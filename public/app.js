@@ -26,6 +26,7 @@ let PROFILE = null;
 let SETTINGS = null;
 let ASSETS = [];
 let PLANS_CACHE = null;
+let LANDING_ON = false;
 
 async function refreshSession() {
   try {
@@ -1100,7 +1101,21 @@ async function render() {
   const hash = location.hash || '#/';
   const [path] = hash.split('?');
 
+  // Anclas dentro de la landing (#como-funciona, #incluye, #planes, #faq): no son rutas de la app
+  if (!path.startsWith('#/')) {
+    if (!LANDING_ON) {
+      PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
+      root.innerHTML = landingView(PLANS_CACHE);
+      drawHero();
+      LANDING_ON = true;
+    }
+    const el = document.querySelector(path);
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth' }));
+    return;
+  }
+
   if (path === '#/login' || path === '#/registro') {
+    LANDING_ON = false;
     root.innerHTML = authView(path.slice(2));
     $('#btnAuth').onclick = async () => {
       const email = $('#f_email').value, password = $('#f_pass').value;
@@ -1118,10 +1133,12 @@ async function render() {
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     drawHero();
+    LANDING_ON = true;
     return;
   }
 
   // App (requiere login)
+  LANDING_ON = false;
   await refreshSession();
   if (!ME) { location.hash = '#/login'; return; }
   const tab = (path.split('/')[2] || 'crear');
