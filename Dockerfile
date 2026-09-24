@@ -21,7 +21,9 @@ ENV NODE_ENV=production \
     DATA_DIR=/app/data \
     MEDIA_DIR=/app/media
 
-VOLUME ["/app/data", "/app/media"]
+# Crear directorios de datos (la persistencia real la dan los Volumes de Railway)
+RUN mkdir -p /app/data /app/media
+
 
 EXPOSE 3000
 
