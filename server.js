@@ -1,0 +1,488 @@
+// Posta — servidor principal
+const express = require('express');
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const db = require('./db');
+const { generateContent, generateIdeas } = require('./generator');
+const { getAuthUrl, exchangeCode, findIgAccount } = require('./instagram');
+const { startScheduler } = require('./scheduler');
+const { startTokenRefresh } = require('./tokenrefresh');
+const { renderVideo, ffmpegAvailable } = require('./video');
+const { PLANS, TRIAL_PLAN, getPlan, formatPrice } = require('./config/plans');
+const mp = require('./mercadopago');
+
+const app = express();
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PROD = NODE_ENV === 'production';
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'media');
+const IMAGE_BASE_URL = (process.env.IMAGE_BASE_URL || '').replace(/\/$/, '');
+const WA_NUMBER = (process.env.WA_NUMBER || '').replace(/\D/g, '');
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (IS_PROD && !SESSION_SECRET) {
+  console.error('[posta] ❌ ERROR: en producción tenés que definir SESSION_SECRET en las variables de entorno.');
+  process.exit(1);
+}
+if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
+
+app.use(express.json({ limit: '2mb' }));
+app.use(
+  session({
+    secret: SESSION_SECRET || 'posta-dev-secret-cambiar-en-prod',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 30 * 24 * 3600 * 1000, httpOnly: true, secure: process.env.COOKIE_SECURE === '1' },
+  })
+);
+app.use('/media', express.static(MEDIA_DIR));
+app.use(express.static(path.join(__dirname, 'public')));
+
+const requireAuth = (req, res, next) => {
+  if (!req.session.userId) return res.status(401).json({ error: 'No autenticado' });
+  next();
+};
+
+function getProfile(userId) {
+  let p = db.prepare('SELECT * FROM profiles WHERE user_id = ?').get(userId);
+  if (!p) {
+    db.prepare('INSERT INTO profiles (user_id) VALUES (?)').run(userId);
+    p = db.prepare('SELECT * FROM profiles WHERE user_id = ?').get(userId);
+  }
+  return p;
+}
+function getSettings(userId) {
+  let s = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
+  if (!s) {
+    db.prepare('INSERT INTO settings (user_id) VALUES (?)').run(userId);
+    s = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
+  }
+  return s;
+}
+function maskSettings(s) {
+  const c = { ...s };
+  if (c.openai_key) c.openai_key = '••••••' + c.openai_key.slice(-4);
+  if (c.ig_access_token) c.ig_access_token = '••••••' + c.ig_access_token.slice(-4);
+  if (c.meta_app_secret) c.meta_app_secret = '••••••';
+  return c;
+}
+
+// ---------- Auth ----------
+app.post('/api/auth/register', (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password || password.length < 6)
+    return res.status(400).json({ error: 'Email y contraseña (mínimo 6 caracteres)' });
+  try {
+    const hash = bcrypt.hashSync(password, 10);
+    const r = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(email.trim().toLowerCase(), hash);
+    req.session.userId = r.lastInsertRowid;
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: 'Ese email ya está registrado' });
+  }
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get((email || '').trim().toLowerCase());
+  if (!user || !bcrypt.compareSync(password || '', user.password_hash))
+    return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+  req.session.userId = user.id;
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy(() => res.json({ ok: true }));
+});
+
+app.get('/api/auth/me', (req, res) => {
+  if (!req.session.userId) return res.json({ user: null });
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+  if (!user) return res.json({ user: null });
+  const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
+  res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      created_at: user.created_at,
+      plan: user.plan || TRIAL_PLAN,
+      plan_status: user.plan_status || 'trial',
+      posts_per_week: plan.postsPerWeek,
+      is_trial: user.plan_status !== 'active',
+    },
+  });
+});
+
+// ---------- Perfil del negocio ----------
+app.get('/api/profile', requireAuth, (req, res) => res.json(getProfile(req.session.userId)));
+
+app.put('/api/profile', requireAuth, (req, res) => {
+  const { business_name, category, tone, description, ig_username, competitors, goal } = req.body || {};
+  getProfile(req.session.userId);
+  db.prepare(
+    `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, updated_at=datetime('now') WHERE user_id=?`
+  ).run(business_name || '', category || 'otro', tone || 'canchero', description || '', ig_username || '', competitors || '', goal || '', req.session.userId);
+  res.json({ ok: true });
+});
+
+function validTimezone(tz) {
+  if (!tz || typeof tz !== 'string') return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
+
+// ---------- Ajustes ----------
+app.get('/api/settings', requireAuth, (req, res) => res.json(maskSettings(getSettings(req.session.userId))));
+
+app.put('/api/settings', requireAuth, (req, res) => {
+  const { openai_key, demo_mode, meta_app_id, meta_app_secret, image_base_url, timezone, preferred_palette, brand_colors } = req.body || {};
+  const cur = getSettings(req.session.userId);
+  let bc = cur.brand_colors || '';
+  if (brand_colors !== undefined) {
+    const arr = Array.isArray(brand_colors) ? brand_colors : [];
+    const clean = arr.filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).slice(0, 3);
+    bc = clean.length >= 2 ? JSON.stringify(clean) : '';
+  }
+  db.prepare(
+    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, updated_at=datetime('now') WHERE user_id=?`
+  ).run(
+    openai_key && !openai_key.startsWith('••••') ? openai_key : cur.openai_key,
+    demo_mode === undefined ? cur.demo_mode : (demo_mode ? 1 : 0),
+    meta_app_id || '',
+    meta_app_secret && !meta_app_secret.startsWith('••••') ? meta_app_secret : cur.meta_app_secret,
+    image_base_url || '',
+    validTimezone(timezone) ? timezone : (cur.timezone || DEFAULT_TZ),
+    Number.isInteger(preferred_palette) ? preferred_palette : (cur.preferred_palette ?? 0),
+    bc,
+    req.session.userId
+  );
+  res.json({ ok: true });
+});
+
+// ---------- Generador ----------
+app.post('/api/generate', requireAuth, async (req, res) => {
+  const { topic } = req.body || {};
+  if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del post' });
+  const profile = getProfile(req.session.userId);
+  const settings = getSettings(req.session.userId);
+  try {
+    const out = await generateContent(
+      {
+        business: profile.business_name,
+        category: profile.category,
+        tone: profile.tone,
+        topic: topic.trim(),
+        competitors: profile.competitors,
+      },
+      settings.openai_key || process.env.OPENAI_API_KEY || ''
+    );
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo generar el contenido' });
+  }
+});
+
+// ---------- Ideas: nosotros pensamos el contenido por el cliente ----------
+app.post('/api/ideas', requireAuth, async (req, res) => {
+  const profile = getProfile(req.session.userId);
+  const settings = getSettings(req.session.userId);
+  try {
+    const ideas = await generateIdeas(
+      {
+        business: profile.business_name,
+        category: profile.category,
+        tone: profile.tone,
+        description: profile.description,
+        competitors: profile.competitors,
+      },
+      settings.openai_key || process.env.OPENAI_API_KEY || ''
+    );
+    res.json({ ideas });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudieron generar las ideas' });
+  }
+});
+
+// ---------- Subida de imagen (PNG del diseñador) ----------
+app.post('/api/media', requireAuth, express.raw({ type: 'image/png', limit: '15mb' }), (req, res) => {
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
+  fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+  res.json({ path: `/media/${name}` });
+});
+
+// ---------- Librería de medios del cliente (fotos + logo) ----------
+app.get('/api/assets', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT id, file_path, kind, created_at FROM assets WHERE user_id = ? ORDER BY created_at ASC').all(req.session.userId);
+  res.json(rows);
+});
+
+app.post('/api/assets', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), (req, res) => {
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
+  const kind = req.query.kind === 'logo' ? 'logo' : 'photo';
+  if (kind === 'photo') {
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'photo'`).get(req.session.userId).c;
+    if (n >= 20) return res.status(400).json({ error: 'Llegaste al máximo de 20 fotos' });
+  }
+  const ct = req.get('Content-Type') || '';
+  const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+  fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+  const filePath = `/media/${name}`;
+  if (kind === 'logo') {
+    // Un solo logo: reemplaza el anterior
+    const olds = db.prepare(`SELECT id, file_path FROM assets WHERE user_id = ? AND kind = 'logo'`).all(req.session.userId);
+    for (const o of olds) {
+      try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(o.file_path))); } catch (_) {}
+    }
+    db.prepare(`DELETE FROM assets WHERE user_id = ? AND kind = 'logo'`).run(req.session.userId);
+  }
+  const r = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind);
+  res.json({ ok: true, id: r.lastInsertRowid, path: filePath, kind });
+});
+
+app.delete('/api/assets/:id', requireAuth, (req, res) => {
+  const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!a) return res.status(404).json({ error: 'No encontrado' });
+  try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(a.file_path))); } catch (_) {}
+  db.prepare('DELETE FROM assets WHERE id = ?').run(a.id);
+  res.json({ ok: true });
+});
+
+// ---------- Subida de audio (mp3 para videos) ----------
+app.post('/api/audio', requireAuth, express.raw({ type: 'audio/mpeg', limit: '15mb' }), (req, res) => {
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'Audio vacío' });
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.mp3`;
+  fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+  res.json({ path: `/media/${name}` });
+});
+
+// Resuelve una ruta /media/xxx a archivo local dentro de MEDIA_DIR (anti path traversal)
+function mediaFile(localPath) {
+  if (!localPath || typeof localPath !== 'string' || !localPath.startsWith('/media/')) return null;
+  const file = path.join(MEDIA_DIR, path.basename(localPath));
+  if (!file.startsWith(path.resolve(MEDIA_DIR) + path.sep)) return null;
+  return fs.existsSync(file) ? file : null;
+}
+
+// ---------- Generador de video ----------
+app.post('/api/videos', requireAuth, async (req, res) => {
+  if (!ffmpegAvailable()) {
+    return res.status(500).json({ error: 'Instalá ffmpeg (ej: brew install ffmpeg)' });
+  }
+  const { scenes, music_path } = req.body || {};
+  if (!Array.isArray(scenes) || !scenes.length || scenes.length > 5) {
+    return res.status(400).json({ error: 'El video lleva de 1 a 5 escenas' });
+  }
+  try {
+    const prepared = scenes.map((s, i) => {
+      const file = mediaFile(s.image_path);
+      if (!file) throw new Error(`Escena ${i + 1}: imagen inválida`);
+      const duration = Math.min(30, Math.max(1, Math.round(Number(s.duration) || 3)));
+      return { file, text: String(s.text || '').slice(0, 140), duration };
+    });
+    const total = prepared.reduce((a, s) => a + s.duration, 0);
+    if (total > 60) return res.status(400).json({ error: 'El video no puede durar más de 60 segundos' });
+    let musicFile = null;
+    if (music_path) {
+      musicFile = mediaFile(music_path);
+      if (!musicFile) return res.status(400).json({ error: 'Música inválida' });
+    }
+    const out = await renderVideo({ scenes: prepared, musicFile, mediaDir: MEDIA_DIR });
+    res.json({ ok: true, url: out.url, duration: out.duration });
+  } catch (e) {
+    console.error('[posta] Error generando video:', e.message);
+    res.status(500).json({ error: e.message || 'No se pudo generar el video' });
+  }
+});
+
+// ---------- Posts ----------
+app.get('/api/posts', requireAuth, (req, res) => {
+  const { status } = req.query;
+  let rows;
+  if (status) {
+    rows = db.prepare('SELECT * FROM posts WHERE user_id = ? AND status = ? ORDER BY scheduled_at ASC, created_at DESC').all(req.session.userId, status);
+  } else {
+    rows = db.prepare('SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').all(req.session.userId);
+  }
+  res.json(rows);
+});
+
+app.post('/api/posts', requireAuth, (req, res) => {
+  const { image_path, caption, hashtags, scheduled_at, media_type } = req.body || {};
+  if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
+  const status = scheduled_at ? 'scheduled' : 'draft';
+  const mt = media_type === 'video' ? 'video' : 'image';
+  const r = db.prepare(
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
+  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+app.patch('/api/posts/:id', requireAuth, (req, res) => {
+  const { scheduled_at, caption, hashtags, action } = req.body || {};
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (action === 'cancel') {
+    db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
+  } else if (action === 'publish-now') {
+    db.prepare(`UPDATE posts SET status='scheduled', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
+  } else {
+    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
+      scheduled_at || post.scheduled_at, caption ?? post.caption, hashtags ?? post.hashtags, post.id
+    );
+  }
+  res.json({ ok: true });
+});
+
+app.delete('/api/posts/:id', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
+  res.json({ ok: true });
+});
+
+// ---------- Instagram OAuth ----------
+app.get('/api/ig/start', requireAuth, (req, res) => {
+  const s = getSettings(req.session.userId);
+  const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
+  if (!appId) return res.status(400).json({ error: 'Configurá tu Meta App ID en Ajustes' });
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/ig/callback`;
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.igState = state;
+  req.session.igRedirect = redirectUri;
+  res.json({ url: getAuthUrl(appId, redirectUri, state) });
+});
+
+app.get('/api/ig/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!req.session.userId || state !== req.session.igState) return res.status(400).send('Estado inválido');
+  try {
+    const s = getSettings(req.session.userId);
+    const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
+    const appSecret = s.meta_app_secret || process.env.IG_APP_SECRET || process.env.META_APP_SECRET;
+    const tokenData = await exchangeCode(appId, appSecret, req.session.igRedirect, code);
+    const ig = await findIgAccount(tokenData.access_token);
+    db.prepare(
+      `UPDATE settings SET ig_user_id=?, ig_page_id=?, ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, updated_at=datetime('now') WHERE user_id=?`
+    ).run(ig.igUserId, ig.pageId, tokenData.access_token, req.session.userId);
+    db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(ig.igUsername, req.session.userId);
+    res.redirect('/#/app/ajustes?ig=ok');
+  } catch (e) {
+    res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(e.message));
+  }
+});
+
+app.post('/api/ig/disconnect', requireAuth, (req, res) => {
+  db.prepare(`UPDATE settings SET ig_user_id='', ig_page_id='', ig_access_token='' WHERE user_id=?`).run(req.session.userId);
+  db.prepare(`UPDATE profiles SET ig_connected=0 WHERE user_id=?`).run(req.session.userId);
+  res.json({ ok: true });
+});
+
+// ---------- Config pública (landing, CTAs) ----------
+app.get('/api/config', (req, res) => {
+  res.json({
+    whatsapp: WA_NUMBER ? `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola Posta, quiero automatizar mi Instagram 🚀')}` : '',
+    mp_configured: mp.mpConfigured(),
+  });
+});
+
+// ---------- Facturación (Mercado Pago) ----------
+app.get('/api/billing/plans', (req, res) => {
+  res.json({
+    plans: Object.values(PLANS).map((p) => ({ ...p, price_label: formatPrice(p) })),
+    trial_plan: TRIAL_PLAN,
+    mp_configured: mp.mpConfigured(),
+    whatsapp: WA_NUMBER ? `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola Posta, quiero automatizar mi Instagram 🚀')}` : '',
+  });
+});
+
+app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
+  const { plan: planId } = req.body || {};
+  if (!PLANS[planId]) return res.status(400).json({ error: 'Plan inválido' });
+  if (!mp.mpConfigured()) {
+    return res.status(400).json({ error: 'Pagos no configurados todavía. Escribinos por WhatsApp y lo activamos.' });
+  }
+  try {
+    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const { init_point } = await mp.createSubscription({
+      plan: PLANS[planId],
+      userId: user.id,
+      userEmail: user.email,
+      baseUrl,
+    });
+    res.json({ init_point });
+  } catch (e) {
+    console.error('[posta] Error creando suscripción MP:', e.message);
+    res.status(500).json({ error: 'No se pudo iniciar el pago. Probá de nuevo en unos minutos.' });
+  }
+});
+
+// Webhook de Mercado Pago: valida la suscripción y activa/cancela el plan.
+// Soporta ?topic=preapproval&id=... y body {type:'preapproval', data:{id}}.
+app.post('/api/billing/webhook', async (req, res) => {
+  const topic = req.query.topic || req.query.type || (req.body && req.body.type);
+  const mpId = req.query.id || (req.body && req.body.data && req.body.data.id);
+  if (!mp.mpConfigured()) {
+    console.log('[posta] Webhook MP recibido pero MP_ACCESS_TOKEN no está configurado. Se ignora.');
+    return res.status(200).json({ ok: false, warning: 'MP no configurado' });
+  }
+  if (topic !== 'preapproval' || !mpId) {
+    return res.status(200).json({ ok: true, ignored: true });
+  }
+  try {
+    const sub = await mp.getSubscription(mpId);
+    const [userId, planId] = String(sub.external_reference || '').split(':');
+    if (!userId || !PLANS[planId]) {
+      console.log(`[posta] Webhook MP: external_reference inválido (${sub.external_reference})`);
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+    if (sub.status === 'authorized') {
+      db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
+        .run(planId, String(mpId), Number(userId));
+      console.log(`[posta] ✅ Plan ${planId} activado para el usuario ${userId} (MP ${mpId})`);
+    } else if (['cancelled', 'paused'].includes(sub.status)) {
+      db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
+        .run(Number(userId), String(mpId));
+      console.log(`[posta] Plan cancelado para el usuario ${userId} (MP ${mpId}, estado ${sub.status})`);
+    }
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error('[posta] Webhook MP falló:', e.message);
+    res.status(200).json({ ok: false, error: 'retry' });
+  }
+});
+
+app.post('/api/billing/cancel', requireAuth, async (req, res) => {
+  const user = db.prepare('SELECT mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+  if (user && user.mp_preapproval_id && mp.mpConfigured()) {
+    try {
+      await mp.cancelSubscription(user.mp_preapproval_id);
+    } catch (e) {
+      console.error('[posta] No se pudo cancelar en MP:', e.message);
+    }
+  }
+  db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=?`).run(req.session.userId);
+  res.json({ ok: true });
+});
+
+// ---------- Health ----------
+app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
+
+// SPA fallback
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+app.listen(PORT, () => {
+  console.log(`[posta] Corriendo en http://localhost:${PORT} (${NODE_ENV})`);
+  console.log(`[posta] Mercado Pago: ${mp.mpConfigured() ? 'configurado ✅' : 'no configurado (pagos desactivados)'}`);
+  startScheduler(db);
+  startTokenRefresh();
+});

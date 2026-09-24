@@ -1,0 +1,16 @@
+services:
+  posta:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - MEDIA_DIR=/app/media
+    volumes:
+      - ./data:/app/data
+      - ./media:/app/media
+    restart: unless-stopped

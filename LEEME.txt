@@ -1,0 +1,15 @@
+POSTA — Automatizá tu Instagram
+==============================
+
+CÓMO PROBARLA (Mac):
+1. Hacé doble clic en INICIAR.command
+2. Se abre sola en tu navegador: http://localhost:3000
+3. Registrate con cualquier email (es local, no se envía nada)
+4. Andá a "Ajustes" y completá los datos de tu negocio
+5. Andá a "Ideas 💡" → Generar ideas → probá "Crear post" o "⚡ Armar mi semana"
+
+NOTAS:
+- La primera vez instala las dependencias (tarda 1-2 minutos).
+- Los posts se "publican" en modo demo (simulado). Para publicar de verdad
+  en Instagram hay que conectar la cuenta en Ajustes (ver README.md).
+- Para detenerla: cerrá la ventana de la Terminal.
