@@ -99,11 +99,21 @@ function landingView(cfg) {
       <a class="btn btn-sun" href="#/registro">Empezar ahora</a>
       ${wa ? `<a class="btn btn-ghost" href="${wa}" target="_blank">💬 Hablar por WhatsApp</a>` : `<a class="btn btn-ghost" href="#como-funciona">Ver cómo funciona</a>`}
     </div>
-    <div class="hero-note">Sin tarjeta · 7 días gratis · Cancelá cuando quieras</div>
-    <div class="mock-row"><div class="phone"><div class="screen">
-      <div id="heroCanvas"></div>
-      <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#1B86BC">#modaargentina #emprendedoresargentinos</span></div>
-    </div></div></div>
+    <div class="hero-note">Sin tarjeta · 7 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
+    <div class="mock-row">
+      <div class="phone"><div class="screen">
+        <img src="hero-post.png" alt="Ejemplo de posteo creado por Posta">
+        <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#1B86BC">#modaargentina #emprendedoresargentinos</span></div>
+      </div></div>
+      <div class="phone"><div class="screen">
+        <video src="showreel.mp4" autoplay muted loop playsinline></video>
+        <div class="cap"><b>Posta</b> 🎬 Así se ven los posteos que creamos para tu negocio, en cualquier rubro...</div>
+      </div></div>
+    </div>
+  </div></div>
+  <div class="sample-banner"><div class="wrap">
+    <div class="sample-txt"><b>🎁 3 posteos de muestra GRATIS</b><span>Te los armamos con tu marca para que veas la calidad antes de pagar un peso.</span></div>
+    ${wa ? `<a class="btn btn-sun" href="${wa}" target="_blank">Quiero mi muestra gratis</a>` : `<a class="btn btn-sun" href="#/registro">Quiero mi muestra gratis</a>`}
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así de simple</h2>
@@ -129,6 +139,8 @@ function landingView(cfg) {
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Sin letra chica. Cancelá cuando quieras.</p>
+    <div class="anchor-line">Un community manager cuesta <b>$300.000+/mes</b>. Posta arranca en <b>$29.900</b>.</div>
+    <div class="scarcity">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
     <div class="plans-row">${planCards || '<p>Cargando planes...</p>'}</div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
@@ -140,6 +152,9 @@ function landingView(cfg) {
       <details><summary>¿Usan mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un post?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
+      <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
+      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Vos elegís: automático total o con tu aprobación previa. Todo queda visible en tu calendario para revisar antes de que salga.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si tu Instagram no se ve transformado, te devolvemos el 100%. Sin preguntas.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-sun" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
@@ -1106,7 +1121,6 @@ async function render() {
     if (!LANDING_ON) {
       PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
       root.innerHTML = landingView(PLANS_CACHE);
-      drawHero();
       LANDING_ON = true;
     }
     const el = document.querySelector(path);
@@ -1132,7 +1146,6 @@ async function render() {
   if (path === '#/' || path === '') {
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
-    drawHero();
     LANDING_ON = true;
     return;
   }
@@ -1153,15 +1166,6 @@ async function render() {
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
-}
-
-function drawHero() {
-  const holder = $('#heroCanvas');
-  if (!holder) return;
-  const c = document.createElement('canvas');
-  drawPost(c, { tpl: 'gradiente', pal: 0, title: 'NUEVO INGRESO', subtitle: 'Buzos oversize ya disponibles 🔥', handle: 'tunegocio' });
-  c.style.width = '100%';
-  holder.appendChild(c);
 }
 
 function bindApp(tab) {
