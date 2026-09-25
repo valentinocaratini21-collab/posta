@@ -75,10 +75,17 @@ const FASHION = fam('fashion', 6), FOOD = fam('food', 6), BEAUTY = fam('beauty',
       FITNESS = fam('fitness', 5), PETS = fam('pets', 5), HOME = fam('home', 6),
       OFFICE = fam('office', 5), LIFE = fam('lifestyle', 6), BAR = fam('bar', 5);
 
+// Pool curado solo para cafés: si el nombre del negocio suena a café,
+// usamos únicamente fotos creíbles de café (nada de cerveza, ensaladas
+// ni lifestyle genérico). Un café con foto de cerveza rompe la magia.
+const CAFE_POOL = ['food', 'food-2', 'food-4', 'lifestyle', 'lifestyle-1', 'food-1'];
+const CAFE_RE = /caf[eé]|coffee|cafeter[ií]a|barista|tostadur[ií]a|espresso|cappuccino|latte|pasteler[ií]a|panader[ií]a|brunch|medialuna|churro|desayuno|merienda/i;
+function isCafeBusiness(business) { return CAFE_RE.test(String(business || '')); }
+
 const CATEGORY_PHOTOS = {
   moda: [...FASHION, ...LIFE.slice(0, 2), ...BEAUTY.slice(0, 2)],
   joyeria: [...FASHION.slice(0, 4), ...BEAUTY.slice(0, 4), ...LIFE.slice(0, 2)],
-  gastronomia: [...FOOD, ...BAR.slice(0, 2), ...LIFE.slice(0, 2)],
+  gastronomia: [...FOOD, ...LIFE.slice(0, 2)],
   bar: [...BAR, ...FOOD.slice(0, 3), ...LIFE.slice(0, 2)],
   belleza: [...BEAUTY, ...FASHION.slice(0, 2), ...LIFE.slice(0, 2)],
   fitness: [...FITNESS, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
@@ -98,8 +105,11 @@ const CATEGORY_PHOTOS = {
   otro: [...LIFE.slice(0, 5), ...OFFICE.slice(0, 3), ...HOME.slice(0, 2)],
 };
 
-function stockPhotosN(category, n) {
-  const pool = (CATEGORY_PHOTOS[category] || CATEGORY_PHOTOS.otro).slice();
+function stockPhotosN(category, n, business) {
+  // Los cafés tienen pool propio: solo fotos que un café publicaría.
+  const pool = (category === 'gastronomia' && isCafeBusiness(business))
+    ? CAFE_POOL.slice()
+    : (CATEGORY_PHOTOS[category] || CATEGORY_PHOTOS.otro).slice();
   // shuffle
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -112,8 +122,8 @@ function stockPhotosN(category, n) {
   });
 }
 
-function stockPhotos3(category) {
-  return stockPhotosN(category, 3);
+function stockPhotos3(category, business) {
+  return stockPhotosN(category, 3, business);
 }
 
 // ---------- Colores elegidos por el visitante ----------
@@ -274,7 +284,7 @@ const TAGS_AR = {
   profesionales: ['#serviciosprofesionales', '#consultoria', '#abogados', '#contadores', '#profesionales'],
   flores: ['#floreriaargentina', '#flores', '#vivero', '#ramosdeflores', '#plantas'],
   bar: ['#baresargentina', '#cervezaartesanal', '#cocktails', '#happyhour', '#salidas'],
-  otro: ['#emprendedoresargentinos', '#pymesargentina', '#negociosdigitales', '#argentina'],
+  otro: ['#pymesargentina', '#negocioslocales', '#comerciolocal', '#argentina'],
 };
 const TAGS_UY = Object.fromEntries(
   Object.entries(TAGS_AR).map(([k, v]) => [
@@ -283,7 +293,7 @@ const TAGS_UY = Object.fromEntries(
   ])
 );
 const TAGS_NEUTRAL = {
-  moda: ['#moda', '#tiendaderopa', '#ootd', '#emprendedores', '#fashion'],
+  moda: ['#moda', '#tiendaderopa', '#ootd', '#fashion', '#nuevacoleccion'],
   gastronomia: ['#foodie', '#gastronomia', '#antojo', '#restaurante', '#foodlover'],
   belleza: ['#belleza', '#peluqueria', '#estetica', '#makeup', '#skincare'],
   fitness: ['#fitness', '#entrenamiento', '#gymlife', '#vidasana', '#personaltrainer'],
@@ -304,7 +314,9 @@ const TAGS_NEUTRAL = {
   bar: ['#bar', '#cerveza', '#cocktails', '#bares', '#happyhour'],
   otro: ['#emprendedores', '#pymes', '#negociosdigitales', '#marketingdigital'],
 };
-const GENERIC_TAGS = ['#emprendedores', '#marketingdigital', '#contenidodigital'];
+// Nada de hashtags de marketinero (#marketingdigital, #emprendedores…):
+// un café real jamás los publicaría y rompen la promesa de "listo para publicar".
+const GENERIC_TAGS = [];
 
 function demoHashtags(category, country, tone) {
   const base = tone === 'tu' ? TAGS_NEUTRAL : country === 'UY' ? TAGS_UY : TAGS_AR;
@@ -821,7 +833,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       [stylePool[i], stylePool[j]] = [stylePool[j], stylePool[i]];
     }
     const stylesN = stylePool.slice(0, n);
-    const stockN = photoPath ? null : stockPhotosN(cat, n);
+    const stockN = photoPath ? null : stockPhotosN(cat, n, business);
     const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
     const posts = topics.map((t, i) => {
       // Foto: la del usuario si la subió (misma en los n); si no, n fotos
@@ -859,19 +871,22 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     });
 
     // El 3er posteo sale como video (el diseño del medio, animado con zoom suave).
-    // Si el render del video falla de forma transitoria, se reintenta una vez
-    // antes de caer al fallback de imagen.
+    // El video es el momento "wow" de la semana: si el render falla, se reintenta
+    // con backoff antes de caer al fallback de imagen. Si igual falla, se registra
+    // con un log bien visible (nunca en silencio).
     const videoIdx = Math.min(2, n - 1);
     let videoB64 = null;
-    for (let attempt = 0; attempt < 2 && !videoB64; attempt++) {
+    const videoWaits = [1500, 3000, 6000];
+    for (let attempt = 0; attempt < 4 && !videoB64; attempt++) {
       try {
         const vbuf = await renderDemoVideo(path.join(runDir, `post-${videoIdx}.png`), runDir, videoIdx);
         videoB64 = vbuf.toString('base64');
       } catch (e) {
-        console.error('[posta] Video de la demo falló (intento ' + (attempt + 1) + '):', e.message);
-        if (!videoB64 && attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+        console.error('[posta] Video de la demo falló (intento ' + (attempt + 1) + '/4):', e.message);
+        if (attempt < 3) await new Promise((r) => setTimeout(r, videoWaits[attempt]));
       }
     }
+    if (!videoB64) console.error('[posta] ⚠️ VIDEO FALLÓ TRAS 4 INTENTOS — la semana sale sin video (fallback a imagen)');
 
     return made.map((m, i) => (
       i === videoIdx && videoB64

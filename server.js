@@ -593,10 +593,19 @@ app.get('/prueba', (req, res) => {
 });
 
 app.get('/api/trial/status', (req, res) => {
+  if (trialTestMode(req)) return res.json({ ok: true, used: false });
   const ip = demo.clientIp(req);
   const row = db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip);
   res.json({ ok: true, used: !!row });
 });
+
+// Llave de prueba del dueño: con ?test_key=... se saltea el límite de 1 prueba
+// por IP y no se registra el uso. La llave vive en Railway (variable
+// TRIAL_TEST_KEY), nunca en el código ni en el repo.
+function trialTestMode(req) {
+  const k = process.env.TRIAL_TEST_KEY || '';
+  return !!(k && req.query && req.query.test_key === k);
+}
 
 function buildTrialWeek(n) {
   const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -632,7 +641,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
 
   const ip = demo.clientIp(req);
-  if (db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip)) {
+  const testMode = trialTestMode(req);
+  if (!testMode && db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip)) {
     return res.status(429).json({ error: 'Ya usaste tu prueba gratis 🙏 Creá tu cuenta para seguir.' });
   }
 
@@ -647,7 +657,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // 6 ideas pensadas para SU negocio + semana Pro: 5 posteos (4 imágenes + 1 video)
     const ideas = await generateIdeas({ business, category, tone, description: goal, competitors }, null);
     const posts = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count: 5 });
-    db.prepare('INSERT OR IGNORE INTO trial_usage (ip) VALUES (?)').run(ip);
+    if (!testMode) db.prepare('INSERT OR IGNORE INTO trial_usage (ip) VALUES (?)').run(ip);
+    const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
+    if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
     let screenshot = null;
     if (photoPath) {
@@ -662,6 +674,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       week: buildTrialWeek(posts.length),
       screenshot,
       spots_left: spotsLeft(),
+      video_ok: videoOk,
     });
   } catch (e) {
     console.error('[posta] Error en prueba completa:', e.message);

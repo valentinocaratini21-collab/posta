@@ -122,14 +122,14 @@ async function generateContent(input, apiKey) {
 
 // ---------- Motor de ideas: nosotros pensamos el contenido por el cliente ----------
 const CAT_WORDS = {
-  ropa: { cosa: 'prendas', accion: 'vestirte' },
-  gastronomia: { cosa: 'platos', accion: 'comer rico' },
-  fitness: { cosa: 'entrenamientos', accion: 'entrenar' },
-  servicios: { cosa: 'servicios', accion: 'contratarte' },
-  mascotas: { cosa: 'productos', accion: 'cuidar a tu mascota' },
-  viajes: { cosa: 'destinos', accion: 'viajar' },
-  belleza: { cosa: 'tratamientos', accion: 'verte bien' },
-  otro: { cosa: 'productos', accion: 'elegirte' },
+  ropa: { cosa: 'prendas', tip: '3 looks con poco presupuesto' },
+  gastronomia: { cosa: 'platos', tip: '3 tips para comer rico' },
+  fitness: { cosa: 'entrenamientos', tip: '3 errores que frenan tu progreso' },
+  servicios: { cosa: 'servicios', tip: '3 preguntas antes de contratar' },
+  mascotas: { cosa: 'productos', tip: '3 cuidados que tu mascota necesita' },
+  viajes: { cosa: 'destinos', tip: '3 destinos que valen la pena' },
+  belleza: { cosa: 'tratamientos', tip: '3 hábitos para verte mejor' },
+  otro: { cosa: 'productos', tip: '3 tips de experto' },
 };
 
 function templateIdeas({ business, category, competitors }) {
@@ -139,13 +139,13 @@ function templateIdeas({ business, category, competitors }) {
     ? ` Diferenciate de ${competitors}: mostrá lo que ellos no tienen.`
     : '';
   return [
-    { formato: 'Novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` },
-    { formato: 'Promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' },
-    { formato: 'Tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' },
-    { formato: 'Testimonio', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' },
-    { formato: 'Detrás de escena', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' },
-    { formato: 'Comunidad', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' },
-    { formato: 'Reel/Video', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' },
+    { formato: 'Novedad', titulo: `Lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` },
+    { formato: 'Promo', titulo: 'Promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' },
+    { formato: 'Tip', titulo: w.tip, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' },
+    { formato: 'Testimonio', titulo: 'Lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' },
+    { formato: 'Detrás de escena', titulo: `Cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' },
+    { formato: 'Comunidad', titulo: 'Te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' },
+    { formato: 'Reel/Video', titulo: `Así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' },
   ];
 }
 
