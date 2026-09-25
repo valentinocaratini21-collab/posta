@@ -325,6 +325,70 @@ const TABS = [
   ['ajustes', '⚙️', 'Ajustes'],
 ];
 let IDEAS = [];
+/* ---------- PWA: instalar la app ---------- */
+let PWA_DEFERRED = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  PWA_DEFERRED = e;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = '';
+});
+window.addEventListener('appinstalled', () => {
+  PWA_DEFERRED = null;
+  try { localStorage.setItem('pwa-installed', '1'); } catch (e) {}
+  const b = document.getElementById('pwaBanner');
+  if (b) b.remove();
+});
+function pwaIsInstalled() {
+  try { if (localStorage.getItem('pwa-installed') === '1') return true; } catch (e) {}
+  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+}
+function pwaIsIos() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+function pwaDismissed() {
+  try { return localStorage.getItem('pwa-dismissed') === '1'; } catch (e) { return false; }
+}
+function pwaBannerHtml() {
+  if (pwaIsInstalled() || pwaDismissed()) return '';
+  const ios = pwaIsIos();
+  const txt = ios
+    ? 'Instalá Posta en tu teléfono: tocá <b>Compartir</b> y elegí <b>“Agregar a pantalla de inicio”</b>.'
+    : 'Instalá Posta en tu teléfono para tenerla siempre a mano.';
+  const btnStyle = (!ios && !PWA_DEFERRED) ? ' style="display:none"' : '';
+  return `<div class="pwa-banner" id="pwaBanner">
+    <span class="pwa-ico">📲</span>
+    <div class="pwa-txt">${txt}</div>
+    <button class="btn btn-primary btn-sm" id="pwaInstallBtn"${btnStyle}>Instalar</button>
+    <button class="pwa-x" id="pwaDismiss" aria-label="Cerrar">✕</button>
+  </div>`;
+}
+async function pwaDoInstall() {
+  if (PWA_DEFERRED) {
+    PWA_DEFERRED.prompt();
+    try { await PWA_DEFERRED.userChoice; } catch (e) {}
+    PWA_DEFERRED = null;
+    return;
+  }
+  alert('Para instalar Posta:\n\niPhone: tocá Compartir y elegí "Agregar a pantalla de inicio".\n\nAndroid: tocá el menú ⋮ y elegí "Instalar app" o "Agregar a pantalla de inicio".');
+}
+function pwaWire() {
+  const d = document.getElementById('pwaDismiss');
+  if (d) d.onclick = () => {
+    try { localStorage.setItem('pwa-dismissed', '1'); } catch (e) {}
+    const b = document.getElementById('pwaBanner');
+    if (b) b.remove();
+  };
+  const ib = document.getElementById('pwaInstallBtn');
+  if (ib) ib.onclick = pwaDoInstall;
+  const mi = document.getElementById('msheetInstall');
+  if (mi) mi.onclick = () => {
+    const ms = document.getElementById('msheet');
+    if (ms) ms.classList.remove('open');
+    pwaDoInstall();
+  };
+}
+
 function appShell(tab, content) {
   const MAIN_TABS = [['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video'], ['fotos', '📷', 'Fotos']];
   const MORE_TABS = [['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
@@ -333,6 +397,7 @@ function appShell(tab, content) {
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
   <div class="mtabs">${TABS.map(([k, i, l]) => `<button class="mtab ${k === tab ? 'on' : ''}" data-tab="${k}">${i} ${l}</button>`).join('')}</div>
+  ${pwaBannerHtml()}
   <div class="app-shell">
     <div class="sidebar">
       <a class="logo" href="#/" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
@@ -350,6 +415,7 @@ function appShell(tab, content) {
   <div class="msheet" id="msheet"><div class="msheet-bg" id="msheetBg"></div>
     <div class="msheet-card">
       ${MORE_TABS.map(([k, i, l]) => `<button class="msheet-btn ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span>${l}</button>`).join('')}
+      ${pwaIsInstalled() ? '' : '<button class="msheet-btn" id="msheetInstall"><span class="ico">📲</span>Instalar app</button>'}
     </div>
   </div>`;
 }
@@ -1334,6 +1400,7 @@ async function render() {
 }
 
 function bindApp(tab) {
+  pwaWire();
   $$('.mtab,.side-link[data-tab],.mbar-btn[data-tab],.msheet-btn[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };

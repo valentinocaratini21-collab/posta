@@ -1,0 +1,32 @@
+POSTA — PWA: app instalable + banner visible
+
+QUE ES: Posta se vuelve instalable como app (icono en pantalla de inicio,
+se abre a pantalla completa sin barra del navegador). Ademas aparece un
+banner visible en la app invitano a instalarla, y la opcion "Instalar app"
+en el menu Mas.
+
+ARCHIVOS (todos van dentro de la carpeta public/ del repo):
+  - index.html        (reemplazar)
+  - app.js            (reemplazar)
+  - styles.css        (reemplazar)
+  - manifest.json     (nuevo)
+  - sw.js             (nuevo)
+  - icon-192.png      (nuevo)
+  - icon-512.png      (nuevo)
+  - icon-maskable-192.png  (nuevo)
+  - icon-maskable-512.png  (nuevo)
+  - apple-touch-icon.png   (nuevo)
+
+PASOS:
+1. En GitHub entra a la carpeta public/ del repo posta.
+2. Subi los 10 archivos (los 3 reemplazan a los actuales, los 7 son nuevos).
+3. Commit. Espera el redeploy de Railway (1-2 min).
+
+COMO SE VE:
+- Android/Chrome: banner celeste arriba en la app con boton "Instalar".
+- iPhone: banner con instrucciones (Compartir -> Agregar a pantalla de inicio).
+- El banner se puede cerrar con la X. Tambien esta en Mas -> Instalar app.
+- Una vez instalada no vuelve a aparecer.
+
+VERIFICAR: abrir https://www.postahacetodo.com/manifest.json (tiene que
+mostrar el JSON) y en el celular ver el banner en la app.
