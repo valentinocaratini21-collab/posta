@@ -540,7 +540,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     res.json({ init_point, discount_applied: discount });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
-    res.status(500).json({ error: 'No se pudo iniciar el pago. Probá de nuevo en unos minutos.' });
+    res.status(500).json({ error: 'No se pudo iniciar el pago: ' + e.message });
   }
 });
 
