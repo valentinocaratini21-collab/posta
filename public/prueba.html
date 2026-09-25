@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probá Posta por dentro — Tu semana armada gratis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--cel:#2793C8;--yl:#FEC14D;--navy:#0A1E33;--bg:#fff;--bg2:#F2F9FD;--mut:#47617A;--line:#E2EDF5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(--navy);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+.logo{font-weight:900;font-size:24px;color:var(--navy);text-decoration:none}
+.logo .dot{color:var(--cel)}
+.pill{display:inline-block;background:var(--yl);color:var(--navy);font-weight:800;font-size:12px;letter-spacing:1px;padding:8px 16px;border-radius:999px}
+.hero{text-align:center;padding:44px 0 8px}
+.hero h1{font-size:clamp(28px,5vw,46px);font-weight:900;line-height:1.15;margin:18px 0 12px}
+.hero h1 .hl{color:var(--cel)}
+.hero .sub{color:var(--mut);font-size:17px;max-width:640px;margin:0 auto;line-height:1.6}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.form-card{max-width:640px;margin:28px auto 60px}
+.field{margin-bottom:18px}
+.field label{display:block;font-weight:700;font-size:14px;margin-bottom:8px}
+.field input[type=text],.field select,.field textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:13px 15px;font-family:inherit;font-size:15px;color:var(--navy);background:#fff;outline:none;transition:border .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cel)}
+.field textarea{resize:vertical;min-height:74px}
+.field .hint{font-size:13px;color:var(--mut);margin-top:6px}
+.tone-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tone-card{border:2px solid var(--line);border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;background:#fff}
+.tone-card .e{font-size:30px}
+.tone-card b{display:block;margin-top:6px;font-size:15px}
+.tone-card small{color:var(--mut);font-size:12px}
+.tone-card.on{border-color:var(--cel);background:var(--bg2);box-shadow:0 6px 18px rgba(39,147,200,.15)}
+.color-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.color-row input[type=color]{width:100%;height:52px;border:2px solid var(--line);border-radius:12px;padding:6px;background:#fff;cursor:pointer}
+.country-row{display:flex;gap:10px}
+.country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
+.country-btn.on{border-color:var(--cel);background:var(--bg2)}
+.btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:14px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s,box-shadow .12s}
+.btn-primary{background:var(--yl);color:var(--navy);box-shadow:0 8px 24px rgba(254,193,77,.45)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(254,193,77,.55)}
+.btn-block{width:100%}
+.btn-ghost{background:#fff;color:var(--cel);border:2px solid var(--cel)}
+.btn-sm{padding:10px 20px;font-size:14px}
+.err{background:#FDE8E8;color:#B42323;border-radius:12px;padding:13px 16px;font-weight:600;font-size:14px;margin-bottom:16px;display:none}
+.tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
+/* TRACKER */
+.tracker{max-width:560px;margin:40px auto 80px;text-align:center}
+.tracker h2{font-size:clamp(24px,4vw,34px);font-weight:900;margin-bottom:8px}
+.tracker .sub{color:var(--mut);margin-bottom:30px}
+.tstep{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 18px;margin-bottom:10px;text-align:left;opacity:.45;transition:all .3s}
+.tstep.act{opacity:1;border-color:var(--cel);box-shadow:0 6px 18px rgba(39,147,200,.12)}
+.tstep.done{opacity:1;border-color:#cde9d6}
+.tstep .ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--bg2);flex-shrink:0}
+.tstep.act .ic{background:var(--cel);color:#fff;animation:pulse 1.1s infinite}
+.tstep.done .ic{background:#22c55e;color:#fff;animation:none}
+.tstep b{font-size:15px}
+.tstep small{display:block;color:var(--mut);font-weight:400;font-size:12px}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.pbar{height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin:26px 0 8px}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cel),var(--yl));border-radius:99px;transition:width .5s}
+/* RESULTS */
+.res-hero{text-align:center;padding:40px 0 10px}
+.res-hero h2{font-size:clamp(26px,4.6vw,42px);font-weight:900;margin:16px 0 8px}
+.res-hero h2 .hl{color:var(--cel)}
+.res-hero .sub{color:var(--mut);font-size:16px}
+.sec{margin:44px 0}
+.sec h3{font-size:22px;font-weight:800;margin-bottom:6px}
+.sec .lede{color:var(--mut);margin-bottom:20px;font-size:15px}
+.ideas{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.idea{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.idea .fmt{display:inline-block;background:var(--bg2);color:var(--cel);font-weight:800;font-size:11px;letter-spacing:1px;padding:5px 12px;border-radius:99px;margin-bottom:10px}
+.idea b{display:block;font-size:16px;margin-bottom:8px}
+.idea p{font-size:14px;color:var(--mut);line-height:1.55}
+.ba{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch;margin-top:8px}
+.ba-panel{border-radius:18px;overflow:hidden;border:1px solid var(--line);position:relative;background:var(--bg2)}
+.ba-panel img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:4/5}
+.ba-tag{position:absolute;top:12px;left:12px;background:var(--navy);color:#fff;font-weight:800;font-size:12px;padding:7px 14px;border-radius:99px}
+.ba-panel.after .ba-tag{background:var(--yl);color:var(--navy)}
+.ba-arrow{display:flex;align-items:center;font-size:34px;color:var(--cel);font-weight:900}
+.ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px}
+.ba-grid img,.ba-grid video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#000}
+.ba-mock{padding:26px;text-align:center;color:#9db2c5}
+.ba-mock .grid{filter:grayscale(1);opacity:.5}
+.week{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.day{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.day:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(10,30,51,.12)}
+.day .dh{background:var(--navy);color:#fff;padding:10px;text-align:center}
+.day .dh b{display:block;font-size:14px}
+.day .dh small{font-size:11px;opacity:.75}
+.day .db{position:relative;aspect-ratio:4/5;background:var(--bg2)}
+.day .db img,.day .db video{width:100%;height:100%;object-fit:cover;display:block}
+.day .vbadge{position:absolute;bottom:8px;right:8px;background:rgba(10,30,51,.8);color:#fff;font-size:11px;font-weight:800;padding:5px 10px;border-radius:99px}
+.stat-band{background:var(--navy);color:#fff;border-radius:20px;padding:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:40px 0}
+.stat-band .st{text-align:center}
+.stat-band .st .n{font-size:clamp(28px,4vw,44px);font-weight:900;color:var(--yl)}
+.stat-band .st .t{font-size:14px;opacity:.85;margin-top:6px;line-height:1.5}
+.sticky-cta{position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;backdrop-filter:blur(8px);display:none}
+.sticky-cta .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sticky-cta b{font-size:15px}
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(10,30,51,.6);z-index:100;display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:24px;max-width:880px;width:100%;max-height:92vh;overflow-y:auto;padding:34px;position:relative;animation:pop .25s ease}
+@keyframes pop{from{transform:scale(.96) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.modal .x{position:absolute;top:16px;right:18px;border:none;background:var(--bg2);width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer;color:var(--navy)}
+.modal h2{font-size:clamp(24px,4vw,34px);font-weight:900;text-align:center}
+.modal h2 .hl{color:var(--cel)}
+.modal .msub{text-align:center;color:var(--mut);margin:10px 0 24px;font-size:15px}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.plan{border:2px solid var(--line);border-radius:18px;padding:24px 20px;text-align:center;position:relative;background:#fff}
+.plan.hot{border-color:var(--yl);box-shadow:0 14px 40px rgba(254,193,77,.3);transform:scale(1.03)}
+.plan .ptag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--yl);color:var(--navy);font-weight:800;font-size:11px;padding:5px 14px;border-radius:99px;white-space:nowrap}
+.plan h4{font-size:18px;margin-bottom:8px}
+.plan .pr{font-size:30px;font-weight:900}
+.plan .pr small{font-size:14px;font-weight:600;color:var(--mut)}
+.plan .pd{font-size:13px;color:var(--cel);font-weight:700;margin:4px 0 12px}
+.plan ul{list-style:none;text-align:left;font-size:13px;color:var(--mut);margin-bottom:18px;line-height:1.9}
+.plan ul li:before{content:"✓ ";color:var(--cel);font-weight:800}
+.mline{display:flex;gap:10px;align-items:flex-start;background:var(--bg2);border-radius:12px;padding:12px 16px;font-size:14px;margin-bottom:10px;line-height:1.5}
+.mline b{color:var(--navy)}
+.ref-tease{text-align:center;font-size:14px;color:var(--mut);margin:16px 0 4px}
+.ref-tease b{color:var(--cel)}
+/* LIGHTBOX */
+.lb{position:fixed;inset:0;background:rgba(10,30,51,.85);z-index:120;display:none;align-items:center;justify-content:center;padding:20px}
+.lb.open{display:flex}
+.lb-box{background:#fff;border-radius:20px;max-width:480px;width:100%;max-height:92vh;overflow-y:auto;position:relative}
+.lb-box img,.lb-box video{width:100%;display:block;aspect-ratio:4/5;object-fit:cover;border-radius:20px 20px 0 0;background:#000}
+.lb-cap{padding:20px}
+.lb-cap p{font-size:14px;line-height:1.65;white-space:pre-line}
+.lb-cap .tags{color:var(--cel);font-size:13px;margin-top:10px;line-height:1.6}
+.lb .x{position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.9);width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;z-index:2}
+.done-view{max-width:560px;margin:60px auto;text-align:center;padding:0 20px}
+.done-view h2{font-size:30px;font-weight:900;margin:18px 0 10px}
+.done-view p{color:var(--mut);line-height:1.7;margin-bottom:24px}
+.footer{text-align:center;padding:40px 20px 110px;color:var(--mut);font-size:13px}
+@media(max-width:760px){.ba{grid-template-columns:1fr}.ba-arrow{transform:rotate(90deg);justify-content:center}.week{grid-template-columns:repeat(2,1fr)}.plans{grid-template-columns:1fr}.plan.hot{transform:none}.stat-band{grid-template-columns:1fr}.sticky-cta b{font-size:13px}.modal{padding:24px 18px}}
+</style>
+</head>
+<body>
+<div class="nav"><div class="wrap">
+  <a class="logo" href="/">Posta<span class="dot">.</span></a>
+  <span class="pill">PRUEBA GRATIS · UNA SOLA VEZ</span>
+</div></div>
+
+<!-- VISTA: ya usada -->
+<div id="v-used" class="done-view" style="display:none">
+  <div style="font-size:54px">🙏</div>
+  <h2>Ya usaste tu prueba gratis</h2>
+  <p>Cada negocio puede probar Posta por dentro una sola vez. Pero todavía podés ver los planes y empezar hoy mismo: tu primera semana se publica mañana.</p>
+  <a class="btn btn-primary" href="/#planes">Ver planes</a>
+  <div style="margin-top:14px"><a class="btn btn-ghost btn-sm" href="/demo">Probar la demo rápida</a></div>
+</div>
+
+<!-- VISTA: onboarding -->
+<div id="v-onboarding" style="display:none">
+  <div class="wrap">
+    <div class="hero">
+      <span class="pill">TE CONFIGURAMOS TODO 🚀</span>
+      <h1>Vemos tu negocio por dentro.<br><span class="hl">Vos no hacés nada.</span></h1>
+      <p class="sub">Contanos lo básico en 2 minutos y te armamos <b>tus ideas + tu semana de posteos</b>, como si ya fueras cliente.</p>
+    </div>
+    <div class="card form-card">
+      <div class="err" id="obErr"></div>
+      <div class="field"><label>Nombre de tu negocio *</label><input type="text" id="f_biz" placeholder="Ej: Café Martínez" maxlength="60"></div>
+      <div class="field"><label>Tu Instagram (opcional)</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Para personalizar tu prueba con tu nombre.</div></div>
+      <div class="field"><label>Rubro *</label><select id="f_cat"></select></div>
+      <div class="field"><label>¿Qué querés lograr? *</label><textarea id="f_goal" maxlength="300" placeholder="Ej: vender más por Instagram y que me conozcan en el barrio"></textarea></div>
+      <div class="field"><label>¿Cómo le hablás a tus clientes? *</label>
+        <div class="tone-row">
+          <div class="tone-card on" data-tone="vos"><div class="e">😎</div><b>Canchero</b><small>che, mirá, vení</small></div>
+          <div class="tone-card" data-tone="tu"><div class="e">💼</div><b>Profesional</b><small>mira, ven, le presentamos</small></div>
+        </div>
+      </div>
+      <div class="field"><label>Tus competidores (opcional)</label><input type="text" id="f_comp" placeholder="Nombres o @ de Instagram, separados por coma" maxlength="200"><div class="hint">Los estudiamos para que tu semana te haga destacar.</div></div>
+      <div class="field"><label>Captura de tu Instagram o tu logo (opcional)</label><input type="file" id="f_file" accept="image/jpeg,image/png,image/webp" style="border:none;padding:0"><div class="hint">La usamos solo para sacar los colores de tus posteos. No se envía a ningún lado.</div></div>
+      <div class="field"><label>Tus colores</label>
+        <div class="color-row">
+          <div><input type="color" id="f_accent" value="#2793C8"><div class="hint">Color principal</div></div>
+          <div><input type="color" id="f_btn" value="#FEC14D"><div class="hint">Color de botones</div></div>
+        </div>
+      </div>
+      <div class="field"><label>País</label>
+        <div class="country-row">
+          <button type="button" class="country-btn on" data-c="AR">🇦🇷 Argentina</button>
+          <button type="button" class="country-btn" data-c="UY">🇺🇾 Uruguay</button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="btnGo">Armar mi semana 🚀</button>
+      <p class="tiny">Sin registro · Sin tarjeta · La prueba es una sola vez por negocio</p>
+    </div>
+  </div>
+</div>
+
+<!-- VISTA: tracker -->
+<div id="v-loading" style="display:none">
+  <div class="wrap">
+    <div class="tracker">
+      <span class="pill">TRABAJANDO PARA VOS ⚙️</span>
+      <h2 id="tkTitle">Armando tu semana…</h2>
+      <p class="sub">Esto es lo que haríamos por vos cada semana, en automático.</p>
+      <div id="tkSteps"></div>
+      <div class="pbar"><i id="tkBar"></i></div>
+      <p class="tiny" id="tkPct">0%</p>
+    </div>
+  </div>
+</div>
+
+<!-- VISTA: resultados -->
+<div id="v-results" style="display:none">
+  <div class="wrap">
+    <div class="res-hero">
+      <span class="pill">ASÍ SE VERÍA CON EL PLAN PRO</span>
+      <h2>¡Tu semana está lista, <span class="hl" id="rBiz">tu negocio</span>! 🎉</h2>
+      <p class="sub" id="rSub"></p>
+    </div>
+
+    <div class="sec">
+      <h3>Tus ideas 💡</h3>
+      <p class="lede">Pensadas para tu negocio, no genéricas. Esto es lo primero que haríamos por vos.</p>
+      <div class="ideas" id="rIdeas"></div>
+    </div>
+
+    <div class="sec">
+      <h3>Tu Instagram: antes vs después</h3>
+      <p class="lede">La diferencia entre hoy y tu primera semana con Posta.</p>
+      <div class="ba">
+        <div class="ba-panel"><span class="ba-tag">TU PERFIL HOY</span><div id="rBefore"></div></div>
+        <div class="ba-arrow">→</div>
+        <div class="ba-panel after"><span class="ba-tag">CON POSTA</span><div class="ba-grid" id="rAfter"></div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Tu semana 📅</h3>
+      <p class="lede">5 posteos armados, con diseño + caption + hashtags. Tocá cada uno para verlo completo.</p>
+      <div class="week" id="rWeek"></div>
+    </div>
+
+    <div class="stat-band">
+      <div class="st"><div class="n">5×</div><div class="t">veces por semana publicarías.<br>Tu competencia postea ~2.</div></div>
+      <div class="st"><div class="n">260</div><div class="t">posteos al año<br>que no tuviste que hacer.</div></div>
+    </div>
+
+    <div style="text-align:center;margin:10px 0 30px">
+      <button class="btn btn-primary" id="btnBuy2" style="font-size:19px;padding:18px 46px">Quiero esto todos los meses 🚀</button>
+      <p class="tiny">Garantía de 30 días · Cancelá cuando quieras</p>
+    </div>
+  </div>
+</div>
+
+<div class="sticky-cta" id="stickyCta"><div class="wrap">
+  <b>🔒 Tu semana está lista — desbloqueala con tu plan</b>
+  <button class="btn btn-primary btn-sm" id="btnBuy3">Ver planes</button>
+</div></div>
+
+<!-- MODAL COMPRA -->
+<div class="overlay" id="ovPlans"><div class="modal">
+  <button class="x" id="xPlans">✕</button>
+  <h2>Tu semana está lista <span class="hl">🔒</span></h2>
+  <p class="msub">Llevate tus 5 posteos + tu semana armada, <b>todos los meses</b>, sin mover un dedo.</p>
+  <div class="plans" id="mPlans"><p style="text-align:center;color:var(--mut)">Cargando planes…</p></div>
+  <div class="mline"><span>💪</span><span><b>260 posteos al año</b> que no tuviste que hacer.</span></div>
+  <div class="mline"><span>⚡</span><span><b>Pagás hoy, mañana tu semana ya está publicada.</b> Así de rápido arrancás.</span></div>
+  <div class="mline"><span>🔥</span><span id="mSpots"><b>Quedan pocos lugares</b> este mes — cada negocio lleva trabajo personalizado.</span></div>
+  <div class="mline"><span>🛡️</span><span><b>Garantía de 30 días:</b> si tu Instagram no se ve transformado, te devolvemos el 100%.</span></div>
+  <p class="ref-tease">🎁 ¿Vienen de a dos? <b>Traé 2 amigos y pagá la mitad</b> todos los meses — tu link de referidos te espera en tu cuenta.</p>
+</div></div>
+
+<!-- LIGHTBOX -->
+<div class="lb" id="lb"><div class="lb-box">
+  <button class="x" id="xLb">✕</button>
+  <div id="lbMedia"></div>
+  <div class="lb-cap"><p id="lbCap"></p><div class="tags" id="lbTags"></div></div>
+</div></div>
+
+<div class="footer">Posta · Vos vendé. Nosotros posteamos. · Hecho en Argentina 🇦🇷</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Café / Restaurante","belleza":"Barbería / Peluquería / Estética","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","turismo":"Turismo / Hotelería","eventos":"Eventos / Fiestas","tecnologia":"Tecnología / Celulares","deco":"Muebles / Decoración","joyeria":"Joyería / Accesorios","fotografia":"Fotografía / Arte","profesionales":"Servicios profesionales","flores":"Florería / Vivero","bar":"Bar / Cervecería","otro":"Otro"};
+
+let TRIAL = null;      // respuesta del backend
+let COUNTRY = 'AR';
+let TONE = 'vos';
+let modalShown = false;
+
+function show(id) {
+  ['v-used','v-onboarding','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
+  window.scrollTo({ top: 0 });
+}
+
+// ---------- init ----------
+(async function init() {
+  $('#f_cat').innerHTML = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  $$('.tone-card').forEach((c) => { c.onclick = () => { $$('.tone-card').forEach((x) => x.classList.remove('on')); c.classList.add('on'); TONE = c.dataset.tone; }; });
+  $$('.country-btn').forEach((b) => { b.onclick = () => { $$('.country-btn').forEach((x) => x.classList.remove('on')); b.classList.add('on'); COUNTRY = b.dataset.c; }; });
+  $('#btnGo').onclick = startTrial;
+  $('#btnBuy2').onclick = openPlans;
+  $('#btnBuy3').onclick = openPlans;
+  $('#xPlans').onclick = closePlans;
+  $('#ovPlans').addEventListener('click', (e) => { if (e.target.id === 'ovPlans') closePlans(); });
+  $('#xLb').onclick = () => $('#lb').classList.remove('open');
+  $('#lb').addEventListener('click', (e) => { if (e.target.id === 'lb') $('#lb').classList.remove('open'); });
+
+  try {
+    const st = await (await fetch('/api/trial/status')).json();
+    if (st.used) { show('v-used'); return; }
+  } catch (e) { /* si falla, se intenta igual */ }
+  if (localStorage.getItem('posta_trial_done')) { show('v-used'); return; }
+  show('v-onboarding');
+})();
+
+// ---------- colores desde la imagen (posteos, no encabezado) ----------
+function extractPalette(img) {
+  const cw = 120, chh = 120;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  // contain: la captura entra completa
+  const s = Math.min(cw / img.naturalWidth, chh / img.naturalHeight);
+  const w = img.naturalWidth * s, h = img.naturalHeight * s;
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, chh);
+  cx.drawImage(img, (cw - w) / 2, (chh - h) / 2, w, h);
+  const d = cx.getImageData(0, 0, cw, chh).data;
+  const buckets = {};
+  // Solo el 65% inferior: la grilla de posteos (arriba quedan avatar/bio/botones)
+  for (let y = Math.floor(chh * 0.35); y < chh; y += 2) {
+    for (let x = 0; x < cw; x += 2) {
+      const i = (y * cw + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx - mn < 28) continue;                 // grises/blancos/negros del UI
+      if (mx > 242 && mn > 225) continue;          // blancos
+      if (mx < 24) continue;                       // negros
+      const key = [r >> 5, g >> 5, b >> 5].join(',');
+      buckets[key] = (buckets[key] || 0) + 1;
+    }
+  }
+  let best = null, bestN = 0;
+  for (const k in buckets) { if (buckets[k] > bestN) { bestN = buckets[k]; best = k; } }
+  if (!best) return null;
+  const [br, bg, bb] = best.split(',').map(Number);
+  const toHex = (v) => Math.round((v * 32 + 16)).toString(16).padStart(2, '0').toUpperCase();
+  return '#' + toHex(br) + toHex(bg) + toHex(bb);
+}
+
+// ---------- generar ----------
+const TK_STEPS = [
+  ['🔍', 'Analizando tu rubro…', 'Detectamos qué funciona en tu mercado.'],
+  ['💡', 'Creando 6 ideas para tu negocio…', 'Estrategia pensada para vos, no genérica.'],
+  ['🎨', 'Diseñando tus 5 posteos…', 'Con tus colores y tu nombre.'],
+  ['🎬', 'Armando tu video…', 'Formato vertical, listo para Reels.'],
+  ['📅', 'Organizando tu semana…', 'Cada post en su día, con su caption.'],
+];
+let tkTimer = null;
+
+async function startTrial() {
+  const biz = $('#f_biz').value.trim();
+  const err = $('#obErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  if (!biz) return fail('Contanos el nombre de tu negocio 🙂');
+  if (!$('#f_goal').value.trim()) return fail('Contanos qué querés lograr, así tu semana sale a medida 🙂');
+  err.style.display = 'none';
+
+  // Colores desde la imagen (si la subió): se procesa en el navegador, no se envía
+  const fileInput = $('#f_file');
+  if (fileInput.files && fileInput.files[0]) {
+    try {
+      const img = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im); im.onerror = rej;
+        im.src = URL.createObjectURL(fileInput.files[0]);
+      });
+      const pal = extractPalette(img);
+      if (pal) $('#f_accent').value = pal;
+    } catch (e) { /* sigue con los colores elegidos */ }
+  }
+
+  show('v-loading');
+  $('#tkTitle').textContent = 'Armando tu semana para ' + biz + '…';
+  const box = $('#tkSteps');
+  box.innerHTML = TK_STEPS.map((s, i) => `<div class="tstep" id="tk${i}"><div class="ic">${s[0]}</div><div><b>${s[1]}</b><small>${s[2]}</small></div></div>`).join('');
+  const bar = $('#tkBar'), pct = $('#tkPct');
+  let p = 0;
+  const mark = (i, cls) => { const el = $('#tk' + i); if (el) { el.classList.remove('act'); if (cls) el.classList.add(cls); } };
+  tkTimer = setInterval(() => {
+    p = Math.min(p + 1, 5);
+    for (let i = 0; i < 5; i++) {
+      if (i < p) { mark(i, 'done'); $('#tk' + i + ' .ic').textContent = '✓'; }
+      else if (i === p && p < 5) { $('#tk' + i).classList.add('act'); }
+    }
+    bar.style.width = (p / 5 * 100) + '%';
+    pct.textContent = Math.round(p / 5 * 100) + '%';
+    if (p >= 5) clearInterval(tkTimer);
+  }, 5200);
+  $('#tk0').classList.add('act');
+
+  const fd = new FormData();
+  fd.append('business', biz);
+  fd.append('ig', $('#f_ig').value.trim());
+  fd.append('category', $('#f_cat').value);
+  fd.append('country', COUNTRY);
+  fd.append('tone', TONE);
+  fd.append('goal', $('#f_goal').value.trim());
+  fd.append('competitors', $('#f_comp').value.trim());
+  fd.append('accent', $('#f_accent').value);
+  fd.append('btn', $('#f_btn').value);
+  if (fileInput.files && fileInput.files[0]) fd.append('photo', fileInput.files[0]);
+
+  try {
+    const t0 = Date.now();
+    const res = await fetch('/api/trial/generate', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No pudimos armar tu prueba');
+    // Que el tracker se vea completo aunque el backend haya sido rápido
+    const wait = Math.max(0, 9000 - (Date.now() - t0));
+    await new Promise((r) => setTimeout(r, wait));
+    clearInterval(tkTimer);
+    TRIAL = data;
+    localStorage.setItem('posta_trial_done', '1');
+    renderResults();
+  } catch (e) {
+    clearInterval(tkTimer);
+    show('v-onboarding');
+    fail(e.message || 'No pudimos armar tu prueba. Probá de nuevo.');
+  }
+}
+
+// ---------- resultados ----------
+function renderResults() {
+  const t = TRIAL;
+  $('#rBiz').textContent = t.business;
+  const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
+  $('#rSub').textContent = (t.ig ? '@' + t.ig + ' · ' : '') + 'Semana del ' + firstDay.date + ' al ' + lastDay.date + ' · 5 posteos listos';
+
+  $('#rIdeas').innerHTML = t.ideas.map((id) => `
+    <div class="idea"><span class="fmt">${esc(id.formato || 'IDEA')}</span><b>${esc(id.titulo)}</b><p>${esc(id.angulo)}</p></div>`).join('');
+
+  // Antes / después
+  $('#rBefore').innerHTML = t.screenshot
+    ? `<img src="${t.screenshot}" alt="Tu perfil hoy">`
+    : `<div class="ba-mock"><div style="font-size:40px;margin-bottom:10px">📭</div><b>Tu perfil hoy</b><p style="font-size:13px;margin-top:8px">Pocos posteos, sin constancia.<br>Así se ve el 80% de los negocios.</p></div>`;
+  $('#rAfter').innerHTML = t.posts.slice(0, 4).map((p) =>
+    p.type === 'video' ? `<div style="position:relative"><video src="${p.video}" muted playsinline preload="metadata"></video></div>` : `<img src="${p.image}" alt="Posteo">`).join('');
+
+  // Semana
+  $('#rWeek').innerHTML = t.week.map((w) => {
+    const p = t.posts[w.post];
+    const media = p.type === 'video'
+      ? `<video src="${p.video}" muted playsinline preload="metadata"></video><span class="vbadge">▶ VIDEO</span>`
+      : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}">`;
+    return `<div class="day" data-i="${w.post}"><div class="dh"><b>${esc(w.day)}</b><small>${esc(w.date)}</small></div><div class="db">${media}</div></div>`;
+  }).join('');
+  $$('#rWeek .day').forEach((d) => { d.onclick = () => openLb(parseInt(d.dataset.i, 10)); });
+
+  show('v-results');
+  const sc = $('#stickyCta');
+  sc.style.display = 'block';
+  // El cartel de compra en el pico de emoción (una sola vez, se puede cerrar)
+  if (!modalShown) {
+    modalShown = true;
+    setTimeout(() => { if ($('#v-results').style.display === 'block') openPlans(); }, 8000);
+  }
+}
+
+function openLb(i) {
+  const p = TRIAL.posts[i];
+  $('#lbMedia').innerHTML = p.type === 'video'
+    ? `<video src="${p.video}" controls playsinline></video>`
+    : `<img src="${p.image}" alt="Posteo">`;
+  $('#lbCap').textContent = p.caption || '';
+  $('#lbTags').textContent = p.hashtags || '';
+  $('#lb').classList.add('open');
+}
+
+// ---------- modal compra ----------
+let plansLoaded = false;
+async function openPlans() {
+  $('#ovPlans').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (plansLoaded) return;
+  try {
+    const cfg = await (await fetch('/api/billing/plans?country=' + COUNTRY)).json();
+    const perDay = (p) => {
+      const v = Math.round(p.price / 30).toLocaleString('es-AR');
+      return (p.currency === 'UYU' ? '≈ $U ' + v : '≈ $' + v) + '/día';
+    };
+    $('#mPlans').innerHTML = (cfg.plans || []).map((p) => `
+      <div class="plan${p.highlighted ? ' hot' : ''}">
+        ${p.highlighted ? '<div class="ptag">EL MÁS ELEGIDO 👈 tu semana fue así</div>' : ''}
+        <h4>Plan ${esc(p.name)}</h4>
+        <div class="pr">${esc(p.price_label)}<small>/mes</small></div>
+        <div class="pd">${perDay(p)} · menos que un café</div>
+        <ul>${(p.features || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+        <button class="btn ${p.highlighted ? 'btn-primary' : 'btn-ghost'} btn-block btn-sm" data-plan="${esc(p.id)}">Elegir ${esc(p.name)}</button>
+      </div>`).join('');
+    $$('#mPlans [data-plan]').forEach((b) => { b.onclick = () => choosePlan(b.dataset.plan); });
+    const spots = (typeof TRIAL.spots_left === 'number') ? TRIAL.spots_left : null;
+    const mes = new Date().toLocaleString('es', { month: 'long' });
+    if (spots !== null) $('#mSpots').innerHTML = `<b>Quedan ${spots} lugares</b> en ${mes} — cada negocio lleva trabajo personalizado.`;
+    plansLoaded = true;
+  } catch (e) {
+    $('#mPlans').innerHTML = '<p style="text-align:center;color:var(--mut)">No pudimos cargar los planes. <a href="/#planes" style="color:var(--cel);font-weight:700">Verlos en la web</a></p>';
+  }
+}
+function closePlans() {
+  $('#ovPlans').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function choosePlan(planId) {
+  try { localStorage.setItem('posta_chosen_plan', planId); } catch (e) {}
+  location.href = '/#/registro';
+}
+</script>
+</body>
+</html>
