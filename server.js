@@ -362,7 +362,10 @@ app.get('/api/ig/start', requireAuth, (req, res) => {
   const s = getSettings(req.session.userId);
   const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
   if (!appId) return res.status(400).json({ error: 'Configurá tu Meta App ID en Ajustes' });
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/ig/callback`;
+  // Forzar https en producción: Meta rechaza redirect_uri con http.
+  // (Sin 'trust proxy', req.protocol devuelve http detrás del proxy de Railway.)
+  const host = req.get('host');
+  const redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/callback`;
   const state = crypto.randomBytes(16).toString('hex');
   req.session.igState = state;
   req.session.igRedirect = redirectUri;

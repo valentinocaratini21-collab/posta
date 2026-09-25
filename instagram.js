@@ -3,7 +3,7 @@
 // Modo real: usa la Instagram Graph API (requiere cuenta Business/Creator
 // vinculada a una Página de Facebook y una app de Meta aprobada).
 
-const API_VERSION = 'v21.0';
+const API_VERSION = 'v26.0';
 
 function getAuthUrl(appId, redirectUri, state) {
   const scope = [
