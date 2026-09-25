@@ -412,11 +412,67 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Eliminación de datos (requerido por Meta App Review) ----------
+// Meta envía un POST form-encoded con `signed_request` cuando un usuario pide borrar sus datos.
+function parseMetaSignedRequest(signedRequest, secret) {
+  try {
+    const parts = String(signedRequest || '').split('.');
+    if (parts.length !== 2 || !secret) return null;
+    const [sigB64u, payloadB64u] = parts;
+    const b64 = (s) => Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const sig = b64(sigB64u);
+    const expected = crypto.createHmac('sha256', secret).update(payloadB64u).digest();
+    if (sig.length !== expected.length || !crypto.timingSafeEqual(sig, expected)) return null;
+    return JSON.parse(b64(payloadB64u).toString('utf8'));
+  } catch (e) { return null; }
+}
+
+app.post('/api/data-deletion', express.urlencoded({ extended: false }), (req, res) => {
+  const data = parseMetaSignedRequest(req.body.signed_request, process.env.META_APP_SECRET);
+  if (!data) return res.status(400).json({ error: 'signed_request inválido' });
+  const metaUserId = String(data.user_id || '');
+  try {
+    const s = metaUserId ? db.prepare('SELECT user_id FROM settings WHERE ig_user_id = ?').get(metaUserId) : null;
+    if (s) {
+      const uid = s.user_id;
+      db.prepare('DELETE FROM posts WHERE user_id = ?').run(uid);
+      db.prepare('DELETE FROM assets WHERE user_id = ?').run(uid);
+      db.prepare(`UPDATE settings SET ig_user_id='', ig_page_id='', ig_access_token='' WHERE user_id=?`).run(uid);
+      db.prepare('UPDATE profiles SET ig_username=NULL, ig_connected=0 WHERE user_id=?').run(uid);
+    }
+  } catch (e) { /* no bloquea la confirmación */ }
+  const code = crypto.randomBytes(8).toString('hex');
+  try { db.prepare('INSERT INTO deletion_requests (code, meta_user_id, status) VALUES (?, ?, ?)').run(code, metaUserId, 'done'); } catch (e) {}
+  const base = 'https://' + req.get('host');
+  res.json({ url: base + '/api/data-deletion/status?code=' + code, confirmation_code: code });
+});
+
+app.get('/api/data-deletion/status', (req, res) => {
+  const r = db.prepare('SELECT code, status, created_at FROM deletion_requests WHERE code = ?').get(String(req.query.code || ''));
+  if (!r) return res.status(404).json({ error: 'código no encontrado' });
+  res.json({ confirmation_code: r.code, status: r.status, deleted_at: r.created_at });
+});
+
 // ---------- Config pública (landing, CTAs) ----------
 app.get('/api/config', (req, res) => {
   res.json({
     mp_configured: mp.mpConfigured(),
   });
+});
+
+// Diagnóstico: ¿puede este servidor llegar a la API de MercadoPago?
+// (endpoint público e inofensivo: solo devuelve estado y latencia)
+app.get('/api/billing/mp-ping', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const r = await fetch('https://api.mercadopago.com/v1/payment_methods', {
+      headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN || ''}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    res.json({ ok: r.ok, status: r.status, ms: Date.now() - t0 });
+  } catch (e) {
+    res.json({ ok: false, error: e.name + ': ' + e.message, ms: Date.now() - t0 });
+  }
 });
 
 // ---------- Referidos: 2 amigos activos = 50% off ----------

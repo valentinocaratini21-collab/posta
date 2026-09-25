@@ -103,6 +103,16 @@ CREATE TABLE IF NOT EXISTS trial_usage (
 );
 `);
 
+// Eliminación de datos (requerido por Meta): solicitudes vía signed_request
+db.exec(`
+CREATE TABLE IF NOT EXISTS deletion_requests (
+  code TEXT PRIMARY KEY,
+  meta_user_id TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'done',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }

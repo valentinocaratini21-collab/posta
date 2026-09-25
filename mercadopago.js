@@ -14,14 +14,23 @@ function mpConfigured() {
 }
 
 async function mpFetch(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`${MP_API}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${MP_API}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch (e) {
+    if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+      throw new Error('MercadoPago no responde (timeout). Probá de nuevo en unos minutos.');
+    }
+    throw new Error('No se pudo conectar con MercadoPago.');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data.message || data.error || `MP ${res.status}`;
