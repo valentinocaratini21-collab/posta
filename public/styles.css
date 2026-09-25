@@ -49,6 +49,8 @@ a{color:inherit;text-decoration:none}
 .phone .screen{border-radius:32px;overflow:hidden;background:#000}
 .phone img{width:100%;display:block}
 .phone video{width:100%;display:block;aspect-ratio:9/16;object-fit:cover;background:#000}
+.show-row .phone video{aspect-ratio:4/5}
+.show-row .phone img{aspect-ratio:4/5;object-fit:cover}
 /* showcase */
 .show-row{display:flex;justify-content:center;gap:28px;margin-top:56px;flex-wrap:wrap;align-items:flex-start}
 .phone.sm{width:250px}
