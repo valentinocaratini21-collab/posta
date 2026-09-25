@@ -1095,7 +1095,7 @@ function ajustesView() {
       <div class="d">En modo demo las publicaciones se simulan: probá todo el flujo sin conectar nada. Desactivalo para publicar de verdad.</div></div>
       <div class="toggle ${s.demo_mode ? 'on' : ''}" id="tglDemo"></div></div>
     <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar` : 'Todavía no conectaste tu Instagram. Necesitás una cuenta Business vinculada a una Página de Facebook.'}</div></div>
+      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar` : 'Todavía no conectaste tu Instagram. Necesitás una cuenta profesional (Business o Creator).'}</div></div>
       ${p.ig_connected ? `<button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button>` : `<button class="btn btn-soft btn-sm" id="btnIgConn">Conectar Instagram</button>`}
     </div>
     <div id="igMsg"></div>
@@ -1107,6 +1107,8 @@ function ajustesView() {
       <div class="field"><label>Meta App ID</label><input id="s_appid" value="${esc(s.meta_app_id)}" placeholder="123456789"></div>
       <div class="field"><label>Meta App Secret</label><input id="s_appsecret" type="password" value="${esc(s.meta_app_secret)}" placeholder="••••••"></div>
     </div>
+    <div class="field"><label>Instagram Embed URL <span style="color:var(--dim);font-weight:400">(del dashboard de Meta → caso de uso Instagram → "API setup with Instagram login")</span></label>
+      <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?..."></div>
     <div class="field"><label>URL pública de imágenes <span style="color:var(--dim);font-weight:400">(para publicar de verdad, ej: https://tu-dominio.com)</span></label>
       <input id="s_imgurl" value="${esc(s.image_base_url)}" placeholder="https://..."></div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar integraciones</button> <span id="setMsg"></span>
@@ -1598,7 +1600,8 @@ function bindSettings() {
   $('#btnSaveSettings').onclick = async () => {
     await api.put('/api/settings', {
       openai_key: $('#s_openai').value, meta_app_id: $('#s_appid').value,
-      meta_app_secret: $('#s_appsecret').value, image_base_url: $('#s_imgurl').value,
+      meta_app_secret: $('#s_appsecret').value, ig_embed_url: $('#s_igembed').value,
+      image_base_url: $('#s_imgurl').value,
     });
     $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
   };
