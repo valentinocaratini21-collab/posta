@@ -17,6 +17,22 @@ const DEMO_VIDEO_SCRIPT = path.join(__dirname, 'demo_video.py');
 const FONTS_DIR = path.join(__dirname, 'assets', 'fonts');
 const STOCK_DIR = path.join(__dirname, 'public', 'demo-stock');
 
+// Auto-extrae public/demo-stock.zip (librería de 59 fotos) si faltan fotos.
+// Permite subir la librería como un solo archivo en vez de 59 sueltos.
+(function ensureStock() {
+  try {
+    const zip = path.join(__dirname, 'public', 'demo-stock.zip');
+    if (!fs.existsSync(zip)) return;
+    let have = 0;
+    try { have = fs.readdirSync(STOCK_DIR).filter((f) => f.endsWith('.webp')).length; } catch (_) {}
+    if (have >= 59) return;
+    fs.mkdirSync(STOCK_DIR, { recursive: true });
+    execFileSync('python3', ['-c',
+      'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])',
+      zip, STOCK_DIR], { stdio: 'ignore', timeout: 60000 });
+  } catch (_) {}
+})();
+
 const DEMO_LIMIT_PER_DAY = 5;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -51,24 +67,49 @@ const CATEGORY_LABELS = {
 const COUNTRIES = ['AR', 'UY'];
 
 // Familia fotográfica por rubro (8 fotos high-key en public/demo-stock/).
-const CATEGORY_PHOTO = {
-  moda: 'fashion', joyeria: 'fashion',
-  gastronomia: 'food', bar: 'bar',
-  belleza: 'beauty',
-  fitness: 'fitness',
-  mascotas: 'pets',
-  hogar: 'home', deco: 'home', flores: 'home', inmobiliaria: 'home',
-  salud: 'office', profesionales: 'office', educacion: 'office', tecnologia: 'office',
-  turismo: 'lifestyle', eventos: 'lifestyle', fotografia: 'lifestyle', autos: 'lifestyle', otro: 'lifestyle',
+// 59 fotos stock en public/demo-stock/: 9 familias ({fam}.webp original +
+// {fam}-1..N.webp). Cada rubro tiene un pool de ~10 fotos creibles; cada demo
+// usa 3 fotos distintas elegidas al azar del pool.
+function fam(f, n) { const a = [f]; for (let i = 1; i <= n; i++) a.push(f + '-' + i); return a; }
+const FASHION = fam('fashion', 6), FOOD = fam('food', 6), BEAUTY = fam('beauty', 6),
+      FITNESS = fam('fitness', 5), PETS = fam('pets', 5), HOME = fam('home', 6),
+      OFFICE = fam('office', 5), LIFE = fam('lifestyle', 6), BAR = fam('bar', 5);
+
+const CATEGORY_PHOTOS = {
+  moda: [...FASHION, ...LIFE.slice(0, 2), ...BEAUTY.slice(0, 2)],
+  joyeria: [...FASHION.slice(0, 4), ...BEAUTY.slice(0, 4), ...LIFE.slice(0, 2)],
+  gastronomia: [...FOOD, ...BAR.slice(0, 2), ...LIFE.slice(0, 2)],
+  bar: [...BAR, ...FOOD.slice(0, 3), ...LIFE.slice(0, 2)],
+  belleza: [...BEAUTY, ...FASHION.slice(0, 2), ...LIFE.slice(0, 2)],
+  fitness: [...FITNESS, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
+  mascotas: [...PETS, ...HOME.slice(0, 3), ...LIFE.slice(0, 2)],
+  hogar: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
+  deco: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
+  flores: [...HOME.slice(0, 4), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
+  inmobiliaria: [...HOME.slice(0, 5), ...OFFICE.slice(0, 3), ...LIFE.slice(0, 2)],
+  salud: [...OFFICE.slice(0, 4), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
+  profesionales: [...OFFICE, ...HOME.slice(0, 2), ...LIFE.slice(0, 3)],
+  educacion: [...OFFICE, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
+  tecnologia: [...OFFICE, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
+  turismo: [...LIFE, ...BAR.slice(0, 2), ...FOOD.slice(0, 2)],
+  eventos: [...BAR.slice(0, 4), ...LIFE.slice(0, 4), ...FOOD.slice(0, 2)],
+  fotografia: [...LIFE.slice(0, 5), ...FASHION.slice(0, 3), ...OFFICE.slice(0, 2)],
+  autos: [...OFFICE.slice(0, 4), ...LIFE.slice(0, 4), ...HOME.slice(0, 2)],
+  otro: [...LIFE.slice(0, 5), ...OFFICE.slice(0, 3), ...HOME.slice(0, 2)],
 };
 
-function stockFor(category, i) {
-  // Los 3 posteos usan la foto de la familia del rubro (sin rotar a otra
-  // familia: una foto que no matchea el rubro rompe la credibilidad).
-  const fam = CATEGORY_PHOTO[category] || 'lifestyle';
-  const p = path.join(STOCK_DIR, fam + '.webp');
-  if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
-  return p;
+function stockPhotos3(category) {
+  const pool = (CATEGORY_PHOTOS[category] || CATEGORY_PHOTOS.otro).slice();
+  // shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 3).map((fam) => {
+    const p = path.join(STOCK_DIR, fam + '.webp');
+    if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
+    return p;
+  });
 }
 
 // ---------- Colores elegidos por el visitante ----------
@@ -586,13 +627,25 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
 
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-demo-'));
   try {
+    // 3 estilos distintos al azar de la libreria de 9 + 3 fotos distintas.
+    const stylePool = ['promo', 'editorial', 'nocturno', 'bloque', 'marco', 'sello', 'cita', 'tipografico', 'oferta'];
+    for (let i = stylePool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [stylePool[i], stylePool[j]] = [stylePool[j], stylePool[i]];
+    }
+    const styles3 = stylePool.slice(0, 3);
+    const stock3 = photoPath ? null : stockPhotos3(cat);
+    const focuses = [0.35, 0.5, 0.65];
     const posts = topics.map((t, i) => {
-      // Foto: la del usuario si la subió; si no, stock de la familia del rubro.
-      const photo = photoPath || stockFor(cat, i);
+      // Foto: la del usuario si la subió (misma en los 3); si no, 3 fotos
+      // distintas del pool creible del rubro, con encuadre variado.
+      const photo = photoPath || stock3[i];
       let headline = t.headline;
       if (tone === 'tu') headline = TU_HEADLINES[headline] || headline;
       return {
         photo,
+        style: styles3[i],
+        focus: focuses[i],
         pill: t.tag,
         bar,
         headline,
@@ -619,12 +672,17 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     });
 
     // 2 posteos estáticos + 1 video (el 3er diseño, animado con zoom suave).
+    // Si el render del video falla de forma transitoria, se reintenta una vez
+    // antes de caer al fallback de imagen.
     let videoB64 = null;
-    try {
-      const vbuf = await renderDemoVideo(path.join(runDir, 'post-2.png'), runDir);
-      videoB64 = vbuf.toString('base64');
-    } catch (e) {
-      console.error('[posta] Video de la demo falló, devuelvo imagen:', e.message);
+    for (let attempt = 0; attempt < 2 && !videoB64; attempt++) {
+      try {
+        const vbuf = await renderDemoVideo(path.join(runDir, 'post-2.png'), runDir);
+        videoB64 = vbuf.toString('base64');
+      } catch (e) {
+        console.error('[posta] Video de la demo falló (intento ' + (attempt + 1) + '):', e.message);
+        if (!videoB64 && attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+      }
     }
 
     return [
@@ -652,6 +710,6 @@ module.exports = {
   MAX_FILE_BYTES,
   CATEGORIES,
   CATEGORY_LABELS,
-  CATEGORY_PHOTO,
+  CATEGORY_PHOTOS,
   COUNTRIES,
 };
