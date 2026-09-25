@@ -8,7 +8,7 @@ const PLANS_AR = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 29900,
+    price: 39900,
     currency: 'ARS',
     postsPerWeek: 3,
     tagline: 'Para empezar a estar presente',
@@ -22,7 +22,7 @@ const PLANS_AR = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 59900,
+    price: 79900,
     currency: 'ARS',
     postsPerWeek: 5,
     tagline: 'Para crecer de verdad',
@@ -38,7 +38,7 @@ const PLANS_AR = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 99900,
+    price: 129900,
     currency: 'ARS',
     postsPerWeek: 7,
     tagline: 'Presencia total, todos los días',
