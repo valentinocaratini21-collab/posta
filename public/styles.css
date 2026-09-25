@@ -186,6 +186,62 @@ a{color:inherit;text-decoration:none}
 /* Video thumb en listas */
 .post-item video.thumb{width:74px;height:92px;object-fit:cover;border-radius:10px;flex:none;background:#000}
 
+/* ===== Posta extras (pz-*): landing + referidos ===== */
+.pz-perday{font-size:13px;color:var(--dim);margin:-8px 0 14px;font-weight:600}
+.pz-beforeafter{margin-top:64px}
+.pz-beforeafter h3{font-size:24px;font-weight:800;margin-bottom:24px}
+.pz-ba-row{display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap}
+.pz-ba-panel{background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:var(--shadow);width:300px}
+.pz-ba-label{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--dim);margin-bottom:14px}
+.pz-ba-label-on{color:var(--cel)}
+.pz-ba-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pz-ba-grid span{aspect-ratio:1/1;border-radius:10px;background:linear-gradient(135deg,#EDF2F7,#E2E8F0)}
+.pz-ba-panel img{width:100%;border-radius:12px;display:block}
+.pz-ba-arrow{font-size:44px;color:var(--cel);font-weight:800;line-height:1}
+.pz-trialband{background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:34px 0}
+.pz-trialband .wrap{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.pz-trialband-txt b{display:block;font-size:19px;margin-bottom:6px}
+.pz-trialband-txt span{color:var(--mut);font-size:15px}
+.pz-refband{background:linear-gradient(120deg,#2793C8,#1E7FAE);color:#fff;text-align:center;font-weight:700;font-size:14px;padding:10px 16px}
+.pz-calc{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:32px;max-width:520px;margin:36px auto 0;text-align:left}
+.pz-calc .btn{margin-top:8px}
+.pz-calc-out{margin-top:18px;font-size:17px;color:var(--mut);background:var(--bg2);border-radius:14px;padding:16px 18px;line-height:1.5}
+.pz-calc-out b{color:var(--txt)}
+.pz-disc{background:#F0F9FF;border:1px solid #CFE7F5;color:var(--txt);border-radius:14px;padding:12px 16px;font-size:14px;margin:12px 0}
+.pz-refrow{display:flex;gap:10px;margin:12px 0}
+.pz-refrow input{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--mut);background:var(--bg2);min-width:0}
+.pz-refbar{height:10px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:10px 0}
+.pz-refbar div{height:100%;background:linear-gradient(90deg,var(--cel),#5BB8E3);border-radius:999px;transition:width .4s}
+@media(max-width:640px){.pz-ba-arrow{transform:rotate(90deg)}}
+/* mobile topbar */
+.mtop{display:none}
+@media(max-width:760px){
+  .mtop{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.94);z-index:40;backdrop-filter:blur(10px)}
+  .mtabs{display:flex;gap:6px;overflow-x:auto;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:57px;background:var(--bg);z-index:39}
+}
+.mtab{flex:none;border:none;background:var(--card2);color:var(--mut);font-weight:700;font-size:14px;padding:10px 18px;border-radius:999px;cursor:pointer;font-family:inherit}
+.mtab.on{background:var(--yl);color:#0A1E33}
+
+/* Planes landing */
+.plans-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px;align-items:stretch}
+.plans-row .price-card{margin:0;max-width:none}
+.price-card.hot{border-color:var(--cel);box-shadow:0 20px 60px rgba(39,147,200,.18)}
+.price-card.hot .tag{background:var(--yl);color:#0A1E33}
+
+/* FAQ */
+.faq details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 24px;margin-bottom:12px;box-shadow:var(--shadow)}
+.faq summary{font-weight:700;font-size:17px;cursor:pointer;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";float:right;color:var(--cel);font-size:22px}
+.faq details[open] summary::after{content:"–"}
+.faq details p{color:var(--mut);font-size:15px;line-height:1.65;margin-top:12px}
+
+/* Onboarding */
+.goal-card:hover{border-color:var(--cel)!important}
+
+/* Video thumb en listas */
+.post-item video.thumb{width:74px;height:92px;object-fit:cover;border-radius:10px;flex:none;background:#000}
+
 /* ===== Landing mobile (≤760px): nav hamburguesa + hero compacto ===== */
 .nav-landing .hamburger{display:none}
 .nav-landing .mobile-menu{display:none}

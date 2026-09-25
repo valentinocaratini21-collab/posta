@@ -28,6 +28,14 @@ let ASSETS = [];
 let PLANS_CACHE = null;
 let LANDING_ON = false;
 
+// Referidos: cache de GET /api/referrals/mine (una sola llamada por sesión)
+let PZ_REF_PROMISE = null;
+let PZ_AUTO_PLAN = false;
+async function pzReferral() {
+  if (!PZ_REF_PROMISE) PZ_REF_PROMISE = api.get('/api/referrals/mine').catch(() => null);
+  return PZ_REF_PROMISE;
+}
+
 async function refreshSession() {
   try {
     const { user } = await api.get('/api/auth/me');
@@ -67,12 +75,20 @@ function slotDate19(i, tz) {
 const TIMEZONES = ['America/Argentina/Buenos_Aires', 'America/Santiago', 'America/Asuncion', 'America/Montevideo', 'America/Sao_Paulo', 'America/Bogota', 'America/Lima', 'America/Mexico_City', 'America/New_York', 'Europe/Madrid'];
 
 /* ---------- LANDING ---------- */
+// Precio por día bajo cada plan (landing)
+function pzPerDayHTML(p) {
+  const per = Math.round(Number(p.price || 0) / 30);
+  if (!per) return '';
+  const sym = p.currency === 'UYU' ? '$U ' : '$';
+  return `<div class="pz-perday">≈ ${sym}${per.toLocaleString('es-AR')} por día</div>`;
+}
 function planCardsHTML(plans) {
   return (plans || []).map(p => `
     <div class="price-card${p.highlighted ? ' hot' : ''}">
       ${p.highlighted ? '<div class="tag">EL MÁS ELEGIDO</div>' : ''}
       <h3>Plan ${esc(p.name)}</h3>
       <div class="price">${esc(p.price_label)}<small>/mes</small></div>
+      ${pzPerDayHTML(p)}
       <p style="color:var(--mut);font-size:14px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="#/registro">Empezar ahora</a>
@@ -90,7 +106,6 @@ function toggleMobileMenu() {
   const m = document.getElementById('mobileMenu');
   if (m) m.classList.toggle('open');
 }
-
 async function switchPlansCountry(c) {
   PLANS_COUNTRY = (c === 'UY') ? 'UY' : 'AR';
   document.querySelectorAll('.country-toggle button').forEach(b => b.classList.toggle('on', b.dataset.country === PLANS_COUNTRY));
@@ -104,12 +119,33 @@ async function switchPlansCountry(c) {
   } catch (e) { /* mantiene los planes actuales */ }
 }
 
+// Banda fina si llegó con link de referido (?ref= guardado en localStorage)
+function pzRefBandHTML() {
+  try {
+    if (localStorage.getItem('posta_ref')) return `<div class="pz-refband">🎉 Llegaste con el link de un amigo</div>`;
+  } catch (e) {}
+  return '';
+}
+// Calculadora "cuánto te cuesta hacerlo vos" (global, la llama el botón)
+function calcDIY() {
+  const h = Math.max(0, parseFloat(($('#diy_hours') || {}).value) || 0);
+  const r = Math.max(0, parseFloat(($('#diy_rate') || {}).value) || 0);
+  const out = $('#diy_out');
+  if (!out) return;
+  const monthly = Math.round(h * r * 4);
+  const pro = (PLANS_CACHE && PLANS_CACHE.plans || []).find(p => p.id === 'pro');
+  const sym = (pro && pro.currency === 'UYU') ? '$U ' : '$';
+  const proLabel = pro ? pro.price_label : '$59.900';
+  out.innerHTML = `Hacerlo vos te cuesta <b>${sym}${monthly.toLocaleString('es-AR')}/mes</b> · Posta Pro: <b>${esc(proLabel)}/mes</b>`;
+  out.style.display = 'block';
+}
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
   PLANS_COUNTRY = country;
   const planCards = planCardsHTML(plans);
   return `
+  ${pzRefBandHTML()}
   <div class="nav nav-landing"><div class="wrap">
     <a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <div class="nav-links">
@@ -140,6 +176,20 @@ function landingView(cfg) {
       <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
       <a class="btn btn-ghost" href="/demo">✨ Probar gratis</a>
     </div>
+    <div class="pz-beforeafter">
+      <h3>La diferencia se ve en una semana</h3>
+      <div class="pz-ba-row">
+        <div class="pz-ba-panel">
+          <div class="pz-ba-label">TU INSTAGRAM HOY</div>
+          <div class="pz-ba-grid">${'<span></span>'.repeat(9)}</div>
+        </div>
+        <div class="pz-ba-arrow">→</div>
+        <div class="pz-ba-panel">
+          <div class="pz-ba-label pz-ba-label-on">CON POSTA</div>
+          <img src="hero-post.png" alt="Instagram gestionado por Posta">
+        </div>
+      </div>
+    </div>
     <div class="hero-note">Sin tarjeta · 7 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
@@ -156,9 +206,13 @@ function landingView(cfg) {
     <div class="sample-txt"><b>🎁 3 posteos de muestra GRATIS</b><span>Generala vos mismo en 30 segundos, con tu negocio real. Sin registro.</span></div>
     <a class="btn btn-primary" href="/demo">Quiero mi muestra gratis</a>
   </div></div>
+  <div class="pz-trialband"><div class="wrap">
+    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armamos tus ideas + tu semana en 2 minutos. Una sola vez, sin registro.</span></div>
+    <a class="btn btn-primary" href="/prueba">Probar la app</a>
+  </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
     <h2>Hecho con Posta</h2>
-    <p class="lede">Diseños y videos creados en minutos, para cualquier rubro.</p>
+    <p class="lede">Diseños y videos creados en minutos, para cualquier rubro. Cada post de nuestros clientes lleva la marca Hecho con Posta — es nuestra mejor publicidad.</p>
     <div class="show-row">
       <div class="phone sm"><div class="screen"><img src="post-food.png" alt="Diseño para restaurante creado por Posta"></div></div>
       <div class="phone sm"><div class="screen"><video src="video-food.mp4" autoplay muted loop playsinline></video></div></div>
@@ -172,7 +226,7 @@ function landingView(cfg) {
     <div class="steps">
       <div class="step"><div class="num">1</div><h3>Contanos tu negocio una vez</h3><p>Qué vendés, tu estilo y tus competidores. Te lleva 2 minutos y no te pedimos más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Ideas estratégicas, diseños con tus fotos y tu marca, captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Publicamos solos</h3><p>Tu semana armada y publicada automáticamente a la mejor hora. Vos ni te enterás.</p></div>
+      <div class="step"><div class="num">3</div><h3>Tu semana, armada</h3><p>Ideas, diseños y captions programados a la mejor hora. Vos elegís cuándo sale cada post.</p></div>
     </div>
   </div></div>
   <div class="section" id="incluye" style="background:var(--bg2)"><div class="wrap">
@@ -185,6 +239,17 @@ function landingView(cfg) {
       <div class="feat"><div class="ico">🎬</div><h3>Videos para Reels</h3><p>Convertimos tus fotos en videos verticales con música, listos para el formato que más rinde.</p></div>
       <div class="feat"><div class="ico">📅</div><h3>Publicación automática</h3><p>Programamos tu semana completa y el sistema publica solo, a la hora exacta, en tu cuenta real.</p></div>
       <div class="feat"><div class="ico">🔍</div><h3>Diferenciación de tu competencia</h3><p>Nos contás quiénes son tus competidores y creamos contenido que te haga destacar, no copiar.</p></div>
+    </div>
+  </div></div>
+  <div class="section" id="calculadora" style="background:var(--bg2)"><div class="wrap" style="max-width:760px;text-align:center">
+    <h2>¿Cuánto te cuesta hacerlo vos?</h2>
+    <p class="lede">La cuenta que nadie hace antes de contratar un community manager.</p>
+    <div class="pz-calc">
+      <div class="field"><label>Horas por semana que le dedicás</label><input id="diy_hours" type="number" min="0" value="5"></div>
+      <div class="field"><label>Valor de tu hora ($)</label><input id="diy_rate" type="number" min="0" value="8000"></div>
+      <button class="btn btn-primary" onclick="calcDIY()">Calcular</button>
+      <div id="diy_out" class="pz-calc-out" style="display:none"></div>
+      <div style="text-align:center;margin-top:14px"><a class="btn btn-ghost" href="/prueba">Probar gratis</a></div>
     </div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
@@ -208,8 +273,10 @@ function landingView(cfg) {
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un post?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
-      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Vos elegís: automático total o con tu aprobación previa. Todo queda visible en tu calendario para revisar antes de que salga.</p></details>
+      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Vos elegís: publicación programada o con tu aprobación previa. Todo queda visible en tu calendario para revisar antes de que salga.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si tu Instagram no se ve transformado, te devolvemos el 100%. Sin preguntas.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Al día siguiente: pagás hoy y mañana tu primera semana ya está armada y programada.</p></details>
+      <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 amigos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
@@ -964,6 +1031,9 @@ function ajustesView() {
   <div class="card" style="border:2px solid var(--yl)"><h3>💳 Mi plan</h3>
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div>
+  <div class="card" style="border:2px solid var(--cel)"><h3>🎁 Referidos · 50% off</h3>
+    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div>
   <div class="card"><h3>🏪 Tu negocio</h3>
     <div class="row2">
       <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
@@ -1169,7 +1239,9 @@ function bindOnboarding() {
       }
       await api.put('/api/settings', { preferred_palette: palIdx });
       await refreshSession();
-      location.hash = '#/app/ideas';
+      // Si viene de /prueba con plan preseleccionado, va directo a elegirlo
+      const chosenPlan = localStorage.getItem('posta_chosen_plan');
+      location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/ideas';
     } catch (e) {
       $('#obMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
       fin.disabled = false; fin.textContent = '✨ Listo, a crear contenido';
@@ -1180,6 +1252,14 @@ function bindOnboarding() {
 /* ---------- ROUTER ---------- */
 async function render() {
   const root = $('#app');
+  // Captura de código de referido (?ref=): se guarda una vez, sanitizado
+  try {
+    const r = new URLSearchParams(location.search).get('ref');
+    if (r) {
+      const clean = String(r).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      if (clean) localStorage.setItem('posta_ref', clean);
+    }
+  } catch (e) {}
   const hash = location.hash || '#/';
   const [path] = hash.split('?');
 
@@ -1201,11 +1281,23 @@ async function render() {
     $('#btnAuth').onclick = async () => {
       const email = $('#f_email').value, password = $('#f_pass').value;
       try {
-        await api.post(path === '#/login' ? '/api/auth/login' : '/api/auth/register', { email, password });
+        const isReg = path !== '#/login';
+        const body = { email, password };
+        if (isReg) {
+          const rf = localStorage.getItem('posta_ref');
+          if (rf) body.ref = rf;
+        }
+        await api.post(isReg ? '/api/auth/register' : '/api/auth/login', body);
         await refreshSession();
-        // Onboarding si el perfil está incompleto
-        location.hash = (PROFILE && PROFILE.business_name) ? '#/app/crear' : '#/app/onboarding';
-        if (!PROFILE || !PROFILE.business_name) OB = freshOB();
+        if (isReg) localStorage.removeItem('posta_ref');
+        // Onboarding si el perfil está incompleto; si viene de /prueba, va a elegir plan
+        const chosen = localStorage.getItem('posta_chosen_plan');
+        if (PROFILE && PROFILE.business_name) {
+          location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '#/app/crear';
+        } else {
+          location.hash = '#/app/onboarding';
+          OB = freshOB();
+        }
       } catch (e) { $('#formErr').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
     };
     return;
@@ -1431,7 +1523,58 @@ function bindSettings() {
           }
         };
       }
+      // 🎁 50% off por referidos: se aplica automáticamente al suscribirte
+      try {
+        const refInfo = await pzReferral();
+        if (refInfo && refInfo.discount_active) {
+          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎁 <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
+        }
+      } catch (e) {}
+      // Plan preseleccionado desde /prueba (?plan_sel=): click programático UNA vez
+      if (!PZ_AUTO_PLAN && !hasActive) {
+        const pq = new URLSearchParams(location.hash.split('?')[1] || '');
+        const sel = (pq.get('plan_sel') || '').replace(/[^a-z]/g, '');
+        if (sel) {
+          PZ_AUTO_PLAN = true;
+          try { history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {}
+          localStorage.removeItem('posta_chosen_plan');
+          const btn = document.querySelector(`#planList [data-sub="${sel}"]`);
+          if (btn && !btn.disabled) btn.click();
+        }
+      }
     } catch (e) { z.innerHTML = `<div class="err">No se pudieron cargar los planes</div>`; }
+  })();
+  // 🎁 Referidos
+  (async () => {
+    const z = $('#refZone');
+    if (!z) return;
+    const info = await pzReferral();
+    if (!info || !info.ok) { z.innerHTML = `<p style="color:var(--dim)">No se pudo cargar tu link de referidos.</p>`; return; }
+    const n = info.referred_count || 0, need = info.needed || 2;
+    const pct = Math.min(100, Math.round(n / need * 100));
+    const missing = Math.max(0, need - n);
+    z.innerHTML = `
+      <p style="color:var(--mut);font-size:14px;margin-bottom:4px">Compartí tu link personal: si <b>${need} amigos</b> se suscriben con tu link, <b>pagás la mitad todos los meses</b>.</p>
+      <div class="pz-refrow">
+        <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
+        <button class="btn btn-primary btn-sm" id="pzRefCopy">Copiar</button>
+      </div>
+      <div class="pz-refbar"><div style="width:${pct}%"></div></div>
+      <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> amigos suscriptos</p>
+      ${info.discount_active
+        ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b> en tu suscripción.</div>`
+        : `<p style="font-size:14px">Te falta(n) <b>${missing}</b>: cuando ${need} amigos se suscriban con tu link, pagás la mitad.</p>`}
+      <span id="pzRefMsg" style="font-size:13px"></span>`;
+    $('#pzRefCopy').onclick = async () => {
+      const v = $('#pzRefLink').value;
+      try { await navigator.clipboard.writeText(v); }
+      catch (e) {
+        const t = document.createElement('textarea'); t.value = v; document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); } catch (e2) {}
+        t.remove();
+      }
+      $('#pzRefMsg').innerHTML = '<span style="color:var(--cel)">✅ Link copiado</span>';
+    };
   })();
   // Marca
   const bBlog = $('#btnBrandLogo');
