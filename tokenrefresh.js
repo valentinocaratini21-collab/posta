@@ -1,14 +1,14 @@
 // Refresh de tokens de Instagram — Posta
 // Los tokens long-lived de Meta vencen a los 60 días.
 // Cron diario: refresca los tokens con más de 50 días de antigüedad vía
-// GET /oauth/access_token?grant_type=fb_exchange_token
+// GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token
 // Si el refresh falla, se loguea claro y se marca settings.ig_token_warning=1
 // para avisarle al usuario en Ajustes.
 
 const cron = require('node-cron');
 const db = require('./db');
+const { refreshLongLivedToken } = require('./instagram');
 
-const API_VERSION = 'v21.0';
 const REFRESH_AFTER_DAYS = 50;
 
 function daysSince(iso) {
@@ -19,27 +19,10 @@ function daysSince(iso) {
 }
 
 async function refreshOneToken(s) {
-  const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
-  const appSecret = s.meta_app_secret || process.env.IG_APP_SECRET || process.env.META_APP_SECRET;
-  if (!appId || !appSecret) {
-    console.log(`[posta] Token user ${s.user_id}: sin credenciales de Meta, no se puede refrescar`);
-    return;
-  }
-  const params = new URLSearchParams({
-    grant_type: 'fb_exchange_token',
-    client_id: appId,
-    client_secret: appSecret,
-    fb_exchange_token: s.ig_access_token,
-  });
-  const res = await fetch(
-    `https://graph.facebook.com/${API_VERSION}/oauth/access_token?${params}`
-  );
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message || 'Error de Meta');
-  if (!data.access_token) throw new Error('Meta no devolvió un token nuevo');
+  const newToken = await refreshLongLivedToken(s.ig_access_token);
   db.prepare(
     `UPDATE settings SET ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, updated_at=datetime('now') WHERE user_id=?`
-  ).run(data.access_token, s.user_id);
+  ).run(newToken, s.user_id);
   console.log(`[posta] Token de Instagram refrescado para el usuario ${s.user_id}`);
 }
 

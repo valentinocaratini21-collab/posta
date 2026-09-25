@@ -7,7 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
 const { generateContent, generateIdeas } = require('./generator');
-const { getAuthUrl, exchangeCode, findIgAccount } = require('./instagram');
+const { getAuthUrl, exchangeCodeForTokens, getIgUsername } = require('./instagram');
 const { startScheduler } = require('./scheduler');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { renderVideo, ffmpegAvailable } = require('./video');
@@ -152,7 +152,7 @@ const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
 app.get('/api/settings', requireAuth, (req, res) => res.json(maskSettings(getSettings(req.session.userId))));
 
 app.put('/api/settings', requireAuth, (req, res) => {
-  const { openai_key, demo_mode, meta_app_id, meta_app_secret, image_base_url, timezone, preferred_palette, brand_colors } = req.body || {};
+  const { openai_key, demo_mode, meta_app_id, meta_app_secret, ig_embed_url, image_base_url, timezone, preferred_palette, brand_colors } = req.body || {};
   const cur = getSettings(req.session.userId);
   let bc = cur.brand_colors || '';
   if (brand_colors !== undefined) {
@@ -161,12 +161,13 @@ app.put('/api/settings', requireAuth, (req, res) => {
     bc = clean.length >= 2 ? JSON.stringify(clean) : '';
   }
   db.prepare(
-    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, updated_at=datetime('now') WHERE user_id=?`
+    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, ig_embed_url=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, updated_at=datetime('now') WHERE user_id=?`
   ).run(
     openai_key && !openai_key.startsWith('••••') ? openai_key : cur.openai_key,
     demo_mode === undefined ? cur.demo_mode : (demo_mode ? 1 : 0),
     meta_app_id || '',
     meta_app_secret && !meta_app_secret.startsWith('••••') ? meta_app_secret : cur.meta_app_secret,
+    ig_embed_url || '',
     image_base_url || '',
     validTimezone(timezone) ? timezone : (cur.timezone || DEFAULT_TZ),
     Number.isInteger(preferred_palette) ? preferred_palette : (cur.preferred_palette ?? 0),
@@ -357,19 +358,25 @@ app.delete('/api/posts/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- Instagram OAuth ----------
+// ---------- Instagram OAuth (Instagram Login / Business Login) ----------
 app.get('/api/ig/start', requireAuth, (req, res) => {
   const s = getSettings(req.session.userId);
-  const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
-  if (!appId) return res.status(400).json({ error: 'Configurá tu Meta App ID en Ajustes' });
-  // Forzar https en producción: Meta rechaza redirect_uri con http.
-  // (Sin 'trust proxy', req.protocol devuelve http detrás del proxy de Railway.)
-  const host = req.get('host');
-  const redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/callback`;
+  const embedUrl = s.ig_embed_url || process.env.META_IG_EMBED_URL || process.env.IG_EMBED_URL;
+  if (!embedUrl)
+    return res.status(400).json({ error: 'Configurá tu Instagram Embed URL en Ajustes' });
+  // redirect_uri para el intercambio del code: el de la Embed URL, o el de este host
+  let redirectUri = '';
+  try {
+    redirectUri = new URL(embedUrl).searchParams.get('redirect_uri') || '';
+  } catch (e) { /* url inválida, se usa el fallback */ }
+  if (!redirectUri) {
+    const host = req.get('host');
+    redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/callback`;
+  }
   const state = crypto.randomBytes(16).toString('hex');
   req.session.igState = state;
   req.session.igRedirect = redirectUri;
-  res.json({ url: getAuthUrl(appId, redirectUri, state) });
+  res.json({ url: getAuthUrl(embedUrl, state) });
 });
 
 app.get('/api/ig/callback', async (req, res) => {
@@ -379,12 +386,20 @@ app.get('/api/ig/callback', async (req, res) => {
     const s = getSettings(req.session.userId);
     const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
     const appSecret = s.meta_app_secret || process.env.IG_APP_SECRET || process.env.META_APP_SECRET;
-    const tokenData = await exchangeCode(appId, appSecret, req.session.igRedirect, code);
-    const ig = await findIgAccount(tokenData.access_token);
+    const { accessToken, igUserId } = await exchangeCodeForTokens(
+      appId,
+      appSecret,
+      req.session.igRedirect,
+      code
+    );
+    let username = '';
+    try {
+      username = await getIgUsername(igUserId, accessToken);
+    } catch (e) { /* no bloquea la conexión */ }
     db.prepare(
-      `UPDATE settings SET ig_user_id=?, ig_page_id=?, ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, updated_at=datetime('now') WHERE user_id=?`
-    ).run(ig.igUserId, ig.pageId, tokenData.access_token, req.session.userId);
-    db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(ig.igUsername, req.session.userId);
+      `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, updated_at=datetime('now') WHERE user_id=?`
+    ).run(igUserId, accessToken, req.session.userId);
+    db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
     res.redirect('/#/app/ajustes?ig=ok');
   } catch (e) {
     res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(e.message));
