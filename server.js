@@ -417,8 +417,11 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   if (!mp.mpConfigured()) {
     return res.status(400).json({ error: 'Pagos no configurados todavía.' });
   }
+  const user = db.prepare('SELECT id, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+  if (user && user.plan_status === 'active' && user.mp_preapproval_id) {
+    return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
+  }
   try {
-    const user = db.prepare('SELECT id FROM users WHERE id = ?').get(req.session.userId);
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const { init_point } = await mp.createSubscription({
       plan,
@@ -474,9 +477,10 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
       await mp.cancelSubscription(user.mp_preapproval_id);
     } catch (e) {
       console.error('[posta] No se pudo cancelar en MP:', e.message);
+      return res.status(500).json({ error: 'No pudimos cancelar tu suscripción en Mercado Pago. Probá de nuevo en unos minutos.' });
     }
   }
-  db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=?`).run(req.session.userId);
+  db.prepare(`UPDATE users SET plan_status='cancelled', mp_preapproval_id=NULL WHERE id=?`).run(req.session.userId);
   res.json({ ok: true });
 });
 
