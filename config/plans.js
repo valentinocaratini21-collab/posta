@@ -106,7 +106,7 @@ const PLANS_UY = {
 // Texto de ancla de precio por país (se muestra sobre las tarjetas de planes).
 // ⚠️ El valor UY es propuesta — confirmar junto con los precios.
 const PLAN_ANCHOR = {
-  AR: { cm: '$300.000+/mes', desde: '$29.900' },
+  AR: { cm: '$300.000+/mes', desde: '$39.900' },
   UY: { cm: '$U 50.000+/mes', desde: '$U 890' },
 };
 
