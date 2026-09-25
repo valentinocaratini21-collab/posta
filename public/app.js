@@ -5,11 +5,17 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 
 const api = {
   async req(method, url, body) {
-    const r = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let r;
+    try {
+      r = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (e) {
+      throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+    }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'Error');
     return data;
@@ -290,6 +296,7 @@ function landingView(cfg) {
   <div class="footer"><div class="wrap">
     <span class="logo" style="font-size:20px">Posta<span class="dot">.</span></span>
     <span>Hecho en Argentina 🇦🇷 · © 2026</span>
+    <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
   </div></div>`;
 }
 
