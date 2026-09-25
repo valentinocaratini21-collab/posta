@@ -157,7 +157,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 </div>
 
 <!-- VISTA: onboarding -->
-<div id="v-onboarding" style="display:none">
+<div id="v-onboarding">
   <div class="wrap">
     <div class="hero">
       <span class="pill">TE CONFIGURAMOS TODO 🚀</span>
@@ -340,6 +340,7 @@ function show(id) {
 
 // ---------- init ----------
 (async function init() {
+ try {
   $('#f_cat').innerHTML = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $$('.tone-card').forEach((c) => { c.onclick = () => { $$('.tone-card').forEach((x) => x.classList.remove('on')); c.classList.add('on'); TONE = c.dataset.tone; }; });
   $$('.country-btn').forEach((b) => { b.onclick = () => { $$('.country-btn').forEach((x) => x.classList.remove('on')); b.classList.add('on'); COUNTRY = b.dataset.c; }; });
@@ -363,9 +364,12 @@ function show(id) {
     // ¿Ya generaste tu semana en este navegador? Mostrala directo.
     const saved = await idb.get();
     if (saved && saved.ok) { TRIAL = saved; modalShown = true; renderResults(); return; }
-    if (localStorage.getItem('posta_trial_done')) { show('v-used'); return; }
+    let done = false;
+    try { done = !!localStorage.getItem('posta_trial_done'); } catch (e) {}
+    if (done) { show('v-used'); return; }
   }
   show('v-onboarding');
+ } catch (e) { try { show('v-onboarding'); } catch (e2) {} }
 })();
 
 // ---------- colores desde la imagen (posteos, no encabezado) ----------
@@ -473,7 +477,7 @@ async function startTrial() {
     await new Promise((r) => setTimeout(r, wait));
     clearInterval(tkTimer);
     TRIAL = data;
-    if (!TEST_KEY_QS) { localStorage.setItem('posta_trial_done', '1'); idb.set(data); }
+    if (!TEST_KEY_QS) { try { localStorage.setItem('posta_trial_done', '1'); } catch (e) {} idb.set(data); }
     renderResults();
   } catch (e) {
     clearInterval(tkTimer);
