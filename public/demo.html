@@ -101,6 +101,10 @@
         <label class="sw"><input type="color" id="d_btn" value="#FEC14D"><span>Color de botones</span></label>
       </div>
       <div class="file-hint">Elegí los colores de tu marca y los usamos en tus diseños.</div></div>
+    <div class="field"><label>Tu logo o captura de tu Instagram <span style="font-weight:400;color:var(--dim)">(opcional)</span></label>
+      <input id="d_brand" type="file" accept="image/png,image/jpeg,image/webp">
+      <div class="file-hint">¿Por qué lo pedimos? Si subís tu logo o una captura de tu feed, detectamos los colores de tu marca automáticamente para que las muestras parezcan hechas para tu negocio. La imagen no se sube a ningún lado: solo leemos sus colores en tu navegador.</div>
+      <div class="file-hint" id="d_brand_msg" hidden></div></div>
     <div class="row2d">
       <div class="field"><label>Tono</label><select id="d_tone">
         <option value="vos">Voseo — "vos" (AR / UY)</option>
@@ -141,6 +145,58 @@
   const grid = document.getElementById('demoGrid');
 
   function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  function extractPalette(img){
+    const S=120, c=document.createElement('canvas');
+    c.width=S; c.height=S;
+    const x=c.getContext('2d',{willReadFrequently:true});
+    const r=Math.max(S/img.width,S/img.height), w=img.width*r, h=img.height*r;
+    x.drawImage(img,(S-w)/2,(S-h)/2,w,h);
+    const d=x.getImageData(0,0,S,S).data;
+    const buckets=new Map();
+    for(let i=0;i<d.length;i+=16){
+      const R=d[i],G=d[i+1],B=d[i+2],A=d[i+3];
+      if(A<128) continue;
+      const mx=Math.max(R,G,B), mn=Math.min(R,G,B);
+      if(mx-mn<30) continue;
+      if(mx<50||mn>225) continue;
+      const k=((R>>4)<<8)|((G>>4)<<4)|(B>>4);
+      buckets.set(k,(buckets.get(k)||0)+1);
+    }
+    if(!buckets.size) return null;
+    const cols=[...buckets.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .map(([k])=>[((k>>8)&15)*16+8,((k>>4)&15)*16+8,(k&15)*16+8]);
+    const hex=p=>'#'+p.map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+    const primary=cols[0];
+    let secondary=null;
+    for(const col of cols.slice(1)){
+      if(Math.hypot(col[0]-primary[0],col[1]-primary[1],col[2]-primary[2])>90){secondary=col;break;}
+    }
+    return {accent:hex(primary), btn:hex(secondary||[254,193,77])};
+  }
+
+  const brand=document.getElementById('d_brand'), brandMsg=document.getElementById('d_brand_msg');
+  brand.addEventListener('change',()=>{
+    brandMsg.hidden=true;
+    const f=brand.files[0];
+    if(!f) return;
+    if(f.size>5*1024*1024){brandMsg.hidden=false;brandMsg.textContent='La imagen no puede superar los 5MB.';brand.value='';return;}
+    const url=URL.createObjectURL(f);
+    const img=new Image();
+    const done=(ok,msg)=>{URL.revokeObjectURL(url);brandMsg.hidden=false;brandMsg.textContent=msg;if(!ok)brand.value='';};
+    img.onload=()=>{
+      try{
+        const pal=extractPalette(img);
+        if(pal){
+          document.getElementById('d_accent').value=pal.accent;
+          document.getElementById('d_btn').value=pal.btn;
+          done(true,'🎨 Detectamos los colores de tu marca y los aplicamos a las muestras. Podés ajustarlos arriba si querés.');
+        }else done(false,'No encontramos colores marcados en esa imagen; te dejamos los colores por defecto.');
+      }catch(e){done(false,'No pudimos leer esa imagen; probá con otra.');}
+    };
+    img.onerror=()=>done(false,'No pudimos leer esa imagen; probá con otra.');
+    img.src=url;
+  });
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
