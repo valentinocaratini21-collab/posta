@@ -291,6 +291,47 @@ let TRIAL = null;      // respuesta del backend
 let COUNTRY = 'AR';
 let TONE = 'vos';
 let modalShown = false;
+// Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
+// El límite de 1 prueba por IP lo sigue controlando el servidor.
+const idb = {
+  db: null,
+  open() {
+    return new Promise((resolve) => {
+      try {
+        const rq = indexedDB.open('posta-trial', 1);
+        rq.onupgradeneeded = () => rq.result.createObjectStore('k');
+        rq.onsuccess = () => { idb.db = rq.result; resolve(true); };
+        rq.onerror = () => resolve(false);
+      } catch (e) { resolve(false); }
+    });
+  },
+  async set(v) {
+    if (!idb.db && !(await idb.open())) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = idb.db.transaction('k', 'readwrite');
+        tx.objectStore('k').put(v, 'trial');
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) { resolve(false); }
+    });
+  },
+  async get() {
+    if (!idb.db && !(await idb.open())) return null;
+    return new Promise((resolve) => {
+      try {
+        const rq = idb.db.transaction('k').objectStore('k').get('trial');
+        rq.onsuccess = () => resolve(rq.result || null);
+        rq.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  },
+};
+// La llave de prueba del dueño viaja en la URL (?test_key=...) y se reenvía a la API
+const TEST_KEY_QS = (() => {
+  const k = new URLSearchParams(location.search).get('test_key');
+  return k ? '?test_key=' + encodeURIComponent(k) : '';
+})();
 
 function show(id) {
   ['v-used','v-onboarding','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
@@ -311,10 +352,19 @@ function show(id) {
   $('#lb').addEventListener('click', (e) => { if (e.target.id === 'lb') $('#lb').classList.remove('open'); });
 
   try {
-    const st = await (await fetch('/api/trial/status')).json();
-    if (st.used) { show('v-used'); return; }
+    const st = await (await fetch('/api/trial/status' + TEST_KEY_QS)).json();
+    if (st.used && !TEST_KEY_QS) {
+      const saved = await idb.get();
+      if (saved && saved.ok) { TRIAL = saved; modalShown = true; renderResults(); return; }
+      show('v-used'); return;
+    }
   } catch (e) { /* si falla, se intenta igual */ }
-  if (localStorage.getItem('posta_trial_done')) { show('v-used'); return; }
+  if (!TEST_KEY_QS) {
+    // ¿Ya generaste tu semana en este navegador? Mostrala directo.
+    const saved = await idb.get();
+    if (saved && saved.ok) { TRIAL = saved; modalShown = true; renderResults(); return; }
+    if (localStorage.getItem('posta_trial_done')) { show('v-used'); return; }
+  }
   show('v-onboarding');
 })();
 
@@ -415,7 +465,7 @@ async function startTrial() {
 
   try {
     const t0 = Date.now();
-    const res = await fetch('/api/trial/generate', { method: 'POST', body: fd });
+    const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'No pudimos armar tu prueba');
     // Que el tracker se vea completo aunque el backend haya sido rápido
@@ -423,7 +473,7 @@ async function startTrial() {
     await new Promise((r) => setTimeout(r, wait));
     clearInterval(tkTimer);
     TRIAL = data;
-    localStorage.setItem('posta_trial_done', '1');
+    if (!TEST_KEY_QS) { localStorage.setItem('posta_trial_done', '1'); idb.set(data); }
     renderResults();
   } catch (e) {
     clearInterval(tkTimer);
