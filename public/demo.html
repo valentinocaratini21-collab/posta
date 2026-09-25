@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Probá Posta gratis — 3 posteos de muestra para tu negocio</title>
-<meta name="description" content="Generá 3 posteos de muestra para el Instagram de tu negocio en 30 segundos. Sin registro, sin tarjeta.">
+<title>Probá Posta gratis — 2 posteos + 1 video de muestra para tu negocio</title>
+<meta name="description" content="Generá 2 posteos + 1 video de muestra para el Instagram de tu negocio en 30 segundos. Sin registro, sin tarjeta.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 <style>
   .demo-hero{padding:90px 0 40px;text-align:center;position:relative;overflow:hidden}
-  .demo-hero::before{content:"";position:absolute;top:-220px;left:50%;transform:translateX(-50%);width:860px;height:520px;background:radial-gradient(ellipse,rgba(24,136,184,.12),transparent 70%);pointer-events:none}
+  .demo-hero::before{content:"";position:absolute;top:-220px;left:50%;transform:translateX(-50%);width:860px;height:520px;background:radial-gradient(ellipse,rgba(39,147,200,.12),transparent 70%);pointer-events:none}
   .demo-hero h1{font-size:clamp(36px,5vw,60px);font-weight:800;letter-spacing:-.03em;line-height:1.08;max-width:760px;margin:0 auto}
   .demo-hero h1 .hl{color:var(--cel)}
   .demo-hero p.sub{font-size:18px;color:var(--mut);max-width:600px;margin:20px auto 0;line-height:1.6}
@@ -19,12 +19,19 @@
   .row2d{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
   @media(max-width:560px){.row2d{grid-template-columns:1fr}.demo-card{padding:32px 24px}}
   .file-hint{font-size:13px;color:var(--dim);margin-top:6px}
+  .color-row{display:flex;gap:26px;margin-top:10px}
+  .sw{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--mut)}
+  .sw input[type=color]{width:46px;height:46px;border:2px solid var(--line);border-radius:50%;padding:0;background:none;cursor:pointer}
+  .sw input[type=color]::-webkit-color-swatch-wrapper{padding:3px}
+  .sw input[type=color]::-webkit-color-swatch{border:none;border-radius:50%}
+  .sw input[type=color]::-moz-color-swatch{border:none;border-radius:50%}
   #demoResult{display:none;max-width:1060px;margin:0 auto;padding:10px 24px 90px}
   #demoResult h2{text-align:center;font-size:clamp(26px,4vw,40px);font-weight:800;margin-bottom:10px}
   #demoResult .lede{text-align:center;color:var(--mut);margin-bottom:40px}
   .demo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px}
-  .demo-post{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow)}
-  .demo-post img{width:100%;display:block;aspect-ratio:1080/1350;object-fit:cover;background:#000}
+  .demo-post{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);position:relative}
+  .demo-post img,.demo-post video{width:100%;display:block;aspect-ratio:1080/1350;object-fit:cover;background:#000}
+  .demo-vbadge{position:absolute;top:14px;left:14px;background:rgba(10,30,51,.88);color:#fff;font-size:12px;font-weight:800;padding:7px 14px;border-radius:999px;letter-spacing:.08em;pointer-events:none}
   .demo-post .body{padding:22px}
   .demo-post .cap{font-size:14px;line-height:1.65;white-space:pre-line;margin-bottom:12px}
   .demo-post .tags{font-size:13px;color:var(--yl-l);line-height:1.6}
@@ -51,7 +58,7 @@
 <div class="demo-hero"><div class="wrap">
   <div class="pill">🎁 Muestra gratis · Sin registro</div>
   <h1>Probá Posta <span class="hl">gratis</span>,<br>con tu negocio real.</h1>
-  <p class="sub">Completá estos datos y en 30 segundos generamos <b>3 posteos de muestra</b> para tu Instagram. Sin tarjeta, sin WhatsApp, sin compromiso.</p>
+  <p class="sub">Completá estos datos y en 30 segundos generamos <b>2 posteos + 1 video de muestra</b> para tu Instagram. Sin tarjeta, sin WhatsApp, sin compromiso.</p>
 </div></div>
 
 <div class="wrap">
@@ -61,9 +68,24 @@
     <div class="row2d">
       <div class="field"><label>Rubro</label><select id="d_category">
         <option value="moda">Moda / Tienda de ropa</option>
-        <option value="gastronomia">Gastronomía / Café</option>
-        <option value="belleza">Barbería / Estética</option>
+        <option value="gastronomia">Gastronomía / Café / Restaurante</option>
+        <option value="belleza">Barbería / Peluquería / Estética</option>
         <option value="fitness">Fitness / Gimnasio</option>
+        <option value="mascotas">Mascotas / Veterinaria</option>
+        <option value="salud">Salud / Odontología</option>
+        <option value="hogar">Servicios para el hogar</option>
+        <option value="inmobiliaria">Inmobiliaria</option>
+        <option value="autos">Autos / Taller</option>
+        <option value="educacion">Educación / Cursos</option>
+        <option value="turismo">Turismo / Hotelería</option>
+        <option value="eventos">Eventos / Fiestas</option>
+        <option value="tecnologia">Tecnología / Celulares</option>
+        <option value="deco">Muebles / Decoración</option>
+        <option value="joyeria">Joyería / Accesorios</option>
+        <option value="fotografia">Fotografía / Arte</option>
+        <option value="profesionales">Servicios profesionales</option>
+        <option value="flores">Florería / Vivero</option>
+        <option value="bar">Bar / Cervecería</option>
         <option value="otro">Otro</option>
       </select></div>
       <div class="field"><label>País</label><select id="d_country">
@@ -71,6 +93,14 @@
         <option value="UY">🇺🇾 Uruguay</option>
       </select></div>
     </div>
+    <div class="field"><label>¿Qué querés lograr? <span style="font-weight:400;color:var(--dim)">(opcional)</span></label><textarea id="d_goal" rows="2" maxlength="300" placeholder="Ej: Quiero llenar los turnos del fin de semana con la promo de corte + barba"></textarea>
+      <div class="file-hint">Contanos tu objetivo y lo usamos para elegir los mejores posteos.</div></div>
+    <div class="field"><label>Tus colores <span style="font-weight:400;color:var(--dim)">(opcional)</span></label>
+      <div class="color-row">
+        <label class="sw"><input type="color" id="d_accent" value="#2793C8"><span>Color principal</span></label>
+        <label class="sw"><input type="color" id="d_btn" value="#FEC14D"><span>Color de botones</span></label>
+      </div>
+      <div class="file-hint">Elegí los colores de tu marca y los usamos en tus diseños.</div></div>
     <div class="row2d">
       <div class="field"><label>Tono</label><select id="d_tone">
         <option value="vos">Voseo — "vos" (AR / UY)</option>
@@ -79,14 +109,14 @@
       <div class="field"><label>Foto (opcional)</label><input id="d_photo" type="file" accept="image/png,image/jpeg,image/webp">
         <div class="file-hint">JPG, PNG o WebP · máx 5MB. Si no subís, usamos un fondo de tu rubro.</div></div>
     </div>
-    <button class="btn btn-primary btn-block" id="demoBtn" type="submit" style="margin-top:8px">✨ Generar mis 3 posteos</button>
-    <div class="spinner" id="demoSpin"><div class="spin"></div>Creando tus posteos… esto tarda unos 30 segundos.</div>
+    <button class="btn btn-primary btn-block" id="demoBtn" type="submit" style="margin-top:8px">✨ Generar mi demo</button>
+    <div class="spinner" id="demoSpin"><div class="spin"></div>Creando tus posteos y tu video… esto tarda unos 20 segundos.</div>
   </form>
 </div>
 
 <div id="demoResult">
   <h2>Así se vería tu Instagram con Posta</h2>
-  <p class="lede">Esto lo creamos recién, para tu negocio. Imaginate 3 a 7 posteos así por semana, sin mover un dedo.</p>
+  <p class="lede">Esto lo creamos recién, para tu negocio. Imaginate posteos y videos así todas las semanas, sin mover un dedo.</p>
   <div class="demo-grid" id="demoGrid"></div>
   <p class="wm-note">Muestras con marca de agua · Límite de 5 demos por día por persona.</p>
   <div class="demo-cta">
@@ -125,6 +155,9 @@
     fd.append('category', document.getElementById('d_category').value);
     fd.append('country', document.getElementById('d_country').value);
     fd.append('tone', document.getElementById('d_tone').value);
+    fd.append('goal', document.getElementById('d_goal').value.trim());
+    fd.append('accent', document.getElementById('d_accent').value);
+    fd.append('btn', document.getElementById('d_btn').value);
     if (photo) fd.append('photo', photo);
 
     btn.disabled = true;
@@ -136,7 +169,9 @@
       if (!res.ok) throw new Error(data.error || 'Algo salió mal. Probá de nuevo.');
       grid.innerHTML = data.posts.map(p => `
         <div class="demo-post">
-          <img src="${p.image}" alt="Posteo de muestra creado por Posta" loading="lazy">
+          ${p.type === 'video'
+            ? `<span class="demo-vbadge">▶ VIDEO</span><video src="${p.video}" autoplay muted loop playsinline controls preload="metadata"></video>`
+            : `<img src="${p.image}" alt="Posteo de muestra creado por Posta" loading="lazy">`}
           <div class="body">
             <div class="cap">${esc(p.caption)}</div>
             <div class="tags">${esc(p.hashtags)}</div>

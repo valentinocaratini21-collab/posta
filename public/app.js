@@ -129,7 +129,7 @@ function landingView(cfg) {
     <div class="mock-row">
       <div class="phone"><div class="screen">
         <img src="hero-post.png" alt="Ejemplo de posteo creado por Posta">
-        <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#1888B8">#modaargentina #emprendedoresargentinos</span></div>
+        <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#2793C8">#modaargentina #emprendedoresargentinos</span></div>
       </div></div>
       <div class="phone"><div class="screen">
         <video src="showreel.mp4" autoplay muted loop playsinline></video>
@@ -266,7 +266,7 @@ function freshVState() {
 let VSTATE = freshVState();
 
 const BASE_PALETTES = [
-  { name: 'Celeste', c: ['#1888B8', '#0F6E96'], dark: false },
+  { name: 'Celeste', c: ['#2793C8', '#1E7FAE'], dark: false },
   { name: 'Amarillo', c: ['#FEC14D', '#E5A62C'], dark: true },
   { name: 'Navy', c: ['#0A1E33', '#47617A'], dark: false },
   { name: 'Nieve', c: ['#FFFFFF', '#F2F9FD'], dark: true },
@@ -984,7 +984,7 @@ function ajustesView() {
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || ['#FEC14D', '#1888B8', '#0A1E33'][i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
+        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || ['#FEC14D', '#2793C8', '#0A1E33'][i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
       </div>
     </div>
     <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
@@ -1024,7 +1024,7 @@ function freshOB() {
     competitors: (PROFILE && PROFILE.competitors) || '',
     goal: (PROFILE && PROFILE.goal) || '',
     palSel: '0',
-    c1: '#FEC14D', c2: '#1888B8', c3: '#0A1E33',
+    c1: '#FEC14D', c2: '#2793C8', c3: '#0A1E33',
     useBrand: false,
   };
 }
