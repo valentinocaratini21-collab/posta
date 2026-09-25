@@ -445,7 +445,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Pagos no configurados todavía.' });
   }
   try {
-    const user = db.prepare('SELECT id, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+    const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
     if (user.plan_status === 'active' && user.mp_preapproval_id) {
       return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
     }
@@ -461,6 +461,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
       plan: finalPlan,
       userId: user.id,
       baseUrl,
+      payerEmail: user.email,
     });
     res.json({ init_point, discount_applied: discount });
   } catch (e) {
