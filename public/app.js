@@ -214,10 +214,14 @@ function landingView(cfg) {
     <h2>Hecho con Posta</h2>
     <p class="lede">Diseños y videos creados en minutos, para cualquier rubro. Cada post de nuestros clientes lleva la marca Hecho con Posta — es nuestra mejor publicidad.</p>
     <div class="show-row">
-      <div class="phone sm"><div class="screen"><img src="post-food.png" alt="Diseño para restaurante creado por Posta"></div></div>
-      <div class="phone sm"><div class="screen"><video src="video-food.mp4" autoplay muted loop playsinline></video></div></div>
-      <div class="phone sm"><div class="screen"><img src="post-barber.png" alt="Diseño para barbería creado por Posta"></div></div>
-      <div class="phone sm"><div class="screen"><video src="video-barber.mp4" autoplay muted loop playsinline></video></div></div>
+      <div class="phone sm"><div class="screen"><img src="post-food.png" alt="Diseño para restaurante creado por Posta"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
+      <div class="phone sm"><div class="screen"><video src="video-moda.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
+      <div class="phone sm"><div class="screen"><img src="post-barber.png" alt="Diseño para barbería creado por Posta"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
+      <div class="phone sm"><div class="screen"><video src="video-fitness.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
+      <div class="phone sm"><div class="screen"><img src="post-moda.png" alt="Diseño para tienda de ropa creado por Posta"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
+      <div class="phone sm"><div class="screen"><video src="video-belleza.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
+      <div class="phone sm"><div class="screen"><img src="post-mascotas.png" alt="Diseño para pet shop creado por Posta"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
+      <div class="phone sm"><div class="screen"><video src="video-food.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>Gastronomía</b> · Café Martínez</div></div>
     </div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
