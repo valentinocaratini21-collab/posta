@@ -186,30 +186,39 @@ a{color:inherit;text-decoration:none}
 /* Video thumb en listas */
 .post-item video.thumb{width:74px;height:92px;object-fit:cover;border-radius:10px;flex:none;background:#000}
 
-/* ===== Posta extras (pz-*): landing + referidos ===== */
-.pz-perday{font-size:13px;color:var(--dim);margin:-8px 0 14px;font-weight:600}
-.pz-beforeafter{margin-top:64px}
-.pz-beforeafter h3{font-size:24px;font-weight:800;margin-bottom:24px}
-.pz-ba-row{display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap}
-.pz-ba-panel{background:#fff;border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:var(--shadow);width:300px}
-.pz-ba-label{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--dim);margin-bottom:14px}
-.pz-ba-label-on{color:var(--cel)}
-.pz-ba-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.pz-ba-grid span{aspect-ratio:1/1;border-radius:10px;background:linear-gradient(135deg,#EDF2F7,#E2E8F0)}
-.pz-ba-panel img{width:100%;border-radius:12px;display:block}
-.pz-ba-arrow{font-size:44px;color:var(--cel);font-weight:800;line-height:1}
-.pz-trialband{background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:34px 0}
-.pz-trialband .wrap{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap}
-.pz-trialband-txt b{display:block;font-size:19px;margin-bottom:6px}
-.pz-trialband-txt span{color:var(--mut);font-size:15px}
-.pz-refband{background:linear-gradient(120deg,#2793C8,#1E7FAE);color:#fff;text-align:center;font-weight:700;font-size:14px;padding:10px 16px}
-.pz-calc{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:32px;max-width:520px;margin:36px auto 0;text-align:left}
-.pz-calc .btn{margin-top:8px}
-.pz-calc-out{margin-top:18px;font-size:17px;color:var(--mut);background:var(--bg2);border-radius:14px;padding:16px 18px;line-height:1.5}
-.pz-calc-out b{color:var(--txt)}
-.pz-disc{background:#F0F9FF;border:1px solid #CFE7F5;color:var(--txt);border-radius:14px;padding:12px 16px;font-size:14px;margin:12px 0}
-.pz-refrow{display:flex;gap:10px;margin:12px 0}
-.pz-refrow input{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--mut);background:var(--bg2);min-width:0}
-.pz-refbar{height:10px;background:var(--bg2);border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:10px 0}
-.pz-refbar div{height:100%;background:linear-gradient(90deg,var(--cel),#5BB8E3);border-radius:999px;transition:width .4s}
-@media(max-width:640px){.pz-ba-arrow{transform:rotate(90deg)}}
+/* ===== Landing mobile (≤760px): nav hamburguesa + hero compacto ===== */
+.nav-landing .hamburger{display:none}
+.nav-landing .mobile-menu{display:none}
+@media(max-width:760px){
+  .wrap{padding:0 20px}
+  .nav .wrap{height:64px}
+  .logo{font-size:23px}
+  .nav-landing .nav-links{display:none}
+  .nav-landing .hamburger{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:44px;height:44px;background:none;border:none;cursor:pointer;padding:11px}
+  .nav-landing .hamburger span{display:block;width:22px;height:2.5px;border-radius:3px;background:var(--txt)}
+  .nav-landing .mobile-menu{display:none;flex-direction:column;padding:8px 20px 20px;background:#FFFFFF;border-top:1px solid var(--line)}
+  .nav-landing .mobile-menu.open{display:flex}
+  .nav-landing .mobile-menu a{font-size:17px;font-weight:600;color:var(--mut);padding:13px 4px;border-bottom:1px solid var(--line)}
+  .nav-landing .mobile-menu a:last-of-type{border-bottom:none}
+  .nav-landing .mobile-menu .btn{margin-top:12px;color:#0A1E33}
+  /* otras barras (demo, auth): compactar sin ocultar */
+  .nav:not(.nav-landing) .nav-links{gap:14px;font-size:14px;white-space:nowrap}
+  .nav:not(.nav-landing) .nav-links .btn{padding:9px 16px;font-size:13px}
+  .nav:not(.nav-landing) .logo{font-size:22px}
+  .hero{padding:60px 0 54px}
+  .hero h1{font-size:38px}
+  .hero p.sub{font-size:17px;margin:20px auto 30px}
+  .hero-cta{flex-direction:column;align-items:stretch}
+  .hero-cta .btn{width:100%;max-width:340px;margin:0 auto}
+  .hero-note{font-size:13px;padding:0 8px}
+  .mock-row{margin-top:48px;gap:22px}
+  .phone{width:272px}
+  .section{padding:60px 0}
+  .section h2{font-size:30px}
+  .section .lede{font-size:16px;margin-bottom:40px}
+  .sample-txt b{font-size:19px}
+  .price-card{padding:36px 26px}
+  .price-card .price{font-size:48px}
+  .anchor-line{font-size:17px;padding:16px 20px}
+  .form-card{margin:40px auto;padding:36px 26px}
+}
