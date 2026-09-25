@@ -255,6 +255,9 @@ const TABS = [
 ];
 let IDEAS = [];
 function appShell(tab, content) {
+  const MAIN_TABS = [['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video'], ['fotos', '📷', 'Fotos']];
+  const MORE_TABS = [['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
+  const moreOn = MORE_TABS.some(([k]) => k === tab);
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
@@ -268,6 +271,15 @@ function appShell(tab, content) {
       <button class="side-link" id="btnLogout"><span class="ico">🚪</span>Salir</button>
     </div>
     <div class="main">${content}</div>
+  </div>
+  <nav class="mbar">
+    ${MAIN_TABS.map(([k, i, l]) => `<button class="mbar-btn ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span><span class="lbl">${l}</span></button>`).join('')}
+    <button class="mbar-btn ${moreOn ? 'on' : ''}" id="mbarMore"><span class="ico">⋯</span><span class="lbl">Más</span></button>
+  </nav>
+  <div class="msheet" id="msheet"><div class="msheet-bg" id="msheetBg"></div>
+    <div class="msheet-card">
+      ${MORE_TABS.map(([k, i, l]) => `<button class="msheet-btn ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span>${l}</button>`).join('')}
+    </div>
   </div>`;
 }
 
@@ -1224,10 +1236,13 @@ async function render() {
 }
 
 function bindApp(tab) {
-  $$('.mtab,.side-link[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
+  $$('.mtab,.side-link[data-tab],.mbar-btn[data-tab],.msheet-btn[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
+  const mm = $('#mbarMore'), ms = $('#msheet'), mb = $('#msheetBg');
+  if (mm && ms) mm.onclick = () => ms.classList.add('open');
+  if (mb && ms) mb.onclick = () => ms.classList.remove('open');
 
   if (tab === 'crear') bindCreator();
   if (tab === 'ideas') bindIdeas();

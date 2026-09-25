@@ -222,3 +222,23 @@ a{color:inherit;text-decoration:none}
   .anchor-line{font-size:17px;padding:16px 20px}
   .form-card{margin:40px auto;padding:36px 26px}
 }
+
+/* ===== App mobile: bottom bar + hoja "Más" (reemplaza tira de tabs) ===== */
+.mbar{display:none}
+.msheet{display:none}
+@media(max-width:760px){
+  .mtabs{display:none}
+  .main{padding:24px 16px 112px}
+  .mbar{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(255,255,255,.97);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 6px calc(10px + env(safe-area-inset-bottom))}
+  .mbar-btn{flex:1;min-width:0;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:inherit;cursor:pointer;color:var(--dim);font-size:11px;font-weight:700;padding:6px 0}
+  .mbar-btn .ico{font-size:22px;line-height:1}
+  .mbar-btn.on{color:var(--cel)}
+  .msheet{position:fixed;inset:0;z-index:70;display:none}
+  .msheet.open{display:block}
+  .msheet-bg{position:absolute;inset:0;background:rgba(10,30,51,.45)}
+  .msheet-card{position:absolute;bottom:0;left:0;right:0;background:#FFFFFF;border-radius:26px 26px 0 0;padding:14px 20px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(10,30,51,.18)}
+  .msheet-btn{display:flex;align-items:center;gap:14px;width:100%;background:none;border:none;border-bottom:1px solid var(--line);padding:16px 4px;font-size:17px;font-weight:700;color:var(--mut);font-family:inherit;cursor:pointer;text-align:left}
+  .msheet-btn:last-child{border-bottom:none}
+  .msheet-btn .ico{font-size:22px}
+  .msheet-btn.on{color:var(--cel)}
+}
