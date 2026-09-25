@@ -196,25 +196,26 @@ def wrap_fit(draw, fonts_dir, text, max_w, start_size, max_lines=3):
 
 
 def grade_photo(p):
-    """High-key blanco: balance de blancos neutro + exposicion levantada."""
+    """Tratamiento suave: la foto sigue siendo foto (no un fantasma).
+    Brillo 1.05 (antes 1.22), velo blanco 0.10 (antes 0.42), contraste 1.06,
+    saturacion 1.06 y balance de blancos estrecho a +-8% (antes +-22%)."""
     st = ImageStat.Stat(p)
     mr, mg, mb = st.mean[0], st.mean[1], st.mean[2]
     lum = (mr + mg + mb) / 3.0 or 1.0
 
-    def cg(m, lo, hi):
-        return min(max(lum / m, lo), hi) if m > 1 else 1.0
+    def cg(m):
+        return min(max(lum / m, 0.92), 1.08) if m > 1 else 1.0
 
-    s = 0.65
-    egr = 1 + (cg(mr, 0.86, 1.16) - 1) * s
-    egg = 1 + (cg(mg, 0.93, 1.07) - 1) * s
-    egb = 1 + (cg(mb, 0.86, 1.22) - 1) * s
     r, g, b = p.split()
+    egr, egg, egb = cg(mr), cg(mg), cg(mb)
     r = r.point(lambda v: 255 if v * egr >= 255 else int(v * egr))
     g = g.point(lambda v: 255 if v * egg >= 255 else int(v * egg))
     b = b.point(lambda v: 255 if v * egb >= 255 else int(v * egb))
     p = Image.merge("RGB", (r, g, b))
-    p = ImageEnhance.Brightness(p).enhance(1.22)
-    p = Image.blend(p, Image.new("RGB", p.size, (255, 255, 255)), 0.42)
+    p = ImageEnhance.Brightness(p).enhance(1.05)
+    p = ImageEnhance.Contrast(p).enhance(1.06)
+    p = ImageEnhance.Color(p).enhance(1.06)
+    p = Image.blend(p, Image.new("RGB", p.size, (255, 255, 255)), 0.10)
     return p
 
 
