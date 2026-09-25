@@ -98,18 +98,22 @@ const CATEGORY_PHOTOS = {
   otro: [...LIFE.slice(0, 5), ...OFFICE.slice(0, 3), ...HOME.slice(0, 2)],
 };
 
-function stockPhotos3(category) {
+function stockPhotosN(category, n) {
   const pool = (CATEGORY_PHOTOS[category] || CATEGORY_PHOTOS.otro).slice();
   // shuffle
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return pool.slice(0, 3).map((fam) => {
+  return pool.slice(0, n).map((fam) => {
     const p = path.join(STOCK_DIR, fam + '.webp');
     if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
     return p;
   });
+}
+
+function stockPhotos3(category) {
+  return stockPhotosN(category, 3);
 }
 
 // ---------- Colores elegidos por el visitante ----------
@@ -326,6 +330,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS DE LOOK',
       subline: 'Ideas simples para armar tu look en 5 minutos.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips para armar tu look con lo nuevo de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'SORTEO SEMANAL',
+      subline: 'Participá por un look completo.', cta: 'Quiero participar',
+      caption: 'Se viene sorteo en {BIZ} 🎁\n\nSorteamos un look completo entre quienes comenten. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+    { kind: 'social', tag: 'CLIENTAS', headline: 'LOOKS REALES',
+      subline: 'Nuestras clientas lo usan así.', cta: 'Ver más looks',
+      caption: 'Nada como verlo puesto ✨\n\nNuestras clientas armando looks con lo nuevo de {BIZ}.\n\nEtiquetá a tu amiga que necesita esto 🙋' },
+    { kind: 'promo', tag: 'OUTLET', headline: 'HASTA 50% OFF',
+      subline: 'Selección outlet, hasta agotar stock.', cta: 'Ver selección',
+      caption: 'Atención, que esto es posta 👇\n\nHasta 50% off en selección outlet de {BIZ}. Cuando se acaba, se acaba.\n\nEscribinos por DM antes de que vuele 📩' },
   ],
   gastronomia: [
     { kind: 'social', tag: 'EL FAVORITO', headline: 'EL MÁS PEDIDO',
@@ -337,6 +350,15 @@ const DEMO_TOPICS = {
     { kind: 'reserva', tag: 'HOY', headline: 'VENÍ HOY',
       subline: 'Tres motivos para pasar hoy mismo.', cta: 'Voy hoy',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 motivos para venir hoy a {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO PLATO',
+      subline: 'El plato que se va a volver tu favorito.', cta: 'Lo quiero probar',
+      caption: 'Che, mirá lo que acaba de llegar 👀\n\nNuevo plato en {BIZ}: vení a probarlo esta semana.\n\nReservá tu mesa por DM 📩' },
+    { kind: 'tip', tag: 'TIP', headline: 'MARIDAJE PERFECTO',
+      subline: 'Qué pedir con cada plato.', cta: 'Ver la guía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nLa guía de maridaje de {BIZ}: qué pedir con cada plato.\n\nGuardá este post para tu próxima visita 🔖' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'CENA PARA DOS',
+      subline: 'Sorteamos una cena completa.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUna cena para dos, con postre incluido. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   belleza: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO SERVICIO',
@@ -348,6 +370,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS DE CUIDADO',
       subline: 'Cuidado profesional, también en casa.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips de cuidado en casa, por los expertos de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'promo', tag: 'COMBO', headline: 'COMBO AMIGA',
+      subline: 'Vení con una amiga y ahorran las dos.', cta: 'Lo quiero',
+      caption: 'Atención, que esto es posta 👇\n\nCombo amiga en {BIZ}: reservan juntas y ahorran las dos.\n\nEscribinos por DM y te lo reservamos 📩' },
+    { kind: 'social', tag: 'ANTES/DESPUÉS', headline: 'EL CAMBIO',
+      subline: 'Resultados reales de esta semana.', cta: 'Quiero mi cambio',
+      caption: 'Mirá este cambio ✨\n\nResultados reales en {BIZ}, sin filtros.\n\nReservá tu turno por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'DÍA DE SPA',
+      subline: 'Sorteamos una sesión completa.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn día de spa completo. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   fitness: [
     { kind: 'novedad', tag: 'HOY', headline: 'EMPEZÁ HOY',
@@ -359,6 +390,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 ERRORES COMUNES',
       subline: 'Tres errores que frenan tu progreso.', cta: 'Ver cuáles son',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 errores comunes al entrenar (y cómo evitarlos), por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'COMUNIDAD', headline: 'ENTRENÁ ACOMPAÑADO',
+      subline: 'La comunidad que te empuja a seguir.', cta: 'Sumarme',
+      caption: 'Acá no entrenás solo 💪\n\nLa comunidad de {BIZ} te espera: entrenamientos, desafíos y buena onda.\n\nEscribinos por DM y arrancá 📩' },
+    { kind: 'promo', tag: 'PLAN', headline: 'PLAN ANUAL -20%',
+      subline: 'Asegurá tu año al mejor precio.', cta: 'Lo aprovecho',
+      caption: 'Atención, que esto es posta 👇\n\nPlan anual en {BIZ} con 20% off, solo esta semana.\n\nComentá INFO y te pasamos todo 👇' },
+    { kind: 'reserva', tag: 'EVALUACIÓN', headline: 'EVALUACIÓN GRATIS',
+      subline: 'Medimos tu punto de partida sin cargo.', cta: 'Pedir la mía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nEvaluación inicial gratis en {BIZ}: sabemos desde dónde empezás.\n\nEscribinos por DM y te la reservamos 📩' },
   ],
   mascotas: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO INGRESO',
@@ -370,6 +410,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS DE CUIDADO',
       subline: 'Consejos para una mascota feliz y sana.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips de cuidado para tu mascota, por los expertos de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'CLIENTES', headline: 'LOS MÁS LINDOS',
+      subline: 'Nuestros clientes de cuatro patas.', cta: 'Ver más',
+      caption: 'Nivel de ternura: máximo 🐶\n\nNuestros clientes de cuatro patas, en {BIZ}.\n\nEtiquetá a quien necesita ver esto 🙋' },
+    { kind: 'reserva', tag: 'TURNO', headline: 'PELUQUERÍA CANINA',
+      subline: 'Turnos de baño y corte esta semana.', cta: 'Reservar turno',
+      caption: 'Che, mirá esto 👀\n\nTurnos de peluquería canina en {BIZ}, esta semana.\n\nEscribinos por DM y te lo reservamos 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'KIT MASCOTERO',
+      subline: 'Sorteamos un kit completo.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn kit mascotero completo: alimento, juguetes y accesorios.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   salud: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO TRATAMIENTO',
@@ -381,6 +430,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 HÁBITOS SANOS',
       subline: 'Pequeños cambios, grandes resultados.', cta: 'Ver cuáles son',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 hábitos sanos que recomiendan en {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'promo', tag: 'CHEQUEO', headline: 'CHEQUEO ANUAL',
+      subline: 'Control completo a precio especial.', cta: 'Pedir turno',
+      caption: 'Atención, que esto es posta 👇\n\nChequeo anual en {BIZ} a precio especial este mes.\n\nEscribinos por DM y te lo reservamos 📩' },
+    { kind: 'social', tag: 'CONFIANZA', headline: 'NOS ELIGEN',
+      subline: 'Años cuidando tu salud.', cta: 'Conocernos',
+      caption: 'Gracias por confiar ✨\n\nAños cuidando la salud de nuestros pacientes en {BIZ}.\n\nPedí tu turno por DM 📩' },
+    { kind: 'tip', tag: 'TIP', headline: 'SEÑALES DE ALERTA',
+      subline: 'Cuándo no esperar para consultar.', cta: 'Ver la guía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nSeñales a las que prestar atención, por los expertos de {BIZ}.\n\nGuardá este post, te puede servir 🔖' },
   ],
   hogar: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO SERVICIO',
@@ -392,6 +450,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS PARA TU CASA',
       subline: 'Mantenimiento simple, sin llamar a nadie.', cta: 'Ver los tips',
       caption: 'Che, mirá esto 👀\n\n3 tips de mantenimiento para tu casa, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'reserva', tag: 'VISITA', headline: 'VISITA TÉCNICA',
+      subline: 'Vamos a tu casa sin cargo.', cta: 'Pedir visita',
+      caption: 'Che, mirá esto 👀\n\nVisita técnica sin cargo en {BIZ}: vemos tu casa y te cotizamos.\n\nEscribinos por DM 📩' },
+    { kind: 'social', tag: 'TRABAJOS', headline: 'ANTES Y DESPUÉS',
+      subline: 'Trabajos reales de esta semana.', cta: 'Ver más',
+      caption: 'Mirá este cambio ✨\n\nAntes y después de un trabajo real de {BIZ}.\n\nPedí tu presupuesto gratis 👇' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'KIT DE HERRAMIENTAS',
+      subline: 'Sorteamos un kit completo.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn kit de herramientas completo para tu casa.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   inmobiliaria: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO INGRESO',
@@ -403,6 +470,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS PARA COMPRAR',
       subline: 'Lo que tenés que saber antes de decidir.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips para comprar tu próxima propiedad, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'VENDIDA', headline: 'OTRA VENDIDA',
+      subline: 'Familias que ya encontraron su lugar.', cta: 'Quiero la mía',
+      caption: 'Otra familia feliz 🏡\n\nPropiedad vendida por {BIZ} esta semana.\n\nComentá INFO y encontramos la tuya 👇' },
+    { kind: 'reserva', tag: 'VISITA', headline: 'VISITAS ESTA SEMANA',
+      subline: 'Coordiná tu visita sin compromiso.', cta: 'Coordinar visita',
+      caption: 'Che, mirá esto 👀\n\nVisitas disponibles esta semana en {BIZ}.\n\nEscribinos por DM y coordinamos 📩' },
+    { kind: 'tip', tag: 'TIP', headline: 'CRÉDITO HIPOTECARIO',
+      subline: 'Todo lo que tenés que saber.', cta: 'Ver la guía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nGuía de crédito hipotecario, por los expertos de {BIZ}.\n\nGuardá este post 🔖' },
   ],
   autos: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO INGRESO',
@@ -414,6 +490,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS PARA TU AUTO',
       subline: 'Cuidá tu auto y evitá gastos grandes.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips para cuidar tu auto, por los expertos de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'promo', tag: 'FINANCIACIÓN', headline: 'CUOTAS SIN INTERÉS',
+      subline: 'Financiación a tu medida.', cta: 'Consultar',
+      caption: 'Atención, que esto es posta 👇\n\nCuotas sin interés en {BIZ}: estrená tu próximo auto.\n\nComentá INFO y te pasamos todo 👇' },
+    { kind: 'social', tag: 'CLIENTES', headline: 'OTRO 0KM',
+      subline: 'Clientes que ya estrenaron.', cta: 'Quiero el mío',
+      caption: 'Otro 0km en la calle 🚗\n\nFelicitaciones a quienes confiaron en {BIZ}.\n\nEscribinos por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'SERVICE GRATIS',
+      subline: 'Sorteamos un service completo.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn service completo gratis para tu auto.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   educacion: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO CURSO',
@@ -425,6 +510,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS PARA APRENDER',
       subline: 'Consejos para aprender más rápido.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips para aprender más rápido, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'EGRESADOS', headline: 'OTRA CAMADA',
+      subline: 'Nuevos egresados este mes.', cta: 'Sumarme',
+      caption: 'Otra camada que lo logró 🎓\n\nEgresados de {BIZ} este mes.\n\nEscribinos por DM e inscribite 📩' },
+    { kind: 'reserva', tag: 'CHARLA', headline: 'CHARLA INFORMATIVA',
+      subline: 'Vení a conocer sin compromiso.', cta: 'Anotarme',
+      caption: 'Che, mirá esto 👀\n\nCharla informativa gratis en {BIZ}.\n\nEscribinos por DM y te anotamos 📩' },
+    { kind: 'promo', tag: '2X1', headline: 'TRAÉ UN AMIGO',
+      subline: 'Se inscriben dos, paga uno.', cta: 'Lo aprovecho',
+      caption: 'Atención, que esto es posta 👇\n\nEn {BIZ}: traé un amigo y se inscriben 2x1.\n\nComentá INFO y te pasamos todo 👇' },
   ],
   turismo: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO DESTINO',
@@ -436,6 +530,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS VIAJEROS',
       subline: 'Viajá mejor con estos consejos.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips viajeros por los expertos de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'VIAJEROS', headline: 'ASÍ LA PASARON',
+      subline: 'Nuestros viajeros en destino.', cta: 'Quiero viajar',
+      caption: 'Así la pasaron nuestros viajeros ✨\n\nPróxima salida con {BIZ}: sumate.\n\nEscribinos por DM 📩' },
+    { kind: 'reserva', tag: 'CUPOS', headline: 'ÚLTIMOS CUPOS',
+      subline: 'Quedan pocos lugares para la próxima salida.', cta: 'Reservar lugar',
+      caption: 'Che, mirá esto 👀\n\nÚltimos cupos para la próxima salida de {BIZ}.\n\nEscribinos por DM y te lo reservamos 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'VIAJE PARA DOS',
+      subline: 'Sorteamos una escapada completa.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUna escapada para dos, todo incluido.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   eventos: [
     { kind: 'novedad', tag: 'FECHA', headline: 'PRÓXIMA FECHA',
@@ -447,6 +550,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS DE FIESTA',
       subline: 'Que tu evento salga perfecto.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips para que tu fiesta salga perfecta, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'ASÍ FUE', headline: 'NOCHE INOLVIDABLE',
+      subline: 'Así se vivió la última fecha.', cta: 'Ver próxima fecha',
+      caption: 'Así se vivió la última 🔥\n\nPróxima fecha de {BIZ}: no te la pierdas.\n\nEscribinos por DM 📩' },
+    { kind: 'reserva', tag: 'MESA VIP', headline: 'MESAS VIP',
+      subline: 'Reservá tu mesa con beneficios.', cta: 'Reservar mesa',
+      caption: 'Che, mirá esto 👀\n\nMesas VIP disponibles en {BIZ}.\n\nEscribinos por DM y te la reservamos 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'ENTRADAS DOBLES',
+      subline: 'Sorteamos entradas para la próxima fecha.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nEntradas dobles para la próxima fecha.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   tecnologia: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'ÚLTIMO MODELO',
@@ -458,6 +570,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TRUCOS ÚTILES',
       subline: 'Todo lo que tu equipo puede hacer.', cta: 'Ver los trucos',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 trucos para tu equipo, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'promo', tag: 'TRADE-IN', headline: 'PLAN CANJE',
+      subline: 'Traé tu usado y llevate lo nuevo.', cta: 'Consultar',
+      caption: 'Atención, que esto es posta 👇\n\nPlan canje en {BIZ}: tu usado vale más acá.\n\nComentá INFO y te cotizamos 👇' },
+    { kind: 'social', tag: 'REVIEW', headline: 'LO PROBAMOS',
+      subline: 'Nuestro análisis sin vueltas.', cta: 'Ver review',
+      caption: 'Lo probamos por vos 📱\n\nReview honesta en {BIZ}, sin vueltas.\n\nGuardá este post 🔖' },
+    { kind: 'reserva', tag: 'SOPORTE', headline: 'SOPORTE TÉCNICO',
+      subline: 'Reparamos tu equipo en 24h.', cta: 'Pedir turno',
+      caption: 'Che, mirá esto 👀\n\nSoporte técnico en {BIZ}: tu equipo listo en 24h.\n\nEscribinos por DM 📩' },
   ],
   deco: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVA COLECCIÓN',
@@ -469,6 +590,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 IDEAS DECO',
       subline: 'Ideas para renovar tu espacio.', cta: 'Ver las ideas',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 ideas deco para tu casa, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'AMBIENTES', headline: 'ESPACIOS REALES',
+      subline: 'Casas decoradas con nuestras piezas.', cta: 'Ver más',
+      caption: 'Espacios reales, piezas nuestras ✨\n\nInspiración deco de {BIZ} para tu casa.\n\nGuardá este post 🔖' },
+    { kind: 'reserva', tag: 'ASESORÍA', headline: 'ASESORÍA GRATIS',
+      subline: 'Te ayudamos a elegir sin cargo.', cta: 'Pedir asesoría',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nAsesoría deco gratis en {BIZ}.\n\nEscribinos por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'KIT DECO',
+      subline: 'Sorteamos un kit para tu living.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn kit deco completo para tu living.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   joyeria: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVA COLECCIÓN',
@@ -480,6 +610,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: 'CÓMO CUIDARLAS',
       subline: 'Que tus piezas duren toda la vida.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\nCómo cuidar tus piezas, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'ELEGIDAS', headline: 'LAS MÁS ELEGIDAS',
+      subline: 'Las piezas que todas quieren.', cta: 'Ver colección',
+      caption: 'Las más elegidas ✨\n\nLas piezas favoritas de {BIZ}, esta semana.\n\nEscribinos por DM 📩' },
+    { kind: 'reserva', tag: 'CITA', headline: 'ATENCIÓN PERSONALIZADA',
+      subline: 'Probate todo con asesoramiento.', cta: 'Pedir cita',
+      caption: 'Che, mirá esto 👀\n\nAtención personalizada en {BIZ}: probate todo tranquila.\n\nEscribinos por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'ANILLO DE ORO',
+      subline: 'Sorteamos una pieza única.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn anillo único. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   fotografia: [
     { kind: 'novedad', tag: 'PORTFOLIO', headline: 'NUEVO TRABAJO',
@@ -491,6 +630,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS DE FOTO',
       subline: 'Mejores fotos con tu celular.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips de foto con celular, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'BACKSTAGE', headline: 'ASÍ TRABAJAMOS',
+      subline: 'El detrás de escena de una sesión.', cta: 'Ver más',
+      caption: 'El backstage que no ves 📸\n\nAsí trabajamos en {BIZ}.\n\nReservá tu sesión por DM 📩' },
+    { kind: 'promo', tag: 'MINI', headline: 'MINI SESIONES',
+      subline: 'Sesiones cortas a precio especial.', cta: 'Quiero la mía',
+      caption: 'Atención, que esto es posta 👇\n\nMini sesiones en {BIZ}: 30 minutos, precio especial.\n\nComentá INFO y te pasamos todo 👇' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'SESIÓN GRATIS',
+      subline: 'Sorteamos una sesión completa.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUna sesión de fotos completa, gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   profesionales: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVO SERVICIO',
@@ -502,6 +650,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 CONSEJOS CLAVE',
       subline: 'Lo que tenés que saber antes de decidir.', cta: 'Ver los consejos',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 consejos clave, por los expertos de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'CASOS', headline: 'CASO DE ÉXITO',
+      subline: 'Cómo ayudamos a un cliente real.', cta: 'Quiero lo mismo',
+      caption: 'Caso real, resultado real 📈\n\nCómo ayudamos a un cliente en {BIZ}.\n\nComentá INFO y conversamos 👇' },
+    { kind: 'promo', tag: 'DIAGNÓSTICO', headline: 'DIAGNÓSTICO GRATIS',
+      subline: 'Analizamos tu caso sin cargo.', cta: 'Pedir el mío',
+      caption: 'Atención, que esto es posta 👇\n\nDiagnóstico gratis en {BIZ}: analizamos tu caso.\n\nEscribinos por DM 📩' },
+    { kind: 'tip', tag: 'TIP', headline: 'ERRORES CAROS',
+      subline: 'Los errores que más plata cuestan.', cta: 'Ver cuáles son',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nLos errores más caros (y cómo evitarlos), por {BIZ}.\n\nGuardá este post 🔖' },
   ],
   flores: [
     { kind: 'novedad', tag: 'TEMPORADA', headline: 'FLORES DE TEMPORADA',
@@ -513,6 +670,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS DE RIEGO',
       subline: 'Que tus plantas vivan más.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips de riego y cuidado, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'ENTREGAS', headline: 'ASÍ LLEGAN',
+      subline: 'Nuestros ramos en manos felices.', cta: 'Pedir el mío',
+      caption: 'Así llegan nuestros ramos 💐\n\nFelicidad entregada por {BIZ}.\n\nPedí el tuyo por DM 📩' },
+    { kind: 'reserva', tag: 'EVENTOS', headline: 'FLORES PARA EVENTOS',
+      subline: 'Decoración floral para tu día especial.', cta: 'Consultar',
+      caption: 'Che, mirá esto 👀\n\nFlores para eventos en {BIZ}: tu día, hermoso.\n\nEscribinos por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'RAMO SEMANAL',
+      subline: 'Sorteamos un ramo cada semana.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUn ramo fresco cada semana.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   bar: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NUEVA BIRRA',
@@ -524,6 +690,15 @@ const DEMO_TOPICS = {
     { kind: 'social', tag: 'LA CASA', headline: 'EL PUNTO DE ENCUENTRO',
       subline: 'Tu mesa de siempre te espera.', cta: 'Reservar mesa',
       caption: 'Mirá lo que tenemos para vos ✨\n\nEl punto de encuentro de siempre: {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'tip', tag: 'TIP', headline: 'GUÍA CERVECERA',
+      subline: 'Qué estilo va con vos.', cta: 'Ver la guía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nGuía cervecera de {BIZ}: encontrá tu estilo.\n\nGuardá este post 🔖' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'RONDA GRATIS',
+      subline: 'Sorteamos una ronda para tu mesa.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nUna ronda gratis para tu mesa.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+    { kind: 'reserva', tag: 'CUMPLES', headline: 'FESTEJÁ ACÁ',
+      subline: 'Tu cumple con beneficios para el grupo.', cta: 'Reservar fecha',
+      caption: 'Che, mirá esto 👀\n\nFestejá tu cumple en {BIZ}: beneficios para todo el grupo.\n\nEscribinos por DM 📩' },
   ],
   otro: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'NOVEDAD',
@@ -535,6 +710,15 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', headline: '3 TIPS CLAVE',
       subline: 'Consejos de expertos, directo a tu feed.', cta: 'Ver los tips',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips clave por los expertos de {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
+    { kind: 'social', tag: 'CLIENTES', headline: 'NOS RECOMIENDAN',
+      subline: 'Lo que dicen quienes nos eligen.', cta: 'Conocernos',
+      caption: 'Gracias por recomendarnos ✨\n\nLo que dicen nuestros clientes de {BIZ}.\n\nEscribinos por DM 📩' },
+    { kind: 'reserva', tag: 'CONSULTA', headline: 'HABLEMOS',
+      subline: 'Primera consulta sin cargo.', cta: 'Agendar charla',
+      caption: 'Che, mirá esto 👀\n\nPrimera consulta sin cargo en {BIZ}.\n\nEscribinos por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'SORTEO MENSUAL',
+      subline: 'Todos los meses, un premio.', cta: 'Quiero participar',
+      caption: 'Sorteo en {BIZ} 🎁\n\nTodos los meses sorteamos algo lindo.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
 };
 
@@ -607,9 +791,9 @@ function runDemoRender(args, timeoutMs = 90000) {
 
 // El 3er posteo sale como video: demo_video.py renderiza los frames con PIL
 // (zoom suave Ken Burns, 6 segundos, 1080×1350) y los codifica a MP4 con ffmpeg.
-function renderDemoVideo(pngPath, runDir) {
+function renderDemoVideo(pngPath, runDir, idx) {
   return new Promise((resolve, reject) => {
-    const out = path.join(runDir, 'post-2.mp4');
+    const out = path.join(runDir, `post-${idx == null ? 2 : idx}.mp4`);
     execFile('python3', [DEMO_VIDEO_SCRIPT, pngPath, out, '6'], (err, stdout, stderr) => {
       if (err) return reject(new Error('video: ' + String(stderr || err.message).slice(0, 200)));
       try { resolve(fs.readFileSync(out)); }
@@ -619,32 +803,35 @@ function renderDemoVideo(pngPath, runDir) {
 }
 
 // ---------- Orquestador ----------
-async function generateDemo({ business, category, country, tone, photoPath, goal, accent, btn }) {
+// count: cantidad de posteos a generar (3 = demo clásica 2+1; 5 = semana de prueba Pro)
+async function generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+  const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
-  const { topics, goalLine } = applyGoal(DEMO_TOPICS[cat], goal);
+  const { topics: allTopics, goalLine } = applyGoal(DEMO_TOPICS[cat], goal);
+  const topics = allTopics.slice(0, n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-demo-'));
   try {
-    // 3 estilos distintos al azar de la libreria de 9 + 3 fotos distintas.
+    // n estilos distintos al azar de la libreria de 9 + n fotos distintas.
     const stylePool = ['promo', 'editorial', 'nocturno', 'bloque', 'marco', 'sello', 'cita', 'tipografico', 'oferta'];
     for (let i = stylePool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [stylePool[i], stylePool[j]] = [stylePool[j], stylePool[i]];
     }
-    const styles3 = stylePool.slice(0, 3);
-    const stock3 = photoPath ? null : stockPhotos3(cat);
-    const focuses = [0.35, 0.5, 0.65];
+    const stylesN = stylePool.slice(0, n);
+    const stockN = photoPath ? null : stockPhotosN(cat, n);
+    const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
     const posts = topics.map((t, i) => {
-      // Foto: la del usuario si la subió (misma en los 3); si no, 3 fotos
+      // Foto: la del usuario si la subió (misma en los n); si no, n fotos
       // distintas del pool creible del rubro, con encuadre variado.
-      const photo = photoPath || stock3[i];
+      const photo = photoPath || stockN[i];
       let headline = t.headline;
       if (tone === 'tu') headline = TU_HEADLINES[headline] || headline;
       return {
         photo,
-        style: styles3[i],
+        style: stylesN[i],
         focus: focuses[i],
         pill: t.tag,
         bar,
@@ -671,13 +858,14 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       };
     });
 
-    // 2 posteos estáticos + 1 video (el 3er diseño, animado con zoom suave).
+    // El 3er posteo sale como video (el diseño del medio, animado con zoom suave).
     // Si el render del video falla de forma transitoria, se reintenta una vez
     // antes de caer al fallback de imagen.
+    const videoIdx = Math.min(2, n - 1);
     let videoB64 = null;
     for (let attempt = 0; attempt < 2 && !videoB64; attempt++) {
       try {
-        const vbuf = await renderDemoVideo(path.join(runDir, 'post-2.png'), runDir);
+        const vbuf = await renderDemoVideo(path.join(runDir, `post-${videoIdx}.png`), runDir, videoIdx);
         videoB64 = vbuf.toString('base64');
       } catch (e) {
         console.error('[posta] Video de la demo falló (intento ' + (attempt + 1) + '):', e.message);
@@ -685,13 +873,11 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       }
     }
 
-    return [
-      { type: 'image', image: made[0].image, caption: made[0].caption, hashtags: made[0].hashtags },
-      { type: 'image', image: made[1].image, caption: made[1].caption, hashtags: made[1].hashtags },
-      videoB64
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: made[2].caption, hashtags: made[2].hashtags }
-        : { type: 'image', image: made[2].image, caption: made[2].caption, hashtags: made[2].hashtags },
-    ];
+    return made.map((m, i) => (
+      i === videoIdx && videoB64
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags }
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags }
+    ));
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
   }

@@ -94,6 +94,35 @@ CREATE TABLE IF NOT EXISTS demo_usage (
 );
 `);
 
+// Prueba completa: una sola vez por IP (sin registro)
+db.exec(`
+CREATE TABLE IF NOT EXISTS trial_usage (
+  ip TEXT PRIMARY KEY,
+  used_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+// Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
+try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+
+// Backfill: códigos de referido para usuarios existentes
+try {
+  const rcrypto = require('crypto');
+  const used = new Set(
+    db.prepare(`SELECT referral_code FROM users WHERE referral_code IS NOT NULL AND referral_code != ''`)
+      .all().map((r) => r.referral_code)
+  );
+  const missing = db.prepare(`SELECT id FROM users WHERE referral_code IS NULL OR referral_code = ''`).all();
+  const upd = db.prepare(`UPDATE users SET referral_code = ? WHERE id = ?`);
+  for (const u of missing) {
+    let code;
+    do { code = rcrypto.randomBytes(4).toString('hex'); } while (used.has(code));
+    used.add(code);
+    upd.run(code, u.id);
+  }
+} catch (e) { console.error('[posta] backfill referral_code:', e.message); }
+
 // Backfill: timezone vacío → default
 try { db.exec(`UPDATE settings SET timezone='America/Argentina/Buenos_Aires' WHERE timezone IS NULL OR timezone=''`); } catch (e) {}
 

@@ -74,12 +74,19 @@ function maskSettings(s) {
 
 // ---------- Auth ----------
 app.post('/api/auth/register', (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, ref } = req.body || {};
   if (!email || !password || password.length < 6)
     return res.status(400).json({ error: 'Email y contraseña (mínimo 6 caracteres)' });
   try {
     const hash = bcrypt.hashSync(password, 10);
-    const r = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)').run(email.trim().toLowerCase(), hash);
+    const code = newReferralCode();
+    let referredBy = null;
+    const refCode = String(ref || '').trim().toLowerCase().slice(0, 16);
+    if (/^[a-z0-9]{4,16}$/.test(refCode)) {
+      const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(refCode);
+      if (referrer && referrer.id) referredBy = referrer.id;
+    }
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by) VALUES (?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy);
     req.session.userId = r.lastInsertRowid;
     res.json({ ok: true });
   } catch (e) {
@@ -394,6 +401,26 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+// ---------- Referidos: 2 amigos activos = 50% off ----------
+const REFERRALS_NEEDED = 2;
+const REFERRAL_DISCOUNT = 0.5;
+
+function newReferralCode() {
+  for (let i = 0; i < 10; i++) {
+    const code = crypto.randomBytes(4).toString('hex');
+    if (!db.prepare('SELECT id FROM users WHERE referral_code = ?').get(code)) return code;
+  }
+  return crypto.randomBytes(8).toString('hex');
+}
+
+// Cuenta referidos con suscripción ACTIVA (si cancelan, el descuento se pierde)
+function referralStats(userId) {
+  const me = db.prepare('SELECT referral_code FROM users WHERE id = ?').get(userId);
+  const row = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND plan_status = 'active'`).get(userId);
+  const referred_count = row ? row.n : 0;
+  return { code: me ? me.referral_code : '', referred_count, needed: REFERRALS_NEEDED, discount_active: referred_count >= REFERRALS_NEEDED };
+}
+
 // ---------- Facturación (Mercado Pago) ----------
 app.get('/api/billing/plans', (req, res) => {
   const country = req.query.country === 'UY' ? 'UY' : 'AR';
@@ -420,13 +447,20 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
   try {
     const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
     const baseUrl = `${req.protocol}://${req.get('host')}`;
+    // Descuento por referidos: 2 amigos con suscripción activa = 50% off
+    let finalPlan = plan;
+    let discount = false;
+    if (referralStats(user.id).discount_active) {
+      discount = true;
+      finalPlan = { ...plan, price: Math.round(plan.price * REFERRAL_DISCOUNT), name: `${plan.name} (50% off referidos)` };
+    }
     const { init_point } = await mp.createSubscription({
-      plan,
+      plan: finalPlan,
       userId: user.id,
       userEmail: user.email,
       baseUrl,
     });
-    res.json({ init_point });
+    res.json({ init_point, discount_applied: discount });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
     res.status(500).json({ error: 'No se pudo iniciar el pago. Probá de nuevo en unos minutos.' });
@@ -481,6 +515,25 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Referidos ----------
+app.get('/api/referrals/mine', requireAuth, (req, res) => {
+  const s = referralStats(req.session.userId);
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active });
+});
+
+// Capacidad real: 15 lugares por mes menos suscripciones activas
+const MONTHLY_SPOTS = 15;
+function spotsLeft() {
+  try {
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE plan_status = 'active'`).get();
+    return Math.max(0, MONTHLY_SPOTS - (row ? row.n : 0));
+  } catch (_) { return MONTHLY_SPOTS; }
+}
+app.get('/api/capacity', (req, res) => {
+  res.json({ ok: true, spots_left: spotsLeft(), spots_total: MONTHLY_SPOTS });
+});
+
 // ---------- Demo pública self-service (sin login) ----------
 // El visitante genera 3 posteos de muestra sin registro ni WhatsApp.
 app.get('/demo', (req, res) => {
@@ -525,6 +578,94 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   } catch (e) {
     console.error('[posta] Error en demo pública:', e.message);
     res.status(500).json({ error: 'No pudimos generar tu demo ahora. Probá de nuevo en unos minutos.' });
+  } finally {
+    if (photoPath) {
+      try { fs.unlinkSync(photoPath); } catch (_) {}
+    }
+  }
+});
+
+// ---------- Prueba completa: la app por dentro, una sola vez, sin registro ----------
+// El visitante pasa por onboarding mini → ve sus 6 ideas → su semana Pro armada
+// (5 posteos: 4 imágenes + 1 video) → cartel de compra en el pico de emoción.
+app.get('/prueba', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
+});
+
+app.get('/api/trial/status', (req, res) => {
+  const ip = demo.clientIp(req);
+  const row = db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip);
+  res.json({ ok: true, used: !!row });
+});
+
+function buildTrialWeek(n) {
+  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const now = new Date();
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(now.getTime() + (i + 1) * 86400000);
+    return { day: days[d.getDay()], date: `${d.getDate()} ${months[d.getMonth()]}`, post: i };
+  });
+}
+
+const TRIAL_IMG_MIME = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+
+app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
+  let fields, file;
+  try {
+    ({ fields, file } = demo.parseMultipart(req, req.body));
+  } catch (e) {
+    return res.status(400).json({ error: e.message || 'Formulario inválido' });
+  }
+  const business = String(fields.business || '').trim().slice(0, 60);
+  const ig = String(fields.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  const category = String(fields.category || '').trim();
+  const country = String(fields.country || '').trim().toUpperCase();
+  const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 300);
+  const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
+  const accent = String(fields.accent || '').trim().slice(0, 7);
+  const btn = String(fields.btn || '').trim().slice(0, 7);
+  if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
+  if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
+  if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
+  if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
+
+  const ip = demo.clientIp(req);
+  if (db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip)) {
+    return res.status(429).json({ error: 'Ya usaste tu prueba gratis 🙏 Creá tu cuenta para seguir.' });
+  }
+
+  let photoPath = null;
+  try {
+    if (file) {
+      const kind = demo.validImageKind(file);
+      if (!kind) return res.status(400).json({ error: 'La imagen tiene que ser JPG, PNG o WebP' });
+      photoPath = path.join(os.tmpdir(), `posta-trial-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
+      fs.writeFileSync(photoPath, file.buffer);
+    }
+    // 6 ideas pensadas para SU negocio + semana Pro: 5 posteos (4 imágenes + 1 video)
+    const ideas = await generateIdeas({ business, category, tone, description: goal, competitors }, null);
+    const posts = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count: 5 });
+    db.prepare('INSERT OR IGNORE INTO trial_usage (ip) VALUES (?)').run(ip);
+
+    let screenshot = null;
+    if (photoPath) {
+      const ext = photoPath.split('.').pop().toLowerCase();
+      screenshot = `data:${TRIAL_IMG_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64');
+    }
+    res.json({
+      ok: true,
+      business, ig, category,
+      ideas: ideas.slice(0, 6),
+      posts,
+      week: buildTrialWeek(posts.length),
+      screenshot,
+      spots_left: spotsLeft(),
+    });
+  } catch (e) {
+    console.error('[posta] Error en prueba completa:', e.message);
+    res.status(500).json({ error: 'No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.' });
   } finally {
     if (photoPath) {
       try { fs.unlinkSync(photoPath); } catch (_) {}
