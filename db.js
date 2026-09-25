@@ -116,6 +116,8 @@ CREATE TABLE IF NOT EXISTS deletion_requests (
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+// Email de MercadoPago del usuario (puede diferir del email de la cuenta)
+try { db.exec(`ALTER TABLE users ADD COLUMN mp_payer_email TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 // Backfill: códigos de referido para usuarios existentes
 try {

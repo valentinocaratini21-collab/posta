@@ -40,12 +40,15 @@ async function mpFetch(path, { method = 'GET', body } = {}) {
 }
 
 // Crea una suscripción (preapproval) y devuelve el init_point para redirigir al pagador.
-// NOTA: no se envía payer_email a propósito — así el pagador puede autorizar
-// con CUALQUIER cuenta de Mercado Pago, aunque su email sea distinto al de Posta.
+// payer_email es REQUERIDO por MercadoPago y debe ser el email de la cuenta de MP
+// con la que el usuario va a pagar (no necesariamente el email de Posta).
 // La suscripción se identifica por external_reference (userId:planId), que es lo
 // que usa el webhook para activar el plan correcto.
-async function createSubscription({ plan, userId, baseUrl }) {
+async function createSubscription({ plan, userId, baseUrl, payerEmail }) {
   if (!mpConfigured()) throw new Error('Pagos no configurados todavía');
+  if (!payerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) {
+    throw new Error('Falta el email de MercadoPago.');
+  }
   const backUrls = {
     success: `${baseUrl}/#/app/ajustes?plan=ok`,
     pending: `${baseUrl}/#/app/ajustes?plan=pending`,
@@ -56,6 +59,7 @@ async function createSubscription({ plan, userId, baseUrl }) {
     body: {
       reason: `Posta — Plan ${plan.name}`,
       external_reference: `${userId}:${plan.id}`,
+      payer_email: payerEmail,
       auto_recurring: {
         frequency: 1,
         frequency_type: 'months',

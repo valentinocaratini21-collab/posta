@@ -109,13 +109,14 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   res.json({
     user: {
       id: user.id,
       email: user.email,
+      mp_payer_email: user.mp_payer_email || '',
       created_at: user.created_at,
       plan: user.plan || TRIAL_PLAN,
       plan_status: user.plan_status || 'trial',
@@ -511,18 +512,24 @@ app.get('/api/billing/plans', (req, res) => {
 });
 
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
-  const { plan: planId, country } = req.body || {};
+  const { plan: planId, country, payer_email } = req.body || {};
   const plans = getPlans(country === 'UY' ? 'UY' : 'AR');
   const plan = plans[planId];
   if (!plan) return res.status(400).json({ error: 'Plan inválido' });
   if (!mp.mpConfigured()) {
     return res.status(400).json({ error: 'Pagos no configurados todavía.' });
   }
+  const payerEmail = String(payer_email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail)) {
+    return res.status(400).json({ error: 'Ingresá el email de tu cuenta de MercadoPago.' });
+  }
   try {
     const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
     if (user.plan_status === 'active' && user.mp_preapproval_id) {
       return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
     }
+    // Guardar el email de MP para pre-completarlo la próxima vez
+    try { db.prepare(`UPDATE users SET mp_payer_email=? WHERE id=?`).run(payerEmail, user.id); } catch (e) {}
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     // Descuento por referidos: 2 amigos con suscripción activa = 50% off
     let finalPlan = plan;
@@ -535,7 +542,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
       plan: finalPlan,
       userId: user.id,
       baseUrl,
-      payerEmail: user.email,
+      payerEmail,
     });
     res.json({ init_point, discount_applied: discount });
   } catch (e) {
