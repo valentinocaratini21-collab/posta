@@ -498,6 +498,9 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 300);
+  const accent = String(fields.accent || '').trim().slice(0, 7);
+  const btn = String(fields.btn || '').trim().slice(0, 7);
   if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
   if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
   if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
@@ -517,7 +520,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
       photoPath = path.join(os.tmpdir(), `posta-demo-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
       fs.writeFileSync(photoPath, file.buffer);
     }
-    const posts = await demo.generateDemo({ business, category, country, tone, photoPath });
+    const posts = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn });
     res.json({ ok: true, posts, remaining: rl.remaining });
   } catch (e) {
     console.error('[posta] Error en demo pública:', e.message);
