@@ -84,6 +84,16 @@ CREATE TABLE IF NOT EXISTS assets (
 CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(user_id, kind);
 `);
 
+// Demo pública: rate limit de generaciones por IP por día (5/día)
+db.exec(`
+CREATE TABLE IF NOT EXISTS demo_usage (
+  ip TEXT NOT NULL,
+  day TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (ip, day)
+);
+`);
+
 // Backfill: timezone vacío → default
 try { db.exec(`UPDATE settings SET timezone='America/Argentina/Buenos_Aires' WHERE timezone IS NULL OR timezone=''`); } catch (e) {}
 

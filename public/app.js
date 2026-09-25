@@ -67,28 +67,54 @@ function slotDate19(i, tz) {
 const TIMEZONES = ['America/Argentina/Buenos_Aires', 'America/Santiago', 'America/Asuncion', 'America/Montevideo', 'America/Sao_Paulo', 'America/Bogota', 'America/Lima', 'America/Mexico_City', 'America/New_York', 'Europe/Madrid'];
 
 /* ---------- LANDING ---------- */
-function landingView(cfg) {
-  const plans = (cfg && cfg.plans) || [];
-  const wa = (cfg && cfg.whatsapp) || '';
-  const planCards = plans.map(p => `
+function planCardsHTML(plans) {
+  return (plans || []).map(p => `
     <div class="price-card${p.highlighted ? ' hot' : ''}">
       ${p.highlighted ? '<div class="tag">EL MÁS ELEGIDO</div>' : ''}
       <h3>Plan ${esc(p.name)}</h3>
       <div class="price">${esc(p.price_label)}<small>/mes</small></div>
       <p style="color:var(--mut);font-size:14px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn ${p.highlighted ? 'btn-sun' : 'btn-grad'} btn-block" href="#/registro">Empezar ahora</a>
+      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="#/registro">Empezar ahora</a>
     </div>`).join('');
+}
+
+function anchorHTML(anchor) {
+  if (!anchor) return '';
+  return `Un community manager cuesta <b>${esc(anchor.cm)}</b>. Posta arranca en <b>${esc(anchor.desde)}</b>.`;
+}
+
+// Cambia el país de los planes en la landing sin recargar
+let PLANS_COUNTRY = 'AR';
+async function switchPlansCountry(c) {
+  PLANS_COUNTRY = (c === 'UY') ? 'UY' : 'AR';
+  document.querySelectorAll('.country-toggle button').forEach(b => b.classList.toggle('on', b.dataset.country === PLANS_COUNTRY));
+  try {
+    const cfg = await api.get('/api/billing/plans?country=' + PLANS_COUNTRY);
+    PLANS_CACHE = cfg;
+    const row = document.getElementById('plansRow');
+    if (row) row.innerHTML = planCardsHTML(cfg.plans);
+    const anchor = document.getElementById('anchorLine');
+    if (anchor && cfg.anchor) anchor.innerHTML = anchorHTML(cfg.anchor);
+  } catch (e) { /* mantiene los planes actuales */ }
+}
+
+function landingView(cfg) {
+  const plans = (cfg && cfg.plans) || [];
+  const country = (cfg && cfg.country) || 'AR';
+  PLANS_COUNTRY = country;
+  const planCards = planCardsHTML(plans);
   return `
   <div class="nav"><div class="wrap">
     <a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#incluye">Qué incluye</a>
+      <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
       <a href="#faq">Preguntas</a>
       <a href="#/login">Entrar</a>
-      <a class="btn btn-sun btn-sm" href="#/registro">Empezar ahora</a>
+      <a class="btn btn-primary btn-sm" href="#/registro">Empezar ahora</a>
     </div>
   </div></div>
   <div class="hero"><div class="wrap">
@@ -96,14 +122,14 @@ function landingView(cfg) {
     <h1>Vos vendé. <span class="hl">Nosotros posteamos.</span></h1>
     <p class="sub"><b>Vos no te ocupás de nada.</b> Contanos de tu negocio una sola vez: creamos las ideas, los diseños y los captions, y publicamos solo en tu Instagram.</p>
     <div class="hero-cta">
-      <a class="btn btn-sun" href="#/registro">Empezar ahora</a>
-      ${wa ? `<a class="btn btn-ghost" href="${wa}" target="_blank">💬 Hablar por WhatsApp</a>` : `<a class="btn btn-ghost" href="#como-funciona">Ver cómo funciona</a>`}
+      <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
+      <a class="btn btn-ghost" href="/demo">✨ Probar gratis</a>
     </div>
     <div class="hero-note">Sin tarjeta · 7 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
         <img src="hero-post.png" alt="Ejemplo de posteo creado por Posta">
-        <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#1B86BC">#modaargentina #emprendedoresargentinos</span></div>
+        <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#1888B8">#modaargentina #emprendedoresargentinos</span></div>
       </div></div>
       <div class="phone"><div class="screen">
         <video src="showreel.mp4" autoplay muted loop playsinline></video>
@@ -112,8 +138,18 @@ function landingView(cfg) {
     </div>
   </div></div>
   <div class="sample-banner"><div class="wrap">
-    <div class="sample-txt"><b>🎁 3 posteos de muestra GRATIS</b><span>Te los armamos con tu marca para que veas la calidad antes de pagar un peso.</span></div>
-    ${wa ? `<a class="btn btn-sun" href="${wa}" target="_blank">Quiero mi muestra gratis</a>` : `<a class="btn btn-sun" href="#/registro">Quiero mi muestra gratis</a>`}
+    <div class="sample-txt"><b>🎁 3 posteos de muestra GRATIS</b><span>Generala vos mismo en 30 segundos, con tu negocio real. Sin registro.</span></div>
+    <a class="btn btn-primary" href="/demo">Quiero mi muestra gratis</a>
+  </div></div>
+  <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
+    <h2>Hecho con Posta</h2>
+    <p class="lede">Diseños y videos creados en minutos, para cualquier rubro.</p>
+    <div class="show-row">
+      <div class="phone sm"><div class="screen"><img src="post-food.png" alt="Diseño para restaurante creado por Posta"></div></div>
+      <div class="phone sm"><div class="screen"><video src="video-food.mp4" autoplay muted loop playsinline></video></div></div>
+      <div class="phone sm"><div class="screen"><img src="post-barber.png" alt="Diseño para barbería creado por Posta"></div></div>
+      <div class="phone sm"><div class="screen"><video src="video-barber.mp4" autoplay muted loop playsinline></video></div></div>
+    </div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así de simple</h2>
@@ -139,9 +175,13 @@ function landingView(cfg) {
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Sin letra chica. Cancelá cuando quieras.</p>
-    <div class="anchor-line">Un community manager cuesta <b>$300.000+/mes</b>. Posta arranca en <b>$29.900</b>.</div>
+    <div class="country-toggle">
+      <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
+      <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
+    </div>
+    <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
     <div class="scarcity">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
-    <div class="plans-row">${planCards || '<p>Cargando planes...</p>'}</div>
+    <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
@@ -157,8 +197,8 @@ function landingView(cfg) {
       <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si tu Instagram no se ve transformado, te devolvemos el 100%. Sin preguntas.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-sun" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
-      ${wa ? `<div style="margin-top:16px"><a href="${wa}" target="_blank" style="color:var(--celeste-d);font-weight:700">💬 o hablanos por WhatsApp</a></div>` : ''}
+      <a class="btn btn-primary" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
+      <div style="margin-top:18px"><a class="btn btn-ghost" href="/demo">✨ Probar gratis</a></div>
     </div>
   </div></div>
   <div class="footer"><div class="wrap">
@@ -181,9 +221,9 @@ function authView(mode) {
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"></div>
-    <button class="btn btn-sun btn-block" id="btnAuth">${isLogin ? 'Entrar' : 'Crear cuenta'}</button>
+    <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? 'Entrar' : 'Crear cuenta'}</button>
     <p style="text-align:center;margin-top:18px;font-size:14px;color:var(--dim)">
-      ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--celeste-d)">Registrate</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--celeste-d)">Entrá</a>'}
+      ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
     </p>
   </div></div>`;
 }
@@ -226,10 +266,10 @@ function freshVState() {
 let VSTATE = freshVState();
 
 const BASE_PALETTES = [
-  { name: 'Cielo', c: ['#2FA9E0', '#1B86BC'], dark: false },
-  { name: 'Sol', c: ['#FFD200', '#FF9E00'], dark: true },
-  { name: 'Bandera', c: ['#2FA9E0', '#FFD200'], dark: true },
-  { name: 'Nube', c: ['#EAF6FD', '#BFE3F5'], dark: true },
+  { name: 'Celeste', c: ['#1888B8', '#0F6E96'], dark: false },
+  { name: 'Amarillo', c: ['#FEC14D', '#E5A62C'], dark: true },
+  { name: 'Navy', c: ['#0A1E33', '#47617A'], dark: false },
+  { name: 'Nieve', c: ['#FFFFFF', '#F2F9FD'], dark: true },
 ];
 // Colores de marca del cliente (brand kit) → paleta "Mi marca" primera en la lista
 function brandColors() {
@@ -296,32 +336,32 @@ function drawPost(canvas, o) {
   const ctx = canvas.getContext('2d');
   const pals = getPalettes();
   const pal = pals[o.pal] || pals[0];
-  const ink = pal.dark ? '#0B2239' : '#FFFFFF';
-  const sub = pal.dark ? 'rgba(10,12,10,.72)' : 'rgba(255,255,255,.82)';
+  const ink = pal.dark ? '#0A1E33' : '#FFFFFF';
+  const sub = pal.dark ? 'rgba(10,30,51,.72)' : 'rgba(255,255,255,.82)';
 
   if (o.photoImg) {
     // La foto va de fondo y el diseño se mantiene: velo con los colores de la marca
     drawCover(ctx, o.photoImg, 0, 0, W, H);
     if (o.tpl === 'claro') ctx.fillStyle = 'rgba(255,255,255,.88)';
-    else if (o.tpl === 'noche') ctx.fillStyle = 'rgba(11,34,57,.86)';
+    else if (o.tpl === 'noche') ctx.fillStyle = 'rgba(10,30,51,.86)';
     else { const pg = ctx.createLinearGradient(0, 0, W, H); pg.addColorStop(0, hexA(pal.c[0], .62)); pg.addColorStop(1, hexA(pal.c[1], .62)); ctx.fillStyle = pg; }
     ctx.fillRect(0, 0, W, H);
   }
 
   if (o.tpl === 'claro') {
     if (!o.photoImg) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); }
-    ctx.fillStyle = '#FFC93C'; ctx.fillRect(90, 120, 130, 18);
-    ctx.fillStyle = '#0B2239'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#FEC14D'; ctx.fillRect(90, 120, 130, 18);
+    ctx.fillStyle = '#0A1E33'; ctx.textAlign = 'center';
     ctx.font = '800 96px -apple-system, Inter, sans-serif';
     wrapText(ctx, o.title || 'Tu título', W - 220).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, 420 + i * 116));
-    ctx.fillStyle = 'rgba(10,12,10,.65)'; ctx.font = '400 52px -apple-system, Inter, sans-serif';
+    ctx.fillStyle = 'rgba(10,30,51,.65)'; ctx.font = '400 52px -apple-system, Inter, sans-serif';
     wrapText(ctx, o.subtitle || '', W - 260).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 900 + i * 70));
-    ctx.fillStyle = '#0B2239'; ctx.font = '700 44px -apple-system, Inter, sans-serif';
+    ctx.fillStyle = '#0A1E33'; ctx.font = '700 44px -apple-system, Inter, sans-serif';
     ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, 1230);
   } else if (o.tpl === 'noche') {
-    if (!o.photoImg) { ctx.fillStyle = '#0B2239'; ctx.fillRect(0, 0, W, H); }
-    ctx.strokeStyle = '#FFC93C'; ctx.lineWidth = 10; ctx.strokeRect(50, 50, W - 100, H - 100);
-    ctx.fillStyle = '#FFC93C'; ctx.font = '800 40px -apple-system, Inter, sans-serif'; ctx.textAlign = 'center';
+    if (!o.photoImg) { ctx.fillStyle = '#0A1E33'; ctx.fillRect(0, 0, W, H); }
+    ctx.strokeStyle = '#FEC14D'; ctx.lineWidth = 10; ctx.strokeRect(50, 50, W - 100, H - 100);
+    ctx.fillStyle = '#FEC14D'; ctx.font = '800 40px -apple-system, Inter, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(('' + (o.handle || 'tunegocio')).toUpperCase(), W / 2, 170);
     ctx.fillStyle = '#fff'; ctx.font = '800 104px -apple-system, Inter, sans-serif';
     wrapText(ctx, o.title || 'Tu título', W - 240).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, 560 + i * 124));
@@ -343,9 +383,9 @@ function drawPost(canvas, o) {
     // pill handle
     ctx.font = '800 46px -apple-system, Inter, sans-serif';
     const hw = ctx.measureText('@' + (o.handle || 'tunegocio')).width + 90;
-    ctx.fillStyle = pal.dark ? '#0B2239' : '#fff';
+    ctx.fillStyle = pal.dark ? '#0A1E33' : '#fff';
     ctx.beginPath(); ctx.roundRect(W / 2 - hw / 2, 1150, hw, 96, 48); ctx.fill();
-    ctx.fillStyle = pal.dark ? '#fff' : '#0B2239';
+    ctx.fillStyle = pal.dark ? '#fff' : '#0A1E33';
     ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, 1214);
   } else { // gradiente
     if (!o.photoImg) {
@@ -387,12 +427,12 @@ function creatorView() {
       <div class="field"><label>¿De qué es el post?</label>
         <textarea id="c_topic" placeholder='Ej: "nuevo buzo oversize color crema", "promo 2x1 en pizzas los martes", "abrimos local en Palermo"'>${esc(c.topic)}</textarea>
         <div class="hint">Una frase alcanza. La IA lo convierte en caption + hashtags con tu tono.</div></div>
-      <button class="btn btn-grad" id="btnGen">🤖 Generar con IA</button>
+      <button class="btn btn-soft" id="btnGen">🤖 Generar con IA</button>
       <div id="genErr"></div>
       <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
         <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
         <div class="field"><label>Hashtags</label><textarea id="c_tags" style="min-height:70px">${esc(c.hashtags)}</textarea></div>
-        <button class="btn btn-sun" id="btnToDesign">Siguiente: diseñar imagen →</button>
+        <button class="btn btn-primary" id="btnToDesign">Siguiente: diseñar imagen →</button>
       </div>
     </div>`;
   }
@@ -408,7 +448,7 @@ function creatorView() {
             ${['gradiente', 'claro', 'noche', 'promo'].map(t => `<div class="tpl ${c.tpl === t ? 'on' : ''}" data-tpl="${t}">${t[0].toUpperCase() + t.slice(1)}</div>`).join('')}
           </div>
           <h3 style="margin-top:18px">Paleta</h3>
-          <div class="pal-row">${getPalettes().map((p, i) => `<div class="pal ${c.pal === i ? 'on' : ''}" data-pal="${i}" title="${p.name}${p.brand ? ' (tus colores)' : ''}" style="background:linear-gradient(135deg,${p.c[0]},${p.c[1]});${p.brand ? 'box-shadow:0 0 0 2px var(--yellow)' : ''}"></div>`).join('')}</div>
+          <div class="pal-row">${getPalettes().map((p, i) => `<div class="pal ${c.pal === i ? 'on' : ''}" data-pal="${i}" title="${p.name}${p.brand ? ' (tus colores)' : ''}" style="background:linear-gradient(135deg,${p.c[0]},${p.c[1]});${p.brand ? 'box-shadow:0 0 0 2px var(--yl)' : ''}"></div>`).join('')}</div>
           <div class="field" style="margin-top:18px"><label>Título</label><input id="d_title" value="${esc(c.title)}" placeholder="HASTA 40% OFF"></div>
           <div class="field"><label>Subtítulo</label><input id="d_sub" value="${esc(c.subtitle)}" placeholder="Solo esta semana"></div>
           <div class="field"><label>Usuario de Instagram (sin @)</label><input id="d_handle" value="${esc(c.handle || (PROFILE?.ig_username || ''))}" placeholder="tunegocio"></div>
@@ -434,7 +474,7 @@ function creatorView() {
         </div>
         <div style="display:flex;gap:10px">
           <button class="btn btn-ghost" id="btnBack1">← Atrás</button>
-          <button class="btn btn-sun" id="btnSaveDesign" style="flex:1">Guardar diseño →</button>
+          <button class="btn btn-primary" id="btnSaveDesign" style="flex:1">Guardar diseño →</button>
         </div>
       </div>
       <div><div class="preview-box"><canvas id="postCanvas"></canvas></div>
@@ -452,14 +492,14 @@ function creatorView() {
       <img src="${esc(c.imagePath)}" style="width:180px;border-radius:14px;border:1px solid var(--line)">
       <div style="flex:1;min-width:240px">
         <p style="font-size:15px;line-height:1.6;color:var(--mut);white-space:pre-wrap">${esc(c.caption)}</p>
-        <p style="color:#1B86BC;font-size:14px;margin-top:8px">${esc(c.hashtags)}</p>
+        <p style="color:var(--yl-l);font-size:14px;margin-top:8px">${esc(c.hashtags)}</p>
       </div>
     </div>
     <div class="row2" style="margin-top:24px">
       <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="p_when" min="${minDt}" value="${minDt}"></div>
       <div class="field"><label>&nbsp;</label><div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-sun" id="btnSchedule">📅 Programar</button>
-        <button class="btn btn-grad" id="btnNow">⚡ Publicar ahora</button>
+        <button class="btn btn-primary" id="btnSchedule">📅 Programar</button>
+        <button class="btn btn-soft" id="btnNow">⚡ Publicar ahora</button>
       </div></div>
     </div>
     <div id="pubMsg"></div>
@@ -471,18 +511,18 @@ function creatorView() {
 function ideasView() {
   const comp = ((PROFILE || {}).competitors || '').trim();
   return `<h1>Ideas 💡</h1><p class="sub">Nosotros pensamos el contenido por vos. Vos no te ocupás de nada.</p>
-  <div class="card" style="background:linear-gradient(135deg,#EAF6FD,#FFF8E6);border:1px solid #BFE3F5">
+  <div class="card" style="background:linear-gradient(135deg,rgba(37,99,235,.20),rgba(37,99,235,.06));border:1px solid rgba(37,99,235,.4)">
     <h3>⚡ Piloto automático</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.65;margin:0">
       Contanos de tu negocio <b>una sola vez</b>. Estudiamos tu rubro${comp ? ` y a tus competidores (<b>${esc(comp)}</b>)` : ''},
       creamos las ideas, el texto y el diseño, y lo publicamos solo.
-      ${comp ? '' : '<br><a href="#/app/ajustes" style="color:var(--celeste-d);font-weight:700">→ Agregá tus competidores en Ajustes</a> para ideas que te hagan destacar.'}
+      ${comp ? '' : '<br><a href="#/app/ajustes" style="color:var(--cel);font-weight:700">→ Agregá tus competidores en Ajustes</a> para ideas que te hagan destacar.'}
     </p>
   </div>
   <div id="ideasZone">${IDEAS.length ? ideasList() : `
     <div class="empty"><div class="big">💡</div>
       Todavía no generamos ideas para tu negocio.<br><br>
-      <button class="btn btn-sun" id="btnGenIdeas">✨ Generar ideas para mi negocio</button>
+      <button class="btn btn-primary" id="btnGenIdeas">✨ Generar ideas para mi negocio</button>
     </div>`}
   </div>
   <div id="ideasMsg"></div>`;
@@ -511,12 +551,12 @@ function ideasList() {
         <div class="cap" style="white-space:normal;line-height:1.6">${esc(idea.angulo)}</div>
       </div>
       <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">
-        ${isVideo ? `<button class="btn btn-sun btn-sm" data-video="${i}">🎬 Crear video →</button>` : ''}
-        <button class="btn btn-grad btn-sm" data-idea="${i}">Crear post →</button>
+        ${isVideo ? `<button class="btn btn-primary btn-sm" data-video="${i}">🎬 Crear video →</button>` : ''}
+        <button class="btn btn-soft btn-sm" data-idea="${i}">Crear post →</button>
       </div>
     </div>`; }).join('')}
   </div>
-  <div class="card" style="border:2px solid var(--yellow)">
+  <div class="card" style="border:2px solid var(--yl)">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos el texto, diseñamos la imagen y programamos los posts solos. Vos solo mirá cómo salen.</p>
     <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
@@ -524,7 +564,7 @@ function ideasList() {
       <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
       </select>
-      <button class="btn btn-sun" id="btnAutopilot">⚡ Armar mi semana</button>
+      <button class="btn btn-primary" id="btnAutopilot">⚡ Armar mi semana</button>
     </div>
     <div id="apProg" style="margin-top:16px"></div>
   </div>`;
@@ -621,7 +661,7 @@ function videoView() {
   const v = VSTATE;
   const photos = assetPhotos();
   return `<h1>Video 🎬</h1><p class="sub">Convertí tus fotos en un video vertical (1080×1920) para Reels y TikTok. Hasta 5 escenas, 60 segundos en total.</p>
-  ${!photos.length ? `<div class="card" style="border:1px dashed var(--celeste)"><p style="color:var(--mut);font-size:15px;margin:0">💡 Tip: subí tus fotos en <a href="#/app/fotos" style="color:var(--celeste-d);font-weight:700">Mis fotos</a> y las tenés siempre a mano para tus videos.</p></div>` : ''}
+  ${!photos.length ? `<div class="card" style="border:1px dashed var(--yl)"><p style="color:var(--mut);font-size:15px;margin:0">💡 Tip: subí tus fotos en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a> y las tenés siempre a mano para tus videos.</p></div>` : ''}
   <div class="card"><h3>Escenas (${v.scenes.length}/5)</h3>
     ${v.scenes.map((s, i) => `
     <div class="post-item" style="align-items:flex-start;gap:14px">
@@ -658,17 +698,17 @@ function videoView() {
   </div>
   <div class="card"><h3>Generar</h3>
     <div class="field"><label>Caption (opcional, para programarlo)</label><textarea data-vcap style="min-height:80px" placeholder="Texto que acompaña el video...">${esc(v.caption)}</textarea></div>
-    <button class="btn btn-sun" id="btnVGen" ${v.busy ? 'disabled' : ''}>${v.busy ? '⏳ Generando video...' : '🎬 Generar video'}</button>
+    <button class="btn btn-primary" id="btnVGen" ${v.busy ? 'disabled' : ''}>${v.busy ? '⏳ Generando video...' : '🎬 Generar video'}</button>
     <div id="vMsg" style="margin-top:14px"></div>
     ${v.result_url ? `
     <div style="margin-top:18px;display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
       <video src="${esc(v.result_url)}" controls style="width:220px;border-radius:14px;border:1px solid var(--line)"></video>
       <div style="flex:1;min-width:220px">
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-          <a class="btn btn-grad btn-sm" href="${esc(v.result_url)}" download>⬇️ Descargar</a>
+          <a class="btn btn-soft btn-sm" href="${esc(v.result_url)}" download>⬇️ Descargar</a>
         </div>
         <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="v_when"></div>
-        <button class="btn btn-sun btn-sm" id="btnVSched">📅 Programar video</button>
+        <button class="btn btn-primary btn-sm" id="btnVSched">📅 Programar video</button>
         <div id="vSchedMsg" style="margin-top:10px"></div>
       </div>
     </div>` : ''}
@@ -793,7 +833,7 @@ function fotosView() {
     <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
       ${logo ? `<img src="${logo.file_path}" style="max-width:160px;max-height:100px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:8px">` : `<div style="color:var(--dim);font-size:15px">Todavía no subiste tu logo.</div>`}
       <div style="display:flex;gap:8px">
-        <button class="btn btn-grad btn-sm" id="btnLogoAdd">${logo ? 'Cambiar logo' : 'Subir logo'}</button>
+        <button class="btn btn-soft btn-sm" id="btnLogoAdd">${logo ? 'Cambiar logo' : 'Subir logo'}</button>
         ${logo ? `<button class="btn btn-danger btn-sm" id="btnLogoRm">Quitar</button>` : ''}
       </div>
     </div>
@@ -856,7 +896,7 @@ function postItem(p, actions) {
       <div class="meta">${vtag}${badge(p.status)}
         ${p.scheduled_at && p.status === 'scheduled' ? `<span>📅 ${fmtDate(p.scheduled_at)}</span>` : ''}
         ${p.published_at ? `<span>✅ ${fmtDate(p.published_at)}</span>` : ''}
-        ${p.ig_permalink ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--celeste-d)">Ver en IG ↗</a>` : ''}
+        ${p.ig_permalink ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ↗</a>` : ''}
         ${p.error ? `<span style="color:#D64545">${esc(p.error)}</span>` : ''}
       </div>
     </div>
@@ -869,15 +909,15 @@ async function calendarView() {
   const all = [...posts, ...drafts];
   return `<h1>Calendario 📅</h1><p class="sub">Tus próximos posts. Se publican solos a la hora indicada.</p>
   ${all.length ? all.map(p => postItem(p, `
-      ${p.status === 'scheduled' ? `<button class="btn btn-grad btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
+      ${p.status === 'scheduled' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
       <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>
-    `)).join('') : `<div class="empty"><div class="big">📭</div>No tenés posts programados.<br><br><a class="btn btn-sun" href="#/app/crear">Crear el primero</a></div>`}`;
+    `)).join('') : `<div class="empty"><div class="big">📭</div>No tenés posts programados.<br><br><a class="btn btn-primary" href="#/app/crear">Crear el primero</a></div>`}`;
 }
 async function historyView() {
   const posts = await api.get('/api/posts');
   const done = posts.filter(p => ['published', 'failed', 'cancelled'].includes(p.status));
   return `<h1>Historial 📊</h1><p class="sub">Todo lo que ya pasó por Posta.</p>
-  ${done.length ? done.map(p => postItem(p, p.status === 'failed' ? `<button class="btn btn-grad btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : '')).join('')
+  ${done.length ? done.map(p => postItem(p, p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : '')).join('')
     : `<div class="empty"><div class="big">📊</div>Todavía no hay historial.</div>`}`;
 }
 
@@ -894,7 +934,7 @@ function ajustesView() {
   const bc = brandColors();
   return `<h1>Ajustes ⚙️</h1><p class="sub">Tu negocio, tu marca, tu plan y tus integraciones.</p>
   ${igMsg}${planMsg}${tokenWarn}
-  <div class="card" style="border:2px solid var(--yellow)"><h3>💳 Mi plan</h3>
+  <div class="card" style="border:2px solid var(--yl)"><h3>💳 Mi plan</h3>
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div>
   <div class="card"><h3>🏪 Tu negocio</h3>
@@ -924,12 +964,12 @@ function ajustesView() {
       <input id="s_comp" value="${esc(p.competitors || '')}" placeholder="tiendaX, @competidor2">
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-sun" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
+      <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
     </div>
   </div>
   <div class="card"><h3>🎨 Mi marca</h3>
-    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Tus fotos están en <a href="#/app/fotos" style="color:var(--celeste-d);font-weight:700">Mis fotos</a>. Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Tus fotos están en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a>. Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
@@ -944,10 +984,10 @@ function ajustesView() {
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || ['#2FA9E0', '#1B86BC', '#FFC93C'][i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
+        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || ['#FEC14D', '#1888B8', '#0A1E33'][i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
       </div>
     </div>
-    <button class="btn btn-sun" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
+    <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
   </div>
   <div class="card"><h3>📸 Instagram</h3>
     <div class="set-row"><div><div class="t">Modo demo ${s.demo_mode ? '(activo)' : ''}</div>
@@ -955,7 +995,7 @@ function ajustesView() {
       <div class="toggle ${s.demo_mode ? 'on' : ''}" id="tglDemo"></div></div>
     <div class="set-row"><div><div class="t">Cuenta conectada</div>
       <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar` : 'Todavía no conectaste tu Instagram. Necesitás una cuenta Business vinculada a una Página de Facebook.'}</div></div>
-      ${p.ig_connected ? `<button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button>` : `<button class="btn btn-grad btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+      ${p.ig_connected ? `<button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button>` : `<button class="btn btn-soft btn-sm" id="btnIgConn">Conectar Instagram</button>`}
     </div>
     <div id="igMsg"></div>
   </div>
@@ -968,7 +1008,7 @@ function ajustesView() {
     </div>
     <div class="field"><label>URL pública de imágenes <span style="color:var(--dim);font-weight:400">(para publicar de verdad, ej: https://tu-dominio.com)</span></label>
       <input id="s_imgurl" value="${esc(s.image_base_url)}" placeholder="https://..."></div>
-    <button class="btn btn-sun" id="btnSaveSettings">Guardar integraciones</button> <span id="setMsg"></span>
+    <button class="btn btn-primary" id="btnSaveSettings">Guardar integraciones</button> <span id="setMsg"></span>
     <p class="hint" style="margin-top:14px">📖 El paso a paso para crear tu app de Meta y publicar de verdad está en el <b>README</b> del proyecto.</p>
   </div>`;
 }
@@ -984,7 +1024,7 @@ function freshOB() {
     competitors: (PROFILE && PROFILE.competitors) || '',
     goal: (PROFILE && PROFILE.goal) || '',
     palSel: '0',
-    c1: '#2FA9E0', c2: '#1B86BC', c3: '#FFC93C',
+    c1: '#FEC14D', c2: '#1888B8', c3: '#0A1E33',
     useBrand: false,
   };
 }
@@ -1033,7 +1073,7 @@ function onboardingView() {
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Para enfocar las ideas y los textos en lo que más te sirve.</p>
     <div style="display:grid;gap:12px">
       ${GOALS.map(([v, ico, t, d]) => `
-      <button class="goal-card ${o.goal === v ? 'on' : ''}" data-goal="${v}" style="display:flex;gap:14px;align-items:center;text-align:left;background:#fff;border:2px solid ${o.goal === v ? 'var(--celeste)' : 'var(--line)'};border-radius:16px;padding:18px;cursor:pointer;font-family:inherit">
+      <button class="goal-card ${o.goal === v ? 'on' : ''}" data-goal="${v}" style="display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);border:2px solid ${o.goal === v ? 'var(--yl)' : 'var(--line)'};border-radius:16px;padding:18px;cursor:pointer;font-family:inherit">
         <span style="font-size:30px">${ico}</span>
         <span><b style="font-size:16px">${t}</b><br><span style="color:var(--mut);font-size:14px">${d}</span></span>
       </button>`).join('')}
@@ -1044,7 +1084,7 @@ function onboardingView() {
     <div id="obMsg" style="margin-top:8px"></div>
     <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap">
       ${o.step > 1 ? `<button class="btn btn-ghost" id="obBack">← Atrás</button>` : ''}
-      ${o.step < 4 ? `<button class="btn btn-sun" id="obNext" style="flex:1">Continuar →</button>` : `<button class="btn btn-sun" id="obFinish" style="flex:1">✨ Listo, a crear contenido</button>`}
+      ${o.step < 4 ? `<button class="btn btn-primary" id="obNext" style="flex:1">Continuar →</button>` : `<button class="btn btn-primary" id="obFinish" style="flex:1">✨ Listo, a crear contenido</button>`}
     </div>
     <div style="text-align:center;margin-top:14px"><a href="#/app/crear" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
   </div>`;
@@ -1290,7 +1330,7 @@ function bindSettings() {
       competitors: $('#s_comp').value, goal: $('#s_goal').value,
     });
     await api.put('/api/settings', { timezone: $('#s_tz').value });
-    $('#profMsg').innerHTML = '<span style="color:var(--celeste-d);font-size:14px">✅ Guardado</span>';
+    $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
     PROFILE = await api.get('/api/profile');
     SETTINGS = await api.get('/api/settings');
   };
@@ -1312,7 +1352,7 @@ function bindSettings() {
             <div style="font-size:20px;font-weight:800">${esc(curPlan.name)} ${isTrial ? '<span style="font-size:13px;color:var(--dim)">(trial)</span>' : ''}</div>
             <div style="font-size:14px;color:var(--mut)">${esc(curPlan.price_label)}/mes · ${curPlan.postsPerWeek} posts/semana · ${isTrial ? 'Trial' : esc(ME.plan_status)}</div>
           </div>
-          <button class="btn btn-sun btn-sm" id="btnPlanChange">Cambiar / mejorar plan</button>
+          <button class="btn btn-primary btn-sm" id="btnPlanChange">Cambiar / mejorar plan</button>
         </div>
         <div id="planList" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px"></div>
         <div id="planMsg" style="margin-top:10px"></div>`;
@@ -1321,11 +1361,11 @@ function bindSettings() {
         const show = l.style.display === 'none';
         l.style.display = show ? 'grid' : 'none';
         if (show) l.innerHTML = plans.map(p => `
-          <div style="border:2px solid ${p.id === cur && !isTrial ? 'var(--celeste)' : 'var(--line)'};border-radius:16px;padding:18px">
+          <div style="border:2px solid ${p.id === cur && !isTrial ? 'var(--yl)' : 'var(--line)'};border-radius:16px;padding:18px">
             <b>${esc(p.name)}</b> ${p.highlighted ? '<span class="badge b-scheduled">Recomendado</span>' : ''}
             <div style="font-size:22px;font-weight:800;margin:8px 0">${esc(p.price_label)}<small style="font-size:13px;color:var(--dim)">/mes</small></div>
             <div style="font-size:14px;color:var(--mut);margin-bottom:12px">${p.postsPerWeek} posts/semana</div>
-            <button class="btn ${p.id === cur && !isTrial ? 'btn-ghost' : 'btn-sun'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && !isTrial ? 'disabled' : ''}>${p.id === cur && !isTrial ? 'Plan actual' : 'Elegir ' + esc(p.name)}</button>
+            <button class="btn ${p.id === cur && !isTrial ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && !isTrial ? 'disabled' : ''}>${p.id === cur && !isTrial ? 'Plan actual' : 'Elegir ' + esc(p.name)}</button>
           </div>`).join('');
         $$('#planList [data-sub]').forEach(b => b.onclick = async () => {
           if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía. Escribinos y lo activamos.</div>`; return; }
@@ -1353,7 +1393,7 @@ function bindSettings() {
   $('#btnSaveBrand').onclick = async () => {
     const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
     await api.put('/api/settings', { brand_colors: colors, preferred_palette: +$('#s_pal').value });
-    $('#brandMsg').innerHTML = '<span style="color:var(--celeste-d);font-size:14px">✅ Marca guardada</span>';
+    $('#brandMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
     SETTINGS = await api.get('/api/settings');
   };
   $('#btnSaveSettings').onclick = async () => {
@@ -1361,7 +1401,7 @@ function bindSettings() {
       openai_key: $('#s_openai').value, meta_app_id: $('#s_appid').value,
       meta_app_secret: $('#s_appsecret').value, image_base_url: $('#s_imgurl').value,
     });
-    $('#setMsg').innerHTML = '<span style="color:var(--celeste-d);font-size:14px">✅ Guardado</span>';
+    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
   };
   $('#tglDemo').onclick = async () => {
     const v = !$('#tglDemo').classList.contains('on');

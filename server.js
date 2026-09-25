@@ -11,8 +11,10 @@ const { getAuthUrl, exchangeCode, findIgAccount } = require('./instagram');
 const { startScheduler } = require('./scheduler');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { renderVideo, ffmpegAvailable } = require('./video');
-const { PLANS, TRIAL_PLAN, getPlan, formatPrice } = require('./config/plans');
+const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
 const mp = require('./mercadopago');
+const demo = require('./demo');
+const os = require('os');
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -20,7 +22,6 @@ const IS_PROD = NODE_ENV === 'production';
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'media');
 const IMAGE_BASE_URL = (process.env.IMAGE_BASE_URL || '').replace(/\/$/, '');
-const WA_NUMBER = (process.env.WA_NUMBER || '').replace(/\D/g, '');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
@@ -389,32 +390,38 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
 // ---------- Config pública (landing, CTAs) ----------
 app.get('/api/config', (req, res) => {
   res.json({
-    whatsapp: WA_NUMBER ? `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola Posta, quiero automatizar mi Instagram 🚀')}` : '',
     mp_configured: mp.mpConfigured(),
   });
 });
 
 // ---------- Facturación (Mercado Pago) ----------
 app.get('/api/billing/plans', (req, res) => {
+  const country = req.query.country === 'UY' ? 'UY' : 'AR';
+  const plans = getPlans(country);
+  const anchor = PLAN_ANCHOR[country];
   res.json({
-    plans: Object.values(PLANS).map((p) => ({ ...p, price_label: formatPrice(p) })),
+    country,
+    currency: country === 'UY' ? 'UYU' : 'ARS',
+    plans: Object.values(plans).map((p) => ({ ...p, price_label: formatPrice(p) })),
+    anchor,
     trial_plan: TRIAL_PLAN,
     mp_configured: mp.mpConfigured(),
-    whatsapp: WA_NUMBER ? `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent('Hola Posta, quiero automatizar mi Instagram 🚀')}` : '',
   });
 });
 
 app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
-  const { plan: planId } = req.body || {};
-  if (!PLANS[planId]) return res.status(400).json({ error: 'Plan inválido' });
+  const { plan: planId, country } = req.body || {};
+  const plans = getPlans(country === 'UY' ? 'UY' : 'AR');
+  const plan = plans[planId];
+  if (!plan) return res.status(400).json({ error: 'Plan inválido' });
   if (!mp.mpConfigured()) {
-    return res.status(400).json({ error: 'Pagos no configurados todavía. Escribinos por WhatsApp y lo activamos.' });
+    return res.status(400).json({ error: 'Pagos no configurados todavía.' });
   }
   try {
     const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.session.userId);
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const { init_point } = await mp.createSubscription({
-      plan: PLANS[planId],
+      plan,
       userId: user.id,
       userEmail: user.email,
       baseUrl,
@@ -472,6 +479,54 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
   }
   db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=?`).run(req.session.userId);
   res.json({ ok: true });
+});
+
+// ---------- Demo pública self-service (sin login) ----------
+// El visitante genera 3 posteos de muestra sin registro ni WhatsApp.
+app.get('/demo', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'demo.html'));
+});
+
+app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
+  let fields, file;
+  try {
+    ({ fields, file } = demo.parseMultipart(req, req.body));
+  } catch (e) {
+    return res.status(400).json({ error: e.message || 'Formulario inválido' });
+  }
+  const business = String(fields.business || '').trim().slice(0, 60);
+  const category = String(fields.category || '').trim();
+  const country = String(fields.country || '').trim().toUpperCase();
+  const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
+  if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
+  if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
+  if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
+
+  const ip = demo.clientIp(req);
+  const rl = demo.checkRateLimit(ip);
+  if (!rl.allowed) {
+    return res.status(429).json({ error: 'Llegaste al límite de 5 demos por día. Volvé mañana 🚀' });
+  }
+
+  let photoPath = null;
+  try {
+    if (file) {
+      const kind = demo.validImageKind(file);
+      if (!kind) return res.status(400).json({ error: 'La foto tiene que ser JPG, PNG o WebP' });
+      photoPath = path.join(os.tmpdir(), `posta-demo-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
+      fs.writeFileSync(photoPath, file.buffer);
+    }
+    const posts = await demo.generateDemo({ business, category, country, tone, photoPath });
+    res.json({ ok: true, posts, remaining: rl.remaining });
+  } catch (e) {
+    console.error('[posta] Error en demo pública:', e.message);
+    res.status(500).json({ error: 'No pudimos generar tu demo ahora. Probá de nuevo en unos minutos.' });
+  } finally {
+    if (photoPath) {
+      try { fs.unlinkSync(photoPath); } catch (_) {}
+    }
+  }
 });
 
 // ---------- Health ----------
