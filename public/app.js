@@ -1373,42 +1373,64 @@ function bindSettings() {
     try {
       const { plans, mp_configured } = await api.get('/api/billing/plans');
       const cur = (ME && ME.plan) || 'esencial';
-      const isTrial = ME && ME.is_trial;
+      const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
+      const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : 'trial'})</span>` : '';
       const curPlan = plans.find(p => p.id === cur) || plans[0];
-      z.innerHTML = `
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px 20px">
-            <div style="font-size:13px;color:var(--dim)">Plan actual</div>
-            <div style="font-size:20px;font-weight:800">${esc(curPlan.name)} ${isTrial ? '<span style="font-size:13px;color:var(--dim)">(trial)</span>' : ''}</div>
-            <div style="font-size:14px;color:var(--mut)">${esc(curPlan.price_label)}/mes · ${curPlan.postsPerWeek} posts/semana · ${isTrial ? 'Trial' : esc(ME.plan_status)}</div>
-          </div>
-          <button class="btn btn-primary btn-sm" id="btnPlanChange">Cambiar / mejorar plan</button>
-        </div>
-        <div id="planList" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px"></div>
-        <div id="planMsg" style="margin-top:10px"></div>`;
-      $('#btnPlanChange').onclick = () => {
-        const l = $('#planList');
-        const show = l.style.display === 'none';
-        l.style.display = show ? 'grid' : 'none';
-        if (show) l.innerHTML = plans.map(p => `
-          <div style="border:2px solid ${p.id === cur && !isTrial ? 'var(--yl)' : 'var(--line)'};border-radius:16px;padding:18px">
+      const planCard = (p) => `
+          <div style="border:2px solid ${p.id === cur && hasActive ? 'var(--yl)' : 'var(--line)'};border-radius:16px;padding:18px">
             <b>${esc(p.name)}</b> ${p.highlighted ? '<span class="badge b-scheduled">Recomendado</span>' : ''}
             <div style="font-size:22px;font-weight:800;margin:8px 0">${esc(p.price_label)}<small style="font-size:13px;color:var(--dim)">/mes</small></div>
             <div style="font-size:14px;color:var(--mut);margin-bottom:12px">${p.postsPerWeek} posts/semana</div>
-            <button class="btn ${p.id === cur && !isTrial ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && !isTrial ? 'disabled' : ''}>${p.id === cur && !isTrial ? 'Plan actual' : 'Elegir ' + esc(p.name)}</button>
-          </div>`).join('');
+            <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
+          </div>`;
+      const bindSub = () => {
         $$('#planList [data-sub]').forEach(b => b.onclick = async () => {
-          if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía. Escribinos y lo activamos.</div>`; return; }
+          if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía.</div>`; return; }
           b.disabled = true; b.textContent = '⏳...';
           try {
             const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub });
             location.href = init_point;
           } catch (e) {
             $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-            b.disabled = false; b.textContent = 'Elegir plan';
+            b.disabled = false; b.textContent = 'Suscribirse';
           }
         });
       };
+      if (!hasActive) {
+        z.innerHTML = `
+        <div style="margin-bottom:16px">
+          <div style="font-size:13px;color:var(--dim)">Plan actual</div>
+          <div style="font-size:20px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
+        </div>
+        <div style="font-size:16px;font-weight:800;margin-bottom:12px">Elegí tu plan para empezar 🚀</div>
+        <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
+        <div id="planMsg" style="margin-top:10px"></div>
+        <p style="font-size:13px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
+        bindSub();
+      } else {
+        z.innerHTML = `
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px 20px">
+            <div style="font-size:13px;color:var(--dim)">Plan actual</div>
+            <div style="font-size:20px;font-weight:800">${esc(curPlan.name)}</div>
+            <div style="font-size:14px;color:var(--mut)">${esc(curPlan.price_label)}/mes · ${curPlan.postsPerWeek} posts/semana · se renueva solo cada mes</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>
+        </div>
+        <div id="planMsg" style="margin-top:10px"></div>
+        <p style="font-size:13px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
+        $('#btnCancelSub').onclick = async () => {
+          if (!confirm('¿Cancelar tu suscripción? Mantenés tu plan hasta el fin del período ya pago.')) return;
+          const b = $('#btnCancelSub'); b.disabled = true; b.textContent = 'Cancelando...';
+          try {
+            await api.post('/api/billing/cancel');
+            await refreshSession(); render();
+          } catch (e) {
+            $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+            b.disabled = false; b.textContent = 'Cancelar suscripción';
+          }
+        };
+      }
     } catch (e) { z.innerHTML = `<div class="err">No se pudieron cargar los planes</div>`; }
   })();
   // Marca
