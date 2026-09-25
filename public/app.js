@@ -186,7 +186,7 @@ function landingView(cfg) {
         <div class="pz-ba-arrow">→</div>
         <div class="pz-ba-panel">
           <div class="pz-ba-label pz-ba-label-on">CON POSTA</div>
-          <img src="hero-post.png" alt="Instagram gestionado por Posta">
+          <img src="hero-feed.png" alt="Feed de Instagram gestionado por Posta">
         </div>
       </div>
     </div>
