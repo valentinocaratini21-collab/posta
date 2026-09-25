@@ -134,4 +134,4 @@ posta/
 - [ ] Mejores horarios sugeridos por IA según analytics
 - [ ] Respuestas automáticas a comentarios/DMs
 - [ ] Múltiples cuentas por usuario
-- [ ] Carruseles
+- [ ] Carruseles 
