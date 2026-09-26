@@ -148,7 +148,7 @@ async function switchPlansCountry(c) {
 // Banda fina si llegó con link de referido (?ref= guardado en localStorage)
 function pzRefBandHTML() {
   try {
-    if (localStorage.getItem('posta_ref')) return `<div class="pz-refband">🎉 Llegaste con el link de un amigo</div>`;
+    if (localStorage.getItem('posta_ref')) return `<div class="pz-refband">🎉 Llegaste con un link de invitado: tenés <b>20% off</b> en tu plan, todos los meses</div>`;
   } catch (e) {}
   return '';
 }
@@ -331,6 +331,7 @@ function landingView(cfg) {
       <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si no estás conforme, te devolvemos el 100% de tu primer pago. Sin preguntas.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ni bien pagás: armás tu primera semana con un clic y la dejás programada.</p></details>
       <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
+      <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
