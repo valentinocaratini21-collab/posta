@@ -2313,8 +2313,15 @@ function bindSettings() {
           if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía.</div>`; return; }
           // Paso 1: pedir el email de la cuenta de MercadoPago (debe coincidir con la que paga)
           const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
+          const subPlan = plans.find(p => p.id === b.dataset.sub) || curPlan;
+          const discLine = (refInfo && refInfo.discount_active)
+            ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>50% off</b> por referidos: este plan te queda en <b>$${Math.round(subPlan.price / 2).toLocaleString('es-AR')}/mes</b>.</div>`
+            : (refInfo && refInfo.invited)
+              ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>20% off</b> de invitado: este plan te queda en <b>$${Math.round(subPlan.price * 0.8).toLocaleString('es-AR')}/mes</b>.</div>`
+              : '';
           $('#planMsg').innerHTML = `
             <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
+              ${discLine}
               <div style="font-weight:800;margin-bottom:6px">Un paso más 💳</div>
               <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>, el mismo con el que vas a pagar.</div>
               <div class="field"><input id="mpEmail" type="email" placeholder="tu@email.com" value="${preset}" autocomplete="email"></div>
@@ -2406,19 +2413,48 @@ function bindSettings() {
     const n = info.referred_count || 0, need = info.needed || 2;
     const pct = Math.min(100, Math.round(n / need * 100));
     const missing = Math.max(0, need - n);
+    // Precio concreto según el plan actual (o el del trial)
+    let planPrice = 0;
+    try {
+      const pd = await api.get('/api/billing/plans');
+      const pl = (pd.plans || []).find(x => x.id === ((ME && ME.plan) || 'esencial')) || (pd.plans || [])[0];
+      if (pl) planPrice = pl.price || 0;
+    } catch (e) {}
+    const fmt$ = (v) => '$' + Math.round(v).toLocaleString('es-AR');
+    const half$ = planPrice ? fmt$(planPrice / 2) : null;
+    const shareMsg = `Uso Posta para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link tenés 20% off en tu plan: ${info.link}`;
+    const slots = Array.from({ length: need }, (_, i) =>
+      `<span class="pz-slot${i < n ? ' on' : ''}">${i < n ? '\u2713' : (i + 1)}</span>`).join('');
     z.innerHTML = `
-      <p style="color:var(--mut);font-size:14px;margin-bottom:4px">Compartí tu link personal: si <b>${need} amigos</b> se suscriben con tu link, <b>pagás la mitad todos los meses</b>.</p>
+      <div class="pz-ref-hero">
+        <div class="pz-ref-hero-t">🎁 Pagás la mitad, todos los meses</div>
+        ${half$ ? `<div class="pz-ref-hero-p">Pasás de <s>${fmt$(planPrice)}</s> a <b>${half$}</b>/mes con ${need} amigos suscriptos.</div>`
+          : `<div class="pz-ref-hero-p">Con <b>${need} amigos</b> suscriptos, tu plan te sale <b>la mitad</b>.</div>`}
+      </div>
+      <div class="pz-ref-steps">
+        <div><span>1️⃣</span>Compartí tu link</div>
+        <div><span>2️⃣</span>Ellos se suscriben con <b>20% off</b></div>
+        <div><span>3️⃣</span>Vos pagás la mitad, siempre</div>
+      </div>
+      <div class="pz-ref-share">
+        <button class="btn btn-wa btn-sm" data-share="wa">WhatsApp</button>
+        <button class="btn btn-ig btn-sm" data-share="ig">Instagram</button>
+        <button class="btn btn-x btn-sm" data-share="x">X</button>
+        <button class="btn btn-primary btn-sm" id="pzRefCopy">Copiar link</button>
+      </div>
       <div class="pz-refrow">
         <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
-        <button class="btn btn-primary btn-sm" id="pzRefCopy">Copiar</button>
       </div>
+      <div class="pz-ref-slots">${slots}</div>
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
       <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> amigos suscriptos</p>
       ${info.discount_active
-        ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b> en tu suscripción.</div>`
-        : `<p style="font-size:14px">Te falta(n) <b>${missing}</b>: cuando ${need} amigos se suscriban con tu link, pagás la mitad.</p>`}
+        ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
+        : `<p style="font-size:14px">${missing === 1 ? 'Te falta <b>1</b> amigo' : `Te faltan <b>${missing}</b> amigos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
+      <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
       <span id="pzRefMsg" style="font-size:13px"></span>`;
-    $('#pzRefCopy').onclick = async () => {
+    const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
+    const copyLink = async (okMsg) => {
       const v = $('#pzRefLink').value;
       try { await navigator.clipboard.writeText(v); }
       catch (e) {
@@ -2426,8 +2462,15 @@ function bindSettings() {
         try { document.execCommand('copy'); } catch (e2) {}
         t.remove();
       }
-      $('#pzRefMsg').innerHTML = '<span style="color:var(--cel)">✅ Link copiado</span>';
+      say(okMsg || '✅ Link copiado');
     };
+    $('#pzRefCopy').onclick = () => copyLink();
+    z.querySelectorAll('[data-share]').forEach(b => b.onclick = () => {
+      const k = b.dataset.share;
+      if (k === 'wa') window.open('https://wa.me/?text=' + encodeURIComponent(shareMsg), '_blank');
+      else if (k === 'x') window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareMsg), '_blank');
+      else if (k === 'ig') copyLink('✅ Link copiado: pegalo en tu historia o por DM');
+    });
   })();
   // Marca
   const bBlog = $('#btnBrandLogo');
