@@ -1586,11 +1586,12 @@ function ajustesView() {
     <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
       <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
       </div>
-    <div class="field"><label>Tus competidores <span style="color:var(--dim);font-weight:400">(nombres o usuarios de IG, separados por coma)</span></label>
-      <input id="s_comp" value="${esc(p.competitors || '')}" placeholder="tiendaX, @competidor2">
+    <div class="field"><label>Tus competidores</label>
+      <div class="comp-box" id="s_compbox"><span id="s_chips" style="display:contents"></span><input id="s_compin" placeholder="Escribí un nombre y apretá Enter ⏎"></div>
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
+      <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
     </div>
   </div>
@@ -1657,6 +1658,8 @@ const GOALS = [
   ['vender', '💰', 'Vender más', 'Que cada post traiga clientes y ventas'],
   ['seguidores', '📈', 'Más seguidores', 'Crecer la comunidad y el alcance'],
   ['lanzamiento', '🚀', 'Lanzamientos', 'Anunciar novedades y promos con fuerza'],
+  ['fidelizar', '🤝', 'Fidelizar clientes', 'Que te vuelvan a elegir, siempre'],
+  ['referente', '🎓', 'Ser referente', 'Posicionarte como experto en tu rubro'],
 ];
 function onboardingView() {
   const o = OB;
@@ -2306,6 +2309,31 @@ function bindSettings() {
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');
   if (sDesc) sDesc.oninput = () => { $('#s_desc_n').textContent = sDesc.value.length; };
+  // --- competidores como chips ---
+  let compChips = String(p.competitors || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+  const compBox = $('#s_chips');
+  const renderChips = () => {
+    compBox.innerHTML = compChips.map((c, i) => `<span class="comp-chip">${esc(c)}<b data-ci="${i}" style="cursor:pointer;margin-left:6px">×</b></span>`).join('');
+    compBox.querySelectorAll('[data-ci]').forEach(x => x.onclick = () => { compChips.splice(+x.dataset.ci, 1); renderChips(); markDirty(); });
+  };
+  const addChip = () => {
+    const v = $('#s_compin').value.trim().replace(/^@+/, '');
+    if (!v) return;
+    if (compChips.length >= 10) { $('#s_compin').value = ''; return; }
+    if (!compChips.some(c => c.toLowerCase() === v.toLowerCase())) compChips.push(v);
+    $('#s_compin').value = ''; renderChips(); markDirty();
+  };
+  renderChips();
+  $('#s_compin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addChip(); } });
+  // --- cambios sin guardar ---
+  let profDirty = false;
+  const dirtyEl = $('#profDirty');
+  function markDirty() { if (!profDirty) { profDirty = true; if (dirtyEl) dirtyEl.style.display = ''; } }
+  ['s_biz', 's_iguser', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_desc'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', markDirty);
+    if (el) el.addEventListener('change', markDirty);
+  });
   $('#btnSaveProfile').onclick = async () => {
     if (!$('#s_biz').value.trim()) { $('#profMsg').innerHTML = '<div class="err">Poné el nombre de tu negocio</div>'; return; }
     const catOther = $('#s_catother').value.trim();
@@ -2313,10 +2341,11 @@ function bindSettings() {
       business_name: $('#s_biz').value, ig_username: $('#s_iguser').value.replace('@', ''),
       category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
       tone: $('#s_tone').value, description: $('#s_desc').value,
-      competitors: $('#s_comp').value, goal: $('#s_goal').value,
+      competitors: compChips.join(', '), goal: $('#s_goal').value,
     });
     await api.put('/api/settings', { timezone: $('#s_tz').value });
     $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
+    profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
     PROFILE = await api.get('/api/profile');
     SETTINGS = await api.get('/api/settings');
   };

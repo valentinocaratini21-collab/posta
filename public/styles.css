@@ -581,3 +581,11 @@ button{font-family:inherit}
   .sched-row input[type=datetime-local]{width:100%}
   .opt-sel{top:22px;right:22px}
 }
+
+/* Chips de competidores */
+.comp-box{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border:1.5px solid var(--line);border-radius:12px;padding:8px 12px;background:#fff;min-height:48px;cursor:text}
+.comp-box:focus-within{border-color:var(--cel)}
+.comp-chip{display:inline-flex;align-items:center;background:var(--bg);border:1px solid var(--line);color:var(--navy);font-size:13px;font-weight:600;border-radius:999px;padding:5px 6px 5px 12px}
+.comp-chip b{color:var(--mut);font-size:16px;line-height:1}
+.comp-chip b:hover{color:#e5484d}
+#s_compin{border:none;outline:none;flex:1;min-width:160px;font-size:14px;padding:6px 0;background:transparent;color:var(--navy)}
