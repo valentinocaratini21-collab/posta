@@ -262,6 +262,30 @@ function landingView(cfg) {
       <div style="text-align:center;margin-top:14px"><a class="btn btn-ghost" href="/prueba">Probar gratis</a></div>
     </div>
   </div></div>
+  <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
+    <h2>El único que hace todo por vos</h2>
+    <p class="lede">Las herramientas te dan más trabajo. Nosotros te lo sacamos de encima.</p>
+    <div class="vs-list">
+      <div class="vs-item">
+        <div class="vs-top">🧰 <b>Apps para programar posteos</b></div>
+        <p>Vos creás los diseños, vos escribís los textos, vos programás cada post. Y se pagan en dólares con tarjeta.</p>
+      </div>
+      <div class="vs-item">
+        <div class="vs-top">🧑‍💼 <b>Community manager</b></div>
+        <p>$300.000+ por mes. Hay que buscarlo, dirigirlo, revisarlo y esperarlo.</p>
+      </div>
+      <div class="vs-item">
+        <div class="vs-top">😮‍💨 <b>Hacerlo vos</b></div>
+        <p>Horas por semana que no tenés, para un Instagram a medias.</p>
+      </div>
+      <div class="vs-item win">
+        <div class="vs-top">🚀 <b>Posta</b></div>
+        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y publicamos en automático en tu cuenta. En pesos, con MercadoPago. Y lo probás <b>7 días gratis</b>, sin tarjeta.</p>
+      </div>
+    </div>
+    <p class="unico-line">Somos el único servicio argentino 100% done-for-you para Instagram.</p>
+    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
+  </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Sin letra chica. Cancelá cuando quieras.</p>
@@ -283,7 +307,7 @@ function landingView(cfg) {
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un post?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
-      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Vos elegís: publicación programada o con tu aprobación previa. Todo queda visible en tu calendario para revisar antes de que salga.</p></details>
+      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Sí. Tu semana se publica en automático, pero la ves entera antes en "Mi semana" y podés editar o eliminar cualquier posteo. Nada sale sin que lo hayas podido revisar.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si tu Instagram no se ve transformado, te devolvemos el 100%. Sin preguntas.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Al día siguiente: pagás hoy y mañana tu primera semana ya está armada y programada.</p></details>
       <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 amigos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
@@ -323,6 +347,7 @@ function authView(mode) {
 
 /* ---------- APP SHELL ---------- */
 const TABS = [
+  ['semana', '🏠', 'Mi semana'],
   ['crear', '✨', 'Crear post'],
   ['ideas', '💡', 'Ideas'],
   ['video', '🎬', 'Video'],
@@ -397,20 +422,23 @@ function pwaWire() {
 }
 
 function appShell(tab, content) {
-  const MAIN_TABS = [['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video'], ['fotos', '📷', 'Fotos']];
-  const MORE_TABS = [['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
+  const MAIN_TABS = [['semana', '🏠', 'Inicio'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
+  const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
+  const igBanner = (PROFILE && PROFILE.ig_connected) ? '' : `
+  <div class="ig-banner"><span class="igb-ico">📸</span><span class="igb-txt"><b>Conectá tu Instagram</b><span>Publicá en automático en 1 minuto, sin contraseña.</span></span><button class="btn btn-primary btn-sm" data-ig-connect>Conectar ahora</button></div>`;
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
   <div class="mtabs">${TABS.map(([k, i, l]) => `<button class="mtab ${k === tab ? 'on' : ''}" data-tab="${k}">${i} ${l}</button>`).join('')}</div>
   ${pwaBannerHtml()}
+  ${igBanner}
   <div class="app-shell">
     <div class="sidebar">
       <a class="logo" href="#/" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
       ${TABS.map(([k, i, l]) => `<button class="side-link ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span>${l}</button>`).join('')}
       <div class="grow"></div>
-      <div style="padding:12px 16px;font-size:13px;color:var(--dim)">${esc(ME?.email || '')}</div>
+      <div class="side-user">${esc(ME?.email || '')}</div>
       <button class="side-link" id="btnLogout"><span class="ico">🚪</span>Salir</button>
     </div>
     <div class="main">${content}</div>
@@ -592,7 +620,7 @@ function creatorView() {
   const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
   if (c.step === 1) {
     return `
-    <h1>Crear post ✨</h1><p class="sub">Paso 1 de 3 — Contanos la idea, la IA escribe el texto.</p>
+    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear post</h1><p class="sub">Paso 1 de 3 — Contanos la idea, la IA escribe el texto.</p></div></div>
     ${stepsBar}
     <div class="card">
       <div class="field"><label>¿De qué es el post?</label>
@@ -609,7 +637,7 @@ function creatorView() {
   }
   if (c.step === 2) {
     return `
-    <h1>Crear post ✨</h1><p class="sub">Paso 2 de 3 — Diseñá la imagen del post (1080 × 1350).</p>
+    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear post</h1><p class="sub">Paso 2 de 3 — Diseñá la imagen del post (1080 × 1350).</p></div></div>
     ${stepsBar}
     <div class="designer">
       <div>
@@ -656,7 +684,7 @@ function creatorView() {
   const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   const minDt = now.toISOString().slice(0, 16);
   return `
-  <h1>Crear post ✨</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p>
+  <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear post</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>
   ${stepsBar}
   <div class="card">
     <div style="display:flex;gap:22px;flex-wrap:wrap">
@@ -679,16 +707,94 @@ function creatorView() {
 }
 
 /* ---------- IDEAS: nosotros pensamos el contenido por vos ---------- */
-function ideasView() {
+// ---------- Checklist primeros pasos + próximo posteo recomendado ----------
+function weekStartMonday(d){ const x = new Date(d); const day = (x.getDay()+6)%7; x.setHours(0,0,0,0); x.setDate(x.getDate()-day); return x; }
+function postWeekDate(p){
+  const s = p.scheduled_at || p.published_at; if(!s) return null;
+  const d = new Date(s.length === 16 ? s.replace(' ','T') : s);
+  return isNaN(d) ? null : d;
+}
+// Elige la idea con menos solapamiento de temas con los últimos posteos
+function pickNextIdea(ideas, posts){
+  const stop = new Set(['para','con','los','las','una','del','que','por','como','esta','este','esto','mas','muy','sin','sobre','entre','hasta','desde','todo','todos','toda','esas','esos','este','esta']);
+  const recent = new Set();
+  posts.slice(0, 10).forEach(p => {
+    String(p.caption || '').toLowerCase().split(/[^a-záéíóúñü]+/).forEach(w => { if (w.length > 4 && !stop.has(w)) recent.add(w); });
+  });
+  let best = 0, bestScore = 999;
+  ideas.forEach((idea, i) => {
+    const words = String(idea.titulo || '').toLowerCase().split(/[^a-záéíóúñü]+/).filter(w => w.length > 4 && !stop.has(w));
+    const overlap = words.filter(w => recent.has(w)).length;
+    if (overlap < bestScore) { bestScore = overlap; best = i; }
+  });
+  return best;
+}
+function checklistHTML(postsCount){
+  const p = PROFILE || {};
+  const s1 = !!(p.business_name && p.business_name.trim());
+  const s2 = !!p.ig_connected;
+  const s3 = postsCount > 0;
+  const done = [s1, s2, s3].filter(Boolean).length;
+  if (done === 3) return '';
+  const step = (ok, num, title, desc, action) => `
+    <div class="check-step ${ok ? 'done' : ''}">
+      <span class="ck-ico">${ok ? '✅' : num}</span>
+      <span class="ck-txt"><b>${title}</b><span>${desc}</span></span>
+      <span class="ck-act">${ok ? '<span class="ck-done">Listo</span>' : action}</span>
+    </div>`;
+  return `<div class="card check-card">
+    <div class="check-head"><h3>🚀 Tus primeros pasos</h3><span class="badge b-scheduled">${done}/3</span></div>
+    <div class="pz-refbar check-bar"><div style="width:${Math.round(done / 3 * 100)}%"></div></div>
+    <div class="check-steps">
+      ${step(s1, 1, 'Contanos tu negocio', 'Unos 2 minutos, una sola vez.', '<a class="btn btn-soft btn-sm" href="#/app/ajustes">Completar</a>')}
+      ${step(s2, 2, 'Conectá tu Instagram', 'Publicá en automático en 1 minuto.', '<button class="btn btn-primary btn-sm" data-ig-connect>Conectar Instagram</button>')}
+      ${step(s3, 3, 'Creá tu primer posteo', 'O armá tu semana en 1 tap.', '<a class="btn btn-soft btn-sm" href="#/app/crear">Crear post</a>')}
+    </div>
+  </div>`;
+}
+function recCardHTML(ideas, posts, ppw){
+  const ws = weekStartMonday(new Date());
+  const inWeek = posts.filter(p => { const d = postWeekDate(p); return d && d >= ws && ['scheduled','publishing','published'].includes(p.status); });
+  const missing = Math.max(0, ppw - inWeek.length);
+  if (!missing) return `<div class="card rec-card rec-done">
+      <div class="rec-tag">✨ Esta semana</div>
+      <h3>Tu semana está completa ✅</h3>
+      <p>Tenés ${inWeek.length} ${inWeek.length === 1 ? 'posteo' : 'posteos'} programados o publicados (${ppw}/semana en tu plan). La próxima recomendación llega el lunes. 🚀</p>
+    </div>`;
+  if (!ideas.length) return `<div class="card rec-card">
+      <div class="rec-tag">✨ Tu próximo posteo</div>
+      <h3>¿Qué publicamos ahora?</h3>
+      <p>Generamos ideas pensadas para tu negocio y te recomendamos qué posteo crear primero.</p>
+      <button class="btn btn-primary" id="btnRecGen">✨ Generar ideas</button>
+    </div>`;
+  const idea = ideas[pickNextIdea(ideas, posts)];
+  const isVideo = /reel|video/i.test(idea.formato || '');
+  const idx = IDEAS.indexOf(idea);
+  return `<div class="card rec-card">
+    <div class="rec-tag">✨ Tu próximo posteo recomendado</div>
+    <h3>${esc(idea.titulo)}</h3>
+    ${idea.angulo ? `<p>${esc(idea.angulo)}</p>` : ''}
+    <div class="rec-meta"><span class="badge b-scheduled">${esc(idea.formato || 'Post')}</span><span>📅 Te faltan ${missing} de ${ppw} esta semana</span></div>
+    <button class="btn btn-primary" data-rec-idea="${idx}">${isVideo ? '🎬 Crear este video' : 'Crear este posteo'} →</button>
+  </div>`;
+}
+async function ideasView() {
   const comp = ((PROFILE || {}).competitors || '').trim();
-  return `<h1>Ideas 💡</h1><p class="sub">Nosotros pensamos el contenido por vos. Vos no te ocupás de nada.</p>
-  <div class="card" style="background:linear-gradient(135deg,rgba(37,99,235,.20),rgba(37,99,235,.06));border:1px solid rgba(37,99,235,.4)">
-    <h3>⚡ Piloto automático</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.65;margin:0">
-      Contanos de tu negocio <b>una sola vez</b>. Estudiamos tu rubro${comp ? ` y a tus competidores (<b>${esc(comp)}</b>)` : ''},
-      creamos las ideas, el texto y el diseño, y lo publicamos solo.
-      ${comp ? '' : '<br><a href="#/app/ajustes" style="color:var(--cel);font-weight:700">→ Agregá tus competidores en Ajustes</a> para ideas que te hagan destacar.'}
-    </p>
+  let posts = [];
+  try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
+  const ppw = (ME && ME.posts_per_week) || 3;
+  return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos. Vos no te ocupás de nada.</p></div></div>
+  ${checklistHTML(posts.length)}
+  ${recCardHTML(IDEAS, posts, ppw)}
+  <div class="card hero-card">
+    <div class="auto-head"><div class="ah-ico">⚡</div><div class="ah-txt"><h3>Piloto automático</h3><p>Armo tu semana completa de una: ideas, textos, diseños y programación.</p></div></div>
+    <div class="set-row"><div><div class="t">Publicar automáticamente</div><div class="d">Posteo a la hora que elijas, sin que muevas un dedo.</div></div><div class="toggle ${SETTINGS && SETTINGS.autopilot ? 'on' : ''}" id="tglAuto"></div></div>
+    <div class="set-row"><div><div class="t">Hora de publicación</div><div class="d">El momento en que sale cada posteo.</div></div><input class="in" style="width:110px" type="time" id="autoTime" value="${(SETTINGS && SETTINGS.autopilot_time) || '19:00'}"></div>
+    <div class="set-row"><div><div class="t">Competidores a diferenciarte</div><div class="d">Marcas que querés superar: usamos sus puntos débiles para que brilles.</div></div></div>
+    <input class="in" id="autoComp" placeholder="Ej: @competidor1, @competidor2" value="${esc(comp)}">
+    <div class="btn-row"><button class="btn btn-primary btn-lg" id="btnAuto">${SETTINGS && SETTINGS.autopilot ? '🔁 Regenerar mi semana' : '⚡ Armar mi semana'}</button>
+    <button class="btn btn-soft" id="btnPlan">⚙️ Mi plan</button></div>
+    <div id="autoMsg"></div>
   </div>
   <div id="ideasZone">${IDEAS.length ? ideasList() : `
     <div class="empty"><div class="big">💡</div>
@@ -727,7 +833,7 @@ function ideasList() {
       </div>
     </div>`; }).join('')}
   </div>
-  <div class="card" style="border:2px solid var(--yl)">
+  <div class="card card-hi-yl">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos el texto, diseñamos la imagen y programamos los posts solos. Vos solo mirá cómo salen.</p>
     <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
@@ -811,6 +917,21 @@ function bindIdeas() {
   };
   const b = $('#btnGenIdeas'); if (b) b.onclick = gen;
   const r = $('#btnRegenIdeas'); if (r) r.onclick = gen;
+  const rg = $('#btnRecGen'); if (rg) rg.onclick = gen;
+  $$('[data-rec-idea]').forEach(btn => btn.onclick = () => {
+    const idea = IDEAS[+btn.dataset.recIdea];
+    if (!idea) return;
+    if (/reel|video/i.test(idea.formato || '')) {
+      const photos = assetPhotos();
+      VSTATE = freshVState();
+      VSTATE.scenes = [{ image_path: photos.length ? photos[0].file_path : '', text: idea.titulo, duration: 4 }];
+      if (photos.length > 1) VSTATE.scenes.push({ image_path: photos[1].file_path, text: (idea.angulo || '').split('.')[0].slice(0, 80), duration: 4 });
+      location.hash = '#/app/video';
+    } else {
+      CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+      location.hash = '#/app/crear';
+    }
+  });
   $$('[data-idea]').forEach(btn => btn.onclick = () => {
     const idea = IDEAS[+btn.dataset.idea];
     CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
@@ -831,8 +952,8 @@ function bindIdeas() {
 function videoView() {
   const v = VSTATE;
   const photos = assetPhotos();
-  return `<h1>Video 🎬</h1><p class="sub">Convertí tus fotos en un video vertical (1080×1920) para Reels y TikTok. Hasta 5 escenas, 60 segundos en total.</p>
-  ${!photos.length ? `<div class="card" style="border:1px dashed var(--yl)"><p style="color:var(--mut);font-size:15px;margin:0">💡 Tip: subí tus fotos en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a> y las tenés siempre a mano para tus videos.</p></div>` : ''}
+  return `<div class="page-head"><div class="ph-ico">🎬</div><div class="ph-txt"><h1>Video</h1><p class="sub">Convertí tus fotos en un video vertical (1080×1920) para Reels y TikTok. Hasta 5 escenas, 60 segundos en total.</p></div></div>
+  ${!photos.length ? `<div class="card tip-card"><p style="color:var(--mut);font-size:15px;margin:0">💡 Tip: subí tus fotos en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a> y las tenés siempre a mano para tus videos.</p></div>` : ''}
   <div class="card"><h3>Escenas (${v.scenes.length}/5)</h3>
     ${v.scenes.map((s, i) => `
     <div class="post-item" style="align-items:flex-start;gap:14px">
@@ -840,7 +961,7 @@ function videoView() {
         ${s.image_path ? `<img src="${esc(s.image_path)}" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">` : `<div style="width:72px;height:110px;border-radius:10px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--dim)">🖼️</div>`}
       </div>
       <div class="info" style="flex:1">
-        <div style="font-weight:700;margin-bottom:8px">Escena ${i + 1}</div>
+        <div class="scene-n">Escena ${i + 1}</div>
         <div class="field" style="margin-bottom:8px"><label>Texto en pantalla</label><input data-vtext="${i}" value="${esc(s.text)}" placeholder="Ej: Nuevo ingreso 🔥" maxlength="140"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
           <div class="field" style="margin:0;width:110px"><label>Duración (seg)</label><input type="number" data-vdur="${i}" min="1" max="30" value="${s.duration}"></div>
@@ -987,15 +1108,15 @@ function bindVideo() {
 function fotosView() {
   const photos = assetPhotos();
   const logo = assetLogo();
-  return `<h1>Mis fotos 📷</h1><p class="sub">Tu librería: las fotos que usamos de fondo en tus diseños y videos, y tu logo que va en cada post.</p>
+  return `<div class="page-head"><div class="ph-ico">📷</div><div class="ph-txt"><h1>Mis fotos</h1><p class="sub">Tu librería: las fotos que usamos de fondo en tus diseños y videos, y tu logo que va en cada post.</p></div></div>
   <div class="card"><h3>🖼️ Fotos (${photos.length}/20)</h3>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
       ${photos.map(a => `
       <div style="position:relative">
         <img src="${a.file_path}" style="width:120px;height:150px;object-fit:cover;border-radius:12px;border:1px solid var(--line)">
-        <button class="btn btn-danger btn-sm" data-adel="${a.id}" style="position:absolute;top:6px;right:6px;padding:6px 10px">✕</button>
+        <button class="btn btn-danger btn-sm foto-del" data-adel="${a.id}">✕</button>
       </div>`).join('')}
-      ${photos.length < 20 ? `<button class="btn btn-ghost" id="btnAAdd" style="width:120px;height:150px;border-style:dashed">＋<br>Agregar</button>` : ''}
+      ${photos.length < 20 ? `<button class="btn btn-ghost foto-add" id="btnAAdd">＋<br>Agregar</button>` : ''}
     </div>
     <input type="file" id="a_files" accept="image/*" multiple style="display:none">
     <div class="hint">El autopilot usa tus fotos rotando: post 1 → foto 1, post 2 → foto 2, etc. Si no hay fotos, usa los diseños de plantilla.</div>
@@ -1074,12 +1195,151 @@ function postItem(p, actions) {
     <div class="acts">${actions}</div>
   </div>`;
 }
+/* ---------- MI SEMANA (dashboard) ---------- */
+let SEM_NUDGES = [];
+
+// Botones 👍/👎 para enseñarle a Posta lo que te gusta
+function sigBtns(p) {
+  const a = p.signal === 'approved' ? ' on' : '';
+  const r = p.signal === 'rejected' ? ' on' : '';
+  return `<button class="sig-btn${a}" data-sig="approved" data-id="${p.id}" title="Me gustó, así">👍</button><button class="sig-btn${r}" data-sig="rejected" data-id="${p.id}" title="No me gustó">👎</button>`;
+}
+function bindSignalBtns() {
+  $$('[data-sig]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api.post(`/api/posts/${b.dataset.id}/signal`, { signal: b.dataset.sig }); }
+    catch (e) { b.disabled = false; return; }
+    render();
+  });
+}
+
+// Calendario comercial argentino: fechas que venden. Nudge si faltan ≤14 días.
+function arFechas() {
+  const y = new Date().getFullYear();
+  const out = [];
+  const push = (name, date, topic, approx) => out.push({ name, date, topic, approx: !!approx });
+  for (const yy of [y, y + 1]) {
+    const t = (m) => { const d = new Date(yy, m, 1); let n = 0; for (;;) { if (d.getDay() === 0 && ++n === 3) return new Date(d); d.setDate(d.getDate() + 1); } };
+    push('Año Nuevo', new Date(yy, 0, 1), 'Promo de comienzo de año para tu negocio');
+    push('Reyes Magos', new Date(yy, 0, 6), 'Promo por Reyes: últimos regalos');
+    push('Día de la Mujer', new Date(yy, 2, 8), 'Contenido por el Día de la Mujer');
+    push('Hot Sale', new Date(yy, 4, 11), 'Ofertas para el Hot Sale', true);
+    push('Día del Padre', t(5), 'Promo por el Día del Padre');
+    push('Día del Niño', t(7), 'Promo por el Día del Niño');
+    push('Día de la Madre', t(9), 'Promo por el Día de la Madre');
+    push('CyberMonday', new Date(yy, 10, 2), 'Ofertas para el CyberMonday', true);
+    push('Navidad', new Date(yy, 11, 25), 'Promo de Navidad y fiestas');
+    push('Fin de año', new Date(yy, 11, 31), 'Cierre de año: balance y agradecimiento');
+  }
+  return out;
+}
+function upcomingNudges() {
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  return arFechas()
+    .map(f => {
+      const d = new Date(f.date); d.setHours(0, 0, 0, 0);
+      const days = Math.round((d - now) / 86400000);
+      return { ...f, days };
+    })
+    .filter(f => f.days >= 0 && f.days <= 14)
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 2);
+}
+function fmtDay(d) {
+  return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+async function semanaView() {
+  let st = null;
+  try { st = await api.get('/api/stats/summary'); } catch (e) { st = null; }
+  const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada. Vos no te ocupás de nada.</p></div></div>`;
+  if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
+  const w = st.week, ap = st.approval, mo = st.month;
+  const ws = new Date(w.start + 'T12:00:00'), we = new Date(w.end + 'T12:00:00');
+  const pct = w.planned ? Math.min(100, Math.round((w.ready / w.planned) * 100)) : 0;
+
+  // Tira de 7 días (lun–dom)
+  const dayKey = (iso) => { try { return new Date(iso).toLocaleDateString('en-CA'); } catch { return ''; } };
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(ws); d.setDate(d.getDate() + i);
+    const key = d.toLocaleDateString('en-CA');
+    const todays = w.posts.filter(p => dayKey(p.published_at || p.scheduled_at) === key);
+    const cls = todays.some(p => p.status === 'published') ? 'ok' : todays.length ? 'pend' : 'empty';
+    const ico = cls === 'ok' ? '✅' : cls === 'pend' ? '📅' : '·';
+    days.push(`<div class="wk-day ${cls}"><span class="wd-n">${d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '')}</span><span class="wd-d">${d.getDate()}</span><span class="wd-i">${ico}</span></div>`);
+  }
+
+  // Gráfico de ritmo: últimas 8 semanas (posteos por semana — datos propios)
+  const maxT = Math.max(1, ...st.weekly.map(x => x.total));
+  const bars = st.weekly.map(x => `<div class="bar-w"><div class="bar" style="height:${Math.max(4, Math.round((x.total / maxT) * 100))}%"></div><span>${esc(x.label)}</span></div>`).join('');
+
+  // Aprobación sin cambios
+  const apBlock = ap.total
+    ? `<div class="big-pct">${ap.approved_rate}%</div>
+       <div class="pz-refbar check-bar"><div style="width:${ap.approved_rate}%"></div></div>
+       <p class="d">De ${ap.total} ${ap.total === 1 ? 'posteo que opinaste' : 'posteos que opinaste'}, ${ap.approved} ${ap.approved === 1 ? 'salió' : 'salieron'} sin que toques nada.${ap.edited ? ` Tocaste ${ap.edited} y descartaste ${ap.rejected}.` : ''}</p>`
+    : `<p class="d" style="margin:0">Todavía no hay datos. Marcá 👍 o 👎 en tus posteos y Posta aprende lo que te gusta para hacerlo cada vez mejor.</p>`;
+
+  // Próximos posteos de la semana con 👍/👎
+  const upcoming = w.posts.filter(p => ['scheduled', 'publishing'].includes(p.status));
+  const upBlock = upcoming.length
+    ? upcoming.map(p => postItem(p, sigBtns(p))).join('')
+    : `<div class="empty"><div class="big">📭</div>No hay posteos pendientes esta semana.<br><br><a class="btn btn-primary" href="#/app/ideas">Armar mi semana</a></div>`;
+
+  // Nudges de calendario comercial
+  SEM_NUDGES = upcomingNudges();
+  const nudgeBlock = SEM_NUDGES.map((n, i) => `
+    <div class="card nudge-card">
+      <div class="nudge-top"><span class="nudge-ico">📣</span><div><h3>Se acerca ${esc(n.name)}</h3>
+      <p>${fmtDay(n.date)}${n.days === 0 ? ' — ¡es hoy!' : n.days === 1 ? ' — ¡es mañana!' : ` — faltan ${n.days} días`}${n.approx ? ' (fecha aprox.)' : ''}</p></div></div>
+      <button class="btn btn-primary btn-sm" data-nudge="${i}">Armar idea →</button>
+    </div>`).join('');
+
+  return `${head}
+  <div class="card sem-hero">
+    <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
+    <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
+    ${w.missing
+      ? `<p class="sem-msg">Te ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar tu semana. <a href="#/app/ideas"><b>Armarlos ahora →</b></a></p>`
+      : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>`}
+  </div>
+  <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div></div>
+  ${nudgeBlock}
+  <div class="card"><h3>🔜 Próximos posteos</h3><p class="d">Marcá 👍 si te gusta como está o 👎 si no te convence — así aprendemos.</p>${upBlock}</div>
+  <div class="row2">
+    <div class="card"><h3>📊 Tu ritmo</h3><p class="d">Posteos por semana (últimas 8)</p><div class="bars">${bars}</div></div>
+    <div class="card"><h3>👍 Aprobados sin cambios</h3>${apBlock}</div>
+  </div>
+  <div class="card month-card">
+    <div class="nudge-top"><span class="nudge-ico">🗓️</span><div><h3>Tu mes con Posta</h3><p>Lo que hicimos por vos este mes</p></div></div>
+    <div class="month-grid">
+      <div class="mstat"><b>${mo.published}</b><span>posteos publicados</span></div>
+      <div class="mstat"><b>${mo.scheduled}</b><span>programados</span></div>
+      <div class="mstat"><b>~0</b><span>minutos tuyos</span></div>
+      <div class="mstat hl"><b>${mo.hours_saved} h</b><span>ahorradas (estimado)</span></div>
+    </div>
+    <p class="d">Hacer esto a mano te llevaría ~1,5 h por posteo entre idea, diseño, texto y publicación. Vos no moviste un dedo.</p>
+  </div>`;
+}
+
+function bindSemana() {
+  bindSignalBtns();
+  $$('[data-nudge]').forEach(b => b.onclick = () => {
+    const n = SEM_NUDGES[+b.dataset.nudge];
+    if (!n) return;
+    CREATOR = { step: 1, topic: n.topic, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+    location.hash = '#/app/crear';
+  });
+}
+
 async function calendarView() {
   const posts = await api.get('/api/posts?status=scheduled');
   const drafts = await api.get('/api/posts?status=draft');
   const all = [...posts, ...drafts];
-  return `<h1>Calendario 📅</h1><p class="sub">Tus próximos posts. Se publican solos a la hora indicada.</p>
+  return `<div class="page-head"><div class="ph-ico">📅</div><div class="ph-txt"><h1>Calendario</h1><p class="sub">Tus próximos posts. Se publican solos a la hora indicada.</p></div></div>
   ${all.length ? all.map(p => postItem(p, `
+      ${sigBtns(p)}
       ${p.status === 'scheduled' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
       <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>
     `)).join('') : `<div class="empty"><div class="big">📭</div>No tenés posts programados.<br><br><a class="btn btn-primary" href="#/app/crear">Crear el primero</a></div>`}`;
@@ -1087,8 +1347,8 @@ async function calendarView() {
 async function historyView() {
   const posts = await api.get('/api/posts');
   const done = posts.filter(p => ['published', 'failed', 'cancelled'].includes(p.status));
-  return `<h1>Historial 📊</h1><p class="sub">Todo lo que ya pasó por Posta.</p>
-  ${done.length ? done.map(p => postItem(p, p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : '')).join('')
+  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Historial</h1><p class="sub">Todo lo que ya pasó por Posta. Marcá 👍/👎 y aprendemos lo que te gusta.</p></div></div>
+  ${done.length ? done.map(p => postItem(p, `${p.status === 'published' ? sigBtns(p) : ''}${p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : ''}`)).join('')
     : `<div class="empty"><div class="big">📊</div>Todavía no hay historial.</div>`}`;
 }
 
@@ -1103,12 +1363,12 @@ function ajustesView() {
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Probá de nuevo.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
-  return `<h1>Ajustes ⚙️</h1><p class="sub">Tu negocio, tu marca, tu plan y tus integraciones.</p>
+  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu marca, tu plan y tus integraciones.</p></div></div>
   ${igMsg}${planMsg}${tokenWarn}
-  <div class="card" style="border:2px solid var(--yl)"><h3>💳 Mi plan</h3>
+  <div class="card card-hi-yl"><h3>💳 Mi plan</h3>
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div>
-  <div class="card" style="border:2px solid var(--cel)"><h3>🎁 Referidos · 50% off</h3>
+  <div class="card card-hi-cel"><h3>🎁 Referidos · 50% off</h3>
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div>
   <div class="card"><h3>🏪 Tu negocio</h3>
@@ -1249,12 +1509,12 @@ function onboardingView() {
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Para enfocar las ideas y los textos en lo que más te sirve.</p>
     <div style="display:grid;gap:12px">
       ${GOALS.map(([v, ico, t, d]) => `
-      <button class="goal-card ${o.goal === v ? 'on' : ''}" data-goal="${v}" style="display:flex;gap:14px;align-items:center;text-align:left;background:var(--card);border:2px solid ${o.goal === v ? 'var(--yl)' : 'var(--line)'};border-radius:16px;padding:18px;cursor:pointer;font-family:inherit">
-        <span style="font-size:30px">${ico}</span>
-        <span><b style="font-size:16px">${t}</b><br><span style="color:var(--mut);font-size:14px">${d}</span></span>
+      <button class="goal-card ${o.goal === v ? 'on' : ''}" data-goal="${v}">
+        <span class="gc-ico">${ico}</span>
+        <span><b class="gc-t">${t}</b><br><span class="gc-d">${d}</span></span>
       </button>`).join('')}
     </div>`;
-  return `<h1>Te configuramos todo 🚀</h1><p class="sub">Paso ${o.step} de 4 — 2 minutos y no te pedimos más nada.</p>
+  return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Te configuramos todo</h1><p class="sub">Paso ${o.step} de 4 — 2 minutos y no te pedimos más nada.</p></div></div>
   ${stepsBar}
   <div class="card" style="max-width:640px">${body}
     <div id="obMsg" style="margin-top:8px"></div>
@@ -1372,7 +1632,7 @@ async function render() {
         // Onboarding si el perfil está incompleto; si viene de /prueba, va a elegir plan
         const chosen = localStorage.getItem('posta_chosen_plan');
         if (PROFILE && PROFILE.business_name) {
-          location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '#/app/crear';
+          location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '#/app/semana';
         } else {
           location.hash = '#/app/onboarding';
           OB = freshOB();
@@ -1392,10 +1652,11 @@ async function render() {
   LANDING_ON = false;
   await refreshSession();
   if (!ME) { location.hash = '#/login'; return; }
-  const tab = (path.split('/')[2] || 'crear');
+  const tab = (path.split('/')[2] || 'semana');
   let content = '';
-  if (tab === 'crear') content = creatorView();
-  else if (tab === 'ideas') content = ideasView();
+  if (tab === 'semana') content = await semanaView();
+  else if (tab === 'crear') content = creatorView();
+  else if (tab === 'ideas') content = await ideasView();
   else if (tab === 'video') content = videoView();
   else if (tab === 'fotos') content = fotosView();
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
@@ -1409,6 +1670,7 @@ async function render() {
 function bindApp(tab) {
   pwaWire();
   $$('.mtab,.side-link[data-tab],.mbar-btn[data-tab],.msheet-btn[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
+  $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
@@ -1416,6 +1678,7 @@ function bindApp(tab) {
   if (mm && ms) mm.onclick = () => ms.classList.add('open');
   if (mb && ms) mb.onclick = () => ms.classList.remove('open');
 
+  if (tab === 'semana') bindSemana();
   if (tab === 'crear') bindCreator();
   if (tab === 'ideas') bindIdeas();
   if (tab === 'video') bindVideo();
@@ -1428,6 +1691,7 @@ function bindApp(tab) {
       await api.patch(`/api/posts/${id}`, { action: act === 'now' ? 'publish-now' : 'cancel' });
       render();
     });
+    bindSignalBtns();
   }
   if (tab === 'ajustes') bindSettings();
 }
@@ -1524,6 +1788,14 @@ function bindCreator() {
   }
 }
 
+async function igConnect() {
+  try { const { url } = await api.get('/api/ig/start'); location.href = url; }
+  catch (e) {
+    const m = $('#igMsg');
+    if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    else alert('Error: ' + e.message);
+  }
+}
 function bindSettings() {
   $('#btnSaveProfile').onclick = async () => {
     await api.put('/api/profile', {
@@ -1549,10 +1821,10 @@ function bindSettings() {
       const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : 'trial'})</span>` : '';
       const curPlan = plans.find(p => p.id === cur) || plans[0];
       const planCard = (p) => `
-          <div style="border:2px solid ${p.id === cur && hasActive ? 'var(--yl)' : 'var(--line)'};border-radius:16px;padding:18px">
-            <b>${esc(p.name)}</b> ${p.highlighted ? '<span class="badge b-scheduled">Recomendado</span>' : ''}
-            <div style="font-size:22px;font-weight:800;margin:8px 0">${esc(p.price_label)}<small style="font-size:13px;color:var(--dim)">/mes</small></div>
-            <div style="font-size:14px;color:var(--mut);margin-bottom:12px">${p.postsPerWeek} posts/semana</div>
+          <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}">
+            <div class="pm-top"><b>${esc(p.name)}</b> ${p.highlighted ? '<span class="badge b-scheduled">Recomendado</span>' : ''}</div>
+            <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
+            <div class="pm-perk">${p.postsPerWeek} posts/semana</div>
             <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
           </div>`;
       const bindSub = () => {
@@ -1600,10 +1872,10 @@ function bindSettings() {
       } else {
         z.innerHTML = `
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px 20px">
-            <div style="font-size:13px;color:var(--dim)">Plan actual</div>
-            <div style="font-size:20px;font-weight:800">${esc(curPlan.name)}</div>
-            <div style="font-size:14px;color:var(--mut)">${esc(curPlan.price_label)}/mes · ${curPlan.postsPerWeek} posts/semana · se renueva solo cada mes</div>
+          <div class="plan-cur">
+            <div class="pc-label">Plan actual</div>
+            <div class="pc-name">${esc(curPlan.name)}</div>
+            <div class="pc-det">${esc(curPlan.price_label)}/mes · ${curPlan.postsPerWeek} posts/semana · se renueva solo cada mes</div>
           </div>
           <button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>
         </div>
@@ -1703,12 +1975,7 @@ function bindSettings() {
     render();
   };
   const bc = $('#btnIgConn');
-  if (bc) bc.onclick = async () => {
-    try {
-      const { url } = await api.get('/api/ig/start');
-      location.href = url;
-    } catch (e) { $('#igMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-  };
+  if (bc) bc.onclick = igConnect;
   const bd = $('#btnIgDisc');
   if (bd) bd.onclick = async () => { await api.post('/api/ig/disconnect'); render(); };
 }
