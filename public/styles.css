@@ -335,6 +335,9 @@ button{font-family:inherit}
 .pz-slot{width:38px;height:38px;border-radius:50%;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--dim);font-weight:800;background:#fff}
 .pz-slot.on{border-style:solid;border-color:var(--yl);background:rgba(254,193,77,.20);color:#0A1E33}
 .pz-ref-auto{font-size:13px;color:var(--mut);background:var(--bg2);border:1px solid var(--line-soft);border-radius:10px;padding:8px 12px;margin:10px 0 4px}
+.pz-ref-joined{margin:10px 0;padding:10px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:12px}
+.pz-ref-joined-t{font-weight:800;font-size:14px;margin-bottom:4px}
+.pz-ref-join{font-size:14px;font-weight:700;color:var(--cel);padding:2px 0}
 @media(max-width:640px){.pz-ba-arrow{transform:rotate(90deg)}}
 
 /* ===== Landing mobile (≤760px): nav hamburguesa + hero compacto ===== */
