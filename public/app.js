@@ -2388,6 +2388,8 @@ function bindSettings() {
         const refInfo = await pzReferral();
         if (refInfo && refInfo.discount_active) {
           z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎁 <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
+        } else if (refInfo && refInfo.invited && !hasActive) {
+          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎉 <b>Tenés 20% off de invitado</b>: se aplica automáticamente al suscribirte, todos los meses.</div>`);
         }
       } catch (e) {}
       // Plan preseleccionado desde /prueba (?plan_sel=): click programático UNA vez
@@ -2422,7 +2424,7 @@ function bindSettings() {
     } catch (e) {}
     const fmt$ = (v) => '$' + Math.round(v).toLocaleString('es-AR');
     const half$ = planPrice ? fmt$(planPrice / 2) : null;
-    const shareMsg = `Uso Posta para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link tenés 20% off en tu plan: ${info.link}`;
+    const shareMsg = `Uso Posta para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link ahorrás hasta $25.980 por mes en tu plan: ${info.link}`;
     const slots = Array.from({ length: need }, (_, i) =>
       `<span class="pz-slot${i < n ? ' on' : ''}">${i < n ? '\u2713' : (i + 1)}</span>`).join('');
     z.innerHTML = `
@@ -2433,7 +2435,7 @@ function bindSettings() {
       </div>
       <div class="pz-ref-steps">
         <div><span>1️⃣</span>Compartí tu link</div>
-        <div><span>2️⃣</span>Ellos se suscriben con <b>20% off</b></div>
+        <div><span>2️⃣</span>Ellos se suscriben con <b>20% off todos los meses</b></div>
         <div><span>3️⃣</span>Vos pagás la mitad mientras sigan suscriptos</div>
       </div>
       <div class="pz-ref-share">
@@ -2445,6 +2447,7 @@ function bindSettings() {
       <div class="pz-refrow">
         <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
       </div>
+      <details style="font-size:13px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">👀 Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
       <div class="pz-ref-slots">${slots}</div>
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
       <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
