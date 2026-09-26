@@ -869,7 +869,14 @@ app.get('/api/referrals/mine', requireAuth, (req, res) => {
   try {
     joined = db.prepare(`SELECT COALESCE(NULLIF(p.business_name, ''), 'Un referido') AS name FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.referred_by = ? AND u.plan_status = 'active' ORDER BY u.id DESC`).all(req.session.userId).map(r => r.name);
   } catch (e) {}
-  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by), joined });
+  // En camino: se registraron con el link pero todavía no se suscribieron (siguen en trial)
+  let pending = [];
+  try {
+    const nowMs = Date.now();
+    pending = db.prepare(`SELECT COALESCE(NULLIF(p.business_name, ''), 'Un referido') AS name, u.trial_ends_at AS trial_ends_at FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.referred_by = ? AND u.plan_status = 'trial' ORDER BY u.id DESC`).all(req.session.userId)
+      .map(r => ({ name: r.name, days_left: (r.trial_ends_at && r.trial_ends_at > nowMs) ? Math.ceil((r.trial_ends_at - nowMs) / 86400000) : 0 }));
+  } catch (e) {}
+  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by), joined, pending });
   // Si los referidos cambiaron desde la suscripción, sincronizar el monto con MP (no bloquea)
   reconcileUser(db, req.session.userId).catch(() => {});
 });
