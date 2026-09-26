@@ -2259,11 +2259,12 @@ function bindSettings() {
       }
       const curPlan = plans.find(p => p.id === cur) || plans[0];
       const planCard = (p) => `
-          <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}">
+          <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}${p.highlighted ? ' rec' : ''}">
             <div class="pm-top"><b>${esc(p.name)}</b> ${p.highlighted ? '<span class="badge b-scheduled">Recomendado</span>' : ''}</div>
             <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
             <div class="pm-perday">\u2248 $${Math.round(p.price / 30).toLocaleString('es-AR')} por d\u00eda</div>
             <div class="pm-perk">${p.postsPerWeek} posts/semana</div>
+            <ul class="pm-feats">${(p.features || []).map(f => `<li>✓ ${esc(f)}</li>`).join('')}</ul>
             <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
           </div>`;
       const bindSub = () => {

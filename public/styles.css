@@ -295,6 +295,8 @@ button{font-family:inherit}
 .pz-trial-warn{background:#FFF8E8;border:1px solid #F0C75E;border-radius:14px;padding:12px 16px;font-size:14px;margin-bottom:14px;line-height:1.5}
 .pz-trial-exp{background:#FDECEC;border:1px solid #EFA9A9;border-radius:14px;padding:12px 16px;font-size:14px;margin-bottom:14px;line-height:1.5}
 .plan-mini .pm-perday{font-size:12px;color:var(--dim);margin:0 0 6px}
+.plan-mini .pm-feats{list-style:none;margin:10px 0 14px;padding:0;font-size:13px;color:var(--mut);display:grid;gap:7px;line-height:1.45}
+.plan-mini.rec{border-color:var(--yl-line);box-shadow:0 10px 26px rgba(254,193,77,.14)}
 .pz-guar{background:#EFFBF3;border:1px solid #B9E6C7;border-radius:14px;padding:12px 16px;font-size:14px;margin-top:14px;line-height:1.5}
 .pz-refrow{display:flex;gap:10px;margin:12px 0}
 .pz-refrow input{flex:1;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;font-size:14px;color:var(--mut);background:#FBFDFF;min-width:0;font-family:inherit}
