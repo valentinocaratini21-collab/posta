@@ -297,6 +297,21 @@ button{font-family:inherit}
 .plan-mini .pm-perday{font-size:12px;color:var(--dim);margin:0 0 6px}
 .plan-mini .pm-feats{list-style:none;margin:10px 0 14px;padding:0;font-size:13px;color:var(--mut);display:grid;gap:7px;line-height:1.45}
 .plan-mini.rec{border-color:var(--yl-line);box-shadow:0 10px 26px rgba(254,193,77,.14)}
+/* Modal agresivo: trial vencido */
+.pz-exp-overlay{position:fixed;inset:0;background:rgba(10,30,51,.74);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;animation:pzFadeIn .18s ease}
+.pz-exp-modal{background:#fff;border-radius:22px;max-width:460px;width:100%;padding:32px 26px 24px;text-align:center;position:relative;box-shadow:0 24px 70px rgba(0,0,0,.35);max-height:92vh;overflow:auto}
+.pz-exp-modal h2{font-size:24px;margin:10px 0 8px;color:var(--txt)}
+.pz-exp-sub{color:var(--mut);font-size:15px;line-height:1.55;margin:0 0 18px}
+.pz-exp-x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:17px;color:var(--dim);cursor:pointer;padding:8px}
+.pz-exp-plans{display:grid;gap:10px;margin-bottom:14px}
+.pz-exp-plan{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;background:#fff;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
+.pz-exp-plan:hover{border-color:var(--yl-line);box-shadow:0 6px 18px rgba(254,193,77,.18)}
+.pz-exp-plan b{font-size:15px;display:block;margin-bottom:2px}
+.pz-exp-plan small{color:var(--dim);font-size:12px}
+.pz-exp-go{background:var(--yl);color:#0A1E33;font-weight:800;font-size:13px;padding:8px 14px;border-radius:999px;white-space:nowrap}
+.pz-exp-guar{font-size:12.5px;color:var(--mut);margin:6px 0 12px}
+.pz-exp-later{border:0;background:none;color:var(--dim);font-size:13px;cursor:pointer;text-decoration:underline;padding:6px}
+@keyframes pzFadeIn{from{opacity:0}to{opacity:1}}
 .pz-guar{background:#EFFBF3;border:1px solid #B9E6C7;border-radius:14px;padding:12px 16px;font-size:14px;margin-top:14px;line-height:1.5}
 .pz-refrow{display:flex;gap:10px;margin:12px 0}
 .pz-refrow input{flex:1;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;font-size:14px;color:var(--mut);background:#FBFDFF;min-width:0;font-family:inherit}

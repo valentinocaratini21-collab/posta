@@ -1826,6 +1826,47 @@ async function render() {
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan)
+  try {
+    if (ME && ME.trial_expired && ME.plan_status === 'trial' && tab !== 'ajustes' && !sessionStorage.getItem('pz_exp_modal')) {
+      showExpiredModal();
+    }
+  } catch (e) {}
+}
+
+/* ---------- Modal agresivo: trial vencido ---------- */
+async function showExpiredModal() {
+  if (document.getElementById('pzExpOverlay')) return;
+  let plans = [];
+  try { const d = await api.get('/api/billing/plans'); plans = d.plans || []; } catch (e) {}
+  const perDay = (p) => '\u2248 $' + Math.round(p.price / 30).toLocaleString('es-AR') + ' por d\u00eda';
+  const rows = plans.map(p => `
+    <button class="pz-exp-plan" data-exp-plan="${p.id}">
+      <span><b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small></span>
+      <span class="pz-exp-go">Elegir \u2192</span>
+    </button>`).join('');
+  const ov = document.createElement('div');
+  ov.id = 'pzExpOverlay';
+  ov.className = 'pz-exp-overlay';
+  ov.innerHTML = `
+    <div class="pz-exp-modal" role="dialog" aria-modal="true">
+      <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
+      <div style="font-size:42px">\U0001F512</div>
+      <h2>Tu prueba gratis termin\u00f3</h2>
+      <p class="pz-exp-sub">Tus posteos se frenaron. Eleg\u00ed tu plan para seguir publicando con tu marca.</p>
+      <div class="pz-exp-plans">${rows}</div>
+      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes \U0001F680</button>'}
+      <p class="pz-exp-guar">\U0001F6E1\uFE0F Si no est\u00e1s conforme, te devolvemos el 100% de tu primer pago.</p>
+      <button class="pz-exp-later" id="pzExpLater">Por ahora no</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => { try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} ov.remove(); };
+  const goPlan = (pid) => { close(); location.hash = '#/app/ajustes' + (pid ? '?plan_sel=' + encodeURIComponent(pid) : ''); };
+  ov.querySelector('#pzExpClose').onclick = close;
+  ov.querySelector('#pzExpLater').onclick = close;
+  const goBtn = ov.querySelector('#pzExpGo');
+  if (goBtn) goBtn.onclick = () => goPlan('');
+  ov.querySelectorAll('[data-exp-plan]').forEach(b => b.onclick = () => goPlan(b.dataset.expPlan));
 }
 
 function bindApp(tab) {
