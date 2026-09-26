@@ -330,7 +330,7 @@ function landingView(cfg) {
       <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Sí. Tu semana se publica en automático, pero la ves entera antes en "Mi semana" y podés editar o eliminar cualquier posteo. Nada sale sin que lo hayas podido revisar.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si no estás conforme, te devolvemos el 100% de tu primer pago. Sin preguntas.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ni bien pagás: armás tu primera semana con un clic y la dejás programada.</p></details>
-      <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 amigos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
+      <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
@@ -2428,13 +2428,13 @@ function bindSettings() {
     z.innerHTML = `
       <div class="pz-ref-hero">
         <div class="pz-ref-hero-t">🎁 Pagás la mitad, todos los meses</div>
-        ${half$ ? `<div class="pz-ref-hero-p">Pasás de <s>${fmt$(planPrice)}</s> a <b>${half$}</b>/mes con ${need} amigos suscriptos.</div>`
-          : `<div class="pz-ref-hero-p">Con <b>${need} amigos</b> suscriptos, tu plan te sale <b>la mitad</b>.</div>`}
+        ${half$ ? `<div class="pz-ref-hero-p">Pasás de <s>${fmt$(planPrice)}</s> a <b>${half$}</b>/mes con ${need} referidos suscriptos.</div>`
+          : `<div class="pz-ref-hero-p">Con <b>${need} referidos</b> suscriptos, tu plan te sale <b>la mitad</b>.</div>`}
       </div>
       <div class="pz-ref-steps">
         <div><span>1️⃣</span>Compartí tu link</div>
         <div><span>2️⃣</span>Ellos se suscriben con <b>20% off</b></div>
-        <div><span>3️⃣</span>Vos pagás la mitad, siempre</div>
+        <div><span>3️⃣</span>Vos pagás la mitad mientras sigan suscriptos</div>
       </div>
       <div class="pz-ref-share">
         <button class="btn btn-wa btn-sm" data-share="wa">WhatsApp</button>
@@ -2447,10 +2447,10 @@ function bindSettings() {
       </div>
       <div class="pz-ref-slots">${slots}</div>
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
-      <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> amigos suscriptos</p>
+      <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
       ${info.discount_active
         ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
-        : `<p style="font-size:14px">${missing === 1 ? 'Te falta <b>1</b> amigo' : `Te faltan <b>${missing}</b> amigos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
+        : `<p style="font-size:14px">${missing === 1 ? 'Te falta <b>1</b> referido' : `Te faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
       <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
       <span id="pzRefMsg" style="font-size:13px"></span>`;
     const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
