@@ -13,6 +13,7 @@ const { startScheduler } = require('./scheduler');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
+const TRIAL_DAYS = 10;
 const mp = require('./mercadopago');
 const demo = require('./demo');
 const os = require('os');
@@ -48,6 +49,16 @@ const requireAuth = (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ error: 'No autenticado' });
   next();
 };
+
+// Si la prueba gratis venció, no se puede generar ni programar: el paywall es "Mi plan"
+function requireTrialValid(req, res, next) {
+  try {
+    const u = db.prepare('SELECT plan_status, trial_ends_at FROM users WHERE id = ?').get(req.session.userId);
+    if (u && u.plan_status === 'trial' && u.trial_ends_at && u.trial_ends_at <= Date.now())
+      return res.status(402).json({ error: 'trial_expired', message: 'Tu prueba gratis terminó. Elegí un plan para seguir creando contenido.' });
+  } catch (e) { /* ante la duda, dejar pasar */ }
+  next();
+}
 
 function getProfile(userId) {
   let p = db.prepare('SELECT * FROM profiles WHERE user_id = ?').get(userId);
@@ -88,7 +99,8 @@ app.post('/api/auth/register', (req, res) => {
       const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(refCode);
       if (referrer && referrer.id) referredBy = referrer.id;
     }
-    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by) VALUES (?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy);
+    const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at) VALUES (?, ?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds);
     req.session.userId = r.lastInsertRowid;
     res.json({ ok: true });
   } catch (e) {
@@ -111,9 +123,13 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, trial_ends_at FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
+  const nowMs = Date.now();
+  const tEnds = user.trial_ends_at || 0;
+  const trialExpired = user.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs;
+  const trialDaysLeft = (!trialExpired && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0;
   res.json({
     user: {
       id: user.id,
@@ -124,6 +140,8 @@ app.get('/api/auth/me', (req, res) => {
       plan_status: user.plan_status || 'trial',
       posts_per_week: plan.postsPerWeek,
       is_trial: user.plan_status !== 'active',
+      trial_days_left: trialDaysLeft,
+      trial_expired: trialExpired,
     },
   });
 });
@@ -182,7 +200,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
 });
 
 // ---------- Generador ----------
-app.post('/api/generate', requireAuth, async (req, res) => {
+app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const { topic } = req.body || {};
   if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del post' });
   const profile = getProfile(req.session.userId);
@@ -282,7 +300,7 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 });
 
 // ---------- Ideas: nosotros pensamos el contenido por el cliente ----------
-app.post('/api/ideas', requireAuth, async (req, res) => {
+app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
   try {
@@ -408,7 +426,7 @@ app.get('/api/posts', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/posts', requireAuth, (req, res) => {
+app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const { image_path, caption, hashtags, scheduled_at, media_type } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
   const status = scheduled_at ? 'scheduled' : 'draft';

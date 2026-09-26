@@ -143,6 +143,15 @@ try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); 
 // Email de MercadoPago del usuario (puede diferir del email de la cuenta)
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_payer_email TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
+// Trial de 10 días: vencimiento de la prueba gratis (milisegundos epoch)
+try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e) { /* ya existe */ }
+
+// Backfill: usuarios en trial sin fecha de vencimiento → 10 días desde hoy
+try {
+  db.prepare(`UPDATE users SET trial_ends_at = ? WHERE (plan_status IS NULL OR plan_status = 'trial') AND trial_ends_at IS NULL`)
+    .run(Date.now() + 10 * 24 * 3600 * 1000);
+} catch (e) { /* noop */ }
+
 // Backfill: códigos de referido para usuarios existentes
 try {
   const rcrypto = require('crypto');
