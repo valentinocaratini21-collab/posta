@@ -10,6 +10,7 @@ const { generateContent, generateIdeas } = require('./generator');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername } = require('./instagram');
 const { startScheduler } = require('./scheduler');
+const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
@@ -785,11 +786,14 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     // si no, invitado con link = 20% off
     let finalPlan = plan;
     let discount = false;
+    let mult = 1;
     if (referralStats(user.id).discount_active) {
       discount = true;
+      mult = REFERRAL_DISCOUNT;
       finalPlan = { ...plan, price: Math.round(plan.price * REFERRAL_DISCOUNT), name: `${plan.name} (50% off referidos)` };
     } else if (user.referred_by) {
       discount = true;
+      mult = FRIEND_DISCOUNT;
       finalPlan = { ...plan, price: Math.round(plan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
     }
     const { init_point } = await mp.createSubscription({
@@ -798,6 +802,8 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
       baseUrl,
       payerEmail,
     });
+    // Guardar base y multiplicador para la conciliación automática con MP
+    try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(plan.price, mult, user.id); } catch (e) {}
     res.json({ init_point, discount_applied: discount });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
@@ -864,6 +870,8 @@ app.get('/api/referrals/mine', requireAuth, (req, res) => {
     joined = db.prepare(`SELECT COALESCE(NULLIF(p.business_name, ''), 'Un referido') AS name FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.referred_by = ? AND u.plan_status = 'active' ORDER BY u.id DESC`).all(req.session.userId).map(r => r.name);
   } catch (e) {}
   res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by), joined });
+  // Si los referidos cambiaron desde la suscripción, sincronizar el monto con MP (no bloquea)
+  reconcileUser(db, req.session.userId).catch(() => {});
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas

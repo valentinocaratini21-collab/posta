@@ -75,6 +75,19 @@ function startScheduler(db) {
   console.log('[posta] Scheduler activo (cada 1 minuto)');
   // Chequeo inicial a los 10 segundos
   setTimeout(() => processDuePosts(db), 10000);
+  // Conciliación de descuentos con MercadoPago: cada 12 horas
+  try {
+    const { reconcileAll } = require('./billing-sync');
+    cron.schedule('0 */12 * * *', () => {
+      reconcileAll(db).catch((e) => console.error('[billing-sync]', e.message));
+    });
+    // Primera pasada a los 5 minutos del arranque (hace backfill si hace falta)
+    setTimeout(() => {
+      reconcileAll(db).catch((e) => console.error('[billing-sync]', e.message));
+    }, 5 * 60 * 1000);
+  } catch (e) {
+    console.error('[billing-sync] no se pudo iniciar:', e.message);
+  }
 }
 
 module.exports = { startScheduler, processDuePosts };

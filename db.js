@@ -145,6 +145,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN mp_payer_email TEXT DEFAULT ''`); } 
 
 // Trial de 10 días: vencimiento de la prueba gratis (milisegundos epoch)
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN mp_base_amount INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN mp_mult REAL DEFAULT 1`); } catch (e) { /* ya existe */ }
 
 // Registro permanente de cuentas de Instagram usadas (anti trial duplicado):
 // un IG = una sola prueba gratis, aunque lo desconecten o borren la cuenta

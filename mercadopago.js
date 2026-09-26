@@ -88,4 +88,19 @@ async function cancelSubscription(preapprovalId) {
   });
 }
 
-module.exports = { mpConfigured, createSubscription, getSubscription, cancelSubscription };
+// Actualiza el monto mensual de una suscripción existente (para aplicar o quitar
+// descuentos de referidos sin que el usuario tenga que re-suscribirse).
+// NOTA: este llamado PUT con auto_recurring no está verificado contra la API
+// real todavía (sí están verificados POST, GET y PUT-cancel). Si MP lo rechaza,
+// se loguea y la DB no cambia.
+async function updateSubscriptionAmount(preapprovalId, amount) {
+  if (!mpConfigured()) throw new Error('Pagos no configurados todavía');
+  const amt = Math.round(Number(amount));
+  if (!amt || amt <= 0) throw new Error('Monto inválido');
+  return mpFetch(`/preapproval/${encodeURIComponent(preapprovalId)}`, {
+    method: 'PUT',
+    body: { auto_recurring: { transaction_amount: amt } },
+  });
+}
+
+module.exports = { mpConfigured, createSubscription, getSubscription, cancelSubscription, updateSubscriptionAmount };
