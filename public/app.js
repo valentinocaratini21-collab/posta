@@ -2292,6 +2292,9 @@ function bindSettings() {
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
       const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
+      // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
+      let refInfo = null;
+      try { refInfo = await pzReferral(); } catch (e) {}
       let trialBanner = '';
       if (!hasActive && ME && ME.plan_status === 'trial') {
         if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Tu prueba gratis terminó.</b> Elegí tu plan para seguir publicando con tu marca.</div>`;
@@ -2386,7 +2389,6 @@ function bindSettings() {
       }
       // 🎁 50% off por referidos: se aplica automáticamente al suscribirte
       try {
-        const refInfo = await pzReferral();
         if (refInfo && refInfo.discount_active) {
           z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎁 <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
         } else if (refInfo && refInfo.invited && !hasActive) {
