@@ -113,6 +113,29 @@ CREATE TABLE IF NOT EXISTS deletion_requests (
 );
 `);
 
+// Loop inteligente fase 1: señales del cliente por posteo (qué le gustó y qué no)
+// client_signal: approved (salió sin cambios) | edited (lo editó antes) | rejected (lo canceló/eliminó o 👎)
+db.exec(`
+CREATE TABLE IF NOT EXISTS post_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  idea_text TEXT DEFAULT '',
+  template TEXT DEFAULT '',
+  caption_style TEXT DEFAULT '',
+  hashtags TEXT DEFAULT '',
+  scheduled_for TEXT DEFAULT '',
+  rubro TEXT DEFAULT '',
+  client_signal TEXT NOT NULL DEFAULT 'approved',
+  week_key TEXT DEFAULT '',
+  UNIQUE(user_id, post_id)
+);
+CREATE INDEX IF NOT EXISTS idx_signals_user_week ON post_signals(user_id, week_key);
+CREATE INDEX IF NOT EXISTS idx_signals_signal ON post_signals(user_id, client_signal);
+`);
+
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }

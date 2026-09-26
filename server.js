@@ -318,11 +318,12 @@ app.post('/api/videos', requireAuth, async (req, res) => {
 // ---------- Posts ----------
 app.get('/api/posts', requireAuth, (req, res) => {
   const { status } = req.query;
+  const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id';
   let rows;
   if (status) {
-    rows = db.prepare('SELECT * FROM posts WHERE user_id = ? AND status = ? ORDER BY scheduled_at ASC, created_at DESC').all(req.session.userId, status);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? AND p.status = ? ORDER BY p.scheduled_at ASC, p.created_at DESC`).all(req.session.userId, status);
   } else {
-    rows = db.prepare('SELECT * FROM posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 100').all(req.session.userId);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
   }
   res.json(rows);
 });
@@ -344,19 +345,156 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
+    recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
   } else if (action === 'publish-now') {
     db.prepare(`UPDATE posts SET status='scheduled', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
   } else {
+    const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
       scheduled_at || post.scheduled_at, caption ?? post.caption, hashtags ?? post.hashtags, post.id
     );
+    if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto antes de que salga
   }
   res.json({ ok: true });
 });
 
 app.delete('/api/posts/:id', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (post) recordSignal(req.session.userId, post, 'rejected'); // lo eliminó = no le gustó
   db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
   res.json({ ok: true });
+});
+
+// ---------- Loop inteligente fase 1: señales + resumen ----------
+// Semana con inicio lunes (zona horaria del negocio). week_key = 'YYYY-MM-DD' del lunes.
+function tzToday(tz) {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+  catch { return new Date().toISOString().slice(0, 10); }
+}
+function mondayKeyOf(ymd) {
+  const [y, m, d] = String(ymd).split('-').map(Number);
+  const dt = new Date(Date.UTC(y || 1970, (m || 1) - 1, d || 1, 12));
+  dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+  return dt.toISOString().slice(0, 10);
+}
+function ymdInTz(iso, tz) {
+  if (!iso) return null;
+  try {
+    const d = new Date(String(iso).length === 16 ? iso : String(iso).replace(' ', 'T'));
+    if (isNaN(d)) return null;
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  } catch { return null; }
+}
+function shiftDays(ymd, n) {
+  const [y, m, d] = String(ymd).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+function userTz(userId) {
+  try { return getSettings(userId).timezone || 'America/Argentina/Buenos_Aires'; }
+  catch { return 'America/Argentina/Buenos_Aires'; }
+}
+function postWeekKey(p, tz) {
+  return mondayKeyOf(ymdInTz(p.scheduled_at || p.published_at || p.created_at, tz) || tzToday(tz));
+}
+// Guarda (o actualiza) la señal del cliente para un posteo. La última señal vale.
+function recordSignal(userId, post, signal) {
+  try {
+    const tz = userTz(userId);
+    const prof = getProfile(userId) || {};
+    const wk = postWeekKey(post, tz);
+    db.prepare(`
+      INSERT INTO post_signals (user_id, post_id, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
+      VALUES (?,?,?,?,?,?,?,datetime('now'))
+      ON CONFLICT(user_id, post_id) DO UPDATE SET
+        client_signal=excluded.client_signal, hashtags=excluded.hashtags,
+        scheduled_for=excluded.scheduled_for, rubro=excluded.rubro,
+        week_key=excluded.week_key, updated_at=datetime('now')
+    `).run(userId, post.id, post.hashtags || '', post.scheduled_at || '', prof.category || '', signal, wk);
+  } catch (e) { console.error('[posta] recordSignal:', e.message); }
+}
+
+// Señal manual (👍/👎) sobre un posteo
+app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
+  const { signal } = req.body || {};
+  if (!['approved', 'edited', 'rejected'].includes(signal)) return res.status(400).json({ error: 'Señal inválida' });
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  recordSignal(req.session.userId, post, signal);
+  res.json({ ok: true });
+});
+
+// Resumen para el dashboard "Mi semana": semana actual, aprobación, ritmo y mes.
+// Métricas honestas de actividad propia (posteos), NUNCA métricas de Instagram.
+app.get('/api/stats/summary', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const tz = userTz(uid);
+  const curWeek = mondayKeyOf(tzToday(tz));
+  const posts = db.prepare('SELECT * FROM posts WHERE user_id = ?').all(uid);
+  const withWk = posts.map((p) => ({ ...p, _wk: postWeekKey(p, tz) }));
+  const sigRows = db.prepare('SELECT post_id, client_signal FROM post_signals WHERE user_id = ?').all(uid);
+  const sigMap = Object.fromEntries(sigRows.map((r) => [r.post_id, r.client_signal]));
+
+  const weekPosts = withWk
+    .filter((p) => p._wk === curWeek && p.status !== 'cancelled')
+    .sort((a, b) => String(a.scheduled_at || a.created_at).localeCompare(String(b.scheduled_at || b.created_at)));
+  const byStatus = {};
+  for (const p of weekPosts) byStatus[p.status] = (byStatus[p.status] || 0) + 1;
+  const ready = weekPosts.filter((p) => ['scheduled', 'publishing', 'published'].includes(p.status)).length;
+
+  const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
+  const ppw = (getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN).postsPerWeek) || 3;
+
+  const weekly = [];
+  for (let i = 7; i >= 0; i--) {
+    const wk = shiftDays(curWeek, -i * 7);
+    weekly.push({
+      key: wk,
+      label: wk.slice(8) + '/' + wk.slice(5, 7),
+      total: withWk.filter((p) => p._wk === wk && p.status !== 'cancelled').length,
+    });
+  }
+
+  let approved = 0, edited = 0, rejected = 0;
+  for (const r of sigRows) {
+    if (r.client_signal === 'approved') approved++;
+    else if (r.client_signal === 'edited') edited++;
+    else if (r.client_signal === 'rejected') rejected++;
+  }
+  const sigTotal = approved + edited + rejected;
+
+  const mk = tzToday(tz).slice(0, 7);
+  const monthPublished = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published' AND substr(published_at, 1, 7) = ?`).get(uid, mk).c;
+  const monthScheduled = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'scheduled'`).get(uid).c;
+
+  res.json({
+    week: {
+      key: curWeek,
+      start: curWeek,
+      end: shiftDays(curWeek, 6),
+      planned: ppw,
+      ready,
+      missing: Math.max(0, ppw - ready),
+      by_status: byStatus,
+      posts: weekPosts.map((p) => ({
+        id: p.id, image_path: p.image_path, caption: p.caption, hashtags: p.hashtags,
+        scheduled_at: p.scheduled_at, published_at: p.published_at, status: p.status,
+        media_type: p.media_type, ig_permalink: p.ig_permalink, signal: sigMap[p.id] || null,
+      })),
+    },
+    approval: {
+      approved, edited, rejected, total: sigTotal,
+      approved_rate: sigTotal ? Math.round((approved / sigTotal) * 100) : null,
+    },
+    weekly,
+    month: {
+      key: mk,
+      published: monthPublished,
+      scheduled: monthScheduled,
+      hours_saved: Math.round(monthPublished * 1.5 * 10) / 10, // estimado: ~1,5 h por posteo hecho a mano
+    },
+  });
 });
 
 // ---------- Instagram OAuth (Instagram Login / Business Login) ----------

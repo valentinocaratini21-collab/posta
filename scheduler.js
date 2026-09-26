@@ -43,6 +43,21 @@ async function processDuePosts(db) {
       db.prepare(
         `UPDATE posts SET status = 'published', ig_permalink = ?, published_at = datetime('now') WHERE id = ?`
       ).run(result.permalink || '', post.id);
+      // Loop inteligente fase 1: si salió sin que el cliente lo tocara, cuenta como aprobado.
+      // No pisa una señal manual previa (ej: 👎 marcado antes de publicarse).
+      try {
+        const has = db.prepare('SELECT id FROM post_signals WHERE user_id = ? AND post_id = ?').get(post.user_id, post.id);
+        if (!has) {
+          const prof = db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(post.user_id) || {};
+          const d = new Date(post.scheduled_at || post.published_at || Date.now());
+          d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+          const wk = d.toISOString().slice(0, 10);
+          db.prepare(
+            `INSERT INTO post_signals (user_id, post_id, hashtags, scheduled_for, rubro, client_signal, week_key)
+             VALUES (?,?,?,?,?, 'approved', ?)`
+          ).run(post.user_id, post.id, post.hashtags || '', post.scheduled_at || '', prof.category || '', wk);
+        }
+      } catch (e) { console.error('[posta] signal auto:', e.message); }
       console.log(`[posta] Post #${post.id} publicado${result.demo ? ' (demo)' : ''}`);
     } catch (e) {
       db.prepare(`UPDATE posts SET status = 'failed', error = ? WHERE id = ?`).run(
