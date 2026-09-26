@@ -1561,6 +1561,7 @@ function ajustesView() {
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div>
   <div class="card"><h3>🏪 Tu negocio</h3>
+  <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus ideas y posteos: cuanto más completos, mejores resultados.</p>
     <div class="row2">
       <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
       <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
@@ -2306,6 +2307,7 @@ function bindSettings() {
   const sDesc = $('#s_desc');
   if (sDesc) sDesc.oninput = () => { $('#s_desc_n').textContent = sDesc.value.length; };
   $('#btnSaveProfile').onclick = async () => {
+    if (!$('#s_biz').value.trim()) { $('#profMsg').innerHTML = '<div class="err">Poné el nombre de tu negocio</div>'; return; }
     const catOther = $('#s_catother').value.trim();
     await api.put('/api/profile', {
       business_name: $('#s_biz').value, ig_username: $('#s_iguser').value.replace('@', ''),
