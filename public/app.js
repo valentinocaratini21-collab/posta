@@ -2788,14 +2788,21 @@ function bindSettings() {
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
   const igRetry = $('#btnIgRetry');
   if (igRetry) igRetry.onclick = () => igConnect();
-  // Si está conectado pero el username quedó vacío: sincronizar solo
+  // Si está conectado pero el username quedó vacío: sincronizar solo (muestra el error si falla)
   if (PROFILE && PROFILE.ig_connected && !PROFILE.ig_username) {
-    (async () => {
+    const doIgSync = async () => {
+      const m = $('#igMsg');
       try {
         const r = await api.get('/api/ig/sync');
         if (r && r.username) { PROFILE.ig_username = r.username; render(); }
-      } catch (e) { /* se reintenta en la próxima visita a Ajustes */ }
-    })();
+        else if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram (respuesta vacía). <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
+      } catch (e) {
+        if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
+      }
+      const rb = $('#igSyncRetry');
+      if (rb) rb.onclick = (ev) => { ev.preventDefault(); doIgSync(); };
+    };
+    doIgSync();
   }
 }
 
