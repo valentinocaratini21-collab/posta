@@ -1625,12 +1625,27 @@ function ajustesView() {
     </div>
   </div>
   <div class="card"><h3>📸 Instagram</h3>
+    <div id="igBanner"></div>
     <div class="set-row"><div><div class="t">Modo demo ${s.demo_mode ? '(activo)' : ''}</div>
       <div class="d">En modo demo las publicaciones se simulan: probá todo el flujo sin conectar nada. Desactivalo para publicar de verdad.</div></div>
       <div class="toggle ${s.demo_mode ? 'on' : ''}" id="tglDemo"></div></div>
     <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar` : 'Todavía no conectaste tu Instagram. Necesitás una cuenta profesional (Business o Creator).'}</div></div>
+      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div></div>
       ${p.ig_connected ? `<button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button>` : `<button class="btn btn-soft btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+    </div>
+    <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
+      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:13px">(gratis, 30 segundos)</span></div>
+      <ol style="margin:0 0 12px 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
+        <li>Abrí Instagram y andá a tu perfil</li>
+        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
+        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
+        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
+      </ol>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">📲 Abrir Instagram</a>
+        <button class="btn btn-primary btn-sm" id="btnIgRetry">🔄 Ya la hice profesional — conectar</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
     <div id="igMsg"></div>
   </div>
@@ -2750,6 +2765,29 @@ function bindSettings() {
   if (bc) bc.onclick = igConnect;
   const bd = $('#btnIgDisc');
   if (bd) bd.onclick = async () => { await api.post('/api/ig/disconnect'); render(); };
+  // --- resultado del OAuth (?ig= en el hash) ---
+  (function igResult() {
+    let q = '';
+    try { q = location.hash.split('?')[1] || ''; } catch (e) {}
+    const hq = new URLSearchParams(q);
+    const r = hq.get('ig');
+    if (!r) return;
+    try { history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {}
+    const box = $('#igBanner');
+    if (!box) return;
+    if (r === 'ok') {
+      box.innerHTML = `<div class="ig-ok">✅ <b>¡Instagram conectado!</b>${hq.get('demo_off') ? ' El modo demo se apagó solo — ahora publicás de verdad.' : ''}</div>`;
+    } else if (r === 'personal') {
+      box.innerHTML = `<div class="ig-warn">⚠️ <b>Tu cuenta de Instagram es personal.</b> Para publicar necesitás una cuenta profesional (Business o Creator).</div>`;
+      const g = $('#igProGuide'); if (g) g.style.display = '';
+    } else if (r === 'error') {
+      box.innerHTML = `<div class="err">❌ ${esc(hq.get('msg') || 'No se pudo conectar tu Instagram.')}</div>`;
+    }
+  })();
+  const igProLink = $('#igProLink');
+  if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
+  const igRetry = $('#btnIgRetry');
+  if (igRetry) igRetry.onclick = () => igConnect();
 }
 
 window.addEventListener('hashchange', render);

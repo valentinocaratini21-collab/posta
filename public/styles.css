@@ -609,3 +609,6 @@ button{font-family:inherit}
 .bp-head span{font-weight:800;font-size:13px;letter-spacing:1.5px;text-transform:uppercase}
 .bp-title{font-weight:900;font-size:27px;line-height:1.15;margin-bottom:16px}
 .bp-cta{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:700;font-size:13px}
+
+.ig-ok{background:#E8F7EE;border:1px solid #B9E6C9;color:#14663A;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px}
+.ig-warn{background:#FFF6E0;border:1px solid #F5D98B;color:#8A5A00;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px}
