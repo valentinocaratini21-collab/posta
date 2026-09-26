@@ -44,7 +44,9 @@ app.use(
   })
 );
 app.use('/media', express.static(MEDIA_DIR));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, fp) => { if (/\.(js|css|html)$/.test(fp)) res.setHeader('Cache-Control', 'no-cache'); },
+}));
 
 const requireAuth = (req, res, next) => {
   if (!req.session.userId) return res.status(401).json({ error: 'No autenticado' });
