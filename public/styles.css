@@ -589,3 +589,5 @@ button{font-family:inherit}
 .comp-chip b{color:var(--mut);font-size:16px;line-height:1}
 .comp-chip b:hover{color:#e5484d}
 #s_compin{border:none;outline:none;flex:1;min-width:160px;font-size:14px;padding:6px 0;background:transparent;color:var(--navy)}
+.comp-av{width:22px;height:22px;border-radius:50%;object-fit:cover;margin-right:7px;flex:none}
+.comp-av-fb{display:inline-flex;align-items:center;justify-content:center;background:var(--line);font-size:11px}

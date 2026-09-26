@@ -2310,20 +2310,35 @@ function bindSettings() {
   const sDesc = $('#s_desc');
   if (sDesc) sDesc.oninput = () => { $('#s_desc_n').textContent = sDesc.value.length; };
   // --- competidores como chips ---
-  let compChips = String(p.competitors || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+  let compChips = String((PROFILE && PROFILE.competitors) || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+  let compPics = {};
   const compBox = $('#s_chips');
   const renderChips = () => {
-    compBox.innerHTML = compChips.map((c, i) => `<span class="comp-chip">${esc(c)}<b data-ci="${i}" style="cursor:pointer;margin-left:6px">×</b></span>`).join('');
+    compBox.innerHTML = compChips.map((c, i) => {
+      const pic = compPics[c.toLowerCase()];
+      const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : `<span class="comp-av comp-av-fb">📷</span>`;
+      return `<span class="comp-chip">${av}${esc(c)}<b data-ci="${i}" style="cursor:pointer;margin-left:6px">×</b></span>`;
+    }).join('');
     compBox.querySelectorAll('[data-ci]').forEach(x => x.onclick = () => { compChips.splice(+x.dataset.ci, 1); renderChips(); markDirty(); });
+  };
+  const fetchPic = async (name) => {
+    const k = name.toLowerCase();
+    if (compPics[k] !== undefined) return;
+    compPics[k] = null;
+    try {
+      const r = await api.get('/api/ig/avatar?u=' + encodeURIComponent(name));
+      if (r && r.pic_url) { compPics[k] = r.pic_url; renderChips(); }
+    } catch (e) {}
   };
   const addChip = () => {
     const v = $('#s_compin').value.trim().replace(/^@+/, '');
     if (!v) return;
     if (compChips.length >= 10) { $('#s_compin').value = ''; return; }
-    if (!compChips.some(c => c.toLowerCase() === v.toLowerCase())) compChips.push(v);
+    if (!compChips.some(c => c.toLowerCase() === v.toLowerCase())) { compChips.push(v); fetchPic(v); }
     $('#s_compin').value = ''; renderChips(); markDirty();
   };
   renderChips();
+  compChips.forEach(fetchPic);
   $('#s_compin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addChip(); } });
   // --- cambios sin guardar ---
   let profDirty = false;
