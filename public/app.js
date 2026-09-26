@@ -216,7 +216,7 @@ function landingView(cfg) {
         </div>
       </div>
     </div>
-    <div class="hero-note">Sin tarjeta · 7 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
+    <div class="hero-note">Sin tarjeta · 10 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
         <img src="hero-post.png" alt="Ejemplo de posteo creado por Posta">
@@ -300,7 +300,7 @@ function landingView(cfg) {
       </div>
       <div class="vs-item win">
         <div class="vs-top">🚀 <b>Posta</b></div>
-        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y publicamos en automático en tu cuenta. En pesos, con MercadoPago. Y lo probás <b>7 días gratis</b>, sin tarjeta.</p>
+        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y publicamos en automático en tu cuenta. En pesos, con MercadoPago. Y lo probás <b>10 días gratis</b>, sin tarjeta.</p>
       </div>
     </div>
     <p class="unico-line">Somos el único servicio argentino 100% done-for-you para Instagram.</p>
@@ -354,7 +354,7 @@ function authView(mode) {
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
-    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '7 días gratis, sin tarjeta.'}</p>
+    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '10 días gratis, sin tarjeta.'}</p>
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"></div>
@@ -2262,6 +2262,7 @@ function bindSettings() {
           <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}">
             <div class="pm-top"><b>${esc(p.name)}</b> ${p.highlighted ? '<span class="badge b-scheduled">Recomendado</span>' : ''}</div>
             <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
+            <div class="pm-perday">\u2248 $${Math.round(p.price / 30).toLocaleString('es-AR')} por d\u00eda</div>
             <div class="pm-perk">${p.postsPerWeek} posts/semana</div>
             <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
           </div>`;
@@ -2303,9 +2304,10 @@ function bindSettings() {
           <div style="font-size:20px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
         </div>
         ${trialBanner}
-        <div style="font-size:16px;font-weight:800;margin-bottom:12px">Elegí tu plan para empezar 🚀</div>
+        <div style="font-size:16px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
         <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
         <div id="planMsg" style="margin-top:10px"></div>
+        <div class="pz-guar">🛡️ <b>Garantía Posta:</b> si no estás conforme, te devolvemos el 100% de tu primer pago.</div>
         <p style="font-size:13px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
         bindSub();
       } else {
