@@ -2457,7 +2457,7 @@ function bindSettings() {
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
       <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
       ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link 🎉</div>${info.joined.map(nm => `<div class="pz-ref-join">✓ ${esc(nm)}</div>`).join('')}</div>` : ''}
-      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map(p => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''}</div>`).join('')}</div>` : ''}
+      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">📋 Copiar mensaje</button></div>`).join('')}</div>` : ''}
       ${info.discount_active
         ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
         : `<p style="font-size:14px">${missing === 1 ? 'Te falta <b>1</b> referido' : `Te faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
@@ -2485,6 +2485,12 @@ function bindSettings() {
       say(okMsg || '✅ Copiado');
     };
     $('#pzRefCopyMsg').onclick = () => copyText(shareMsg, '✅ Mensaje copiado: pegalo donde quieras');
+    z.querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => {
+      const p = info.pending[Number(b.dataset.nudge)];
+      if (!p) return;
+      const who = (p.name && p.name !== 'Un referido') ? ` ${p.name}` : '';
+      copyText(`Che${who}! Vi que empezaste tu prueba de Posta con mi link 🚀 Si te suscribís antes de que termine, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
+    });
     const nativeBtn = $('#pzRefNative');
     if (nativeBtn && navigator.share) {
       nativeBtn.style.display = '';
