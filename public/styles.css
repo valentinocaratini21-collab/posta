@@ -501,3 +501,38 @@ button{font-family:inherit}
   .feedback-row{flex-direction:column}
   .feedback-row .btn{width:100%}
 }
+
+/* ---------- Creador v3: selección múltiple, mis fotos, modales ---------- */
+.opt-card.selected{border:2px solid var(--cel);box-shadow:0 0 0 3px rgba(39,147,200,.18)}
+.opt-sel{position:absolute;top:26px;right:26px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.96);border:1.5px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(10,30,51,.12);min-height:44px;color:var(--txt)}
+.opt-sel input{width:22px;height:22px;accent-color:var(--cel);cursor:pointer;margin:0}
+.opt-img{cursor:pointer}
+.opt-customlink{background:none;border:none;color:var(--cel);font-size:14px;font-weight:700;cursor:pointer;padding:10px;width:100%;text-align:center;font-family:inherit}
+#multiBar{position:fixed;left:12px;right:12px;bottom:12px;z-index:61;background:#0A1E33;color:#fff;border-radius:18px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 8px 30px rgba(10,30,51,.35)}
+#multiBar .btn{min-height:48px;flex-shrink:0}
+#multiCount{font-weight:700;font-size:15px}
+.modal-ov{position:fixed;inset:0;background:rgba(10,30,51,.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal-card{background:#fff;border-radius:20px;padding:22px;max-width:560px;width:100%;max-height:88vh;overflow:auto}
+.modal-card h3{margin-bottom:4px;color:var(--txt)}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions .btn{flex:1;min-height:48px}
+.sched-row{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.sched-thumb{width:52px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--line);flex-shrink:0}
+.sched-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sched-info b{font-size:14px;color:var(--txt)}
+.sched-row input[type=datetime-local]{border:1.5px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;min-height:48px;color:var(--txt)}
+.light-card img{width:100%;border-radius:14px;margin-bottom:12px}
+.light-card p{white-space:pre-wrap;font-size:14px;line-height:1.6;color:var(--mut);margin-bottom:14px}
+.myphotos-card{background:var(--card);border:1.5px dashed var(--cel-line);border-radius:var(--r);padding:18px;margin-bottom:22px}
+.mp-title{font-size:16px;font-weight:800;margin-bottom:6px;color:var(--txt)}
+.mp-text{font-size:14px;color:var(--mut);line-height:1.55;margin-bottom:12px}
+.mp-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.mp-thumb{width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer;background:var(--bg2)}
+.prodphoto-note{background:#EAF7EF;border:1.5px solid #BDE5C8;color:#14532D;border-radius:14px;padding:12px 16px;margin-bottom:14px;font-size:14px;font-weight:600}
+.photoq-note{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 16px;margin-bottom:14px;font-size:14px;color:var(--mut)}
+@media(max-width:760px){
+  #multiBar{bottom:84px;left:10px;right:10px}
+  .sched-row{flex-wrap:wrap}
+  .sched-row input[type=datetime-local]{width:100%}
+  .opt-sel{top:22px;right:22px}
+}

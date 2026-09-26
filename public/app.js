@@ -78,6 +78,20 @@ function slotDate19(i, tz) {
     return d.toISOString();
   }
 }
+// Día 'YYYY-MM-DD' de un ISO en la zona horaria del negocio
+function tzDayKey(iso, tz) {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+  } catch { return ''; }
+}
+// ISO → valor para <input type="datetime-local"> en hora local del navegador
+function isoToLocalInput(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
 const TIMEZONES = ['America/Argentina/Buenos_Aires', 'America/Santiago', 'America/Asuncion', 'America/Montevideo', 'America/Sao_Paulo', 'America/Bogota', 'America/Lima', 'America/Mexico_City', 'America/New_York', 'Europe/Madrid'];
 
 /* ---------- LANDING ---------- */
@@ -456,7 +470,7 @@ function appShell(tab, content) {
 }
 
 /* ---------- CREAR ---------- */
-let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '' };
+let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
 
 /* ---------- VIDEO ---------- */
 function freshVState() {
@@ -626,6 +640,10 @@ function creatorView() {
       <div class="field"><label>¿De qué es el post?</label>
         <textarea id="c_topic" placeholder='Ej: "nuevo buzo oversize color crema", "promo 2x1 en pizzas los martes", "abrimos local en Palermo"'>${esc(c.topic)}</textarea>
         <div class="hint">Una frase alcanza. La IA lo convierte en caption + hashtags con tu tono.</div></div>
+      <div class="field"><label>📷 Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
+        <div id="c_prodPhotoBox"></div>
+        <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
+        <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
       <button class="btn btn-soft" id="btnGen">🤖 Generar con IA</button>
       <div id="genErr"></div>
       <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
@@ -685,27 +703,46 @@ function creatorView() {
     const colors = det.colors || [];
     const hexes = det.colorHex || [];
     const opts = c.options || [];
+    const libPhotos = (typeof assetPhotos === 'function' ? assetPhotos() : []);
     const colorNames = colors.length > 1
       ? colors.slice(0, -1).join(', ') + ' y ' + colors[colors.length - 1]
       : colors.join(', ');
     return `
-    <div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Elegí tu diseño</h1><p class="sub">6 opciones hechas para tu idea. Elegí una y programala.</p></div></div>
+    <div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Elegí tu diseño</h1><p class="sub">6 opciones hechas para tu idea. Elegí una o varias y programalas.</p></div></div>
     <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
     ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
+    ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
+    ${det.photoQuery && !det.productPhoto ? `<div class="photoq-note">📸 Fotos de: <b>${esc(det.photoQuery)}</b>${det.userPhotos ? ` · usando tus fotos primero ✨` : ''}</div>` : ''}
+    <div class="myphotos-card">
+      <div class="mp-title">📷 Tus fotos</div>
+      <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
+      <div class="mp-row" id="mpRow">
+        ${libPhotos.length ? libPhotos.map(a => `<img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('') : `<span class="mut">Todavía no subiste fotos.</span>`}
+      </div>
+      <button class="btn btn-soft" id="btnUploadPhotos">📤 Subir fotos de tus productos</button>
+      <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
+      <div id="mpMsg"></div>
+    </div>
     <div id="optErr"></div>
     <div class="opt-grid">
       ${opts.map((o, i) => `
-      <div class="opt-card">
+      <div class="opt-card" data-card="${i}">
         ${i === c.recommendedIndex ? `<div class="opt-badge">⭐ Recomendada</div>` : ''}
-        <img class="opt-img" src="${esc(o.image)}" alt="${esc(o.title || ('Diseño ' + (i + 1)))}" loading="lazy">
+        <label class="opt-sel"><input type="checkbox" class="opt-selbox" data-sel="${i}"><span>Elegir</span></label>
+        <img class="opt-img" data-optimg="${i}" src="${esc(o.image)}" alt="${esc(o.title || ('Diseño ' + (i + 1)))}" loading="lazy" title="Tocá para ver en grande">
         ${i === c.recommendedIndex && c.recommendedReason ? `<p class="opt-reason">${esc(c.recommendedReason)}</p>` : ''}
         ${o.title ? `<p class="opt-title">${esc(o.title)}</p>` : ''}
         ${o.caption ? `<p class="opt-caption">${esc(o.caption)}</p>` : ''}
         <div class="opt-actions">
           <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño →</button>
-          <button class="btn btn-ghost btn-sm opt-custom" data-custom="${i}">✏️ Personalizar</button>
+          <button class="btn btn-ghost btn-sm opt-myphoto" data-mp="${i}">📷 Mi foto</button>
         </div>
+        <button class="opt-customlink" data-custom="${i}">✏️ Personalizar a mano</button>
       </div>`).join('')}
+    </div>
+    <div id="multiBar" style="display:none">
+      <span id="multiCount">✅ 0 elegidos</span>
+      <button class="btn btn-primary" id="btnMultiSched">Programar (0)</button>
     </div>
     <div style="display:flex;justify-content:center;margin:4px 0 26px">
       <button class="btn btn-soft" id="btnRegen">🔄 Regenerar opciones</button>
@@ -717,6 +754,38 @@ function creatorView() {
         <button class="btn btn-primary btn-sm" id="btnFeedback">Arreglar</button>
       </div>
       <div id="feedbackMsg"></div>
+    </div>
+    <div id="schedModal" class="modal-ov" style="display:none">
+      <div class="modal-card">
+        <h3>📅 Programar diseños</h3>
+        <p class="mut" style="margin-bottom:12px">Elegí día y hora para cada uno.</p>
+        <div id="schedRows"></div>
+        <div id="schedMsg"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="btnSchedCancel">Cancelar</button>
+          <button class="btn btn-primary" id="btnSchedConfirm">✅ Confirmar</button>
+        </div>
+      </div>
+    </div>
+    <div id="optLight" class="modal-ov" style="display:none">
+      <div class="modal-card light-card">
+        <img id="optLightImg" alt="Diseño en grande">
+        <p id="optLightCap"></p>
+        <button class="btn btn-ghost btn-block" id="btnLightClose">Cerrar</button>
+      </div>
+    </div>
+    <div id="photoPickModal" class="modal-ov" style="display:none">
+      <div class="modal-card">
+        <h3>📷 Foto para este diseño</h3>
+        <button class="btn btn-soft btn-block" id="btnPickUpload" style="margin:12px 0">📤 Subir nueva foto</button>
+        <input type="file" id="pickFile" accept="image/*" style="display:none">
+        <p class="mut" style="margin:6px 0 8px"><b>De tu librería</b></p>
+        <div class="mp-row" id="pickLib"></div>
+        <p class="mut" style="margin:6px 0 8px"><b>Del banco de fotos</b></p>
+        <div class="mp-row" id="pickStock"></div>
+        <div id="pickMsg"></div>
+        <button class="btn btn-ghost btn-block" id="btnPickClose" style="margin-top:14px">Cancelar</button>
+      </div>
     </div>
     <button class="btn btn-ghost btn-sm" id="btnBackOptions" style="margin-top:16px">← Volver</button>`;
   }
@@ -968,13 +1037,13 @@ function bindIdeas() {
       if (photos.length > 1) VSTATE.scenes.push({ image_path: photos[1].file_path, text: (idea.angulo || '').split('.')[0].slice(0, 80), duration: 4 });
       location.hash = '#/app/video';
     } else {
-      CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+      CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
       location.hash = '#/app/crear';
     }
   });
   $$('[data-idea]').forEach(btn => btn.onclick = () => {
     const idea = IDEAS[+btn.dataset.idea];
-    CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+    CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
     location.hash = '#/app/crear';
   });
   $$('[data-video]').forEach(btn => btn.onclick = () => {
@@ -1368,7 +1437,7 @@ function bindSemana() {
   $$('[data-nudge]').forEach(b => b.onclick = () => {
     const n = SEM_NUDGES[+b.dataset.nudge];
     if (!n) return;
-    CREATOR = { step: 1, topic: n.topic, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+    CREATOR = { step: 1, topic: n.topic, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
     location.hash = '#/app/crear';
   });
 }
@@ -1739,19 +1808,58 @@ function bindApp(tab) {
 function bindCreator() {
   const c = CREATOR;
   if (c.step === 1) {
+    // 📷 Foto del producto (opcional): se sube al momento y viaja como productPhoto.
+    const renderProdBox = () => {
+      const box = $('#c_prodPhotoBox');
+      if (!box) return;
+      box.innerHTML = c.productPhoto
+        ? `<div style="display:flex;gap:10px;align-items:center">
+            <img src="${esc(c.productPhoto)}" style="width:72px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)" alt="Foto de tu producto">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" id="btnProdPhCh" type="button">Cambiar</button>
+              <button class="btn btn-ghost btn-sm" id="btnProdPhRm" type="button">Quitar</button>
+            </div>
+          </div>`
+        : `<button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
+           <div id="prodPhMsg"></div>`;
+      const trig = () => $('#c_prodPhotoFile').click();
+      const bAdd = $('#btnProdPhAdd'); if (bAdd) bAdd.onclick = trig;
+      const bCh = $('#btnProdPhCh'); if (bCh) bCh.onclick = trig;
+      const bRm = $('#btnProdPhRm'); if (bRm) bRm.onclick = () => { c.productPhoto = ''; renderProdBox(); };
+    };
+    const prodInput = $('#c_prodPhotoFile');
+    if (prodInput) prodInput.onchange = async () => {
+      const f = prodInput.files[0]; if (!f) return;
+      if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
+      const msg = $('#prodPhMsg');
+      if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo foto...</div>`;
+      try {
+        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+        c.productPhoto = data.path;
+        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+      } catch (e) {
+        alert('No se pudo subir la foto: ' + e.message);
+      }
+      renderProdBox();
+    };
+    renderProdBox();
     $('#btnGen').onclick = async () => {
       c.topic = $('#c_topic').value.trim();
       if (!c.topic) { $('#genErr').innerHTML = `<div class="err">Escribí el tema del post primero</div>`; return; }
       const btn = $('#btnGen');
       btn.disabled = true; btn.textContent = '🎨 Armándo tus 6 opciones...';
       try {
-        const out = await api.post('/api/creator/options', { topic: c.topic });
+        const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || out.options.length !== 6) throw new Error('Respuesta incompleta');
         c.options = out.options;
         c.detected = out.detected || null;
         c.recommendedIndex = out.recommendedIndex || 0;
         c.recommendedReason = out.recommendedReason || '';
         c.feedback = '';
+        c.selected = [];
+        c.cardPhoto = {};
         c.step = 'options'; render();
       } catch (e) {
         // Fallback al comportamiento viejo (pantalla de texto con caption/hashtags)
@@ -1822,7 +1930,7 @@ function bindCreator() {
       c.imagePath = o.image; c.caption = o.caption || ''; c.hashtags = o.hashtags || '';
       c.step = 3; render();
     });
-    $$('.opt-custom').forEach(b => b.onclick = () => {
+    $$('.opt-customlink').forEach(b => b.onclick = () => {
       const o = c.options[+b.dataset.custom]; if (!o) return;
       c.title = o.title || ''; c.subtitle = o.subtitle || ''; c.caption = o.caption || '';
       c.hashtags = o.hashtags || ''; c.photo = o.image || '';
@@ -1833,13 +1941,181 @@ function bindCreator() {
       c.options = out.options; c.detected = out.detected || null;
       c.recommendedIndex = out.recommendedIndex || 0;
       c.recommendedReason = out.recommendedReason || '';
+      c.selected = []; c.cardPhoto = {};
       render();
+    };
+    // ---- Selección múltiple ----
+    function updateMultiBar() {
+      const n = c.selected.length;
+      const bar = $('#multiBar');
+      if (!bar) return;
+      bar.style.display = n ? 'flex' : 'none';
+      $('#multiCount').textContent = `✅ ${n} elegido${n === 1 ? '' : 's'}`;
+      $('#btnMultiSched').textContent = `Programar (${n})`;
+    }
+    $$('.opt-selbox').forEach(ch => ch.onchange = () => {
+      const i = +ch.dataset.sel;
+      c.selected = c.selected.filter(x => x !== i);
+      if (ch.checked) { c.selected.push(i); c.selected.sort((a, b) => a - b); }
+      const card = document.querySelector(`[data-card="${i}"]`);
+      if (card) card.classList.toggle('selected', ch.checked);
+      updateMultiBar();
+    });
+    // ---- Detalle en grande (tap en la imagen) ----
+    $$('.opt-img').forEach(im => im.onclick = () => {
+      const o = c.options[+im.dataset.optimg]; if (!o) return;
+      $('#optLightImg').src = o.image;
+      $('#optLightCap').textContent = (o.caption || '') + (o.hashtags ? '\n\n' + o.hashtags : '');
+      $('#optLight').style.display = 'flex';
+    });
+    const closeLight = () => { const l = $('#optLight'); if (l) l.style.display = 'none'; };
+    $('#btnLightClose').onclick = closeLight;
+    $('#optLight').onclick = (e) => { if (e.target.id === 'optLight') closeLight(); };
+    // ---- "📷 Mi foto" por tarjeta ----
+    let pickIdx = null;
+    function openMyPhotoPicker(idx) {
+      pickIdx = idx;
+      const o = c.options[idx]; if (!o) return;
+      const lib = assetPhotos();
+      $('#pickLib').innerHTML = lib.length
+        ? lib.map(a => `<img src="${esc(a.file_path)}" data-pick="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('')
+        : `<span class="mut">Todavía no subiste fotos.</span>`;
+      const stock = (o.photoCandidates || []).filter(u => !lib.some(a => a.file_path === u)).slice(0, 6);
+      $('#pickStock').innerHTML = stock.length
+        ? stock.map(u => `<img src="${esc(u)}" data-pick="${esc(u)}" class="mp-thumb" alt="Foto del banco">`).join('')
+        : `<span class="mut">Sin alternativas.</span>`;
+      $('#pickMsg').innerHTML = '';
+      $('#photoPickModal').style.display = 'flex';
+    }
+    async function applyCardPhoto(idx, photoUrl) {
+      const o = c.options[idx]; if (!o) return;
+      $('#pickMsg').innerHTML = `<div class="hint">⏳ Actualizando diseño...</div>`;
+      try {
+        const r = await api.post('/api/creator/rerender', {
+          style: o.style, photo: photoUrl, headline: o.title, subline: o.subtitle,
+          pill: o.pill, bar: o.bar, cta: o.cta, colors: o.colors,
+        });
+        if (!r || !r.image) throw new Error('Sin imagen');
+        o.image = r.image;
+        c.cardPhoto[idx] = photoUrl;
+        if (o.photoCandidates && !o.photoCandidates.includes(photoUrl)) o.photoCandidates.unshift(photoUrl);
+        const img = document.querySelector(`img[data-optimg="${idx}"]`);
+        if (img) img.src = r.image;
+        $('#photoPickModal').style.display = 'none';
+      } catch (e) {
+        $('#pickMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+      }
+    }
+    $$('.opt-myphoto').forEach(b => b.onclick = () => openMyPhotoPicker(+b.dataset.mp));
+    $('#photoPickModal').onclick = async (e) => {
+      const t = e.target;
+      if (t.id === 'photoPickModal' || t.id === 'btnPickClose') { $('#photoPickModal').style.display = 'none'; return; }
+      if (t.id === 'btnPickUpload') { $('#pickFile').click(); return; }
+      const pk = t.dataset && t.dataset.pick;
+      if (pk && pickIdx !== null) await applyCardPhoto(pickIdx, pk);
+    };
+    $('#pickFile').onchange = async () => {
+      const f = $('#pickFile').files[0]; if (!f || pickIdx === null) return;
+      if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
+      $('#pickMsg').innerHTML = `<div class="hint">⏳ Subiendo foto...</div>`;
+      try {
+        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+        await applyCardPhoto(pickIdx, data.path);
+      } catch (e) {
+        $('#pickMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+      }
+      $('#pickFile').value = '';
+    };
+    // ---- Subir fotos a la librería (arriba de las opciones) ----
+    $('#btnUploadPhotos').onclick = () => $('#mpFiles').click();
+    $('#mpFiles').onchange = async () => {
+      const files = Array.from($('#mpFiles').files || []).filter(f => f.type.startsWith('image/'));
+      if (!files.length) return;
+      const msg = $('#mpMsg');
+      msg.innerHTML = `<div class="hint">⏳ Subiendo ${files.length} ${files.length === 1 ? 'foto' : 'fotos'}...</div>`;
+      let ok = 0;
+      for (const f of files) {
+        try {
+          const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+          const data = await r.json();
+          if (r.ok) ok++;
+          else if (msg) msg.innerHTML = `<div class="err">${esc(data.error || 'Error')}</div>`;
+        } catch (e) { msg.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+      }
+      $('#mpFiles').value = '';
+      ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+      if (ok) {
+        msg.innerHTML = `<div class="hint">✅ ¡Listo! Regenerando con tus fotos...</div>`;
+        try {
+          const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
+          if (out && Array.isArray(out.options) && out.options.length) { applyOptions(out); return; }
+        } catch (e) { /* queda el mensaje de abajo */ }
+        msg.innerHTML = `<div class="hint">✅ ¡Listo! Tocá "🔄 Regenerar opciones" para usarlas.</div>`;
+      }
+    };
+    // ---- Programar N ----
+    async function openSchedModal() {
+      if (!c.selected.length) return;
+      const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+      let scheduled = [];
+      try { scheduled = await api.get('/api/posts?status=scheduled'); } catch (e) { scheduled = []; }
+      const taken = new Set((scheduled || []).map(p => tzDayKey(p.scheduled_at, tz)).filter(Boolean));
+      let off = 0;
+      const rows = c.selected.map(idx => {
+        let iso = slotDate19(0, tz);
+        let guard = 0;
+        while (guard++ < 90) {
+          iso = slotDate19(off, tz); off++;
+          const k = tzDayKey(iso, tz);
+          if (k && !taken.has(k)) { taken.add(k); break; }
+        }
+        return { idx, iso };
+      });
+      $('#schedRows').innerHTML = rows.map(r => {
+        const o = c.options[r.idx];
+        return `<div class="sched-row">
+          <img src="${esc(o.image)}" class="sched-thumb" alt="">
+          <div class="sched-info"><b>${esc(o.title || 'Diseño')}</b><span class="mut">${esc((o.caption || '').slice(0, 60))}…</span></div>
+          <input type="datetime-local" data-swhen="${r.idx}" value="${isoToLocalInput(r.iso)}">
+        </div>`;
+      }).join('');
+      $('#schedMsg').innerHTML = '';
+      $('#schedModal').style.display = 'flex';
+    }
+    $('#btnMultiSched').onclick = openSchedModal;
+    $('#btnSchedCancel').onclick = () => { $('#schedModal').style.display = 'none'; };
+    $('#schedModal').onclick = (e) => { if (e.target.id === 'schedModal') $('#schedModal').style.display = 'none'; };
+    $('#btnSchedConfirm').onclick = async () => {
+      const btn = $('#btnSchedConfirm');
+      btn.disabled = true; btn.textContent = '⏳ Programando...';
+      try {
+        const items = c.selected.map(idx => {
+          const o = c.options[idx];
+          const inp = document.querySelector(`input[data-swhen="${idx}"]`);
+          const v = inp && inp.value;
+          if (!v) throw new Error('Elegí fecha y hora para todos los diseños');
+          return { image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date(v).toISOString() };
+        });
+        const r = await api.post('/api/creator/schedule', { items });
+        $('#schedMsg').innerHTML = `<div class="okmsg">✅ ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/calendario">ver en Calendario</a></div>`;
+        c.selected = [];
+        $$('.opt-selbox').forEach(ch => { ch.checked = false; });
+        $$('.opt-card').forEach(cd => cd.classList.remove('selected'));
+        updateMultiBar();
+        setTimeout(() => { $('#schedModal').style.display = 'none'; location.hash = '#/app/calendario'; }, 1800);
+      } catch (e) {
+        $('#schedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = '✅ Confirmar';
+      }
     };
     $('#btnRegen').onclick = async () => {
       const btn = $('#btnRegen');
       btn.disabled = true; btn.textContent = '🎨 Generando nuevas opciones...';
       try {
-        const out = await api.post('/api/creator/options', { topic: c.topic });
+        const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
         applyOptions(out);
       } catch (e) {
@@ -1855,7 +2131,7 @@ function bindCreator() {
       const btn = $('#btnFeedback');
       btn.disabled = true; btn.textContent = '🔧 Arreglándolo...';
       try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, feedback: fb });
+        const out = await api.post('/api/creator/options', { topic: c.topic, feedback: fb, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
         c.feedback = fb; applyOptions(out);
       } catch (e) {
@@ -1868,7 +2144,7 @@ function bindCreator() {
   if (c.step === 3) {
     const done = (msg) => {
       $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
-      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '' };
+      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
       setTimeout(() => location.hash = '#/app/calendario', 1400);
     };
     $('#btnSchedule').onclick = async () => {
