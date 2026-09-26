@@ -602,3 +602,10 @@ button{font-family:inherit}
 .pv-val{font-size:14px;color:var(--navy);font-weight:600;line-height:1.45}
 .pv-warn{color:#b7791f;font-weight:500}
 .pv-tip{margin-top:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--navy);line-height:1.5}
+
+.bp-card{border-radius:16px;padding:18px;max-width:320px;position:relative;overflow:hidden;box-shadow:0 4px 14px rgba(10,30,51,.12)}
+.bp-head{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.bp-head img{height:28px;border-radius:6px;background:#fff;padding:2px}
+.bp-head span{font-weight:800;font-size:13px;letter-spacing:1.5px;text-transform:uppercase}
+.bp-title{font-weight:900;font-size:27px;line-height:1.15;margin-bottom:16px}
+.bp-cta{display:inline-block;padding:8px 18px;border-radius:999px;font-weight:700;font-size:13px}

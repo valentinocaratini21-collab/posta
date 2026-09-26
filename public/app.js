@@ -1604,6 +1604,7 @@ function ajustesView() {
         <div style="display:flex;gap:10px;align-items:center">
           ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:14px">Sin logo</span>'}
           <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
+          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
         </div>
         <input type="file" id="s_logofile" accept="image/*" style="display:none">
       </div>
@@ -1614,7 +1615,14 @@ function ajustesView() {
       </div>
       <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano.</div>
     </div>
-    <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
+    <div class="field"><label>Vista previa</label>
+      <div id="brandPrev"></div>
+      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
+      <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
+    </div>
   </div>
   <div class="card"><h3>📸 Instagram</h3>
     <div class="set-row"><div><div class="t">Modo demo ${s.demo_mode ? '(activo)' : ''}</div>
@@ -2666,6 +2674,43 @@ function bindSettings() {
     }
     catch (e) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`; }
   };
+  // --- vista previa de marca ---
+  const lumInk = (hex) => {
+    const n = parseInt(String(hex).slice(1), 16);
+    const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    return lum > 0.6 ? '#0A1E33' : '#FFFFFF';
+  };
+  function renderBrandPrev() {
+    const box = $('#brandPrev');
+    if (!box) return;
+    const c = [$('#s_c0') && $('#s_c0').value, $('#s_c1') && $('#s_c1').value, $('#s_c2') && $('#s_c2').value].filter(Boolean);
+    if (!c.length) { box.innerHTML = ''; return; }
+    const logo = assetLogo();
+    const biz = (PROFILE && PROFILE.business_name) || 'Tu negocio';
+    const ink = lumInk(c[0]);
+    box.innerHTML = `
+      <div class="bp-card" style="background:linear-gradient(135deg,${c[0]},${c[1] || c[0]})">
+        <div class="bp-head">${logo ? `<img src="${logo.file_path}">` : ''}<span style="color:${ink}">${esc(biz)}</span></div>
+        <div class="bp-title" style="color:${ink}">¡NUEVA<br>COLECCIÓN!</div>
+        <div><span class="bp-cta" style="background:${c[2] || c[1] || c[0]};color:${lumInk(c[2] || c[1] || c[0])}">Ver más →</span></div>
+      </div>`;
+  }
+  let brandDirty = false;
+  const bDirtyEl = $('#brandDirty');
+  function markBrandDirty() { if (!brandDirty) { brandDirty = true; if (bDirtyEl) bDirtyEl.style.display = ''; } }
+  ['s_c0', 's_c1', 's_c2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { markBrandDirty(); renderBrandPrev(); });
+  });
+  renderBrandPrev();
+  const bBlogDel = $('#btnBrandLogoDel');
+  if (bBlogDel) bBlogDel.onclick = async () => {
+    if (!confirm('¿Quitar el logo de tu marca?')) return;
+    const logo = assetLogo();
+    if (logo && logo.id) { try { await api.del('/api/assets/' + logo.id); } catch (e) {} }
+    ASSETS = await api.get('/api/assets').catch(() => []);
+    render();
+  };
   // Si hay logo pero no colores de marca: detectarlos del logo automáticamente
   (async () => {
     try {
@@ -2685,6 +2730,7 @@ function bindSettings() {
     if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
     await api.put('/api/settings', { brand_colors: colors });
     $('#brandMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
+    brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
     SETTINGS = await api.get('/api/settings');
   };
   $('#btnSaveSettings').onclick = async () => {
