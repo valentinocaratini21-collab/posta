@@ -515,12 +515,8 @@ function getPalettes() {
   }
   return list;
 }
-function defaultPal() {
-  const pals = getPalettes();
-  const p = SETTINGS && SETTINGS.preferred_palette;
-  if (Number.isInteger(p) && p >= 0 && p < pals.length) return p;
-  return 0;
-}
+// La paleta por defecto siempre es "Mi marca" (indice 0 cuando hay colores de marca).
+function defaultPal() { return 0; }
 const PALETTES = BASE_PALETTES; // compat: usar getPalettes() para la lista efectiva
 
 // Saca los N colores dominantes de una imagen (se usa para autocompletar
@@ -1572,9 +1568,6 @@ function ajustesView() {
         </div>
         <input type="file" id="s_logofile" accept="image/*" style="display:none">
       </div>
-      <div class="field"><label>Paleta preferida</label><select id="s_pal">
-        ${getPalettes().map((pl, i) => `<option value="${i}" ${defaultPal() === i ? 'selected' : ''}>${pl.name}${pl.brand ? ' (tus colores)' : ''}</option>`).join('')}
-      </select></div>
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="display:flex;gap:10px">
@@ -1620,7 +1613,6 @@ function freshOB() {
     description: (PROFILE && PROFILE.description) || '',
     competitors: (PROFILE && PROFILE.competitors) || '',
     goal: (PROFILE && PROFILE.goal) || '',
-    palSel: 'brand',
     c1: '#8B95A1', c2: '#C3CAD2', c3: '#4A5560',
     useBrand: false,
   };
@@ -1647,7 +1639,6 @@ function onboardingView() {
     <div class="field"><label>Nombres o usuarios de Instagram, separados por coma</label><input id="ob_comp" value="${esc(o.competitors)}" placeholder="tiendaX, @competidor2"></div>
     <div class="hint">Si no tenés a mano, saltealo y lo agregás después en Ajustes.</div>`;
   if (o.step === 3) {
-    const livePals = [{ name: 'Mi marca', c: [o.c1, o.c2, o.c3], brand: true }, ...BASE_PALETTES];
     body = `
     <h3>Tu estilo 🎨</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Tu logo y tus colores: todo lo que generemos sale con tu marca, no con la nuestra.</p>
@@ -1665,9 +1656,7 @@ function onboardingView() {
       </div>
       <div class="hint">Salen de tu logo solos. Tocá cada uno si querés ajustarlo a mano.</div>
     </div>
-    <div class="field"><label>Paleta preferida</label><select id="ob_pal">
-      ${livePals.map((p, i) => `<option value="${p.brand ? 'brand' : String(i - 1)}" ${String(o.palSel) === (p.brand ? 'brand' : String(i - 1)) ? 'selected' : ''}>${p.name}${p.brand ? ' (tus colores)' : ''}</option>`).join('')}
-    </select></div>`;
+    <div class="hint" style="margin-top:4px">🎨 Todo lo que generemos va a usar estos colores: son la identidad de tu marca.</div>`;
   }
   if (o.step === 4) body = `
     <h3>Tu objetivo 🎯</h3>
@@ -1706,7 +1695,6 @@ function bindOnboarding() {
     if (o.step === 2) o.competitors = $('#ob_comp').value.trim();
     if (o.step === 3) {
       o.c1 = $('#ob_c1').value; o.c2 = $('#ob_c2').value; o.c3 = $('#ob_c3').value;
-      o.palSel = $('#ob_pal').value;
       if (!assetLogo()) { $('#obMsg').innerHTML = `<div class="err">Subí el logo de tu marca para continuar 🙂</div>`; return; }
     }
     o.step++; render();
@@ -1744,15 +1732,6 @@ function bindOnboarding() {
       const colors = [o.c1, o.c2, o.c3].filter((c, i, a) => a.indexOf(c) === i);
       if (colors.length >= 2) await api.put('/api/settings', { brand_colors: colors });
       SETTINGS = await api.get('/api/settings');
-      const pals = getPalettes();
-      let palIdx = 0;
-      if (o.palSel === 'brand' && pals[0] && pals[0].brand) palIdx = 0;
-      else {
-        const bi = parseInt(o.palSel, 10);
-        palIdx = pals.findIndex(p => !p.brand && BASE_PALETTES.indexOf(p) === bi);
-        if (palIdx < 0) palIdx = 0;
-      }
-      await api.put('/api/settings', { preferred_palette: palIdx });
       await refreshSession();
       // Si viene de /prueba con plan preseleccionado, va directo a elegirlo
       const chosenPlan = localStorage.getItem('posta_chosen_plan');
@@ -2426,7 +2405,7 @@ function bindSettings() {
     const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
     const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
     if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
-    await api.put('/api/settings', { brand_colors: colors, preferred_palette: +$('#s_pal').value });
+    await api.put('/api/settings', { brand_colors: colors });
     $('#brandMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
     SETTINGS = await api.get('/api/settings');
   };
