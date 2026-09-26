@@ -1587,7 +1587,7 @@ function ajustesView() {
       <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
       </div>
     <div class="field"><label>Tus competidores</label>
-      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
       <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
