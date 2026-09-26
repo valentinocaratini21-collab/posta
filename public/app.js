@@ -98,7 +98,18 @@ function isoToLocalInput(iso) {
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 16);
 }
-const TIMEZONES = ['America/Argentina/Buenos_Aires', 'America/Santiago', 'America/Asuncion', 'America/Montevideo', 'America/Sao_Paulo', 'America/Bogota', 'America/Lima', 'America/Mexico_City', 'America/New_York', 'Europe/Madrid'];
+const TIMEZONES = [
+  ['America/Argentina/Buenos_Aires', 'Buenos Aires, Argentina'],
+  ['America/Santiago', 'Santiago, Chile'],
+  ['America/Asuncion', 'Asunción, Paraguay'],
+  ['America/Montevideo', 'Montevideo, Uruguay'],
+  ['America/Sao_Paulo', 'São Paulo, Brasil'],
+  ['America/Bogota', 'Bogotá, Colombia'],
+  ['America/Lima', 'Lima, Perú'],
+  ['America/Mexico_City', 'Ciudad de México, México'],
+  ['America/New_York', 'Nueva York, EE.UU.'],
+  ['Europe/Madrid', 'Madrid, España'],
+];
 
 /* ---------- LANDING ---------- */
 // Precio por día bajo cada plan (landing)
@@ -1537,7 +1548,7 @@ function ajustesView() {
   <div class="card"><h3>🏪 Tu negocio</h3>
     <div class="row2">
       <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
-      <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="mitienda"></div>
+      <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
     </div>
     <div class="row2">
       <div class="field"><label>Rubro</label><select id="s_cat">
@@ -1549,7 +1560,7 @@ function ajustesView() {
     </div>
     <div class="row2">
       <div class="field"><label>Zona horaria <span style="color:var(--dim);font-weight:400">(para programar a las 19:00 de tu país)</span></label><select id="s_tz">
-        ${TIMEZONES.map(t => `<option ${s.timezone === t ? 'selected' : ''} value="${t}">${t.replace('_', ' ')}</option>`).join('')}
+        ${TIMEZONES.map(([v, l]) => `<option ${s.timezone === v ? 'selected' : ''} value="${v}">${l}</option>`).join('')}
       </select></div>
       <div class="field"><label>Objetivo</label><select id="s_goal">
         ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
@@ -2489,7 +2500,7 @@ function bindSettings() {
       const p = info.pending[Number(b.dataset.nudge)];
       if (!p) return;
       const who = (p.name && p.name !== 'Un referido') ? ` ${p.name}` : '';
-      copyText(`Che${who}! Vi que empezaste tu prueba de Posta con mi link 🚀 Si te suscribís antes de que termine, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
+      copyText(`Che${who}! Vi que empezaste tu prueba de Posta con mi link 🚀 Si te suscribís${p.days_left > 0 ? ` (te quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba)` : ''}, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
     });
     const nativeBtn = $('#pzRefNative');
     if (nativeBtn && navigator.share) {
