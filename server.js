@@ -859,7 +859,11 @@ app.get('/api/referrals/mine', requireAuth, (req, res) => {
   const s = referralStats(req.session.userId);
   const me = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(req.session.userId);
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by) });
+  let joined = [];
+  try {
+    joined = db.prepare(`SELECT COALESCE(NULLIF(p.business_name, ''), 'Un referido') AS name FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.referred_by = ? AND u.plan_status = 'active' ORDER BY u.id DESC`).all(req.session.userId).map(r => r.name);
+  } catch (e) {}
+  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by), joined });
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas
