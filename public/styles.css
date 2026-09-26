@@ -165,6 +165,7 @@ button{font-family:inherit}
 .hero-card{background:linear-gradient(135deg,rgba(39,147,200,.13),rgba(39,147,200,.04));border:1px solid rgba(39,147,200,.32)}
 .tip-card{border:1.5px dashed var(--yl-line);background:rgba(254,193,77,.07)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+#s_catother_w{grid-column:1/-1}
 @media(max-width:760px){.row2{grid-template-columns:1fr}.sidebar{display:none}.main{padding:26px 16px 120px}.page-head{margin-bottom:22px}.ph-ico{width:46px;height:46px;font-size:22px;border-radius:14px}.page-head h1,.main>h1{font-size:24px}}
 
 /* ---------- creator ---------- */
