@@ -599,6 +599,33 @@ app.get('/api/stats/summary', requireAuth, (req, res) => {
 });
 
 // ---------- Instagram OAuth (Instagram Login / Business Login) ----------
+// Avatar de un usuario de Instagram (og:image público, con caché de 30 días)
+app.get('/api/ig/avatar', requireAuth, async (req, res) => {
+  const u = String(req.query.u || '').trim().toLowerCase().replace(/^@+/, '');
+  if (!/^[a-z0-9._]{1,30}$/.test(u)) return res.status(400).json({ error: 'Usuario inválido' });
+  try {
+    const cached = db.prepare("SELECT pic_url, name FROM ig_avatar_cache WHERE username=? AND fetched_at > datetime('now','-30 days')").get(u);
+    if (cached && cached.pic_url) return res.json({ username: u, pic_url: cached.pic_url, name: cached.name });
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 10000);
+    let html = '';
+    try {
+      const r = await fetch('https://www.instagram.com/' + encodeURIComponent(u) + '/', {
+        signal: ctl.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' },
+      });
+      html = await r.text();
+    } finally { clearTimeout(t); }
+    const m = html.match(/<meta property="og:image" content="([^"]+)"/);
+    const t2 = html.match(/<meta property="og:title" content="([^"]+)"/);
+    let pic = m ? m[1].replace(/&amp;/g, '&') : null;
+    // solo avatares reales (scontent); si IG sirvió el muro de login, no cachear
+    if (pic && !/scontent[^/]*\.cdninstagram\.com\/v\//.test(pic)) pic = null;
+    const nm = t2 ? t2[1].replace(/&amp;/g, '&').split(' on Instagram')[0].split(' • ')[0] : '';
+    if (pic) db.prepare('INSERT OR REPLACE INTO ig_avatar_cache (username, pic_url, name, fetched_at) VALUES (?,?,?,datetime(\'now\'))').run(u, pic, nm);
+    res.json({ username: u, pic_url: pic, name: nm });
+  } catch (e) { res.json({ username: u, pic_url: null }); }
+});
 app.get('/api/ig/start', requireAuth, (req, res) => {
   const s = getSettings(req.session.userId);
   const embedUrl = s.ig_embed_url || process.env.META_IG_EMBED_URL || process.env.IG_EMBED_URL;

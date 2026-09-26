@@ -106,6 +106,12 @@ CREATE TABLE IF NOT EXISTS trial_usage (
 
 // Eliminación de datos (requerido por Meta): solicitudes vía signed_request
 db.exec(`
+CREATE TABLE IF NOT EXISTS ig_avatar_cache (
+  username TEXT PRIMARY KEY,
+  pic_url TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS deletion_requests (
   code TEXT PRIMARY KEY,
   meta_user_id TEXT DEFAULT '',
