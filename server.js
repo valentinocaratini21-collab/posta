@@ -206,21 +206,78 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
 // ---------- Creador v2: 6 opciones con foto, colores y energía ----------
 app.post('/api/creator/options', requireAuth, async (req, res) => {
-  const { topic, feedback } = req.body || {};
+  const { topic, feedback, productPhoto } = req.body || {};
   if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'Contanos la idea del post' });
   try {
     const settings = getSettings(req.session.userId);
+    // Foto del producto (opcional, paso 1): si existe en /media, es LA foto de las 6.
+    let prodPhoto = null;
+    const pp = String(productPhoto || '');
+    if (pp.startsWith('/media/') && fs.existsSync(path.join(MEDIA_DIR, path.basename(pp)))) {
+      prodPhoto = pp;
+    }
+    // Librería del usuario (opcional): sus fotos tienen prioridad sobre stock.
+    const userPhotos = db
+      .prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at ASC`)
+      .all(req.session.userId)
+      .map((r) => r.file_path);
     const out = await creator.generateOptions({
       topic: String(topic).trim().slice(0, 300),
       feedback: String(feedback || '').trim().slice(0, 300),
       profile: getProfile(req.session.userId),
       settings,
       openaiKey: settings.openai_key || process.env.OPENAI_API_KEY || '',
+      productPhoto: prodPhoto,
+      userPhotos,
     });
     res.json(out);
   } catch (e) {
     console.error('[creator]', e.message);
     res.status(500).json({ error: e.message || 'No se pudieron armar las opciones' });
+  }
+});
+
+// ---------- Creador v2: re-renderizar UNA opción con otra foto ("📷 Mi foto") ----------
+app.post('/api/creator/rerender', requireAuth, async (req, res) => {
+  try {
+    const image = await creator.rerenderOption(req.body || {});
+    res.json({ image });
+  } catch (e) {
+    console.error('[creator/rerender]', e.message);
+    res.status(500).json({ error: e.message || 'No se pudo actualizar el diseño' });
+  }
+});
+
+// ---------- Creador v2: programar N diseños de una ----------
+app.post('/api/creator/schedule', requireAuth, (req, res) => {
+  const { items } = req.body || {};
+  if (!Array.isArray(items) || !items.length || items.length > 6) {
+    return res.status(400).json({ error: 'Elegí al menos un diseño' });
+  }
+  try {
+    // Validar todo antes de insertar (nada a medias).
+    const clean = items.map((it, i) => {
+      const image = String((it && it.image) || '');
+      if (!image.startsWith('/media/')) throw new Error(`Diseño ${i + 1}: imagen inválida`);
+      const when = new Date((it && it.scheduled_at) || '');
+      if (isNaN(when)) throw new Error(`Diseño ${i + 1}: fecha inválida`);
+      return {
+        image,
+        caption: String((it && it.caption) || ''),
+        hashtags: String((it && it.hashtags) || ''),
+        scheduled_at: when.toISOString(),
+      };
+    });
+    const stmt = db.prepare(
+      'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
+    );
+    const ids = clean.map((c) =>
+      stmt.run(req.session.userId, c.image, c.caption, c.hashtags, c.scheduled_at, 'scheduled', 'image').lastInsertRowid
+    );
+    res.json({ ok: true, count: ids.length, ids });
+  } catch (e) {
+    console.error('[creator/schedule]', e.message);
+    res.status(500).json({ error: e.message || 'No se pudieron programar' });
   }
 });
 

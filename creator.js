@@ -78,6 +78,9 @@ const PHOTO_DICT = {
   pasta: 'pasta', sushi: 'sushi', ensalada: 'salad', desayuno: 'breakfast',
   merienda: 'brunch', brunch: 'brunch', cafe: 'coffee', cafeteria: 'coffee shop',
   torta: 'cake', pastel: 'cake', helado: 'ice cream', chocolate: 'chocolate',
+  banana: 'bananas', manzana: 'apples', palta: 'avocado', tomate: 'tomatoes',
+  frutilla: 'strawberries', limon: 'lemons', jugo: 'juice', licuado: 'smoothie',
+  fruta: 'fruits', verdura: 'vegetables',
   cerveza: 'beer', vino: 'wine', coctel: 'cocktail', trago: 'cocktail',
   restaurante: 'restaurant', resto: 'restaurant', bar: 'bar', pizzeria: 'pizzeria',
   panaderia: 'bakery', pasteleria: 'pastry',
@@ -102,20 +105,57 @@ const PHOTO_DICT = {
   oficina: 'office', trabajo: 'workspace', emprendedor: 'entrepreneur',
 };
 
+// Adjetivos ES → EN (claves normalizadas, sin tildes: norm() las quita).
+// Se combinan con el sustantivo: "bananas un poco verdes" → "green bananas".
+const ADJ_DICT = {
+  verde: 'green', verdes: 'green',
+  maduro: 'ripe', madura: 'ripe', maduros: 'ripe', maduras: 'ripe',
+  rojo: 'red', roja: 'red', rojos: 'red', rojas: 'red',
+  negro: 'black', negra: 'black', negros: 'black', negras: 'black',
+  blanco: 'white', blanca: 'white', blancos: 'white', blancas: 'white',
+  azul: 'blue', azules: 'blue', celeste: 'light blue',
+  amarillo: 'yellow', amarilla: 'yellow', amarillos: 'yellow',
+  rosa: 'pink', rosada: 'pink', rosado: 'pink',
+  violeta: 'purple', violetas: 'purple', lila: 'lilac',
+  naranja: 'orange', gris: 'gray', grises: 'gray',
+  marron: 'brown', marrones: 'brown', dorado: 'golden', dorada: 'golden',
+  plateado: 'silver', plateada: 'silver', beige: 'beige', crema: 'cream',
+  grande: 'large', grandes: 'large', gigante: 'huge', enorme: 'huge',
+  pequeno: 'small', pequena: 'small', pequenos: 'small', pequenas: 'small',
+  chico: 'small', chica: 'small', chiquito: 'small', chiquita: 'small', mini: 'mini',
+  nuevo: 'new', nueva: 'new', nuevos: 'new', nuevas: 'new',
+  fresco: 'fresh', fresca: 'fresh', frescos: 'fresh', frescas: 'fresh',
+  dulce: 'sweet', dulces: 'sweet', salado: 'salty', salada: 'salty',
+  seco: 'dry', seca: 'dry', crocante: 'crunchy', caliente: 'hot', frio: 'cold',
+  artesanal: 'artisan', casero: 'homemade', casera: 'homemade',
+  elegante: 'elegant', deportivo: 'sporty', oversize: 'oversized',
+  estampado: 'printed', estampada: 'printed', liso: 'plain', rayado: 'striped',
+};
+
 const FILLER = new Set(
   'de en con para por el la los las lo del al un una unos unas y o u que se es son esta este esto estos estas mi tu su sus mis tus les me te nos le muy mas sin sobre entre hace hacer hacen hacemos nuevo nueva nuevos nuevas hoy ahora ayer manana quiero quiere quieren queres queremos vendo venden venta oferta promo promocion descuento producto productos servicio servicios negocio marca gran mejor lindo linda hermoso hermosa abrimos abren abrir abrieron inauguramos inaugurar lanzamos lanzar lanzamiento presentamos presentar tenemos tengo tienen mira miren miralo conta contanos atencion veni vengan veni pasate pasa elegi lleva llevate aprovecha disfruta conoce descubri llega llego llegan sumate animate pedilo pedila reservalo'.split(' ')
 );
 
 function photoQueryFor(text) {
   const words = norm(text).split(/[^a-z]+/).filter((w) => w.length > 2 && !FILLER.has(w));
-  const colorNames = new Set(COLOR_MAP.flatMap((c) => c.names));
-  const sig = words.filter((w) => !colorNames.has(w));
-  for (const w of sig) {
-    if (PHOTO_DICT[w]) return PHOTO_DICT[w];
-    if (w.endsWith('es') && PHOTO_DICT[w.slice(0, -2)]) return PHOTO_DICT[w.slice(0, -2)];
-    if (w.endsWith('s') && PHOTO_DICT[w.slice(0, -1)]) return PHOTO_DICT[w.slice(0, -1)];
+  // Sustantivo: primera palabra con traducción conocida.
+  let noun = null;
+  for (const w of words) {
+    const cand =
+      PHOTO_DICT[w] ||
+      (w.endsWith('es') && PHOTO_DICT[w.slice(0, -2)]) ||
+      (w.endsWith('s') && PHOTO_DICT[w.slice(0, -1)]);
+    if (cand) { noun = cand; break; }
   }
-  if (sig.length) return sig[0];
+  // Adjetivos: se combinan con el sustantivo ("bananas un poco verdes" → "green bananas").
+  const adjs = [];
+  for (const w of words) {
+    const a = ADJ_DICT[w];
+    if (a && !adjs.includes(a)) adjs.push(a);
+    if (adjs.length >= 2) break;
+  }
+  if (noun) return adjs.length ? `${adjs.join(' ')} ${noun}` : noun;
+  if (words.length) return words[0];
   return 'lifestyle';
 }
 
@@ -252,6 +292,32 @@ async function searchPhotos({ query, pexelsKey, n = 6, salt = 0, page = 1 }) {
   throw new Error('No se pudieron conseguir fotos (' + errors.join('; ') + ')');
 }
 
+// Convierte una URL /media/... en { path, file } (ruta absoluta local).
+// Devuelve null si no es una URL de medios válida o el archivo no existe.
+function toLocalPhoto(url) {
+  const u = String(url || '');
+  if (!u.startsWith('/media/')) return null;
+  const file = path.join(MEDIA_DIR, path.basename(u));
+  if (!fs.existsSync(file)) return null;
+  return { path: u, file };
+}
+
+// Prioridad de fotos: las del usuario primero, después stock. Sin duplicados.
+// Recibe items { path, file } o URLs; devuelve hasta n items { path, file, user }.
+function mergeUserPhotos(userPhotos, stockPhotos, n = 6) {
+  const seen = new Set();
+  const out = [];
+  const push = (p, isUser) => {
+    const item = typeof p === 'string' ? toLocalPhoto(p) : p;
+    if (!item || !item.path || seen.has(item.path)) return;
+    seen.add(item.path);
+    out.push({ path: item.path, file: item.file, user: !!isUser });
+  };
+  for (const p of userPhotos || []) { push(p, true); if (out.length >= n) break; }
+  for (const p of stockPhotos || []) { push(p, false); if (out.length >= n) break; }
+  return out;
+}
+
 // ================= 4. PALETA Y RENDER =================
 function luminance(hex) {
   const n = parseInt(String(hex).slice(1), 16);
@@ -359,7 +425,7 @@ function hashStr(s) {
   return h;
 }
 
-async function generateOptions({ topic, feedback, profile, settings, openaiKey }) {
+async function generateOptions({ topic, feedback, profile, settings, openaiKey, productPhoto, userPhotos }) {
   const combined = feedback ? `${topic} ${feedback}` : topic;
   const colors = detectColors(combined);
   const photoQuery = photoQueryFor(combined);
@@ -370,7 +436,23 @@ async function generateOptions({ topic, feedback, profile, settings, openaiKey }
   const salt = feedback ? Math.abs(hashStr(feedback + Date.now())) % 997 : 0;
   const page = wantsNewPhotos && pexelsKey ? (Math.abs(hashStr(feedback)) % 4) + 2 : 1;
 
-  const photos = await searchPhotos({ query: photoQuery, pexelsKey, n: 6, salt, page });
+  // Prioridad de fotos: 1) foto adjunta en paso 1 (el producto real) >
+  // 2) librería del usuario > 3) Pexels/stock. Todo opcional: sin fotos del
+  // usuario el flujo funciona igual con stock.
+  const prodLocal = toLocalPhoto(productPhoto);
+  let photos, photoCandidates;
+  if (prodLocal) {
+    photos = Array.from({ length: 6 }, () => ({ ...prodLocal, user: true }));
+    photoCandidates = [prodLocal.path];
+  } else {
+    const userLocal = (userPhotos || []).map(toLocalPhoto).filter(Boolean).slice(0, 6);
+    let stock = [];
+    if (userLocal.length < 6) {
+      stock = await searchPhotos({ query: photoQuery, pexelsKey, n: 6, salt, page });
+    }
+    photos = mergeUserPhotos(userLocal, stock, 6);
+    photoCandidates = photos.map((p) => p.path);
+  }
 
   const business = (profile && profile.business_name) || '';
   const category = (profile && profile.category) || 'otro';
@@ -416,6 +498,11 @@ async function generateOptions({ topic, feedback, profile, settings, openaiKey }
     hashtags: tags,
     style: r.style,
     paletteName: palette.label,
+    colors: palette.render,
+    pill: r.pill,
+    bar: r.bar,
+    cta: r.cta,
+    photoCandidates,
   }));
 
   return {
@@ -423,6 +510,8 @@ async function generateOptions({ topic, feedback, profile, settings, openaiKey }
       colors: colors.map((c) => c.name),
       colorHex: colors.map((c) => c.hex),
       photoQuery,
+      productPhoto: !!prodLocal,
+      userPhotos: photos.filter((p) => p.user && !prodLocal).length,
     },
     recommendedIndex: 0,
     recommendedReason: 'La elegimos por la foto y el diseño que más va con tu idea',
@@ -430,4 +519,36 @@ async function generateOptions({ topic, feedback, profile, settings, openaiKey }
   };
 }
 
-module.exports = { generateOptions, detectColors, photoQueryFor, resolvePalette, searchPhotos };
+// Re-renderiza UNA opción con otra foto (para "📷 Mi foto" por tarjeta).
+// Acepta los campos del endpoint ({ template, palette, photo, title, subtitle })
+// y el set completo interno. La foto debe ser una URL /media/... existente.
+async function rerenderOption({ style, template, photo, headline, title, subline, subtitle, pill, bar, cta, colors, palette }) {
+  const local = toLocalPhoto(photo);
+  if (!local) throw new Error('Elegí una foto válida');
+  let renderColors = colors || palette;
+  if (Array.isArray(renderColors) && renderColors.length >= 2) {
+    renderColors = resolvePalette(
+      renderColors.slice(0, 2).map((hex) => ({ name: '', hex })),
+      []
+    ).render;
+  }
+  if (!renderColors || !renderColors.accent) {
+    renderColors = resolvePalette([], []).render;
+  }
+  const posts = [{
+    photo: local.file,
+    style: style || template || 'promo',
+    focus: 0.5,
+    pill: pill || 'NUEVO',
+    bar: (bar || '').toUpperCase().slice(0, 28),
+    headline: (headline || title || 'NOVEDAD').toUpperCase().slice(0, 30),
+    subline: subline || subtitle || '',
+    cta: cta || 'Escribinos por DM',
+    watermark: '',
+    colors: renderColors,
+  }];
+  const [r] = await renderOptions(posts);
+  return r.image;
+}
+
+module.exports = { generateOptions, detectColors, photoQueryFor, resolvePalette, searchPhotos, mergeUserPhotos, rerenderOption };
