@@ -191,7 +191,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pill">Tu equipo de marketing en automático <b>🇦🇷</b></div>
     <h1>Vos vendé. <span class="hl">Nosotros posteamos.</span></h1>
-    <p class="sub"><b>Vos no te ocupás de nada.</b> Contanos de tu negocio una sola vez: creamos las ideas, los diseños y los captions, y publicamos solo en tu Instagram.</p>
+    <p class="sub"><b>Vos no diseñás nada.</b> Con un clic armás tu semana; nosotros la publicamos sola en tu Instagram.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
       <a class="btn btn-ghost" href="/demo">✨ Probar gratis</a>
@@ -260,7 +260,7 @@ function landingView(cfg) {
       <div class="feat"><div class="ico">💡</div><h3>Ideas estratégicas</h3><p>Cada semana pensamos el contenido por vos: novedades, promos, tips, testimonios y más.</p></div>
       <div class="feat"><div class="ico">🎨</div><h3>Diseños con tu marca</h3><p>Usamos TUS fotos, TU logo y TUS colores. Nada de plantillas genéricas que no te representan.</p></div>
       <div class="feat"><div class="ico">✍️</div><h3>Captions + hashtags</h3><p>Textos en rioplatense con tu tono, pensados para vender, con hashtags para Argentina.</p></div>
-      <div class="feat"><div class="ico">🎬</div><h3>Videos para Reels</h3><p>Convertimos tus fotos en videos verticales con música, listos para el formato que más rinde.</p></div>
+      <div class="feat"><div class="ico">🎬</div><h3>Videos para Reels</h3><p>Convertimos tus fotos en videos verticales listos para Reels, en el formato que más rinde.</p></div>
       <div class="feat"><div class="ico">📅</div><h3>Publicación automática</h3><p>Programamos tu semana completa y el sistema publica solo, a la hora exacta, en tu cuenta real.</p></div>
       <div class="feat"><div class="ico">🔍</div><h3>Diferenciación de tu competencia</h3><p>Nos contás quiénes son tus competidores y creamos contenido que te haga destacar, no copiar.</p></div>
     </div>
@@ -322,8 +322,8 @@ function landingView(cfg) {
       <details><summary>¿Qué pasa si no me gusta un post?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
       <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Sí. Tu semana se publica en automático, pero la ves entera antes en "Mi semana" y podés editar o eliminar cualquier posteo. Nada sale sin que lo hayas podido revisar.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si tu Instagram no se ve transformado, te devolvemos el 100%. Sin preguntas.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Al día siguiente: pagás hoy y mañana tu primera semana ya está armada y programada.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si no estás conforme, te devolvemos el 100% de tu primer pago. Sin preguntas.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ni bien pagás: armás tu primera semana con un clic y la dejás programada.</p></details>
       <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 amigos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
@@ -497,7 +497,7 @@ function getPalettes() {
   if (bc.length >= 2) {
     const n = parseInt(bc[0].slice(1), 16);
     const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-    list.unshift({ name: 'Mi marca', c: [bc[0], bc[1]], dark: lum > 0.6, brand: true });
+    list.unshift({ name: 'Mi marca', c: bc.slice(0, 3), dark: lum > 0.6, brand: true });
   }
   return list;
 }
@@ -508,6 +508,43 @@ function defaultPal() {
   return 0;
 }
 const PALETTES = BASE_PALETTES; // compat: usar getPalettes() para la lista efectiva
+
+// Saca los N colores dominantes de una imagen (se usa para autocompletar
+// los colores de marca desde el logo que sube el cliente). Filtra fondos
+// blancos/negros y grises para quedarse con los colores reales de la marca.
+function extractTopColors(img, n) {
+  const cw = 120, chh = 120;
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  const s = Math.min(cw / img.naturalWidth, chh / img.naturalHeight);
+  const w = img.naturalWidth * s, h = img.naturalHeight * s;
+  cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, chh);
+  cx.drawImage(img, (cw - w) / 2, (chh - h) / 2, w, h);
+  const d = cx.getImageData(0, 0, cw, chh).data;
+  const buckets = {};
+  for (let y = 0; y < chh; y += 2) {
+    for (let x = 0; x < cw; x += 2) {
+      const i = (y * cw + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx - mn < 28) continue;              // grises
+      if (mx > 242 && mn > 225) continue;      // blancos (fondos de logo)
+      if (mx < 24) continue;                   // negros
+      const key = [r >> 5, g >> 5, b >> 5].join(',');
+      buckets[key] = (buckets[key] || 0) + 1;
+    }
+  }
+  const toHex = (v) => Math.round(v * 32 + 16).toString(16).padStart(2, '0').toUpperCase();
+  return Object.entries(buckets).sort((a, b) => b[1] - a[1]).slice(0, n || 3)
+    .map(([k]) => '#' + k.split(',').map(Number).map(toHex).join(''));
+}
+function loadImageFile(file) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => { URL.revokeObjectURL(im.src); res(im); };
+    im.onerror = rej;
+    im.src = URL.createObjectURL(file);
+  });
+}
 
 function wrapText(ctx, text, maxW) {
   const words = text.split(' ');
@@ -665,7 +702,7 @@ function creatorView() {
             ${['gradiente', 'claro', 'noche', 'promo'].map(t => `<div class="tpl ${c.tpl === t ? 'on' : ''}" data-tpl="${t}">${t[0].toUpperCase() + t.slice(1)}</div>`).join('')}
           </div>
           <h3 style="margin-top:18px">Paleta</h3>
-          <div class="pal-row">${getPalettes().map((p, i) => `<div class="pal ${c.pal === i ? 'on' : ''}" data-pal="${i}" title="${p.name}${p.brand ? ' (tus colores)' : ''}" style="background:linear-gradient(135deg,${p.c[0]},${p.c[1]});${p.brand ? 'box-shadow:0 0 0 2px var(--yl)' : ''}"></div>`).join('')}</div>
+          <div class="pal-row">${getPalettes().map((p, i) => `<div class="pal ${c.pal === i ? 'on' : ''}" data-pal="${i}" title="${p.name}${p.brand ? ' (tus colores)' : ''}" style="background:linear-gradient(135deg,${p.c.join(',')});${p.brand ? 'box-shadow:0 0 0 2px var(--yl)' : ''}"></div>`).join('')}</div>
           <div class="field" style="margin-top:18px"><label>Título</label><input id="d_title" value="${esc(c.title)}" placeholder="HASTA 40% OFF"></div>
           <div class="field"><label>Subtítulo</label><input id="d_sub" value="${esc(c.subtitle)}" placeholder="Solo esta semana"></div>
           <div class="field"><label>Usuario de Instagram (sin @)</label><input id="d_handle" value="${esc(c.handle || (PROFILE?.ig_username || ''))}" placeholder="tunegocio"></div>
@@ -892,7 +929,7 @@ async function ideasView() {
   let posts = [];
   try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
   const ppw = (ME && ME.posts_per_week) || 3;
-  return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos. Vos no te ocupás de nada.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos.</p></div></div>
   ${checklistHTML(posts.length)}
   ${recCardHTML(IDEAS, posts, ppw)}
   <div class="card hero-card">
@@ -1361,7 +1398,7 @@ function fmtDay(d) {
 async function semanaView() {
   let st = null;
   try { st = await api.get('/api/stats/summary'); } catch (e) { st = null; }
-  const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada. Vos no te ocupás de nada.</p></div></div>`;
+  const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div></div>`;
   if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
   const ws = new Date(w.start + 'T12:00:00'), we = new Date(w.end + 'T12:00:00');
@@ -1568,7 +1605,7 @@ function freshOB() {
     description: (PROFILE && PROFILE.description) || '',
     competitors: (PROFILE && PROFILE.competitors) || '',
     goal: (PROFILE && PROFILE.goal) || '',
-    palSel: '0',
+    palSel: 'brand',
     c1: '#FEC14D', c2: '#2793C8', c3: '#0A1E33',
     useBrand: false,
   };
@@ -1594,25 +1631,29 @@ function onboardingView() {
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Los estudiamos para crear contenido que te haga <b>destacar</b>, no copiar.</p>
     <div class="field"><label>Nombres o usuarios de Instagram, separados por coma</label><input id="ob_comp" value="${esc(o.competitors)}" placeholder="tiendaX, @competidor2"></div>
     <div class="hint">Si no tenés a mano, saltealo y lo agregás después en Ajustes.</div>`;
-  if (o.step === 3) body = `
+  if (o.step === 3) {
+    const livePals = [{ name: 'Mi marca', c: [o.c1, o.c2, o.c3], brand: true }, ...BASE_PALETTES];
+    body = `
     <h3>Tu estilo 🎨</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Tus fotos, tu logo y tus colores: todo lo que generemos sale con tu marca.</p>
-    <div class="field"><label>Logo (opcional)</label>
+    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Tu logo y tus colores: todo lo que generemos sale con tu marca, no con la nuestra.</p>
+    <div class="field"><label>Logo de tu marca *</label>
       <div style="display:flex;gap:10px;align-items:center">
         ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:56px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : ''}
         <button class="btn btn-ghost btn-sm" id="ob_logo">📤 ${assetLogo() ? 'Cambiar logo' : 'Subir logo'}</button>
       </div>
       <input type="file" id="ob_logofile" accept="image/*" style="display:none">
+      <div class="hint">Al subirlo sacamos tus colores automáticamente. Sin logo no podemos seguir.</div>
     </div>
-    <div class="field"><label>Tus colores de marca (opcional, con 2 alcanza)</label>
+    <div class="field"><label>Tus colores *</label>
       <div style="display:flex;gap:10px">
         ${['c1', 'c2', 'c3'].map(k => `<input type="color" id="ob_${k}" value="${o[k]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
       </div>
-      <div class="hint">Si los completás, creamos la paleta "Mi marca" y es la que usamos por defecto.</div>
+      <div class="hint">Salen de tu logo solos. Tocá cada uno si querés ajustarlo a mano.</div>
     </div>
     <div class="field"><label>Paleta preferida</label><select id="ob_pal">
-      ${getPalettes().map((p, i) => `<option value="${p.brand ? 'brand' : BASE_PALETTES.indexOf(p)}" ${String(o.palSel) === (p.brand ? 'brand' : String(BASE_PALETTES.indexOf(p))) ? 'selected' : ''}>${p.name}${p.brand ? ' (tus colores)' : ''}</option>`).join('')}
+      ${livePals.map((p, i) => `<option value="${p.brand ? 'brand' : String(i - 1)}" ${String(o.palSel) === (p.brand ? 'brand' : String(i - 1)) ? 'selected' : ''}>${p.name}${p.brand ? ' (tus colores)' : ''}</option>`).join('')}
     </select></div>`;
+  }
   if (o.step === 4) body = `
     <h3>Tu objetivo 🎯</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Para enfocar las ideas y los textos en lo que más te sirve.</p>
@@ -1651,6 +1692,7 @@ function bindOnboarding() {
     if (o.step === 3) {
       o.c1 = $('#ob_c1').value; o.c2 = $('#ob_c2').value; o.c3 = $('#ob_c3').value;
       o.palSel = $('#ob_pal').value;
+      if (!assetLogo()) { $('#obMsg').innerHTML = `<div class="err">Subí el logo de tu marca para continuar 🙂</div>`; return; }
     }
     o.step++; render();
   };
@@ -1660,7 +1702,17 @@ function bindOnboarding() {
   const lf = $('#ob_logofile');
   if (lf) lf.onchange = async () => {
     if (!lf.files[0]) return;
-    try { await uploadAssetFile(lf.files[0], 'logo'); render(); }
+    try {
+      await uploadAssetFile(lf.files[0], 'logo');
+      try {
+        const img = await loadImageFile(lf.files[0]);
+        const cols = extractTopColors(img, 3);
+        if (cols[0]) o.c1 = cols[0];
+        if (cols[1]) o.c2 = cols[1];
+        if (cols[2]) o.c3 = cols[2];
+      } catch (e) { /* mantiene los colores actuales */ }
+      render();
+    }
     catch (e) { $('#obMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
   };
   const fin = $('#obFinish');
