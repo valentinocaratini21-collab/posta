@@ -55,22 +55,29 @@ async function getIgUsername(igUserId, accessToken) {
 
 // Perfil básico + tipo de cuenta (para detectar cuentas personales).
 // Si la versión de la API no expone account_type, se reintenta sin ese campo.
+// Si el ID numérico no se resuelve con el token, se usa /me.
 async function getIgProfile(igUserId, accessToken) {
-  const params = new URLSearchParams({ fields: 'username,account_type', access_token: accessToken });
-  const res = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}?${params}`);
-  const data = await res.json();
-  if (data.error) {
-    const msg = data.error.message || 'Error de Meta';
-    if (/account_type/i.test(msg)) {
-      const p2 = new URLSearchParams({ fields: 'username', access_token: accessToken });
-      const r2 = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}?${p2}`);
-      const d2 = await r2.json();
-      if (d2.error) throw new Error(d2.error.message || 'Error de Meta');
-      return { username: d2.username || '', accountType: '' };
-    }
-    throw new Error(msg);
+  const lookup = async (uid, fields) => {
+    const params = new URLSearchParams({ fields, access_token: accessToken });
+    const res = await fetch(`${IG_HOST}/${API_VERSION}/${uid}?${params}`);
+    return res.json();
+  };
+  let data = await lookup(igUserId, 'username,account_type');
+  if (data.error && /account_type/i.test(data.error.message || '')) {
+    data = await lookup(igUserId, 'username');
   }
-  return { username: data.username || '', accountType: data.account_type || '' };
+  if (data.error && /unsupported get request/i.test(data.error.message || '')) {
+    console.error('[ig] numeric id failed, trying /me:', JSON.stringify(data.error));
+    data = await lookup('me', 'username,account_type');
+    if (data.error && /account_type/i.test(data.error.message || '')) {
+      data = await lookup('me', 'username');
+    }
+  }
+  if (data.error) {
+    console.error('[ig] getIgProfile failed:', JSON.stringify(data.error));
+    throw new Error(data.error.message || 'Error de Meta');
+  }
+  return { username: data.username || '', accountType: data.account_type || '', userId: data.id ? String(data.id) : igUserId };
 }
 
 // Refresca un token de larga duración (válido 60 días, se refresca a los 50)

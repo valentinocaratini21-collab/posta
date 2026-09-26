@@ -718,6 +718,9 @@ app.get('/api/ig/sync', requireAuth, async (req, res) => {
     const s = getSettings(req.session.userId);
     if (!s.ig_user_id || !s.ig_access_token) return res.status(400).json({ error: 'Sin cuenta conectada' });
     const prof = await getIgProfile(s.ig_user_id, s.ig_access_token);
+    if (prof.userId && prof.userId !== s.ig_user_id) {
+      db.prepare(`UPDATE settings SET ig_user_id=? WHERE user_id=?`).run(prof.userId, req.session.userId);
+    }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(prof.username, req.session.userId);
     res.json({ ok: true, username: prof.username, accountType: prof.accountType });
   } catch (e) {
