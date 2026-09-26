@@ -83,6 +83,23 @@ async function publishReal({ imageUrl, caption }, { igUserId, accessToken }) {
   });
   const created = await createRes.json();
   if (created.error) throw new Error(created.error.message);
+  if (!created.id) throw new Error('Meta no devolvió el contenedor de la imagen');
+
+  // Esperar que Instagram termine de procesar el contenedor (descarga la imagen
+  // de forma asíncrona; publicar antes da "media ID no disponible").
+  let status = '';
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const stRes = await fetch(
+      `${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`
+    );
+    const st = await stRes.json();
+    status = st.status_code || '';
+    if (status === 'FINISHED') break;
+    if (status === 'ERROR')
+      throw new Error('Instagram no pudo descargar la imagen. Revisá que la URL sea pública: ' + imageUrl);
+  }
+  if (status !== 'FINISHED') throw new Error('Instagram tardó demasiado en procesar la imagen. Probá de nuevo.');
 
   // Paso 2: publicar el contenedor
   const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
