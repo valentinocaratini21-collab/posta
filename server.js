@@ -155,7 +155,7 @@ app.put('/api/profile', requireAuth, (req, res) => {
   getProfile(req.session.userId);
   db.prepare(
     `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, updated_at=datetime('now') WHERE user_id=?`
-  ).run(business_name || '', category || 'otro', tone || 'canchero', description || '', ig_username || '', competitors || '', goal || '', req.session.userId);
+  ).run(business_name || '', category || 'otro', tone || 'canchero', (description || '').slice(0, 600), ig_username || '', competitors || '', goal || '', req.session.userId);
   res.json({ ok: true });
 });
 

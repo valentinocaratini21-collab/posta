@@ -51,6 +51,15 @@ const HASHTAGS = {
   mascotas: ['#mascotasargentinas', '#doglover', '#gatosdeinstagram', '#petshop', '#mascotasfelices'],
   viajes: ['#viajesargentina', '#turismoargentina', '#viajeros', '#escapadas', '#travelgram'],
   belleza: ['#bellezaargentina', '#makeup', '#skincare', '#peluqueria', '#estetica'],
+  cafeteria: ['#cafedeespecialidad', '#coffeeholic', '#cafeenbuenosaires', '#brunch', '#cafeteria'],
+  barberia: ['#barberiaargentina', '#barberia', '#barberlife', '#cortedepelo', '#estilomasculino'],
+  salud: ['#saludargentina', '#bienestar', '#vidasaludable', '#saludintegral', '#cuidatusalud'],
+  educacion: ['#educacionargentina', '#cursosonline', '#capacitacion', '#aprendeencasa', '#educacion'],
+  tecnologia: ['#tecnologiaargentina', '#tech', '#innovacion', '#startupsargentina', '#digital'],
+  hogar: ['#hogarargentina', '#decoracion', '#decohome', '#interiorismo', '#hogardulcehogar'],
+  inmobiliaria: ['#inmobiliariaargentina', '#propiedades', '#realestateargentina', '#ventadepropiedades', '#inversion'],
+  eventos: ['#eventosargentina', '#fiestas', '#organizaciondeeventos', '#casamientos', '#eventplanner'],
+  arte: ['#arteargentina', '#artistasargentinos', '#disenografico', '#artecontemporaneo', '#creatividad'],
   otro: ['#emprendedoresargentinos', '#pymesargentina', '#argentina', '#negociosdigitales'],
 };
 
