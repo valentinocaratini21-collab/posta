@@ -2788,6 +2788,15 @@ function bindSettings() {
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
   const igRetry = $('#btnIgRetry');
   if (igRetry) igRetry.onclick = () => igConnect();
+  // Si está conectado pero el username quedó vacío: sincronizar solo
+  if (PROFILE && PROFILE.ig_connected && !PROFILE.ig_username) {
+    (async () => {
+      try {
+        const r = await api.get('/api/ig/sync');
+        if (r && r.username) { PROFILE.ig_username = r.username; render(); }
+      } catch (e) { /* se reintenta en la próxima visita a Ajustes */ }
+    })();
+  }
 }
 
 window.addEventListener('hashchange', render);
