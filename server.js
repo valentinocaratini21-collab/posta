@@ -660,7 +660,14 @@ app.get('/api/ig/start', requireAuth, (req, res) => {
 });
 
 app.get('/api/ig/callback', async (req, res) => {
-  const { code, state } = req.query;
+  const { code, state, error, error_description } = req.query;
+  // Meta puede redirigir con error (permiso denegado, rol insuficiente, etc.)
+  if (error) {
+    const msg = /access_denied|user_denied/i.test(error)
+      ? 'Denegaste el acceso a Instagram. Probá de nuevo y tocá "Permitir".'
+      : (error_description || error);
+    return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(msg));
+  }
   if (!req.session.userId || state !== req.session.igState) return res.status(400).send('Estado inválido');
   try {
     const s = getSettings(req.session.userId);
@@ -676,7 +683,7 @@ app.get('/api/ig/callback', async (req, res) => {
     try {
       const prof = await getIgProfile(igUserId, accessToken);
       username = prof.username; accountType = prof.accountType;
-    } catch (e) { /* no bloquea la conexión */ }
+    } catch (e) { console.error('[ig/callback] getIgProfile:', e.message); }
     // Solo las cuentas profesionales (Business/Creator) pueden publicar vía API
     if (/personal/i.test(accountType || '')) {
       return res.redirect('/#/app/ajustes?ig=personal');
@@ -702,6 +709,20 @@ app.get('/api/ig/callback', async (req, res) => {
     res.redirect('/#/app/ajustes?ig=ok' + (wasDemo ? '&demo_off=1' : ''));
   } catch (e) {
     res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(e.message));
+  }
+});
+
+// Relee el perfil de IG con el token guardado (rellena el username si quedó vacío)
+app.get('/api/ig/sync', requireAuth, async (req, res) => {
+  try {
+    const s = getSettings(req.session.userId);
+    if (!s.ig_user_id || !s.ig_access_token) return res.status(400).json({ error: 'Sin cuenta conectada' });
+    const prof = await getIgProfile(s.ig_user_id, s.ig_access_token);
+    db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(prof.username, req.session.userId);
+    res.json({ ok: true, username: prof.username, accountType: prof.accountType });
+  } catch (e) {
+    console.error('[ig/sync]:', e.message);
+    res.status(400).json({ error: e.message });
   }
 });
 
