@@ -110,11 +110,15 @@ const GOAL_LINES = {
   vender: 'Objetivo principal: VENDER. Cada propuesta tiene que traer clientes y ventas: promos, urgencia, prueba social y llamados a la compra directos.',
   seguidores: 'Objetivo principal: CRECER EN SEGUIDORES. Cada propuesta tiene que maximizar alcance e interacción: contenido guardable y compartible, que invite a seguir la cuenta.',
   lanzamiento: 'Objetivo principal: LANZAMIENTOS. Cada propuesta tiene que anunciar novedades y promos con fuerza: expectativa, revelación y urgencia.',
+  fidelizar: 'Objetivo principal: FIDELIZAR CLIENTES. Cada propuesta tiene que hacer que los clientes vuelvan: comunidad, beneficios para clientes frecuentes, contenido que genere vínculo y pertenencia.',
+  referente: 'Objetivo principal: SER REFERENTE. Cada propuesta tiene que posicionarte como experto en tu rubro: contenido educativo, tips, autoridad y confianza.',
 };
 const GOAL_CTAS = {
   vender: 'Escribinos por DM y compralo hoy 📩',
   seguidores: 'Seguinos para no perderte nada ➕',
   lanzamiento: 'No te quedes afuera: pedilo ya 🚀',
+  fidelizar: 'Volvé pronto: tenemos algo para vos 💛',
+  referente: 'Guardá este tip de experto 🔖',
 };
 const goalLine = g => (GOAL_LINES[g] ? '\n' + GOAL_LINES[g] : '');
 
