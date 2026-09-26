@@ -110,6 +110,21 @@ const TIMEZONES = [
   ['America/New_York', 'Nueva York, EE.UU.'],
   ['Europe/Madrid', 'Madrid, España'],
 ];
+const CATS = [
+  ['ropa', '👕', 'Ropa'], ['gastronomia', '🍔', 'Gastronomía'], ['cafeteria', '☕', 'Cafetería'],
+  ['belleza', '💄', 'Belleza'], ['barberia', '💈', 'Barbería'], ['fitness', '💪', 'Fitness'],
+  ['salud', '🩺', 'Salud'], ['mascotas', '🐾', 'Mascotas'], ['servicios', '🛠️', 'Servicios'],
+  ['educacion', '📚', 'Educación'], ['tecnologia', '💻', 'Tecnología'], ['hogar', '🏠', 'Hogar y deco'],
+  ['inmobiliaria', '🏢', 'Inmobiliaria'], ['eventos', '🎉', 'Eventos'], ['viajes', '✈️', 'Viajes'],
+  ['arte', '🎨', 'Arte y diseño'], ['otro', '➕', 'Otro'],
+];
+const TONES = [
+  ['canchero', '😎', 'Canchero'], ['profesional', '💼', 'Profesional'], ['divertido', '😂', 'Divertido'],
+  ['cercano', '🤝', 'Cercano'], ['elegante', '✨', 'Elegante'], ['motivador', '🔥', 'Motivador'],
+];
+const catKnown = v => CATS.some(([x]) => x === v);
+const catSel = v => catKnown(v) ? v : 'otro';
+const catCustom = v => (catKnown(v) || v === 'otro' || !v) ? '' : v;
 
 /* ---------- LANDING ---------- */
 // Precio por día bajo cada plan (landing)
@@ -1552,10 +1567,11 @@ function ajustesView() {
     </div>
     <div class="row2">
       <div class="field"><label>Rubro</label><select id="s_cat">
-        ${['ropa', 'gastronomia', 'fitness', 'servicios', 'mascotas', 'viajes', 'belleza', 'otro'].map(c => `<option ${p.category === c ? 'selected' : ''} value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join('')}
+        ${CATS.map(([v, ico, t]) => `<option ${catSel(p.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
       </select></div>
+      <div class="field" id="s_catother_w" style="${catSel(p.category) === 'otro' ? '' : 'display:none'}"><label>¿Cuál?</label><input id="s_catother" value="${esc(catCustom(p.category))}" placeholder="Ej: veterinaria, librería..." maxlength="40"></div>
       <div class="field"><label>Tono de la IA</label><select id="s_tone">
-        ${['canchero', 'profesional', 'divertido'].map(t => `<option ${p.tone === t ? 'selected' : ''} value="${t}">${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}
+        ${TONES.map(([v, ico, t]) => `<option ${p.tone === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
       </select></div>
     </div>
     <div class="row2">
@@ -1566,8 +1582,9 @@ function ajustesView() {
         ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
       </select></div>
     </div>
-    <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
-      <div class="hint">Mientras más nos cuentes, mejores ideas creamos por vos.</div></div>
+    <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
+      <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
+      </div>
     <div class="field"><label>Tus competidores <span style="color:var(--dim);font-weight:400">(nombres o usuarios de IG, separados por coma)</span></label>
       <input id="s_comp" value="${esc(p.competitors || '')}" placeholder="tiendaX, @competidor2">
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
@@ -1648,9 +1665,10 @@ function onboardingView() {
     <h3>Tu negocio 🏪</h3>
     <div class="field"><label>Nombre del negocio</label><input id="ob_biz" value="${esc(o.business_name)}" placeholder="Mi Tienda"></div>
     <div class="field"><label>Rubro</label><select id="ob_cat">
-      ${['ropa', 'gastronomia', 'fitness', 'servicios', 'mascotas', 'viajes', 'belleza', 'otro'].map(c => `<option ${o.category === c ? 'selected' : ''} value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join('')}
+      ${CATS.map(([v, ico, t]) => `<option ${catSel(o.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
     </select></div>
-    <div class="field"><label>Contanos en una frase qué hacés</label><textarea id="ob_desc" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(o.description)}</textarea></div>`;
+    <div class="field" id="ob_catother_w" style="${catSel(o.category) === 'otro' ? '' : 'display:none'}"><label>¿Cuál?</label><input id="ob_catother" value="${esc(catCustom(o.category))}" placeholder="Ej: veterinaria, librería..." maxlength="40"></div>
+    <div class="field"><label>Contanos en una frase qué hacés</label><textarea id="ob_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(o.description)}</textarea></div>`;
   if (o.step === 2) body = `
     <h3>Tus competidores 🔍</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Los estudiamos para crear contenido que te haga <b>destacar</b>, no copiar.</p>
@@ -1706,7 +1724,8 @@ function bindOnboarding() {
   if (next) next.onclick = () => {
     if (o.step === 1) {
       o.business_name = $('#ob_biz').value.trim();
-      o.category = $('#ob_cat').value;
+      const obCatOther = $('#ob_catother').value.trim();
+      o.category = ($('#ob_cat').value === 'otro' && obCatOther) ? obCatOther.toLowerCase() : $('#ob_cat').value;
       o.description = $('#ob_desc').value.trim();
       if (!o.business_name) { $('#obMsg').innerHTML = `<div class="err">Poné el nombre de tu negocio</div>`; return; }
     }
@@ -1717,6 +1736,8 @@ function bindOnboarding() {
     }
     o.step++; render();
   };
+  const obCat = $('#ob_cat');
+  if (obCat) obCat.onchange = () => { $('#ob_catother_w').style.display = obCat.value === 'otro' ? '' : 'none'; };
   $$('[data-goal]').forEach(b => b.onclick = () => { o.goal = b.dataset.goal; render(); });
   const bl = $('#ob_logo');
   if (bl) bl.onclick = () => $('#ob_logofile').click();
@@ -2280,10 +2301,16 @@ async function igConnect() {
   }
 }
 function bindSettings() {
+  const sCat = $('#s_cat');
+  if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
+  const sDesc = $('#s_desc');
+  if (sDesc) sDesc.oninput = () => { $('#s_desc_n').textContent = sDesc.value.length; };
   $('#btnSaveProfile').onclick = async () => {
+    const catOther = $('#s_catother').value.trim();
     await api.put('/api/profile', {
       business_name: $('#s_biz').value, ig_username: $('#s_iguser').value.replace('@', ''),
-      category: $('#s_cat').value, tone: $('#s_tone').value, description: $('#s_desc').value,
+      category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
+      tone: $('#s_tone').value, description: $('#s_desc').value,
       competitors: $('#s_comp').value, goal: $('#s_goal').value,
     });
     await api.put('/api/settings', { timezone: $('#s_tz').value });
