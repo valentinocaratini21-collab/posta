@@ -633,9 +633,22 @@ app.get('/api/ig/callback', async (req, res) => {
     try {
       username = await getIgUsername(igUserId, accessToken);
     } catch (e) { /* no bloquea la conexión */ }
+    // Un Instagram = una sola prueba gratis en Posta (aunque lo desconecten después)
+    const dupe = igUserId ? db.prepare(`SELECT user_id FROM settings WHERE ig_user_id = ? AND user_id != ?`).get(igUserId, req.session.userId) : null;
+    if (dupe) {
+      return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya está vinculada a otra cuenta de Posta.'));
+    }
+    const usedBefore = igUserId ? db.prepare(`SELECT first_user_id FROM ig_registry WHERE ig_user_id = ?`).get(igUserId) : null;
+    if (usedBefore && usedBefore.first_user_id !== req.session.userId) {
+      return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya fue usada en Posta. Cada cuenta de Instagram puede activar una sola prueba gratis.'));
+    }
     db.prepare(
       `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, updated_at=datetime('now') WHERE user_id=?`
     ).run(igUserId, accessToken, req.session.userId);
+    // Registro permanente del uso (sobrevive a desconexiones)
+    try {
+      db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(igUserId, req.session.userId);
+    } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
     res.redirect('/#/app/ajustes?ig=ok');
   } catch (e) {

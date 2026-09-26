@@ -146,6 +146,23 @@ try { db.exec(`ALTER TABLE users ADD COLUMN mp_payer_email TEXT DEFAULT ''`); } 
 // Trial de 10 días: vencimiento de la prueba gratis (milisegundos epoch)
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e) { /* ya existe */ }
 
+// Registro permanente de cuentas de Instagram usadas (anti trial duplicado):
+// un IG = una sola prueba gratis, aunque lo desconecten o borren la cuenta
+try {
+  db.exec(`
+CREATE TABLE IF NOT EXISTS ig_registry (
+  ig_user_id TEXT PRIMARY KEY,
+  first_user_id INTEGER NOT NULL,
+  first_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
+);`);
+} catch (e) { /* ya existe */ }
+// Backfill: IGs actualmente vinculados quedan registrados con su dueño actual
+try {
+  db.exec(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id)
+           SELECT ig_user_id, user_id FROM settings
+           WHERE ig_user_id IS NOT NULL AND ig_user_id != ''`);
+} catch (e) { /* noop */ }
+
 // Backfill: usuarios en trial sin fecha de vencimiento → 10 días desde hoy
 try {
   db.prepare(`UPDATE users SET trial_ends_at = ? WHERE (plan_status IS NULL OR plan_status = 'trial') AND trial_ends_at IS NULL`)
