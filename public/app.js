@@ -485,11 +485,25 @@ const BASE_PALETTES = [
   { name: 'Nieve', c: ['#FFFFFF', '#F2F9FD'], dark: true },
 ];
 // Colores de marca del cliente (brand kit) → paleta "Mi marca" primera en la lista
+// Los colores de Posta nunca son "los del cliente": si lo guardado es exactamente
+// nuestro trío por defecto, se trata como no configurado.
+const POSTA_DEFAULT_TRIO = ['#FEC14D', '#2793C8', '#0A1E33'];
+const NEUTRAL_TRIO = ['#8B95A1', '#C3CAD2', '#4A5560'];
 function brandColors() {
   try {
     const c = JSON.parse((SETTINGS && SETTINGS.brand_colors) || '[]');
-    return Array.isArray(c) ? c.filter(x => /^#[0-9a-fA-F]{6}$/.test(x)) : [];
+    const list = Array.isArray(c) ? c.filter(x => /^#[0-9a-fA-F]{6}$/.test(x)) : [];
+    if (list.length >= 3 && POSTA_DEFAULT_TRIO.every((d, i) => list[i].toUpperCase() === d)) return [];
+    return list;
   } catch { return []; }
+}
+function loadImageUrl(url) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = rej;
+    im.src = url;
+  });
 }
 function getPalettes() {
   const list = [...BASE_PALETTES];
@@ -1564,8 +1578,9 @@ function ajustesView() {
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || ['#FEC14D', '#2793C8', '#0A1E33'][i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
+        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
       </div>
+      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano.</div>
     </div>
     <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
   </div>
@@ -1606,7 +1621,7 @@ function freshOB() {
     competitors: (PROFILE && PROFILE.competitors) || '',
     goal: (PROFILE && PROFILE.goal) || '',
     palSel: 'brand',
-    c1: '#FEC14D', c2: '#2793C8', c3: '#0A1E33',
+    c1: '#8B95A1', c2: '#C3CAD2', c3: '#4A5560',
     useBrand: false,
   };
 }
@@ -2382,11 +2397,35 @@ function bindSettings() {
   const slf = $('#s_logofile');
   if (slf) slf.onchange = async () => {
     if (!slf.files[0]) return;
-    try { await uploadAssetFile(slf.files[0], 'logo'); render(); }
+    try {
+      await uploadAssetFile(slf.files[0], 'logo');
+      try {
+        const img = await loadImageFile(slf.files[0]);
+        const cols = extractTopColors(img, 3);
+        if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
+      } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
+      SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
+      render();
+    }
     catch (e) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`; }
   };
+  // Si hay logo pero no colores de marca: detectarlos del logo automáticamente
+  (async () => {
+    try {
+      if (brandColors().length >= 2) return;
+      const logo = assetLogo();
+      if (!logo) return;
+      const img = await loadImageUrl(logo.file_path);
+      const cols = extractTopColors(img, 3);
+      let filled = 0;
+      cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; filled++; } });
+      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:14px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
+    } catch (e) { /* quedan los valores actuales */ }
+  })();
   $('#btnSaveBrand').onclick = async () => {
     const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
+    const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
+    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
     await api.put('/api/settings', { brand_colors: colors, preferred_palette: +$('#s_pal').value });
     $('#brandMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
     SETTINGS = await api.get('/api/settings');
