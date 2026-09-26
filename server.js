@@ -214,6 +214,7 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
         tone: profile.tone,
         topic: topic.trim(),
         competitors: profile.competitors,
+        goal: profile.goal,
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
@@ -312,6 +313,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
         tone: profile.tone,
         description: profile.description,
         competitors: profile.competitors,
+        goal: profile.goal,
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );

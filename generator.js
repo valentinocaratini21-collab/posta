@@ -106,19 +106,31 @@ const ENERGY_BENEFITS = [
   'Si no te enamora, te devolvemos la plata ✅',
 ];
 
+const GOAL_LINES = {
+  vender: 'Objetivo principal: VENDER. Cada propuesta tiene que traer clientes y ventas: promos, urgencia, prueba social y llamados a la compra directos.',
+  seguidores: 'Objetivo principal: CRECER EN SEGUIDORES. Cada propuesta tiene que maximizar alcance e interacción: contenido guardable y compartible, que invite a seguir la cuenta.',
+  lanzamiento: 'Objetivo principal: LANZAMIENTOS. Cada propuesta tiene que anunciar novedades y promos con fuerza: expectativa, revelación y urgencia.',
+};
+const GOAL_CTAS = {
+  vender: 'Escribinos por DM y compralo hoy 📩',
+  seguidores: 'Seguinos para no perderte nada ➕',
+  lanzamiento: 'No te quedes afuera: pedilo ya 🚀',
+};
+const goalLine = g => (GOAL_LINES[g] ? '\n' + GOAL_LINES[g] : '');
+
 function stripEmojis(s) {
   return String(s || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '').replace(/ {2,}/g, ' ');
 }
 
 // Caption con energía a partir de plantillas. `seed` varía hook/CTA/beneficio;
 // `feedback` permite ajustes ("más corto", "sin emojis", "más divertido"...).
-function templateCaption({ business, category, tone, topic, feedback, seed }) {
+function templateCaption({ business, category, tone, topic, feedback, seed, goal }) {
   const fb = String(feedback || '');
   let t = /divert|gracios/i.test(fb) ? 'divertido' : (/profesion|seri[oa]|elegante/i.test(fb) ? 'profesional' : (HOOKS[tone] ? tone : 'canchero'));
   const hooks = [...(HOOKS[t] || HOOKS.canchero), ...(ENERGY_HOOKS[t] || [])];
   const ctas = [...(CTAS[t] || CTAS.canchero), ...(ENERGY_CTAS[t] || [])];
   const hook = hooks[seed % hooks.length];
-  const cta = ctas[(seed * 3 + 1) % ctas.length];
+  const cta = GOAL_CTAS[goal] || ctas[(seed * 3 + 1) % ctas.length];
   const benefit = ENERGY_BENEFITS[seed % ENERGY_BENEFITS.length];
   const biz = business ? ` en ${business}` : '';
   const topicLine = `${String(topic).charAt(0).toUpperCase()}${String(topic).slice(1)}${biz}.`;
@@ -145,16 +157,16 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function templateGenerate({ business, category, tone, topic }) {
+function templateGenerate({ business, category, tone, topic, goal }) {
   const t = HOOKS[tone] ? tone : 'canchero';
-  const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: Math.floor(Math.random() * 1000) });
+  const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: Math.floor(Math.random() * 1000), goal });
   const tags = [...(HASHTAGS[category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
   return { caption, hashtags: tags.join(' ') };
 }
 
-async function openaiGenerate({ business, category, tone, topic, competitors }, apiKey) {
+async function openaiGenerate({ business, category, tone, topic, competitors, goal }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -177,7 +189,7 @@ async function openaiGenerate({ business, category, tone, topic, competitors }, 
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
       ],
       max_tokens: 500,
@@ -205,7 +217,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, tone, topic, feedback }, n, apiKey) {
+async function openaiCaptions({ business, category, tone, topic, feedback, goal }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -220,7 +232,7 @@ async function openaiCaptions({ business, category, tone, topic, feedback }, n, 
         {
           role: 'user',
           content:
-            `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}` +
+            `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}${goalLine(goal)}` +
             (feedback ? `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}` : '') +
             `\nGenerá los ${n} captions y los hashtags.`,
         },
@@ -267,20 +279,21 @@ const CAT_WORDS = {
   otro: { cosa: 'productos', accion: 'elegirte' },
 };
 
-function templateIdeas({ business, category, competitors }) {
+function templateIdeas({ business, category, competitors, goal }) {
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
+  const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
   const vs = competitors
     ? ` Diferenciate de ${competitors}: mostrá lo que ellos no tienen.`
     : '';
   return [
-    { formato: 'Novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` },
-    { formato: 'Promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' },
-    { formato: 'Tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' },
-    { formato: 'Testimonio', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' },
-    { formato: 'Detrás de escena', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' },
-    { formato: 'Comunidad', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' },
-    { formato: 'Reel/Video', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' },
+    { formato: 'Novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` + ga },
+    { formato: 'Promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' + ga },
+    { formato: 'Tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' + ga },
+    { formato: 'Testimonio', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' + ga },
+    { formato: 'Detrás de escena', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' + ga },
+    { formato: 'Comunidad', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
+    { formato: 'Reel/Video', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
   ];
 }
 
