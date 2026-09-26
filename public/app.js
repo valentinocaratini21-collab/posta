@@ -1587,7 +1587,8 @@ function ajustesView() {
       <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
       </div>
     <div class="field"><label>Tus competidores</label>
-      <div class="comp-box" id="s_compbox"><span id="s_chips" style="display:contents"></span><input id="s_compin" placeholder="Escribí un nombre y apretá Enter ⏎"></div>
+      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
@@ -2332,7 +2333,14 @@ function bindSettings() {
   };
   const addChip = () => {
     const v = $('#s_compin').value.trim().replace(/^@+/, '');
+    const cHint = $('#compHint');
     if (!v) return;
+    if (v.includes('@')) {
+      if (cHint) { cHint.textContent = 'Eso parece un email — poné el nombre o el usuario de Instagram del competidor.'; cHint.style.display = ''; }
+      $('#s_compin').value = '';
+      return;
+    }
+    if (cHint) cHint.style.display = 'none';
     if (compChips.length >= 10) { $('#s_compin').value = ''; return; }
     if (!compChips.some(c => c.toLowerCase() === v.toLowerCase())) { compChips.push(v); fetchPic(v); }
     $('#s_compin').value = ''; renderChips(); markDirty();
@@ -2340,6 +2348,7 @@ function bindSettings() {
   renderChips();
   compChips.forEach(fetchPic);
   $('#s_compin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addChip(); } });
+  $('#s_compbox').addEventListener('click', e => { if (e.target.id !== 's_compin') $('#s_compin').focus(); });
   // --- cambios sin guardar ---
   let profDirty = false;
   const dirtyEl = $('#profDirty');
