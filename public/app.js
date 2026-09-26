@@ -17,7 +17,13 @@ const api = {
       throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
     }
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || 'Error');
+    if (!r.ok) {
+      if (r.status === 402 && data.error === 'trial_expired') {
+        if (typeof ME !== 'undefined' && ME) ME.trial_expired = true;
+        try { location.hash = '#/app/ajustes'; } catch (e) {}
+      }
+      throw new Error(data.message || data.error || 'Error');
+    }
     return data;
   },
   get: (u) => api.req('GET', u),
@@ -964,7 +970,7 @@ async function ideasView() {
 function ideasList() {
   const ppw = (ME && ME.posts_per_week) || 3;
   const planName = (ME && ME.plan ? ME.plan[0].toUpperCase() + ME.plan.slice(1) : 'Esencial');
-  const planTag = ME && ME.is_trial ? `${planName} (trial)` : planName;
+  const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
   const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posts por semana</option>`).join('');
   return `
   <div class="card">
@@ -2242,7 +2248,15 @@ function bindSettings() {
       const { plans, mp_configured } = await api.get('/api/billing/plans');
       const cur = (ME && ME.plan) || 'esencial';
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
-      const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : 'trial'})</span>` : '';
+      const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
+      const trialLeft = (ME && ME.trial_days_left) || 0;
+      let trialBanner = '';
+      if (!hasActive && ME && ME.plan_status === 'trial') {
+        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Tu prueba gratis terminó.</b> Elegí tu plan para seguir publicando con tu marca.</div>`;
+        else if (trialLeft > 0) trialBanner = trialLeft <= 3
+          ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
+          : `<div class="pz-trial-ok">🎁 Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
+      }
       const curPlan = plans.find(p => p.id === cur) || plans[0];
       const planCard = (p) => `
           <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}">
@@ -2288,6 +2302,7 @@ function bindSettings() {
           <div style="font-size:13px;color:var(--dim)">Plan actual</div>
           <div style="font-size:20px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
         </div>
+        ${trialBanner}
         <div style="font-size:16px;font-weight:800;margin-bottom:12px">Elegí tu plan para empezar 🚀</div>
         <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
         <div id="planMsg" style="margin-top:10px"></div>
