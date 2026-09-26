@@ -56,22 +56,92 @@ const HASHTAGS = {
 
 const GENERIC_TAGS = ['#argentina', '#emprendedor', '#marketingdigital'];
 
+// ---------- Energía extra (Creador v2): hooks, CTAs y beneficios con punch ----------
+const ENERGY_HOOKS = {
+  canchero: [
+    'Pará todo lo que estás haciendo 🛑',
+    'Esto no es un post más 🔥',
+    'Te lo digo de una: lo necesitás 💥',
+    'Mirá esto y después me contás 🤩',
+    'Si te gusta lo bueno, seguí leyendo 👀',
+    'Alerta: esto vuela 🚨',
+    'Lo que estabas esperando, llegó ✨',
+    'No digas que no te avisamos ⚡',
+  ],
+  profesional: [
+    'Presentamos lo último de nuestra colección',
+    'Diseñado para quienes eligen calidad',
+  ],
+  divertido: [
+    'Tu tarjeta me va a pedir perdón 💳😂',
+    'Peligro: antojo nivel experto ⚠️',
+  ],
+};
+
+const ENERGY_CTAS = {
+  canchero: [
+    'Pedilo por DM antes de que vuele 📩',
+    'Comentá QUIERO y te lo reservamos 👇',
+    'Guardalo, porque después lo vas a buscar 🔖',
+    'Compartilo con quien lo necesita 🙌',
+  ],
+  profesional: ['Escribinos y te asesoramos 📩'],
+  divertido: ['Dale que vuelan 🏃💨'],
+};
+
+const ENERGY_BENEFITS = [
+  'Stock limitado, no te quedes afuera ⚡',
+  'Calidad premium que se nota en cada detalle ✨',
+  'Precio de lanzamiento solo por esta semana 💥',
+  'Te lo enviamos a todo el país 📦',
+  'Si no te enamora, te devolvemos la plata ✅',
+];
+
+function stripEmojis(s) {
+  return String(s || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '').replace(/ {2,}/g, ' ');
+}
+
+// Caption con energía a partir de plantillas. `seed` varía hook/CTA/beneficio;
+// `feedback` permite ajustes ("más corto", "sin emojis", "más divertido"...).
+function templateCaption({ business, category, tone, topic, feedback, seed }) {
+  const fb = String(feedback || '');
+  let t = /divert|gracios/i.test(fb) ? 'divertido' : (/profesion|seri[oa]|elegante/i.test(fb) ? 'profesional' : (HOOKS[tone] ? tone : 'canchero'));
+  const hooks = [...(HOOKS[t] || HOOKS.canchero), ...(ENERGY_HOOKS[t] || [])];
+  const ctas = [...(CTAS[t] || CTAS.canchero), ...(ENERGY_CTAS[t] || [])];
+  const hook = hooks[seed % hooks.length];
+  const cta = ctas[(seed * 3 + 1) % ctas.length];
+  const benefit = ENERGY_BENEFITS[seed % ENERGY_BENEFITS.length];
+  const biz = business ? ` en ${business}` : '';
+  const topicLine = `${String(topic).charAt(0).toUpperCase()}${String(topic).slice(1)}${biz}.`;
+  const short = /cort/i.test(fb);
+  const long = /larg/i.test(fb);
+  let caption;
+  if (short) caption = `${hook}\n\n${topicLine}\n\n${cta}`;
+  else if (long) caption = `${hook}\n\n${topicLine}\n\n${benefit}\n${ENERGY_BENEFITS[(seed + 2) % ENERGY_BENEFITS.length]}\n\n${cta}`;
+  else caption = `${hook}\n\n${topicLine}\n\n${benefit}\n\n${cta}`;
+  if (/sin emoji|menos emoji/i.test(fb)) caption = stripEmojis(caption).trim();
+  return caption;
+}
+
+const ENERGY_SYSTEM = (n) =>
+  `Sos un community manager argentino experto en Instagram que vende de verdad. ` +
+  `Escribís en español rioplatense con voseo, tono cercano, canchero y con ENERGÍA: ` +
+  `nada de lenguaje corporativo ni frases de manual. Cada caption lleva: un hook inicial ` +
+  `que frene el scroll (1 línea con punch), el contenido con onda y un call to action claro. ` +
+  `Usá 1 o 2 emojis bien puestos, nunca más. ` +
+  `Respondé SOLO con un JSON: {"captions": ["...", ...], "hashtags": "#tag1 #tag2 ..."}. ` +
+  `Generá exactamente ${n} captions DISTINTOS entre sí. Máximo 8 hashtags relevantes para Argentina.`;
+
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function templateGenerate({ business, category, tone, topic }) {
   const t = HOOKS[tone] ? tone : 'canchero';
-  const hook = pick(HOOKS[t]);
-  const cta = pick(CTAS[t]);
-  const biz = business ? ` en ${business}` : '';
+  const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: Math.floor(Math.random() * 1000) });
   const tags = [...(HASHTAGS[category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
-
-  const caption =
-    `${hook}\n\n${topic}${biz}.\n\n${cta}`;
-
   return { caption, hashtags: tags.join(' ') };
 }
 
@@ -89,7 +159,12 @@ async function openaiGenerate({ business, category, tone, topic, competitors }, 
         {
           role: 'system',
           content:
-            'Sos un community manager argentino experto en Instagram. Escribís en español rioplatense con voseo, tono cercano y canchero pero no exagerado. Respondé SOLO con un JSON: {"caption": "...", "hashtags": "#tag1 #tag2 ..."}. El caption debe tener un hook inicial fuerte, el contenido, y un call to action. Máximo 8 hashtags relevantes para Argentina.',
+            'Sos un community manager argentino experto en Instagram que vende de verdad. ' +
+            'Escribís en español rioplatense con voseo, tono cercano, canchero y con ENERGÍA: ' +
+            'nada de lenguaje corporativo ni frases de manual. El caption lleva un hook inicial ' +
+            'que frene el scroll (1 línea con punch), el contenido con onda y un call to action claro. ' +
+            'Usá 1 o 2 emojis bien puestos, nunca más. ' +
+            'Respondé SOLO con un JSON: {"caption": "...", "hashtags": "#tag1 #tag2 ..."}. Máximo 8 hashtags relevantes para Argentina.',
         },
         {
           role: 'user',
@@ -120,16 +195,67 @@ async function generateContent(input, apiKey) {
   return templateGenerate(input);
 }
 
+// ---------- Creador v2: N captions distintos + hashtags ----------
+async function openaiCaptions({ business, category, tone, topic, feedback }, n, apiKey) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: ENERGY_SYSTEM(n) },
+        {
+          role: 'user',
+          content:
+            `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}` +
+            (feedback ? `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}` : '') +
+            `\nGenerá los ${n} captions y los hashtags.`,
+        },
+      ],
+      max_tokens: 1600,
+      temperature: 0.95,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices[0].message.content);
+  const caps = Array.isArray(parsed.captions) ? parsed.captions.map(String).filter(Boolean) : [];
+  if (!caps.length) throw new Error('Sin captions');
+  while (caps.length < n) caps.push(caps[caps.length % Math.max(caps.length, 1)]);
+  return { captions: caps.slice(0, n), hashtags: String(parsed.hashtags || '') };
+}
+
+async function generateCaptions(input, n, apiKey) {
+  if (apiKey) {
+    try {
+      return await openaiCaptions(input, n, apiKey);
+    } catch (e) {
+      console.error('OpenAI captions falló, usando plantillas:', e.message);
+    }
+  }
+  const seedBase = input.seedBase || 0;
+  const captions = [];
+  for (let i = 0; i < n; i++) captions.push(templateCaption({ ...input, seed: seedBase + i }));
+  const tags = [...(HASHTAGS[input.category] || HASHTAGS.otro), ...GENERIC_TAGS]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 8);
+  return { captions, hashtags: tags.join(' ') };
+}
+
 // ---------- Motor de ideas: nosotros pensamos el contenido por el cliente ----------
 const CAT_WORDS = {
-  ropa: { cosa: 'prendas', tip: '3 looks con poco presupuesto' },
-  gastronomia: { cosa: 'platos', tip: '3 tips para comer rico' },
-  fitness: { cosa: 'entrenamientos', tip: '3 errores que frenan tu progreso' },
-  servicios: { cosa: 'servicios', tip: '3 preguntas antes de contratar' },
-  mascotas: { cosa: 'productos', tip: '3 cuidados que tu mascota necesita' },
-  viajes: { cosa: 'destinos', tip: '3 destinos que valen la pena' },
-  belleza: { cosa: 'tratamientos', tip: '3 hábitos para verte mejor' },
-  otro: { cosa: 'productos', tip: '3 tips de experto' },
+  ropa: { cosa: 'prendas', accion: 'vestirte' },
+  gastronomia: { cosa: 'platos', accion: 'comer rico' },
+  fitness: { cosa: 'entrenamientos', accion: 'entrenar' },
+  servicios: { cosa: 'servicios', accion: 'contratarte' },
+  mascotas: { cosa: 'productos', accion: 'cuidar a tu mascota' },
+  viajes: { cosa: 'destinos', accion: 'viajar' },
+  belleza: { cosa: 'tratamientos', accion: 'verte bien' },
+  otro: { cosa: 'productos', accion: 'elegirte' },
 };
 
 function templateIdeas({ business, category, competitors }) {
@@ -139,13 +265,13 @@ function templateIdeas({ business, category, competitors }) {
     ? ` Diferenciate de ${competitors}: mostrá lo que ellos no tienen.`
     : '';
   return [
-    { formato: 'Novedad', titulo: `Lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` },
-    { formato: 'Promo', titulo: 'Promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' },
-    { formato: 'Tip', titulo: w.tip, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' },
-    { formato: 'Testimonio', titulo: 'Lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' },
-    { formato: 'Detrás de escena', titulo: `Cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' },
-    { formato: 'Comunidad', titulo: 'Te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' },
-    { formato: 'Reel/Video', titulo: `Así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' },
+    { formato: 'Novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` },
+    { formato: 'Promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' },
+    { formato: 'Tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' },
+    { formato: 'Testimonio', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' },
+    { formato: 'Detrás de escena', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' },
+    { formato: 'Comunidad', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' },
+    { formato: 'Reel/Video', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' },
   ];
 }
 
@@ -197,4 +323,4 @@ async function generateIdeas(input, apiKey) {
   return templateIdeas(input);
 }
 
-module.exports = { generateContent, generateIdeas, HASHTAGS };
+module.exports = { generateContent, generateIdeas, generateCaptions, HASHTAGS };

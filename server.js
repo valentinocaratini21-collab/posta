@@ -7,6 +7,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
 const { generateContent, generateIdeas } = require('./generator');
+const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername } = require('./instagram');
 const { startScheduler } = require('./scheduler');
 const { startTokenRefresh } = require('./tokenrefresh');
@@ -67,6 +68,7 @@ function getSettings(userId) {
 function maskSettings(s) {
   const c = { ...s };
   if (c.openai_key) c.openai_key = '••••••' + c.openai_key.slice(-4);
+  if (c.pexels_key) c.pexels_key = '••••••' + c.pexels_key.slice(-4);
   if (c.ig_access_token) c.ig_access_token = '••••••' + c.ig_access_token.slice(-4);
   if (c.meta_app_secret) c.meta_app_secret = '••••••';
   return c;
@@ -153,7 +155,7 @@ const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
 app.get('/api/settings', requireAuth, (req, res) => res.json(maskSettings(getSettings(req.session.userId))));
 
 app.put('/api/settings', requireAuth, (req, res) => {
-  const { openai_key, demo_mode, meta_app_id, meta_app_secret, ig_embed_url, image_base_url, timezone, preferred_palette, brand_colors } = req.body || {};
+  const { openai_key, demo_mode, meta_app_id, meta_app_secret, ig_embed_url, image_base_url, timezone, preferred_palette, brand_colors, pexels_key } = req.body || {};
   const cur = getSettings(req.session.userId);
   let bc = cur.brand_colors || '';
   if (brand_colors !== undefined) {
@@ -162,7 +164,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
     bc = clean.length >= 2 ? JSON.stringify(clean) : '';
   }
   db.prepare(
-    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, ig_embed_url=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, updated_at=datetime('now') WHERE user_id=?`
+    `UPDATE settings SET openai_key=?, demo_mode=?, meta_app_id=?, meta_app_secret=?, ig_embed_url=?, image_base_url=?, timezone=?, preferred_palette=?, brand_colors=?, pexels_key=?, updated_at=datetime('now') WHERE user_id=?`
   ).run(
     openai_key && !openai_key.startsWith('••••') ? openai_key : cur.openai_key,
     demo_mode === undefined ? cur.demo_mode : (demo_mode ? 1 : 0),
@@ -173,6 +175,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
     validTimezone(timezone) ? timezone : (cur.timezone || DEFAULT_TZ),
     Number.isInteger(preferred_palette) ? preferred_palette : (cur.preferred_palette ?? 0),
     bc,
+    pexels_key && !pexels_key.startsWith('••••') ? pexels_key : (cur.pexels_key || ''),
     req.session.userId
   );
   res.json({ ok: true });
@@ -198,6 +201,26 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     res.json(out);
   } catch (e) {
     res.status(500).json({ error: 'No se pudo generar el contenido' });
+  }
+});
+
+// ---------- Creador v2: 6 opciones con foto, colores y energía ----------
+app.post('/api/creator/options', requireAuth, async (req, res) => {
+  const { topic, feedback } = req.body || {};
+  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'Contanos la idea del post' });
+  try {
+    const settings = getSettings(req.session.userId);
+    const out = await creator.generateOptions({
+      topic: String(topic).trim().slice(0, 300),
+      feedback: String(feedback || '').trim().slice(0, 300),
+      profile: getProfile(req.session.userId),
+      settings,
+      openaiKey: settings.openai_key || process.env.OPENAI_API_KEY || '',
+    });
+    res.json(out);
+  } catch (e) {
+    console.error('[creator]', e.message);
+    res.status(500).json({ error: e.message || 'No se pudieron armar las opciones' });
   }
 });
 
