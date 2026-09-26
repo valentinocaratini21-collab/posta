@@ -728,6 +728,7 @@ app.get('/api/billing/mp-ping', async (req, res) => {
 // ---------- Referidos: 2 amigos activos = 50% off ----------
 const REFERRALS_NEEDED = 2;
 const REFERRAL_DISCOUNT = 0.5;
+const FRIEND_DISCOUNT = 0.8; // invitado con link de referido: 20% off
 
 function newReferralCode() {
   for (let i = 0; i < 10; i++) {
@@ -773,19 +774,23 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Ingresá el email de tu cuenta de MercadoPago.' });
   }
   try {
-    const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+    const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id, referred_by FROM users WHERE id = ?').get(req.session.userId);
     if (user.plan_status === 'active' && user.mp_preapproval_id) {
       return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
     }
     // Guardar el email de MP para pre-completarlo la próxima vez
     try { db.prepare(`UPDATE users SET mp_payer_email=? WHERE id=?`).run(payerEmail, user.id); } catch (e) {}
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    // Descuento por referidos: 2 amigos con suscripción activa = 50% off
+    // Descuento por referidos: 2 amigos con suscripción activa = 50% off (tiene prioridad);
+    // si no, invitado con link = 20% off
     let finalPlan = plan;
     let discount = false;
     if (referralStats(user.id).discount_active) {
       discount = true;
       finalPlan = { ...plan, price: Math.round(plan.price * REFERRAL_DISCOUNT), name: `${plan.name} (50% off referidos)` };
+    } else if (user.referred_by) {
+      discount = true;
+      finalPlan = { ...plan, price: Math.round(plan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
     }
     const { init_point } = await mp.createSubscription({
       plan: finalPlan,
@@ -852,8 +857,9 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
 // ---------- Referidos ----------
 app.get('/api/referrals/mine', requireAuth, (req, res) => {
   const s = referralStats(req.session.userId);
+  const me = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(req.session.userId);
   const baseUrl = `${req.protocol}://${req.get('host')}`;
-  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active });
+  res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by) });
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas
