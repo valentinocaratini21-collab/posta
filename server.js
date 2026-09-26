@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const { generateContent, generateIdeas } = require('./generator');
 const creator = require('./creator.js');
-const { getAuthUrl, exchangeCodeForTokens, getIgUsername } = require('./instagram');
+const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler } = require('./scheduler');
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
@@ -642,6 +642,17 @@ app.get('/api/ig/start', requireAuth, (req, res) => {
     const host = req.get('host');
     redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/callback`;
   }
+  // La redirect_uri tiene que volver a Posta: si apunta a otro lado,
+  // Instagram nunca regresa y el usuario "se queda en Instagram".
+  try {
+    const ru = new URL(redirectUri);
+    const thisHost = req.get('host');
+    if (ru.host !== thisHost) {
+      return res.status(400).json({ error: `Tu Embed URL redirige a ${ru.host}, pero tiene que volver a Posta. En el dashboard de Meta → tu app → caso de uso Instagram → "API setup with Instagram login", poné como redirect URI: https://${thisHost}/api/ig/callback` });
+    }
+  } catch (e) {
+    return res.status(400).json({ error: 'La Embed URL no es válida. Revisala en Ajustes → Integraciones.' });
+  }
   const state = crypto.randomBytes(16).toString('hex');
   req.session.igState = state;
   req.session.igRedirect = redirectUri;
@@ -661,10 +672,15 @@ app.get('/api/ig/callback', async (req, res) => {
       req.session.igRedirect,
       code
     );
-    let username = '';
+    let username = '', accountType = '';
     try {
-      username = await getIgUsername(igUserId, accessToken);
+      const prof = await getIgProfile(igUserId, accessToken);
+      username = prof.username; accountType = prof.accountType;
     } catch (e) { /* no bloquea la conexión */ }
+    // Solo las cuentas profesionales (Business/Creator) pueden publicar vía API
+    if (/personal/i.test(accountType || '')) {
+      return res.redirect('/#/app/ajustes?ig=personal');
+    }
     // Un Instagram = una sola prueba gratis en Posta (aunque lo desconecten después)
     const dupe = igUserId ? db.prepare(`SELECT user_id FROM settings WHERE ig_user_id = ? AND user_id != ?`).get(igUserId, req.session.userId) : null;
     if (dupe) {
@@ -674,15 +690,16 @@ app.get('/api/ig/callback', async (req, res) => {
     if (usedBefore && usedBefore.first_user_id !== req.session.userId) {
       return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya fue usada en Posta. Cada cuenta de Instagram puede activar una sola prueba gratis.'));
     }
+    const wasDemo = !!getSettings(req.session.userId).demo_mode;
     db.prepare(
-      `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, updated_at=datetime('now') WHERE user_id=?`
+      `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, demo_mode=0, updated_at=datetime('now') WHERE user_id=?`
     ).run(igUserId, accessToken, req.session.userId);
     // Registro permanente del uso (sobrevive a desconexiones)
     try {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(igUserId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
-    res.redirect('/#/app/ajustes?ig=ok');
+    res.redirect('/#/app/ajustes?ig=ok' + (wasDemo ? '&demo_off=1' : ''));
   } catch (e) {
     res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(e.message));
   }

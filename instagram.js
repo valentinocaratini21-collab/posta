@@ -50,11 +50,27 @@ async function exchangeCodeForTokens(appId, appSecret, redirectUri, code) {
 }
 
 async function getIgUsername(igUserId, accessToken) {
-  const params = new URLSearchParams({ fields: 'username', access_token: accessToken });
+  return (await getIgProfile(igUserId, accessToken)).username;
+}
+
+// Perfil básico + tipo de cuenta (para detectar cuentas personales).
+// Si la versión de la API no expone account_type, se reintenta sin ese campo.
+async function getIgProfile(igUserId, accessToken) {
+  const params = new URLSearchParams({ fields: 'username,account_type', access_token: accessToken });
   const res = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}?${params}`);
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
-  return data.username || '';
+  if (data.error) {
+    const msg = data.error.message || 'Error de Meta';
+    if (/account_type/i.test(msg)) {
+      const p2 = new URLSearchParams({ fields: 'username', access_token: accessToken });
+      const r2 = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}?${p2}`);
+      const d2 = await r2.json();
+      if (d2.error) throw new Error(d2.error.message || 'Error de Meta');
+      return { username: d2.username || '', accountType: '' };
+    }
+    throw new Error(msg);
+  }
+  return { username: data.username || '', accountType: data.account_type || '' };
 }
 
 // Refresca un token de larga duración (válido 60 días, se refresca a los 50)
@@ -209,6 +225,7 @@ module.exports = {
   getAuthUrl,
   exchangeCodeForTokens,
   getIgUsername,
+  getIgProfile,
   refreshLongLivedToken,
   publishPost,
   publishVideo,
