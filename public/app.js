@@ -1594,6 +1594,7 @@ function ajustesView() {
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
       <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
+      <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
   </div>
   <div class="card"><h3>🎨 Mi marca</h3>
@@ -2375,6 +2376,57 @@ function bindSettings() {
   };
   const bOnb = $('#btnOnb');
   if (bOnb) bOnb.onclick = () => { OB = freshOB(); location.hash = '#/app/onboarding'; };
+  const bPrev = $('#btnPreview');
+  if (bPrev) bPrev.onclick = openPreview;
+  function openPreview() {
+    const catV = $('#s_cat').value;
+    const catE = CATS.find(c => c[0] === catV) || ['otro', '🏷️', 'Otro'];
+    const catTxt = catV === 'otro' ? ($('#s_catother').value.trim() || 'Otro') : catE[2];
+    const toneE = TONES.find(t => t[0] === $('#s_tone').value) || ['', '🎭', '—'];
+    const goalE = GOALS.find(g => g[0] === $('#s_goal').value) || ['', '🎯', '—', ''];
+    const tzE = TIMEZONES.find(z => z[0] === $('#s_tz').value) || [];
+    const biz = $('#s_biz').value.trim();
+    const igu = $('#s_iguser').value.trim().replace(/^@+/, '');
+    const desc = $('#s_desc').value.trim();
+    const row = (ico, lbl, val) => `<div class="pv-row"><span class="pv-ico">${ico}</span><div><div class="pv-lbl">${lbl}</div><div class="pv-val">${val}</div></div></div>`;
+    const chips = compChips.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">` + compChips.map(c => {
+          const pic = compPics[c.toLowerCase()];
+          const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : '';
+          return `<span class="comp-chip">${av}${esc(c)}</span>`;
+        }).join('') + `</div>`
+      : `<span class="pv-warn">Todavía no sumaste competidores.</span>`;
+    const tips = [];
+    if (!desc) tips.push('una descripción de tu negocio');
+    if (!compChips.length) tips.push('al menos un competidor');
+    const ov = document.createElement('div');
+    ov.className = 'modal-ov';
+    ov.innerHTML = `
+      <div class="modal-card" style="max-width:440px" role="dialog" aria-modal="true">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <h3 style="margin:0">🤖 Cómo me ve la IA</h3>
+          <button class="btn btn-ghost btn-sm" id="pvX">✕</button>
+        </div>
+        <p style="color:var(--mut);font-size:13px;margin:0 0 8px">Con estos datos creamos tus ideas y posteos:</p>
+        ${row('🏪', 'Negocio', esc(biz) || '<span class="pv-warn">Falta el nombre</span>')}
+        ${row('📸', 'Instagram', igu ? '@' + esc(igu) : '<span class="pv-warn">Sin usuario</span>')}
+        ${row(catE[1], 'Rubro', esc(catTxt))}
+        ${row(toneE[1], 'Tono de la IA', esc(toneE[2]))}
+        ${row(goalE[1], 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:13px">${esc(goalE[3])}</span>` : ''))}
+        ${row('🕐', 'Zona horaria', esc(tzE[1] || '—'))}
+        ${row('📝', 'Descripción', desc ? esc(desc.length > 160 ? desc.slice(0, 160) + '…' : desc) : '<span class="pv-warn">Sin descripción.</span>')}
+        ${row('⚔️', 'Competidores', chips)}
+        ${tips.length ? `<div class="pv-tip">💡 <b>Tip:</b> sumá ${tips.join(' y ')} para ideas mucho mejores.</div>` : `<div class="pv-tip">✅ <b>Perfil completo:</b> la IA tiene todo lo que necesita.</div>`}
+        <button class="btn btn-primary btn-block" id="pvOk" style="margin-top:12px">Entendido</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = () => { document.removeEventListener('keydown', onKey); ov.remove(); };
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    ov.querySelector('#pvX').onclick = close;
+    ov.querySelector('#pvOk').onclick = close;
+  }
   // Mi plan
   (async () => {
     const z = $('#planZone');
