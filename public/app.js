@@ -456,7 +456,7 @@ function appShell(tab, content) {
 }
 
 /* ---------- CREAR ---------- */
-let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '' };
 
 /* ---------- VIDEO ---------- */
 function freshVState() {
@@ -679,6 +679,46 @@ function creatorView() {
       <div><div class="preview-box"><canvas id="postCanvas"></canvas></div>
       <p style="color:var(--dim);font-size:13px;margin-top:10px;text-align:center">Vista previa real — así se va a ver en el feed.</p></div>
     </div>`;
+  }
+  if (c.step === 'options') {
+    const det = c.detected || {};
+    const colors = det.colors || [];
+    const hexes = det.colorHex || [];
+    const opts = c.options || [];
+    const colorNames = colors.length > 1
+      ? colors.slice(0, -1).join(', ') + ' y ' + colors[colors.length - 1]
+      : colors.join(', ');
+    return `
+    <div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Elegí tu diseño</h1><p class="sub">6 opciones hechas para tu idea. Elegí una y programala.</p></div></div>
+    <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
+    ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
+    <div id="optErr"></div>
+    <div class="opt-grid">
+      ${opts.map((o, i) => `
+      <div class="opt-card">
+        ${i === c.recommendedIndex ? `<div class="opt-badge">⭐ Recomendada</div>` : ''}
+        <img class="opt-img" src="${esc(o.image)}" alt="${esc(o.title || ('Diseño ' + (i + 1)))}" loading="lazy">
+        ${i === c.recommendedIndex && c.recommendedReason ? `<p class="opt-reason">${esc(c.recommendedReason)}</p>` : ''}
+        ${o.title ? `<p class="opt-title">${esc(o.title)}</p>` : ''}
+        ${o.caption ? `<p class="opt-caption">${esc(o.caption)}</p>` : ''}
+        <div class="opt-actions">
+          <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño →</button>
+          <button class="btn btn-ghost btn-sm opt-custom" data-custom="${i}">✏️ Personalizar</button>
+        </div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:center;margin:4px 0 26px">
+      <button class="btn btn-soft" id="btnRegen">🔄 Regenerar opciones</button>
+    </div>
+    <div class="feedback-card">
+      <p class="feedback-title">¿Querés cambiar algo? Decime y lo arreglamos. O lo mejoramos.</p>
+      <div class="feedback-row">
+        <input id="fb_input" placeholder='Ej: "más rojo", "otra foto", "caption más corto"'>
+        <button class="btn btn-primary btn-sm" id="btnFeedback">Arreglar</button>
+      </div>
+      <div id="feedbackMsg"></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btnBackOptions" style="margin-top:16px">← Volver</button>`;
   }
   // step 3
   const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
@@ -1702,15 +1742,28 @@ function bindCreator() {
     $('#btnGen').onclick = async () => {
       c.topic = $('#c_topic').value.trim();
       if (!c.topic) { $('#genErr').innerHTML = `<div class="err">Escribí el tema del post primero</div>`; return; }
-      $('#btnGen').disabled = true; $('#btnGen').textContent = '⏳ Generando...';
+      const btn = $('#btnGen');
+      btn.disabled = true; btn.textContent = '🎨 Armándo tus 6 opciones...';
       try {
-        const out = await api.post('/api/generate', { topic: c.topic });
-        c.caption = out.caption; c.hashtags = out.hashtags;
-        $('#genErr').innerHTML = '';
-        $('#genOut').style.display = 'block';
-        $('#c_caption').value = c.caption; $('#c_tags').value = c.hashtags;
-      } catch (e) { $('#genErr').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-      $('#btnGen').disabled = false; $('#btnGen').textContent = '🤖 Generar con IA';
+        const out = await api.post('/api/creator/options', { topic: c.topic });
+        if (!out || !Array.isArray(out.options) || out.options.length !== 6) throw new Error('Respuesta incompleta');
+        c.options = out.options;
+        c.detected = out.detected || null;
+        c.recommendedIndex = out.recommendedIndex || 0;
+        c.recommendedReason = out.recommendedReason || '';
+        c.feedback = '';
+        c.step = 'options'; render();
+      } catch (e) {
+        // Fallback al comportamiento viejo (pantalla de texto con caption/hashtags)
+        try {
+          const out = await api.post('/api/generate', { topic: c.topic });
+          c.caption = out.caption; c.hashtags = out.hashtags;
+          $('#genErr').innerHTML = '';
+          $('#genOut').style.display = 'block';
+          $('#c_caption').value = c.caption; $('#c_tags').value = c.hashtags;
+        } catch (e2) { $('#genErr').innerHTML = `<div class="err">${esc(e2.message)}</div>`; }
+        btn.disabled = false; btn.textContent = '🤖 Generar con IA';
+      }
     };
     const toDesign = $('#btnToDesign');
     if (toDesign) toDesign.onclick = () => {
@@ -1763,10 +1816,59 @@ function bindCreator() {
       } catch (e) { alert('Error: ' + e.message); $('#btnSaveDesign').disabled = false; $('#btnSaveDesign').textContent = 'Guardar diseño →'; }
     };
   }
+  if (c.step === 'options') {
+    $$('.opt-use').forEach(b => b.onclick = () => {
+      const o = c.options[+b.dataset.use]; if (!o) return;
+      c.imagePath = o.image; c.caption = o.caption || ''; c.hashtags = o.hashtags || '';
+      c.step = 3; render();
+    });
+    $$('.opt-custom').forEach(b => b.onclick = () => {
+      const o = c.options[+b.dataset.custom]; if (!o) return;
+      c.title = o.title || ''; c.subtitle = o.subtitle || ''; c.caption = o.caption || '';
+      c.hashtags = o.hashtags || ''; c.photo = o.image || '';
+      c.tpl = 'gradiente'; c.pal = defaultPal(); c.palTouched = false;
+      c.step = 2; render();
+    });
+    const applyOptions = (out) => {
+      c.options = out.options; c.detected = out.detected || null;
+      c.recommendedIndex = out.recommendedIndex || 0;
+      c.recommendedReason = out.recommendedReason || '';
+      render();
+    };
+    $('#btnRegen').onclick = async () => {
+      const btn = $('#btnRegen');
+      btn.disabled = true; btn.textContent = '🎨 Generando nuevas opciones...';
+      try {
+        const out = await api.post('/api/creator/options', { topic: c.topic });
+        if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
+        applyOptions(out);
+      } catch (e) {
+        $('#optErr').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = '🔄 Regenerar opciones';
+      }
+    };
+    $('#btnFeedback').onclick = async () => {
+      const inp = $('#fb_input');
+      const fb = inp.value.trim();
+      const msg = $('#feedbackMsg');
+      if (!fb) { msg.innerHTML = `<div class="hint" style="margin:10px 0 0">Contame qué querés cambiar 👇</div>`; return; }
+      const btn = $('#btnFeedback');
+      btn.disabled = true; btn.textContent = '🔧 Arreglándolo...';
+      try {
+        const out = await api.post('/api/creator/options', { topic: c.topic, feedback: fb });
+        if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
+        c.feedback = fb; applyOptions(out);
+      } catch (e) {
+        msg.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+        btn.disabled = false; btn.textContent = 'Arreglar';
+      }
+    };
+    $('#btnBackOptions').onclick = () => { c.step = 1; render(); };
+  }
   if (c.step === 3) {
     const done = (msg) => {
       $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
-      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '' };
+      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '' };
       setTimeout(() => location.hash = '#/app/calendario', 1400);
     };
     $('#btnSchedule').onclick = async () => {
