@@ -190,11 +190,16 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, trial_ig } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get((email || '').trim().toLowerCase());
   if (!user || !bcrypt.compareSync(password || '', user.password_hash))
     return res.status(401).json({ error: 'Email o contraseña incorrectos' });
   req.session.userId = user.id;
+  // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
+  try {
+    const nImp = importTrialWeek(user.id, trial_ig);
+    if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${user.id}`);
+  } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
   res.json({ ok: true });
 });
 
