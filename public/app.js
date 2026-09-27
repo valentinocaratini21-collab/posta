@@ -1349,8 +1349,8 @@ function chatCardHTML() {
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
       <input type="file" id="chatFile" accept="image/*" multiple hidden>
     </div>
-    <div style="font-size:12px;color:var(--mut);margin-top:6px">📷 Subí fotos de tu producto: la IA opina sobre ellas y las usa en los ejemplos.</div>
     <div id="chatMsg"></div>
+    <div style="font-size:12px;color:var(--mut);margin-top:10px">📷 Subí fotos de tu producto: la IA opina sobre ellas y las usa en los ejemplos.</div>
   </div>`;
 }
 
