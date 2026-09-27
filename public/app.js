@@ -2836,7 +2836,7 @@ function bindSettings() {
     const box = $('#igBanner');
     if (!box) return;
     if (r === 'ok') {
-      box.innerHTML = `<div class="ig-ok">✅ <b>¡Instagram conectado!</b>${hq.get('demo_off') ? ' El modo demo se apagó solo — ahora publicás de verdad.' : ''}</div>`;
+      box.innerHTML = `<div class="ig-ok">✅ <b>¡Instagram conectado!</b>${hq.get('demo_off') ? ' El modo demo se apagó solo — ahora publicás de verdad.' : ''}<br><a class="btn btn-primary btn-sm" href="#/app/crear" style="margin-top:10px">Crear mi primer posteo →</a></div>`;
     } else if (r === 'personal') {
       box.innerHTML = `<div class="ig-warn">⚠️ <b>Tu cuenta de Instagram es personal.</b> Para publicar necesitás una cuenta profesional (Business o Creator).</div>`;
       const g = $('#igProGuide'); if (g) g.style.display = '';
