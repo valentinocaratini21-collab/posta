@@ -1202,6 +1202,8 @@ function videoView() {
           <div class="field" style="margin:0;width:110px"><label>Duración (seg)</label><input type="number" data-vdur="${i}" min="1" max="30" value="${s.duration}"></div>
           <button class="btn btn-ghost btn-sm" data-vup="${i}">📤 Subir</button>
           ${photos.length ? `<button class="btn btn-ghost btn-sm" data-vlib="${i}">🖼️ Mis fotos</button>` : ''}
+          ${i > 0 ? `<button class="btn btn-ghost btn-sm" data-vmove="${i}" data-vdir="-1" title="Subir escena">↑</button>` : ''}
+          ${i < v.scenes.length - 1 ? `<button class="btn btn-ghost btn-sm" data-vmove="${i}" data-vdir="1" title="Bajar escena">↓</button>` : ''}
           ${v.scenes.length > 1 ? `<button class="btn btn-danger btn-sm" data-vrm="${i}">Quitar</button>` : ''}
         </div>
         <div data-vpicker="${i}" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
@@ -1292,6 +1294,14 @@ function bindVideo() {
     if (t) t.innerHTML = vTotalHTML();
   });
   $$('[data-vrm]').forEach(b => b.onclick = () => { v.scenes.splice(+b.dataset.vrm, 1); rerender(); });
+  // Mover escena ↑ ↓
+  $$('[data-vmove]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.vmove, j = i + (+b.dataset.vdir);
+    if (j < 0 || j >= v.scenes.length) return;
+    const [s] = v.scenes.splice(i, 1);
+    v.scenes.splice(j, 0, s);
+    rerender();
+  });
   $$('[data-vcap]').forEach(inp => inp.oninput = () => { v.caption = inp.value; });
   const bAdd = $('#btnVAdd');
   if (bAdd) bAdd.onclick = () => { v.scenes.push({ image_path: '', text: '', duration: 3 }); rerender(); };
@@ -1301,13 +1311,14 @@ function bindVideo() {
   const vm = $('#v_music');
   if (vm) vm.onchange = async () => {
     const f = vm.files[0]; if (!f) return;
+    if (bma) { bma.disabled = true; bma.textContent = '⏳ Subiendo…'; }
     try {
       const r = await fetch('/api/audio', { method: 'POST', headers: { 'Content-Type': 'audio/mpeg' }, body: f });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
       v.music_path = data.path;
       rerender();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { alert('Error: ' + e.message); if (bma) { bma.disabled = false; bma.innerHTML = '📤 Subir MP3'; } }
     vm.value = '';
   };
   const bmr = $('#btnVMusicRm');
