@@ -519,6 +519,16 @@ app.delete('/api/posts/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Duplicar un posteo como borrador (para re-publicarlo sin armarlo de cero)
+app.post('/api/posts/:id/duplicate', requireAuth, requireTrialValid, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  const r = db.prepare(
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
+  ).run(req.session.userId, post.image_path, post.caption, post.hashtags, null, 'draft', post.media_type || 'image');
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
 // ---------- Loop inteligente fase 1: señales + resumen ----------
 // Semana con inicio lunes (zona horaria del negocio). week_key = 'YYYY-MM-DD' del lunes.
 function tzToday(tz) {
