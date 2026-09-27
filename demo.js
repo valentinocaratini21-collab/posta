@@ -10,6 +10,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const db = require('./db');
 
 const DEMO_SCRIPT = path.join(__dirname, 'demo_render.py');
@@ -40,12 +41,15 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const CATEGORIES = [
   'moda', 'gastronomia', 'belleza', 'fitness', 'mascotas', 'salud', 'hogar',
   'inmobiliaria', 'autos', 'educacion', 'turismo', 'eventos', 'tecnologia',
-  'deco', 'joyeria', 'fotografia', 'profesionales', 'flores', 'bar', 'otro',
+  'deco', 'joyeria', 'fotografia', 'profesionales', 'flores', 'bar',
+  'cafeteria', 'barberia', 'servicios', 'viajes', 'arte', 'otro',
 ];
 const CATEGORY_LABELS = {
   moda: 'Moda / Tienda de ropa',
-  gastronomia: 'Gastronomía / Café / Restaurante',
-  belleza: 'Barbería / Peluquería / Estética',
+  gastronomia: 'Gastronomía / Restaurante',
+  belleza: 'Belleza / Estética',
+  barberia: 'Barbería / Peluquería',
+  cafeteria: 'Cafetería',
   fitness: 'Fitness / Gimnasio',
   mascotas: 'Mascotas / Veterinaria',
   salud: 'Salud / Odontología',
@@ -54,12 +58,15 @@ const CATEGORY_LABELS = {
   autos: 'Autos / Taller',
   educacion: 'Educación / Cursos',
   turismo: 'Turismo / Hotelería',
+  viajes: 'Agencia de viajes',
   eventos: 'Eventos / Fiestas',
   tecnologia: 'Tecnología / Celulares',
   deco: 'Muebles / Decoración',
   joyeria: 'Joyería / Accesorios',
-  fotografia: 'Fotografía / Arte',
+  fotografia: 'Fotografía',
+  arte: 'Arte / Diseño',
   profesionales: 'Servicios profesionales',
+  servicios: 'Servicios',
   flores: 'Florería / Vivero',
   bar: 'Bar / Cervecería',
   otro: 'Otro',
@@ -102,6 +109,11 @@ const CATEGORY_PHOTOS = {
   eventos: [...BAR.slice(0, 4), ...LIFE.slice(0, 4), ...FOOD.slice(0, 2)],
   fotografia: [...LIFE.slice(0, 5), ...FASHION.slice(0, 3), ...OFFICE.slice(0, 2)],
   autos: [...OFFICE.slice(0, 4), ...LIFE.slice(0, 4), ...HOME.slice(0, 2)],
+  cafeteria: [...FOOD.slice(0, 4), ...LIFE.slice(0, 4), ...BAR.slice(0, 2)],
+  barberia: [...BEAUTY.slice(0, 5), ...FASHION.slice(0, 3), ...LIFE.slice(0, 2)],
+  servicios: [...OFFICE.slice(0, 4), ...HOME.slice(0, 4), ...LIFE.slice(0, 2)],
+  viajes: [...LIFE.slice(0, 5), ...BAR.slice(0, 3), ...FOOD.slice(0, 2)],
+  arte: [...FASHION.slice(0, 4), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
   otro: [...LIFE.slice(0, 5), ...OFFICE.slice(0, 3), ...HOME.slice(0, 2)],
 };
 
@@ -298,6 +310,11 @@ const TAGS_AR = {
   profesionales: ['#serviciosprofesionales', '#consultoria', '#abogados', '#contadores', '#profesionales'],
   flores: ['#floreriaargentina', '#flores', '#vivero', '#ramosdeflores', '#plantas'],
   bar: ['#baresargentina', '#cervezaartesanal', '#cocktails', '#happyhour', '#salidas'],
+  cafeteria: ['#cafeargentina', '#cafe', '#barista', '#merienda', '#cafedeespecialidad'],
+  barberia: ['#barberiaargentina', '#barbero', '#corte', '#fade', '#barbershop'],
+  servicios: ['#serviciosargentina', '#oficios', '#tecnico', '#reparaciones', '#presupuestos'],
+  viajes: ['#viajesargentina', '#agenciadeviajes', '#turismo', '#escapadas', '#viajeros'],
+  arte: ['#arteargentino', '#artista', '#obrasdearte', '#arte', '#diseño'],
   otro: ['#pymesargentina', '#negocioslocales', '#comerciolocal', '#argentina'],
 };
 const TAGS_UY = Object.fromEntries(
@@ -326,6 +343,11 @@ const TAGS_NEUTRAL = {
   profesionales: ['#profesionales', '#consultoria', '#servicios', '#negocios', '#emprendedores'],
   flores: ['#flores', '#floreria', '#vivero', '#ramosdeflores', '#plantas'],
   bar: ['#bar', '#cerveza', '#cocktails', '#bares', '#happyhour'],
+  cafeteria: ['#cafe', '#barista', '#merienda', '#coffeetime', '#cafedeespecialidad'],
+  barberia: ['#barberia', '#barbero', '#fade', '#cortemasculino', '#barbershop'],
+  servicios: ['#servicios', '#oficios', '#reparaciones', '#tecnico', '#presupuesto'],
+  viajes: ['#viajes', '#agenciadeviajes', '#turismo', '#viajeros', '#escapadas'],
+  arte: ['#arte', '#artista', '#obrasdearte', '#diseno', '#art'],
   otro: ['#pymes', '#negocioslocales', '#comerciolocal', '#apoyolocal'],
 };
 // Nada de hashtags de marketinero (#marketingdigital, #emprendedores…):
@@ -727,6 +749,106 @@ const DEMO_TOPICS = {
       subline: 'Tu cumple con beneficios para el grupo.', cta: 'Reservar fecha',
       caption: 'Che, mirá esto 👀\n\nFestejá tu cumple en {BIZ}: beneficios para todo el grupo.\n\nEscribinos por DM 📩' },
   ],
+  cafeteria: [
+    { kind: 'novedad', tag: 'NUEVO', headline: 'El blend nuevo ya está en barra',
+      subline: 'De origen único, tostado esta semana.', cta: 'Lo quiero probar',
+      caption: 'Che, mirá lo que acaba de llegar 👀\n\nNuevo blend en {BIZ}: de origen único y tostado esta semana.\n\nPasá a probarlo hoy ☕' },
+    { kind: 'promo', tag: 'MERIENDA', headline: 'Merienda completa a precio amigo',
+      subline: 'Café + dos medialunas, toda la tarde.', cta: 'La aprovecho',
+      caption: 'La merienda se respeta 👇\n\nEn {BIZ}: café con leche + dos medialunas a precio amigo, toda la tarde.\n\nEtiquetá a tu compañero de merienda 🙋' },
+    { kind: 'tip', tag: 'TIP', headline: 'Cómo pedir tu café como un barista',
+      subline: 'La diferencia entre un flat white y un latte.', cta: 'Ver la guía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\n¿Flat white o latte? Te explicamos la diferencia para que pidas como un barista.\n\nGuardá este post 🔖' },
+    { kind: 'social', tag: 'CLIENTES', headline: 'El rincón favorito del barrio',
+      subline: 'Nuestros clientes y su momento café.', cta: 'Ver más',
+      caption: 'Nada como el momento café ☕\n\nNuestros clientes disfrutando su rato en {BIZ}.\n\nVení a buscar el tuyo hoy' },
+    { kind: 'reserva', tag: 'HOY', headline: 'Tu mesa de la tarde te espera',
+      subline: 'El café sale mejor acompañado.', cta: 'Voy hoy',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nTu mesa de la tarde te espera en {BIZ}.\n\nReservá por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'Sorteo: merienda para dos',
+      subline: 'Participar es gratis, solo comentá.', cta: 'Quiero participar',
+      caption: 'Se viene sorteo en {BIZ} 🎁\n\nSorteamos una merienda completa para dos. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+  ],
+  barberia: [
+    { kind: 'social', tag: 'ANTES / DESPUÉS', headline: 'El antes y después que habla solo',
+      subline: 'Cambio de look completo en una visita.', cta: 'Ver más cambios',
+      caption: 'Mirá este cambio 👀\n\nAntes y después en {BIZ}: un corte nuevo, una confianza nueva.\n\nReservá tu turno por DM 📩' },
+    { kind: 'reserva', tag: 'TURNO', headline: 'Tu turno de la semana',
+      subline: 'Quedan pocos lugares este finde.', cta: 'Reservar turno',
+      caption: 'No te quedes sin tu lugar 💈\n\nTurnos de esta semana en {BIZ}: reservá el tuyo antes de que se llenen.\n\nEscribinos por DM 📩' },
+    { kind: 'novedad', tag: 'TENDENCIA', headline: 'El corte que es tendencia',
+      subline: 'El fade que todos están pidiendo.', cta: 'Lo quiero',
+      caption: 'Che, mirá lo que se viene 👀\n\nEl corte tendencia de la temporada ya lo hacemos en {BIZ}.\n\nReservá tu turno 📩' },
+    { kind: 'tip', tag: 'TIP', headline: 'Cómo mantener el corte entre visitas',
+      subline: '3 tips para que dure como recién hecho.', cta: 'Ver los tips',
+      caption: 'Mirá lo que tenemos para vos ✨\n\n3 tips de {BIZ} para que tu corte dure como recién hecho.\n\nGuardá este post 🔖' },
+    { kind: 'promo', tag: 'COMBO', headline: 'Corte + barba, precio combo',
+      subline: 'Salí renovado por menos.', cta: 'Aprovecharlo',
+      caption: 'Atención, que esto es posta 👇\n\nCombo corte + barba en {BIZ} a precio especial esta semana.\n\nComentá INFO y te pasamos todo 👇' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'Sorteo: corte gratis',
+      subline: 'Participar es gratis, solo comentá.', cta: 'Quiero participar',
+      caption: 'Se viene sorteo en {BIZ} 🎁\n\nSorteamos un corte gratis entre quienes comenten.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+  ],
+  servicios: [
+    { kind: 'tip', tag: 'TIP', headline: 'El error que te sale caro',
+      subline: 'Lo que nunca hay que hacer con tu instalación.', cta: 'Ver los tips',
+      caption: 'Mirá esto antes de que sea tarde ⚠️\n\nEl error más común que vemos en {BIZ} y cómo evitarlo.\n\nGuardá este post, te va a servir 🔖' },
+    { kind: 'social', tag: 'TRABAJOS', headline: 'Trabajos que hablan solos',
+      subline: 'Antes y después de esta semana.', cta: 'Ver más trabajos',
+      caption: 'Mirá lo que hicimos esta semana 👀\n\nAntes y después de un trabajo real de {BIZ}.\n\nPedí tu presupuesto por DM 📩' },
+    { kind: 'promo', tag: 'PRESUPUESTO', headline: 'Presupuesto gratis esta semana',
+      subline: 'Sin cargo y sin compromiso.', cta: 'Pedir el mío',
+      caption: 'Atención 👇\n\nEsta semana el presupuesto es gratis en {BIZ}. Sin cargo, sin compromiso.\n\nComentá INFO y te contactamos 👇' },
+    { kind: 'reserva', tag: 'VISITA', headline: 'Reservá tu visita técnica',
+      subline: 'Pasamos por tu casa esta semana.', cta: 'Reservar visita',
+      caption: 'No lo dejes para después 🔧\n\nReservá tu visita técnica de {BIZ} para esta semana.\n\nEscribinos por DM 📩' },
+    { kind: 'novedad', tag: 'NUEVO', headline: 'Nuevo servicio disponible',
+      subline: 'Ahora también hacemos instalaciones.', cta: 'Quiero saber más',
+      caption: 'Che, mirá la novedad 👀\n\n{BIZ} suma un servicio nuevo: ahora también hacemos instalaciones.\n\nConsultanos por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'Sorteo: service gratis',
+      subline: 'Participar es gratis, solo comentá.', cta: 'Quiero participar',
+      caption: 'Se viene sorteo en {BIZ} 🎁\n\nSorteamos un service completo gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+  ],
+  viajes: [
+    { kind: 'novedad', tag: 'DESTINO', headline: 'El destino que todos van a querer',
+      subline: 'La escapada perfecta para el finde largo.', cta: 'Lo quiero conocer',
+      caption: 'Che, mirá este destino 👀\n\nLa escapada que todos van a querer, armada por {BIZ}.\n\nConsultanos por DM 📩' },
+    { kind: 'promo', tag: 'CUOTAS', headline: 'Viajá en cuotas sin interés',
+      subline: 'Tu próximo viaje, más cerca de lo que creés.', cta: 'Aprovecharla',
+      caption: 'Atención, que esto es posta 👇\n\nViajá en cuotas sin interés con {BIZ}. Tu próximo destino, más cerca.\n\nComentá INFO y te pasamos todo 👇' },
+    { kind: 'tip', tag: 'TIP', headline: 'La mejor época para viajar',
+      subline: 'Cuándo ir a cada destino y pagar menos.', cta: 'Ver la guía',
+      caption: 'Mirá lo que tenemos para vos ✨\n\nLa guía de {BIZ}: la mejor época para cada destino (y cuándo pagar menos).\n\nGuardá este post 🔖' },
+    { kind: 'social', tag: 'VIAJEROS', headline: 'Ellos ya volvieron felices',
+      subline: 'Viajeros reales con nuestros paquetes.', cta: 'Ver más viajes',
+      caption: 'Nada como viajar tranquilo ✈️\n\nNuestros viajeros disfrutando su viaje con {BIZ}.\n\nArmá el tuyo por DM 📩' },
+    { kind: 'reserva', tag: 'CUPOS', headline: 'Reservá tu lugar',
+      subline: 'Los cupos de temporada vuelan.', cta: 'Reservar ahora',
+      caption: 'No te quedes afuera ✈️\n\nLos cupos de temporada en {BIZ} se agotan rápido.\n\nReservá tu lugar por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'Sorteo: escapada para dos',
+      subline: 'Participar es gratis, solo comentá.', cta: 'Quiero participar',
+      caption: 'Se viene sorteo en {BIZ} 🎁\n\nSorteamos una escapada para dos. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+  ],
+  arte: [
+    { kind: 'novedad', tag: 'OBRA NUEVA', headline: 'Obra nueva disponible',
+      subline: 'Pieza única, recién terminada.', cta: 'Quiero verla',
+      caption: 'Che, mirá lo que acaba de salir del taller 👀\n\nObra nueva en {BIZ}: pieza única, recién terminada.\n\nEscribinos por DM 📩' },
+    { kind: 'tip', tag: 'PROCESO', headline: 'El proceso detrás de cada pieza',
+      subline: 'Cómo nace una obra, paso a paso.', cta: 'Ver el proceso',
+      caption: 'Mirá lo que hay detrás ✨\n\nEl proceso creativo de {BIZ}, paso a paso.\n\nGuardá este post si te inspira 🔖' },
+    { kind: 'social', tag: 'EN CASAS REALES', headline: 'Ya la tienen en su casa',
+      subline: 'Obras nuestras en hogares reales.', cta: 'Ver más obras',
+      caption: 'Nada como verla colgada 🎨\n\nNuestras obras en hogares reales. Gracias por confiar en {BIZ}.\n\nPedí la tuya por DM 📩' },
+    { kind: 'promo', tag: 'ENCARGOS', headline: 'Encargos de este mes con descuento',
+      subline: 'Tu idea, hecha obra.', cta: 'Encargar la mía',
+      caption: 'Atención 👇\n\nEste mes los encargos en {BIZ} vienen con descuento especial.\n\nComentá INFO y lo charlamos 👇' },
+    { kind: 'reserva', tag: 'LISTA', headline: 'Reservá tu encargo',
+      subline: 'La lista de encargos se llena rápido.', cta: 'Reservar el mío',
+      caption: 'No te quedes sin tu lugar 🎨\n\nLa lista de encargos de {BIZ} se llena rápido.\n\nReservá el tuyo por DM 📩' },
+    { kind: 'sorteo', tag: 'SORTEO', headline: 'Sorteo: una obra de regalo',
+      subline: 'Participar es gratis, solo comentá.', cta: 'Quiero participar',
+      caption: 'Se viene sorteo en {BIZ} 🎁\n\nSorteamos una obra original. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
+  ],
   otro: [
     { kind: 'novedad', tag: 'NUEVO', headline: 'Lo nuevo de la semana',
       subline: 'Ya está disponible, vení a verlo.', cta: 'Quiero saber más',
@@ -949,6 +1071,103 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   }
 }
 
+// Paleta curada por rubro [acento, botón]: el visitante ya no sube nada,
+// Posta elige automáticamente una paleta profesional pensada para su rubro.
+const CATEGORY_COLORS = {
+  moda: ['#232323', '#F0B429'],
+  gastronomia: ['#8B2E2E', '#F2A93B'],
+  cafeteria: ['#5C3D2E', '#D9A679'],
+  bar: ['#1F2A44', '#E8B44A'],
+  belleza: ['#C98BA6', '#F6E7EC'],
+  barberia: ['#1C1C1E', '#C9A227'],
+  fitness: ['#16283F', '#FF5A3C'],
+  mascotas: ['#2E7D6F', '#FFC53D'],
+  salud: ['#2A9DB8', '#E8F6F8'],
+  hogar: ['#4A6741', '#E9D8A6'],
+  deco: ['#B08968', '#F1E3D3'],
+  inmobiliaria: ['#1F3A5F', '#F2C14E'],
+  autos: ['#333333', '#E63946'],
+  educacion: ['#2B6CB0', '#F6C453'],
+  tecnologia: ['#2D2D44', '#00D2FF'],
+  turismo: ['#1B9AAA', '#FFC300'],
+  viajes: ['#0E7C7B', '#F4D35F'],
+  eventos: ['#7B2D8B', '#FEC14D'],
+  fotografia: ['#262626', '#E8B44A'],
+  arte: ['#E4572E', '#F3A712'],
+  joyeria: ['#8C6A3C', '#F6E7C1'],
+  flores: ['#3E7C4F', '#F2A7C3'],
+  profesionales: ['#1F3A5F', '#7FB3D5'],
+  servicios: ['#1F2937', '#F59E0B'],
+  otro: ['#2793C8', '#FEC14D'],
+};
+
+// ---------- Colores reales del perfil de Instagram (best-effort) ----------
+// Trae la foto de perfil pública vía la página de embed (sin login ni API)
+// y extrae hasta 2 colores dominantes. Timeouts acotados: si Instagram no
+// colabora, devuelve null y se usa la paleta del rubro.
+const IG_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const EXTRACT_COLORS_SCRIPT = path.join(__dirname, 'extract_colors.py');
+
+function httpsGet(url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (e) { return reject(e); }
+    const req = https.get({
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      headers: { 'User-Agent': IG_UA, 'Accept-Language': 'es-AR,es;q=0.9' },
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return httpsGet(res.headers.location, timeoutMs).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('http ' + res.statusCode)); }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
+  });
+}
+
+async function fetchIgProfile(ig) {
+  // Devuelve { colors, pic, name } o null. Best-effort con timeouts acotados.
+  const user = String(ig || '').replace(/[^A-Za-z0-9._]/g, '').slice(0, 40);
+  if (!user) return null;
+  const page = await httpsGet('https://www.instagram.com/' + user + '/embed/', 8000);
+  const html = page.body.toString('utf8');
+  // Verificamos que la página sea realmente del usuario pedido (no un challenge)
+  const who = '\\"username\\":\\"' + user.toLowerCase() + '\\"';
+  if (!html.toLowerCase().includes(who)) return null;
+  const m = html.match(/profile_pic_url.{0,6}?"(https:[^"]+)"/);
+  if (!m) return null;
+  const picUrl = m[1].replace(/\\/g, '');
+  // Solo aceptamos la CDN oficial de Instagram (anti-SSRF)
+  if (!/^https:\/\/[a-z0-9.-]*cdninstagram\.com\//i.test(picUrl)) return null;
+  const img = await httpsGet(picUrl, 6000);
+  if (!String(img.headers['content-type'] || '').startsWith('image/')) return null;
+  const nm = html.match(/\\"full_name\\":\\"([^\\]+)\\"/);
+  const name = nm ? nm[1].replace(/[\u0000-\u001F]/g, '').slice(0, 60) : '';
+  const tmp = path.join(os.tmpdir(), 'igpic-' + Date.now() + '-' + Math.floor(Math.random() * 1e6) + '.jpg');
+  fs.writeFileSync(tmp, img.body);
+  try {
+    const out = await new Promise((resolve, reject) => {
+      execFile('python3', [EXTRACT_COLORS_SCRIPT, tmp], { timeout: 8000 }, (err, stdout) => {
+        if (err) return reject(err);
+        resolve(String(stdout || '').trim());
+      });
+    });
+    const cols = out.split(/\s+/).filter((c) => /^#[0-9A-F]{6}$/.test(c));
+    return {
+      colors: cols.length ? cols : null,
+      pic: 'data:image/jpeg;base64,' + img.body.toString('base64'),
+      name,
+    };
+  } finally {
+    try { fs.unlinkSync(tmp); } catch (e) {}
+  }
+}
 module.exports = {
   parseMultipart,
   validImageKind,
@@ -963,5 +1182,7 @@ module.exports = {
   CATEGORIES,
   CATEGORY_LABELS,
   CATEGORY_PHOTOS,
+  CATEGORY_COLORS,
   COUNTRIES,
+  fetchIgProfile,
 };

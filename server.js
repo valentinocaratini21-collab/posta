@@ -1287,8 +1287,30 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 300);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  const accent = String(fields.accent || '').trim().slice(0, 7);
-  const btn = String(fields.btn || '').trim().slice(0, 7);
+  // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
+  // intentamos los colores REALES de su perfil de Instagram (best-effort) y
+  // si no se puede, cae a la paleta curada de su rubro.
+  const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
+  const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
+  let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
+  let btn = hexOk(fields.btn) ? String(fields.btn).trim().toUpperCase() : pal[1];
+  let colorSource = 'rubro';
+  let igPic = null, igName = '';
+  if (ig) {
+    // Perfil real de Instagram (best-effort): foto + nombre + colores.
+    // Si no se puede, todo cae a los fallbacks sin que se note.
+    try {
+      const prof = await demo.fetchIgProfile(ig);
+      if (prof) {
+        igPic = prof.pic; igName = prof.name;
+        if (!hexOk(fields.accent) && prof.colors && prof.colors[0]) {
+          accent = prof.colors[0];
+          if (prof.colors[1]) btn = prof.colors[1];
+          colorSource = 'instagram';
+        }
+      }
+    } catch (e) { /* fallback silencioso */ }
+  }
   if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
   if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
   if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
@@ -1323,6 +1345,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     res.json({
       ok: true,
       business, ig, category,
+      accent, btn, color_source: colorSource,
+      ig_pic: igPic, ig_name: igName,
       ideas: ideas.slice(0, 6),
       posts,
       week: buildTrialWeek(posts.length),
