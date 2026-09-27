@@ -1303,7 +1303,7 @@ function fotosView() {
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
       ${photos.map(a => `
       <div style="position:relative">
-        <img src="${a.file_path}" style="width:120px;height:150px;object-fit:cover;border-radius:12px;border:1px solid var(--line)">
+        <img src="${a.file_path}" data-lightbox="${a.file_path}" style="width:120px;height:150px;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:zoom-in">
         <button class="btn btn-danger btn-sm foto-del" data-adel="${a.id}">✕</button>
       </div>`).join('')}
       ${photos.length < 20 ? `<button class="btn btn-ghost foto-add" id="btnAAdd">＋<br>Agregar</button>` : ''}
@@ -1328,10 +1328,13 @@ function fotosView() {
 function bindFotos() {
   const msg = (t, ok) => { $('#aMsg').innerHTML = `<div class="${ok ? 'okmsg' : 'err'}">${t}</div>`; };
   const up = async (files, kind) => {
-    for (const f of files) {
-      try { await uploadAssetFile(f, kind); }
+    const total = files.length;
+    for (let i = 0; i < total; i++) {
+      if (total > 1) $('#aMsg').innerHTML = `<div class="hint" style="margin:0">⏳ Subiendo ${i + 1} de ${total}…</div>`;
+      try { await uploadAssetFile(files[i], kind); }
       catch (e) { msg('Error: ' + esc(e.message), false); return; }
     }
+    $('#aMsg').innerHTML = '';
     render();
   };
   const bAdd = $('#btnAAdd');
@@ -1353,6 +1356,8 @@ function bindFotos() {
     ASSETS = await api.get('/api/assets');
     render();
   });
+  // Tap en una foto → verla en grande
+  $$('[data-lightbox]').forEach(el => el.onclick = () => openLightbox(el.dataset.lightbox, el.dataset.video === '1'));
 }
 
 /* ---------- CALENDARIO / HISTORIAL ---------- */
