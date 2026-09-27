@@ -126,6 +126,17 @@ button{font-family:inherit}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cel);box-shadow:0 0 0 4px rgba(39,147,200,.14);background:#FFFFFF}
 .field textarea{resize:vertical;min-height:110px;line-height:1.5}
 .field .hint{font-size:13px;color:var(--dim);margin-top:6px;line-height:1.5}
+.int-block{background:var(--bg2);border:1px solid var(--line-soft);border-radius:16px;padding:16px;margin-bottom:16px}
+.int-block h4{margin:0 0 12px;font-size:15px;color:var(--txt)}
+.int-block .field:last-child{margin-bottom:0}
+.int-status{font-size:13.5px;margin-top:10px;color:var(--mut)}
+.int-autourl{font-size:14px;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;color:var(--mut);line-height:1.5}
+.int-autourl b{color:var(--txt);word-break:break-all}
+.int-autourl a{font-size:13px;margin-left:6px}
+details.int-advanced summary{cursor:pointer;font-size:16px;font-weight:700;color:var(--txt);list-style:none;display:flex;align-items:center}
+details.int-advanced summary::-webkit-details-marker{display:none}
+details.int-advanced summary::after{content:'›';margin-left:auto;color:var(--dim);font-size:20px;transition:transform .15s}
+details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .field select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2347617A' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:42px;cursor:pointer;font-weight:600}
 .field select option{background:#FFFFFF;color:#0A1E33}
 .field input[type="color"]{padding:4px;cursor:pointer}

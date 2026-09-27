@@ -1672,20 +1672,23 @@ function ajustesView() {
     </div>
     <div id="igMsg"></div>
   </div>
-  <div class="card"><h3>🔑 Integraciones</h3>
-    <div class="field"><label>OpenAI API Key <span style="color:var(--dim);font-weight:400">(opcional — sin esto usa el generador local)</span></label>
-      <input id="s_openai" type="password" value="${esc(s.openai_key)}" placeholder="sk-..."></div>
-    <div class="row2">
-      <div class="field"><label>Meta App ID</label><input id="s_appid" value="${esc(s.meta_app_id)}" placeholder="123456789"></div>
-      <div class="field"><label>Meta App Secret</label><input id="s_appsecret" type="password" value="${esc(s.meta_app_secret)}" placeholder="••••••"></div>
+  <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
+    <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
+    <div class="int-block"><h4>📸 App de Meta</h4>
+      <div class="row2">
+        <div class="field"><label>Meta App ID</label><input id="s_appid" value="${esc(s.meta_app_id)}" placeholder="123456789">
+          <p class="hint">El número identificador de tu app en Meta.</p></div>
+        <div class="field"><label>Meta App Secret</label><input id="s_appsecret" type="password" value="${esc(s.meta_app_secret)}" placeholder="••••••">
+          <p class="hint">La clave secreta de tu app. Nunca la compartas.</p></div>
+      </div>
+      <p class="hint">Los encontrás en <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com</a> → tu app → Configuración.</p>
+      <div class="field" style="margin-top:10px"><button class="btn btn-ghost" id="btnTestMeta" type="button">Probar conexión</button> <span id="metaTestMsg" style="font-size:13px"></span></div>
+      <div class="field"><label>Instagram Embed URL</label>
+        <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?...">
+        <p class="hint">La dirección que Meta genera para conectar tu Instagram. Se copia del dashboard de Meta: caso de uso Instagram → "API setup with Instagram login".</p></div>
     </div>
-    <div class="field"><label>Instagram Embed URL <span style="color:var(--dim);font-weight:400">(del dashboard de Meta → caso de uso Instagram → "API setup with Instagram login")</span></label>
-      <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?..."></div>
-    <div class="field"><label>URL pública de imágenes <span style="color:var(--dim);font-weight:400">(para publicar de verdad, ej: https://tu-dominio.com)</span></label>
-      <input id="s_imgurl" value="${esc(s.image_base_url)}" placeholder="https://..."></div>
-    <button class="btn btn-primary" id="btnSaveSettings">Guardar integraciones</button> <span id="setMsg"></span>
-    <p class="hint" style="margin-top:14px">📖 El paso a paso para crear tu app de Meta y publicar de verdad está en el <b>README</b> del proyecto.</p>
-  </div>`;
+    <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
+  </details>`;
 }
 
 /* ---------- ONBOARDING (4 pasos) ---------- */
@@ -2783,11 +2786,23 @@ function bindSettings() {
   };
   $('#btnSaveSettings').onclick = async () => {
     await api.put('/api/settings', {
-      openai_key: $('#s_openai').value, meta_app_id: $('#s_appid').value,
+      meta_app_id: $('#s_appid').value,
       meta_app_secret: $('#s_appsecret').value, ig_embed_url: $('#s_igembed').value,
-      image_base_url: $('#s_imgurl').value,
     });
     $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
+  };
+  const btm = $('#btnTestMeta');
+  if (btm) btm.onclick = async () => {
+    const msg = $('#metaTestMsg');
+    const appId = $('#s_appid').value.trim(), appSecret = $('#s_appsecret').value.trim();
+    if (!appId || !appSecret) { msg.innerHTML = '<span style="color:var(--red)">Completá App ID y App Secret primero</span>'; return; }
+    msg.textContent = 'Probando…';
+    try {
+      const r = await api.post('/api/settings/test-meta', { app_id: appId, app_secret: appSecret });
+      msg.innerHTML = r.ok
+        ? `<span style="color:var(--green-d)">✅ App válida: <b>${esc(r.app_name)}</b></span>`
+        : `<span style="color:var(--red)">❌ ${esc(r.error)}</span>`;
+    } catch (e) { msg.innerHTML = `<span style="color:var(--red)">❌ ${esc(e.message)}</span>`; }
   };
   const setDemoMode = async (v) => {
     await api.put('/api/settings', { demo_mode: v });
