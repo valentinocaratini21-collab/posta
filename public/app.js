@@ -1619,6 +1619,12 @@ function ajustesView() {
       <div id="brandPrev"></div>
       <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
     </div>
+    <div class="field"><label>Foto de perfil</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="brand-pf" id="brandPf"></div>
+        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
       <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
@@ -1645,7 +1651,7 @@ function ajustesView() {
     </div>
     ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
     <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
+      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
       <div class="hint" style="margin-top:6px">🔒 Posta puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.</div></div>
       ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
     </div>
@@ -1684,7 +1690,13 @@ function ajustesView() {
 
 /* ---------- ONBOARDING (4 pasos) ---------- */
 let OB = null;
-let IG_VERIFIED_AT = null; // última verificación manual de la conexión IG (HH:MM)
+let IG_VERIFIED_AT = null;
+const igSince = (s) => {
+  try {
+    const d = String(s.ig_token_issued_at || '').slice(0, 10).split('-');
+    return d.length === 3 ? `${d[2]}/${d[1]}` : '';
+  } catch (e) { return ''; }
+}; // última verificación manual de la conexión IG (HH:MM)
 let IG_MODE_WARN = false;  // aviso: modo Real elegido sin cuenta conectada
 function freshOB() {
   return {
@@ -2715,11 +2727,13 @@ function bindSettings() {
     return lum > 0.6 ? '#0A1E33' : '#FFFFFF';
   };
   function renderBrandPrev() {
+    const logo = assetLogo();
+    const pf = $('#brandPf');
+    if (pf) pf.innerHTML = logo ? `<img src="${logo.file_path}" alt="logo">` : '';
     const box = $('#brandPrev');
     if (!box) return;
     const c = [$('#s_c0') && $('#s_c0').value, $('#s_c1') && $('#s_c1').value, $('#s_c2') && $('#s_c2').value].filter(Boolean);
     if (!c.length) { box.innerHTML = ''; return; }
-    const logo = assetLogo();
     const biz = (PROFILE && PROFILE.business_name) || 'Tu negocio';
     const ink = lumInk(c[0]);
     box.innerHTML = `
@@ -2790,6 +2804,10 @@ function bindSettings() {
     if (!confirm(`¿Desconectar ${u} de Posta?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
     await api.post('/api/ig/disconnect'); render();
   };
+  const stampVerified = () => {
+    const d = new Date();
+    IG_VERIFIED_AT = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
   const bv = $('#btnIgVerify');
   if (bv) bv.onclick = async () => {
     const vm = $('#igVerifyMsg');
@@ -2798,8 +2816,7 @@ function bindSettings() {
       const r = await api.get('/api/ig/sync');
       if (r && r.username) {
         PROFILE.ig_username = r.username;
-        const d = new Date();
-        IG_VERIFIED_AT = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        stampVerified();
         render();
       } else if (vm) {
         vm.innerHTML = `<div class="err">❌ No se pudo verificar: ${esc((r && r.error) || 'respuesta vacía')}</div>`;
@@ -2831,21 +2848,38 @@ function bindSettings() {
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
   const igRetry = $('#btnIgRetry');
   if (igRetry) igRetry.onclick = () => igConnect();
-  // Si está conectado pero el username quedó vacío: sincronizar solo (muestra el error si falla)
+  // Si está conectado pero el username quedó vacío: sincronizar solo (reintenta una vez a los 10s)
   if (PROFILE && PROFILE.ig_connected && !PROFILE.ig_username) {
-    const doIgSync = async () => {
+    const doIgSync = async (isRetry) => {
       const m = $('#igMsg');
+      const bindRetry = () => {
+        const rb = $('#igSyncRetry');
+        if (rb) rb.onclick = (ev) => { ev.preventDefault(); doIgSync(false); };
+      };
       try {
         const r = await api.get('/api/ig/sync');
-        if (r && r.username) { PROFILE.ig_username = r.username; render(); }
-        else if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram (respuesta vacía). <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
+        if (r && r.username) { PROFILE.ig_username = r.username; render(); return; }
+        throw new Error((r && r.error) || 'respuesta vacía');
       } catch (e) {
-        if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
+        if (!isRetry) {
+          if (m) m.innerHTML = `<div class="hint">🔄 Sincronizando tu cuenta de Instagram…</div>`;
+          setTimeout(() => doIgSync(true), 10000);
+        } else {
+          if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
+          bindRetry();
+        }
       }
-      const rb = $('#igSyncRetry');
-      if (rb) rb.onclick = (ev) => { ev.preventDefault(); doIgSync(); };
     };
-    doIgSync();
+    doIgSync(false);
+  }
+  // Verificación silenciosa: conectado con username → tildar el checklist sin pedir taps
+  if (PROFILE && PROFILE.ig_connected && PROFILE.ig_username && !IG_VERIFIED_AT) {
+    (async () => {
+      try {
+        const r = await api.get('/api/ig/sync');
+        if (r && r.username) { PROFILE.ig_username = r.username; stampVerified(); render(); }
+      } catch (e) { /* queda sin verificar; el botón manual sigue disponible */ }
+    })();
   }
 }
 
