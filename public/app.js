@@ -1176,8 +1176,9 @@ function videoView() {
   </div>
   <div class="card"><h3>🎵 Música (opcional)</h3>
     ${v.music_path ? `
-      <div style="display:flex;gap:10px;align-items:center">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <span style="font-size:14px;color:var(--mut)">🎵 ${esc(v.music_path.split('/').pop())}</span>
+        <audio src="${esc(v.music_path)}" controls style="height:36px;max-width:220px"></audio>
         <button class="btn btn-ghost btn-sm" id="btnVMusicRm">Quitar</button>
       </div>` : `
       <button class="btn btn-ghost btn-sm" id="btnVMusicAdd">📤 Subir MP3</button>
@@ -1274,6 +1275,7 @@ function bindVideo() {
     if (missing >= 0) { $('#vMsg').innerHTML = `<div class="err">La escena ${missing + 1} no tiene imagen</div>`; return; }
     const total = v.scenes.reduce((a, s) => a + s.duration, 0);
     if (total > 60) { $('#vMsg').innerHTML = `<div class="err">El video no puede durar más de 60 segundos (ahora: ${total}s)</div>`; return; }
+    v.result_url = '';
     v.busy = true; rerender();
     try {
       const r = await api.post('/api/videos', {
