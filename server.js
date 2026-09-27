@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
-const { generateContent, generateIdeas } = require('./generator');
+const { generateContent, generateIdeas, chatIdea } = require('./generator');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -368,6 +368,29 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 });
 
 // ---------- Ideas: nosotros pensamos el contenido por el cliente ----------
+// ---------- Chat consultor de ideas: el cliente trae su idea, la pulen juntos ----------
+// Hasta que la idea no queda exactamente como quiere el cliente, no se manda nada.
+app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
+  const { messages } = req.body || {};
+  if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  const clean = messages
+    .slice(-10)
+    .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
+    .filter(m => m.text.trim());
+  if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  try {
+    const settings = getSettings(req.session.userId);
+    const out = await chatIdea(
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) },
+      settings.openai_key || process.env.OPENAI_API_KEY || ''
+    );
+    res.json(out);
+  } catch (e) {
+    console.error('[chat]', e.message);
+    res.status(500).json({ error: 'No pudimos responder, probá de nuevo' });
+  }
+});
+
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
@@ -536,6 +559,12 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
+  } else if (action === 'save-draft') {
+    // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot)
+    const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
+    db.prepare(`UPDATE posts SET caption=?, hashtags=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, post.id);
+    if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
+    return res.json({ ok: true });
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(

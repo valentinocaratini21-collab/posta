@@ -350,4 +350,86 @@ async function generateIdeas(input, apiKey) {
   return templateIdeas(input);
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, HASHTAGS };
+// ---------- Chat consultor de ideas ----------
+// El cliente cuenta su idea, la IA opina con honestidad y la pulen juntos.
+// Cuando la idea está cerrada y aprobada, la IA la devuelve en un bloque ```idea {...}```
+async function openaiChatIdea({ messages, profile, taste }, apiKey) {
+  const p = profile || {};
+  const sys =
+    'Sos el consultor de contenido de Posta, un experto argentino en Instagram que vende de verdad. ' +
+    'Hablás en español rioplatense con voseo, tono cercano y canchero, sin lenguaje corporativo. ' +
+    'Tu trabajo: el cliente te cuenta ideas para posteos y vos le das tu opinión HONESTA. ' +
+    'Si la idea es floja, genérica o no va a vender, decilo con buena onda pero sin vueltas, y proponé ' +
+    'concretamente cómo mejorarla (ángulo, hook, formato). Si es buena, decilo y pulila igual: ' +
+    'siempre se puede vender más. Hacé preguntas cortas cuando te falte contexto (producto, objetivo). ' +
+    'Mensajes cortos, como un chat de verdad: máximo 4-5 líneas por respuesta, nada de testamentos. ' +
+    'Nunca seas chupamedias: tu valor es decir la posta, no lo que el cliente quiere escuchar. ' +
+    'Cuando la idea esté concreta y el cliente la apruebe (o te pida hacerla), cerrá tu mensaje con un bloque ' +
+    'exacto así:\n```idea\n{"titulo": "título corto del post", "angulo": "ángulo en 1-2 líneas"}\n```\n' +
+    'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.';
+  const ctx =
+    `Negocio: ${p.business_name || 'no especificado'}\nRubro: ${p.category || 'no especificado'}\n` +
+    `Tono: ${p.tone || 'canchero'}\nDescripción: ${p.description || 'no indicada'}\n` +
+    `Competidores: ${p.competitors || 'no indicados'}\nObjetivo: ${p.goal || 'vender más'}\n` +
+    (taste ? `Lo que le gustó/no le gustó antes: ${taste}\n` : '') +
+    'Charlemos la idea del cliente.';
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': ['Bearer', apiKey].join(' '),
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: ctx },
+        ...messages.map(m => ({ role: m.role, content: m.text })),
+      ],
+      max_tokens: 400,
+      temperature: 0.9,
+    }),
+  });
+  if (!res.ok) throw new Error('OpenAI chat: ' + res.status);
+  const data = await res.json();
+  return data.choices[0].message.content || '';
+}
+
+function templateChatIdea({ messages, profile }) {
+  const last = (messages[messages.length - 1] || {}).text || '';
+  const p = profile || {};
+  // Sin IA: guía honesta con preguntas para pulir la idea
+  return (
+    `Buena, la anoté: "${last.slice(0, 80)}${last.length > 80 ? '…' : ''}". ` +
+    `Para que venda de verdad en ${p.business_name || 'tu negocio'}, contame: ¿qué producto o promo ` +
+    `querés mover con este posteo y qué te gustaría que haga la gente al verlo (comprar, preguntar, guardar)? ` +
+    `Con eso te armo el ángulo que más vende.`
+  );
+}
+
+async function chatIdea({ messages, profile, taste }, apiKey) {
+  let text;
+  if (apiKey) {
+    try {
+      text = await openaiChatIdea({ messages, profile, taste }, apiKey);
+    } catch (e) {
+      console.error('OpenAI chat falló, usando plantilla:', e.message);
+      text = templateChatIdea({ messages, profile });
+    }
+  } else {
+    text = templateChatIdea({ messages, profile });
+  }
+  // Extrae la propuesta cerrada si la IA la incluyó
+  let idea = null;
+  const m = String(text).match(/```idea\s*([\s\S]*?)```/);
+  if (m) {
+    try {
+      const j = JSON.parse(m[1]);
+      if (j && j.titulo) idea = { titulo: String(j.titulo).slice(0, 120), angulo: String(j.angulo || '').slice(0, 280) };
+      text = String(text).replace(m[0], '').trim();
+    } catch (e) { /* bloque inválido: se ignora */ }
+  }
+  return { reply: text, idea };
+}
+
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, HASHTAGS };
