@@ -65,14 +65,16 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
 .benefits{margin:36px 0 6px}
 .benefits h3{text-align:center;color:var(--navy);font-size:20px;margin:0 0 16px}
-.bgrid{display:flex;flex-direction:column;gap:8px}
-.bcard{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center}
-.bcard .bi{flex:0 0 46px;width:46px;height:46px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:23px}
+.bgrid{display:flex;flex-direction:column}
+.bcard{display:flex;gap:12px;align-items:flex-start;padding:13px 2px;background:none;border:none;border-radius:0}
+.bcard + .bcard{border-top:1px solid var(--line)}
+.bcard .bi{flex:0 0 42px;width:42px;height:42px;border-radius:13px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:22px}
 .bcard b{display:block;color:var(--navy);font-size:15px;margin-bottom:2px}
 .bcard p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
 @media(min-width:640px){
   .bgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-  .bcard{display:block;padding:14px}
+  .bcard{display:block;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px}
+  .bcard + .bcard{border-top:none}
   .bcard .bi{width:auto;height:auto;background:none;display:block;font-size:24px;margin-bottom:6px}
   .bcard b{font-size:14px;margin-bottom:4px}
 }
@@ -215,7 +217,6 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <button class="btn btn-primary btn-block" id="btnGo">Armar mi semana 🚀</button>
       <p class="tiny">Sin registro · Sin tarjeta · La prueba es una sola vez por negocio</p>
     </div>
-  </div>
 
   <div class="benefits">
     <h3>¿Qué te llevás con Posta?</h3>
@@ -227,6 +228,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div class="bcard"><div class="bi">📈</div><div><b>Constancia automática</b><p>Tu Instagram activo todas las semanas, sin depender de tu tiempo.</p></div></div>
       <div class="bcard"><div class="bi">💳</div><div><b>En pesos, sin vueltas</b><p>Pagás por MercadoPago y cancelás cuando quieras.</p></div></div>
     </div>
+  </div>
   </div>
 </div>
 
