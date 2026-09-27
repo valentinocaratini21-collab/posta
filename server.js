@@ -195,7 +195,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
     meta_app_id || '',
     meta_app_secret && !meta_app_secret.startsWith('••••') ? meta_app_secret : cur.meta_app_secret,
     ig_embed_url || '',
-    image_base_url || '',
+    image_base_url !== undefined ? image_base_url : cur.image_base_url,
     validTimezone(timezone) ? timezone : (cur.timezone || DEFAULT_TZ),
     Number.isInteger(preferred_palette) ? preferred_palette : (cur.preferred_palette ?? 0),
     bc,
@@ -203,6 +203,25 @@ app.put('/api/settings', requireAuth, (req, res) => {
     req.session.userId
   );
   res.json({ ok: true });
+});
+
+// Probar credenciales de Meta sin guardarlas: valida App ID + Secret contra Graph API.
+app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
+  const appId = String(req.body?.app_id || '').trim();
+  const appSecret = String(req.body?.app_secret || '').trim();
+  if (!appId || !appSecret) return res.json({ ok: false, error: 'Completá App ID y App Secret' });
+  if (/^•+$/.test(appSecret)) return res.json({ ok: false, error: 'Ese es el valor oculto, escribí la clave real' });
+  try {
+    const r = await fetch(
+      `https://graph.facebook.com/v26.0/${encodeURIComponent(appId)}?fields=name&access_token=${encodeURIComponent(appId)}|${encodeURIComponent(appSecret)}`,
+      { signal: AbortSignal.timeout(15000) }
+    );
+    const j = await r.json();
+    if (j.error) return res.json({ ok: false, error: j.error.message || 'Credenciales inválidas' });
+    res.json({ ok: true, app_name: j.name || appId });
+  } catch (e) {
+    res.json({ ok: false, error: 'No se pudo contactar a Meta, probá de nuevo' });
+  }
 });
 
 // ---------- Generador ----------
