@@ -67,6 +67,7 @@ async function createSubscription({ plan, userId, baseUrl, payerEmail }) {
         currency_id: plan.currency || 'ARS',
       },
       back_url: backUrls.success,
+      notification_url: `${baseUrl}/api/billing/webhook`,
       status: 'pending',
     },
   });
