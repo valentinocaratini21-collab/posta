@@ -44,6 +44,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .filebtn b{color:var(--navy);font-size:16px}
 .filebtn small{color:var(--mut);font-size:13px}
 .filebtn.has{border-style:solid;border-color:var(--cel);background:#f2f9fd}
+.filewrap{position:relative}
+.filewrap input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}
 .cchips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .cchips:empty{margin-bottom:0}
 .cchip{display:inline-flex;align-items:center;gap:7px;background:#f2f9fd;border:1.5px solid #d8e9f4;border-radius:999px;padding:5px 6px 5px 5px;font-size:14px;font-weight:700}
@@ -186,11 +188,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div class="field"><label>Tus competidores (opcional)</label>
         <div class="cchips" id="compChips"></div>
         <input type="text" id="f_comp" placeholder="Escribí su @ y apretá Enter" maxlength="40" autocomplete="off">
-        <div class="hint">Tocá cada @ para ver su Instagram. Los tenemos en cuenta para que tu semana se diferencie.</div>
+        <div class="hint" id="compHint">Los tenemos en cuenta para que tu semana se diferencie.</div>
       </div>
       <div class="field"><label>Captura de tu Instagram o tu logo *</label>
-        <label class="filebtn" for="f_file"><span class="fe">📷</span><b id="fileBtnTxt">Subí tu captura o logo</b><small>PNG o JPG · detectamos tus colores automáticamente</small></label>
-        <input type="file" id="f_file" accept="image/jpeg,image/png,image/webp" style="display:none">
+        <div class="filewrap">
+          <div class="filebtn"><span class="fe">📷</span><b id="fileBtnTxt">Subí tu captura o logo</b><small>PNG o JPG · detectamos tus colores automáticamente</small></div>
+          <input type="file" id="f_file" accept="image/jpeg,image/png,image/webp">
+        </div>
         <div class="hint">La usamos para detectar tus colores y armar tu antes/después. No la compartimos con nadie.</div>
         <div class="cdet" id="cDetected"><span>🎨 Detectamos tus colores</span><i id="swA"></i><i id="swB"></i></div>
       </div>
@@ -451,6 +455,9 @@ function renderCompChips() {
   box.innerHTML = compHandles.map((h, i) => `
     <span class="cchip"><a href="https://www.instagram.com/${encodeURIComponent(h)}/" target="_blank" rel="noopener"><i>${esc(h[0].toUpperCase())}</i>@${esc(h)}</a><b data-i="${i}" title="Quitar">×</b></span>`).join('');
   box.querySelectorAll('b').forEach((b) => { b.onclick = () => { compHandles.splice(parseInt(b.dataset.i, 10), 1); renderCompChips(); }; });
+  $('#compHint').textContent = compHandles.length
+    ? 'Tocá cada @ para ver su Instagram.'
+    : 'Los tenemos en cuenta para que tu semana se diferencie.';
 }
 function addComp(raw) {
   const h = String(raw || '').trim().replace(/^@/, '').toLowerCase();
