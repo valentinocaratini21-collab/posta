@@ -1139,6 +1139,12 @@ function bindIdeas() {
 }
 
 /* ---------- VIDEO 🎬 ---------- */
+function vTotalHTML() {
+  const total = VSTATE.scenes.reduce((a, s) => a + (+s.duration || 0), 0);
+  const over = total > 60;
+  return `⏱️ Duración total: <b style="color:${over ? 'var(--red-d)' : 'var(--txt)'}">${total}s</b> / 60s máx`;
+}
+
 function videoView() {
   const v = VSTATE;
   const photos = assetPhotos();
@@ -1165,8 +1171,8 @@ function videoView() {
       </div>
     </div>`).join('')}
     ${v.scenes.length < 5 ? `<button class="btn btn-ghost" id="btnVAdd">＋ Agregar escena</button>` : ''}
+    <div id="vTotal" class="hint" style="margin:12px 0 0">${vTotalHTML()}</div>
     <input type="file" id="v_file" accept="image/*" style="display:none">
-    <input type="file" id="v_libfile" accept="image/*" style="display:none">
   </div>
   <div class="card"><h3>🎵 Música (opcional)</h3>
     ${v.music_path ? `
@@ -1214,11 +1220,13 @@ function bindVideo() {
   $$('[data-vup]').forEach(b => b.onclick = () => { vfileIdx = +b.dataset.vup; vfile.click(); });
   vfile.onchange = async () => {
     const f = vfile.files[0]; if (!f) return;
+    const btn = document.querySelector(`[data-vup="${vfileIdx}"]`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Subiendo…'; }
     try {
       const p = await uploadAssetFile(f, 'photo');
       v.scenes[vfileIdx].image_path = p;
       rerender();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { alert('Error: ' + e.message); if (btn) { btn.disabled = false; btn.innerHTML = '📤 Subir'; } }
     vfile.value = '';
   };
   // Elegir de la librería
@@ -1234,6 +1242,9 @@ function bindVideo() {
   $$('[data-vtext]').forEach(inp => inp.oninput = () => { v.scenes[+inp.dataset.vtext].text = inp.value; });
   $$('[data-vdur]').forEach(inp => inp.onchange = () => {
     v.scenes[+inp.dataset.vdur].duration = Math.min(30, Math.max(1, Math.round(+inp.value || 3)));
+    inp.value = v.scenes[+inp.dataset.vdur].duration;
+    const t = $('#vTotal');
+    if (t) t.innerHTML = vTotalHTML();
   });
   $$('[data-vrm]').forEach(b => b.onclick = () => { v.scenes.splice(+b.dataset.vrm, 1); rerender(); });
   $$('[data-vcap]').forEach(inp => inp.oninput = () => { v.caption = inp.value; });
