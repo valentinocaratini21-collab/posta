@@ -1606,19 +1606,26 @@ async function ideasView() {
   return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos.</p></div></div>
   ${checklistHTML(posts.length)}
   ${recCardHTML(IDEAS, posts, ppw)}
-  ${autopilotCardHTML()}
-  ${drafts.length ? reviewCardHTML(drafts) : ''}
   ${chatCardHTML()}
-  <div id="ideasZone">${IDEAS.length ? ideasList() : `
+  <div id="ideasZone">${IDEAS.length ? ideasList(posts) : `
     <div class="empty"><div class="big">💡</div>
       Todavía no generamos ideas para tu negocio.<br>
-      <span style="font-size:14px">Usá "✨ Generar ideas" o "⚡ Armar mi semana" acá arriba 👆</span>
+      <span style="font-size:14px">Charlalo con el consultor acá arriba 👆 o armá tu semana acá abajo 👇</span>
     </div>`}
   </div>
+  ${autopilotCardHTML()}
+  ${drafts.length ? reviewCardHTML(drafts) : ''}
   <div id="ideasMsg"></div>`;
 }
 
-function ideasList() {
+function ideasList(posts) {
+  const STOP = new Set('para con las los del una unos este esta estos estas como mas pero porque cuando donde tus sus mis son fue hay entre sobre todo todos muy sin tan'.split(' '));
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const hay = ' ' + (posts || []).map(p => norm(p.caption)).join(' ') + ' ';
+  const alreadyPosted = title => {
+    const words = norm(title).split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !STOP.has(w));
+    return words.length > 0 && words.filter(w => hay.includes(' ' + w)).length >= 2;
+  };
   return `
   <div class="card">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px">
@@ -1627,12 +1634,14 @@ function ideasList() {
     </div>
     ${IDEAS.map((idea, i) => {
       const isVideo = /reel|video/i.test(idea.formato || '');
+      const posted = alreadyPosted(idea.titulo);
       return `
     <div class="post-item" style="align-items:flex-start">
       <div class="info">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
           <span class="badge b-scheduled">${esc(idea.formato)}</span>
           <b style="font-size:15px">${esc(idea.titulo)}</b>
+          ${posted ? `<span class="badge" style="background:#FFF3D6;color:#8a6d1a;border:1px solid #FEC14D" title="Ya publicaste sobre este tema">📌 Ya lo posteaste</span>` : ''}
         </div>
         <div class="cap" style="white-space:normal;line-height:1.6">${esc(idea.angulo)}</div>
       </div>
@@ -1772,7 +1781,7 @@ function bindIdeas() {
     }
   };
   const b = $('#btnGenIdeas'); if (b) b.onclick = gen;
-  const r = $('#btnRegenIdeas'); if (r) r.onclick = gen;
+  const r = $('#btnRegenIdeas'); if (r) r.onclick = () => { if (confirm('¿Genero ideas nuevas? Las actuales se reemplazan.')) gen(); };
   const rg = $('#btnRecGen'); if (rg) rg.onclick = gen;
   $$('[data-rec-idea]').forEach(btn => btn.onclick = () => {
     const idea = IDEAS[+btn.dataset.recIdea];
