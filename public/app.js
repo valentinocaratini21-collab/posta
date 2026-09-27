@@ -1626,13 +1626,30 @@ function ajustesView() {
   </div>
   <div class="card"><h3>📸 Instagram</h3>
     <div id="igBanner"></div>
-    <div class="set-row"><div><div class="t">Modo demo ${s.demo_mode ? '(activo)' : ''}</div>
-      <div class="d">En modo demo las publicaciones se simulan: probá todo el flujo sin conectar nada. Desactivalo para publicar de verdad.</div></div>
-      <div class="toggle ${s.demo_mode ? 'on' : ''}" id="tglDemo"></div></div>
-    <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div></div>
-      ${p.ig_connected ? `<button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button>` : `<button class="btn btn-soft btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+    <div class="ig-checklist">
+      <div class="t">Tu Instagram está listo cuando:</div>
+      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
+      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
+      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
     </div>
+    <div style="font-weight:800;margin-bottom:8px">Modo de publicación</div>
+    <div class="ig-modes">
+      <div class="ig-mode ${s.demo_mode ? 'sel' : ''}" id="igModeDemo" role="button" tabindex="0">
+        <div class="ig-mode-h">🧪 Demo ${s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
+        <span>Simulamos todo: probá el flujo completo sin conectar nada.</span>
+      </div>
+      <div class="ig-mode ${!s.demo_mode ? 'sel' : ''}" id="igModeReal" role="button" tabindex="0">
+        <div class="ig-mode-h">🚀 Real ${!s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
+        <span>Publicamos en tu Instagram de verdad.</span>
+      </div>
+    </div>
+    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
+    <div class="set-row"><div><div class="t">Cuenta conectada</div>
+      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
+      <div class="hint" style="margin-top:6px">🔒 Posta puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.</div></div>
+      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+    </div>
+    <div id="igVerifyMsg" style="margin-top:10px"></div>
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
       <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:13px">(gratis, 30 segundos)</span></div>
       <ol style="margin:0 0 12px 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
@@ -1667,6 +1684,8 @@ function ajustesView() {
 
 /* ---------- ONBOARDING (4 pasos) ---------- */
 let OB = null;
+let IG_VERIFIED_AT = null; // última verificación manual de la conexión IG (HH:MM)
+let IG_MODE_WARN = false;  // aviso: modo Real elegido sin cuenta conectada
 function freshOB() {
   return {
     step: 1,
@@ -2756,15 +2775,39 @@ function bindSettings() {
     });
     $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
   };
-  $('#tglDemo').onclick = async () => {
-    const v = !$('#tglDemo').classList.contains('on');
+  const setDemoMode = async (v) => {
     await api.put('/api/settings', { demo_mode: v });
+    IG_MODE_WARN = (!v && !(PROFILE && PROFILE.ig_connected));
     render();
   };
+  const md = $('#igModeDemo'); if (md) { md.onclick = () => setDemoMode(true); md.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(true); } }; }
+  const mr = $('#igModeReal'); if (mr) { mr.onclick = () => setDemoMode(false); mr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(false); } }; }
   const bc = $('#btnIgConn');
   if (bc) bc.onclick = igConnect;
   const bd = $('#btnIgDisc');
-  if (bd) bd.onclick = async () => { await api.post('/api/ig/disconnect'); render(); };
+  if (bd) bd.onclick = async () => {
+    const u = (PROFILE && PROFILE.ig_username) ? '@' + PROFILE.ig_username : 'tu cuenta';
+    if (!confirm(`¿Desconectar ${u} de Posta?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
+    await api.post('/api/ig/disconnect'); render();
+  };
+  const bv = $('#btnIgVerify');
+  if (bv) bv.onclick = async () => {
+    const vm = $('#igVerifyMsg');
+    if (vm) vm.innerHTML = '<div class="hint">🔍 Verificando tu conexión con Instagram…</div>';
+    try {
+      const r = await api.get('/api/ig/sync');
+      if (r && r.username) {
+        PROFILE.ig_username = r.username;
+        const d = new Date();
+        IG_VERIFIED_AT = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        render();
+      } else if (vm) {
+        vm.innerHTML = `<div class="err">❌ No se pudo verificar: ${esc((r && r.error) || 'respuesta vacía')}</div>`;
+      }
+    } catch (e) {
+      if (vm) vm.innerHTML = `<div class="err">❌ La verificación falló: ${esc(e.message)}</div>`;
+    }
+  };
   // --- resultado del OAuth (?ig= en el hash) ---
   (function igResult() {
     let q = '';

@@ -612,3 +612,16 @@ button{font-family:inherit}
 
 .ig-ok{background:#E8F7EE;border:1px solid #B9E6C9;color:#14663A;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px}
 .ig-warn{background:#FFF6E0;border:1px solid #F5D98B;color:#8A5A00;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:12px}
+
+/* ---------- Instagram: checklist + modos ---------- */
+.ig-checklist{background:#F2F9FD;border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 14px}
+.ig-checklist .t{font-weight:800;font-size:14px;margin-bottom:8px}
+.ig-check{font-size:14px;color:var(--mut);padding:2px 0}
+.ig-check.ok{color:var(--ink);font-weight:600}
+.ig-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 16px}
+.ig-mode{border:2px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:#fff;transition:border-color .15s,background .15s}
+.ig-mode-h{font-weight:800;font-size:15px;margin-bottom:4px}
+.ig-mode span{font-size:13px;color:var(--mut);line-height:1.45}
+.ig-mode.sel{border-color:var(--cel);background:#F2F9FD}
+.ig-mode-on{color:var(--cel);font-size:12px;font-weight:800;margin-left:6px}
+@media(max-width:560px){.ig-modes{grid-template-columns:1fr}}
