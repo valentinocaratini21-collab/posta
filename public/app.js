@@ -1080,7 +1080,10 @@ function proposalHTML() {
       ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
       <div style="font-weight:700;font-size:14px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
       <div class="chat-previews" id="chatPreviews"><div style="font-size:13px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
-      <div style="font-weight:700;font-size:14px;margin:4px 0 6px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span>:</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px">
+        <div style="font-weight:700;font-size:14px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span></div>
+        <button class="btn btn-soft btn-sm" id="chatMoreCaps" type="button" title="Generar 3 textos nuevos">🔄 Otras</button>
+      </div>
       <div class="chat-caps" id="chatCaps"></div>
       <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
       <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="font-size:13px;margin-top:6px">
@@ -1101,7 +1104,7 @@ async function refreshChatCaption() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   try {
-    const out = await api.post('/api/generate', { topic: idea.titulo, n: 3 });
+    const out = await api.post('/api/generate', { topic: idea.titulo, n: 3, seed: (Date.now() % 100000) });
     if (CHAT_IDEA !== idea) return; // el usuario siguió de largo
     const caps = (out.captions && out.captions.length ? out.captions : [out.caption]).map(String).filter(Boolean);
     CHAT_CAPTIONS = caps.slice(0, 3);
@@ -1113,6 +1116,31 @@ async function refreshChatCaption() {
     const hg = $('#chatHashtags');
     if (hg && !hg.dataset.touched) hg.value = CHAT_CAPTION.hashtags;
   } catch (e) { /* se genera al crear el borrador */ }
+}
+
+// Pide 3 textos nuevos cuando ninguno convence (no pisa los hashtags retocados)
+async function chatMoreCaptions() {
+  if (!CHAT_IDEA) return;
+  const idea = CHAT_IDEA;
+  const b = $('#chatMoreCaps');
+  if (b) { b.disabled = true; b.textContent = '⏳…'; }
+  try {
+    const out = await api.post('/api/generate', { topic: idea.titulo, n: 3, seed: (Date.now() % 100000) + 7 });
+    if (CHAT_IDEA !== idea) return;
+    const caps = (out.captions && out.captions.length ? out.captions : [out.caption]).map(String).filter(Boolean);
+    if (caps.length) {
+      CHAT_CAPTIONS = caps.slice(0, 3);
+      CHAT_CAP_SEL = 0;
+      CHAT_CAPTION = { caption: CHAT_CAPTIONS[0], hashtags: out.hashtags || (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '' };
+      renderChatCaps();
+      const ta = $('#chatCaption');
+      if (ta) { ta.value = CHAT_CAPTION.caption; delete ta.dataset.touched; }
+      const hg = $('#chatHashtags');
+      if (hg && !hg.dataset.touched) hg.value = CHAT_CAPTION.hashtags;
+    }
+  } catch (e) { /* quedan las opciones anteriores */ }
+  const b2 = $('#chatMoreCaps');
+  if (b2) { b2.disabled = false; b2.textContent = '🔄 Otras'; }
 }
 
 // 3 opciones de texto tocables: elegir una la carga en el campo editable
@@ -1475,6 +1503,8 @@ function chatRenderProposal() {
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => chatMakePost(false);
   if (mkR) mkR.onclick = () => chatMakePost(true);
+  const mCaps0 = $('#chatMoreCaps');
+  if (mCaps0) mCaps0.onclick = chatMoreCaptions;
   renderChatPreviews();
   renderChatStoryboard();
   chatScroll();
@@ -1554,6 +1584,8 @@ function bindChat() {
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => chatMakePost(false);
   if (mkR) mkR.onclick = () => chatMakePost(true);
+  const mCapsB = $('#chatMoreCaps');
+  if (mCapsB) mCapsB.onclick = chatMoreCaptions;
   const att = $('#chatAttach'), file = $('#chatFile');
   if (att && file) {
     att.onclick = () => file.click();
