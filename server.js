@@ -264,7 +264,7 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const { topic, n, seed } = req.body || {};
-  if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del post' });
+  if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del posteo' });
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
   const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
@@ -294,7 +294,7 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
 // ---------- Creador v2: 6 opciones con foto, colores y energía ----------
 app.post('/api/creator/options', requireAuth, async (req, res) => {
   const { topic, feedback, productPhoto } = req.body || {};
-  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'Contanos la idea del post' });
+  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'Contanos la idea del posteo' });
   try {
     const settings = getSettings(req.session.userId);
     // Foto del producto (opcional, paso 1): si existe en /media, es LA foto de las 6.
