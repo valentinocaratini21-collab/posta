@@ -37,6 +37,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tone-card.on{border-color:var(--cel);background:var(--bg2);box-shadow:0 6px 18px rgba(39,147,200,.15)}
 .color-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .color-row input[type=color]{width:100%;height:52px;border:2px solid var(--line);border-radius:12px;padding:6px;background:#fff;cursor:pointer}
+.cdet{display:none;align-items:center;gap:8px;margin-top:10px;font-size:13px;font-weight:700;color:var(--navy)}
+.cdet i{width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(10,30,51,.25)}
 .country-row{display:flex;gap:10px}
 .country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
 .country-btn.on{border-color:var(--cel);background:var(--bg2)}
@@ -167,7 +169,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div class="card form-card">
       <div class="err" id="obErr"></div>
       <div class="field"><label>Nombre de tu negocio *</label><input type="text" id="f_biz" placeholder="Ej: Café Martínez" maxlength="60"></div>
-      <div class="field"><label>Tu Instagram (opcional)</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Para personalizar tu prueba con tu nombre.</div></div>
+      <div class="field"><label>Tu Instagram *</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Lo usamos para personalizar tu semana con tu perfil real.</div></div>
       <div class="field"><label>Rubro *</label><select id="f_cat"></select></div>
       <div class="field"><label>¿Qué querés lograr? *</label><textarea id="f_goal" maxlength="300" placeholder="Ej: vender más por Instagram y que me conozcan en el barrio"></textarea></div>
       <div class="field"><label>¿Cómo le hablás a tus clientes? *</label>
@@ -177,13 +179,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         </div>
       </div>
       <div class="field"><label>Tus competidores (opcional)</label><input type="text" id="f_comp" placeholder="Nombres o @ de Instagram, separados por coma" maxlength="200"><div class="hint">Los tenemos en cuenta para que tu semana se diferencie.</div></div>
-      <div class="field"><label>Captura de tu Instagram o tu logo (opcional)</label><input type="file" id="f_file" accept="image/jpeg,image/png,image/webp" style="border:none;padding:0"><div class="hint">La usamos para personalizar tu prueba: tus colores, tus fotos en los posteos y tu antes/después. No la compartimos con nadie.</div></div>
-      <div class="field"><label>Tus colores</label>
-        <div class="color-row">
-          <div><input type="color" id="f_accent" value="#2793C8"><div class="hint">Color principal</div></div>
-          <div><input type="color" id="f_btn" value="#FEC14D"><div class="hint">Color de botones</div></div>
-        </div>
+      <div class="field"><label>Captura de tu Instagram o tu logo *</label><input type="file" id="f_file" accept="image/jpeg,image/png,image/webp" style="border:none;padding:0"><div class="hint">La usamos para detectar tus colores y armar tu antes/después. No la compartimos con nadie.</div>
+        <div class="cdet" id="cDetected"><span>🎨 Detectamos tus colores</span><i id="swA"></i><i id="swB"></i></div>
       </div>
+      <input type="hidden" id="f_accent" value="#2793C8"><input type="hidden" id="f_btn" value="#FEC14D">
       <div class="field"><label>País</label>
         <div class="country-row">
           <button type="button" class="country-btn on" data-c="AR">🇦🇷 Argentina</button>
@@ -345,6 +344,7 @@ function show(id) {
   $$('.tone-card').forEach((c) => { c.onclick = () => { $$('.tone-card').forEach((x) => x.classList.remove('on')); c.classList.add('on'); TONE = c.dataset.tone; }; });
   $$('.country-btn').forEach((b) => { b.onclick = () => { $$('.country-btn').forEach((x) => x.classList.remove('on')); b.classList.add('on'); COUNTRY = b.dataset.c; }; });
   $('#btnGo').onclick = startTrial;
+  $('#f_file').addEventListener('change', detectColors);
   $('#btnBuy2').onclick = openPlans;
   $('#btnBuy3').onclick = openPlans;
   $('#xPlans').onclick = closePlans;
@@ -373,6 +373,7 @@ function show(id) {
 })();
 
 // ---------- colores desde la imagen (posteos, no encabezado) ----------
+// Devuelve hasta 2 colores dominantes (distintos entre sí) de la imagen
 function extractPalette(img) {
   const cw = 120, chh = 120;
   const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh;
@@ -396,12 +397,41 @@ function extractPalette(img) {
       buckets[key] = (buckets[key] || 0) + 1;
     }
   }
-  let best = null, bestN = 0;
-  for (const k in buckets) { if (buckets[k] > bestN) { bestN = buckets[k]; best = k; } }
-  if (!best) return null;
-  const [br, bg, bb] = best.split(',').map(Number);
   const toHex = (v) => Math.round((v * 32 + 16)).toString(16).padStart(2, '0').toUpperCase();
-  return '#' + toHex(br) + toHex(bg) + toHex(bb);
+  const hex = (c) => '#' + c.map(toHex).join('');
+  const sorted = Object.entries(buckets).sort((a, b) => b[1] - a[1]);
+  const picked = [];
+  for (const [k] of sorted) {
+    const c = k.split(',').map(Number);
+    // Que sea visiblemente distinto a los ya elegidos
+    const distinct = picked.every((p) =>
+      Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) >= 3);
+    if (distinct) { picked.push(c); if (picked.length === 2) break; }
+  }
+  return picked.map(hex);
+}
+
+// Detección automática al elegir el archivo: muestra los colores encontrados
+let palPromise = null;
+function detectColors() {
+  const f = $('#f_file').files && $('#f_file').files[0];
+  $('#cDetected').style.display = 'none';
+  if (!f) return;
+  palPromise = (async () => {
+    const img = await new Promise((res, rej) => {
+      const im = new Image();
+      im.onload = () => res(im); im.onerror = rej;
+      im.src = URL.createObjectURL(f);
+    });
+    URL.revokeObjectURL(img.src);
+    const pal = extractPalette(img);
+    if (pal[0]) $('#f_accent').value = pal[0];
+    if (pal[1]) $('#f_btn').value = pal[1];
+    $('#swA').style.background = $('#f_accent').value;
+    $('#swB').style.background = $('#f_btn').value;
+    $('#cDetected').style.display = 'flex';
+  })();
+  palPromise.catch(() => {});
 }
 
 // ---------- generar ----------
@@ -419,22 +449,14 @@ async function startTrial() {
   const err = $('#obErr');
   const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
   if (!biz) return fail('Contanos el nombre de tu negocio 🙂');
+  if (!$('#f_ig').value.trim()) return fail('Contanos tu Instagram 🙂');
+  const fileInput = $('#f_file');
+  if (!fileInput.files || !fileInput.files[0]) return fail('Subí una captura de tu Instagram o tu logo 🙂');
   if (!$('#f_goal').value.trim()) return fail('Contanos qué querés lograr, así tu semana sale a medida 🙂');
   err.style.display = 'none';
 
-  // Colores desde la imagen (si la subió): se procesa en el navegador, no se envía
-  const fileInput = $('#f_file');
-  if (fileInput.files && fileInput.files[0]) {
-    try {
-      const img = await new Promise((res, rej) => {
-        const im = new Image();
-        im.onload = () => res(im); im.onerror = rej;
-        im.src = URL.createObjectURL(fileInput.files[0]);
-      });
-      const pal = extractPalette(img);
-      if (pal) $('#f_accent').value = pal;
-    } catch (e) { /* sigue con los colores elegidos */ }
-  }
+  // Aseguramos que la detección automática de colores haya terminado
+  if (palPromise) { try { await palPromise; } catch (e) {} }
 
   show('v-loading');
   $('#tkTitle').textContent = 'Armando tu semana para ' + biz + '…';
