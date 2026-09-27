@@ -653,3 +653,11 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* ---------- Mi marca: foto de perfil redonda ---------- */
 .brand-pf{width:76px;height:76px;border-radius:50%;overflow:hidden;border:2px solid var(--line);background:#fff;flex:none;display:flex;align-items:center;justify-content:center}
 .brand-pf img{width:100%;height:100%;object-fit:cover}
+
+/* ---------- Publicar ahora: progreso en vivo ---------- */
+.pubnow{display:flex;flex-direction:column;gap:10px;padding:6px 0;max-width:100%}
+.pubnow-step{display:flex;align-items:center;gap:8px;font-size:14px;color:#47617A}
+.pubnow-step.active{color:#0A1E33;font-weight:700}
+.pubnow-step.done{color:#2793C8}
+.pubnow .err{margin:0}
+.pubnow-mount{width:100%}

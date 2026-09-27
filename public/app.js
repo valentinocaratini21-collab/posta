@@ -1427,6 +1427,47 @@ function postItem(p, actions) {
     <div class="acts">${actions}</div>
   </div>`;
 }
+/* ---------- Publicar ahora (instantáneo, con progreso en vivo) ---------- */
+async function publishNowFlow(postId, mount) {
+  const steps = ['Preparando imagen', 'Publicando en Instagram'];
+  const paint = (activeIdx, doneAll, err) => {
+    mount.innerHTML = `<div class="pubnow">` +
+      steps.map((s, i) => {
+        const cls = doneAll || i < activeIdx ? 'done' : (i === activeIdx ? 'active' : '');
+        const icon = doneAll || i < activeIdx ? '✅' : (i === activeIdx ? '⏳' : '○');
+        return `<div class="pubnow-step ${cls}"><span>${icon}</span><span>${s}…</span></div>`;
+      }).join('') +
+      (err ? `<div class="err">${esc(humanError(err))}</div><button class="btn btn-soft btn-sm" data-pnretry="${postId}">Reintentar</button>` : '') +
+      `</div>`;
+    const rb = mount.querySelector('[data-pnretry]');
+    if (rb) rb.onclick = () => publishNowFlow(postId, mount);
+  };
+  paint(0, false);
+  try {
+    await api.post(`/api/posts/${postId}/publish-now`, {});
+  } catch (e) {
+    paint(0, false, e.message);
+    return { ok: false };
+  }
+  const t0 = Date.now();
+  while (Date.now() - t0 < 3.5 * 60 * 1000) {
+    await new Promise(r => setTimeout(r, 2500));
+    let st;
+    try { st = (await api.get(`/api/posts/${postId}`)).post; }
+    catch (e) { continue; }
+    if (st.status === 'published') {
+      mount.innerHTML = `<div class="okmsg">✅ ¡Publicado en Instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ↗</a>` : ''}</div>`;
+      return { ok: true, permalink: st.ig_permalink };
+    }
+    if (st.status === 'failed' || st.status === 'cancelled') {
+      paint(1, false, st.error || 'Se canceló la publicación.');
+      return { ok: false };
+    }
+    paint(Date.now() - t0 > 9000 ? 1 : 0, false);
+  }
+  mount.innerHTML = `<div class="okmsg">⏳ Sigue publicándose… lo ves en el historial en un minuto.</div>`;
+  return { ok: true, pending: true };
+}
 /* ---------- MI SEMANA (dashboard) ---------- */
 let SEM_NUDGES = [];
 
@@ -2052,7 +2093,15 @@ function bindApp(tab) {
         await api.patch(`/api/posts/${id}`, { scheduled_at: new Date(inp.value).toISOString() });
         render(); return;
       }
-      await api.patch(`/api/posts/${id}`, { action: act === 'now' ? 'publish-now' : 'cancel' });
+      if (act === 'now') {
+        b.disabled = true; // bloquea el doble tap
+        const actsEl = b.closest('.post-item').querySelector('.acts');
+        actsEl.innerHTML = '<div class="pubnow-mount"></div>';
+        await publishNowFlow(id, actsEl.querySelector('.pubnow-mount'));
+        render();
+        return;
+      }
+      await api.patch(`/api/posts/${id}`, { action: 'cancel' });
       render();
     });
     bindSignalBtns();
@@ -2415,9 +2464,12 @@ function bindCreator() {
     $('#btnBackOptions').onclick = () => { c.step = 1; render(); };
   }
   if (c.step === 3) {
+    const resetCreator = () => {
+      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
+    };
     const done = (msg) => {
       $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
-      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
+      resetCreator();
       setTimeout(() => location.hash = '#/app/calendario', 1400);
     };
     $('#btnSchedule').onclick = async () => {
@@ -2429,11 +2481,21 @@ function bindCreator() {
       } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
     };
     $('#btnNow').onclick = async () => {
+      const btn = $('#btnNow');
+      btn.disabled = true; // bloquea el doble tap
       try {
         const { id } = await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags });
-        await api.patch(`/api/posts/${id}`, { action: 'publish-now' });
-        done('⚡ Publicando ahora... mirá el historial en unos segundos.');
-      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+        $('#pubMsg').innerHTML = '<div class="pubnow-mount"></div>';
+        const r = await publishNowFlow(id, $('#pubMsg .pubnow-mount'));
+        if (r && r.ok && r.permalink) {
+          // publishNowFlow ya mostró "¡Publicado! Ver en IG ↗"
+          resetCreator();
+          setTimeout(() => location.hash = '#/app/calendario', 8000);
+        } else if (r && r.ok) {
+          done('⏳ Se está publicando… lo ves en el historial en un minuto.');
+        }
+        // si falló, publishNowFlow ya mostró el error con botón Reintentar
+      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
     };
     $('#btnBack2').onclick = () => { c.step = 2; render(); };
   }
