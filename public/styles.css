@@ -777,3 +777,13 @@ textarea.in{resize:vertical;min-height:96px}
   .lp-sticky .btn{width:100%}
   .footer{padding-bottom:112px}
 }
+
+/* ===== Planes: más peek, badge legible, puntitos ===== */
+.plan-dots{display:none}
+@media(max-width:760px){
+  #planes .price-card{flex:0 0 78%}
+  #planes .price-card .tag{font-size:11px;padding:5px 14px;top:-13px}
+  .plan-dots{display:flex;gap:8px;justify-content:center;margin-top:8px}
+  .plan-dots span{width:8px;height:8px;border-radius:50%;background:#C9DCE8;transition:background .2s}
+  .plan-dots span.on{background:var(--cel)}
+}

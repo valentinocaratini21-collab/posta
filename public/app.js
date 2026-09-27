@@ -239,14 +239,14 @@ function landingView(cfg) {
         <div class="pz-ba-arrow">→</div>
         <div class="pz-ba-panel">
           <div class="pz-ba-label pz-ba-label-on">CON POSTA</div>
-          <img src="hero-feed.png" alt="Feed de Instagram gestionado por Posta">
+          <img src="hero-feed.jpg" alt="Feed de Instagram gestionado por Posta">
         </div>
       </div>
     </div>
     <div class="hero-note">Sin tarjeta · 3 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
-        <img src="hero-post.png" alt="Ejemplo de posteo creado por Posta">
+        <img src="hero-post.jpg" alt="Ejemplo de posteo creado por Posta">
         <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#2793C8">#modaargentina #emprendedoresargentinos</span></div>
       </div></div>
       <div class="phone"><div class="screen">
@@ -343,6 +343,7 @@ function landingView(cfg) {
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
     <div class="scarcity" id="scarcityLine">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
+    <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
@@ -2750,6 +2751,17 @@ async function render() {
         const el = document.getElementById('scarcityLine');
         if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
       }).catch(() => {});
+      // Puntitos del carrusel de planes
+      const pr = document.getElementById('plansRow'), pd = document.getElementById('planDots');
+      if (pr && pd) {
+        const updDots = () => {
+          const w = pr.firstElementChild ? pr.firstElementChild.offsetWidth + 14 : 1;
+          const i = Math.min(2, Math.max(0, Math.round(pr.scrollLeft / w)));
+          pd.querySelectorAll('span').forEach((d, j) => d.classList.toggle('on', j === i));
+        };
+        pr.addEventListener('scroll', updDots, { passive: true });
+        updDots();
+      }
     }
     const el = document.querySelector(path);
     if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth' }));
