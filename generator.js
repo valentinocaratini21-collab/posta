@@ -396,15 +396,74 @@ async function openaiChatIdea({ messages, profile, taste }, apiKey) {
 }
 
 function templateChatIdea({ messages, profile }) {
-  const last = (messages[messages.length - 1] || {}).text || '';
+  // Sin IA real: igual tiene que ser útil. Detecta la intención, propone
+  // soluciones concretas (no un loop de preguntas) y CIERRA la idea.
   const p = profile || {};
-  // Sin IA: guía honesta con preguntas para pulir la idea
-  return (
-    `Buena, la anoté: "${last.slice(0, 80)}${last.length > 80 ? '…' : ''}". ` +
-    `Para que venda de verdad en ${p.business_name || 'tu negocio'}, contame: ¿qué producto o promo ` +
-    `querés mover con este posteo y qué te gustaría que haga la gente al verlo (comprar, preguntar, guardar)? ` +
-    `Con eso te armo el ángulo que más vende.`
-  );
+  const biz = p.business_name || 'tu negocio';
+  const userMsgs = messages.filter(m => m.role === 'user').map(m => String(m.text || ''));
+  const last = (userMsgs[userMsgs.length - 1] || '').trim();
+  const all = userMsgs.join(' ').toLowerCase();
+  const turn = userMsgs.length;
+  const first = (userMsgs[0] || '').trim();
+  const echo = last.length > 90 ? last.slice(0, 90).trim() + '…' : last;
+  const has = (...ws) => ws.some(w => all.includes(w));
+  const yes = /^(dale|hacelo|hacela|hace|si\b|sí|sip|ok|okay|genial|perfecto|me gusta\b|me encanta\b|va\b|de una)/i.test(last);
+  const topicShort = ((yes && first ? first : last).split(' ').slice(0, 6).join(' ').trim() || `Novedades de ${biz}`).slice(0, 80);
+
+  let intent = 'general';
+  if (has('sorteo', 'regal', 'ganar', 'concurso')) intent = 'sorteo';
+  else if (has('nuevo', 'nueva', 'lanzamiento', 'lleg', 'ingres')) intent = 'lanzamiento';
+  else if (has('vend', 'comprar', 'promo', 'descuento', 'oferta', 'precio', 'liquid')) intent = 'ventas';
+  else if (has('visibilidad', 'visible', 'seguidores', 'crecer', 'alcance', 'mostrar', 'creativ')) intent = 'visibilidad';
+
+  const ideaBlock = (titulo, angulo) =>
+    `\n\`\`\`idea\n${JSON.stringify({ titulo, angulo })}\n\`\`\``;
+
+  // ---- Cierres por intención: la idea queda lista para hacer el post ----
+  const closers = {
+    visibilidad: () => ({
+      titulo: `Lo mejor de ${biz} esta semana`,
+      angulo: 'Carrusel con lo más posteado/mostrado de la semana, cada ítem con su detalle. Cierra con la pregunta "¿cuál te llevarías?" para generar comentarios.',
+      pitch: `Listo, la tenemos. Con tu objetivo (más visibilidad + mostrar variedad), el formato que más rinde es el carrusel de "lo mejor de la semana": mostrás el catálogo, la pregunta final genera comentarios y eso es lo que Instagram premia con alcance.`,
+    }),
+    ventas: () => ({
+      titulo: topicShort,
+      angulo: 'Foto del producto como héroe, beneficio principal en el diseño y CTA directo: "Escribinos por DM y te lo reservamos 📩".',
+      pitch: `Vamos a lo que importa: vender. La fórmula que más convierte es producto héroe + un beneficio claro + CTA directo por DM. Sin vueltas, sin humo.`,
+    }),
+    lanzamiento: () => ({
+      titulo: `Llegó lo nuevo a ${biz}`,
+      angulo: 'Anuncio del lanzamiento con el producto como protagonista y fecha clara. Ideal como reel de 3 escenas: adelanto, revelación y CTA.',
+      pitch: `Los lanzamientos rinden con anuncio directo y el producto como héroe. Lo haría reel: adelanto, revelación y CTA — el formato con más alcance para novedades.`,
+    }),
+    sorteo: () => ({
+      titulo: `Sorteo en ${biz} 🎁`,
+      angulo: 'Diseño con el premio bien grande y mecánica simple: seguinos + etiquetá a 2 amigos. Fecha del sorteo clara en el texto.',
+      pitch: `Los sorteos explotan si el premio se ve increíble y participar es fácil. Mecánica simple, premio protagonista y fecha clara: eso trae seguidores de verdad.`,
+    }),
+    general: () => ({
+      titulo: topicShort,
+      angulo: 'Posteo directo con hook que frene el scroll, el contenido bien claro y un CTA según el objetivo (DM, comentario o guardado).',
+      pitch: `Perfecto, con lo que me contaste ya la puedo armar. Voy por un posteo directo: hook que frene el scroll, contenido claro y CTA según tu objetivo.`,
+    }),
+  };
+
+  // Turno 1: opinar + proponer caminos concretos + UNA pregunta
+  if (turn <= 1 && !yes) {
+    const openers = {
+      visibilidad: `Me gusta la dirección. Para visibilidad lo que manda es el contenido que se guarda y se comparte — es lo que Instagram empuja. Con "${echo}", iría por: 1) 🏆 carrusel "lo mejor de la semana", 2) 🤔 "¿cuál te llevarías?" con opciones para juntar comentarios, 3) 📱 mostrar el producto en uso real.\n¿Cuál te cierra más?`,
+      ventas: `Vamos a lo importante: vender. Con "${echo}", el ángulo que más convierte es prueba + CTA directo: el producto en uso o un testimonio, y "escribinos por DM y te lo reservamos 📩".\n¿Qué producto querés mover primero?`,
+      lanzamiento: `Los lanzamientos rinden con antesala: 1) 👀 adelanto misterioso, 2) 🎬 el anuncio con el producto como héroe, 3) 💬 las primeras reacciones.\n¿Ya tenés fecha o lo lanzamos esta semana?`,
+      sorteo: `Los sorteos traen seguidores de verdad si el premio se ve increíble y participar es fácil: seguinos + etiquetá a 2 amigos.\n¿Qué sorteamos y cuándo lo anunciamos?`,
+      general: `Anotada: "${echo}". Mi opinión honesta: la idea funciona si el ángulo es concreto — lo genérico no frena el scroll.\n¿El objetivo es vender, ganar visibilidad o anunciar algo nuevo?`,
+    };
+    return openers[intent];
+  }
+
+  // Turno 2+ o "dale": cerrar la idea para que se pueda hacer el post
+  const c = closers[intent]();
+  return `${c.pitch}\n\nTe la dejé lista acá abajo 👇 Tocá "Hacerlo post" o "Hacerlo reel" y la revisás antes de programar.` +
+    ideaBlock(c.titulo, c.angulo);
 }
 
 async function chatIdea({ messages, profile, taste }, apiKey) {
@@ -414,9 +473,11 @@ async function chatIdea({ messages, profile, taste }, apiKey) {
       text = await openaiChatIdea({ messages, profile, taste }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
+      console.log('[chat] motor: plantilla (fallback por error)');
       text = templateChatIdea({ messages, profile });
     }
   } else {
+    console.log('[chat] motor: plantilla (sin API key)');
     text = templateChatIdea({ messages, profile });
   }
   // Extrae la propuesta cerrada si la IA la incluyó
