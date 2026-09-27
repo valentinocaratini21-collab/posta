@@ -2761,8 +2761,15 @@ async function render() {
         if (isReg) {
           const rf = localStorage.getItem('posta_ref');
           if (rf) body.ref = rf;
+        } else {
+          // Login viniendo de /prueba: pasamos el @ para importar su semana como borradores
+          try {
+            const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+            if (tp && tp.ig_username) body.trial_ig = tp.ig_username;
+          } catch (e) {}
         }
         await api.post(isReg ? '/api/auth/register' : '/api/auth/login', body);
+        if (!isReg) { try { localStorage.removeItem('posta_trial_profile'); } catch (e) {} }
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
         // Puente /prueba → cuenta: si viene de la prueba, pre-cargamos el perfil con los

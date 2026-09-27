@@ -240,6 +240,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div id="tkSteps"></div>
       <div class="pbar"><i id="tkBar"></i></div>
       <p class="tiny" id="tkPct">0%</p>
+      <p class="tiny" id="tkTip" style="margin-top:8px;min-height:18px"></p>
     </div>
   </div>
 </div>
@@ -430,6 +431,15 @@ const TK_STEPS = [
   ['📅', 'Organizando tu semana…', 'Cada post en su día, con su caption.'],
 ];
 let tkTimer = null;
+let tkTipTimer = null;
+// Tips que rotan mientras se arma la semana (entretienen la espera)
+const TK_TIPS = [
+  '💡 Tip: los posteos con tu cara o tu local venden más que los de stock.',
+  '🎨 Tus diseños usan los colores de tu marca.',
+  '✍️ Cada caption se escribe para tu rubro — nada de plantillas genéricas.',
+  '📱 Imaginate esto cada semana, sin que muevas un dedo.',
+  '🔒 Tu cuenta se conecta con Meta, sin compartir tu contraseña.',
+];
 
 async function startTrial() {
   const biz = $('#f_biz').value.trim();
@@ -458,6 +468,17 @@ async function startTrial() {
     if (p >= 5) clearInterval(tkTimer);
   }, 5200);
   $('#tk0').classList.add('act');
+  // Tips rotativos mientras espera (se apaga solo al salir del tracker)
+  let tipI = 0;
+  const tipEl = $('#tkTip');
+  if (tipEl) {
+    tipEl.textContent = TK_TIPS[0];
+    tkTipTimer = setInterval(() => {
+      if ($('#v-loading').style.display !== 'block' || !tipEl.isConnected) { clearInterval(tkTipTimer); return; }
+      tipI = (tipI + 1) % TK_TIPS.length;
+      tipEl.textContent = TK_TIPS[tipI];
+    }, 4200);
+  }
 
   const fd = new FormData();
   fd.append('business', biz);
