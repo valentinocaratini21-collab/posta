@@ -9,7 +9,7 @@ const db = require('./db');
 const { generateContent, generateIdeas } = require('./generator');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
-const { startScheduler } = require('./scheduler');
+const { startScheduler, publishSinglePost } = require('./scheduler');
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { renderVideo, ffmpegAvailable } = require('./video');
@@ -499,9 +499,6 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
-  } else if (action === 'publish-now') {
-    db.prepare(`UPDATE posts SET status='scheduled', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
-    ensureImageBaseUrl(db, req.session.userId, req);
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
@@ -517,6 +514,32 @@ app.delete('/api/posts/:id', requireAuth, (req, res) => {
   if (post) recordSignal(req.session.userId, post, 'rejected'); // lo eliminó = no le gustó
   db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
   res.json({ ok: true });
+});
+
+// Estado de un posteo (para el seguimiento en vivo de "Publicar ahora")
+app.get('/api/posts/:id', requireAuth, (req, res) => {
+  const post = db.prepare(
+    'SELECT id, status, error, ig_permalink, published_at, scheduled_at FROM posts WHERE id = ? AND user_id = ?'
+  ).get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  res.json({ ok: true, post });
+});
+
+// Publicar AHORA de forma inmediata: no espera al scheduler.
+// Idempotente: si ya se está publicando o ya salió, no lo duplica.
+app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (post.status === 'publishing') return res.json({ ok: true, status: 'publishing' });
+  if (post.status === 'published') return res.json({ ok: true, status: 'published', permalink: post.ig_permalink });
+  if (!['draft', 'scheduled', 'failed'].includes(post.status)) {
+    return res.status(400).json({ error: 'Este posteo no se puede publicar ahora' });
+  }
+  db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
+  ensureImageBaseUrl(db, req.session.userId, req);
+  // La publicación corre en segundo plano; el frontend consulta GET /api/posts/:id
+  publishSinglePost(db, { ...post, status: 'publishing' }).catch((e) => console.error('[posta] publish-now:', e.message));
+  res.json({ ok: true, status: 'publishing' });
 });
 
 // Duplicar un posteo como borrador (para re-publicarlo sin armarlo de cero)
