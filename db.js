@@ -70,6 +70,12 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN preferred_palette INTEGER DEFAULT
 try { db.exec(`ALTER TABLE settings ADD COLUMN pexels_key TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'trial'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN plan_status TEXT DEFAULT 'trial'`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+db.exec(`CREATE TABLE IF NOT EXISTS email_tokens (
+  token TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL
+)`);
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_preapproval_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN media_type TEXT DEFAULT 'image'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN brand_logo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
