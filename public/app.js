@@ -1065,6 +1065,10 @@ function bindReview() {
 // Hasta que no queda exactamente como quiere el cliente, no se manda nada.
 let CHAT_PREVIEWS = []; // canvases de ejemplo generados al cerrar la idea
 let CHAT_PREV_SEL = 0;
+let CHAT_PHOTOS = []; // fotos subidas en el chat: [{file_path}]
+let CHAT_PHOTO_IDX = 0;
+let CHAT_STYLE_IDX = 0;
+let CHAT_CAPTION = null; // {caption, hashtags} generados al cerrar la idea
 
 function proposalHTML() {
   if (!CHAT_IDEA) return '';
@@ -1074,6 +1078,13 @@ function proposalHTML() {
       ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
       <div style="font-weight:700;font-size:14px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
       <div class="chat-previews" id="chatPreviews"><div style="font-size:13px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
+      <div style="font-weight:700;font-size:14px;margin:4px 0 6px">📝 Texto del posteo <span style="font-weight:400;color:var(--mut)">(podés retocarlo)</span>:</div>
+      <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
+      <div id="chatHashtags" style="font-size:12px;color:var(--cel);margin:6px 0 2px">${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}</div>
+      <details class="chat-board">
+        <summary>🎬 Ver cómo sería el reel <span style="color:var(--mut);font-weight:400">(3 escenas)</span></summary>
+        <div class="chat-board-row" id="chatBoard"><div style="font-size:13px;color:var(--mut)">⏳ Generando…</div></div>
+      </details>
       <div class="chat-proposal-btns">
         <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo post</button>
         <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
@@ -1082,27 +1093,103 @@ function proposalHTML() {
     </div>`;
 }
 
+// Genera (o regenera) el texto del posteo para la idea cerrada
+async function refreshChatCaption() {
+  if (!CHAT_IDEA) return;
+  const idea = CHAT_IDEA;
+  try {
+    const out = await api.post('/api/generate', { topic: idea.titulo });
+    if (CHAT_IDEA !== idea) return; // el usuario siguió de largo
+    CHAT_CAPTION = { caption: out.caption || '', hashtags: out.hashtags || '' };
+    const ta = $('#chatCaption');
+    if (ta && !ta.value) ta.value = CHAT_CAPTION.caption;
+    const hg = $('#chatHashtags');
+    if (hg) hg.textContent = CHAT_CAPTION.hashtags;
+  } catch (e) { /* se genera al crear el borrador */ }
+}
+
+// Texto envuelto para el storyboard del reel
+function wrapText(ctx, text, x, y, maxW, lh) {
+  const words = String(text || '').split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; }
+    else line = t;
+  }
+  if (line) lines.push(line);
+  const startY = y - ((lines.length - 1) * lh) / 2;
+  lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lh));
+}
+
+// Mini storyboard del reel: las 3 escenas tal como saldrían (foto o diseño + texto)
+async function renderChatStoryboard() {
+  const box = $('#chatBoard');
+  if (!box || !CHAT_IDEA) return;
+  const idea = CHAT_IDEA;
+  try {
+    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
+    const handle = (PROFILE || {}).ig_username || '';
+    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const angle = (idea.angulo || '').split('.')[0].slice(0, 90);
+    const texts = [title, angle || title, handle ? '@' + handle : 'SEGUINOS 👇'];
+    const ph = lib.length ? await photoImg(lib[CHAT_PHOTO_IDX % lib.length].file_path) : null;
+    box.innerHTML = '';
+    for (const tx of texts) {
+      const cv = document.createElement('canvas');
+      cv.width = 180; cv.height = 320;
+      const ctx = cv.getContext('2d');
+      if (ph) {
+        const s = Math.max(cv.width / ph.width, cv.height / ph.height);
+        const w = ph.width * s, h = ph.height * s;
+        ctx.drawImage(ph, (cv.width - w) / 2, (cv.height - h) / 2, w, h);
+        const g = ctx.createLinearGradient(0, cv.height * 0.35, 0, cv.height);
+        g.addColorStop(0, 'rgba(10,30,51,0)');
+        g.addColorStop(1, 'rgba(10,30,51,.88)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, cv.width, cv.height);
+      } else {
+        ctx.fillStyle = '#0A1E33';
+        ctx.fillRect(0, 0, cv.width, cv.height);
+      }
+      ctx.fillStyle = '#fff';
+      ctx.font = '800 15px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      wrapText(ctx, tx, cv.width / 2, cv.height - 52, cv.width - 24, 19);
+      const d = document.createElement('div');
+      d.className = 'chat-board-scene';
+      d.appendChild(cv);
+      box.appendChild(d);
+    }
+  } catch (e) {
+    box.innerHTML = '';
+  }
+}
+
 // Genera 2 ejemplos visuales reales de la idea con el diseñador (canvas),
 // para que el cliente vea qué va a postear antes de crearlo.
+// Usa las fotos subidas al chat (o las de la librería) y el estilo actual.
 async function renderChatPreviews() {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   try {
-    const photos = assetPhotos();
+    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-    const palIdx = defaultPal();
-    const nPals = (typeof getPalettes === 'function' ? getPalettes().length : 5) || 5;
     const handle = (PROFILE || {}).ig_username || '';
     const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
     const subtitle = (idea.angulo || '').split('.')[0].slice(0, 90);
-    const ph = photos.length ? await photoImg(photos[0].file_path) : null;
+    const styles = chatStyles();
+    const pair = [styles[CHAT_STYLE_IDX % styles.length], styles[(CHAT_STYLE_IDX + 1) % styles.length]];
+    const ph = lib.length ? await photoImg(lib[CHAT_PHOTO_IDX % lib.length].file_path) : null;
     const mk = (tpl, pal) => {
       const cv = document.createElement('canvas');
       drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
       return cv;
     };
-    CHAT_PREVIEWS = [mk('gradiente', palIdx), mk('claro', (palIdx + 1) % nPals)];
+    CHAT_PREVIEWS = pair.map(([tpl, pal]) => mk(tpl, pal));
     CHAT_PREV_SEL = 0;
     box.innerHTML = '';
     CHAT_PREVIEWS.forEach((cv, i) => {
@@ -1121,15 +1208,44 @@ async function renderChatPreviews() {
   }
 }
 
+let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
+
+// Trae el historial del chat del servidor (persiste entre sesiones)
+async function chatLoadHistory() {
+  try {
+    const r = await api.get('/api/ideas/chat');
+    if (r && Array.isArray(r.messages) && r.messages.length) {
+      CHAT = r.messages
+        .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text)
+        .map(m => ({ role: m.role, text: String(m.text).slice(0, 2000) }));
+      const box = $('#chatBox');
+      if (box) box.innerHTML = CHAT.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+    }
+    if (r && r.idea && r.idea.titulo) {
+      CHAT_IDEA = r.idea;
+      chatRenderProposal();
+      refreshChatCaption();
+    }
+    chatScroll();
+  } catch (e) { /* sin historial: se empieza de cero */ }
+}
+
 // Crea el borrador usando el ejemplo elegido (se sube solo ese diseño)
 async function draftFromPreview(idea, cv) {
-  const out = await api.post('/api/generate', { topic: idea.titulo });
+  const ta = $('#chatCaption');
+  let caption = ta ? ta.value.trim() : '';
+  let hashtags = (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '';
+  if (!caption) {
+    const out = await api.post('/api/generate', { topic: idea.titulo });
+    caption = out.caption || '';
+    hashtags = out.hashtags || hashtags;
+  }
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
   const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen');
   try {
-    await api.post('/api/posts', { image_path: data.path, caption: out.caption, hashtags: out.hashtags, media_type: 'image' });
+    await api.post('/api/posts', { image_path: data.path, caption, hashtags, media_type: 'image' });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
@@ -1146,12 +1262,152 @@ function chatCardHTML() {
       ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Soy tu consultor de contenido. Contame qué idea tenés para tu Instagram y te digo la posta: si va a vender, qué le cambiaría y cómo la haría. ¿Qué tenés en mente?</div>`}
     </div>
     <div id="chatProposal">${proposalHTML()}</div>
+    <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
+      <button class="btn btn-soft" id="chatAttach" title="Agregar foto">📷</button>
       <input id="chatInput" class="in" placeholder="Ej: quiero un post sobre mis nuevos buzos…" maxlength="2000" autocomplete="off">
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
+      <input type="file" id="chatFile" accept="image/*" multiple hidden>
     </div>
     <div id="chatMsg"></div>
   </div>`;
+}
+
+// Agrega un mensaje del asistente al chat (para confirmaciones locales)
+function chatSay(text) {
+  CHAT.push({ role: 'assistant', text });
+  const box = $('#chatBox');
+  if (box) box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(text)}</div>`);
+  chatScroll();
+  try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text }] }).catch(() => {}); } catch (e) {}
+}
+
+function renderChatPhotos() {
+  const box = $('#chatPhotos');
+  if (!box) return;
+  box.innerHTML = CHAT_PHOTOS.map((p, i) => `
+    <div class="chat-photo">
+      <img src="${esc(p.file_path)}">
+      <button data-chatrm="${i}" title="Quitar foto">✕</button>
+    </div>`).join('');
+  box.querySelectorAll('[data-chatrm]').forEach(b => b.onclick = () => {
+    CHAT_PHOTOS.splice(+b.dataset.chatrm, 1);
+    if (CHAT_PHOTO_IDX >= CHAT_PHOTOS.length) CHAT_PHOTO_IDX = 0;
+    renderChatPhotos();
+    if (CHAT_IDEA) renderChatPreviews();
+  });
+}
+
+// Miniatura liviana (para que la IA "vea" la foto sin mandar megabytes)
+function fileToThumb(file, maxSize = 512) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const s = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(img.width * s));
+        cv.height = Math.max(1, Math.round(img.height * s));
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        URL.revokeObjectURL(img.src);
+        resolve(cv.toDataURL('image/jpeg', 0.7));
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function chatUploadPhotos(files) {
+  const m = $('#chatMsg');
+  const imgs = [...(files || [])].filter(f => f.type && f.type.startsWith('image/')).slice(0, 4);
+  if (!imgs.length) return;
+  try {
+    if (m) m.innerHTML = `<div class="okmsg">⏳ Subiendo ${imgs.length > 1 ? imgs.length + ' fotos' : 'foto'}…</div>`;
+    for (const f of imgs) {
+      const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo subir la foto');
+      const aiUrl = await fileToThumb(f);
+      CHAT_PHOTOS.push({ file_path: data.path, aiUrl, sent: false });
+    }
+    if (m) m.innerHTML = '';
+    renderChatPhotos();
+    if (CHAT_IDEA) {
+      CHAT_PHOTO_IDX = CHAT_PHOTOS.length - 1;
+      renderChatPreviews();
+      renderChatStoryboard();
+      chatSay('📷 ¡Foto agregada! Actualicé los ejemplos con tu foto 👇');
+    } else {
+      chatSay('📷 ¡Foto agregada! La voy a usar en los ejemplos y la IA también la puede ver 👇');
+    }
+  } catch (e) {
+    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
+  }
+}
+
+// Estilos disponibles para los ejemplos (se rotan con "otro estilo")
+function chatStyles() {
+  const p = defaultPal();
+  const n = (typeof getPalettes === 'function' ? getPalettes().length : 5) || 5;
+  return [['gradiente', p], ['claro', (p + 1) % n], ['noche', (p + 2) % n], ['promo', (p + 3) % n]];
+}
+
+// Comandos de edición por chat cuando la idea ya está cerrada.
+// Devuelve true si el mensaje era un pedido de edición y lo aplicó.
+function chatEditCommand(text) {
+  if (!CHAT_IDEA) return false;
+  const t = text.trim();
+  let m;
+  // — Cambiar el título (solo pedidos explícitos) —
+  const titlePats = [
+    /t[ií]tulo\s*:\s*["“]?(.+?)["”]?\s*$/i,
+    /\bcambial[eo]\s+(?:el\s+t[ií]tulo\s+)?a\s+["“]?(.+?)["”]?\s*$/i,
+    /\bque\s+diga\s+["“]?(.+?)["”]?\s*$/i,
+  ];
+  for (const pat of titlePats) {
+    m = t.match(pat);
+    if (m && m[1]) {
+      const nt = m[1].trim();
+      if (nt.length >= 2 && nt.length <= 50) {
+        CHAT_IDEA.titulo = nt;
+        CHAT_CAPTION = null; // el texto se regenera para el nuevo título
+        chatSay(`✅ Título actualizado: "${nt}". Fijate los ejemplos 👇`);
+        chatRenderProposal();
+        refreshChatCaption();
+        return true;
+      }
+    }
+  }
+  // — Cambiar la foto —
+  const nPhotos = CHAT_PHOTOS.length;
+  if (nPhotos > 1 && /\botra\s+foto\b/i.test(t)) {
+    CHAT_PHOTO_IDX = (CHAT_PHOTO_IDX + 1) % nPhotos;
+    chatSay('✅ Cambié la foto. ¿Te gusta más así? 👇');
+    renderChatPreviews();
+    renderChatStoryboard();
+    return true;
+  }
+  m = t.match(/foto\s*(?:n[uú]mero\s*)?(\d)/i);
+  if (m) {
+    const idx = parseInt(m[1], 10) - 1;
+    if (idx >= 0 && idx < nPhotos) {
+      CHAT_PHOTO_IDX = idx;
+      chatSay(`✅ Usando la foto ${idx + 1} 👇`);
+      renderChatPreviews();
+      renderChatStoryboard();
+      return true;
+    }
+  }
+  // — Cambiar el estilo —
+  if (/\botro\s+(estilo|diseño|fondo)\b/i.test(t) || /\b(cambi[ae]|ponele)\s+(otro\s+)?(fondo|estilo|diseño)\b/i.test(t) || /\bm[aá]s\s+(claro|oscuro)\b/i.test(t)) {
+    CHAT_STYLE_IDX++;
+    chatSay('✅ Probá con este estilo 👇');
+    renderChatPreviews();
+    renderChatStoryboard();
+    return true;
+  }
+  return false;
 }
 
 function chatScroll() {
@@ -1168,6 +1424,7 @@ function chatRenderProposal() {
   if (mkP) mkP.onclick = () => chatMakePost(false);
   if (mkR) mkR.onclick = () => chatMakePost(true);
   renderChatPreviews();
+  renderChatStoryboard();
   chatScroll();
 }
 
@@ -1177,18 +1434,27 @@ async function chatSend() {
   if (!text) return;
   const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatSend');
   CHAT.push({ role: 'user', text });
-  CHAT_IDEA = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(text)}</div>`);
   inp.value = '';
   btn.disabled = true;
+  // Si la idea está cerrada y el mensaje es un pedido de edición, se aplica directo
+  if (CHAT_IDEA && chatEditCommand(text)) {
+    btn.disabled = false;
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
+    return;
+  }
+  CHAT_IDEA = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
   chatScroll();
+  // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
+  const unsentPhotos = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent).map(p => p.aiUrl);
   try {
-    const r = await api.post('/api/ideas/chat', { messages: CHAT });
+    const r = await api.post('/api/ideas/chat', { messages: CHAT, photos: unsentPhotos });
     const t = $('#chatTyping'); if (t) t.remove();
+    CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
-    if (r.idea) { CHAT_IDEA = r.idea; chatRenderProposal(); }
+    if (r.idea) { CHAT_IDEA = r.idea; CHAT_CAPTION = null; chatRenderProposal(); refreshChatCaption(); }
   } catch (e) {
     const t = $('#chatTyping'); if (t) t.remove();
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
@@ -1213,7 +1479,11 @@ async function chatMakePost(asVideo) {
     }
     CHAT_IDEA = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
-    CHAT.push({ role: 'assistant', text: '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.' });
+    CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
+    CHAT_CAPTION = null;
+    const doneText = '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.';
+    try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
+    CHAT.push({ role: 'assistant', text: doneText });
     render();
     setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
   } catch (e) {
@@ -1232,7 +1502,15 @@ function bindChat() {
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => chatMakePost(false);
   if (mkR) mkR.onclick = () => chatMakePost(true);
+  const att = $('#chatAttach'), file = $('#chatFile');
+  if (att && file) {
+    att.onclick = () => file.click();
+    file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; };
+  }
+  renderChatPhotos();
   renderChatPreviews();
+  renderChatStoryboard();
+  if (!CHAT_LOADED) { CHAT_LOADED = true; chatLoadHistory(); }
 }
 
 async function ideasView() {
