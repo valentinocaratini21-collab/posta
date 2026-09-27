@@ -893,7 +893,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     }
     // Guardar el email de MP para pre-completarlo la próxima vez
     try { db.prepare(`UPDATE users SET mp_payer_email=? WHERE id=?`).run(payerEmail, user.id); } catch (e) {}
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
     // Descuento por referidos: 2 amigos con suscripción activa = 50% off (tiene prioridad);
     // si no, invitado con link = 20% off
     let finalPlan = plan;
@@ -976,7 +976,7 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
 app.get('/api/referrals/mine', requireAuth, (req, res) => {
   const s = referralStats(req.session.userId);
   const me = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(req.session.userId);
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
   let joined = [];
   try {
     joined = db.prepare(`SELECT COALESCE(NULLIF(p.business_name, ''), 'Un referido') AS name FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.referred_by = ? AND u.plan_status = 'active' ORDER BY u.id DESC`).all(req.session.userId).map(r => r.name);
