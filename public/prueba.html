@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Probá Posta por dentro — Tu semana armada gratis</title>
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.postahacetodo.com/prueba">
+<meta property="og:title" content="Tu semana de posteos, armada — gratis">
+<meta property="og:description" content="Contanos lo básico en 1 minuto y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. 3 días gratis, sin tarjeta.">
+<meta property="og:image" content="https://www.postahacetodo.com/og-prueba.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -531,13 +537,13 @@ function renderResults() {
     ? `<img src="${t.screenshot}" alt="Tu perfil hoy">`
     : `<div class="ba-mock"><div style="font-size:40px;margin-bottom:10px">📭</div><b>Tu perfil hoy</b><p style="font-size:13px;margin-top:8px">Pocos posteos, sin constancia.<br>Así se ve el 80% de los negocios.</p></div>`;
   $('#rAfter').innerHTML = t.posts.slice(0, 4).map((p) =>
-    p.type === 'video' ? `<div style="position:relative"><video src="${p.video}" muted playsinline preload="metadata"></video></div>` : `<img src="${p.image}" alt="Posteo">`).join('');
+    p.type === 'video' ? `<div style="position:relative"><video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video></div>` : `<img src="${p.image}" alt="Posteo">`).join('');
 
   // Semana
   $('#rWeek').innerHTML = t.week.map((w) => {
     const p = t.posts[w.post];
     const media = p.type === 'video'
-      ? `<video src="${p.video}" muted playsinline preload="metadata"></video><span class="vbadge">▶ VIDEO</span>`
+      ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">▶ VIDEO</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}">`;
     return `<div class="day" data-i="${w.post}"><div class="dh"><b>${esc(w.day)}</b><small>${esc(w.date)}</small></div><div class="db">${media}</div></div>`;
   }).join('');
