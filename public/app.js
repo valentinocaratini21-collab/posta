@@ -1607,13 +1607,13 @@ async function ideasView() {
   ${checklistHTML(posts.length)}
   ${recCardHTML(IDEAS, posts, ppw)}
   ${chatCardHTML()}
-  <div id="ideasZone">${IDEAS.length ? ideasList(posts) : `
-    <div class="empty"><div class="big">💡</div>
-      Todavía no generamos ideas para tu negocio.<br>
-      <span style="font-size:14px">Charlalo con el consultor acá arriba 👆 o armá tu semana acá abajo 👇</span>
-    </div>`}
-  </div>
+  ${IDEAS.length ? `<div id="ideasZone">${ideasList(posts)}</div>` : ''}
   ${autopilotCardHTML()}
+  ${IDEAS.length ? '' : `
+  <div class="card" id="ideasEmpty"><div class="empty"><div class="big">💡</div>
+      Todavía no generamos ideas para tu negocio.<br>
+      <span style="font-size:14px">Tocá "⚡ Armar mi semana" acá arriba 👆 o charlalo con el consultor</span>
+  </div></div>`}
   ${drafts.length ? reviewCardHTML(drafts) : ''}
   <div id="ideasMsg"></div>`;
 }
@@ -1646,8 +1646,9 @@ function ideasList(posts) {
         <div class="cap" style="white-space:normal;line-height:1.6">${esc(idea.angulo)}</div>
       </div>
       <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">
-        ${isVideo ? `<button class="btn btn-primary btn-sm" data-video="${i}">🎬 Crear video →</button>` : ''}
+        ${isVideo ? `<button class="btn btn-primary btn-sm" data-video="${i}">🎬 Crear video →</button>` : `<button class="btn btn-ghost btn-sm" data-video="${i}">🎬 Reel</button>`}
         <button class="btn btn-soft btn-sm" data-idea="${i}">Crear post →</button>
+        <button class="btn btn-ghost btn-sm" data-discard="${i}" title="Descartar esta idea">✕</button>
       </div>
     </div>`; }).join('')}
   </div>`;
@@ -1770,14 +1771,15 @@ async function runAutopilot(n) {
 
 function bindIdeas() {
   const gen = async () => {
-    const z = $('#ideasZone');
-    z.innerHTML = `<div class="empty"><div class="big">⏳</div>Estudiando tu negocio y tu competencia...</div>`;
+    const z = $('#ideasZone') || $('#ideasEmpty');
+    if (z) z.innerHTML = `<div class="empty"><div class="big">⏳</div>Estudiando tu negocio y tu competencia...</div>`;
     try {
       const { ideas } = await api.post('/api/ideas', {});
       IDEAS = ideas || [];
       render();
     } catch (e) {
-      z.innerHTML = `<div class="err">No se pudieron generar las ideas: ${esc(e.message)}</div>`;
+      const z2 = $('#ideasZone') || $('#ideasEmpty');
+      if (z2) z2.innerHTML = `<div class="err">No se pudieron generar las ideas: ${esc(e.message)}</div>`;
     }
   };
   const b = $('#btnGenIdeas'); if (b) b.onclick = gen;
@@ -1801,6 +1803,10 @@ function bindIdeas() {
     const idea = IDEAS[+btn.dataset.idea];
     CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
     location.hash = '#/app/crear';
+  });
+  $$('[data-discard]').forEach(btn => btn.onclick = () => {
+    IDEAS.splice(+btn.dataset.discard, 1);
+    render();
   });
   $$('[data-video]').forEach(btn => btn.onclick = () => {
     const idea = IDEAS[+btn.dataset.video];
