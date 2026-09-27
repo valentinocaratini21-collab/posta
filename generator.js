@@ -353,8 +353,9 @@ async function generateIdeas(input, apiKey) {
 // ---------- Chat consultor de ideas ----------
 // El cliente cuenta su idea, la IA opina con honestidad y la pulen juntos.
 // Cuando la idea está cerrada y aprobada, la IA la devuelve en un bloque ```idea {...}```
-async function openaiChatIdea({ messages, profile, taste }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos }, apiKey) {
   const p = profile || {};
+  const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const sys =
     'Sos el consultor de contenido de Posta, un experto argentino en Instagram que vende de verdad. ' +
     'Hablás en español rioplatense con voseo, tono cercano y canchero, sin lenguaje corporativo. ' +
@@ -364,6 +365,9 @@ async function openaiChatIdea({ messages, profile, taste }, apiKey) {
     'siempre se puede vender más. Hacé preguntas cortas cuando te falte contexto (producto, objetivo). ' +
     'Mensajes cortos, como un chat de verdad: máximo 4-5 líneas por respuesta, nada de testamentos. ' +
     'Nunca seas chupamedias: tu valor es decir la posta, no lo que el cliente quiere escuchar. ' +
+    (cleanPhotos.length
+      ? 'El cliente adjuntó fotos de sus productos: MIRALAS con atención y opiná sobre lo que ves en ellas (qué producto conviene mostrar, calidad de la foto, qué ángulo vendería más). Referite a lo concreto que ves, nada de comentarios genéricos. '
+      : '') +
     'Cuando la idea esté concreta y el cliente la apruebe (o te pida hacerla), cerrá tu mensaje con un bloque ' +
     'exacto así:\n```idea\n{"titulo": "título corto del post", "angulo": "ángulo en 1-2 líneas"}\n```\n' +
     'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.';
@@ -373,6 +377,21 @@ async function openaiChatIdea({ messages, profile, taste }, apiKey) {
     `Competidores: ${p.competitors || 'no indicados'}\nObjetivo: ${p.goal || 'vender más'}\n` +
     (taste ? `Lo que le gustó/no le gustó antes: ${taste}\n` : '') +
     'Charlemos la idea del cliente.';
+  const omsgs = messages.map(m => ({ role: m.role, content: m.text }));
+  if (cleanPhotos.length) {
+    for (let i = omsgs.length - 1; i >= 0; i--) {
+      if (omsgs[i].role === 'user') {
+        omsgs[i] = {
+          role: 'user',
+          content: [
+            { type: 'text', text: omsgs[i].content },
+            ...cleanPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
+          ],
+        };
+        break;
+      }
+    }
+  }
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -384,7 +403,7 @@ async function openaiChatIdea({ messages, profile, taste }, apiKey) {
       messages: [
         { role: 'system', content: sys },
         { role: 'user', content: ctx },
-        ...messages.map(m => ({ role: m.role, content: m.text })),
+        ...omsgs,
       ],
       max_tokens: 400,
       temperature: 0.9,
@@ -466,11 +485,11 @@ function templateChatIdea({ messages, profile }) {
     ideaBlock(c.titulo, c.angulo);
 }
 
-async function chatIdea({ messages, profile, taste }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');

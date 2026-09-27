@@ -164,7 +164,22 @@ CREATE TABLE IF NOT EXISTS ig_registry (
   first_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
 } catch (e) { /* ya existe */ }
-// Backfill: IGs actualmente vinculados quedan registrados con su dueño actual
+// Chat consultor: historial persistente entre sesiones + idea cerrada pendiente
+db.exec(`
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'user',
+  text TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_chatmsg_user ON chat_messages(user_id, id);
+CREATE TABLE IF NOT EXISTS chat_state (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  idea_json TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+`);
 try {
   db.exec(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id)
            SELECT ig_user_id, user_id FROM settings

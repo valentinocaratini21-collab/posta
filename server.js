@@ -371,24 +371,59 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 // ---------- Chat consultor de ideas: el cliente trae su idea, la pulen juntos ----------
 // Hasta que la idea no queda exactamente como quiere el cliente, no se manda nada.
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
-  const { messages } = req.body || {};
+  const { messages, photos } = req.body || {};
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'Contanos tu idea' });
   const clean = messages
     .slice(-10)
     .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
     .filter(m => m.text.trim());
   if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  const cleanPhotos = Array.isArray(photos)
+    ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4)
+    : [];
   try {
     const settings = getSettings(req.session.userId);
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId), photos: cleanPhotos },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
+    const uid = req.session.userId;
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
+    if (out.idea) db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
+    else db.prepare('DELETE FROM chat_state WHERE user_id=?').run(uid);
     res.json(out);
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'No pudimos responder, probá de nuevo' });
   }
+});
+
+// Historial del chat consultor (persiste entre sesiones) + idea cerrada pendiente
+app.get('/api/ideas/chat', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const msgs = db.prepare('SELECT role, text FROM chat_messages WHERE user_id=? ORDER BY id DESC LIMIT 60').all(uid).reverse();
+  const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
+  let idea = null;
+  try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
+  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null });
+});
+
+// Log de eventos locales del chat (confirmaciones de edición, fotos) y limpieza de la idea
+app.post('/api/ideas/chat/log', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const { messages, clearIdea } = req.body || {};
+  try {
+    if (clearIdea) db.prepare('DELETE FROM chat_state WHERE user_id=?').run(uid);
+    if (Array.isArray(messages)) {
+      const ins = db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)');
+      for (const m of messages.slice(0, 10)) {
+        if ((m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string' && m.text.trim())
+          ins.run(uid, m.role, m.text.slice(0, 2000));
+      }
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
 });
 
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
@@ -414,9 +449,11 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
 });
 
 // ---------- Subida de imagen (PNG del diseñador) ----------
-app.post('/api/media', requireAuth, express.raw({ type: 'image/png', limit: '15mb' }), (req, res) => {
+app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), (req, res) => {
   if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
+  const ct = req.get('Content-Type') || '';
+  const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
   res.json({ path: `/media/${name}` });
 });
