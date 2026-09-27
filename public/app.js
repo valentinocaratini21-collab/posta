@@ -712,6 +712,31 @@ function drawPost(canvas, o) {
   }
 }
 
+function creatorChips() {
+  const p = (typeof PROFILE !== 'undefined' && PROFILE) || {};
+  const biz = p.business_name || 'tu negocio';
+  const M = {
+    ropa: ['Nuevo ingreso de la semana', 'Prenda destacada de hoy', 'Sale: hasta 40% off'],
+    gastronomia: ['Promo 2x1 en pizzas', 'Plato nuevo de la carta', 'Menú del día'],
+    cafeteria: ['Latte nuevo de la casa', 'Promo merienda', 'Café de especialidad'],
+    belleza: ['Tratamiento nuevo', 'Promo del mes', 'Antes y después'],
+    barberia: ['Corte de la semana', 'Promo corte + barba', 'Reservá tu turno'],
+    fitness: ['Clase nueva esta semana', 'Promo primer mes', 'Rutina para arrancar'],
+    salud: ['Nuevo servicio', 'Turnos disponibles', 'Tip de salud'],
+    mascotas: ['Novedad para tu mascota', 'Promo en alimento', 'Tip para cuidarla'],
+    servicios: ['Servicio nuevo', 'Promo este mes', 'Pedí tu presupuesto'],
+    educacion: ['Curso nuevo', 'Inscripciones abiertas', 'Clase gratuita'],
+    tecnologia: ['Producto nuevo', 'Oferta de la semana', 'Tip tecnológico'],
+    hogar: ['Novedad para tu casa', 'Promo en deco', 'Antes y después'],
+    inmobiliaria: ['Nueva propiedad', 'Oportunidad de la semana', 'Conocé este depto'],
+    eventos: ['Próximo evento', 'Entradas disponibles', 'Así fue el último'],
+    viajes: ['Nuevo destino', 'Promo en paquetes', 'Escapada del finde'],
+    arte: ['Obra nueva', 'Mi proceso creativo', 'Encargá tu pieza'],
+    otro: [`Lo nuevo de ${biz}`, 'Promo de la semana', 'Detrás de escena'],
+  };
+  return M[p.category] || M.otro;
+}
+
 function creatorView() {
   const c = CREATOR;
   const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
@@ -721,10 +746,10 @@ function creatorView() {
     ${stepsBar}
     <div class="card">
       <div class="field"><label>¿De qué es el post?</label>
-        <textarea id="c_topic" placeholder='Ej: "nuevo buzo oversize color crema", "promo 2x1 en pizzas los martes", "abrimos local en Palermo"'>${esc(c.topic)}</textarea>
+        <textarea id="c_topic" placeholder="${esc('Ej: ' + creatorChips().map(t => '"' + t + '"').join(', '))}">${esc(c.topic)}</textarea>
         <div class="hint">Una frase alcanza. La IA lo convierte en caption + hashtags con tu tono.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          ${['Buzo oversize color crema', 'Promo 2x1 en pizzas', 'Abrimos local en Palermo'].map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
+          ${creatorChips().map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
         </div></div>
       <div class="field"><label>📷 Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
         <div id="c_prodPhotoBox"></div>
@@ -893,8 +918,8 @@ function creatorView() {
     <div style="display:flex;gap:22px;flex-wrap:wrap">
       <img src="${esc(c.imagePath)}" style="width:180px;border-radius:14px;border:1px solid var(--line)">
       <div style="flex:1;min-width:240px">
-        <p style="font-size:15px;line-height:1.6;color:var(--mut);white-space:pre-wrap">${esc(c.caption)}</p>
-        <p style="color:var(--yl-l);font-size:14px;margin-top:8px">${esc(c.hashtags)}</p>
+        <div class="field"><label>Caption</label><textarea id="p_caption" style="min-height:120px">${esc(c.caption)}</textarea></div>
+        <div class="field"><label>Hashtags</label><textarea id="p_tags" style="min-height:60px">${esc(c.hashtags)}</textarea></div>
       </div>
     </div>
     <div class="row2" style="margin-top:24px">
@@ -3002,7 +3027,7 @@ function bindCreator() {
         const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
         const data = await r.json();
         if (!r.ok) throw new Error(data.error);
-        c.imagePath = data.path; c.step = 3; render();
+        c.imagePath = data.path; c.fromOptions = false; c.step = 3; render();
       } catch (e) { alert('Error: ' + e.message); $('#btnSaveDesign').disabled = false; $('#btnSaveDesign').textContent = 'Guardar diseño →'; }
     };
   }
@@ -3010,6 +3035,7 @@ function bindCreator() {
     $$('.opt-use').forEach(b => b.onclick = () => {
       const o = c.options[+b.dataset.use]; if (!o) return;
       c.imagePath = o.image; c.caption = o.caption || ''; c.hashtags = o.hashtags || '';
+      c.fromOptions = true;
       c.step = 3; render();
     });
     $$('.opt-customlink').forEach(b => b.onclick = () => {
@@ -3269,6 +3295,7 @@ function bindCreator() {
     $('#btnSchedule').onclick = async () => {
       const when = $('#p_when').value;
       if (!when) { $('#pubMsg').innerHTML = `<div class="err">Elegí fecha y hora</div>`; return; }
+      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags, scheduled_at: new Date(when).toISOString() });
         done('✅ Post programado. Se publica solo a la hora indicada.');
@@ -3277,6 +3304,7 @@ function bindCreator() {
     $('#btnNow').onclick = async () => {
       const btn = $('#btnNow');
       btn.disabled = true; // bloquea el doble tap
+      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         const { id } = await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags });
         $('#pubMsg').innerHTML = '<div class="pubnow-mount"></div>';
@@ -3291,7 +3319,7 @@ function bindCreator() {
         // si falló, publishNowFlow ya mostró el error con botón Reintentar
       } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
     };
-    $('#btnBack2').onclick = () => { c.step = 2; render(); };
+    $('#btnBack2').onclick = () => { c.step = c.fromOptions ? 'options' : 2; render(); };
   }
 }
 
