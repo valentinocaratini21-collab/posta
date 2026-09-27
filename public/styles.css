@@ -752,7 +752,7 @@ textarea.in{resize:vertical;min-height:96px}
   #diferencia .vs-item.win{grid-column:1/-1}
   #diferencia .unico-line{font-size:14px}
   /* Planes: carrusel horizontal con peek */
-  #planes .plans-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:14px;margin:0 -20px;padding:4px 20px 16px;scrollbar-width:none}
+  #planes .plans-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:14px;margin:0 -20px;padding:22px 20px 16px;scrollbar-width:none}
   #planes .plans-row::-webkit-scrollbar{display:none}
   #planes .price-card{flex:0 0 84%;scroll-snap-align:center;padding:28px 22px;margin:0}
   #planes .price-card .price{font-size:40px}
@@ -782,8 +782,20 @@ textarea.in{resize:vertical;min-height:96px}
 .plan-dots{display:none}
 @media(max-width:760px){
   #planes .price-card{flex:0 0 78%}
-  #planes .price-card .tag{font-size:11px;padding:5px 14px;top:-13px}
+  #planes .price-card .tag{font-size:11px;padding:5px 14px;top:-10px}
   .plan-dots{display:flex;gap:8px;justify-content:center;margin-top:8px}
   .plan-dots span{width:8px;height:8px;border-radius:50%;background:#C9DCE8;transition:background .2s}
   .plan-dots span.on{background:var(--cel)}
+}
+
+/* ===== Antes/después lado a lado en mobile ===== */
+@media(max-width:760px){
+  .pz-beforeafter{margin-top:44px}
+  .pz-beforeafter h3{font-size:19px;margin-bottom:16px}
+  .pz-ba-row{flex-direction:row;flex-wrap:nowrap;gap:10px}
+  .pz-ba-panel{width:auto;flex:1;min-width:0;padding:14px;border-radius:16px}
+  .pz-ba-label{font-size:10px;margin-bottom:10px}
+  .pz-ba-grid{gap:6px}
+  .pz-ba-grid span{border-radius:8px}
+  .pz-ba-arrow{transform:none;font-size:24px}
 }

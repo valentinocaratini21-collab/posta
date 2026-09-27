@@ -250,7 +250,7 @@ function landingView(cfg) {
         <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#2793C8">#modaargentina #emprendedoresargentinos</span></div>
       </div></div>
       <div class="phone"><div class="screen">
-        <video src="hero-reel2.mp4" autoplay muted loop playsinline></video>
+        <video src="hero-reel2.mp4" poster="hero-reel2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video>
         <div class="cap"><b>Pet Shop Huella</b> 🎬 Su reel de la semana, hecho con Posta...</div>
       </div></div>
     </div>
