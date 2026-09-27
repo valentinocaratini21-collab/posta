@@ -246,6 +246,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <h2 id="rTitle">¡Tu semana está lista, <span class="hl" id="rBiz">tu negocio</span>! 🎉</h2>
       <p class="sub" id="rSub"></p>
       <div id="rCached" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px"></div>
+      <p class="tiny" id="rTime" style="display:none;margin-top:8px"></p>
     </div>
 
     <div class="sec">
@@ -262,6 +263,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         <div class="ba-arrow">→</div>
         <div class="ba-panel after"><span class="ba-tag">CON POSTA</span><div class="ba-grid" id="rAfter"></div></div>
       </div>
+      <p class="tiny" style="margin-top:10px">💡 Diseños de muestra — con tus fotos reales se ve aún mejor.</p>
     </div>
 
     <div class="sec">
@@ -469,6 +471,8 @@ async function startTrial() {
     const wait = Math.max(0, 9000 - (Date.now() - t0));
     await new Promise((r) => setTimeout(r, wait));
     clearInterval(tkTimer);
+    // Tiempo real de generación (sin el relleno del tracker): lo mostramos y nos sirve de medición
+    data.genSecs = Math.max(1, Math.round((Date.now() - t0 - wait) / 1000));
     TRIAL = data;
     // Puente a la cuenta: guardamos los datos del negocio para pre-cargar el perfil al registrarse
     try {
@@ -508,6 +512,11 @@ function renderResults() {
     $('#rTitle').innerHTML = `¡Tu semana está lista, <span class="hl">${esc(t.business)}</span>! 🎉`;
     $('#rCached').style.display = 'none';
   }
+  const rt = $('#rTime');
+  if (t.genSecs) {
+    rt.style.display = 'block';
+    rt.textContent = t.genSecs < 60 ? `⏱ Armada en ${t.genSecs} segundos` : `⏱ Armada en ${Math.floor(t.genSecs / 60)} min ${t.genSecs % 60} s`;
+  } else rt.style.display = 'none';
   const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
   const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>con los colores de tu perfil</b>' : '';
   $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Semana del ' + esc(firstDay.date) + ' al ' + esc(lastDay.date) + ' · 5 posteos listos' + colBadge;
@@ -556,8 +565,7 @@ function openLb(i) {
 
 // ---------- registro con trial: nadie paga antes de probar ----------
 function openRegTrial() {
-  const biz = (TRIAL && TRIAL.business) ? TRIAL.business : 'tu negocio';
-  $('#rgSub').innerHTML = `Probá Posta <b>3 días gratis</b>, sin tarjeta.<br>Tu semana de <b>${esc(biz)}</b> queda guardada en tu cuenta.`;
+  $('#rgSub').innerHTML = `Probá Posta <b>3 días gratis</b>, sin tarjeta.<br>Tus 5 posteos de la prueba te esperan adentro, listos para revisar.`;
   $('#rgErr').style.display = 'none';
   $('#ovReg').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -597,6 +605,7 @@ async function doRegister() {
   b.disabled = true; b.textContent = 'Creando tu cuenta…';
   try {
     const body = { email, password: pass };
+    if (TRIAL && TRIAL.ig) body.trial_ig = TRIAL.ig;
     try { const rf = localStorage.getItem('posta_ref'); if (rf) body.ref = rf; } catch (e) {}
     await pj('/api/auth/register', body);
     try { localStorage.removeItem('posta_ref'); } catch (e) {}

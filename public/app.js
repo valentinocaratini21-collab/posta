@@ -2339,13 +2339,24 @@ async function semanaView() {
       <button class="btn btn-primary btn-sm" data-nudge="${i}">Armar idea →</button>
     </div>`).join('');
 
+  const drafts = (w.by_status && w.by_status.draft) || 0;
+
   return `${head}
+  ${drafts > 0 ? `
+  <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
+    <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenés ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
+    <p>De tu prueba gratis — revisalos y programalos con un clic. Nada sale sin tu OK.</p></div></div>
+    <a class="btn btn-primary btn-block" href="#/app/calendario" style="margin-top:12px">Revisar y programar →</a>
+  </div>` : ''}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
     ${w.missing
-      ? `<p class="sem-msg">Te ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar tu semana.</p>
-         <a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armar mi semana</a>`
+      ? (drafts > 0
+        ? `<p class="sem-msg">Completá tu semana programando tus borradores.</p>
+           <a class="btn btn-primary btn-block" href="#/app/calendario" style="margin-top:12px">Revisar borradores →</a>`
+        : `<p class="sem-msg">Te ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar tu semana.</p>
+           <a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armar mi semana</a>`)
       : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
          <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
