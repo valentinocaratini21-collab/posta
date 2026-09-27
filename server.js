@@ -23,7 +23,10 @@ const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'media');
+// Los archivos subidos (diseños, fotos, logos) van al volumen persistente (DATA_DIR),
+// no al repo: Railway borra el filesystem en cada deploy y los posteos quedarían rotos.
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const MEDIA_DIR = process.env.MEDIA_DIR || path.join(DATA_DIR, 'media');
 const IMAGE_BASE_URL = (process.env.IMAGE_BASE_URL || '').replace(/\/$/, '');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
@@ -431,6 +434,21 @@ app.get('/api/posts', requireAuth, (req, res) => {
   res.json(rows);
 });
 
+// Si el usuario nunca configuró image_base_url, la deducimos del host actual (https en
+// producción). Sin esto Instagram no puede descargar la imagen y la publicación real falla.
+function ensureImageBaseUrl(db, userId, req) {
+  try {
+    if (process.env.IMAGE_BASE_URL) return;
+    const s = db.prepare('SELECT image_base_url FROM settings WHERE user_id = ?').get(userId);
+    if (s && s.image_base_url) return;
+    const rawHost = req.get('host') || '';
+    if (!rawHost) return;
+    const proto = /localhost|127\.0\.0\.1/.test(rawHost.split(':')[0]) ? 'http' : 'https';
+    db.prepare(`UPDATE settings SET image_base_url = ?, updated_at = datetime('now') WHERE user_id = ?`)
+      .run(`${proto}://${rawHost}`, userId);
+  } catch (e) { /* no bloquea la creación del post */ }
+}
+
 app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const { image_path, caption, hashtags, scheduled_at, media_type } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
@@ -439,6 +457,7 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const r = db.prepare(
     'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
   ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt);
+  ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
@@ -451,6 +470,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
   } else if (action === 'publish-now') {
     db.prepare(`UPDATE posts SET status='scheduled', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
+    ensureImageBaseUrl(db, req.session.userId, req);
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
