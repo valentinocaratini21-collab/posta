@@ -425,6 +425,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 window.addEventListener('appinstalled', () => {
   PWA_DEFERRED = null;
   try { localStorage.setItem('pwa-installed', '1'); } catch (e) {}
+  pwaReportInstalled();
   const b = document.getElementById('pwaBanner');
   if (b) b.remove();
 });
@@ -438,8 +439,15 @@ function pwaIsIos() {
 function pwaDismissed() {
   try {
     const t = parseInt(localStorage.getItem('pwa-dismissed') || '0', 10);
-    return t && (Date.now() - t < 7 * 24 * 3600 * 1000);
+    return t && (Date.now() - t < 24 * 3600 * 1000);
   } catch (e) { return false; }
+}
+// Avisar al servidor (una sola vez por dispositivo) que la app quedó instalada.
+// Así no le mandamos emails de recordatorio a quien ya la tiene en el teléfono.
+function pwaReportInstalled() {
+  try { if (localStorage.getItem('pwa-reported') === '1') return; } catch (e) {}
+  try { localStorage.setItem('pwa-reported', '1'); } catch (e) {}
+  try { api.post('/api/pwa-installed', {}).catch(() => {}); } catch (e) {}
 }
 function pwaBannerHtml() {
   if (pwaIsInstalled() || pwaDismissed()) return '';
@@ -465,6 +473,8 @@ async function pwaDoInstall() {
   alert('Para instalar Posta:\n\niPhone: tocá Compartir y elegí "Agregar a pantalla de inicio".\n\nAndroid: tocá el menú ⋮ y elegí "Instalar app" o "Agregar a pantalla de inicio".');
 }
 function pwaWire() {
+  // Si ya la abrió como app instalada, avisar al servidor una sola vez.
+  try { if (pwaIsInstalled()) pwaReportInstalled(); } catch (e) {}
   const d = document.getElementById('pwaDismiss');
   if (d) d.onclick = () => {
     try { localStorage.setItem('pwa-dismissed', String(Date.now())); } catch (e) {}
