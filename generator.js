@@ -170,7 +170,7 @@ function templateGenerate({ business, category, tone, topic, goal }) {
   return { caption, hashtags: tags.join(' ') };
 }
 
-async function openaiGenerate({ business, category, tone, topic, competitors, goal }, apiKey) {
+async function openaiGenerate({ business, category, tone, topic, competitors, goal, taste }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -193,7 +193,7 @@ async function openaiGenerate({ business, category, tone, topic, competitors, go
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${taste || ''}\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
       ],
       max_tokens: 500,
@@ -221,7 +221,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, tone, topic, feedback, goal }, n, apiKey) {
+async function openaiCaptions({ business, category, tone, topic, feedback, goal, taste }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -238,6 +238,7 @@ async function openaiCaptions({ business, category, tone, topic, feedback, goal 
           content:
             `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}${goalLine(goal)}` +
             (feedback ? `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}` : '') +
+            (taste ? `\n${taste}` : '') +
             `\nGenerá los ${n} captions y los hashtags.`,
         },
       ],
@@ -301,7 +302,7 @@ function templateIdeas({ business, category, competitors, goal }) {
   ];
 }
 
-async function openaiIdeas({ business, category, tone, description, competitors }, apiKey) {
+async function openaiIdeas({ business, category, tone, description, competitors, taste }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -319,7 +320,7 @@ async function openaiIdeas({ business, category, tone, description, competitors 
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}\nGenerá las 6 ideas.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 900,

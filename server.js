@@ -239,6 +239,7 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
         topic: topic.trim(),
         competitors: profile.competitors,
         goal: profile.goal,
+        taste: tasteProfile(req.session.userId),
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
@@ -315,9 +316,13 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
     const stmt = db.prepare(
       'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
     );
-    const ids = clean.map((c) =>
-      stmt.run(req.session.userId, c.image, c.caption, c.hashtags, c.scheduled_at, 'scheduled', 'image').lastInsertRowid
-    );
+    const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
+    const ids = [];
+    for (const c of clean) {
+      const cap = c.caption.trim();
+      if (cap && dupStmt.get(req.session.userId, cap)) continue; // ya existe hoy: no duplicar
+      ids.push(stmt.run(req.session.userId, c.image, c.caption, c.hashtags, c.scheduled_at, 'scheduled', 'image').lastInsertRowid);
+    }
     res.json({ ok: true, count: ids.length, ids });
   } catch (e) {
     console.error('[creator/schedule]', e.message);
@@ -338,6 +343,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
         description: profile.description,
         competitors: profile.competitors,
         goal: profile.goal,
+        taste: tasteProfile(req.session.userId),
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
@@ -471,6 +477,12 @@ function ensureImageBaseUrl(db, userId, req) {
 app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const { image_path, caption, hashtags, scheduled_at, media_type } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
+  // Anti-duplicados: mismo texto en las últimas 24h (no cancelado) = avisar en vez de crear otro
+  const cap = (caption || '').trim();
+  if (cap) {
+    const dup = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`).get(req.session.userId, cap);
+    if (dup) return res.status(409).json({ error: 'Ya creaste este posteo hoy. Lo ves en tu historial.', post_id: dup.id });
+  }
   const status = scheduled_at ? 'scheduled' : 'draft';
   const mt = media_type === 'video' ? 'video' : 'image';
   const r = db.prepare(
@@ -541,6 +553,29 @@ function postWeekKey(p, tz) {
   return mondayKeyOf(ymdInTz(p.scheduled_at || p.published_at || p.created_at, tz) || tzToday(tz));
 }
 // Guarda (o actualiza) la señal del cliente para un posteo. La última señal vale.
+// Perfil de gusto del cliente a partir de sus 👍/👎: se inyecta en el prompt para que la IA aprenda de verdad.
+function tasteProfile(userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT p.caption, s.client_signal AS sig FROM post_signals s
+      JOIN posts p ON p.id = s.post_id
+      WHERE s.user_id = ? AND s.client_signal IN ('approved','rejected')
+      ORDER BY s.updated_at DESC LIMIT 12
+    `).all(userId);
+    const liked = [], disliked = [];
+    for (const r of rows) {
+      const cap = (r.caption || '').split('\n')[0].slice(0, 120).trim();
+      if (!cap) continue;
+      if (r.sig === 'approved' && liked.length < 3 && !liked.includes(cap)) liked.push(cap);
+      else if (r.sig === 'rejected' && disliked.length < 3 && !disliked.includes(cap)) disliked.push(cap);
+    }
+    if (!liked.length && !disliked.length) return '';
+    let t = '';
+    if (liked.length) t += `\nAl cliente le GUSTARON estos posteos (escribí más en esta línea):\n- ${liked.join('\n- ')}`;
+    if (disliked.length) t += `\nAl cliente NO le gustaron estos (evitá este estilo y estos temas):\n- ${disliked.join('\n- ')}`;
+    return t;
+  } catch (e) { return ''; }
+}
 function recordSignal(userId, post, signal) {
   try {
     const tz = userTz(userId);
