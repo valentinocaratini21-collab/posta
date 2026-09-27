@@ -722,7 +722,10 @@ function creatorView() {
     <div class="card">
       <div class="field"><label>¿De qué es el post?</label>
         <textarea id="c_topic" placeholder='Ej: "nuevo buzo oversize color crema", "promo 2x1 en pizzas los martes", "abrimos local en Palermo"'>${esc(c.topic)}</textarea>
-        <div class="hint">Una frase alcanza. La IA lo convierte en caption + hashtags con tu tono.</div></div>
+        <div class="hint">Una frase alcanza. La IA lo convierte en caption + hashtags con tu tono.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          ${['Buzo oversize color crema', 'Promo 2x1 en pizzas', 'Abrimos local en Palermo'].map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
+        </div></div>
       <div class="field"><label>📷 Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
         <div id="c_prodPhotoBox"></div>
         <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
@@ -796,16 +799,24 @@ function creatorView() {
     ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
     ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
     ${det.photoQuery && !det.productPhoto ? `<div class="photoq-note">📸 Fotos de: <b>${esc(det.photoQuery)}</b>${det.userPhotos ? ` · usando tus fotos primero ✨` : ''}</div>` : ''}
+    ${libPhotos.length ? `
+    <div class="myphotos-card" style="padding:14px 18px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span style="font-weight:700">📷 Tus fotos</span>
+        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('')}</div>
+        <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">📤 Subir más</button>
+        <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
+      </div>
+      <div id="mpMsg"></div>
+    </div>` : `
     <div class="myphotos-card">
       <div class="mp-title">📷 Tus fotos</div>
       <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
-      <div class="mp-row" id="mpRow">
-        ${libPhotos.length ? libPhotos.map(a => `<img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('') : `<span class="mut">Todavía no subiste fotos.</span>`}
-      </div>
+      <div class="mp-row" id="mpRow"><span class="mut">Todavía no subiste fotos.</span></div>
       <button class="btn btn-soft" id="btnUploadPhotos">📤 Subir fotos de tus productos</button>
       <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
       <div id="mpMsg"></div>
-    </div>
+    </div>`}
     <div id="optErr"></div>
     <div class="opt-grid">
       ${opts.map((o, i) => `
@@ -2882,10 +2893,18 @@ function bindCreator() {
               <button class="btn btn-ghost btn-sm" id="btnProdPhRm" type="button">Quitar</button>
             </div>
           </div>`
-        : `<button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
+        : `<div style="display:flex;gap:8px;flex-wrap:wrap">
+             <button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
+             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">🖼️ Mis fotos</button>` : ''}
+           </div>
+           <div id="prodPhLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
+             ${assetPhotos().map(a => `<img src="${esc(a.file_path)}" data-prodpick="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer" alt="Tu foto">`).join('')}
+           </div>
            <div id="prodPhMsg"></div>`;
       const trig = () => $('#c_prodPhotoFile').click();
       const bAdd = $('#btnProdPhAdd'); if (bAdd) bAdd.onclick = trig;
+      const bLib = $('#btnProdPhLib'); if (bLib) bLib.onclick = () => { const l = $('#prodPhLib'); if (l) l.style.display = l.style.display === 'none' ? 'flex' : 'none'; };
+      $$('#prodPhLib [data-prodpick]').forEach(img => img.onclick = () => { c.productPhoto = img.dataset.prodpick; renderProdBox(); });
       const bCh = $('#btnProdPhCh'); if (bCh) bCh.onclick = trig;
       const bRm = $('#btnProdPhRm'); if (bRm) bRm.onclick = () => { c.productPhoto = ''; renderProdBox(); };
     };
@@ -2907,6 +2926,7 @@ function bindCreator() {
       renderProdBox();
     };
     renderProdBox();
+    $$('[data-chip]').forEach(b => b.onclick = () => { const t = $('#c_topic'); if (t) { t.value = b.dataset.chip; t.focus(); } });
     $('#btnGen').onclick = async () => {
       c.topic = $('#c_topic').value.trim();
       if (!c.topic) { $('#genErr').innerHTML = `<div class="err">Escribí el tema del post primero</div>`; return; }
@@ -3207,6 +3227,7 @@ function bindCreator() {
       }
     };
     $('#btnRegen').onclick = async () => {
+      if (!confirm('¿Genero 6 opciones nuevas? Las actuales se reemplazan.')) return;
       const btn = $('#btnRegen');
       btn.disabled = true; btn.textContent = '🎨 Generando nuevas opciones...';
       try {
