@@ -224,10 +224,10 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pill">Tu equipo de marketing en automático <b>🇦🇷</b></div>
     <h1>Vos vendé. <span class="hl">Nosotros posteamos.</span></h1>
-    <p class="sub"><b>Vos no diseñás nada.</b> Con un clic armás tu semana; nosotros la publicamos sola en tu Instagram.</p>
+    <p class="sub"><b>Nosotros nos encargamos de todo.</b> Con un clic armás tu semana; nosotros la publicamos sola en tu Instagram.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
-      <a class="btn btn-ghost" href="/demo">✨ Probar gratis</a>
+      <a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a>
     </div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
@@ -256,8 +256,8 @@ function landingView(cfg) {
     </div>
   </div></div>
   <div class="sample-banner"><div class="wrap">
-    <div class="sample-txt"><b>🎁 3 posteos de muestra GRATIS</b><span>Generala vos mismo en 30 segundos, con tu negocio real. Sin registro.</span></div>
-    <a class="btn btn-primary" href="/demo">Quiero mi muestra gratis</a>
+    <div class="sample-txt"><b>🎁 Tu semana de posteos GRATIS</b><span>La armamos por vos en 1 minuto, con tu negocio real. Sin registro.</span></div>
+    <a class="btn btn-primary" href="/prueba">Armar mi semana gratis</a>
   </div></div>
   <div class="pz-trialband"><div class="wrap">
     <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armamos tus ideas + tu semana en 2 minutos. Una sola vez, sin registro.</span></div>
@@ -349,20 +349,20 @@ function landingView(cfg) {
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
     <div class="faq">
       <details><summary>¿Necesito hacer algo?</summary><p>No. Nos contás de tu negocio una sola vez al registrarte y listo. Nosotros creamos las ideas, los diseños, los textos y publicamos. Si querés, podés revisar todo antes de que salga.</p></details>
-      <details><summary>¿Publican en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publicamos directamente en tu perfil con la API oficial de Meta. También podés probar todo en modo demo antes.</p></details>
+      <details><summary>¿Publican en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publicamos directamente en tu perfil con la API oficial de Meta. También podés ver tu semana armada en la prueba gratis antes de registrarte.</p></details>
       <details><summary>¿Usan mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
-      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>Sí. Tu semana se publica en automático, pero la ves entera antes en "Mi semana" y podés editar o eliminar cualquier posteo. Nada sale sin que lo hayas podido revisar.</p></details>
+      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>No. Todo queda como borrador en tu cuenta y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si no estás conforme, te devolvemos el 100% de tu primer pago. Sin preguntas.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ni bien pagás: armás tu primera semana con un clic y la dejás programada.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Antes de pagar: en la prueba gratis ya ves tu semana armada, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
       <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
       <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
-      <div style="margin-top:18px"><a class="btn btn-ghost" href="/demo">✨ Probar gratis</a></div>
+      <div style="margin-top:18px"><a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a></div>
     </div>
   </div></div>
   <div class="footer"><div class="wrap">

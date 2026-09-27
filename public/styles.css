@@ -716,3 +716,56 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-input-row .btn{padding:0;width:56px;height:56px;border-radius:50%;font-size:20px;flex-shrink:0}
 .chat-proposal{background:#FFF9EC;border:2px solid var(--yel);border-radius:14px;padding:14px;margin-bottom:10px}
 .chat-proposal-btns{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ===== Landing mobile compacto: todo más chiquito, una cosa al lado de otra ===== */
+@media(max-width:760px){
+  /* secciones más juntas */
+  .section{padding:42px 0}
+  .section h2{font-size:26px}
+  .section .lede{font-size:15px;margin-bottom:24px}
+  /* hero */
+  .hero{padding:44px 0 40px}
+  .hero h1{font-size:34px}
+  .hero p.sub{font-size:16px;margin:16px auto 24px}
+  /* Hecho con Posta: carrusel horizontal con snap */
+  #ejemplos .show-row{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:14px;margin:28px -20px 0;padding:4px 20px 14px;scrollbar-width:none}
+  #ejemplos .show-row::-webkit-scrollbar{display:none}
+  #ejemplos .show-row .phone.sm{flex:0 0 200px;width:200px;scroll-snap-align:center}
+  #ejemplos .show-row .cap{font-size:12.5px}
+  /* Qué incluye: grilla de 2 columnas compacta */
+  #incluye .grid3{grid-template-columns:1fr 1fr;gap:10px}
+  #incluye .feat{padding:18px 14px;border-radius:16px}
+  #incluye .feat .ico{font-size:28px;margin-bottom:10px}
+  #incluye .feat h3{font-size:14px;margin-bottom:6px}
+  #incluye .feat p{font-size:12.5px;line-height:1.5}
+  /* Así de simple: 3 columnas compactas */
+  #como-funciona .steps{grid-template-columns:repeat(3,1fr);gap:10px}
+  #como-funciona .step{padding:18px 10px;text-align:center;border-radius:16px}
+  #como-funciona .step .num{width:34px;height:34px;font-size:16px;margin:0 auto 10px}
+  #como-funciona .step h3{font-size:13.5px;line-height:1.35;margin-bottom:0}
+  #como-funciona .step p{display:none}
+  /* Comparación: 2 columnas, Posta a lo ancho */
+  #diferencia .vs-list{grid-template-columns:1fr 1fr;gap:10px}
+  #diferencia .vs-item{padding:16px 14px;border-radius:16px}
+  #diferencia .vs-top{font-size:14px}
+  #diferencia .vs-item p{font-size:12.5px;line-height:1.5}
+  #diferencia .vs-item.win{grid-column:1/-1}
+  #diferencia .unico-line{font-size:14px}
+  /* Planes: carrusel horizontal con peek */
+  #planes .plans-row{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:14px;margin:0 -20px;padding:4px 20px 16px;scrollbar-width:none}
+  #planes .plans-row::-webkit-scrollbar{display:none}
+  #planes .price-card{flex:0 0 84%;scroll-snap-align:center;padding:28px 22px;margin:0}
+  #planes .price-card .price{font-size:40px}
+  #planes .anchor-line{font-size:15px;padding:14px 16px}
+  #planes .scarcity{font-size:13.5px}
+  /* Calculadora compacta */
+  #calculadora .pz-calc{padding:24px 20px;margin-top:24px}
+  /* FAQ compacto */
+  #faq .faq details{padding:16px 18px;border-radius:14px}
+  #faq .faq summary{font-size:15.5px}
+  #faq .faq details p{font-size:14px}
+  /* bandas */
+  .pz-trialband{padding:26px 0}
+  .sample-banner{padding:26px 0}
+  .sample-banner .wrap{flex-direction:column;text-align:center;gap:14px}
+}
