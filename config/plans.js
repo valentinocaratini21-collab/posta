@@ -121,6 +121,12 @@ function getPlans(country) {
 }
 
 function getPlan(id, country) {
+  // Plan "free": cuenta de cortesía (fundador). Límites del Total, precio 0.
+  // No vive en PLANS_AR/PLANS_UY para que nunca aparezca en la página de precios.
+  if (id === 'free') {
+    const t = getPlans(country).total;
+    return { ...t, id: 'free', name: 'Founder', price: 0, tagline: 'Cuenta del fundador' };
+  }
   const plans = getPlans(country);
   return plans[id] || plans[TRIAL_PLAN];
 }
