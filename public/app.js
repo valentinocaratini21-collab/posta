@@ -1420,7 +1420,7 @@ function postItem(p, actions) {
       <div class="meta">${vtag}${badge(p.status)}
         ${p.scheduled_at && p.status === 'scheduled' ? `<span>📅 ${fmtDate(p.scheduled_at)}</span>` : ''}
         ${p.published_at ? `<span>✅ ${fmtDate(p.published_at)}</span>` : ''}
-        ${p.ig_permalink ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ↗</a>` : ''}
+        ${p.ig_permalink && !p.ig_permalink.includes('/demo_') ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ↗</a>` : ''}
         ${p.error ? `<span style="color:#D64545" title="${esc(p.error)}">${esc(humanError(p.error))}</span>` : ''}
       </div>
     </div>
