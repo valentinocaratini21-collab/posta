@@ -38,8 +38,45 @@ if (IS_PROD && !SESSION_SECRET) {
 if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
 app.use(express.json({ limit: '2mb' }));
+
+// Sesiones persistentes en SQLite: cada deploy reinicia el servidor y la memoria
+// se pierde; sin este store cada deploy deslogueaba a todos los usuarios.
+class SqliteSessionStore extends session.Store {
+  constructor() {
+    super();
+    db.exec(`CREATE TABLE IF NOT EXISTS sessions (
+      sid TEXT PRIMARY KEY,
+      sess TEXT NOT NULL,
+      expire INTEGER NOT NULL
+    )`);
+    const sweep = setInterval(() => {
+      try { db.prepare('DELETE FROM sessions WHERE expire < ?').run(Date.now()); } catch (e) {}
+    }, 3600 * 1000);
+    if (sweep.unref) sweep.unref();
+  }
+  get(sid, cb) {
+    try {
+      const row = db.prepare('SELECT sess, expire FROM sessions WHERE sid = ?').get(sid);
+      if (!row || row.expire <= Date.now()) return cb(null, null);
+      cb(null, JSON.parse(row.sess));
+    } catch (e) { cb(e); }
+  }
+  set(sid, sess, cb) {
+    try {
+      const maxAge = (sess.cookie && sess.cookie.maxAge) || 7 * 24 * 3600 * 1000;
+      db.prepare('INSERT OR REPLACE INTO sessions (sid, sess, expire) VALUES (?, ?, ?)')
+        .run(sid, JSON.stringify(sess), Date.now() + maxAge);
+      cb(null);
+    } catch (e) { cb(e); }
+  }
+  destroy(sid, cb) {
+    try { db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid); cb(null); } catch (e) { cb(e); }
+  }
+  touch(sid, sess, cb) { this.set(sid, sess, cb); }
+}
 app.use(
   session({
+    store: new SqliteSessionStore(),
     secret: SESSION_SECRET || 'posta-dev-secret-cambiar-en-prod',
     resave: false,
     saveUninitialized: false,
