@@ -1370,6 +1370,21 @@ function fmtDate(iso) {
   const d = new Date(s);
   return d.toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
+// "mañana a las 19:00" / "el miércoles 30 a las 19:00"
+function relDay(iso) {
+  if (!iso) return '—';
+  let s = iso.length === 16 ? iso : iso.replace(' ', 'T');
+  if (iso.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+  const d = new Date(s);
+  if (isNaN(d)) return fmtDate(iso);
+  const now = new Date();
+  const dayOnly = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((dayOnly(d) - dayOnly(now)) / 86400000);
+  const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  if (diff <= 0) return `hoy a las ${time}`;
+  if (diff === 1) return `mañana a las ${time}`;
+  return `el ${d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'short' })} a las ${time}`;
+}
 // Errores técnicos de Meta/IG traducidos a lenguaje humano
 function humanError(err) {
   if (!err) return '';
@@ -1610,13 +1625,17 @@ async function calendarView() {
   const posts = await api.get('/api/posts?status=scheduled');
   const drafts = await api.get('/api/posts?status=draft');
   const all = [...posts, ...drafts];
-  return `<div class="page-head"><div class="ph-ico">📅</div><div class="ph-txt"><h1>Calendario</h1><p class="sub">Tus próximos posts. Se publican solos a la hora indicada.</p></div></div>
-  ${all.length ? all.map(p => postItem(p, `
+  const head = `<div class="page-head"><div class="ph-ico">📅</div><div class="ph-txt"><h1>Calendario</h1><p class="sub">Tus próximos posts. Se publican solos a la hora indicada.</p></div></div>`;
+  if (!all.length) return head + `<div class="empty"><div class="big">📭</div>No tenés posts programados.<br><br><a class="btn btn-primary" href="#/app/ideas">⚡ Armar mi semana</a><div style="margin-top:12px"><a href="#/app/crear" class="mut" style="font-size:14px">o crear un post suelto →</a></div></div>`;
+  const nextLine = posts.length ? `<p class="cal-next">📍 Próximo posteo: <b>${relDay(posts[0].scheduled_at)}</b> — sale solo, no tenés que hacer nada.</p>` : '';
+  const draftNudge = drafts.length ? `<p class="cal-draft-nudge">✏️ Tenés ${drafts.length === 1 ? '1 borrador' : `${drafts.length} borradores`} sin fecha — poneles día y hora abajo para que salgan solos.</p>` : '';
+  return head + nextLine + draftNudge
+  + all.map(p => postItem(p, `
       ${sigBtns(p)}
       ${p.status === 'scheduled' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
       ${p.status === 'draft' ? `<span class="sched-row"><input type="datetime-local" id="sched-${p.id}"><button class="btn btn-soft btn-sm" data-act="sched" data-id="${p.id}">📅 Programar</button></span>` : ''}
       <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>
-    `)).join('') : `<div class="empty"><div class="big">📭</div>No tenés posts programados.<br><br><a class="btn btn-primary" href="#/app/crear">Crear el primero</a></div>`}`;
+    `)).join('');
 }
 async function historyView() {
   const posts = await api.get('/api/posts');

@@ -594,6 +594,8 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .sched-now{min-height:48px;white-space:nowrap}
 .pubnow-mount:empty{display:none}
 .pubnow-mount{width:100%}
+.cal-next{background:#EAF6FD;border:1.5px solid #BFE3F5;color:#0A1E33;border-radius:12px;padding:10px 14px;font-size:14px;margin:0 0 12px}
+.cal-draft-nudge{background:#FFF7E6;border:1.5px solid #F5D98B;color:#0A1E33;border-radius:12px;padding:10px 14px;font-size:14px;margin:0 0 12px}
 .light-card img{width:100%;border-radius:14px;margin-bottom:12px}
 .light-card p{white-space:pre-wrap;font-size:14px;line-height:1.6;color:var(--mut);margin-bottom:14px}
 .myphotos-card{background:var(--card);border:1.5px dashed var(--cel-line);border-radius:var(--r);padding:18px;margin-bottom:22px}
