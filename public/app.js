@@ -2754,6 +2754,29 @@ async function render() {
         await api.post(isReg ? '/api/auth/register' : '/api/auth/login', body);
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
+        // Puente /prueba → cuenta: si viene de la prueba, pre-cargamos el perfil con los
+        // datos que ya nos dio (negocio, rubro, etc.) y se saltea el onboarding.
+        if (isReg) {
+          try {
+            const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+            if (tp && tp.business_name) {
+              const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', otro: 'otro' };
+              await api.put('/api/profile', {
+                business_name: String(tp.business_name).slice(0, 80),
+                category: catMap[tp.category] || 'otro',
+                description: String(tp.description || '').slice(0, 600),
+                competitors: String(tp.competitors || '').slice(0, 200),
+                ig_username: String(tp.ig_username || '').slice(0, 40),
+                tone: tp.tone === 'tu' ? 'profesional' : 'canchero',
+                goal: 'vender',
+              });
+              const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+              if (bc.length >= 2) await api.put('/api/settings', { brand_colors: bc.slice(0, 3) }).catch(() => {});
+              await refreshSession();
+            }
+          } catch (e) {}
+          localStorage.removeItem('posta_trial_profile');
+        }
         // Onboarding si el perfil está incompleto; si viene de /prueba, va a elegir plan
         const chosen = localStorage.getItem('posta_chosen_plan');
         if (PROFILE && PROFILE.business_name) {

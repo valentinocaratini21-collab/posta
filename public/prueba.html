@@ -477,6 +477,19 @@ async function startTrial() {
     await new Promise((r) => setTimeout(r, wait));
     clearInterval(tkTimer);
     TRIAL = data;
+    // Puente a la cuenta: guardamos los datos del negocio para pre-cargar el perfil al registrarse
+    try {
+      localStorage.setItem('posta_trial_profile', JSON.stringify({
+        business_name: biz,
+        category: $('#f_cat').value,
+        description: $('#f_goal').value.trim(),
+        competitors: $('#f_comp').value.trim(),
+        ig_username: $('#f_ig').value.trim().replace(/^@/, ''),
+        tone: TONE,
+        country: COUNTRY,
+        brand_colors: [$('#f_accent').value, $('#f_btn').value],
+      }));
+    } catch (e) {}
     if (!TEST_KEY_QS) { try { localStorage.setItem('posta_trial_done', '1'); } catch (e) {} idb.set(data); }
     renderResults();
   } catch (e) {
