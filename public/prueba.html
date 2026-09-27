@@ -65,12 +65,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
 .benefits{margin:36px 0 6px}
 .benefits h3{text-align:center;color:var(--navy);font-size:20px;margin:0 0 16px}
-.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.bcard{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px}
-.bcard .bi{font-size:24px;margin-bottom:6px}
-.bcard b{display:block;color:var(--navy);font-size:14px;margin-bottom:4px}
+.bgrid{display:flex;flex-direction:column;gap:8px}
+.bcard{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center}
+.bcard .bi{flex:0 0 46px;width:46px;height:46px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:23px}
+.bcard b{display:block;color:var(--navy);font-size:15px;margin-bottom:2px}
 .bcard p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
-@media(min-width:640px){.bgrid{grid-template-columns:1fr 1fr 1fr}}
+@media(min-width:640px){
+  .bgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .bcard{display:block;padding:14px}
+  .bcard .bi{width:auto;height:auto;background:none;display:block;font-size:24px;margin-bottom:6px}
+  .bcard b{font-size:14px;margin-bottom:4px}
+}
 /* Antes: tarjeta con el perfil real del visitante */
 .igb{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px;text-align:left}
 .igb-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
@@ -215,12 +220,12 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   <div class="benefits">
     <h3>¿Qué te llevás con Posta?</h3>
     <div class="bgrid">
-      <div class="bcard"><div class="bi">🗓️</div><b>5 posteos por semana</b><p>Diseño, caption y hashtags. Vos no tocás nada.</p></div>
-      <div class="bcard"><div class="bi">🙌</div><b>100% hecho por nosotros</b><p>Vos vendé. Nosotros posteamos.</p></div>
-      <div class="bcard"><div class="bi">✅</div><b>Vos aprobás todo</b><p>Nada se publica sin tu OK.</p></div>
-      <div class="bcard"><div class="bi">🎬</div><b>Reels incluidos</b><p>Videos verticales listos para publicar.</p></div>
-      <div class="bcard"><div class="bi">📈</div><b>Constancia automática</b><p>Tu Instagram activo todas las semanas, sin depender de tu tiempo.</p></div>
-      <div class="bcard"><div class="bi">💳</div><b>En pesos, sin vueltas</b><p>Pagás por MercadoPago y cancelás cuando quieras.</p></div>
+      <div class="bcard"><div class="bi">🗓️</div><div><b>5 posteos por semana</b><p>Diseño, caption y hashtags. Vos no tocás nada.</p></div></div>
+      <div class="bcard"><div class="bi">🙌</div><div><b>100% hecho por nosotros</b><p>Vos vendé. Nosotros posteamos.</p></div></div>
+      <div class="bcard"><div class="bi">✅</div><div><b>Vos aprobás todo</b><p>Nada se publica sin tu OK.</p></div></div>
+      <div class="bcard"><div class="bi">🎬</div><div><b>Reels incluidos</b><p>Videos verticales listos para publicar.</p></div></div>
+      <div class="bcard"><div class="bi">📈</div><div><b>Constancia automática</b><p>Tu Instagram activo todas las semanas, sin depender de tu tiempo.</p></div></div>
+      <div class="bcard"><div class="bi">💳</div><div><b>En pesos, sin vueltas</b><p>Pagás por MercadoPago y cancelás cuando quieras.</p></div></div>
     </div>
   </div>
 </div>
@@ -300,6 +305,20 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   <p class="ref-tease">🎁 ¿Vienen de a dos? <b>Traé 2 amigos y pagá la mitad</b> todos los meses — tu link de referidos te espera en tu cuenta.</p>
 </div></div>
 
+<!-- MODAL: registro sin salir de /prueba -->
+<div class="overlay" id="ovReg"><div class="modal">
+  <button class="x" id="xReg">✕</button>
+  <span class="pill">TU SEMANA TE ESPERA 🔥</span>
+  <h2>Creá tu cuenta</h2>
+  <p class="msub" id="rgSub"></p>
+  <div class="field"><label>Email</label><input type="email" id="rg_email" placeholder="tu@email.com" autocomplete="email"></div>
+  <div class="field"><label>Contraseña</label><input type="password" id="rg_pass" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+  <div class="err" id="rgErr"></div>
+  <button class="btn btn-primary btn-block" id="btnReg">Crear mi cuenta 🚀</button>
+  <p class="tiny">Sin tarjeta · Cancelá cuando quieras</p>
+  <p class="tiny" style="margin-top:8px">¿Ya tenés cuenta? <a href="/#/login" style="color:var(--cel);font-weight:700">Entrá</a></p>
+</div></div>
+
 <!-- LIGHTBOX -->
 <div class="lb" id="lb"><div class="lb-box">
   <button class="x" id="xLb">✕</button>
@@ -317,6 +336,7 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'
 const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Restaurante","cafeteria":"Cafetería","bar":"Bar / Cervecería","belleza":"Belleza / Estética","barberia":"Barbería / Peluquería","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","deco":"Muebles / Decoración","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","tecnologia":"Tecnología / Celulares","turismo":"Turismo / Hotelería","viajes":"Agencia de viajes","eventos":"Eventos / Fiestas","fotografia":"Fotografía","arte":"Arte / Diseño","joyeria":"Joyería / Accesorios","flores":"Florería / Vivero","profesionales":"Servicios profesionales","servicios":"Servicios","otro":"Otro"};
 
 let TRIAL = null;      // respuesta del backend
+let TRIAL_PLANS = [];   // planes cacheados para el registro embebido
 let COUNTRY = 'AR';
 let TONE = 'vos';
 let modalShown = false;
@@ -557,6 +577,7 @@ async function openPlans() {
   if (plansLoaded) return;
   try {
     const cfg = await (await fetch('/api/billing/plans?country=' + COUNTRY)).json();
+    TRIAL_PLANS = cfg.plans || [];
     const perDay = (p) => {
       const v = Math.round(p.price / 30).toLocaleString('es-AR');
       return (p.currency === 'UYU' ? '≈ $U ' + v : '≈ $' + v) + '/día';
@@ -584,9 +605,94 @@ function closePlans() {
   document.body.style.overflow = '';
 }
 function choosePlan(planId) {
-  try { localStorage.setItem('posta_chosen_plan', planId); } catch (e) {}
-  location.href = '/#/registro';
+  const p = (TRIAL_PLANS || []).find((x) => x.id === planId) || {};
+  openReg(planId, p.name || '', p.price_label || '');
 }
+
+// ---------- registro embebido: nadie sale de /prueba ----------
+async function pj(url, body, method) {
+  let r;
+  try {
+    r = await fetch(url, {
+      method: method || (body === undefined ? 'GET' : 'POST'),
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+  }
+  let d = {};
+  try { d = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(d.error || 'Algo salió mal. Probá de nuevo.');
+  return d;
+}
+function openReg(planId, planName, planPrice) {
+  try { localStorage.setItem('posta_chosen_plan', planId); } catch (e) {}
+  closePlans();
+  const biz = (TRIAL && TRIAL.business) ? TRIAL.business : 'tu negocio';
+  $('#rgSub').innerHTML = planName
+    ? `Plan <b>${esc(planName)}</b> · ${esc(planPrice)}/mes.<br>Tu semana de <b>${esc(biz)}</b> queda guardada en tu cuenta.`
+    : `Tu semana de <b>${esc(biz)}</b> queda guardada en tu cuenta.`;
+  $('#rgErr').style.display = 'none';
+  $('#ovReg').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => { try { $('#rg_email').focus(); } catch (e) {} }, 350);
+}
+function closeReg() {
+  $('#ovReg').classList.remove('open');
+  document.body.style.overflow = '';
+}
+async function doRegister() {
+  const email = $('#rg_email').value.trim(), pass = $('#rg_pass').value;
+  const err = $('#rgErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) return fail('Poné un email válido 🙂');
+  if (pass.length < 6) return fail('La contraseña tiene que tener al menos 6 caracteres 🙂');
+  err.style.display = 'none';
+  const b = $('#btnReg');
+  b.disabled = true; b.textContent = 'Creando tu cuenta…';
+  try {
+    const body = { email, password: pass };
+    try { const rf = localStorage.getItem('posta_ref'); if (rf) body.ref = rf; } catch (e) {}
+    await pj('/api/auth/register', body);
+    try { localStorage.removeItem('posta_ref'); } catch (e) {}
+    // Puente /prueba → cuenta: pre-cargamos el perfil con los datos de la prueba
+    try {
+      const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+      if (tp && tp.business_name) {
+        const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+        await pj('/api/profile', {
+          business_name: String(tp.business_name).slice(0, 80),
+          category: catMap[tp.category] || 'otro',
+          description: String(tp.description || '').slice(0, 600),
+          competitors: String(tp.competitors || '').slice(0, 200),
+          ig_username: String(tp.ig_username || '').slice(0, 40),
+          tone: tp.tone === 'tu' ? 'profesional' : 'canchero',
+          goal: 'vender',
+        }, 'PUT');
+        const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+        if (bc.length >= 2) await pj('/api/settings', { brand_colors: bc.slice(0, 3) }, 'PUT').catch(() => {});
+      }
+    } catch (e) {}
+    try { localStorage.removeItem('posta_trial_profile'); } catch (e) {}
+    b.textContent = '¡Listo! ✅';
+    let chosen = null;
+    try { chosen = localStorage.getItem('posta_chosen_plan'); } catch (e) {}
+    setTimeout(() => {
+      location.href = chosen ? '/#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '/#/app/semana';
+    }, 700);
+  } catch (e) {
+    fail(e.message);
+    b.disabled = false; b.textContent = 'Crear mi cuenta 🚀';
+  }
+}
+$('#xReg').onclick = closeReg;
+$('#btnReg').onclick = doRegister;
+$('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') closeReg(); });
+['rg_email', 'rg_pass'].forEach((id) => {
+  document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+});
 </script>
 </body>
 </html>
