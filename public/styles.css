@@ -769,3 +769,11 @@ textarea.in{resize:vertical;min-height:96px}
   .sample-banner{padding:26px 0}
   .sample-banner .wrap{flex-direction:column;text-align:center;gap:14px}
 }
+
+/* ===== Sticky CTA del landing (solo mobile) ===== */
+.lp-sticky{display:none}
+@media(max-width:760px){
+  .lp-sticky{display:block;position:fixed;bottom:0;left:0;right:0;z-index:55;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+  .lp-sticky .btn{width:100%}
+  .footer{padding-bottom:112px}
+}

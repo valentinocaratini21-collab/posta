@@ -267,14 +267,14 @@ function landingView(cfg) {
     <h2>Hecho con Posta</h2>
     <p class="lede">Diseños y videos creados en minutos, para cualquier rubro. Cada post de nuestros clientes lleva la marca Hecho con Posta — es nuestra mejor publicidad.</p>
     <div class="show-row">
-      <div class="phone sm"><div class="screen"><img src="post-food.png" alt="Diseño para restaurante creado por Posta"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posta"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
       <div class="phone sm"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
-      <div class="phone sm"><div class="screen"><img src="post-moda.png" alt="Diseño para tienda de ropa creado por Posta"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
-      <div class="phone sm"><div class="screen"><img src="post-barber.png" alt="Diseño para barbería creado por Posta"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
-      <div class="phone sm"><div class="screen"><img src="post-belleza.png" alt="Diseño para estética creado por Posta"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
-      <div class="phone sm"><div class="screen"><img src="post-mascotas.png" alt="Diseño para pet shop creado por Posta"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
-      <div class="phone sm"><div class="screen"><img src="post-fitness.png" alt="Diseño para gimnasio creado por Posta"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
-      <div class="phone sm"><div class="screen"><img src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posta"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-moda.png" alt="Diseño para tienda de ropa creado por Posta"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-barber.png" alt="Diseño para barbería creado por Posta"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-belleza.png" alt="Diseño para estética creado por Posta"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-mascotas.png" alt="Diseño para pet shop creado por Posta"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posta"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posta"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
     </div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
@@ -341,7 +341,7 @@ function landingView(cfg) {
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
     </div>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
-    <div class="scarcity">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
+    <div class="scarcity" id="scarcityLine">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
@@ -369,7 +369,8 @@ function landingView(cfg) {
     <span class="logo" style="font-size:20px">Posta<span class="dot">.</span></span>
     <span>Hecho en Argentina 🇦🇷 · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
-  </div></div>`;
+  </div></div>
+  <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">✨ Probar gratis</a></div></div>`;
 }
 
 /* ---------- AUTH ---------- */
@@ -2744,6 +2745,11 @@ async function render() {
       PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
       root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
+      // Lugares reales: bajan solos con cada cliente nuevo
+      fetch('/api/capacity').then(r => r.json()).then(c => {
+        const el = document.getElementById('scarcityLine');
+        if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
+      }).catch(() => {});
     }
     const el = document.querySelector(path);
     if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth' }));
