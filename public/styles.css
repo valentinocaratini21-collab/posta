@@ -711,6 +711,7 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-board-scene canvas{width:100%;height:auto;display:block}
 #chatCaption{font-size:15px;min-height:96px}
 #chatHashtags:empty{display:none}
+.chat-input-row{display:flex;gap:8px;align-items:center}
 .chat-input-row .in{flex:1;margin:0;border-radius:999px;padding:16px 22px;font-size:17px;box-shadow:0 2px 10px rgba(10,30,51,.06)}
 .chat-input-row .btn{padding:0;width:56px;height:56px;border-radius:50%;font-size:20px;flex-shrink:0}
 .chat-proposal{background:#FFF9EC;border:2px solid var(--yel);border-radius:14px;padding:14px;margin-bottom:10px}

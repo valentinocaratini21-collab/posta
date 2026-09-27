@@ -1344,11 +1344,12 @@ function chatCardHTML() {
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
-      <button class="btn btn-soft" id="chatAttach" title="Agregar foto">📷</button>
+      <button class="btn btn-soft" id="chatAttach" title="Subir foto">📷</button>
       <input id="chatInput" class="in" placeholder="Ej: quiero un post sobre mis nuevos buzos…" maxlength="2000" autocomplete="off">
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
       <input type="file" id="chatFile" accept="image/*" multiple hidden>
     </div>
+    <div style="font-size:12px;color:var(--mut);margin-top:6px">📷 Subí fotos de tu producto: la IA opina sobre ellas y las usa en los ejemplos.</div>
     <div id="chatMsg"></div>
   </div>`;
 }
