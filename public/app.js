@@ -1019,7 +1019,7 @@ function autopilotCardHTML() {
   const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
   const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posteos por semana</option>`).join('');
   return `
-  <div class="card card-hi-yl">
+  <div class="card card-hi-yl" id="autopilotCard">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel. Vos los revisás y aprobás — recién ahí se programan.</p>
     <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
@@ -1856,6 +1856,10 @@ function bindIdeas() {
   const ap = $('#btnAutopilot'); if (ap) ap.onclick = () => runAutopilot(+$('#apCount').value);
   bindReview();
   bindChat();
+  if (window.__goAutopilot) {
+    window.__goAutopilot = false;
+    setTimeout(() => { const el = document.getElementById('autopilotCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
+  }
 }
 
 /* ---------- VIDEO 🎬 ---------- */
@@ -2341,8 +2345,10 @@ async function semanaView() {
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
     ${w.missing
-      ? `<p class="sem-msg">Te ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar tu semana. <a href="#/app/ideas"><b>${w.missing === 1 ? 'Armarlo ahora →' : 'Armarlos ahora →'}</b></a></p>`
-      : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>`}
+      ? `<p class="sem-msg">Te ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar tu semana.</p>
+         <a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armar mi semana</a>`
+      : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
+         <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
   <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div><p class="d" style="margin:12px 0 0"><a href="#/app/calendario">Ver programados y borradores →</a></p></div>
   ${nudgeBlock}
@@ -2364,6 +2370,7 @@ async function semanaView() {
 
 function bindSemana() {
   bindSignalBtns();
+  $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
   $$('[data-nudge]').forEach(b => b.onclick = () => {
     const n = SEM_NUDGES[+b.dataset.nudge];
     if (!n) return;
@@ -2377,7 +2384,7 @@ async function calendarView() {
   const drafts = await api.get('/api/posts?status=draft');
   const all = [...posts, ...drafts];
   const head = `<div class="page-head"><div class="ph-ico">📅</div><div class="ph-txt"><h1>Calendario</h1><p class="sub">Tus próximos posteos. Se publican solos a la hora indicada.</p></div></div>`;
-  if (!all.length) return head + `<div class="empty"><div class="big">📭</div>No tenés posteos programados.<br><br><a class="btn btn-primary" href="#/app/ideas">⚡ Armar mi semana</a><div style="margin-top:12px"><a href="#/app/crear" class="mut" style="font-size:14px">o crear un posteo suelto →</a></div></div>`;
+  if (!all.length) return head + `<div class="empty"><div class="big">📭</div>No tenés posteos programados.<br><br><a class="btn btn-primary" href="#/app/ideas" data-goto-autopilot>⚡ Armar mi semana</a><div style="margin-top:12px"><a href="#/app/crear" class="mut" style="font-size:14px">o crear un posteo suelto →</a></div></div>`;
   const nextLine = posts.length ? `<p class="cal-next">📍 Próximo posteo: <b>${relDay(posts[0].scheduled_at)}</b> — sale solo, no tenés que hacer nada.</p>` : '';
   const draftNudge = drafts.length ? `<p class="cal-draft-nudge">✏️ Tenés ${drafts.length === 1 ? '1 borrador' : `${drafts.length} borradores`} sin fecha — poneles día y hora abajo para que salgan solos.</p>` : '';
   return head + nextLine + draftNudge
@@ -2845,6 +2852,7 @@ function bindApp(tab) {
   if (tab === 'fotos') bindFotos();
   if (tab === 'onboarding') bindOnboarding();
   if (tab === 'calendario' || tab === 'historial') {
+    $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
     $$('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, act = b.dataset.act;
       if (act === 'cancel' && !confirm('¿Cancelar este post?')) return;
