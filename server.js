@@ -1247,10 +1247,7 @@ app.get('/prueba', (req, res) => {
 });
 
 app.get('/api/trial/status', (req, res) => {
-  if (trialTestMode(req)) return res.json({ ok: true, used: false });
-  const ip = demo.clientIp(req);
-  const row = db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip);
-  res.json({ ok: true, used: !!row });
+  res.json({ ok: true, used: false });
 });
 
 // Llave de prueba del dueño: con ?test_key=... se saltea el límite de 1 prueba
@@ -1318,8 +1315,29 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
 
   const ip = demo.clientIp(req);
   const testMode = trialTestMode(req);
-  if (!testMode && db.prepare('SELECT ip FROM trial_usage WHERE ip = ?').get(ip)) {
-    return res.status(429).json({ error: 'Ya usaste tu prueba gratis 🙏 Creá tu cuenta para seguir.' });
+  const igKey = ig.toLowerCase();
+  // Cache por @: si este Instagram ya generó su semana hace menos de 72h,
+  // se la mostramos al instante sin regenerar (no gasta IA ni espera).
+  if (!testMode && igKey) {
+    try {
+      const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
+      if (hit && Date.now() - hit.created_at < 72 * 3600 * 1000) {
+        const out = JSON.parse(hit.payload);
+        out.cached = true;
+        out.spots_left = spotsLeft();
+        out.week = buildTrialWeek((out.posts || []).length);
+        return res.json(out);
+      }
+      if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
+    } catch (e) { /* si falla el cache, se genera igual */ }
+  }
+  // Anti-spam: 5 pruebas por día por IP (antes: 1 prueba por IP para siempre)
+  if (!testMode) {
+    const rl = demo.checkRateLimit(ip);
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀' });
+    }
   }
 
   let photoPath = null;
@@ -1333,7 +1351,6 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // 6 ideas pensadas para SU negocio + semana Pro: 5 posteos (4 imágenes + 1 video)
     const ideas = await generateIdeas({ business, category, tone, description: goal, competitors }, null);
     const posts = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count: 5 });
-    if (!testMode) db.prepare('INSERT OR IGNORE INTO trial_usage (ip) VALUES (?)').run(ip);
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -1342,7 +1359,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       const ext = photoPath.split('.').pop().toLowerCase();
       screenshot = `data:${TRIAL_IMG_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64');
     }
-    res.json({
+    const out = {
       ok: true,
       business, ig, category,
       accent, btn, color_source: colorSource,
@@ -1353,7 +1370,17 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       screenshot,
       spots_left: spotsLeft(),
       video_ok: videoOk,
-    });
+    };
+    // Guardamos la semana por @ (72h): si vuelve, la ve al instante.
+    if (!testMode && igKey) {
+      try {
+        const payload = JSON.stringify(out);
+        if (payload.length < 12 * 1024 * 1024) {
+          db.prepare('INSERT OR REPLACE INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)').run(igKey, payload, Date.now());
+        }
+      } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
+    }
+    res.json(out);
   } catch (e) {
     console.error('[posta] Error en prueba completa:', e.message);
     res.status(500).json({ error: 'No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.' });

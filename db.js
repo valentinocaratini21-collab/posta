@@ -104,6 +104,17 @@ CREATE TABLE IF NOT EXISTS trial_usage (
 );
 `);
 
+// Prueba completa: cache de la semana generada, clave por @ de Instagram (72h).
+// Si el mismo @ vuelve dentro de 3 días, ve su semana al instante sin
+// regenerar (no gasta IA). Reemplaza al bloqueo permanente por IP.
+db.exec(`
+CREATE TABLE IF NOT EXISTS trial_cache (
+  ig TEXT PRIMARY KEY,
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+`);
+
 // Eliminación de datos (requerido por Meta): solicitudes vía signed_request
 db.exec(`
 CREATE TABLE IF NOT EXISTS ig_avatar_cache (
