@@ -263,7 +263,7 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
 
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
-  const { topic, n } = req.body || {};
+  const { topic, n, seed } = req.body || {};
   if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del post' });
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
@@ -277,6 +277,7 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
       competitors: profile.competitors,
       goal: profile.goal,
       taste: tasteProfile(req.session.userId),
+      seedBase: parseInt(seed, 10) || 0,
     };
     const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
     if (count > 1) {
