@@ -30,6 +30,7 @@ const api = {
   post: (u, b) => api.req('POST', u, b),
   put: (u, b) => api.req('PUT', u, b),
   patch: (u, b) => api.req('PATCH', u, b),
+  delete: (u) => api.req('DELETE', u),
   del: (u) => api.req('DELETE', u),
 };
 
@@ -1545,14 +1546,22 @@ async function calendarView() {
   ${all.length ? all.map(p => postItem(p, `
       ${sigBtns(p)}
       ${p.status === 'scheduled' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
+      ${p.status === 'draft' ? `<span class="sched-row"><input type="datetime-local" id="sched-${p.id}"><button class="btn btn-soft btn-sm" data-act="sched" data-id="${p.id}">📅 Programar</button></span>` : ''}
       <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>
     `)).join('') : `<div class="empty"><div class="big">📭</div>No tenés posts programados.<br><br><a class="btn btn-primary" href="#/app/crear">Crear el primero</a></div>`}`;
 }
 async function historyView() {
   const posts = await api.get('/api/posts');
   const done = posts.filter(p => ['published', 'failed', 'cancelled'].includes(p.status));
+  const d = new Date(), mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const inMk = (p) => (p.published_at || p.scheduled_at || p.created_at || '').slice(0, 7) === mk;
+  const mp = done.filter(p => p.status === 'published' && inMk(p)).length;
+  const mf = done.filter(p => p.status === 'failed' && inMk(p)).length;
+  const summary = (mp || mf)
+    ? `<p class="hist-sum">📊 Este mes: <b>${mp}</b> publicado${mp === 1 ? '' : 's'}${mf ? ` · <b>${mf}</b> fallaron` : ''}</p>` : '';
   return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Historial</h1><p class="sub">Todo lo que ya pasó por Posta. Marcá 👍/👎 y aprendemos lo que te gusta.</p></div></div>
-  ${done.length ? done.map(p => postItem(p, `${p.status === 'published' ? sigBtns(p) : ''}${p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : ''}`)).join('')
+  ${summary}
+  ${done.length ? done.map(p => postItem(p, `${p.status === 'published' ? sigBtns(p) : ''}${p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : ''}${p.status === 'published' ? `<button class="btn btn-ghost btn-sm" data-act="dup" data-id="${p.id}">Duplicar</button>` : ''}<button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar del historial">🗑️</button>`)).join('')
     : `<div class="empty"><div class="big">📊</div>Todavía no hay historial.</div>`}`;
 }
 
@@ -2001,6 +2010,21 @@ function bindApp(tab) {
     $$('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, act = b.dataset.act;
       if (act === 'cancel' && !confirm('¿Cancelar este post?')) return;
+      if (act === 'del') {
+        if (!confirm('¿Borrar este posteo del historial?')) return;
+        await api.delete(`/api/posts/${id}`);
+        render(); return;
+      }
+      if (act === 'dup') {
+        await api.post(`/api/posts/${id}/duplicate`, {});
+        location.hash = '#/app/calendario'; return;
+      }
+      if (act === 'sched') {
+        const inp = $(`#sched-${id}`);
+        if (!inp || !inp.value) { alert('Elegí fecha y hora'); return; }
+        await api.patch(`/api/posts/${id}`, { scheduled_at: new Date(inp.value).toISOString() });
+        render(); return;
+      }
       await api.patch(`/api/posts/${id}`, { action: act === 'now' ? 'publish-now' : 'cancel' });
       render();
     });
