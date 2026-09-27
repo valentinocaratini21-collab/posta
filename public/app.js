@@ -472,7 +472,7 @@ function pwaWire() {
 }
 
 function appShell(tab, content) {
-  const MAIN_TABS = [['semana', '🏠', 'Inicio'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
+  const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
   const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
   const igBanner = (PROFILE && PROFILE.ig_connected) ? '' : `
