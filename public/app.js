@@ -1005,8 +1005,8 @@ function reviewCardHTML(drafts) {
     <div class="post-item" style="align-items:flex-start">
       <div style="width:72px;flex-shrink:0">
         ${d.media_type === 'video'
-          ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#0A1E33"></video>`
-          : `<img src="${esc(d.image_path)}" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">`}
+          ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#0A1E33;cursor:zoom-in"></video>`
+          : `<img src="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:zoom-in">`}
       </div>
       <div class="info" style="flex:1;min-width:0">
         <div style="margin-bottom:6px"><span class="badge b-draft">Borrador ${i + 1}</span>${d.media_type === 'video' ? ' <span class="badge b-scheduled">🎬 reel</span>' : ''}</div>
@@ -1024,6 +1024,11 @@ function reviewCardHTML(drafts) {
 }
 
 function bindReview() {
+  // Tap en la miniatura abre el diseño en grande
+  $$('#reviewCard [data-lightbox]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    openLightbox(el.dataset.lightbox, el.dataset.video === '1');
+  });
   // Guardar el texto al salir del campo (queda en borrador, sin programar)
   $$('[data-revcap]').forEach(ta => ta.addEventListener('change', async () => {
     try { await api.patch('/api/posts/' + ta.dataset.revcap, { action: 'save-draft', caption: ta.value }); }
@@ -1058,19 +1063,81 @@ function bindReview() {
 /* ---------- CHAT CONSULTOR DE IDEAS 💬 ---------- */
 // El cliente trae su idea, la IA opina con honestidad y la pulen juntos.
 // Hasta que no queda exactamente como quiere el cliente, no se manda nada.
-function chatCardHTML() {
-  const msgs = CHAT.map(m => `
-    <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
-  const proposal = CHAT_IDEA ? `
+let CHAT_PREVIEWS = []; // canvases de ejemplo generados al cerrar la idea
+let CHAT_PREV_SEL = 0;
+
+function proposalHTML() {
+  if (!CHAT_IDEA) return '';
+  return `
     <div class="chat-proposal">
       <div style="font-weight:800;margin-bottom:4px">✨ Idea lista: ${esc(CHAT_IDEA.titulo)}</div>
-      ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:10px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
+      ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
+      <div style="font-weight:700;font-size:14px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
+      <div class="chat-previews" id="chatPreviews"><div style="font-size:13px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
       <div class="chat-proposal-btns">
         <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo post</button>
         <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
       </div>
       <div style="font-size:12px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
-    </div>` : '';
+    </div>`;
+}
+
+// Genera 2 ejemplos visuales reales de la idea con el diseñador (canvas),
+// para que el cliente vea qué va a postear antes de crearlo.
+async function renderChatPreviews() {
+  const box = $('#chatPreviews');
+  if (!box || !CHAT_IDEA) return;
+  const idea = CHAT_IDEA;
+  try {
+    const photos = assetPhotos();
+    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+    const palIdx = defaultPal();
+    const nPals = (typeof getPalettes === 'function' ? getPalettes().length : 5) || 5;
+    const handle = (PROFILE || {}).ig_username || '';
+    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const subtitle = (idea.angulo || '').split('.')[0].slice(0, 90);
+    const ph = photos.length ? await photoImg(photos[0].file_path) : null;
+    const mk = (tpl, pal) => {
+      const cv = document.createElement('canvas');
+      drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
+      return cv;
+    };
+    CHAT_PREVIEWS = [mk('gradiente', palIdx), mk('claro', (palIdx + 1) % nPals)];
+    CHAT_PREV_SEL = 0;
+    box.innerHTML = '';
+    CHAT_PREVIEWS.forEach((cv, i) => {
+      const d = document.createElement('div');
+      d.className = 'chat-prev' + (i === CHAT_PREV_SEL ? ' sel' : '');
+      d.appendChild(cv);
+      d.onclick = () => {
+        CHAT_PREV_SEL = i;
+        box.querySelectorAll('.chat-prev').forEach((el, j) => el.classList.toggle('sel', j === i));
+      };
+      box.appendChild(d);
+    });
+  } catch (e) {
+    box.innerHTML = `<div style="font-size:13px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
+    CHAT_PREVIEWS = [];
+  }
+}
+
+// Crea el borrador usando el ejemplo elegido (se sube solo ese diseño)
+async function draftFromPreview(idea, cv) {
+  const out = await api.post('/api/generate', { topic: idea.titulo });
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen');
+  try {
+    await api.post('/api/posts', { image_path: data.path, caption: out.caption, hashtags: out.hashtags, media_type: 'image' });
+  } catch (e) {
+    if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
+  }
+}
+
+function chatCardHTML() {
+  const msgs = CHAT.map(m => `
+    <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
   return `
   <div class="card" id="chatCard">
     <h3 style="margin:0 0 6px">💬 ¿Tenés una idea? Charlemos</h3>
@@ -1078,7 +1145,7 @@ function chatCardHTML() {
     <div class="chat-box" id="chatBox">
       ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Soy tu consultor de contenido. Contame qué idea tenés para tu Instagram y te digo la posta: si va a vender, qué le cambiaría y cómo la haría. ¿Qué tenés en mente?</div>`}
     </div>
-    <div id="chatProposal">${proposal}</div>
+    <div id="chatProposal">${proposalHTML()}</div>
     <div class="chat-input-row">
       <input id="chatInput" class="in" placeholder="Ej: quiero un post sobre mis nuevos buzos…" maxlength="2000" autocomplete="off">
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
@@ -1095,20 +1162,12 @@ function chatScroll() {
 function chatRenderProposal() {
   const p = $('#chatProposal');
   if (!p) return;
-  if (!CHAT_IDEA) { p.innerHTML = ''; return; }
-  p.innerHTML = `
-    <div class="chat-proposal">
-      <div style="font-weight:800;margin-bottom:4px">✨ Idea lista: ${esc(CHAT_IDEA.titulo)}</div>
-      ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:10px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
-      <div class="chat-proposal-btns">
-        <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo post</button>
-        <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
-      </div>
-      <div style="font-size:12px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
-    </div>`;
+  p.innerHTML = proposalHTML();
+  if (!CHAT_IDEA) return;
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => chatMakePost(false);
   if (mkR) mkR.onclick = () => chatMakePost(true);
+  renderChatPreviews();
   chatScroll();
 }
 
@@ -1118,7 +1177,7 @@ async function chatSend() {
   if (!text) return;
   const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatSend');
   CHAT.push({ role: 'user', text });
-  CHAT_IDEA = null; chatRenderProposal();
+  CHAT_IDEA = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(text)}</div>`);
   inp.value = '';
   btn.disabled = true;
@@ -1147,8 +1206,13 @@ async function chatMakePost(asVideo) {
   if (mkR) mkR.disabled = true;
   try {
     if (m) m.innerHTML = `<div class="okmsg">⏳ Creando tu ${asVideo ? 'reel' : 'post'}…</div>`;
-    await draftFromIdea(idea, asVideo, 0);
+    if (!asVideo && CHAT_PREVIEWS.length) {
+      await draftFromPreview(idea, CHAT_PREVIEWS[CHAT_PREV_SEL] || CHAT_PREVIEWS[0]);
+    } else {
+      await draftFromIdea(idea, asVideo, 0);
+    }
     CHAT_IDEA = null;
+    CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT.push({ role: 'assistant', text: '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.' });
     render();
     setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
@@ -1168,6 +1232,7 @@ function bindChat() {
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => chatMakePost(false);
   if (mkR) mkR.onclick = () => chatMakePost(true);
+  renderChatPreviews();
 }
 
 async function ideasView() {

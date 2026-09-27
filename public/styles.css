@@ -684,7 +684,10 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-msg{max-width:88%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .chat-msg.ai{align-self:flex-start;background:#F2F9FD;border:1px solid var(--line);border-bottom-left-radius:6px;color:var(--txt)}
 .chat-msg.u{align-self:flex-end;background:var(--cel);color:#fff;border-bottom-right-radius:6px}
-.chat-input-row{display:flex;gap:10px;align-items:center}
+.chat-previews{display:flex;gap:10px;margin:4px 0 12px}
+.chat-prev{flex:1;border-radius:14px;overflow:hidden;cursor:pointer;border:3px solid var(--line-soft);transition:border-color .15s,box-shadow .15s;background:#fff;max-width:220px}
+.chat-prev canvas{width:100%;height:auto;display:block}
+.chat-prev.sel{border-color:var(--cel);box-shadow:0 4px 16px rgba(39,147,200,.28)}
 .chat-input-row .in{flex:1;margin:0;border-radius:999px;padding:16px 22px;font-size:17px;box-shadow:0 2px 10px rgba(10,30,51,.06)}
 .chat-input-row .btn{padding:0;width:56px;height:56px;border-radius:50%;font-size:20px;flex-shrink:0}
 .chat-proposal{background:#FFF9EC;border:2px solid var(--yel);border-radius:14px;padding:14px;margin-bottom:10px}
