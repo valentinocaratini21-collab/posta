@@ -243,7 +243,7 @@ function landingView(cfg) {
         </div>
       </div>
     </div>
-    <div class="hero-note">Sin tarjeta · 3 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
+    <div class="hero-note">Sin tarjeta · 3 días gratis · Cancelá cuando quieras</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
         <img src="hero-post.jpg" alt="Ejemplo de posteo creado por Posta">
@@ -356,7 +356,7 @@ function landingView(cfg) {
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
       <details><summary>¿Publican sin que yo lo apruebe?</summary><p>No. Todo queda como borrador en tu cuenta y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Tenés 30 días de garantía: si no estás conforme, te devolvemos el 100% de tu primer pago. Sin preguntas.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: usalo 3 días, mirá tu semana armada y decidí. Si no te sirve, no pagás nada.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Antes de pagar: en la prueba gratis ya ves tu semana armada, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
       <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
       <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
@@ -2897,7 +2897,6 @@ async function showExpiredModal() {
       <p class="pz-exp-sub">Tus posteos se frenaron. Eleg\u00ed tu plan para seguir publicando con tu marca.</p>
       <div class="pz-exp-plans">${rows}</div>
       ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes \U0001F680</button>'}
-      <p class="pz-exp-guar">\U0001F6E1\uFE0F Si no est\u00e1s conforme, te devolvemos el 100% de tu primer pago.</p>
       <button class="pz-exp-later" id="pzExpLater">Por ahora no</button>
     </div>`;
   document.body.appendChild(ov);
@@ -3621,7 +3620,6 @@ function bindSettings() {
         <div style="font-size:16px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
         <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
         <div id="planMsg" style="margin-top:10px"></div>
-        <div class="pz-guar">🛡️ <b>Garantía Posta:</b> si no estás conforme, te devolvemos el 100% de tu primer pago.</div>
         <p style="font-size:13px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
         bindSub();
       } else {
