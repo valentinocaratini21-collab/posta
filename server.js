@@ -1220,7 +1220,7 @@ app.get('/api/referrals/mine', requireAuth, (req, res) => {
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas
-const MONTHLY_SPOTS = 15;
+const MONTHLY_SPOTS = 50;
 function spotsLeft() {
   try {
     const row = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE plan_status = 'active'`).get();
