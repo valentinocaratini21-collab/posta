@@ -283,28 +283,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     </div>
 
     <div style="text-align:center;margin:10px 0 30px">
-      <button class="btn btn-primary" id="btnBuy2" style="font-size:19px;padding:18px 46px">Quiero esto todos los meses 🚀</button>
-      <p class="tiny">Garantía de 30 días · Cancelá cuando quieras</p>
+      <button class="btn btn-primary" id="btnBuy2" style="font-size:19px;padding:18px 46px">Empezá tus 3 días gratis 🚀</button>
+      <p class="tiny">Sin tarjeta · Recién pagás cuando termina tu prueba</p>
     </div>
   </div>
 </div>
 
 <div class="sticky-cta" id="stickyCta"><div class="wrap">
-  <b>🔒 Tu semana está lista — desbloqueala con tu plan</b>
-  <button class="btn btn-primary btn-sm" id="btnBuy3">Ver planes</button>
-</div></div>
-
-<!-- MODAL COMPRA -->
-<div class="overlay" id="ovPlans"><div class="modal">
-  <button class="x" id="xPlans">✕</button>
-  <h2>Tu semana está lista <span class="hl">🔒</span></h2>
-  <p class="msub">Llevate tus 5 posteos + tu semana armada, <b>todos los meses</b>, con un clic.</p>
-  <div class="plans" id="mPlans"><p style="text-align:center;color:var(--mut)">Cargando planes…</p></div>
-  <div class="mline"><span>💪</span><span><b>260 posteos al año</b> que no tuviste que hacer.</span></div>
-  <div class="mline"><span>⚡</span><span><b>Pagás hoy y hoy mismo armás tu primera semana con un clic.</b> Así de rápido arrancás.</span></div>
-  <div class="mline"><span>🔥</span><span id="mSpots"><b>Quedan pocos lugares</b> este mes — cada negocio lleva trabajo personalizado.</span></div>
-  <div class="mline"><span>🛡️</span><span><b>Garantía de 30 días:</b> si no estás conforme, te devolvemos el 100% de tu primer pago.</span></div>
-  <p class="ref-tease">🎁 ¿Vienen de a dos? <b>Traé 2 amigos y pagá la mitad</b> todos los meses — tu link de referidos te espera en tu cuenta.</p>
+  <b>🔒 Tu semana está lista — desbloqueala gratis</b>
+  <button class="btn btn-primary btn-sm" id="btnBuy3">Empezar gratis</button>
 </div></div>
 
 <!-- MODAL: registro sin salir de /prueba -->
@@ -338,7 +325,6 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'
 const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Restaurante","cafeteria":"Cafetería","bar":"Bar / Cervecería","belleza":"Belleza / Estética","barberia":"Barbería / Peluquería","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","deco":"Muebles / Decoración","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","tecnologia":"Tecnología / Celulares","turismo":"Turismo / Hotelería","viajes":"Agencia de viajes","eventos":"Eventos / Fiestas","fotografia":"Fotografía","arte":"Arte / Diseño","joyeria":"Joyería / Accesorios","flores":"Florería / Vivero","profesionales":"Servicios profesionales","servicios":"Servicios","otro":"Otro"};
 
 let TRIAL = null;      // respuesta del backend
-let TRIAL_PLANS = [];   // planes cacheados para el registro embebido
 let COUNTRY = 'AR';
 let TONE = 'vos';
 let modalShown = false;
@@ -397,10 +383,8 @@ function show(id) {
   const ci = $('#f_comp');
   ci.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addComp(ci.value); ci.value = ''; } });
   ci.addEventListener('blur', () => { if (ci.value.trim()) { addComp(ci.value); ci.value = ''; } });
-  $('#btnBuy2').onclick = openPlans;
-  $('#btnBuy3').onclick = openPlans;
-  $('#xPlans').onclick = closePlans;
-  $('#ovPlans').addEventListener('click', (e) => { if (e.target.id === 'ovPlans') closePlans(); });
+  $('#btnBuy2').onclick = openRegTrial;
+  $('#btnBuy3').onclick = openRegTrial;
   $('#xLb').onclick = () => $('#lb').classList.remove('open');
   $('#lb').addEventListener('click', (e) => { if (e.target.id === 'lb') $('#lb').classList.remove('open'); });
 
@@ -554,10 +538,10 @@ function renderResults() {
   show('v-results');
   const sc = $('#stickyCta');
   sc.style.display = 'block';
-  // El cartel de compra en el pico de emoción (una sola vez, se puede cerrar)
+  // El registro en el pico de emoción (una sola vez, se puede cerrar)
   if (!modalShown) {
     modalShown = true;
-    setTimeout(() => { if ($('#v-results').style.display === 'block') openPlans(); }, 8000);
+    setTimeout(() => { if ($('#v-results').style.display === 'block') openRegTrial(); }, 8000);
   }
 }
 
@@ -571,44 +555,14 @@ function openLb(i) {
   $('#lb').classList.add('open');
 }
 
-// ---------- modal compra ----------
-let plansLoaded = false;
-async function openPlans() {
-  $('#ovPlans').classList.add('open');
+// ---------- registro con trial: nadie paga antes de probar ----------
+function openRegTrial() {
+  const biz = (TRIAL && TRIAL.business) ? TRIAL.business : 'tu negocio';
+  $('#rgSub').innerHTML = `Probá Posta <b>3 días gratis</b>, sin tarjeta.<br>Tu semana de <b>${esc(biz)}</b> queda guardada en tu cuenta.`;
+  $('#rgErr').style.display = 'none';
+  $('#ovReg').classList.add('open');
   document.body.style.overflow = 'hidden';
-  if (plansLoaded) return;
-  try {
-    const cfg = await (await fetch('/api/billing/plans?country=' + COUNTRY)).json();
-    TRIAL_PLANS = cfg.plans || [];
-    const perDay = (p) => {
-      const v = Math.round(p.price / 30).toLocaleString('es-AR');
-      return (p.currency === 'UYU' ? '≈ $U ' + v : '≈ $' + v) + '/día';
-    };
-    $('#mPlans').innerHTML = (cfg.plans || []).map((p) => `
-      <div class="plan${p.highlighted ? ' hot' : ''}">
-        ${p.highlighted ? '<div class="ptag">EL MÁS ELEGIDO 👈 tu semana fue así</div>' : ''}
-        <h4>Plan ${esc(p.name)}</h4>
-        <div class="pr">${esc(p.price_label)}<small>/mes</small></div>
-        <div class="pd">${perDay(p)} · menos que un café</div>
-        <ul>${(p.features || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
-        <button class="btn ${p.highlighted ? 'btn-primary' : 'btn-ghost'} btn-block btn-sm" data-plan="${esc(p.id)}">Elegir ${esc(p.name)}</button>
-      </div>`).join('');
-    $$('#mPlans [data-plan]').forEach((b) => { b.onclick = () => choosePlan(b.dataset.plan); });
-    const spots = (typeof TRIAL.spots_left === 'number') ? TRIAL.spots_left : null;
-    const mes = new Date().toLocaleString('es', { month: 'long' });
-    if (spots !== null) $('#mSpots').innerHTML = `<b>Quedan ${spots} lugares</b> en ${mes} — cada negocio lleva trabajo personalizado.`;
-    plansLoaded = true;
-  } catch (e) {
-    $('#mPlans').innerHTML = '<p style="text-align:center;color:var(--mut)">No pudimos cargar los planes. <a href="/#planes" style="color:var(--cel);font-weight:700">Verlos en la web</a></p>';
-  }
-}
-function closePlans() {
-  $('#ovPlans').classList.remove('open');
-  document.body.style.overflow = '';
-}
-function choosePlan(planId) {
-  const p = (TRIAL_PLANS || []).find((x) => x.id === planId) || {};
-  openReg(planId, p.name || '', p.price_label || '');
+  setTimeout(() => { try { $('#rg_email').focus(); } catch (e) {} }, 350);
 }
 
 // ---------- registro embebido: nadie sale de /prueba ----------
@@ -628,18 +582,6 @@ async function pj(url, body, method) {
   try { d = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(d.error || 'Algo salió mal. Probá de nuevo.');
   return d;
-}
-function openReg(planId, planName, planPrice) {
-  try { localStorage.setItem('posta_chosen_plan', planId); } catch (e) {}
-  closePlans();
-  const biz = (TRIAL && TRIAL.business) ? TRIAL.business : 'tu negocio';
-  $('#rgSub').innerHTML = planName
-    ? `Plan <b>${esc(planName)}</b> · ${esc(planPrice)}/mes.<br>Tu semana de <b>${esc(biz)}</b> queda guardada en tu cuenta.`
-    : `Tu semana de <b>${esc(biz)}</b> queda guardada en tu cuenta.`;
-  $('#rgErr').style.display = 'none';
-  $('#ovReg').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  setTimeout(() => { try { $('#rg_email').focus(); } catch (e) {} }, 350);
 }
 function closeReg() {
   $('#ovReg').classList.remove('open');
@@ -679,10 +621,8 @@ async function doRegister() {
     } catch (e) {}
     try { localStorage.removeItem('posta_trial_profile'); } catch (e) {}
     b.textContent = '¡Listo! ✅';
-    let chosen = null;
-    try { chosen = localStorage.getItem('posta_chosen_plan'); } catch (e) {}
     setTimeout(() => {
-      location.href = chosen ? '/#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '/#/app/semana';
+      location.href = '/#/app/semana';
     }, 700);
   } catch (e) {
     fail(e.message);

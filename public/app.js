@@ -243,7 +243,7 @@ function landingView(cfg) {
         </div>
       </div>
     </div>
-    <div class="hero-note">Sin tarjeta · 10 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
+    <div class="hero-note">Sin tarjeta · 3 días gratis · 🛡️ Garantía de 30 días · Cancelá cuando quieras</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
         <img src="hero-post.png" alt="Ejemplo de posteo creado por Posta">
@@ -327,7 +327,7 @@ function landingView(cfg) {
       </div>
       <div class="vs-item win">
         <div class="vs-top">🚀 <b>Posta</b></div>
-        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y publicamos en automático en tu cuenta. En pesos, con MercadoPago. Y lo probás <b>10 días gratis</b>, sin tarjeta.</p>
+        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y publicamos en automático en tu cuenta. En pesos, con MercadoPago. Y lo probás <b>3 días gratis</b>, sin tarjeta.</p>
       </div>
     </div>
     <p class="unico-line">Somos el único servicio argentino 100% done-for-you para Instagram.</p>
@@ -382,7 +382,7 @@ function authView(mode) {
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
-    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '10 días gratis, sin tarjeta.'}</p>
+    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '3 días gratis, sin tarjeta.'}</p>
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"></div>
