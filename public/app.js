@@ -386,8 +386,8 @@ function authView(mode) {
     <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
     <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '3 días gratis, sin tarjeta.'}</p>
     <div id="formErr"></div>
-    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"></div>
-    <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
+    <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? 'Entrar' : 'Crear cuenta'}</button>
     <p style="text-align:center;margin-top:18px;font-size:14px;color:var(--dim)">
       ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
@@ -497,11 +497,14 @@ function appShell(tab, content) {
   const moreOn = MORE_TABS.some(([k]) => k === tab);
   const igBanner = (PROFILE && PROFILE.ig_connected) ? '' : `
   <div class="ig-banner"><span class="igb-ico">📸</span><span class="igb-txt"><b>Conectá tu Instagram</b><span>Publicá en automático en 1 minuto, sin contraseña.</span></span><button class="btn btn-primary btn-sm" data-ig-connect>Conectar ahora</button></div>`;
+  const verifyBanner = (ME && !ME.email_verified) ? `
+  <div class="verify-banner"><span class="igb-ico">📧</span><span class="igb-txt"><b>Verificá tu email</b><span>Te mandamos un link a tu casilla para activar tu cuenta.</span></span><button class="btn btn-primary btn-sm" id="btnResendVerify">Reenviar</button></div>` : '';
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
   ${pwaBannerHtml()}
   ${igBanner}
+  ${verifyBanner}
   <div class="app-shell">
     <div class="sidebar">
       <a class="logo" href="#/" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
@@ -2839,7 +2842,10 @@ async function render() {
           location.hash = '#/app/onboarding';
           OB = freshOB();
         }
-      } catch (e) { $('#formErr').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+      } catch (e) {
+        const dup = /ya está registrado/i.test(e.message || '');
+        $('#formErr').innerHTML = `<div class="err">${dup ? `Ese email ya tiene cuenta. ¿Eras vos? <a href="#/login" style="color:var(--cel);font-weight:700">Entrá</a>` : esc(e.message)}</div>`;
+      }
     };
     return;
   }
@@ -2913,6 +2919,12 @@ function bindApp(tab) {
   pwaWire();
   $$('.mtab,.side-link[data-tab],.mbar-btn[data-tab],.msheet-btn[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
+  const rv = $('#btnResendVerify');
+  if (rv) rv.onclick = async () => {
+    rv.disabled = true; rv.textContent = 'Enviando…';
+    try { await api.post('/api/auth/resend-verification'); rv.textContent = 'Email enviado ✓'; }
+    catch (e) { rv.disabled = false; rv.textContent = 'Reenviar'; alert(e.message); }
+  };
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
@@ -3605,7 +3617,14 @@ function bindSettings() {
               const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em });
               location.href = init_point;
             } catch (e) {
-              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+              const needV = /verificá tu email/i.test(e.message || '');
+              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}${needV ? ` <a href="#" id="planResend" style="color:var(--cel);font-weight:700">Reenviar email</a>` : ''}</div>`;
+              const pr = $('#planResend');
+              if (pr) pr.onclick = async (ev) => {
+                ev.preventDefault();
+                try { await api.post('/api/auth/resend-verification'); pr.textContent = 'Email enviado ✓'; pr.onclick = null; }
+                catch (e2) { alert(e2.message); }
+              };
             }
           };
         });
@@ -3622,6 +3641,16 @@ function bindSettings() {
         <div id="planMsg" style="margin-top:10px"></div>
         <p style="font-size:13px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
         bindSub();
+      } else if (ME && ME.plan === 'free') {
+        z.innerHTML = `
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <div class="plan-cur">
+            <div class="pc-label">Plan actual</div>
+            <div class="pc-name">Founder 🚀</div>
+            <div class="pc-det">Gratis para siempre · 7 posteos/semana · todos los límites del Total</div>
+          </div>
+        </div>
+        <div id="planMsg" style="margin-top:10px"></div>`;
       } else {
         z.innerHTML = `
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">

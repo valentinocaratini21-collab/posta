@@ -489,6 +489,8 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .igb-txt b{display:block;font-size:15px}
 .igb-txt span{opacity:.92;font-size:13px}
 .ig-banner .btn{flex:none;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.verify-banner{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#FEC14D 0%,#F6A92C 100%);color:#0A1E33;padding:12px 16px;position:relative;z-index:40}
+.verify-banner .btn{flex:none;background:#0A1E33;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.2)}
 
 .rec-card{border:1.5px solid var(--yl-line);background:linear-gradient(180deg,#FFFEFA 0%,#FFFDF3 100%);box-shadow:0 14px 36px rgba(254,193,77,.22);position:relative;overflow:hidden}
 .rec-card::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--yl),var(--cel))}
