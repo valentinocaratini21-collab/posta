@@ -129,8 +129,41 @@ function maskSettings(s) {
 }
 
 // ---------- Auth ----------
+// Importa la semana generada en /prueba a la cuenta nueva: los posteos quedan
+// como borradores (nada se publica sin su OK). Lee del trial_cache por @,
+// así no se re-suben los archivos desde el navegador.
+function importTrialWeek(userId, igRaw) {
+  const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
+  if (!ig) return 0;
+  const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
+  if (!hit) return 0;
+  let out;
+  try { out = JSON.parse(hit.payload); } catch (e) { return 0; }
+  const posts = (out.posts || []).filter((p) => p && (p.image || p.video));
+  if (!posts.length) return 0;
+  if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
+  let n = 0;
+  for (const p of posts.slice(0, 7)) {
+    try {
+      const isVideo = p.type === 'video' && p.video;
+      const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
+      if (!m) continue;
+      const ext = m[1] === 'video/mp4' ? 'mp4' : (m[2] === 'jpeg' ? 'jpg' : m[2]);
+      const buf = Buffer.from(m[3], 'base64');
+      if (!buf.length || buf.length > 15 * 1024 * 1024) continue;
+      const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+      fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+      db.prepare(
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type) VALUES (?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image');
+      n++;
+    } catch (e) { /* un posteo fallido no frena los demás */ }
+  }
+  return n;
+}
+
 app.post('/api/auth/register', (req, res) => {
-  const { email, password, ref } = req.body || {};
+  const { email, password, ref, trial_ig } = req.body || {};
   if (!email || !password || password.length < 6)
     return res.status(400).json({ error: 'Email y contraseña (mínimo 6 caracteres)' });
   try {
@@ -145,6 +178,11 @@ app.post('/api/auth/register', (req, res) => {
     const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
     const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at) VALUES (?, ?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds);
     req.session.userId = r.lastInsertRowid;
+    // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
+    try {
+      const nImp = importTrialWeek(r.lastInsertRowid, trial_ig);
+      if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
+    } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: 'Ese email ya está registrado' });
