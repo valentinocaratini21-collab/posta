@@ -63,6 +63,23 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .btn-sm{padding:10px 20px;font-size:14px}
 .err{background:#FDE8E8;color:#B42323;border-radius:12px;padding:13px 16px;font-weight:600;font-size:14px;margin-bottom:16px;display:none}
 .tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
+.benefits{margin:36px 0 6px}
+.benefits h3{text-align:center;color:var(--navy);font-size:20px;margin:0 0 16px}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bcard{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px}
+.bcard .bi{font-size:24px;margin-bottom:6px}
+.bcard b{display:block;color:var(--navy);font-size:14px;margin-bottom:4px}
+.bcard p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
+@media(min-width:640px){.bgrid{grid-template-columns:1fr 1fr 1fr}}
+/* Antes: tarjeta con el perfil real del visitante */
+.igb{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px;text-align:left}
+.igb-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.igb-head img{width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid var(--line)}
+.igb-id b{display:block;color:var(--navy);font-size:15px}
+.igb-id span{color:var(--mut);font-size:13px}
+.igb-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px}
+.igb-grid i{display:block;aspect-ratio:1;background:#E8EDF2;border-radius:6px}
+.igb-note{margin:0;color:var(--mut);font-size:13px;line-height:1.5;text-align:center}
 /* TRACKER */
 .tracker{max-width:560px;margin:40px auto 80px;text-align:center}
 .tracker h2{font-size:clamp(24px,4vw,34px);font-weight:900;margin-bottom:8px}
@@ -190,17 +207,20 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         <input type="text" id="f_comp" placeholder="Escribí su @ y apretá Enter" maxlength="40" autocomplete="off">
         <div class="hint" id="compHint">Los tenemos en cuenta para que tu semana se diferencie.</div>
       </div>
-      <div class="field"><label>Captura de tu Instagram o tu logo *</label>
-        <div class="filewrap">
-          <div class="filebtn"><span class="fe">📷</span><b id="fileBtnTxt">Subí tu captura o logo</b><small>PNG o JPG · detectamos tus colores automáticamente</small></div>
-          <input type="file" id="f_file" accept="image/jpeg,image/png,image/webp">
-        </div>
-        <div class="hint">La usamos para detectar tus colores y armar tu antes/después. No la compartimos con nadie.</div>
-        <div class="cdet" id="cDetected"><span>🎨 Detectamos tus colores</span><i id="swA"></i><i id="swB"></i></div>
-      </div>
-      <input type="hidden" id="f_accent" value="#2793C8"><input type="hidden" id="f_btn" value="#FEC14D">
       <button class="btn btn-primary btn-block" id="btnGo">Armar mi semana 🚀</button>
       <p class="tiny">Sin registro · Sin tarjeta · La prueba es una sola vez por negocio</p>
+    </div>
+  </div>
+
+  <div class="benefits">
+    <h3>¿Qué te llevás con Posta?</h3>
+    <div class="bgrid">
+      <div class="bcard"><div class="bi">🗓️</div><b>5 posteos por semana</b><p>Diseño, caption y hashtags. Vos no tocás nada.</p></div>
+      <div class="bcard"><div class="bi">🙌</div><b>100% hecho por nosotros</b><p>Vos vendé. Nosotros posteamos.</p></div>
+      <div class="bcard"><div class="bi">✅</div><b>Vos aprobás todo</b><p>Nada se publica sin tu OK.</p></div>
+      <div class="bcard"><div class="bi">🎬</div><b>Reels incluidos</b><p>Videos verticales listos para publicar.</p></div>
+      <div class="bcard"><div class="bi">📈</div><b>Constancia automática</b><p>Tu Instagram activo todas las semanas, sin depender de tu tiempo.</p></div>
+      <div class="bcard"><div class="bi">💳</div><b>En pesos, sin vueltas</b><p>Pagás por MercadoPago y cancelás cuando quieras.</p></div>
     </div>
   </div>
 </div>
@@ -294,7 +314,7 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Café / Restaurante","belleza":"Barbería / Peluquería / Estética","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","turismo":"Turismo / Hotelería","eventos":"Eventos / Fiestas","tecnologia":"Tecnología / Celulares","deco":"Muebles / Decoración","joyeria":"Joyería / Accesorios","fotografia":"Fotografía / Arte","profesionales":"Servicios profesionales","flores":"Florería / Vivero","bar":"Bar / Cervecería","otro":"Otro"};
+const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Restaurante","cafeteria":"Cafetería","bar":"Bar / Cervecería","belleza":"Belleza / Estética","barberia":"Barbería / Peluquería","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","deco":"Muebles / Decoración","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","tecnologia":"Tecnología / Celulares","turismo":"Turismo / Hotelería","viajes":"Agencia de viajes","eventos":"Eventos / Fiestas","fotografia":"Fotografía","arte":"Arte / Diseño","joyeria":"Joyería / Accesorios","flores":"Florería / Vivero","profesionales":"Servicios profesionales","servicios":"Servicios","otro":"Otro"};
 
 let TRIAL = null;      // respuesta del backend
 let COUNTRY = 'AR';
@@ -352,7 +372,6 @@ function show(id) {
  try {
   $('#f_cat').innerHTML = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('#btnGo').onclick = startTrial;
-  $('#f_file').addEventListener('change', detectColors);
   const ci = $('#f_comp');
   ci.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addComp(ci.value); ci.value = ''; } });
   ci.addEventListener('blur', () => { if (ci.value.trim()) { addComp(ci.value); ci.value = ''; } });
@@ -383,71 +402,6 @@ function show(id) {
  } catch (e) { try { show('v-onboarding'); } catch (e2) {} }
 })();
 
-// ---------- colores desde la imagen (posteos, no encabezado) ----------
-// Devuelve hasta 2 colores dominantes (distintos entre sí) de la imagen
-function extractPalette(img) {
-  const cw = 120, chh = 120;
-  const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh;
-  const cx = cv.getContext('2d', { willReadFrequently: true });
-  // contain: la captura entra completa
-  const s = Math.min(cw / img.naturalWidth, chh / img.naturalHeight);
-  const w = img.naturalWidth * s, h = img.naturalHeight * s;
-  cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, chh);
-  cx.drawImage(img, (cw - w) / 2, (chh - h) / 2, w, h);
-  const d = cx.getImageData(0, 0, cw, chh).data;
-  const buckets = {};
-  // Solo el 65% inferior: la grilla de posteos (arriba quedan avatar/bio/botones)
-  for (let y = Math.floor(chh * 0.35); y < chh; y += 2) {
-    for (let x = 0; x < cw; x += 2) {
-      const i = (y * cw + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      if (mx - mn < 28) continue;                 // grises/blancos/negros del UI
-      if (mx > 242 && mn > 225) continue;          // blancos
-      if (mx < 24) continue;                       // negros
-      const key = [r >> 5, g >> 5, b >> 5].join(',');
-      buckets[key] = (buckets[key] || 0) + 1;
-    }
-  }
-  const toHex = (v) => Math.round((v * 32 + 16)).toString(16).padStart(2, '0').toUpperCase();
-  const hex = (c) => '#' + c.map(toHex).join('');
-  const sorted = Object.entries(buckets).sort((a, b) => b[1] - a[1]);
-  const picked = [];
-  for (const [k] of sorted) {
-    const c = k.split(',').map(Number);
-    // Que sea visiblemente distinto a los ya elegidos
-    const distinct = picked.every((p) =>
-      Math.abs(p[0] - c[0]) + Math.abs(p[1] - c[1]) + Math.abs(p[2] - c[2]) >= 3);
-    if (distinct) { picked.push(c); if (picked.length === 2) break; }
-  }
-  return picked.map(hex);
-}
-
-// Detección automática al elegir el archivo: muestra los colores encontrados
-let palPromise = null;
-function detectColors() {
-  const f = $('#f_file').files && $('#f_file').files[0];
-  $('#cDetected').style.display = 'none';
-  if (!f) return;
-  palPromise = (async () => {
-    const img = await new Promise((res, rej) => {
-      const im = new Image();
-      im.onload = () => res(im); im.onerror = rej;
-      im.src = URL.createObjectURL(f);
-    });
-    URL.revokeObjectURL(img.src);
-    const pal = extractPalette(img);
-    if (pal[0]) $('#f_accent').value = pal[0];
-    if (pal[1]) $('#f_btn').value = pal[1];
-    $('#swA').style.background = $('#f_accent').value;
-    $('#swB').style.background = $('#f_btn').value;
-    $('#cDetected').style.display = 'flex';
-    const nm = f.name.length > 26 ? f.name.slice(0, 25) + '…' : f.name;
-    $('#fileBtnTxt').textContent = '✅ ' + nm;
-    document.querySelector('.filebtn').classList.add('has');
-  })();
-  palPromise.catch(() => {});
-}
-
 // ---------- competidores: chips con @ clickeables ----------
 const compHandles = [];
 function renderCompChips() {
@@ -468,7 +422,7 @@ function addComp(raw) {
 
 // ---------- generar ----------
 const TK_STEPS = [
-  ['🔍', 'Analizando tu rubro…', 'Detectamos qué funciona en tu mercado.'],
+  ['🔍', 'Buscando tu Instagram…', 'Traemos tu perfil y tus colores.'],
   ['💡', 'Creando 6 ideas para tu negocio…', 'Estrategia pensada para vos, no genérica.'],
   ['🎨', 'Diseñando tus 5 posteos…', 'Con tus colores y tu nombre.'],
   ['🎬', 'Armando tu video…', 'Formato vertical, listo para Reels.'],
@@ -482,13 +436,8 @@ async function startTrial() {
   const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
   if (!biz) return fail('Contanos el nombre de tu negocio 🙂');
   if (!$('#f_ig').value.trim()) return fail('Contanos tu Instagram 🙂');
-  const fileInput = $('#f_file');
-  if (!fileInput.files || !fileInput.files[0]) return fail('Subí una captura de tu Instagram o tu logo 🙂');
   if (!$('#f_goal').value.trim()) return fail('Contanos qué querés lograr, así tu semana sale a medida 🙂');
   err.style.display = 'none';
-
-  // Aseguramos que la detección automática de colores haya terminado
-  if (palPromise) { try { await palPromise; } catch (e) {} }
 
   show('v-loading');
   $('#tkTitle').textContent = 'Armando tu semana para ' + biz + '…';
@@ -517,9 +466,6 @@ async function startTrial() {
   fd.append('tone', TONE);
   fd.append('goal', $('#f_goal').value.trim());
   fd.append('competitors', compHandles.map((h) => '@' + h).join(', '));
-  fd.append('accent', $('#f_accent').value);
-  fd.append('btn', $('#f_btn').value);
-  if (fileInput.files && fileInput.files[0]) fd.append('photo', fileInput.files[0]);
 
   try {
     const t0 = Date.now();
@@ -541,7 +487,7 @@ async function startTrial() {
         ig_username: $('#f_ig').value.trim().replace(/^@/, ''),
         tone: TONE,
         country: COUNTRY,
-        brand_colors: [$('#f_accent').value, $('#f_btn').value],
+        brand_colors: [data.accent || '#2793C8', data.btn || '#FEC14D'],
       }));
     } catch (e) {}
     if (!TEST_KEY_QS) { try { localStorage.setItem('posta_trial_done', '1'); } catch (e) {} idb.set(data); }
@@ -558,13 +504,16 @@ function renderResults() {
   const t = TRIAL;
   $('#rBiz').textContent = t.business;
   const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
-  $('#rSub').textContent = (t.ig ? '@' + t.ig + ' · ' : '') + 'Semana del ' + firstDay.date + ' al ' + lastDay.date + ' · 5 posteos listos';
+  const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>con los colores de tu perfil</b>' : '';
+  $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Semana del ' + esc(firstDay.date) + ' al ' + esc(lastDay.date) + ' · 5 posteos listos' + colBadge;
 
   $('#rIdeas').innerHTML = t.ideas.map((id) => `
     <div class="idea"><span class="fmt">${esc(id.formato || 'IDEA')}</span><b>${esc(id.titulo)}</b><p>${esc(id.angulo)}</p></div>`).join('');
 
-  // Antes / después
-  $('#rBefore').innerHTML = t.screenshot
+  // Antes / después — el "antes" usa su perfil real si lo encontramos
+  $('#rBefore').innerHTML = t.ig_pic
+    ? `<div class="igb"><div class="igb-head"><img src="${t.ig_pic}" alt="@${esc(t.ig)}"><div class="igb-id"><b>@${esc(t.ig)}</b>${t.ig_name ? `<span>${esc(t.ig_name)}</span>` : ''}</div></div><div class="igb-grid"><i></i><i></i><i></i><i></i><i></i><i></i></div><p class="igb-note">Pocos posteos, sin constancia.<br>Así se ve el 80% de los negocios.</p></div>`
+    : t.screenshot
     ? `<img src="${t.screenshot}" alt="Tu perfil hoy">`
     : `<div class="ba-mock"><div style="font-size:40px;margin-bottom:10px">📭</div><b>Tu perfil hoy</b><p style="font-size:13px;margin-top:8px">Pocos posteos, sin constancia.<br>Así se ve el 80% de los negocios.</p></div>`;
   $('#rAfter').innerHTML = t.posts.slice(0, 4).map((p) =>
