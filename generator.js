@@ -284,14 +284,21 @@ const CAT_WORDS = {
   otro: { cosa: 'productos', accion: 'elegirte' },
 };
 
-function templateIdeas({ business, category, competitors, goal }) {
+// Palabras significativas (sin stopwords ni acentos) para detectar temas repetidos
+const TOPIC_STOP = new Set('para con las los del una unos este esta estos estas como mas pero porque cuando donde tus sus mis son fue hay entre sobre todo todos muy sin tan'.split(' '));
+function sigWords(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !TOPIC_STOP.has(w));
+}
+
+function templateIdeas({ business, category, competitors, goal, recentTopics }) {
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
   const vs = competitors
     ? ` Diferenciate de ${competitors}: mostrá lo que ellos no tienen.`
     : '';
-  return [
+  const all = [
     { formato: 'Novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` + ga },
     { formato: 'Promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' + ga },
     { formato: 'Tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' + ga },
@@ -300,9 +307,16 @@ function templateIdeas({ business, category, competitors, goal }) {
     { formato: 'Comunidad', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
     { formato: 'Reel/Video', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
   ];
+  // Si un tema ya se posteó, se saca de la lista (2+ palabras significativas en común)
+  if (recentTopics) {
+    const rw = new Set(sigWords(recentTopics));
+    const fresh = all.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
+    if (fresh.length >= 4) return fresh;
+  }
+  return all;
 }
 
-async function openaiIdeas({ business, category, tone, description, competitors, taste }, apiKey) {
+async function openaiIdeas({ business, category, tone, description, competitors, taste, recentTopics }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -320,7 +334,7 @@ async function openaiIdeas({ business, category, tone, description, competitors,
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}\nGenerá las 6 ideas.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 900,

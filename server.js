@@ -435,6 +435,12 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
   try {
+    // Temas publicados recientemente: el generador debe evitar repetirlos
+    let recentTopics = '';
+    try {
+      const recent = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND status != 'cancelled' ORDER BY created_at DESC LIMIT 12`).all(req.session.userId);
+      recentTopics = recent.map(r => String(r.caption || '').split('\n')[0].slice(0, 80)).filter(Boolean).join(' | ');
+    } catch (e) { /* sin historial: no se filtra nada */ }
     const ideas = await generateIdeas(
       {
         business: profile.business_name,
@@ -444,6 +450,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
         competitors: profile.competitors,
         goal: profile.goal,
         taste: tasteProfile(req.session.userId),
+        recentTopics,
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
