@@ -1527,7 +1527,7 @@ async function chatMakePost(asVideo) {
     if (!asVideo && CHAT_PREVIEWS.length) {
       await draftFromPreview(idea, CHAT_PREVIEWS[CHAT_PREV_SEL] || CHAT_PREVIEWS[0]);
     } else {
-      await draftFromIdea(idea, asVideo, 0);
+      await draftFromIdea(idea, asVideo, 0, true);
     }
     CHAT_IDEA = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
@@ -1650,12 +1650,17 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
 
 // Crea UN borrador a partir de una idea (texto + diseño o reel).
 // Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
-async function draftFromIdea(idea, asVideo, idx = 0) {
+async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
   const photos = assetPhotos();
   const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
   const palIdx = defaultPal();
   const handle = (PROFILE || {}).ig_username || '';
   const out = await api.post('/api/generate', { topic: idea.titulo });
+  // Si viene del chat, se respeta el texto que el cliente eligió/editó (no se regenera)
+  const chatTa = useChatText ? $('#chatCaption') : null;
+  const chatHg = useChatText ? $('#chatHashtags') : null;
+  const caption = (chatTa && chatTa.value.trim()) || out.caption || '';
+  const hashtags = (chatHg && chatHg.value.trim()) || out.hashtags || '';
   let imagePath = null, mediaType = 'image';
   if (asVideo) {
     try {
@@ -1675,7 +1680,7 @@ async function draftFromIdea(idea, asVideo, idx = 0) {
     });
   }
   try {
-    await api.post('/api/posts', { image_path: imagePath, caption: out.caption, hashtags: out.hashtags, media_type: mediaType });
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
