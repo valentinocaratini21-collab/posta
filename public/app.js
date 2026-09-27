@@ -968,38 +968,44 @@ function recCardHTML(ideas, posts, ppw){
     <button class="btn btn-primary" data-rec-idea="${idx}">${isVideo ? '🎬 Crear este video' : 'Crear este posteo'} →</button>
   </div>`;
 }
+function autopilotCardHTML() {
+  const ppw = (ME && ME.posts_per_week) || 3;
+  const planName = (ME && ME.plan ? ME.plan[0].toUpperCase() + ME.plan.slice(1) : 'Esencial');
+  const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
+  const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posts por semana</option>`).join('');
+  return `
+  <div class="card card-hi-yl">
+    <h3>🚀 Llenamos tu semana en autopilot</h3>
+    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel, y programamos todo solo. Vos solo mirá cómo sale.</p>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
+        ${opts}
+      </select>
+      <button class="btn btn-primary" id="btnAutopilot">⚡ Armar mi semana</button>
+    </div>
+    <div id="apProg" style="margin-top:16px"></div>
+  </div>`;
+}
+
 async function ideasView() {
-  const comp = ((PROFILE || {}).competitors || '').trim();
   let posts = [];
   try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
   const ppw = (ME && ME.posts_per_week) || 3;
   return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos.</p></div></div>
   ${checklistHTML(posts.length)}
   ${recCardHTML(IDEAS, posts, ppw)}
-  <div class="card hero-card">
-    <div class="auto-head"><div class="ah-ico">⚡</div><div class="ah-txt"><h3>Piloto automático</h3><p>Armo tu semana completa de una: ideas, textos, diseños y programación.</p></div></div>
-    <div class="set-row"><div><div class="t">Publicar automáticamente</div><div class="d">Posteo a la hora que elijas, sin que muevas un dedo.</div></div><div class="toggle ${SETTINGS && SETTINGS.autopilot ? 'on' : ''}" id="tglAuto"></div></div>
-    <div class="set-row"><div><div class="t">Hora de publicación</div><div class="d">El momento en que sale cada posteo.</div></div><input class="in" style="width:110px" type="time" id="autoTime" value="${(SETTINGS && SETTINGS.autopilot_time) || '19:00'}"></div>
-    <div class="set-row"><div><div class="t">Competidores a diferenciarte</div><div class="d">Marcas que querés superar: usamos sus puntos débiles para que brilles.</div></div></div>
-    <input class="in" id="autoComp" placeholder="Ej: @competidor1, @competidor2" value="${esc(comp)}">
-    <div class="btn-row"><button class="btn btn-primary btn-lg" id="btnAuto">${SETTINGS && SETTINGS.autopilot ? '🔁 Regenerar mi semana' : '⚡ Armar mi semana'}</button>
-    <button class="btn btn-soft" id="btnPlan">⚙️ Mi plan</button></div>
-    <div id="autoMsg"></div>
-  </div>
+  ${autopilotCardHTML()}
   <div id="ideasZone">${IDEAS.length ? ideasList() : `
     <div class="empty"><div class="big">💡</div>
-      Todavía no generamos ideas para tu negocio.<br><br>
-      <button class="btn btn-primary" id="btnGenIdeas">✨ Generar ideas para mi negocio</button>
+      Todavía no generamos ideas para tu negocio.<br>
+      <span style="font-size:14px">Usá "✨ Generar ideas" o "⚡ Armar mi semana" acá arriba 👆</span>
     </div>`}
   </div>
   <div id="ideasMsg"></div>`;
 }
 
 function ideasList() {
-  const ppw = (ME && ME.posts_per_week) || 3;
-  const planName = (ME && ME.plan ? ME.plan[0].toUpperCase() + ME.plan.slice(1) : 'Esencial');
-  const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
-  const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posts por semana</option>`).join('');
   return `
   <div class="card">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px">
@@ -1022,18 +1028,6 @@ function ideasList() {
         <button class="btn btn-soft btn-sm" data-idea="${i}">Crear post →</button>
       </div>
     </div>`; }).join('')}
-  </div>
-  <div class="card card-hi-yl">
-    <h3>🚀 Llenamos tu semana en autopilot</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel, y programamos todo solo. Vos solo mirá cómo sale.</p>
-    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
-        ${opts}
-      </select>
-      <button class="btn btn-primary" id="btnAutopilot">⚡ Armar mi semana</button>
-    </div>
-    <div id="apProg" style="margin-top:16px"></div>
   </div>`;
 }
 
