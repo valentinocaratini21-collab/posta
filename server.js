@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
-const { generateContent, generateIdeas, chatIdea } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea } = require('./generator');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -263,23 +263,27 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
 
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
-  const { topic } = req.body || {};
+  const { topic, n } = req.body || {};
   if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del post' });
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
+  const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
   try {
-    const out = await generateContent(
-      {
-        business: profile.business_name,
-        category: profile.category,
-        tone: profile.tone,
-        topic: topic.trim(),
-        competitors: profile.competitors,
-        goal: profile.goal,
-        taste: tasteProfile(req.session.userId),
-      },
-      settings.openai_key || process.env.OPENAI_API_KEY || ''
-    );
+    const input = {
+      business: profile.business_name,
+      category: profile.category,
+      tone: profile.tone,
+      topic: topic.trim(),
+      competitors: profile.competitors,
+      goal: profile.goal,
+      taste: tasteProfile(req.session.userId),
+    };
+    const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (count > 1) {
+      const out = await generateCaptions(input, count, key);
+      return res.json(out); // { captions: [...], hashtags }
+    }
+    const out = await generateContent(input, key);
     res.json(out);
   } catch (e) {
     res.status(500).json({ error: 'No se pudo generar el contenido' });
