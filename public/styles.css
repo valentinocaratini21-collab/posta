@@ -591,6 +591,9 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .sched-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .sched-info b{font-size:14px;color:var(--txt)}
 .sched-row input[type=datetime-local]{border:1.5px solid var(--line);border-radius:12px;padding:10px;font-size:14px;font-family:inherit;min-height:48px;color:var(--txt)}
+.sched-now{min-height:48px;white-space:nowrap}
+.pubnow-mount:empty{display:none}
+.pubnow-mount{width:100%}
 .light-card img{width:100%;border-radius:14px;margin-bottom:12px}
 .light-card p{white-space:pre-wrap;font-size:14px;line-height:1.6;color:var(--mut);margin-bottom:14px}
 .myphotos-card{background:var(--card);border:1.5px dashed var(--cel-line);border-radius:var(--r);padding:18px;margin-bottom:22px}
@@ -604,6 +607,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
   #multiBar{bottom:84px;left:10px;right:10px}
   .sched-row{flex-wrap:wrap}
   .sched-row input[type=datetime-local]{width:100%}
+  .sched-row .sched-now{flex:1}
   .opt-sel{top:22px;right:22px}
 }
 

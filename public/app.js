@@ -2398,13 +2398,46 @@ function bindCreator() {
       });
       $('#schedRows').innerHTML = rows.map(r => {
         const o = c.options[r.idx];
-        return `<div class="sched-row">
+        return `<div class="sched-row" data-row="${r.idx}">
           <img src="${esc(o.image)}" class="sched-thumb" alt="">
           <div class="sched-info"><b>${esc(o.title || 'Diseño')}</b><span class="mut">${esc((o.caption || '').slice(0, 60))}…</span></div>
           <input type="datetime-local" data-swhen="${r.idx}" value="${isoToLocalInput(r.iso)}">
-        </div>`;
+          <button class="btn btn-soft btn-sm sched-now" data-now="${r.idx}" title="Publicar ahora en Instagram">⚡ Postear ahora</button>
+        </div>
+        <div class="pubnow-mount" data-mount="${r.idx}"></div>`;
       }).join('');
       $('#schedMsg').innerHTML = '';
+      // "⚡ Postear ahora" por fila: crea el post y lo publica al instante
+      $$('#schedRows [data-now]').forEach(b => b.onclick = async () => {
+        const idx = +b.dataset.now;
+        const o = c.options[idx]; if (!o) return;
+        b.disabled = true;
+        const mount = document.querySelector(`#schedRows [data-mount="${idx}"]`);
+        const row = document.querySelector(`#schedRows [data-row="${idx}"]`);
+        try {
+          const r = await api.post('/api/creator/schedule', { items: [{ image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date().toISOString() }] });
+          if (!r.ids || !r.ids.length) throw new Error('Ya hay un posteo igual creado hoy');
+          const res = await publishNowFlow(r.ids[0], mount);
+          if (res && res.ok) {
+            // ya salió (o está saliendo): sacarlo de la selección para no duplicarlo al confirmar
+            c.selected = c.selected.filter(x => x !== idx);
+            const ch = document.querySelector(`.opt-selbox[data-sel="${idx}"]`);
+            if (ch) ch.checked = false;
+            const card = document.querySelector(`[data-card="${idx}"]`);
+            if (card) card.classList.remove('selected');
+            updateMultiBar();
+            const inp = row ? row.querySelector('input[data-swhen]') : null;
+            if (inp) inp.disabled = true;
+            if (row) row.style.opacity = '.55';
+            b.textContent = '✅ Posteado';
+          } else {
+            b.disabled = false;
+          }
+        } catch (e) {
+          if (mount) mount.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+          b.disabled = false;
+        }
+      });
       $('#schedModal').style.display = 'flex';
     }
     $('#btnMultiSched').onclick = openSchedModal;
