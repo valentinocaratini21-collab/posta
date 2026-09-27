@@ -203,6 +203,14 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- PWA instalada ----------
+// El frontend avisa cuando el usuario instala la app en el teléfono.
+// Sirve para no mandarle emails semanales a quien ya la tiene instalada.
+app.post('/api/pwa-installed', requireAuth, (req, res) => {
+  db.prepare(`UPDATE users SET pwa_installed = 1 WHERE id = ?`).run(req.session.userId);
+  res.json({ ok: true });
+});
+
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });

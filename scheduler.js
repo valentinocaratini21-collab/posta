@@ -83,6 +83,16 @@ function startScheduler(db) {
   console.log('[posta] Scheduler activo (cada 1 minuto)');
   // Chequeo inicial a los 10 segundos
   setTimeout(() => processDuePosts(db), 10000);
+  // Recordatorio semanal por email: lunes 10:00 (Buenos Aires).
+  // Solo a quienes tienen cuenta y NO instalaron la app en el teléfono.
+  try {
+    cron.schedule('0 10 * * 1', () => {
+      sendWeeklyReminders(db).catch((e) => console.error('[email semanal]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Recordatorio semanal por email: lunes 10:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[email semanal] no se pudo programar:', e.message);
+  }
   // Conciliación de descuentos con MercadoPago: cada 12 horas
   try {
     const { reconcileAll } = require('./billing-sync');
@@ -98,4 +108,37 @@ function startScheduler(db) {
   }
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost };
+// Recordatorio semanal por email (lunes 10:00 Buenos Aires).
+// Destinatarios: usuarios con email que NO instalaron la PWA en el teléfono,
+// sin opt-out, con cuenta creada hace más de 1 día, en trial o plan activo.
+async function sendWeeklyReminders(db) {
+  const { emailConfigured, weeklyReminderEmail } = require('./email');
+  if (!emailConfigured()) {
+    console.log('[email semanal] sin RESEND_API_KEY: no se envía nada esta semana');
+    return { sent: 0, skipped: 0, failed: 0, unconfigured: true };
+  }
+  const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+  const users = db.prepare(`
+    SELECT id, email FROM users
+    WHERE email IS NOT NULL AND email != ''
+      AND COALESCE(pwa_installed, 0) = 0
+      AND COALESCE(email_opt_out, 0) = 0
+      AND COALESCE(plan_status, 'trial') IN ('trial', 'active')
+      AND datetime(created_at) < datetime('now', '-1 day')
+  `).all();
+  let sent = 0, failed = 0;
+  for (const u of users) {
+    try {
+      const r = await weeklyReminderEmail(u, base);
+      if (r && r.ok) sent++; else failed++;
+    } catch (e) {
+      failed++;
+      console.error('[email semanal] falló', u.email, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400)); // no saturar el proveedor
+  }
+  console.log(`[email semanal] enviados: ${sent}, fallidos: ${failed}, candidatos: ${users.length}`);
+  return { sent, failed };
+}
+
+module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders };

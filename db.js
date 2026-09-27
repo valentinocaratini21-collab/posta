@@ -157,6 +157,9 @@ CREATE INDEX IF NOT EXISTS idx_signals_signal ON post_signals(user_id, client_si
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+// PWA instalada en el teléfono (1 = instalada) y opt-out de emails semanales
+try { db.exec(`ALTER TABLE users ADD COLUMN pwa_installed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN email_opt_out INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Email de MercadoPago del usuario (puede diferir del email de la cuenta)
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_payer_email TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
