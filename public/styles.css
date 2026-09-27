@@ -688,6 +688,15 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-prev{flex:1;border-radius:14px;overflow:hidden;cursor:pointer;border:3px solid var(--line-soft);transition:border-color .15s,box-shadow .15s;background:#fff;max-width:220px}
 .chat-prev canvas{width:100%;height:auto;display:block}
 .chat-prev.sel{border-color:var(--cel);box-shadow:0 4px 16px rgba(39,147,200,.28)}
+.chat-prev{position:relative}
+.pv-tag{position:absolute;top:8px;left:8px;background:rgba(10,30,51,.85);color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;pointer-events:none}
+.chat-caps{display:flex;flex-direction:column;gap:6px;margin:2px 0 8px}
+.chat-caps:empty{display:none}
+.chat-cap-opt{display:flex;gap:8px;align-items:baseline;text-align:left;background:var(--bg-soft);border:2px solid var(--line-soft);border-radius:12px;padding:8px 10px;cursor:pointer;font-size:13px;line-height:1.45;color:var(--txt)}
+.chat-cap-opt b{color:var(--cel);white-space:nowrap;font-size:12px}
+.chat-cap-opt span{color:var(--mut);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.chat-cap-opt.sel{border-color:var(--cel);box-shadow:0 4px 14px rgba(39,147,200,.22)}
+.chat-cap-opt.sel span{color:var(--txt)}
 .chat-photos{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .chat-photos:empty{display:none}
 .chat-photo{position:relative;width:64px;height:64px;border-radius:12px;overflow:hidden;border:2px solid var(--line);flex-shrink:0}

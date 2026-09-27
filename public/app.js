@@ -1069,6 +1069,8 @@ let CHAT_PHOTOS = []; // fotos subidas en el chat: [{file_path}]
 let CHAT_PHOTO_IDX = 0;
 let CHAT_STYLE_IDX = 0;
 let CHAT_CAPTION = null; // {caption, hashtags} generados al cerrar la idea
+let CHAT_CAPTIONS = []; // 3 opciones de texto para elegir
+let CHAT_CAP_SEL = 0;
 
 function proposalHTML() {
   if (!CHAT_IDEA) return '';
@@ -1078,9 +1080,10 @@ function proposalHTML() {
       ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
       <div style="font-weight:700;font-size:14px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
       <div class="chat-previews" id="chatPreviews"><div style="font-size:13px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
-      <div style="font-weight:700;font-size:14px;margin:4px 0 6px">📝 Texto del posteo <span style="font-weight:400;color:var(--mut)">(podés retocarlo)</span>:</div>
-      <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
-      <div id="chatHashtags" style="font-size:12px;color:var(--cel);margin:6px 0 2px">${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}</div>
+      <div style="font-weight:700;font-size:14px;margin:4px 0 6px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span>:</div>
+      <div class="chat-caps" id="chatCaps"></div>
+      <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
+      <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="font-size:13px;margin-top:6px">
       <details class="chat-board">
         <summary>🎬 Ver cómo sería el reel <span style="color:var(--mut);font-weight:400">(3 escenas)</span></summary>
         <div class="chat-board-row" id="chatBoard"><div style="font-size:13px;color:var(--mut)">⏳ Generando…</div></div>
@@ -1093,19 +1096,45 @@ function proposalHTML() {
     </div>`;
 }
 
-// Genera (o regenera) el texto del posteo para la idea cerrada
+// Genera (o regenera) 3 opciones de texto para la idea cerrada
 async function refreshChatCaption() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   try {
-    const out = await api.post('/api/generate', { topic: idea.titulo });
+    const out = await api.post('/api/generate', { topic: idea.titulo, n: 3 });
     if (CHAT_IDEA !== idea) return; // el usuario siguió de largo
-    CHAT_CAPTION = { caption: out.caption || '', hashtags: out.hashtags || '' };
+    const caps = (out.captions && out.captions.length ? out.captions : [out.caption]).map(String).filter(Boolean);
+    CHAT_CAPTIONS = caps.slice(0, 3);
+    CHAT_CAP_SEL = 0;
+    CHAT_CAPTION = { caption: CHAT_CAPTIONS[0] || '', hashtags: out.hashtags || '' };
+    renderChatCaps();
     const ta = $('#chatCaption');
-    if (ta && !ta.value) ta.value = CHAT_CAPTION.caption;
+    if (ta && !ta.dataset.touched) ta.value = CHAT_CAPTION.caption;
     const hg = $('#chatHashtags');
-    if (hg) hg.textContent = CHAT_CAPTION.hashtags;
+    if (hg && !hg.dataset.touched) hg.value = CHAT_CAPTION.hashtags;
   } catch (e) { /* se genera al crear el borrador */ }
+}
+
+// 3 opciones de texto tocables: elegir una la carga en el campo editable
+function renderChatCaps() {
+  const box = $('#chatCaps');
+  if (!box) return;
+  box.innerHTML = '';
+  CHAT_CAPTIONS.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chat-cap-opt' + (i === CHAT_CAP_SEL ? ' sel' : '');
+    const prev = c.length > 90 ? c.slice(0, 90) + '…' : c;
+    b.innerHTML = `<b>Opción ${i + 1}</b><span>${esc(prev)}</span>`;
+    b.onclick = () => {
+      CHAT_CAP_SEL = i;
+      CHAT_CAPTION = { caption: c, hashtags: (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '' };
+      const ta = $('#chatCaption');
+      if (ta) { ta.value = c; ta.dataset.touched = '1'; }
+      box.querySelectorAll('.chat-cap-opt').forEach((el, j) => el.classList.toggle('sel', j === i));
+    };
+    box.appendChild(b);
+  });
 }
 
 // Texto envuelto para el storyboard del reel
@@ -1168,7 +1197,7 @@ async function renderChatStoryboard() {
   }
 }
 
-// Genera 2 ejemplos visuales reales de la idea con el diseñador (canvas),
+// Genera 2 ejemplos visuales reales + opción "solo foto" de la idea con el diseñador,
 // para que el cliente vea qué va a postear antes de crearlo.
 // Usa las fotos subidas al chat (o las de la librería) y el estilo actual.
 async function renderChatPreviews() {
@@ -1183,19 +1212,33 @@ async function renderChatPreviews() {
     const subtitle = (idea.angulo || '').split('.')[0].slice(0, 90);
     const styles = chatStyles();
     const pair = [styles[CHAT_STYLE_IDX % styles.length], styles[(CHAT_STYLE_IDX + 1) % styles.length]];
-    const ph = lib.length ? await photoImg(lib[CHAT_PHOTO_IDX % lib.length].file_path) : null;
+    const phEntry = lib.length ? lib[CHAT_PHOTO_IDX % lib.length] : null;
+    const ph = phEntry ? await photoImg(phEntry.file_path) : null;
     const mk = (tpl, pal) => {
       const cv = document.createElement('canvas');
       drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
       return cv;
     };
-    CHAT_PREVIEWS = pair.map(([tpl, pal]) => mk(tpl, pal));
+    CHAT_PREVIEWS = pair.map(([tpl, pal]) => ({ kind: 'design', cv: mk(tpl, pal) }));
+    if (ph && phEntry) {
+      // Tercera opción: la foto sola, sin diseño encima (cuando la foto vende sola)
+      const cv = document.createElement('canvas');
+      cv.width = 1080; cv.height = 1350;
+      drawCover(cv.getContext('2d'), ph, 0, 0, 1080, 1350);
+      CHAT_PREVIEWS.push({ kind: 'photo', cv, path: phEntry.file_path });
+    }
     CHAT_PREV_SEL = 0;
     box.innerHTML = '';
-    CHAT_PREVIEWS.forEach((cv, i) => {
+    CHAT_PREVIEWS.forEach((pv, i) => {
       const d = document.createElement('div');
       d.className = 'chat-prev' + (i === CHAT_PREV_SEL ? ' sel' : '');
-      d.appendChild(cv);
+      d.appendChild(pv.cv);
+      if (pv.kind === 'photo') {
+        const tag = document.createElement('span');
+        tag.className = 'pv-tag';
+        tag.textContent = '📷 Solo foto';
+        d.appendChild(tag);
+      }
       d.onclick = () => {
         CHAT_PREV_SEL = i;
         box.querySelectorAll('.chat-prev').forEach((el, j) => el.classList.toggle('sel', j === i));
@@ -1230,22 +1273,31 @@ async function chatLoadHistory() {
   } catch (e) { /* sin historial: se empieza de cero */ }
 }
 
-// Crea el borrador usando el ejemplo elegido (se sube solo ese diseño)
-async function draftFromPreview(idea, cv) {
+// Crea el borrador usando el ejemplo elegido.
+// Si se eligió "solo foto", se usa la foto directo sin diseño.
+async function draftFromPreview(idea, prev) {
   const ta = $('#chatCaption');
   let caption = ta ? ta.value.trim() : '';
-  let hashtags = (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '';
+  const hg = $('#chatHashtags');
+  let hashtags = hg ? hg.value.trim() : ((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '');
   if (!caption) {
     const out = await api.post('/api/generate', { topic: idea.titulo });
     caption = out.caption || '';
     hashtags = out.hashtags || hashtags;
   }
-  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-  const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen');
+  let imagePath;
+  if (prev && prev.kind === 'photo' && prev.path) {
+    imagePath = prev.path;
+  } else {
+    const cv = prev && prev.cv ? prev.cv : prev;
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen');
+    imagePath = data.path;
+  }
   try {
-    await api.post('/api/posts', { image_path: data.path, caption, hashtags, media_type: 'image' });
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: 'image' });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
@@ -1371,7 +1423,7 @@ function chatEditCommand(text) {
       const nt = m[1].trim();
       if (nt.length >= 2 && nt.length <= 50) {
         CHAT_IDEA.titulo = nt;
-        CHAT_CAPTION = null; // el texto se regenera para el nuevo título
+        CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; // el texto se regenera para el nuevo título
         chatSay(`✅ Título actualizado: "${nt}". Fijate los ejemplos 👇`);
         chatRenderProposal();
         refreshChatCaption();
@@ -1454,7 +1506,7 @@ async function chatSend() {
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
-    if (r.idea) { CHAT_IDEA = r.idea; CHAT_CAPTION = null; chatRenderProposal(); refreshChatCaption(); }
+    if (r.idea) { CHAT_IDEA = r.idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; chatRenderProposal(); refreshChatCaption(); }
   } catch (e) {
     const t = $('#chatTyping'); if (t) t.remove();
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
@@ -1480,7 +1532,7 @@ async function chatMakePost(asVideo) {
     CHAT_IDEA = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
-    CHAT_CAPTION = null;
+    CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
     const doneText = '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.';
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
