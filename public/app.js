@@ -927,6 +927,7 @@ function creatorView() {
       <div class="field"><label>&nbsp;</label><div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-primary" id="btnSchedule">📅 Programar</button>
         <button class="btn btn-soft" id="btnNow">⚡ Publicar ahora</button>
+        <button class="btn btn-ghost" id="btnDraft">💾 Borrador</button>
       </div></div>
     </div>
     <div id="pubMsg"></div>
@@ -3287,10 +3288,10 @@ function bindCreator() {
     const resetCreator = () => {
       CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
     };
-    const done = (msg) => {
+    const done = (msg, hash) => {
       $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
       resetCreator();
-      setTimeout(() => location.hash = '#/app/calendario', 1400);
+      setTimeout(() => location.hash = hash || '#/app/calendario', 1400);
     };
     $('#btnSchedule').onclick = async () => {
       const when = $('#p_when').value;
@@ -3317,6 +3318,15 @@ function bindCreator() {
           done('⏳ Se está publicando… lo ves en el historial en un minuto.');
         }
         // si falló, publishNowFlow ya mostró el error con botón Reintentar
+      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
+    };
+    $('#btnDraft').onclick = async () => {
+      const btn = $('#btnDraft');
+      btn.disabled = true;
+      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
+      try {
+        await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags });
+        done('💾 Guardado como borrador. Lo revisás en Ideas → Revisá tu semana.', '#/app/ideas');
       } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
     };
     $('#btnBack2').onclick = () => { c.step = c.fromOptions ? 'options' : 2; render(); };
