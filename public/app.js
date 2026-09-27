@@ -405,6 +405,8 @@ const TABS = [
   ['ajustes', '⚙️', 'Ajustes'],
 ];
 let IDEAS = [];
+let CHAT = [];       // [{role:'user'|'assistant', text}]
+let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo}
 /* ---------- PWA: instalar la app ---------- */
 let PWA_DEFERRED = null;
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -943,6 +945,12 @@ function checklistHTML(postsCount){
   </div>`;
 }
 function recCardHTML(ideas, posts, ppw){
+  const drafts = posts.filter(p => p.status === 'draft');
+  if (drafts.length) return `<div class="card rec-card">
+      <div class="rec-tag">📋 Tu semana</div>
+      <h3>Tenés ${drafts.length} ${drafts.length === 1 ? 'borrador' : 'borradores'} para revisar</h3>
+      <p>Mirá cada posteo, editá lo que quieras y programá la semana cuando esté lista 👇</p>
+    </div>`;
   const ws = weekStartMonday(new Date());
   const inWeek = posts.filter(p => { const d = postWeekDate(p); return d && d >= ws && ['scheduled','publishing','published'].includes(p.status); });
   const missing = Math.max(0, ppw - inWeek.length);
@@ -976,7 +984,7 @@ function autopilotCardHTML() {
   return `
   <div class="card card-hi-yl">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel, y programamos todo solo. Vos solo mirá cómo sale.</p>
+    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel. Vos los revisás y aprobás — recién ahí se programan.</p>
     <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
@@ -988,14 +996,191 @@ function autopilotCardHTML() {
   </div>`;
 }
 
+function reviewCardHTML(drafts) {
+  return `
+  <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
+    <h3 style="margin:0 0 6px">📋 Revisá tu semana</h3>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px">Mirá cada posteo, editá el texto si querés y cuando esté lista la programamos. Nada sale sin tu OK.</p>
+    ${drafts.map((d, i) => `
+    <div class="post-item" style="align-items:flex-start">
+      <div style="width:72px;flex-shrink:0">
+        ${d.media_type === 'video'
+          ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#0A1E33"></video>`
+          : `<img src="${esc(d.image_path)}" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">`}
+      </div>
+      <div class="info" style="flex:1;min-width:0">
+        <div style="margin-bottom:6px"><span class="badge b-draft">Borrador ${i + 1}</span>${d.media_type === 'video' ? ' <span class="badge b-scheduled">🎬 reel</span>' : ''}</div>
+        <textarea class="in" data-revcap="${d.id}" rows="3" style="font-size:14px" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
+        ${d.hashtags ? `<div class="cap" style="font-size:12px;margin-top:6px">${esc(d.hashtags)}</div>` : ''}
+      </div>
+      <div class="acts"><button class="btn btn-danger btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button></div>
+    </div>`).join('')}
+    <div style="margin-top:10px">
+      <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Programar semana</button>
+    </div>
+    <div id="revMsg"></div>
+    <p style="font-size:13px;color:var(--dim);margin:10px 0 0">Se programan a las 19:00, un día cada uno, empezando mañana.</p>
+  </div>`;
+}
+
+function bindReview() {
+  // Guardar el texto al salir del campo (queda en borrador, sin programar)
+  $$('[data-revcap]').forEach(ta => ta.addEventListener('change', async () => {
+    try { await api.patch('/api/posts/' + ta.dataset.revcap, { action: 'save-draft', caption: ta.value }); }
+    catch (e) { /* se reintenta al programar */ }
+  }));
+  // Eliminar borrador
+  $$('[data-revdel]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Eliminar este borrador?')) return;
+    try { await api.delete('/api/posts/' + b.dataset.revdel); } catch (e) {}
+    render();
+  });
+  // Programar toda la semana
+  const sw = $('#btnScheduleWeek');
+  if (sw) sw.onclick = async () => {
+    sw.disabled = true;
+    const m = $('#revMsg');
+    try {
+      const tas = $$('[data-revcap]');
+      for (let i = 0; i < tas.length; i++) {
+        await api.patch('/api/posts/' + tas[i].dataset.revcap, {
+          scheduled_at: slotDate(i), caption: tas[i].value,
+        });
+      }
+      location.hash = '#/app/calendario';
+    } catch (e) {
+      if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
+      sw.disabled = false;
+    }
+  };
+}
+
+/* ---------- CHAT CONSULTOR DE IDEAS 💬 ---------- */
+// El cliente trae su idea, la IA opina con honestidad y la pulen juntos.
+// Hasta que no queda exactamente como quiere el cliente, no se manda nada.
+function chatCardHTML() {
+  const msgs = CHAT.map(m => `
+    <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+  const proposal = CHAT_IDEA ? `
+    <div class="chat-proposal">
+      <div style="font-weight:800;margin-bottom:4px">✨ Idea lista: ${esc(CHAT_IDEA.titulo)}</div>
+      ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:10px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
+      <div class="chat-proposal-btns">
+        <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo post</button>
+        <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
+      </div>
+      <div style="font-size:12px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
+    </div>` : '';
+  return `
+  <div class="card" id="chatCard">
+    <h3 style="margin:0 0 6px">💬 ¿Tenés una idea? Charlemos</h3>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Contanos tu idea y te damos nuestra opinión honesta. La pulimos juntos hasta que quede perfecta — recién ahí la convertimos en posteo.</p>
+    <div class="chat-box" id="chatBox">
+      ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Soy tu consultor de contenido. Contame qué idea tenés para tu Instagram y te digo la posta: si va a vender, qué le cambiaría y cómo la haría. ¿Qué tenés en mente?</div>`}
+    </div>
+    <div id="chatProposal">${proposal}</div>
+    <div class="chat-input-row">
+      <input id="chatInput" class="in" placeholder="Ej: quiero un post sobre mis nuevos buzos…" maxlength="2000" autocomplete="off">
+      <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
+    </div>
+    <div id="chatMsg"></div>
+  </div>`;
+}
+
+function chatScroll() {
+  const b = $('#chatBox');
+  if (b) b.scrollTop = b.scrollHeight;
+}
+
+function chatRenderProposal() {
+  const p = $('#chatProposal');
+  if (!p) return;
+  if (!CHAT_IDEA) { p.innerHTML = ''; return; }
+  p.innerHTML = `
+    <div class="chat-proposal">
+      <div style="font-weight:800;margin-bottom:4px">✨ Idea lista: ${esc(CHAT_IDEA.titulo)}</div>
+      ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:10px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
+      <div class="chat-proposal-btns">
+        <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo post</button>
+        <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
+      </div>
+      <div style="font-size:12px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
+    </div>`;
+  const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
+  if (mkP) mkP.onclick = () => chatMakePost(false);
+  if (mkR) mkR.onclick = () => chatMakePost(true);
+  chatScroll();
+}
+
+async function chatSend() {
+  const inp = $('#chatInput');
+  const text = (inp.value || '').trim();
+  if (!text) return;
+  const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatSend');
+  CHAT.push({ role: 'user', text });
+  CHAT_IDEA = null; chatRenderProposal();
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(text)}</div>`);
+  inp.value = '';
+  btn.disabled = true;
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
+  chatScroll();
+  try {
+    const r = await api.post('/api/ideas/chat', { messages: CHAT });
+    const t = $('#chatTyping'); if (t) t.remove();
+    CHAT.push({ role: 'assistant', text: r.reply || '…' });
+    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
+    if (r.idea) { CHAT_IDEA = r.idea; chatRenderProposal(); }
+  } catch (e) {
+    const t = $('#chatTyping'); if (t) t.remove();
+    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
+  }
+  btn.disabled = false;
+  chatScroll();
+}
+
+async function chatMakePost(asVideo) {
+  const idea = CHAT_IDEA;
+  if (!idea) return;
+  const m = $('#chatMsg');
+  const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
+  if (mkP) mkP.disabled = true;
+  if (mkR) mkR.disabled = true;
+  try {
+    if (m) m.innerHTML = `<div class="okmsg">⏳ Creando tu ${asVideo ? 'reel' : 'post'}…</div>`;
+    await draftFromIdea(idea, asVideo, 0);
+    CHAT_IDEA = null;
+    CHAT.push({ role: 'assistant', text: '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.' });
+    render();
+    setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+  } catch (e) {
+    if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
+    if (mkP) mkP.disabled = false;
+    if (mkR) mkR.disabled = false;
+  }
+}
+
+function bindChat() {
+  const btn = $('#chatSend'), inp = $('#chatInput');
+  if (!btn || !inp) return;
+  btn.onclick = chatSend;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });
+  chatScroll();
+  const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
+  if (mkP) mkP.onclick = () => chatMakePost(false);
+  if (mkR) mkR.onclick = () => chatMakePost(true);
+}
+
 async function ideasView() {
   let posts = [];
   try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
   const ppw = (ME && ME.posts_per_week) || 3;
+  const drafts = posts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
   return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos.</p></div></div>
   ${checklistHTML(posts.length)}
   ${recCardHTML(IDEAS, posts, ppw)}
   ${autopilotCardHTML()}
+  ${drafts.length ? reviewCardHTML(drafts) : ''}
+  ${chatCardHTML()}
   <div id="ideasZone">${IDEAS.length ? ideasList() : `
     <div class="empty"><div class="big">💡</div>
       Todavía no generamos ideas para tu negocio.<br>
@@ -1068,11 +1253,52 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
   return r.url;
 }
 
+// Crea UN borrador a partir de una idea (texto + diseño o reel).
+// Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
+async function draftFromIdea(idea, asVideo, idx = 0) {
+  const photos = assetPhotos();
+  const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+  const palIdx = defaultPal();
+  const handle = (PROFILE || {}).ig_username || '';
+  const out = await api.post('/api/generate', { topic: idea.titulo });
+  let imagePath = null, mediaType = 'image';
+  if (asVideo) {
+    try {
+      imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx);
+      mediaType = 'video';
+    } catch (e) { imagePath = null; /* fallback a diseño estático */ }
+  }
+  if (!imagePath) {
+    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const ph = photos.length ? photos[idx % photos.length] : null;
+    imagePath = await renderDesignImage({
+      tpl: 'gradiente', pal: palIdx,
+      title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
+      handle,
+      photoImg: ph ? await photoImg(ph.file_path) : null,
+      logoImg: logo,
+    });
+  }
+  try {
+    await api.post('/api/posts', { image_path: imagePath, caption: out.caption, hashtags: out.hashtags, media_type: mediaType });
+  } catch (e) {
+    if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
+  }
+}
+
 async function runAutopilot(n) {
   const prog = $('#apProg');
   const btn = $('#btnAutopilot');
   btn.disabled = true;
   try {
+    // Si hay borradores sin revisar de una corrida anterior, preguntar antes de reemplazarlos
+    const existing = await api.get('/api/posts');
+    const oldDrafts = existing.filter(p => p.status === 'draft');
+    if (oldDrafts.length) {
+      const ok = confirm(`Tenés ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazo por una semana nueva?`);
+      if (!ok) { btn.disabled = false; return; }
+      for (const d of oldDrafts) { try { await api.delete('/api/posts/' + d.id); } catch (e) {} }
+    }
     let ideas = IDEAS;
     if (!ideas.length) {
       prog.innerHTML = `<div class="okmsg">💡 Generando ideas para tu negocio...</div>`;
@@ -1083,53 +1309,17 @@ async function runAutopilot(n) {
     const picks = ideas.slice(0, n);
     if (!picks.length) throw new Error('No hay ideas para programar');
     // Brand kit del cliente: fotos rotadas + logo + paleta de marca
-    const photos = assetPhotos();
-    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-    const palIdx = defaultPal();
-    const handle = (PROFILE || {}).ig_username || '';
-    let reelFailed = false;
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
       const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
       prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'post'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
-      const out = await api.post('/api/generate', { topic: idea.titulo });
-      const mkDesign = async () => {
-        const title = idea.titulo.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-        const ph = photos.length ? photos[i % photos.length] : null;
-        return renderDesignImage({
-          tpl: 'gradiente', pal: palIdx,
-          title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
-          handle,
-          photoImg: ph ? await photoImg(ph.file_path) : null,
-          logoImg: logo,
-        });
-      };
-      if (isReel) {
-        try {
-          const videoUrl = await autopilotReel(idea, photos, logo, palIdx, handle, i);
-          await api.post('/api/posts', {
-            image_path: videoUrl, caption: out.caption, hashtags: out.hashtags,
-            media_type: 'video', scheduled_at: slotDate(i),
-          });
-        } catch (reelErr) {
-          // Si el reel falla, la semana se completa igual como post estático
-          reelFailed = true;
-          const imagePath = await mkDesign();
-          await api.post('/api/posts', {
-            image_path: imagePath, caption: out.caption, hashtags: out.hashtags,
-            scheduled_at: slotDate(i),
-          });
-        }
-        continue;
-      }
-      const imagePath = await mkDesign();
-      await api.post('/api/posts', {
-        image_path: imagePath, caption: out.caption, hashtags: out.hashtags,
-        scheduled_at: slotDate(i),
-      });
+      await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
     }
-    prog.innerHTML = `<div class="okmsg">✅ ¡Listo! ${picks.length} posts programados${reelFailed ? '' : ' (incluye 1 reel 🎬)'}. Se publican solos.${reelFailed ? ' El reel no se pudo generar esta vez y salió como post.' : ''}</div>`;
-    setTimeout(() => location.hash = '#/app/calendario', 1600);
+    prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista! Revisala acá abajo 👇</div>`;
+    setTimeout(() => {
+      render();
+      setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+    }, 900);
   } catch (e) {
     prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
     btn.disabled = false;
@@ -1179,6 +1369,8 @@ function bindIdeas() {
     location.hash = '#/app/video';
   });
   const ap = $('#btnAutopilot'); if (ap) ap.onclick = () => runAutopilot(+$('#apCount').value);
+  bindReview();
+  bindChat();
 }
 
 /* ---------- VIDEO 🎬 ---------- */
