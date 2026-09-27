@@ -1010,7 +1010,7 @@ function reviewCardHTML(drafts) {
       </div>
       <div class="info" style="flex:1;min-width:0">
         <div style="margin-bottom:6px"><span class="badge b-draft">Borrador ${i + 1}</span>${d.media_type === 'video' ? ' <span class="badge b-scheduled">🎬 reel</span>' : ''}</div>
-        <textarea class="in" data-revcap="${d.id}" rows="3" style="font-size:14px" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
+        <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
         ${d.hashtags ? `<div class="cap" style="font-size:12px;margin-top:6px">${esc(d.hashtags)}</div>` : ''}
       </div>
       <div class="acts"><button class="btn btn-danger btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button></div>
