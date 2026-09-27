@@ -38,12 +38,19 @@ function escDrawtext(t) {
     .replace(/\n/g, ' ');
 }
 
-function runFfmpeg(args, timeoutMs = 180000) {
+function runFfmpeg(args, timeoutMs = 600000) {
   return new Promise((resolve, reject) => {
     execFile('ffmpeg', ['-y', ...args], { timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
-        const msg = String(stderr || err.message).split('\n').slice(-6).join(' ').slice(0, 400);
-        return reject(new Error('ffmpeg falló: ' + msg));
+        let msg;
+        if (err.killed) {
+          msg = 'tardó demasiado en generarse (se agotó el tiempo de espera)';
+        } else {
+          const lines = String(stderr || '').split('\n').map(l => l.trim()).filter(Boolean);
+          const errLine = lines.find(l => /error|invalid|cannot|failed|denied|no such/i.test(l) && !/^frame=/.test(l));
+          msg = (errLine || lines.filter(l => !/^frame=/.test(l)).slice(-2).join(' · ') || err.message).slice(0, 300);
+        }
+        return reject(new Error('No se pudo generar el video: ' + msg));
       }
       resolve(stdout);
     });
@@ -90,7 +97,7 @@ async function renderVideo({ scenes, musicFile, mediaDir }) {
       const txtFile = path.join(tmpDir, `txt${i}.txt`);
       fs.writeFileSync(txtFile, escDrawtext(s.text).slice(0, 140));
       const vf =
-        `scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,` +
+        `scale=1620:2880:force_original_aspect_ratio=increase,crop=1620:2880,` +
         `zoompan=${zExpr}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${FPS},` +
         `drawtext=fontfile=${FONT}:textfile='${txtFile}':fontsize=64:fontcolor=white:` +
         `box=1:boxcolor=black@0.55:boxborderw=36:x=(w-text_w)/2:y=h-340,` +
@@ -110,7 +117,7 @@ async function renderVideo({ scenes, musicFile, mediaDir }) {
       '-filter_complex', filterComplex,
       '-map', '[vout]',
       ...(musicFile ? ['-map', `${scenes.length}:a`] : []),
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
       '-r', String(FPS),
       ...(musicFile ? ['-c:a', 'aac', '-b:a', '128k', '-shortest'] : []),
       '-movflags', '+faststart',
