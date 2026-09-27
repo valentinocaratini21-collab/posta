@@ -1362,8 +1362,23 @@ function badge(s) {
 }
 function fmtDate(iso) {
   if (!iso) return '—';
-  const d = new Date(iso.length === 16 ? iso : iso.replace(' ', 'T'));
+  // Los datetimes de SQLite vienen en UTC sin zona ('2026-09-27 02:52:00'): marcarlos Z para que el navegador los pase a hora local.
+  // Los de 16 chars ('YYYY-MM-DDTHH:MM') vienen de un input datetime-local: ya son hora local, no tocar.
+  let s = iso.length === 16 ? iso : iso.replace(' ', 'T');
+  if (iso.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+  const d = new Date(s);
   return d.toLocaleString('es-AR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+// Errores técnicos de Meta/IG traducidos a lenguaje humano
+function humanError(err) {
+  if (!err) return '';
+  const e = String(err);
+  if (/only photo or video/i.test(e)) return 'Instagram no pudo leer la imagen. Reintentá en unos minutos.';
+  if (/190|token.*expir|invalid.+token|oauth/i.test(e)) return 'Tu conexión con Instagram venció. Reconectala en Ajustes → Instagram.';
+  if (/permission|scope|not authorized/i.test(e)) return 'Falta un permiso de Instagram. Reconectá tu cuenta en Ajustes.';
+  if (/429|rate limit/i.test(e)) return 'Instagram nos pidió esperar un poco. Reintentá en unos minutos.';
+  if (/timeout|network|econn|fetch failed/i.test(e)) return 'Hubo un problema de conexión. Reintentá en unos minutos.';
+  return 'No se pudo publicar en Instagram. Reintentá o reconectá tu cuenta.';
 }
 function postItem(p, actions) {
   const thumb = p.media_type === 'video'
@@ -1378,7 +1393,7 @@ function postItem(p, actions) {
         ${p.scheduled_at && p.status === 'scheduled' ? `<span>📅 ${fmtDate(p.scheduled_at)}</span>` : ''}
         ${p.published_at ? `<span>✅ ${fmtDate(p.published_at)}</span>` : ''}
         ${p.ig_permalink ? `<a href="${esc(p.ig_permalink)}" target="_blank" style="color:var(--cel)">Ver en IG ↗</a>` : ''}
-        ${p.error ? `<span style="color:#D64545">${esc(p.error)}</span>` : ''}
+        ${p.error ? `<span style="color:#D64545" title="${esc(p.error)}">${esc(humanError(p.error))}</span>` : ''}
       </div>
     </div>
     <div class="acts">${actions}</div>
