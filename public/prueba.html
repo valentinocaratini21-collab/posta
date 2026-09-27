@@ -299,7 +299,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   <div class="field"><label>Contraseña</label><input type="password" id="rg_pass" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
   <div class="err" id="rgErr"></div>
   <button class="btn btn-primary btn-block" id="btnReg">Crear mi cuenta 🚀</button>
-  <p class="tiny">Sin tarjeta · Cancelá cuando quieras</p>
+  <p class="tiny">Sin tarjeta · Desde $39.900/mes al terminar · Cancelá cuando quieras</p>
   <p class="tiny" style="margin-top:6px">🔒 Tu Instagram se conecta con Meta — sin compartir tu contraseña</p>
   <p class="tiny" style="margin-top:8px">¿Ya tenés cuenta? <a href="/#/login" style="color:var(--cel);font-weight:700">Entrá</a></p>
 </div></div>
@@ -549,7 +549,7 @@ function renderResults() {
   // El registro en el pico de emoción (una sola vez, se puede cerrar)
   if (!modalShown) {
     modalShown = true;
-    setTimeout(() => { if ($('#v-results').style.display === 'block') openRegTrial(); }, 8000);
+    setTimeout(() => { if (!regSeen && $('#v-results').style.display === 'block') openRegTrial(); }, 8000);
   }
 }
 
@@ -564,7 +564,9 @@ function openLb(i) {
 }
 
 // ---------- registro con trial: nadie paga antes de probar ----------
+let regSeen = false; // el modal ya se mostró (abierto por CTA o por auto-apertura)
 function openRegTrial() {
+  regSeen = true;
   $('#rgSub').innerHTML = `Probá Posta <b>3 días gratis</b>, sin tarjeta.<br>Tus 5 posteos de la prueba te esperan adentro, listos para revisar.`;
   $('#rgErr').style.display = 'none';
   $('#ovReg').classList.add('open');
@@ -593,8 +595,7 @@ async function pj(url, body, method) {
 function closeReg() {
   $('#ovReg').classList.remove('open');
   document.body.style.overflow = '';
-}
-async function doRegister() {
+}async function doRegister() {
   const email = $('#rg_email').value.trim(), pass = $('#rg_pass').value;
   const err = $('#rgErr');
   const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
