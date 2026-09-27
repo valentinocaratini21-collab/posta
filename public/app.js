@@ -1025,8 +1025,8 @@ function ideasList() {
   </div>
   <div class="card card-hi-yl">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos el texto, diseñamos la imagen y programamos los posts solos. Vos solo mirá cómo salen.</p>
-    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
+    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel, y programamos todo solo. Vos solo mirá cómo sale.</p>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posts por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
@@ -1049,6 +1049,31 @@ async function renderDesignImage(o) {
 function slotDate(i) {
   return slotDate19(i, (SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires');
 }
+// El último post de la semana del autopilot es un reel: 3 escenas con fotos
+// del cliente (o diseños generados si no tiene) + textos de la idea.
+async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
+  const title = (idea.titulo || 'NOVEDAD').toUpperCase();
+  const angle = (idea.angulo || '').split('.')[0].slice(0, 90);
+  const usePhotos = photos.length > 0;
+  const sceneImg = async (text, k) => {
+    if (usePhotos) return { image_path: photos[(idx + k) % photos.length].file_path, text, duration: 3 };
+    // Sin fotos: generamos el diseño y lo usamos como escena (ya trae texto, no duplicamos)
+    const image_path = await renderDesignImage({
+      tpl: 'gradiente', pal: palIdx,
+      title: text.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD',
+      subtitle: angle, handle, photoImg: null, logoImg,
+    });
+    return { image_path, text: '', duration: 3 };
+  };
+  const scenes = [
+    await sceneImg(title, 0),
+    await sceneImg(angle || title, 1),
+    await sceneImg(handle ? '@' + handle : 'SEGUINOS 👇', 2),
+  ];
+  const r = await api.post('/api/videos', { scenes });
+  return r.url;
+}
+
 async function runAutopilot(n) {
   const prog = $('#apProg');
   const btn = $('#btnAutopilot');
@@ -1067,16 +1092,26 @@ async function runAutopilot(n) {
     const photos = assetPhotos();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const palIdx = defaultPal();
+    const handle = (PROFILE || {}).ig_username || '';
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
-      prog.innerHTML = `<div class="okmsg">⏳ Creando post ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>...</div>`;
+      const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
+      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'post'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (tarda unos segundos)' : ''}...</div>`;
       const out = await api.post('/api/generate', { topic: idea.titulo });
+      if (isReel) {
+        const videoUrl = await autopilotReel(idea, photos, logo, palIdx, handle, i);
+        await api.post('/api/posts', {
+          image_path: videoUrl, caption: out.caption, hashtags: out.hashtags,
+          media_type: 'video', scheduled_at: slotDate(i),
+        });
+        continue;
+      }
       const title = idea.titulo.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
       const ph = photos.length ? photos[i % photos.length] : null;
       const imagePath = await renderDesignImage({
         tpl: 'gradiente', pal: palIdx,
         title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
-        handle: (PROFILE || {}).ig_username || '',
+        handle,
         photoImg: ph ? await photoImg(ph.file_path) : null,
         logoImg: logo,
       });
@@ -1085,7 +1120,7 @@ async function runAutopilot(n) {
         scheduled_at: slotDate(i),
       });
     }
-    prog.innerHTML = `<div class="okmsg">✅ ¡Listo! ${picks.length} posts programados. Se publican solos.</div>`;
+    prog.innerHTML = `<div class="okmsg">✅ ¡Listo! ${picks.length} posts programados (incluye 1 reel 🎬). Se publican solos.</div>`;
     setTimeout(() => location.hash = '#/app/calendario', 1600);
   } catch (e) {
     prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
