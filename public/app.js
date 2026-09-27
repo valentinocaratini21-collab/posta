@@ -1386,10 +1386,14 @@ function postItem(p, actions) {
     ? `<video class="thumb" src="${esc(p.image_path)}" muted preload="metadata" style="object-fit:cover"></video>`
     : `<img class="thumb" src="${esc(p.image_path)}">`;
   const vtag = p.media_type === 'video' ? `<span class="badge b-scheduled">🎬 video</span>` : '';
+  const capFull = (p.caption || '').trim();
+  const capFirst = esc(capFull.split('\n')[0] || '(sin texto)');
+  const hasMore = capFull.includes('\n') || (p.hashtags || '').trim();
   return `<div class="post-item">
     ${thumb}
     <div class="info">
-      <div class="cap">${esc(p.caption.split('\n')[0] || '(sin texto)')}</div>
+      <div class="cap" ${hasMore ? 'data-cap' : ''}>${capFirst}${hasMore ? ' <span class="more-hint">ver más ▾</span>' : ''}</div>
+      ${hasMore ? `<div class="full-cap" style="display:none">${esc(capFull)}${p.hashtags ? `<div class="full-tags">${esc(p.hashtags)}</div>` : ''}</div>` : ''}
       <div class="meta">${vtag}${badge(p.status)}
         ${p.scheduled_at && p.status === 'scheduled' ? `<span>📅 ${fmtDate(p.scheduled_at)}</span>` : ''}
         ${p.published_at ? `<span>✅ ${fmtDate(p.published_at)}</span>` : ''}
@@ -2029,6 +2033,19 @@ function bindApp(tab) {
       render();
     });
     bindSignalBtns();
+    // Tap en el caption expande/colapsa el texto completo (historial y calendario)
+    $$('.post-item').forEach(item => {
+      const cap = item.querySelector('[data-cap]');
+      const full = item.querySelector('.full-cap');
+      if (!cap || !full) return;
+      const toggle = () => {
+        const open = full.style.display !== 'none';
+        full.style.display = open ? 'none' : 'block';
+        cap.style.display = open ? 'block' : 'none';
+      };
+      cap.onclick = toggle;
+      full.onclick = toggle;
+    });
   }
   if (tab === 'ajustes') bindSettings();
 }
