@@ -410,6 +410,11 @@ let IDEAS = [];
 let CHAT = [];       // [{role:'user'|'assistant', text}]
 let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo}
 /* ---------- PWA: instalar la app ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 let PWA_DEFERRED = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -431,7 +436,10 @@ function pwaIsIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 }
 function pwaDismissed() {
-  try { return localStorage.getItem('pwa-dismissed') === '1'; } catch (e) { return false; }
+  try {
+    const t = parseInt(localStorage.getItem('pwa-dismissed') || '0', 10);
+    return t && (Date.now() - t < 7 * 24 * 3600 * 1000);
+  } catch (e) { return false; }
 }
 function pwaBannerHtml() {
   if (pwaIsInstalled() || pwaDismissed()) return '';
@@ -459,7 +467,7 @@ async function pwaDoInstall() {
 function pwaWire() {
   const d = document.getElementById('pwaDismiss');
   if (d) d.onclick = () => {
-    try { localStorage.setItem('pwa-dismissed', '1'); } catch (e) {}
+    try { localStorage.setItem('pwa-dismissed', String(Date.now())); } catch (e) {}
     const b = document.getElementById('pwaBanner');
     if (b) b.remove();
   };
@@ -2428,7 +2436,7 @@ function ajustesView() {
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
-  const planMsg = q.get('plan') === 'ok' ? `<div class="okmsg">✅ ¡Pago recibido! Tu plan ya está activo.</div>`
+  const planMsg = q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Probá de nuevo.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
@@ -3529,6 +3537,10 @@ function bindSettings() {
       const { plans, mp_configured } = await api.get('/api/billing/plans');
       const cur = (ME && ME.plan) || 'esencial';
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
+      const pcm = document.getElementById('planConfirmMsg');
+      if (pcm) pcm.innerHTML = hasActive
+        ? '✅ ¡Pago recibido! Tu plan ya está activo.'
+        : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.';
       const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
       // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
