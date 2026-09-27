@@ -39,6 +39,17 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .color-row input[type=color]{width:100%;height:52px;border:2px solid var(--line);border-radius:12px;padding:6px;background:#fff;cursor:pointer}
 .cdet{display:none;align-items:center;gap:8px;margin-top:10px;font-size:13px;font-weight:700;color:var(--navy)}
 .cdet i{width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(10,30,51,.25)}
+.filebtn{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:26px 16px;border:2px dashed #b9d4e6;border-radius:16px;background:#f8fcfe;cursor:pointer;text-align:center;box-sizing:border-box}
+.filebtn .fe{font-size:32px}
+.filebtn b{color:var(--navy);font-size:16px}
+.filebtn small{color:var(--mut);font-size:13px}
+.filebtn.has{border-style:solid;border-color:var(--cel);background:#f2f9fd}
+.cchips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.cchips:empty{margin-bottom:0}
+.cchip{display:inline-flex;align-items:center;gap:7px;background:#f2f9fd;border:1.5px solid #d8e9f4;border-radius:999px;padding:5px 6px 5px 5px;font-size:14px;font-weight:700}
+.cchip a{display:inline-flex;align-items:center;gap:7px;color:var(--navy);text-decoration:none}
+.cchip i{width:26px;height:26px;border-radius:50%;background:var(--cel);color:#fff;font-style:normal;font-weight:800;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.cchip b{cursor:pointer;color:var(--mut);font-size:16px;padding:0 6px 0 2px}
 .country-row{display:flex;gap:10px}
 .country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
 .country-btn.on{border-color:var(--cel);background:var(--bg2)}
@@ -172,23 +183,18 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div class="field"><label>Tu Instagram *</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Lo usamos para personalizar tu semana con tu perfil real.</div></div>
       <div class="field"><label>Rubro *</label><select id="f_cat"></select></div>
       <div class="field"><label>¿Qué querés lograr? *</label><textarea id="f_goal" maxlength="300" placeholder="Ej: vender más por Instagram y que me conozcan en el barrio"></textarea></div>
-      <div class="field"><label>¿Cómo le hablás a tus clientes? *</label>
-        <div class="tone-row">
-          <div class="tone-card on" data-tone="vos"><div class="e">😎</div><b>Canchero</b><small>che, mirá, vení</small></div>
-          <div class="tone-card" data-tone="tu"><div class="e">💼</div><b>Profesional</b><small>mira, ven, le presentamos</small></div>
-        </div>
+      <div class="field"><label>Tus competidores (opcional)</label>
+        <div class="cchips" id="compChips"></div>
+        <input type="text" id="f_comp" placeholder="Escribí su @ y apretá Enter" maxlength="40" autocomplete="off">
+        <div class="hint">Tocá cada @ para ver su Instagram. Los tenemos en cuenta para que tu semana se diferencie.</div>
       </div>
-      <div class="field"><label>Tus competidores (opcional)</label><input type="text" id="f_comp" placeholder="Nombres o @ de Instagram, separados por coma" maxlength="200"><div class="hint">Los tenemos en cuenta para que tu semana se diferencie.</div></div>
-      <div class="field"><label>Captura de tu Instagram o tu logo *</label><input type="file" id="f_file" accept="image/jpeg,image/png,image/webp" style="border:none;padding:0"><div class="hint">La usamos para detectar tus colores y armar tu antes/después. No la compartimos con nadie.</div>
+      <div class="field"><label>Captura de tu Instagram o tu logo *</label>
+        <label class="filebtn" for="f_file"><span class="fe">📷</span><b id="fileBtnTxt">Subí tu captura o logo</b><small>PNG o JPG · detectamos tus colores automáticamente</small></label>
+        <input type="file" id="f_file" accept="image/jpeg,image/png,image/webp" style="display:none">
+        <div class="hint">La usamos para detectar tus colores y armar tu antes/después. No la compartimos con nadie.</div>
         <div class="cdet" id="cDetected"><span>🎨 Detectamos tus colores</span><i id="swA"></i><i id="swB"></i></div>
       </div>
       <input type="hidden" id="f_accent" value="#2793C8"><input type="hidden" id="f_btn" value="#FEC14D">
-      <div class="field"><label>País</label>
-        <div class="country-row">
-          <button type="button" class="country-btn on" data-c="AR">🇦🇷 Argentina</button>
-          <button type="button" class="country-btn" data-c="UY">🇺🇾 Uruguay</button>
-        </div>
-      </div>
       <button class="btn btn-primary btn-block" id="btnGo">Armar mi semana 🚀</button>
       <p class="tiny">Sin registro · Sin tarjeta · La prueba es una sola vez por negocio</p>
     </div>
@@ -341,10 +347,11 @@ function show(id) {
 (async function init() {
  try {
   $('#f_cat').innerHTML = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-  $$('.tone-card').forEach((c) => { c.onclick = () => { $$('.tone-card').forEach((x) => x.classList.remove('on')); c.classList.add('on'); TONE = c.dataset.tone; }; });
-  $$('.country-btn').forEach((b) => { b.onclick = () => { $$('.country-btn').forEach((x) => x.classList.remove('on')); b.classList.add('on'); COUNTRY = b.dataset.c; }; });
   $('#btnGo').onclick = startTrial;
   $('#f_file').addEventListener('change', detectColors);
+  const ci = $('#f_comp');
+  ci.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addComp(ci.value); ci.value = ''; } });
+  ci.addEventListener('blur', () => { if (ci.value.trim()) { addComp(ci.value); ci.value = ''; } });
   $('#btnBuy2').onclick = openPlans;
   $('#btnBuy3').onclick = openPlans;
   $('#xPlans').onclick = closePlans;
@@ -430,8 +437,26 @@ function detectColors() {
     $('#swA').style.background = $('#f_accent').value;
     $('#swB').style.background = $('#f_btn').value;
     $('#cDetected').style.display = 'flex';
+    const nm = f.name.length > 26 ? f.name.slice(0, 25) + '…' : f.name;
+    $('#fileBtnTxt').textContent = '✅ ' + nm;
+    document.querySelector('.filebtn').classList.add('has');
   })();
   palPromise.catch(() => {});
+}
+
+// ---------- competidores: chips con @ clickeables ----------
+const compHandles = [];
+function renderCompChips() {
+  const box = $('#compChips');
+  box.innerHTML = compHandles.map((h, i) => `
+    <span class="cchip"><a href="https://www.instagram.com/${encodeURIComponent(h)}/" target="_blank" rel="noopener"><i>${esc(h[0].toUpperCase())}</i>@${esc(h)}</a><b data-i="${i}" title="Quitar">×</b></span>`).join('');
+  box.querySelectorAll('b').forEach((b) => { b.onclick = () => { compHandles.splice(parseInt(b.dataset.i, 10), 1); renderCompChips(); }; });
+}
+function addComp(raw) {
+  const h = String(raw || '').trim().replace(/^@/, '').toLowerCase();
+  if (!h || !/^[a-z0-9._]{1,30}$/.test(h)) return;
+  if (!compHandles.includes(h) && compHandles.length < 5) compHandles.push(h);
+  renderCompChips();
 }
 
 // ---------- generar ----------
@@ -484,7 +509,7 @@ async function startTrial() {
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
   fd.append('goal', $('#f_goal').value.trim());
-  fd.append('competitors', $('#f_comp').value.trim());
+  fd.append('competitors', compHandles.map((h) => '@' + h).join(', '));
   fd.append('accent', $('#f_accent').value);
   fd.append('btn', $('#f_btn').value);
   if (fileInput.files && fileInput.files[0]) fd.append('photo', fileInput.files[0]);
@@ -505,7 +530,7 @@ async function startTrial() {
         business_name: biz,
         category: $('#f_cat').value,
         description: $('#f_goal').value.trim(),
-        competitors: $('#f_comp').value.trim(),
+        competitors: compHandles.map((h) => '@' + h).join(', '),
         ig_username: $('#f_ig').value.trim().replace(/^@/, ''),
         tone: TONE,
         country: COUNTRY,
