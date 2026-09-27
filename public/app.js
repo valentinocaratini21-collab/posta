@@ -1087,34 +1087,48 @@ async function runAutopilot(n) {
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const palIdx = defaultPal();
     const handle = (PROFILE || {}).ig_username || '';
+    let reelFailed = false;
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
       const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
-      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'post'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (tarda unos segundos)' : ''}...</div>`;
+      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'post'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
       const out = await api.post('/api/generate', { topic: idea.titulo });
-      if (isReel) {
-        const videoUrl = await autopilotReel(idea, photos, logo, palIdx, handle, i);
-        await api.post('/api/posts', {
-          image_path: videoUrl, caption: out.caption, hashtags: out.hashtags,
-          media_type: 'video', scheduled_at: slotDate(i),
+      const mkDesign = async () => {
+        const title = idea.titulo.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+        const ph = photos.length ? photos[i % photos.length] : null;
+        return renderDesignImage({
+          tpl: 'gradiente', pal: palIdx,
+          title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
+          handle,
+          photoImg: ph ? await photoImg(ph.file_path) : null,
+          logoImg: logo,
         });
+      };
+      if (isReel) {
+        try {
+          const videoUrl = await autopilotReel(idea, photos, logo, palIdx, handle, i);
+          await api.post('/api/posts', {
+            image_path: videoUrl, caption: out.caption, hashtags: out.hashtags,
+            media_type: 'video', scheduled_at: slotDate(i),
+          });
+        } catch (reelErr) {
+          // Si el reel falla, la semana se completa igual como post estático
+          reelFailed = true;
+          const imagePath = await mkDesign();
+          await api.post('/api/posts', {
+            image_path: imagePath, caption: out.caption, hashtags: out.hashtags,
+            scheduled_at: slotDate(i),
+          });
+        }
         continue;
       }
-      const title = idea.titulo.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-      const ph = photos.length ? photos[i % photos.length] : null;
-      const imagePath = await renderDesignImage({
-        tpl: 'gradiente', pal: palIdx,
-        title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
-        handle,
-        photoImg: ph ? await photoImg(ph.file_path) : null,
-        logoImg: logo,
-      });
+      const imagePath = await mkDesign();
       await api.post('/api/posts', {
         image_path: imagePath, caption: out.caption, hashtags: out.hashtags,
         scheduled_at: slotDate(i),
       });
     }
-    prog.innerHTML = `<div class="okmsg">✅ ¡Listo! ${picks.length} posts programados (incluye 1 reel 🎬). Se publican solos.</div>`;
+    prog.innerHTML = `<div class="okmsg">✅ ¡Listo! ${picks.length} posts programados${reelFailed ? '' : ' (incluye 1 reel 🎬)'}. Se publican solos.${reelFailed ? ' El reel no se pudo generar esta vez y salió como post.' : ''}</div>`;
     setTimeout(() => location.hash = '#/app/calendario', 1600);
   } catch (e) {
     prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
