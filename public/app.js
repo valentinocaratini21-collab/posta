@@ -1381,10 +1381,33 @@ function humanError(err) {
   if (/timeout|network|econn|fetch failed/i.test(e)) return 'Hubo un problema de conexión. Reintentá en unos minutos.';
   return 'No se pudo publicar en Instagram. Reintentá o reconectá tu cuenta.';
 }
+// Lightbox: ver el diseño en grande (tap en la miniatura)
+function openLightbox(src, isVideo) {
+  let lb = $('#lightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'lightbox';
+    lb.innerHTML = `<div class="lb-backdrop"></div><div class="lb-content"></div><button class="lb-close" aria-label="Cerrar">✕</button>`;
+    document.body.appendChild(lb);
+    lb.querySelector('.lb-backdrop').onclick = closeLightbox;
+    lb.querySelector('.lb-close').onclick = closeLightbox;
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+  }
+  lb.querySelector('.lb-content').innerHTML = isVideo
+    ? `<video src="${esc(src)}" controls autoplay playsinline style="max-width:92vw;max-height:84vh;border-radius:12px"></video>`
+    : `<img src="${esc(src)}" alt="Diseño" style="max-width:92vw;max-height:84vh;border-radius:12px;object-fit:contain">`;
+  lb.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  const lb = $('#lightbox');
+  if (lb) { lb.style.display = 'none'; lb.querySelector('.lb-content').innerHTML = ''; }
+  document.body.style.overflow = '';
+}
 function postItem(p, actions) {
   const thumb = p.media_type === 'video'
-    ? `<video class="thumb" src="${esc(p.image_path)}" muted preload="metadata" style="object-fit:cover"></video>`
-    : `<img class="thumb" src="${esc(p.image_path)}">`;
+    ? `<video class="thumb" src="${esc(p.image_path)}" muted preload="metadata" style="object-fit:cover" data-lightbox="${esc(p.image_path)}" data-video="1"></video>`
+    : `<img class="thumb" src="${esc(p.image_path)}" data-lightbox="${esc(p.image_path)}">`;
   const vtag = p.media_type === 'video' ? `<span class="badge b-scheduled">🎬 video</span>` : '';
   const capFull = (p.caption || '').trim();
   const capFirst = esc(capFull.split('\n')[0] || '(sin texto)');
@@ -2045,6 +2068,11 @@ function bindApp(tab) {
       };
       cap.onclick = toggle;
       full.onclick = toggle;
+    });
+    // Tap en la miniatura abre el diseño en grande
+    $$('.post-item [data-lightbox]').forEach(el => el.onclick = (e) => {
+      e.stopPropagation();
+      openLightbox(el.dataset.lightbox, el.dataset.video === '1');
     });
   }
   if (tab === 'ajustes') bindSettings();
