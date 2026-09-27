@@ -1189,7 +1189,11 @@ function videoView() {
     ${v.scenes.map((s, i) => `
     <div class="post-item" style="align-items:flex-start;gap:14px">
       <div style="width:72px;flex-shrink:0">
-        ${s.image_path ? `<img src="${esc(s.image_path)}" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">` : `<div style="width:72px;height:110px;border-radius:10px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--dim)">🖼️</div>`}
+        ${s.image_path ? `
+        <div class="vprev">
+          <img src="${esc(s.image_path)}" alt="">
+          <div class="vprev-txt" data-vprevtxt="${i}" style="${s.text ? '' : 'display:none'}">${esc(s.text)}</div>
+        </div>` : `<div class="vprev vprev-empty">🖼️</div>`}
       </div>
       <div class="info" style="flex:1">
         <div class="scene-n">Escena ${i + 1}</div>
@@ -1231,7 +1235,7 @@ function videoView() {
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
           <a class="btn btn-soft btn-sm" href="${esc(v.result_url)}" download>⬇️ Descargar</a>
         </div>
-        <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="v_when"></div>
+        <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="v_when" value="${isoToLocalInput(slotDate19(0, (SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires'))}"></div>
         <button class="btn btn-primary btn-sm" id="btnVSched">📅 Programar video</button>
         <div id="vSchedMsg" style="margin-top:10px"></div>
       </div>
@@ -1275,7 +1279,12 @@ function bindVideo() {
     v.scenes[+i].image_path = rest.join(':');
     rerender();
   });
-  $$('[data-vtext]').forEach(inp => inp.oninput = () => { v.scenes[+inp.dataset.vtext].text = inp.value; });
+  $$('[data-vtext]').forEach(inp => inp.oninput = () => {
+    const i = +inp.dataset.vtext;
+    v.scenes[i].text = inp.value;
+    const pt = document.querySelector(`[data-vprevtxt="${i}"]`);
+    if (pt) { pt.textContent = inp.value; pt.style.display = inp.value ? '' : 'none'; }
+  });
   $$('[data-vdur]').forEach(inp => inp.onchange = () => {
     v.scenes[+inp.dataset.vdur].duration = Math.min(30, Math.max(1, Math.round(+inp.value || 3)));
     inp.value = v.scenes[+inp.dataset.vdur].duration;
