@@ -224,7 +224,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pill">Tu equipo de marketing en automático <b>🇦🇷</b></div>
     <h1>Vos vendé. <span class="hl">Nosotros posteamos.</span></h1>
-    <p class="sub"><b>Nosotros nos encargamos de todo.</b> Con un clic armás tu semana; nosotros la publicamos sola en tu Instagram.</p>
+    <p class="sub"><b>Nosotros nos encargamos de todo.</b> Con un clic armás tu semana; vos la revisás y se publica sola en tu Instagram.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
       <a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a>
@@ -260,7 +260,7 @@ function landingView(cfg) {
     <a class="btn btn-primary" href="/prueba">Armar mi semana gratis</a>
   </div></div>
   <div class="pz-trialband"><div class="wrap">
-    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armamos tus ideas + tu semana en 2 minutos. Una sola vez, sin registro.</span></div>
+    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armamos tus ideas + tu semana en 1 minuto. Sin registro.</span></div>
     <a class="btn btn-primary" href="/prueba">Probar la app</a>
   </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
@@ -294,7 +294,7 @@ function landingView(cfg) {
       <div class="feat"><div class="ico">🎨</div><h3>Diseños con tu marca</h3><p>Usamos TUS fotos, TU logo y TUS colores. Nada de plantillas genéricas que no te representan.</p></div>
       <div class="feat"><div class="ico">✍️</div><h3>Captions + hashtags</h3><p>Textos en rioplatense con tu tono, pensados para vender, con hashtags para Argentina.</p></div>
       <div class="feat"><div class="ico">🎬</div><h3>Videos para Reels</h3><p>Convertimos tus fotos en videos verticales listos para Reels, en el formato que más rinde.</p></div>
-      <div class="feat"><div class="ico">📅</div><h3>Publicación automática</h3><p>Programamos tu semana completa y el sistema publica solo, a la hora exacta, en tu cuenta real.</p></div>
+      <div class="feat"><div class="ico">📅</div><h3>Publicación automática</h3><p>Programamos tu semana completa: la revisás una vez y el sistema publica solo, a la hora exacta, en tu cuenta real.</p></div>
       <div class="feat"><div class="ico">🔍</div><h3>Diferenciación de tu competencia</h3><p>Nos contás quiénes son tus competidores y creamos contenido que te haga destacar, no copiar.</p></div>
     </div>
   </div></div>
@@ -327,7 +327,7 @@ function landingView(cfg) {
       </div>
       <div class="vs-item win">
         <div class="vs-top">🚀 <b>Posta</b></div>
-        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y publicamos en automático en tu cuenta. En pesos, con MercadoPago. Y lo probás <b>3 días gratis</b>, sin tarjeta.</p>
+        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y programamos tu semana en tu cuenta. Nada sale sin tu OK. En pesos, con MercadoPago. Y lo probás <b>3 días gratis</b>, sin tarjeta.</p>
       </div>
     </div>
     <p class="unico-line">Somos el único servicio argentino 100% done-for-you para Instagram.</p>
