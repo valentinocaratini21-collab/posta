@@ -480,7 +480,6 @@ function appShell(tab, content) {
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
-  <div class="mtabs">${TABS.map(([k, i, l]) => `<button class="mtab ${k === tab ? 'on' : ''}" data-tab="${k}">${i} ${l}</button>`).join('')}</div>
   ${pwaBannerHtml()}
   ${igBanner}
   <div class="app-shell">
