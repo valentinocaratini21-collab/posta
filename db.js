@@ -80,6 +80,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN mp_preapproval_id TEXT DEFAULT ''`);
 try { db.exec(`ALTER TABLE posts ADD COLUMN media_type TEXT DEFAULT 'image'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN brand_logo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN brand_colors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN last_ig_user_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS assets (

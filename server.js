@@ -923,6 +923,20 @@ app.get('/api/stats/summary', requireAuth, (req, res) => {
   });
 });
 
+// Reinicio total: marca (logo, colores, nombre) + posteos pendientes (borradores,
+// programados, en publicación). El historial publicado no se toca.
+// Se usa al cambiar de cuenta de IG conectada y en el botón manual "Reiniciar todo".
+function fullBrandReset(userId) {
+  try {
+    const logos = db.prepare(`SELECT * FROM assets WHERE user_id=? AND kind='logo'`).all(userId);
+    for (const l of logos) { try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(l.file_path))); } catch (_) {} }
+    db.prepare(`DELETE FROM assets WHERE user_id=? AND kind='logo'`).run(userId);
+    db.prepare(`UPDATE settings SET brand_colors='', updated_at=datetime('now') WHERE user_id=?`).run(userId);
+    db.prepare(`UPDATE profiles SET business_name='' WHERE user_id=?`).run(userId);
+    db.prepare(`DELETE FROM posts WHERE user_id=? AND status IN ('draft','scheduled','publishing')`).run(userId);
+  } catch (e) { console.error('[brand-reset]', e.message); }
+}
+
 // ---------- Instagram OAuth (Instagram Login / Business Login) ----------
 // Avatar de un usuario de Instagram (og:image público, con caché de 30 días)
 app.get('/api/ig/avatar', requireAuth, async (req, res) => {
@@ -1061,22 +1075,18 @@ app.get('/api/ig/callback', async (req, res) => {
     if (usedBefore && usedBefore.first_user_id !== req.session.userId) {
       db.prepare(`UPDATE ig_registry SET first_user_id = ?, first_seen_at = datetime('now') WHERE ig_user_id = ?`).run(req.session.userId, finalIgId);
     }
-    const wasDemo = !!getSettings(req.session.userId).demo_mode;
-    const prevIgId = String(getSettings(req.session.userId).ig_user_id || '');
+    const s0 = getSettings(req.session.userId);
+    const wasDemo = !!s0.demo_mode;
+    const prevIgId = String(s0.ig_user_id || s0.last_ig_user_id || '');
     db.prepare(
       `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, demo_mode=0, updated_at=datetime('now') WHERE user_id=?`
     ).run(finalIgId, accessToken, req.session.userId);
-    // Si cambió la cuenta de IG: la marca anterior era de otro negocio → se restablece sola
+    // Si cambió la cuenta de IG: la marca y los posteos pendientes eran de otro negocio → reset total
     let brandReset = false;
     if (prevIgId && finalIgId && prevIgId !== String(finalIgId)) {
-      try {
-        const logos = db.prepare(`SELECT * FROM assets WHERE user_id=? AND kind='logo'`).all(req.session.userId);
-        for (const l of logos) { try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(l.file_path))); } catch (_) {} }
-        db.prepare(`DELETE FROM assets WHERE user_id=? AND kind='logo'`).run(req.session.userId);
-        db.prepare(`UPDATE settings SET brand_colors='', updated_at=datetime('now') WHERE user_id=?`).run(req.session.userId);
-        db.prepare(`UPDATE profiles SET business_name='' WHERE user_id=?`).run(req.session.userId);
-        brandReset = true;
-      } catch (e) { console.error('[ig/callback] brand reset:', e.message); }
+      fullBrandReset(req.session.userId);
+      db.prepare(`UPDATE settings SET last_ig_user_id='' WHERE user_id=?`).run(req.session.userId);
+      brandReset = true;
     }
     // Registro permanente del uso (sobrevive a desconexiones)
     try {
@@ -1108,8 +1118,16 @@ app.get('/api/ig/sync', requireAuth, async (req, res) => {
 });
 
 app.post('/api/ig/disconnect', requireAuth, (req, res) => {
-  db.prepare(`UPDATE settings SET ig_user_id='', ig_page_id='', ig_access_token='' WHERE user_id=?`).run(req.session.userId);
+  // Guardamos cuál IG estaba conectado: si después conecta otro distinto, se detecta
+  // el cambio y se reinician marca + posteos pendientes (eran de otro negocio).
+  db.prepare(`UPDATE settings SET last_ig_user_id=ig_user_id, ig_user_id='', ig_page_id='', ig_access_token='' WHERE user_id=?`).run(req.session.userId);
   db.prepare(`UPDATE profiles SET ig_connected=0 WHERE user_id=?`).run(req.session.userId);
+  res.json({ ok: true });
+});
+
+// Reinicio manual total (marca + posteos pendientes). El historial publicado no se toca.
+app.post('/api/brand/reset', requireAuth, (req, res) => {
+  fullBrandReset(req.session.userId);
   res.json({ ok: true });
 });
 
