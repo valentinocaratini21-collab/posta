@@ -1475,6 +1475,93 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   }
 });
 
+// ---------- Chat de la prueba: mejorar los posteos por chat ----------
+// El visitante pide cambios ("hacelo más canchero") y la IA edita los TEXTOS
+// (caption/hashtags) de sus posteos ya creados. Los cambios se guardan en el
+// trial_cache, así viajan a su cuenta como borradores cuando se registra.
+// Sin login: rate limit de 8 mensajes por día por IP.
+const TRIAL_CHAT_LIMIT = 8;
+try { db.exec('CREATE TABLE IF NOT EXISTS trial_chat_usage (ip TEXT, day TEXT, count INTEGER DEFAULT 0, PRIMARY KEY (ip, day))'); } catch (e) {}
+function trialChatAllowed(ip) {
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    if (Math.random() < 0.05) db.exec(`DELETE FROM trial_chat_usage WHERE day < date('now', '-7 days')`);
+    const row = db.prepare('SELECT count FROM trial_chat_usage WHERE ip = ? AND day = ?').get(ip, day);
+    if (row && row.count >= TRIAL_CHAT_LIMIT) return false;
+    db.prepare('INSERT INTO trial_chat_usage (ip, day, count) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET count = count + 1').run(ip, day);
+    return true;
+  } catch (e) { return true; }
+}
+app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  const { ig, message, history } = req.body || {};
+  const msg = String(message || '').trim().slice(0, 300);
+  const igKey = String(ig || '').trim().replace(/^@/, '').toLowerCase();
+  if (!msg) return res.status(400).json({ error: 'Escribí qué querés cambiar 🙂' });
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  if (!trialChatAllowed(ip)) return res.status(429).json({ error: 'chat_limit' });
+  const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
+  if (!hit) return res.status(404).json({ error: 'No encontramos tu semana. Generala de nuevo 🙂' });
+  let out;
+  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'No pudimos leer tu semana' }); }
+  const posts = out.posts || [];
+  if (!posts.length) return res.status(404).json({ error: 'No encontramos tus posteos' });
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!apiKey) return res.status(500).json({ error: 'El chat no está disponible ahora. Probá en unos minutos.' });
+  const week = out.week || [];
+  const postList = posts.map((p, i) => {
+    const w = week.find((x) => x.post === i);
+    return { i, dia: w ? w.day : ('posteo ' + (i + 1)), caption: String(p.caption || ''), hashtags: String(p.hashtags || '') };
+  });
+  const hist = Array.isArray(history) ? history.slice(-6).map((h) => `${h.role === 'user' ? 'Dueño' : 'Posta'}: ${String(h.text || '').slice(0, 200)}`).join('\n') : '';
+  const sys =
+    'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
+    'Hablás con el dueño de "' + String(out.business || 'su negocio').slice(0, 60) + '" (rubro: ' + String(out.category || 'general').slice(0, 30) + ') que está probando gratis y YA tiene sus 5 posteos creados. ' +
+    'Te pide cambios. Podés editar ÚNICAMENTE los textos: caption y hashtags de uno o varios posteos. ' +
+    'NO podés cambiar diseños, imágenes ni videos: si te pide eso, decile con buena onda que los diseños los retoca nuestro equipo cuando sea cliente. ' +
+    'Escribís en español rioplatense con voseo, tono cercano y canchero, 1-2 líneas.\n\n' +
+    'Posteos (índice, día, caption actual, hashtags actuales):\n' +
+    postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
+    (hist ? '\n\nHistorial reciente:\n' + hist : '') +
+    '\n\nPedido del dueño: "' + msg.replace(/"/g, "'") + '"\n\n' +
+    'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
+    'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply.';
+  try {
+    const ai = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: msg }],
+        max_tokens: 900,
+        temperature: 0.8,
+      }),
+    });
+    if (!ai.ok) throw new Error('OpenAI ' + ai.status);
+    const data = await ai.json();
+    let parsed;
+    try { parsed = JSON.parse(data.choices[0].message.content); } catch (e) { throw new Error('respuesta IA inválida'); }
+    const edits = (parsed.edits || [])
+      .filter((e) => e && Number.isInteger(e.post) && e.post >= 0 && e.post < posts.length)
+      .slice(0, 5);
+    for (const e of edits) {
+      if (typeof e.caption === 'string' && e.caption.trim()) posts[e.post].caption = e.caption.trim().slice(0, 600);
+      if (typeof e.hashtags === 'string' && e.hashtags.trim()) posts[e.post].hashtags = e.hashtags.trim().slice(0, 300);
+    }
+    if (edits.length) {
+      try { db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(JSON.stringify(out), igKey); } catch (e) {}
+    }
+    res.json({
+      reply: String(parsed.reply || 'Listo ✅ ¿Algo más?').slice(0, 300),
+      edits: edits.map((e) => ({ post: e.post, caption: posts[e.post].caption, hashtags: posts[e.post].hashtags })),
+    });
+  } catch (e) {
+    console.error('[posta] trial chat:', e.message);
+    res.status(500).json({ error: 'No pude procesar tu pedido. Probá de nuevo 🙂' });
+  }
+});
+
 // ---------- Health ----------
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 
