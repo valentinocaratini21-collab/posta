@@ -1062,16 +1062,29 @@ app.get('/api/ig/callback', async (req, res) => {
       db.prepare(`UPDATE ig_registry SET first_user_id = ?, first_seen_at = datetime('now') WHERE ig_user_id = ?`).run(req.session.userId, finalIgId);
     }
     const wasDemo = !!getSettings(req.session.userId).demo_mode;
+    const prevIgId = String(getSettings(req.session.userId).ig_user_id || '');
     db.prepare(
       `UPDATE settings SET ig_user_id=?, ig_page_id='', ig_access_token=?, ig_token_issued_at=datetime('now'), ig_token_warning=0, demo_mode=0, updated_at=datetime('now') WHERE user_id=?`
     ).run(finalIgId, accessToken, req.session.userId);
+    // Si cambió la cuenta de IG: la marca anterior era de otro negocio → se restablece sola
+    let brandReset = false;
+    if (prevIgId && finalIgId && prevIgId !== String(finalIgId)) {
+      try {
+        const logos = db.prepare(`SELECT * FROM assets WHERE user_id=? AND kind='logo'`).all(req.session.userId);
+        for (const l of logos) { try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(l.file_path))); } catch (_) {} }
+        db.prepare(`DELETE FROM assets WHERE user_id=? AND kind='logo'`).run(req.session.userId);
+        db.prepare(`UPDATE settings SET brand_colors='', updated_at=datetime('now') WHERE user_id=?`).run(req.session.userId);
+        db.prepare(`UPDATE profiles SET business_name='' WHERE user_id=?`).run(req.session.userId);
+        brandReset = true;
+      } catch (e) { console.error('[ig/callback] brand reset:', e.message); }
+    }
     // Registro permanente del uso (sobrevive a desconexiones)
     try {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(finalIgId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
-    res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '')));
+    res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
   } catch (e) {
     res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(e.message)));
   }
