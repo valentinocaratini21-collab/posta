@@ -1033,23 +1033,26 @@ function recCardHTML(ideas, posts, ppw){
     <button class="btn btn-primary" data-rec-idea="${idx}">${isVideo ? '🎬 Crear este video' : 'Crear este posteo'} →</button>
   </div>`;
 }
-function autopilotCardHTML() {
+// tag: 'ideas' | 'home' — la misma tarjeta vive en Ideas y en Mi semana;
+// los ids se sufijan con el tag para no colisionar.
+function autopilotCardHTML(tag) {
+  const t = tag || 'ideas';
   const ppw = (ME && ME.posts_per_week) || 3;
   const planName = (ME && ME.plan ? ME.plan[0].toUpperCase() + ME.plan.slice(1) : 'Esencial');
   const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
   const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posteos por semana</option>`).join('');
   return `
-  <div class="card card-hi-yl" id="autopilotCard">
+  <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
     <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel. Vos los revisás y aprobás — recién ahí se programan.</p>
     <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
+      <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
       </select>
-      <button class="btn btn-primary" id="btnAutopilot">⚡ Armemos tu semana</button>
+      <button class="btn btn-primary" data-autopilot="${t}">⚡ Armemos tu semana</button>
     </div>
-    <div id="apProg" style="margin-top:16px"></div>
+    <div id="apProg-${t}" style="margin-top:16px"></div>
   </div>`;
 }
 
@@ -1057,9 +1060,10 @@ function reviewCardHTML(drafts) {
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">📋 Revisá tu semana</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px">Mirá cada posteo, editá el texto si querés y cuando esté lista la programamos. Nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px">Mirá cada posteo, editá el texto si querés. Publicá el que quieras <b>ahora</b> con 🚀 o programá toda la semana con un clic. Nada sale sin tu OK.</p>
     ${drafts.map((d, i) => `
-    <div class="post-item" style="align-items:flex-start">
+    <div style="margin-bottom:16px">
+    <div class="post-item" style="align-items:flex-start;margin-bottom:0">
       <div style="width:72px;flex-shrink:0">
         ${d.media_type === 'video'
           ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#0A1E33;cursor:zoom-in"></video>`
@@ -1070,7 +1074,12 @@ function reviewCardHTML(drafts) {
         <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
         ${d.hashtags ? `<div class="cap" style="font-size:12px;margin-top:6px">${esc(d.hashtags)}</div>` : ''}
       </div>
-      <div class="acts"><button class="btn btn-danger btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button></div>
+      <div class="acts" style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary btn-sm" data-revnow="${d.id}" title="Publicar ahora en Instagram" style="font-size:16px">🚀</button>
+        <button class="btn btn-ghost btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button>
+      </div>
+    </div>
+    <div id="revnowm-${d.id}"></div>
     </div>`).join('')}
     <div style="margin-top:10px">
       <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Programar semana</button>
@@ -1095,6 +1104,18 @@ function bindReview() {
   $$('[data-revdel]').forEach(b => b.onclick = async () => {
     if (!confirm('¿Eliminar este borrador?')) return;
     try { await api.delete('/api/posts/' + b.dataset.revdel); } catch (e) {}
+    render();
+  });
+  // Publicar un borrador AHORA (sin esperar la programación)
+  $$('[data-revnow]').forEach(b => b.onclick = async () => {
+    const id = +b.dataset.revnow;
+    b.disabled = true;
+    try {
+      const ta = document.querySelector(`[data-revcap="${id}"]`);
+      if (ta) await api.patch('/api/posts/' + id, { action: 'save-draft', caption: ta.value }).catch(() => {});
+    } catch (e) {}
+    const mount = document.getElementById('revnowm-' + id);
+    await publishNowFlow(id, mount);
     render();
   });
   // Programar toda la semana
@@ -1665,13 +1686,13 @@ async function ideasView() {
   ${recCardHTML(IDEAS, posts, ppw)}
   ${chatCardHTML()}
   ${IDEAS.length ? `<div id="ideasZone">${ideasList(posts)}</div>` : ''}
-  ${autopilotCardHTML()}
+  ${drafts.length ? reviewCardHTML(drafts) : ''}
+  ${autopilotCardHTML('ideas')}
   ${IDEAS.length ? '' : `
   <div class="card" id="ideasEmpty"><div class="empty"><div class="big">💡</div>
       Todavía no generamos ideas para tu negocio.<br>
       <span style="font-size:14px">Tocá "⚡ Armemos tu semana" acá arriba 👆 o charlalo con el consultor</span>
   </div></div>`}
-  ${drafts.length ? reviewCardHTML(drafts) : ''}
   <div id="ideasMsg"></div>`;
 }
 
@@ -1786,9 +1807,10 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
   }
 }
 
-async function runAutopilot(n) {
-  const prog = $('#apProg');
-  const btn = $('#btnAutopilot');
+async function runAutopilot(n, tag) {
+  const t = tag || 'ideas';
+  const prog = document.getElementById('apProg-' + t);
+  const btn = document.querySelector('[data-autopilot="' + t + '"]');
   btn.disabled = true;
   try {
     // Si hay borradores sin revisar de una corrida anterior, preguntar antes de reemplazarlos
@@ -1815,15 +1837,25 @@ async function runAutopilot(n) {
       prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
       await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
     }
-    prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista! Revisala acá abajo 👇</div>`;
+    prog.innerHTML = t === 'home'
+      ? `<div class="okmsg">📋 ¡Tu semana está lista!</div><a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar mi semana →</a>`
+      : `<div class="okmsg">📋 ¡Tu semana está lista!</div>`;
     setTimeout(() => {
       render();
-      setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+      if (t === 'ideas') setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
     }, 900);
   } catch (e) {
     prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
     btn.disabled = false;
   }
+}
+
+function bindAutopilot() {
+  $$('[data-autopilot]').forEach(b => b.onclick = () => {
+    const t = b.dataset.autopilot || 'ideas';
+    const sel = document.getElementById('apCount-' + t);
+    runAutopilot(sel ? +sel.value : 3, t);
+  });
 }
 
 function bindIdeas() {
@@ -1873,12 +1905,12 @@ function bindIdeas() {
     if (photos.length > 1) VSTATE.scenes.push({ image_path: photos[1].file_path, text: (idea.angulo || '').split('.')[0].slice(0, 80), duration: 4 });
     location.hash = '#/app/video';
   });
-  const ap = $('#btnAutopilot'); if (ap) ap.onclick = () => runAutopilot(+$('#apCount').value);
+  bindAutopilot();
   bindReview();
   bindChat();
   if (window.__goAutopilot) {
     window.__goAutopilot = false;
-    setTimeout(() => { const el = document.getElementById('autopilotCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
+    setTimeout(() => { const el = document.getElementById('autopilotCard-ideas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
   }
 }
 
@@ -2470,7 +2502,7 @@ async function semanaView() {
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
     <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenemos ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
     <p>De tu prueba gratis — revisalos y programalos con un clic. Nada sale sin tu OK.</p></div></div>
-    <a class="btn btn-primary btn-block" href="#/app/calendario" style="margin-top:12px">Revisar y programar →</a>
+    <a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar y programar →</a>
   </div>` : ''}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
@@ -2478,12 +2510,12 @@ async function semanaView() {
     ${w.missing
       ? (drafts > 0
         ? `<p class="sem-msg">Completemos la semana programando tus borradores.</p>
-           <a class="btn btn-primary btn-block" href="#/app/calendario" style="margin-top:12px">Revisar borradores →</a>`
-        : `<p class="sem-msg">Nos ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar la semana.</p>
-           <a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armemos tu semana</a>`)
+           <a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar borradores →</a>`
+        : `<p class="sem-msg">Nos ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar la semana.</p>`)
       : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
          <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
+  ${(w.missing && !drafts) ? autopilotCardHTML('home') : ''}
   <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div><p class="d" style="margin:12px 0 0"><a href="#/app/calendario">Ver programados y borradores →</a></p></div>
   ${nudgeBlock}
   <div class="row2">
@@ -2504,6 +2536,7 @@ async function semanaView() {
 
 function bindSemana() {
   bindSignalBtns();
+  bindAutopilot();
   $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
   $$('[data-nudge]').forEach(b => b.onclick = () => {
     const n = SEM_NUDGES[+b.dataset.nudge];
@@ -2525,7 +2558,7 @@ async function calendarView() {
   + all.map(p => postItem(p, `
       ${sigBtns(p)}
       ${p.status === 'scheduled' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
-      ${p.status === 'draft' ? `<span class="sched-row"><input type="datetime-local" id="sched-${p.id}"><button class="btn btn-soft btn-sm" data-act="sched" data-id="${p.id}">📅 Programar</button></span>` : ''}
+      ${p.status === 'draft' ? `<span class="sched-row"><button class="btn btn-primary btn-sm" data-act="now" data-id="${p.id}" title="Publicar ahora en Instagram">🚀 Ahora</button><input type="datetime-local" id="sched-${p.id}"><button class="btn btn-soft btn-sm" data-act="sched" data-id="${p.id}">📅 Programar</button></span>` : ''}
       <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>
     `)).join('');
 }
