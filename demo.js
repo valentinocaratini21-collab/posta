@@ -974,105 +974,241 @@ function renderDemoVideo(pngPath, runDir, idx) {
 
 // ---------- Orquestador ----------
 // count: cantidad de posteos a generar (3 = demo clásica 2+1; 5 = semana de prueba Pro)
-async function generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count }) {
-  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+// Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
+// Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
+// sortear nuevos: así el recolor cambia SOLO los colores, nada más.
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, accent, btn, count, base }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   const { topics: allTopics, goalLine } = applyGoal(DEMO_TOPICS[cat], goal);
   const topics = allTopics.slice(0, n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
-  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-demo-'));
-  try {
-    // n estilos distintos al azar de la libreria de 9 + n fotos distintas.
+  let stylesN, photos;
+  if (base && Array.isArray(base.styles) && base.styles.length >= n && Array.isArray(base.photos) && base.photos.length >= n) {
+    stylesN = base.styles.slice(0, n);
+    photos = base.photos.slice(0, n);
+  } else {
     const stylePool = ['promo', 'editorial', 'nocturno', 'bloque', 'marco', 'sello', 'cita', 'tipografico', 'oferta'];
     for (let i = stylePool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [stylePool[i], stylePool[j]] = [stylePool[j], stylePool[i]];
     }
-    const stylesN = stylePool.slice(0, n);
-    // 'cita' es un testimonio con estrellas: solo tiene sentido con kind 'social'.
-    // Si le toca a otro kind (ej. una promo citada con 5 estrellas), se reemplaza
-    // por un estilo libre y, si hay topic social, la cita va para el.
+    stylesN = stylePool.slice(0, n);
     const socialIdx = topics.findIndex((t) => t.kind === 'social');
     const citaIdx = stylesN.indexOf('cita');
     if (citaIdx >= 0 && topics[citaIdx].kind !== 'social') {
-      // stylePool tiene 9 estilos y n <= 6: stylePool.slice(n) son los no usados.
       const repl = stylePool.slice(n).find((s) => s !== 'cita') || 'editorial';
       stylesN[citaIdx] = repl;
       if (socialIdx >= 0) stylesN[socialIdx] = 'cita';
     }
     const stockN = photoPath ? null : stockPhotosN(cat, n, business);
-    const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
-    const posts = topics.map((t, i) => {
-      // Foto: la del usuario si la subió (misma en los n); si no, n fotos
-      // distintas del pool creible del rubro, con encuadre variado.
-      const photo = photoPath || stockN[i];
-      let headline = t.headline;
-      let subline = t.subline;
-      if (tone === 'tu') {
-        headline = TU_HEADLINES[headline] || headline;
-        subline = toTu(subline);
-      }
-      return {
-        photo,
-        style: stylesN[i],
-        focus: focuses[i],
-        pill: t.tag,
-        bar,
-        headline,
-        subline,
-        cta: t.cta,
-        watermark: 'Hecho con Posta',
-      };
-    });
+    photos = topics.map((_, i) => (photoPath ? { userPhoto: true } : stockN[i]));
+  }
+  const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
+  const specPosts = topics.map((t, i) => {
+    let headline = t.headline;
+    let subline = t.subline;
+    if (tone === 'tu') {
+      headline = TU_HEADLINES[headline] || headline;
+      subline = toTu(subline);
+    }
+    return {
+      photo: photos[i],
+      style: stylesN[i],
+      focus: focuses[i],
+      pill: t.tag,
+      bar,
+      headline,
+      subline,
+      cta: t.cta,
+      watermark: 'Hecho con Posta',
+    };
+  });
+  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, n - 1), count: n, goalLine, topics };
+}
 
+// Renderiza un spec (lista de posteos) a PNGs con los colores dados.
+// Devuelve los buffers en el mismo orden. No toca textos: solo diseño.
+async function renderSpecPngs(specPosts, colors) {
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
+  try {
     const specPath = path.join(runDir, 'spec.json');
-    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(accent, btn), posts }));
+    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: specPosts }));
     await runDemoRender([DEMO_SCRIPT, specPath, runDir]);
+    return { bufs: specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.png`))), runDir };
+  } catch (e) {
+    try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
+    throw e;
+  }
+}
 
+async function renderVideoB64(pngPath, runDir, idx) {
+  const waits = [1500, 3000, 6000];
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return (await renderDemoVideo(pngPath, runDir, idx)).toString('base64');
+    } catch (e) {
+      console.error('[posta] Video falló (intento ' + (attempt + 1) + '/4):', e.message);
+      if (attempt < 3) await new Promise((r) => setTimeout(r, waits[attempt]));
+    }
+  }
+  console.error('[posta] ⚠️ VIDEO FALLÓ TRAS 4 INTENTOS');
+  return null;
+}
+
+// Resuelve las fotos del spec a rutas reales. {userPhoto:true} se restaura
+// desde el dataUrl (la subida original se borra tras generar).
+function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
+  const cleanups = [];
+  const resolved = specPosts.map((p) => {
+    const ph = p.photo;
+    if (ph && typeof ph === 'object' && ph.userPhoto) {
+      const m = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(String(userPhotoDataUrl || ''));
+      if (!m) throw new Error('No encontramos tu foto original');
+      const tmp = path.join(os.tmpdir(), `posta-reup-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${m[2] === 'jpeg' ? 'jpg' : m[2]}`);
+      fs.writeFileSync(tmp, Buffer.from(m[3], 'base64'));
+      cleanups.push(tmp);
+      return { ...p, photo: tmp };
+    }
+    // data URL persistida en el spec (foto subida en un rediseño anterior)
+    if (typeof ph === 'string' && ph.startsWith('data:image/')) {
+      const m = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(ph);
+      if (m) {
+        const tmp = path.join(os.tmpdir(), `posta-redata-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${m[2] === 'jpeg' ? 'jpg' : m[2]}`);
+        fs.writeFileSync(tmp, Buffer.from(m[3], 'base64'));
+        cleanups.push(tmp);
+        return { ...p, photo: tmp };
+      }
+    }
+    return p;
+  });
+  return { resolved, cleanups };
+}
+
+async function generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count }) {
+  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, accent, btn, count });
+  const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
+  const cat = CATEGORIES.includes(category) ? category : 'otro';
+
+  // Las fotos del spec guardado usan marcador para la subida del usuario
+  // (el tmp se borra); las de stock son rutas estables.
+  const savedSpec = {
+    posts: specPosts,
+    styles: spec.styles,
+    photos: spec.photos,
+    videoIdx, count: n,
+  };
+  // En generación inicial photoPath existe: lo inyectamos directo.
+  const withPhotos = specPosts.map((p) => (
+    (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
+  ));
+  const { bufs, runDir } = await renderSpecPngs(withPhotos, { accent, btn });
+  try {
     const made = topics.map((t, i) => {
-      const buf = fs.readFileSync(path.join(runDir, `post-${i}.png`));
       let caption = t.caption.split('{BIZ}').join(business);
       if (i === 0 && goalLine) caption += goalLine;
       if (tone === 'tu') caption = toTu(caption);
       return {
-        image: 'data:image/png;base64,' + buf.toString('base64'),
+        image: 'data:image/png;base64,' + bufs[i].toString('base64'),
         caption,
         hashtags: demoHashtags(cat, country, tone),
       };
     });
 
     // El 3er posteo sale como video (el diseño del medio, animado con zoom suave).
-    // El video es el momento "wow" de la semana: si el render falla, se reintenta
-    // con backoff antes de caer al fallback de imagen. Si igual falla, se registra
-    // con un log bien visible (nunca en silencio).
-    const videoIdx = Math.min(2, n - 1);
-    let videoB64 = null;
-    const videoWaits = [1500, 3000, 6000];
-    for (let attempt = 0; attempt < 4 && !videoB64; attempt++) {
-      try {
-        const vbuf = await renderDemoVideo(path.join(runDir, `post-${videoIdx}.png`), runDir, videoIdx);
-        videoB64 = vbuf.toString('base64');
-      } catch (e) {
-        console.error('[posta] Video de la demo falló (intento ' + (attempt + 1) + '/4):', e.message);
-        if (attempt < 3) await new Promise((r) => setTimeout(r, videoWaits[attempt]));
-      }
-    }
-    if (!videoB64) console.error('[posta] ⚠️ VIDEO FALLÓ TRAS 4 INTENTOS — la semana sale sin video (fallback a imagen)');
+    const vbuf = bufs[videoIdx];
+    const vpath = path.join(runDir, `post-${videoIdx}.png`);
+    fs.writeFileSync(vpath, vbuf);
+    const videoB64 = await renderVideoB64(vpath, runDir, videoIdx);
 
-    return made.map((m, i) => (
+    const posts = made.map((m, i) => (
       i === videoIdx && videoB64
         ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags }
         : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags }
     ));
+    return { posts, spec: savedSpec };
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
   }
 }
 
-// Paleta curada por rubro [acento, botón]: el visitante ya no sube nada,
-// Posta elige automáticamente una paleta profesional pensada para su rubro.
+// Rediseño de la prueba: re-renderiza los posteos del spec guardado con
+// nuevos colores y/o nuevas fotos, SIN tocar textos ni diseños.
+// colors: {accent, btn} (re-render completo). photoOverrides: [{index, photo}]
+// donde photo es ruta de stock o dataUrl subido. Devuelve imágenes nuevas.
+async function redesignDemo({ spec, colors, photoOverrides, userPhotoDataUrl }) {
+  if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
+  if (!spec || !Array.isArray(spec.posts) || !spec.posts.length) throw new Error('Sin diseño guardado');
+  const n = spec.posts.length;
+  const idxs = photoOverrides && photoOverrides.length
+    ? [...new Set(photoOverrides.map((o) => o.index).filter((i) => Number.isInteger(i) && i >= 0 && i < n))]
+    : spec.posts.map((_, i) => i); // sin overrides = todos (recolor)
+  if (!idxs.length) throw new Error('Nada para rediseñar');
+
+  const { resolved, cleanups } = resolveSpecPhotos(spec.posts, userPhotoDataUrl);
+  const tmpUploads = [];
+  try {
+    const sub = idxs.map((i) => {
+      let p = { ...resolved[i] };
+      const ov = (photoOverrides || []).find((o) => o.index === i);
+      if (ov && ov.photo) {
+        const ph = String(ov.photo);
+        const m = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(ph);
+        if (m) {
+          const tmp = path.join(os.tmpdir(), `posta-reph-${Date.now()}-${i}-${crypto.randomBytes(4).toString('hex')}.${m[2] === 'jpeg' ? 'jpg' : m[2]}`);
+          fs.writeFileSync(tmp, Buffer.from(m[3], 'base64'));
+          tmpUploads.push(tmp);
+          p.photo = tmp;
+        } else if (fs.existsSync(ph)) {
+          p.photo = ph;
+        }
+      }
+      return p;
+    });
+    const { bufs, runDir } = await renderSpecPngs(sub, colors || {});
+    try {
+      const images = bufs.map((b) => 'data:image/png;base64,' + b.toString('base64'));
+      let video = null;
+      const vIdx = idxs.indexOf(spec.videoIdx);
+      if (vIdx >= 0) {
+        const vpath = path.join(runDir, `post-${vIdx}.png`);
+        fs.writeFileSync(vpath, bufs[vIdx]);
+        const b64 = await renderVideoB64(vpath, runDir, vIdx);
+        if (b64) video = 'data:video/mp4;base64,' + b64;
+      }
+      return { idxs, images, videoIdx: spec.videoIdx, video };
+    } finally {
+      try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
+    }
+  } finally {
+    for (const f of [...cleanups, ...tmpUploads]) { try { fs.unlinkSync(f); } catch (_) {} }
+  }
+}
+
+// Opciones de fotos "nuestras" para cambiar la foto de un posteo de la prueba:
+// devuelve URLs públicas del pool del rubro (excluye las ya usadas).
+function trialPhotoOptions(category, business, excludeFams, n) {
+  const cat = CATEGORIES.includes(category) ? category : 'otro';
+  let pool = (cat === 'gastronomia' && isCafeBusiness(business))
+    ? CAFE_POOL.slice()
+    : (CATEGORY_PHOTOS[cat] || CATEGORY_PHOTOS.otro).slice();
+  const excl = new Set(excludeFams || []);
+  pool = pool.filter((f) => !excl.has(f));
+  // Si quedan pocas (pool chico como el de café), completar con el pool general del rubro
+  const want = n || 8;
+  if (pool.length < Math.min(4, want)) {
+    const extra = (CATEGORY_PHOTOS[cat] || CATEGORY_PHOTOS.otro).slice()
+      .filter((f) => !excl.has(f) && !pool.includes(f));
+    pool = pool.concat(extra);
+  }
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, want).map((fam) => ({ fam, url: '/demo-stock/' + fam + '.webp' }));
+}
 const CATEGORY_COLORS = {
   moda: ['#232323', '#F0B429'],
   gastronomia: ['#8B2E2E', '#F2A93B'],
@@ -1174,6 +1310,8 @@ module.exports = {
   checkRateLimit,
   clientIp,
   generateDemo,
+  redesignDemo,
+  trialPhotoOptions,
   toTu,
   demoHashtags,
   DEMO_TOPICS,

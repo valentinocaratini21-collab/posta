@@ -1311,7 +1311,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
       photoPath = path.join(os.tmpdir(), `posta-demo-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
       fs.writeFileSync(photoPath, file.buffer);
     }
-    const posts = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn });
+    const { posts } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn });
     res.json({ ok: true, posts, remaining: rl.remaining });
   } catch (e) {
     console.error('[posta] Error en demo pública:', e.message);
@@ -1434,7 +1434,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     }
     // 6 ideas pensadas para SU negocio + semana Pro: 5 posteos (4 imágenes + 1 video)
     const ideas = await generateIdeas({ business, category, tone, description: goal, competitors }, null);
-    const posts = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count: 5 });
+    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count: 5 });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -1450,6 +1450,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       ig_pic: igPic, ig_name: igName,
       ideas: ideas.slice(0, 6),
       posts,
+      design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
       week: buildTrialWeek(posts.length),
       screenshot,
       spots_left: spotsLeft(),
@@ -1560,6 +1561,122 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     console.error('[posta] trial chat:', e.message);
     res.status(500).json({ error: 'No pude procesar tu pedido. Probá de nuevo 🙂' });
   }
+});
+
+// ---------- Rediseño de la prueba: colores y fotos ----------
+// Re-renderiza los posteos con los colores EXACTOS de la marca del cliente
+// y/o nuevas fotos (subidas por él o elegidas de nuestras opciones).
+// No toca textos: el diseño y los posteos se mantienen, solo cambia lo pedido.
+const TRIAL_REDESIGN_LIMIT = 5; // rediseños por día por IP (render es costoso)
+try { db.exec('CREATE TABLE IF NOT EXISTS trial_redesign_usage (ip TEXT, day TEXT, count INTEGER DEFAULT 0, PRIMARY KEY (ip, day))'); } catch (e) {}
+function trialRedesignAllowed(ip) {
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    if (Math.random() < 0.05) db.exec(`DELETE FROM trial_redesign_usage WHERE day < date('now', '-7 days')`);
+    const row = db.prepare('SELECT count FROM trial_redesign_usage WHERE ip = ? AND day = ?').get(ip, day);
+    if (row && row.count >= TRIAL_REDESIGN_LIMIT) return false;
+    db.prepare('INSERT INTO trial_redesign_usage (ip, day, count) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET count = count + 1').run(ip, day);
+    return true;
+  } catch (e) { return true; }
+}
+const cleanHex6 = (v) => {
+  const h = String(v || '').trim().replace(/^#/, '');
+  return /^[0-9a-fA-F]{6}$/.test(h) ? '#' + h.toUpperCase() : null;
+};
+app.post('/api/trial/redesign', express.json({ limit: '12mb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  const { ig, colors, photos } = req.body || {};
+  const igKey = String(ig || '').trim().replace(/^@/, '').toLowerCase();
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  let newColors = null;
+  if (colors) {
+    const accent = cleanHex6(colors.accent), btn = cleanHex6(colors.btn);
+    if (!accent || !btn) return res.status(400).json({ error: 'Colores inválidos' });
+    newColors = { accent, btn };
+  }
+  const photoOverrides = [];
+  if (Array.isArray(photos)) {
+    for (const o of photos.slice(0, 5)) {
+      const index = parseInt(o && o.index, 10);
+      const ph = String((o && o.photo) || '');
+      if (!Number.isInteger(index) || index < 0 || index >= 5 || !ph) continue;
+      const dm = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(ph);
+      if (dm) {
+        if (ph.length > 8 * 1024 * 1024) continue;
+        photoOverrides.push({ index, photo: ph });
+        continue;
+      }
+      const sm = /^\/demo-stock\/([a-z0-9_-]+)\.webp$/i.exec(ph);
+      if (sm) {
+        const fp = path.join(__dirname, 'public', 'demo-stock', sm[1] + '.webp');
+        if (fs.existsSync(fp)) photoOverrides.push({ index, photo: fp });
+      }
+    }
+  }
+  if (!newColors && !photoOverrides.length) return res.status(400).json({ error: 'Nada para cambiar' });
+  if (!trialRedesignAllowed(ip)) return res.status(429).json({ error: 'redesign_limit' });
+  const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
+  if (!hit) return res.status(404).json({ error: 'No encontramos tu semana. Generala de nuevo 🙂' });
+  let out;
+  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'No pudimos leer tu semana' }); }
+  if (!out.design || !Array.isArray(out.design.posts) || !out.design.posts.length) {
+    return res.status(400).json({ error: 'Tu semana es de una versión anterior: generala de nuevo para usar colores y fotos 🙂' });
+  }
+  try {
+    const t0 = Date.now();
+    const r = await demo.redesignDemo({
+      spec: out.design,
+      colors: newColors || { accent: out.accent, btn: out.btn },
+      photoOverrides: photoOverrides.length ? photoOverrides : null,
+      userPhotoDataUrl: out.screenshot || null,
+    });
+    r.idxs.forEach((postIdx, k) => {
+      const p = out.posts[postIdx];
+      if (!p) return;
+      if (postIdx === r.videoIdx && r.video) {
+        p.type = 'video';
+        p.video = r.video;
+        delete p.image;
+      } else {
+        p.type = 'image';
+        p.image = r.images[k];
+        delete p.video;
+      }
+    });
+    // Persistir la selección de fotos en el spec: un recolor posterior no debe
+    // restaurar la foto anterior. dataURL = subida del usuario (va en el cache),
+    // ruta absoluta = foto de stock (estable).
+    for (const o of photoOverrides) {
+      const sp = out.design.posts[o.index];
+      if (!sp) continue;
+      if (typeof o.photo === 'string' && o.photo.startsWith('data:image/')) {
+        sp.photo = o.photo;
+      } else if (typeof o.photo === 'string' && o.photo.startsWith('/')) {
+        sp.photo = o.photo;
+      }
+    }
+    if (newColors) { out.accent = newColors.accent; out.btn = newColors.btn; }
+    try { db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(JSON.stringify(out), igKey); } catch (e) {}
+    const video_ok = out.posts.some((p) => p && p.type === 'video' && p.video);
+    res.json({ ok: true, posts: out.posts, design: out.design, accent: out.accent, btn: out.btn, video_ok, gen_ms: Date.now() - t0 });
+  } catch (e) {
+    console.error('[posta] trial redesign:', e.message);
+    res.status(500).json({ error: 'No pudimos aplicar el cambio. Probá de nuevo 🙂' });
+  }
+});
+
+// Opciones de fotos nuestras para un posteo (del pool del rubro, sin las ya usadas)
+app.get('/api/trial/photo-options', (req, res) => {
+  const igKey = String(req.query.ig || '').trim().replace(/^@/, '').toLowerCase();
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
+  if (!hit) return res.status(404).json({ error: 'No encontramos tu semana' });
+  let out;
+  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'Error' }); }
+  const used = ((out.design && out.design.photos) || [])
+    .filter((p) => typeof p === 'string')
+    .map((p) => p.split('/').pop().replace(/\.webp$/i, ''));
+  res.json({ ok: true, options: demo.trialPhotoOptions(out.category, out.business, used, 8) });
 });
 
 // ---------- Health ----------
