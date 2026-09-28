@@ -224,7 +224,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <div class="pill">Tu equipo de marketing en automático <b>🇦🇷</b></div>
     <h1>Vos vendé. <span class="hl">Nosotros posteamos.</span></h1>
-    <p class="sub"><b>Nosotros nos encargamos de todo.</b> Con un clic armás tu semana; vos la revisás y se publica sola en tu Instagram.</p>
+    <p class="sub"><b>Nosotros nos encargamos de todo.</b> Con un clic armamos tu semana; vos la revisás y se publica sola en tu Instagram.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
       <a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a>
@@ -257,7 +257,7 @@ function landingView(cfg) {
   </div></div>
   <div class="sample-banner"><div class="wrap">
     <div class="sample-txt"><b>🎁 Tu semana de posteos GRATIS</b><span>La armamos por vos en 1 minuto, con tu negocio real. Sin registro.</span></div>
-    <a class="btn btn-primary" href="/prueba">Armar mi semana gratis</a>
+    <a class="btn btn-primary" href="/prueba">Armemos tu semana gratis</a>
   </div></div>
   <div class="pz-trialband"><div class="wrap">
     <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armamos tus ideas + tu semana en 1 minuto. Sin registro.</span></div>
@@ -997,7 +997,7 @@ function checklistHTML(postsCount){
     <div class="check-steps">
       ${step(s1, 1, 'Contanos tu negocio', 'Unos 2 minutos, una sola vez.', '<a class="btn btn-soft btn-sm" href="#/app/ajustes">Completar</a>')}
       ${step(s2, 2, 'Conectá tu Instagram', 'Dejá tu semana lista para publicar.', '<button class="btn btn-primary btn-sm" data-ig-connect>Conectar Instagram</button>')}
-      ${step(s3, 3, 'Creá tu primer posteo', 'O armá tu semana en 1 tap.', '<a class="btn btn-soft btn-sm" href="#/app/crear">Crear posteo</a>')}
+      ${step(s3, 3, 'Creá tu primer posteo', 'O armamos tu semana en 1 tap.', '<a class="btn btn-soft btn-sm" href="#/app/crear">Crear posteo</a>')}
     </div>
   </div>`;
 }
@@ -1005,7 +1005,7 @@ function recCardHTML(ideas, posts, ppw){
   const drafts = posts.filter(p => p.status === 'draft');
   if (drafts.length) return `<div class="card rec-card">
       <div class="rec-tag">📋 Tu semana</div>
-      <h3>Tenés ${drafts.length} ${drafts.length === 1 ? 'borrador' : 'borradores'} para revisar</h3>
+      <h3>Preparamos ${drafts.length} ${drafts.length === 1 ? 'borrador' : 'borradores'} para que revises</h3>
       <p>Mirá cada posteo, editá lo que quieras y programá la semana cuando esté lista 👇</p>
     </div>`;
   const ws = weekStartMonday(new Date());
@@ -1014,7 +1014,7 @@ function recCardHTML(ideas, posts, ppw){
   if (!missing) return `<div class="card rec-card rec-done">
       <div class="rec-tag">✨ Esta semana</div>
       <h3>Tu semana está completa ✅</h3>
-      <p>Tenés ${inWeek.length} ${inWeek.length === 1 ? 'posteo' : 'posteos'} programados o publicados (${ppw}/semana en tu plan). La próxima recomendación llega el lunes. 🚀</p>
+      <p>Ya dejamos ${inWeek.length} ${inWeek.length === 1 ? 'posteo' : 'posteos'} programados o publicados (${ppw}/semana en tu plan). La próxima recomendación llega el lunes. 🚀</p>
     </div>`;
   if (!ideas.length) return `<div class="card rec-card">
       <div class="rec-tag">✨ Tu próximo posteo</div>
@@ -1029,7 +1029,7 @@ function recCardHTML(ideas, posts, ppw){
     <div class="rec-tag">✨ Tu próximo posteo recomendado</div>
     <h3>${esc(idea.titulo)}</h3>
     ${idea.angulo ? `<p>${esc(idea.angulo)}</p>` : ''}
-    <div class="rec-meta"><span class="badge b-scheduled">${esc(idea.formato || 'Post')}</span><span>📅 Te faltan ${missing} de ${ppw} esta semana</span></div>
+    <div class="rec-meta"><span class="badge b-scheduled">${esc(idea.formato || 'Post')}</span><span>📅 Nos faltan ${missing} de ${ppw} esta semana</span></div>
     <button class="btn btn-primary" data-rec-idea="${idx}">${isVideo ? '🎬 Crear este video' : 'Crear este posteo'} →</button>
   </div>`;
 }
@@ -1047,7 +1047,7 @@ function autopilotCardHTML() {
       <select id="apCount" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
       </select>
-      <button class="btn btn-primary" id="btnAutopilot">⚡ Armar mi semana</button>
+      <button class="btn btn-primary" id="btnAutopilot">⚡ Armemos tu semana</button>
     </div>
     <div id="apProg" style="margin-top:16px"></div>
   </div>`;
@@ -1669,7 +1669,7 @@ async function ideasView() {
   ${IDEAS.length ? '' : `
   <div class="card" id="ideasEmpty"><div class="empty"><div class="big">💡</div>
       Todavía no generamos ideas para tu negocio.<br>
-      <span style="font-size:14px">Tocá "⚡ Armar mi semana" acá arriba 👆 o charlalo con el consultor</span>
+      <span style="font-size:14px">Tocá "⚡ Armemos tu semana" acá arriba 👆 o charlalo con el consultor</span>
   </div></div>`}
   ${drafts.length ? reviewCardHTML(drafts) : ''}
   <div id="ideasMsg"></div>`;
@@ -1795,7 +1795,7 @@ async function runAutopilot(n) {
     const existing = await api.get('/api/posts');
     const oldDrafts = existing.filter(p => p.status === 'draft');
     if (oldDrafts.length) {
-      const ok = confirm(`Tenés ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazo por una semana nueva?`);
+      const ok = confirm(`Hay ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazamos por una semana nueva?`);
       if (!ok) { btn.disabled = false; return; }
       for (const d of oldDrafts) { try { await api.delete('/api/posts/' + d.id); } catch (e) {} }
     }
@@ -2468,7 +2468,7 @@ async function semanaView() {
   return `${head}
   ${drafts > 0 ? `
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
-    <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenés ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
+    <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenemos ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
     <p>De tu prueba gratis — revisalos y programalos con un clic. Nada sale sin tu OK.</p></div></div>
     <a class="btn btn-primary btn-block" href="#/app/calendario" style="margin-top:12px">Revisar y programar →</a>
   </div>` : ''}
@@ -2477,10 +2477,10 @@ async function semanaView() {
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
     ${w.missing
       ? (drafts > 0
-        ? `<p class="sem-msg">Completá tu semana programando tus borradores.</p>
+        ? `<p class="sem-msg">Completemos la semana programando tus borradores.</p>
            <a class="btn btn-primary btn-block" href="#/app/calendario" style="margin-top:12px">Revisar borradores →</a>`
-        : `<p class="sem-msg">Te ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar tu semana.</p>
-           <a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armar mi semana</a>`)
+        : `<p class="sem-msg">Nos ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar la semana.</p>
+           <a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armemos tu semana</a>`)
       : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
          <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
@@ -2518,9 +2518,9 @@ async function calendarView() {
   const drafts = await api.get('/api/posts?status=draft');
   const all = [...posts, ...drafts];
   const head = `<div class="page-head"><div class="ph-ico">📅</div><div class="ph-txt"><h1>Calendario</h1><p class="sub">Tus próximos posteos. Se publican solos a la hora indicada.</p></div></div>`;
-  if (!all.length) return head + `<div class="empty"><div class="big">📭</div>No tenés posteos programados.<br><br><a class="btn btn-primary" href="#/app/ideas" data-goto-autopilot>⚡ Armar mi semana</a><div style="margin-top:12px"><a href="#/app/crear" class="mut" style="font-size:14px">o crear un posteo suelto →</a></div></div>`;
+  if (!all.length) return head + `<div class="empty"><div class="big">📭</div>Todavía no armamos tus posteos.<br><br><a class="btn btn-primary" href="#/app/ideas" data-goto-autopilot>⚡ Armemos tu semana</a><div style="margin-top:12px"><a href="#/app/crear" class="mut" style="font-size:14px">o crear un posteo suelto →</a></div></div>`;
   const nextLine = posts.length ? `<p class="cal-next">📍 Próximo posteo: <b>${relDay(posts[0].scheduled_at)}</b> — sale solo, no tenés que hacer nada.</p>` : '';
-  const draftNudge = drafts.length ? `<p class="cal-draft-nudge">✏️ Tenés ${drafts.length === 1 ? '1 borrador' : `${drafts.length} borradores`} sin fecha — poneles día y hora abajo para que salgan solos.</p>` : '';
+  const draftNudge = drafts.length ? `<p class="cal-draft-nudge">✏️ Dejamos ${drafts.length === 1 ? '1 borrador' : `${drafts.length} borradores`} sin fecha — poneles día y hora abajo para que salgan solos.</p>` : '';
   return head + nextLine + draftNudge
   + all.map(p => postItem(p, `
       ${sigBtns(p)}
@@ -2600,7 +2600,7 @@ function ajustesView() {
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
-      <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
+      <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
     </div>
   </div></div>
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
@@ -2635,7 +2635,7 @@ function ajustesView() {
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
-      <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
+      <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
@@ -3950,7 +3950,7 @@ function bindSettings() {
       ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">📋 Copiar mensaje</button></div>`).join('')}</div>` : ''}
       ${info.discount_active
         ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
-        : `<p style="font-size:14px">${missing === 1 ? 'Te falta <b>1</b> referido' : `Te faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
+        : `<p style="font-size:14px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
       <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
       <span id="pzRefMsg" style="font-size:13px"></span>`;
     const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
