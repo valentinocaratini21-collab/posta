@@ -851,3 +851,17 @@ textarea.in{resize:vertical;min-height:96px}
 .pz-offline h2{font-size:24px;color:var(--txt);margin:12px 0 6px}
 .pz-offline p{color:var(--mut);font-size:15px;line-height:1.5}
 
+
+/* Tabla comparativa Posta vs. agencia */
+.cmp-table{margin:26px auto 8px;max-width:720px;border-radius:18px;overflow:hidden;border:1px solid #e3edf5;background:#fff;box-shadow:0 10px 30px rgba(10,30,51,.07)}
+.cmp-row{display:grid;grid-template-columns:1.15fr 1fr 1fr;align-items:stretch}
+.cmp-row>div{padding:13px 12px;font-size:14px;line-height:1.4;border-bottom:1px solid #eef3f8;color:var(--mut)}
+.cmp-row:last-child>div{border-bottom:none}
+.cmp-row .crit{font-weight:700;color:var(--txt);background:#f7fafd}
+.cmp-row .win{background:#eaf6fd;font-weight:700;color:#0A1E33}
+.cmp-row.cmp-head>div{background:#0A1E33;color:#fff;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.4px;border-bottom:none;padding:14px 12px}
+.cmp-row.cmp-head .win{background:#2793C8;color:#fff}
+@media(max-width:560px){
+  .cmp-row>div{padding:10px 8px;font-size:12.5px}
+  .cmp-row.cmp-head>div{font-size:11px}
+}

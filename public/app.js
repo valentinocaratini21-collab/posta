@@ -365,6 +365,20 @@ function landingView(cfg) {
     <p class="unico-line">Somos el único servicio argentino 100% done-for-you para Instagram.</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
+  <div class="section" id="vs-agencia"><div class="wrap" style="max-width:860px">
+    <h2>Posta vs. agencia de marketing</h2>
+    <p class="lede">Lo mismo que te promete una agencia, sin todo lo que odiás de las agencias.</p>
+    <div class="cmp-table" role="table" aria-label="Comparación Posta vs agencia">
+      <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posta</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $39.900</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">Minutos</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
+    </div>
+    <p class="unico-line">Las agencias te venden reuniones. Nosotros te entregamos la semana hecha.</p>
+    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
+  </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Sin letra chica. Cancelá cuando quieras.</p>
