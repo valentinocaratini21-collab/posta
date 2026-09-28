@@ -620,6 +620,13 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 #multiBar .btn{min-height:48px;flex-shrink:0}
 #multiCount{font-weight:700;font-size:15px}
 .modal-ov{position:fixed;inset:0;background:rgba(10,30,51,.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+/* Rachas 🔥 */
+.streak-pill{margin-left:auto;align-self:center;background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:9px 15px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(254,193,77,.4);white-space:nowrap}
+.streak-pill:active{transform:scale(.95)}
+.social-proof{margin:-6px 0 18px;padding:12px 16px;border-radius:12px;background:#F2F9FD;border:1px solid var(--line);color:var(--mut);font-size:14px;text-align:center;line-height:1.5}
+.streak-celeb{text-align:center;padding:6px 4px}
+.streak-celeb .big-emoji{font-size:76px;line-height:1}
+.streak-celeb .warn{background:#FFF9EC;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;font-size:14px;color:#7a5f14;margin:12px 0;line-height:1.5}
 .modal-card{background:#fff;border-radius:20px;padding:22px;max-width:560px;width:100%;max-height:88vh;overflow:auto}
 .modal-card h3{margin-bottom:4px;color:var(--txt)}
 .modal-actions{display:flex;gap:10px;margin-top:16px}

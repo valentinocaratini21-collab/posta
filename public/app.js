@@ -640,8 +640,10 @@ function defaultPal() { return 0; }
 const PALETTES = BASE_PALETTES; // compat: usar getPalettes() para la lista efectiva
 
 // Saca los N colores dominantes de una imagen (se usa para autocompletar
-// los colores de marca desde el logo que sube el cliente). Filtra fondos
-// blancos/negros y grises para quedarse con los colores reales de la marca.
+// los colores de marca desde el logo que sube el cliente).
+// Regla: el FONDO del logo nunca es el principal. El color más frecuente de
+// toda la imagen suele ser el fondo → va como acento (si es un color real).
+// El principal es el color más fuerte del logo en sí (el "logo literal").
 function extractTopColors(img, n) {
   const cw = 120, chh = 120;
   const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh;
@@ -650,22 +652,47 @@ function extractTopColors(img, n) {
   const w = img.naturalWidth * s, h = img.naturalHeight * s;
   cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, chh);
   cx.drawImage(img, (cw - w) / 2, (chh - h) / 2, w, h);
+  const dx = (cw - w) / 2, dy = (chh - h) / 2;
+  const inLogo = (x, y) => x >= dx && x < dx + w && y >= dy && y < dy + h; // sin letterbox
   const d = cx.getImageData(0, 0, cw, chh).data;
+  const key = (r, g, b) => [r >> 5, g >> 5, b >> 5].join(',');
+  const isNeutral = (r, g, b) => {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    return (mx - mn < 28) || (mx > 242 && mn > 225) || (mx < 24); // grises, blancos, negros
+  };
+  // 1) Fondo = el color más frecuente del ÁREA DEL LOGO (incluye neutros)
+  const all = {};
+  for (let y = 0; y < chh; y += 2) {
+    for (let x = 0; x < cw; x += 2) {
+      if (!inLogo(x, y)) continue;
+      const i = (y * cw + x) * 4;
+      const k = key(d[i], d[i + 1], d[i + 2]);
+      all[k] = (all[k] || 0) + 1;
+    }
+  }
+  const sorted = Object.entries(all).sort((a, b) => b[1] - a[1]);
+  if (!sorted.length) return [];
+  const bgKey = sorted[0][0];
+  const toHex = (v) => Math.round(v * 32 + 16).toString(16).padStart(2, '0').toUpperCase();
+  const hexOf = (k) => '#' + k.split(',').map(Number).map(toHex).join('');
+  const [br, bgg, bb] = bgKey.split(',').map(v => Number(v) * 32 + 16);
+  const bgIsReal = !isNeutral(br, bgg, bb);
+  // 2) Principal y secundario: colores cromáticos que NO son el fondo
   const buckets = {};
   for (let y = 0; y < chh; y += 2) {
     for (let x = 0; x < cw; x += 2) {
+      if (!inLogo(x, y)) continue;
       const i = (y * cw + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-      if (mx - mn < 28) continue;              // grises
-      if (mx > 242 && mn > 225) continue;      // blancos (fondos de logo)
-      if (mx < 24) continue;                   // negros
-      const key = [r >> 5, g >> 5, b >> 5].join(',');
-      buckets[key] = (buckets[key] || 0) + 1;
+      const k = key(r, g, b);
+      if (k === bgKey) continue;          // el fondo no compite por ser principal
+      if (isNeutral(r, g, b)) continue;   // grises/blancos/negros
+      buckets[k] = (buckets[k] || 0) + 1;
     }
   }
-  const toHex = (v) => Math.round(v * 32 + 16).toString(16).padStart(2, '0').toUpperCase();
-  return Object.entries(buckets).sort((a, b) => b[1] - a[1]).slice(0, n || 3)
-    .map(([k]) => '#' + k.split(',').map(Number).map(toHex).join(''));
+  const ranked = Object.entries(buckets).sort((a, b) => b[1] - a[1]).map(([k]) => hexOf(k));
+  // 3) El fondo (si es un color real, ej. navy de fitswapp) va como acento
+  const out = bgIsReal ? [ranked[0], ranked[1], hexOf(bgKey)].filter(Boolean) : ranked;
+  return out.slice(0, n || 3);
 }
 function loadImageFile(file) {
   return new Promise((res, rej) => {
@@ -1773,22 +1800,17 @@ function ideasList(posts) {
     const words = norm(title).split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !STOP.has(w));
     return words.length > 0 && words.filter(w => hay.includes(' ' + w)).length >= 2;
   };
-  return `
-  <div class="card">
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <h3 style="margin:0">Ideas creadas para vos (${IDEAS.length})</h3>
-      <button class="btn btn-ghost btn-sm" id="btnRegenIdeas">↻ Regenerar</button>
-    </div>
-    ${IDEAS.map((idea, i) => {
+  // Las ideas que ya posteaste ni se muestran: solo ves ideas frescas para actuar.
+  // Se conserva el índice original porque los botones lo usan contra IDEAS.
+  const fresh = IDEAS.map((idea, i) => ({ idea, i })).filter(({ idea }) => !alreadyPosted(idea.titulo));
+  const listHtml = fresh.length ? fresh.map(({ idea, i }) => {
       const isVideo = /reel|video/i.test(idea.formato || '');
-      const posted = alreadyPosted(idea.titulo);
       return `
     <div class="post-item" style="align-items:flex-start">
       <div class="info">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
           <span class="badge b-scheduled">${esc(idea.formato)}</span>
           <b style="font-size:15px">${esc(idea.titulo)}</b>
-          ${posted ? `<span class="badge" style="background:#FFF3D6;color:#8a6d1a;border:1px solid #FEC14D" title="Ya publicaste sobre este tema">📌 Ya lo posteaste</span>` : ''}
         </div>
         <div class="cap" style="white-space:normal;line-height:1.6">${esc(idea.angulo)}</div>
       </div>
@@ -1797,7 +1819,15 @@ function ideasList(posts) {
         <button class="btn btn-soft btn-sm" data-idea="${i}">Crear post →</button>
         <button class="btn btn-ghost btn-sm" data-discard="${i}" title="Descartar esta idea">✕</button>
       </div>
-    </div>`; }).join('')}
+    </div>`; }).join('')
+    : `<div class="empty"><div class="big">🎉</div>Ya cubriste todas estas ideas.<br><span style="font-size:14px">Tocá "↻ Regenerar" para ideas nuevas o charlalo con el consultor</span></div>`;
+  return `
+  <div class="card">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="margin:0">Ideas creadas para vos (${fresh.length})</h3>
+      <button class="btn btn-ghost btn-sm" id="btnRegenIdeas">↻ Regenerar</button>
+    </div>
+    ${listHtml}
   </div>`;
 }
 
@@ -1909,9 +1939,13 @@ async function runAutopilot(n, tag) {
     prog.innerHTML = t === 'home'
       ? `<div class="okmsg">📋 ¡Tu semana está lista!</div><a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar mi semana →</a>`
       : `<div class="okmsg">📋 ¡Tu semana está lista!</div>`;
+    // Racha: registrar la semana armada (idempotente por semana)
+    let sk = null;
+    try { sk = await api.post('/api/streak/week-armed', {}); } catch (e) {}
     setTimeout(() => {
       render();
       if (t === 'ideas') setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+      if (sk && sk.newWeek) setTimeout(() => showStreakCelebration(sk), 600);
     }, 900);
   } catch (e) {
     prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
@@ -2523,10 +2557,106 @@ function fmtDay(d) {
   return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+/* ---------- RACHAS 🔥 ---------- */
+function closeStreakModal() { const m = document.getElementById('streakModal'); if (m) m.remove(); }
+function streakModalShell(inner) {
+  closeStreakModal();
+  const ov = document.createElement('div');
+  ov.className = 'modal-ov'; ov.id = 'streakModal';
+  ov.innerHTML = `<div class="modal-card"><div class="streak-celeb">${inner}</div></div>`;
+  ov.addEventListener('click', (e) => { if (e.target === ov) closeStreakModal(); });
+  document.body.appendChild(ov);
+}
+function streakNextTxt(sk) {
+  if (!sk.nextLevel) return `<p class="d">Nivel máximo 👑</p>`;
+  const falta = sk.nextLevel.at - sk.current;
+  return `<p class="d">Te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${esc(sk.nextLevel.emoji)} ${esc(sk.nextLevel.name)}</p>`;
+}
+function streakShareBtns() {
+  return `<button class="btn btn-primary btn-block" id="streakShareBtn" style="margin-top:10px">📤 Compartir mi racha</button>
+  <button class="btn btn-ghost btn-block" id="streakCloseBtn" style="margin-top:8px">Cerrar</button>`;
+}
+function wireStreakModalBtns(sk) {
+  const sh = $('#streakShareBtn'); if (sh) sh.onclick = () => shareStreakImage(sk);
+  const cl = $('#streakCloseBtn'); if (cl) cl.onclick = closeStreakModal;
+}
+// Celebración al completar la semana (festejo especial si subió de nivel)
+function showStreakCelebration(sk) {
+  if (!sk || !sk.current) return;
+  const lv = sk.level || { emoji: '🔥', name: '' };
+  streakModalShell(`
+    <div class="big-emoji">${lv.emoji}</div>
+    <h3 style="margin:12px 0 4px">${sk.leveledUp ? '¡Subiste de nivel!' : '¡Racha en marcha!'}</h3>
+    <p style="font-size:17px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
+    ${streakNextTxt(sk)}
+    ${streakShareBtns()}`);
+  wireStreakModalBtns(sk);
+}
+// Tocar la píldora: detalle de la racha + mejor racha + aviso si se apaga
+function streakPillModal(sk) {
+  if (!sk || !sk.current) return;
+  const lv = sk.level || { emoji: '🔥', name: '' };
+  const warn = sk.expiringSoon
+    ? `<p class="warn">⏳ Tu racha se apaga ${sk.daysLeft === 0 ? 'hoy' : sk.daysLeft === 1 ? 'en 1 día' : `en ${sk.daysLeft} días`} — armá tu semana y seguí sumando.</p>` : '';
+  streakModalShell(`
+    <div class="big-emoji">${lv.emoji}</div>
+    <h3 style="margin:12px 0 4px">${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</h3>
+    <p class="d" style="margin:0 0 4px">Nivel ${esc(lv.name)} · Mejor racha: ${sk.best} ${sk.best === 1 ? 'semana' : 'semanas'}</p>
+    ${streakNextTxt(sk)}
+    ${warn}
+    ${streakShareBtns()}`);
+  wireStreakModalBtns(sk);
+}
+// Insignia opt-in para compartir: imagen "🔥 N semanas con Posta" (tamaño historia)
+function shareStreakImage(sk) {
+  if (!sk || !sk.current) return;
+  const lv = sk.level || { emoji: '🔥', name: '' };
+  const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
+  const c0 = bc[0] || '#2793C8', c1 = bc[1] || '#0A1E33';
+  const cv = document.createElement('canvas'); cv.width = 1080; cv.height = 1920;
+  const x = cv.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 1080, 1920);
+  g.addColorStop(0, c0); g.addColorStop(1, c1);
+  x.fillStyle = g; x.fillRect(0, 0, 1080, 1920);
+  x.textAlign = 'center'; x.fillStyle = '#FFFFFF';
+  x.font = '220px serif'; x.fillText(lv.emoji, 540, 700);
+  x.font = '900 210px -apple-system, Arial, sans-serif'; x.fillText(String(sk.current), 540, 1010);
+  x.font = '700 62px -apple-system, Arial, sans-serif';
+  x.fillText(sk.current === 1 ? 'SEMANA CON POSTA' : 'SEMANAS CON POSTA', 540, 1130);
+  x.globalAlpha = 0.85; x.font = '500 44px -apple-system, Arial, sans-serif';
+  x.fillText('Mi negocio no para ' + lv.emoji, 540, 1240);
+  x.globalAlpha = 0.6; x.font = '500 36px -apple-system, Arial, sans-serif';
+  x.fillText('Hecho con Posta', 540, 1820);
+  x.globalAlpha = 1;
+  cv.toBlob(async (blob) => {
+    if (!blob) return;
+    const file = new File([blob], 'mi-racha-posta.png', { type: 'image/png' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Mi racha con Posta' }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'mi-racha-posta.png'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+}
+
 async function semanaView() {
   let st = null;
   try { st = await api.get('/api/stats/summary'); } catch (e) { st = null; }
-  const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div></div>`;
+  let sk = null, soc = null;
+  try { sk = await api.get('/api/streak'); } catch (e) {}
+  try { soc = await api.get('/api/streak/social'); } catch (e) {}
+  const pill = sk && sk.current > 0 && sk.level
+    ? `<button class="streak-pill" id="streakPill" title="Tu racha">${esc(sk.level.emoji)} ${sk.current}</button>` : '';
+  const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${pill}</div>`;
+  const socialBar = soc && soc.shown
+    ? `<div class="social-proof">🔥 ${soc.count} negocios llevan 15+ días seguidos armando su semana con Posta</div>` : '';
+  const expBanner = sk && sk.expiringSoon ? `
+  <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
+    <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga ${sk.daysLeft === 0 ? 'hoy' : sk.daysLeft === 1 ? 'en 1 día' : `en ${sk.daysLeft} días`}</h3>
+    <p>Armá tu semana antes del domingo y la racha sigue viva. <a href="#/app/ideas">Armar mi semana →</a></p></div></div>
+  </div>` : '';
   if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
   const ws = new Date(w.start + 'T12:00:00'), we = new Date(w.end + 'T12:00:00');
@@ -2567,12 +2697,14 @@ async function semanaView() {
   const drafts = (w.by_status && w.by_status.draft) || 0;
 
   return `${head}
+  ${socialBar}
   ${drafts > 0 ? `
   <div class="card" id="draftsBanner" style="border:1.5px solid #FEC14D;background:#FFF9EC">
     <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenemos ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
     <p>De tu prueba gratis — revisalos y programalos con un clic. Nada sale sin tu OK.</p></div></div>
     <a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar y programar →</a>
   </div>` : ''}
+  ${expBanner}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
@@ -2608,6 +2740,10 @@ function bindSemana() {
   bindSignalBtns();
   bindAutopilot();
   bindChat();
+  const sp = $('#streakPill');
+  if (sp) sp.onclick = async () => {
+    try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
+  };
   $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
   $$('[data-nudge]').forEach(b => b.onclick = () => {
     const n = SEM_NUDGES[+b.dataset.nudge];
@@ -4101,6 +4237,24 @@ function bindSettings() {
   // Marca
   const bBlog = $('#btnBrandLogo');
   if (bBlog) bBlog.onclick = () => $('#s_logofile').click();
+  // Si el creador ya tenía 6 opciones generadas, las regenera con los colores
+  // nuevos para que el cambio se vea al instante (cero pasos extra).
+  async function refreshCreatorWithNewColors(msgEl) {
+    try {
+      const cc = (typeof CREATOR !== 'undefined' && CREATOR) || null;
+      if (!cc || !Array.isArray(cc.options) || cc.options.length !== 6 || !cc.topic) return false;
+      if (msgEl) msgEl.innerHTML = '<span style="font-size:14px;color:var(--cel)">🎨 Actualizando tus diseños…</span>';
+      const out = await api.post('/api/creator/options', { topic: cc.topic, productPhoto: cc.productPhoto || undefined });
+      if (out && Array.isArray(out.options) && out.options.length === 6) {
+        cc.options = out.options; cc.detected = out.detected || null;
+        cc.recommendedIndex = out.recommendedIndex || 0;
+        cc.recommendedReason = out.recommendedReason || '';
+        cc.selected = []; cc.cardPhoto = {};
+        return true;
+      }
+    } catch (e) { /* no bloquea el guardado */ }
+    return false;
+  }
   const slf = $('#s_logofile');
   if (slf) slf.onchange = async () => {
     const orig = slf.files[0]; slf.value = '';
@@ -4116,6 +4270,8 @@ function bindSettings() {
         if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
       } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
+      const refreshed = await refreshCreatorWithNewColors($('#brandMsg'));
+      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:14px;color:var(--cel)">✅ Colores actualizados en tus diseños</span>';
       render();
     }
     catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`; }
@@ -4213,9 +4369,12 @@ function bindSettings() {
     const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
     if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
     await api.put('/api/settings', { brand_colors: colors });
-    $('#brandMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
+    const brandMsgEl = $('#brandMsg');
+    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
     brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
     SETTINGS = await api.get('/api/settings');
+    if (await refreshCreatorWithNewColors(brandMsgEl))
+      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada — diseños actualizados</span>';
   };
   $('#btnSaveSettings').onclick = async () => {
     await api.put('/api/settings', {
