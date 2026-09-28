@@ -832,3 +832,14 @@ textarea.in{resize:vertical;min-height:96px}
   .pz-ba-grid span{border-radius:8px}
   .pz-ba-arrow{transform:none;font-size:24px}
 }
+
+/* ---------- PWA install modal (paso a paso visual) ---------- */
+.pz-pwa-steps{display:flex;flex-direction:column;gap:10px;margin:18px 0 20px;text-align:left}
+.pz-pwa-step{display:flex;gap:12px;align-items:flex-start;background:var(--bg2);border:1px solid var(--line-soft);border-radius:14px;padding:12px 14px}
+.pz-pwa-n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--cel);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px}
+.pz-pwa-step b{display:block;font-size:15px;color:var(--txt)}
+.pz-pwa-step small{display:block;font-size:13px;color:var(--mut);margin-top:2px;line-height:1.4}
+/* ---------- Pantalla sin conexión (la sesión NO se cierra) ---------- */
+.pz-offline{min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 24px}
+.pz-offline h2{font-size:24px;color:var(--txt);margin:12px 0 6px}
+.pz-offline p{color:var(--mut);font-size:15px;line-height:1.5}

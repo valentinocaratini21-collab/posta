@@ -14,7 +14,9 @@ const api = {
         signal: AbortSignal.timeout(30000),
       });
     } catch (e) {
-      throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+      const err = new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+      err.networkError = true; // error de red: NO es "sesión cerrada"
+      throw err;
     }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -22,7 +24,9 @@ const api = {
         if (typeof ME !== 'undefined' && ME) ME.trial_expired = true;
         try { location.hash = '#/app/ajustes'; } catch (e) {}
       }
-      throw new Error(data.message || data.error || 'Error');
+      const err = new Error(data.message || data.error || 'Error');
+      err.status = r.status;
+      throw err;
     }
     return data;
   },
@@ -49,16 +53,44 @@ async function pzReferral() {
   return PZ_REF_PROMISE;
 }
 
+// true cuando el último refreshSession falló por red (no por sesión cerrada).
+// En ese caso NO mandamos al login: la sesión sigue válida, solo falta internet.
+let NET_OFFLINE = false;
 async function refreshSession() {
-  try {
-    const { user } = await api.get('/api/auth/me');
-    ME = user;
-    if (user) {
-      PROFILE = await api.get('/api/profile');
-      SETTINGS = await api.get('/api/settings');
-      ASSETS = await api.get('/api/assets').catch(() => []);
+  let lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const { user } = await api.get('/api/auth/me');
+      ME = user || null;
+      NET_OFFLINE = false;
+      if (user) {
+        PROFILE = await api.get('/api/profile');
+        SETTINGS = await api.get('/api/settings');
+        ASSETS = await api.get('/api/assets').catch(() => []);
+      }
+      return;
+    } catch (e) {
+      lastErr = e;
+      if (e && e.status === 401) { ME = null; NET_OFFLINE = false; return; } // sesión realmente cerrada
+      if (e && e.networkError && i < 2) { await new Promise(r => setTimeout(r, 800 * (i + 1))); continue; }
+      break;
     }
-  } catch { ME = null; }
+  }
+  if (lastErr && lastErr.networkError) { NET_OFFLINE = true; return; } // mantenemos ME anterior
+  ME = null; NET_OFFLINE = false;
+}
+// Pantalla cuando hay sesión pero no hay internet: reintentar, nunca pedir login.
+function offlineView() {
+  return `<div class="pz-offline">
+    <div style="font-size:52px">📡</div>
+    <h2>Sin conexión</h2>
+    <p>No pudimos hablar con el servidor.<br>Tu sesión sigue abierta, solo te falta internet.</p>
+    <button class="btn btn-primary" id="btnRetryConn" style="margin-top:14px">Reintentar</button>
+  </div>`;
+}
+function bindOffline() {
+  const b = document.getElementById('btnRetryConn');
+  if (b) b.onclick = () => render();
 }
 function assetPhotos() { return ASSETS.filter(a => a.kind === 'photo'); }
 function assetLogo() { return ASSETS.find(a => a.kind === 'logo'); }
@@ -456,7 +488,39 @@ async function pwaDoInstall() {
     PWA_DEFERRED = null;
     return;
   }
-  alert('Para instalar Posta:\n\niPhone: tocá Compartir y elegí "Agregar a pantalla de inicio".\n\nAndroid: tocá el menú ⋮ y elegí "Instalar app" o "Agregar a pantalla de inicio".');
+  pwaInstallModal();
+}
+// Modal visual paso a paso para guardar Posta en el celu.
+// En iPhone muestra SOLO los pasos de iPhone (nada de Android que confunda).
+function pwaInstallModal() {
+  if (document.getElementById('pzPwaOverlay')) return;
+  const steps = pwaIsIos() ? `
+    <div class="pz-pwa-step"><span class="pz-pwa-n">1</span><div><b>Tocá los tres puntitos •••</b><small>Abajo a la derecha, junto a la dirección.</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">2</span><div><b>Tocá Compartir</b><small>El cuadradito con la flecha hacia arriba.</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Elegí "Agregar a pantalla de inicio"</b><small>Deslizá un poco hacia abajo para encontrarla.</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">4</span><div><b>Tocá "Agregar"</b><small>Arriba a la derecha. ¡Listo! Posta queda como una app 🎉</small></div></div>
+  ` : `
+    <div class="pz-pwa-step"><span class="pz-pwa-n">1</span><div><b>Tocá el menú ⋮</b><small>Arriba a la derecha en Chrome.</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">2</span><div><b>Elegí "Instalar app"</b><small>O "Agregar a pantalla de inicio".</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Confirmá</b><small>¡Listo! Posta queda como una app 🎉</small></div></div>
+  `;
+  const ov = document.createElement('div');
+  ov.id = 'pzPwaOverlay';
+  ov.className = 'pz-exp-overlay';
+  ov.innerHTML = `
+    <div class="pz-exp-modal" role="dialog" aria-modal="true">
+      <button class="pz-exp-x" id="pzPwaClose" aria-label="Cerrar">✕</button>
+      <div style="font-size:42px">📲</div>
+      <h2>Guardá Posta en tu celu</h2>
+      <p class="pz-exp-sub">Queda como una app, con su ícono en la pantalla de inicio.</p>
+      <div class="pz-pwa-steps">${steps}</div>
+      <button class="btn btn-primary btn-block" id="pzPwaOk">Entendido</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.querySelector('#pzPwaClose').onclick = close;
+  ov.querySelector('#pzPwaOk').onclick = close;
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
 }
 function pwaWire() {
   // Si ya la abrió como app instalada, avisar al servidor una sola vez.
@@ -1646,7 +1710,10 @@ async function chatMakePost(asVideo) {
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
-    setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+    setTimeout(() => {
+      const rc = $('#reviewCard') || $('#draftsBanner');
+      if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
   } catch (e) {
     if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
     if (mkP) mkP.disabled = false;
@@ -1772,11 +1839,12 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
 // Crea UN borrador a partir de una idea (texto + diseño o reel).
 // Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
 async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
-  const photos = assetPhotos();
-  const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-  const palIdx = defaultPal();
-  const handle = (PROFILE || {}).ig_username || '';
-  const out = await api.post('/api/generate', { topic: idea.titulo });
+  const dstage = async (name, fn) => { try { return await fn(); } catch (e) { e._dbgStage = (e._dbgStage ? e._dbgStage + ' < ' : '') + 'draft:' + name; throw e; } };
+  const photos = await dstage('assetPhotos', async () => assetPhotos());
+  const logo = await dstage('logo', async () => assetLogo() ? await photoImg(assetLogo().file_path) : null);
+  const palIdx = await dstage('defaultPal', async () => defaultPal());
+  const handle = await dstage('handle', async () => (PROFILE || {}).ig_username || '');
+  const out = await dstage('POST /api/generate', () => api.post('/api/generate', { topic: idea.titulo }));
   // Si viene del chat, se respeta el texto que el cliente eligió/editó (no se regenera)
   const chatTa = useChatText ? $('#chatCaption') : null;
   const chatHg = useChatText ? $('#chatHashtags') : null;
@@ -1785,23 +1853,24 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
   let imagePath = null, mediaType = 'image';
   if (asVideo) {
     try {
-      imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx);
+      imagePath = await dstage('autopilotReel', () => autopilotReel(idea, photos, logo, palIdx, handle, idx));
       mediaType = 'video';
-    } catch (e) { imagePath = null; /* fallback a diseño estático */ }
+    } catch (e) { try { console.error('[AUTOPILOT-DEBUG] reel falló, fallback a estático:', e._dbgStage, e.message); } catch (e2) {} imagePath = null; /* fallback a diseño estático */ }
   }
   if (!imagePath) {
-    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const title = await dstage('title', async () => (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD');
     const ph = photos.length ? photos[idx % photos.length] : null;
-    imagePath = await renderDesignImage({
+    const phImg = await dstage('photoImg', async () => ph ? await photoImg(ph.file_path) : null);
+    imagePath = await dstage('renderDesignImage', () => renderDesignImage({
       tpl: 'gradiente', pal: palIdx,
       title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
       handle,
-      photoImg: ph ? await photoImg(ph.file_path) : null,
+      photoImg: phImg,
       logoImg: logo,
-    });
+    }));
   }
   try {
-    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType });
+    await dstage('POST /api/posts', () => api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType }));
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
@@ -1812,10 +1881,15 @@ async function runAutopilot(n, tag) {
   const prog = document.getElementById('apProg-' + t);
   const btn = document.querySelector('[data-autopilot="' + t + '"]');
   btn.disabled = true;
+  // DEBUG TEMPORAL: captura la etapa exacta y el stack del error
+  const stage = async (name, fn) => {
+    try { return await fn(); }
+    catch (e) { e._dbgStage = name; throw e; }
+  };
   try {
     // Si hay borradores sin revisar de una corrida anterior, preguntar antes de reemplazarlos
-    const existing = await api.get('/api/posts');
-    const oldDrafts = existing.filter(p => p.status === 'draft');
+    const existing = await stage('GET /api/posts', () => api.get('/api/posts'));
+    const oldDrafts = await stage('filtrar borradores', async () => existing.filter(p => p.status === 'draft'));
     if (oldDrafts.length) {
       const ok = confirm(`Hay ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazamos por una semana nueva?`);
       if (!ok) { btn.disabled = false; return; }
@@ -1824,18 +1898,18 @@ async function runAutopilot(n, tag) {
     let ideas = IDEAS;
     if (!ideas.length) {
       prog.innerHTML = `<div class="okmsg">💡 Generando ideas para tu negocio...</div>`;
-      const r = await api.post('/api/ideas', {});
-      ideas = r.ideas || [];
+      const r = await stage('POST /api/ideas', () => api.post('/api/ideas', {}));
+      ideas = await stage('r.ideas || []', async () => r.ideas || []);
       IDEAS = ideas;
     }
-    const picks = ideas.slice(0, n);
+    const picks = await stage('ideas.slice(0,n)', async () => ideas.slice(0, n));
     if (!picks.length) throw new Error('No hay ideas para programar');
     // Brand kit del cliente: fotos rotadas + logo + paleta de marca
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
       const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
       prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
-      await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
+      await stage('draftFromIdea #' + i + (isReel ? ' (reel)' : ''), () => draftFromIdea(idea, isReel, i)); // borrador: el cliente revisa antes de programar
     }
     prog.innerHTML = t === 'home'
       ? `<div class="okmsg">📋 ¡Tu semana está lista!</div><a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar mi semana →</a>`
@@ -1845,7 +1919,8 @@ async function runAutopilot(n, tag) {
       if (t === 'ideas') setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
     }, 900);
   } catch (e) {
-    prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
+    try { console.error('[AUTOPILOT-DEBUG] etapa:', e._dbgStage, 'error:', e); } catch (e2) {}
+    prog.innerHTML = `<div class="err"><b>Error en etapa: ${esc(e._dbgStage || '?')}</b><br>Error: ${esc(e.message)}<pre style="text-align:left;font-size:11px;white-space:pre-wrap;max-height:300px;overflow:auto;background:#fff;padding:8px;border-radius:8px;margin-top:8px">${esc(e.stack || '(sin stack)')}</pre></div>`;
     btn.disabled = false;
   }
 }
@@ -2499,7 +2574,7 @@ async function semanaView() {
 
   return `${head}
   ${drafts > 0 ? `
-  <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
+  <div class="card" id="draftsBanner" style="border:1.5px solid #FEC14D;background:#FFF9EC">
     <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenemos ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
     <p>De tu prueba gratis — revisalos y programalos con un clic. Nada sale sin tu OK.</p></div></div>
     <a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar y programar →</a>
@@ -2516,6 +2591,7 @@ async function semanaView() {
          <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
   ${(w.missing && !drafts) ? autopilotCardHTML('home') : ''}
+  ${chatCardHTML()}
   <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div><p class="d" style="margin:12px 0 0"><a href="#/app/calendario">Ver programados y borradores →</a></p></div>
   ${nudgeBlock}
   <div class="row2">
@@ -2537,6 +2613,7 @@ async function semanaView() {
 function bindSemana() {
   bindSignalBtns();
   bindAutopilot();
+  bindChat();
   $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
   $$('[data-nudge]').forEach(b => b.onclick = () => {
     const n = SEM_NUDGES[+b.dataset.nudge];
@@ -3089,6 +3166,7 @@ async function render() {
   // App (requiere login)
   LANDING_ON = false;
   await refreshSession();
+  if (!ME && NET_OFFLINE) { root.innerHTML = offlineView(); bindOffline(); return; }
   if (!ME) { location.hash = '#/login'; return; }
   const tab = (path.split('/')[2] || 'semana');
   let content = '';
