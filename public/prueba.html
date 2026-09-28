@@ -242,6 +242,11 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .lb-box{background:#fff;border-radius:20px;max-width:480px;width:100%;max-height:92vh;overflow-y:auto;position:relative}
 .lb-box img,.lb-box video{width:100%;display:block;aspect-ratio:4/5;object-fit:cover;border-radius:20px 20px 0 0;background:#000}
 .lb-cap{padding:20px}
+.lb-cap h3{margin:0 0 8px;font-size:18px;color:var(--navy);line-height:1.3}
+.lb-nav{position:absolute;top:34%;width:44px;height:44px;border-radius:50%;border:none;background:rgba(10,30,51,.55);color:#fff;font-size:26px;font-weight:800;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;padding:0 0 3px}
+.lb-nav.prev{left:12px}
+.lb-nav.next{right:12px}
+.lb-nav:active{background:rgba(10,30,51,.8)}
 .lb-cap p{font-size:14px;line-height:1.65;white-space:pre-line}
 .lb-cap .tags{color:var(--cel);font-size:13px;margin-top:10px;line-height:1.6}
 .lb .x{position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.9);width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;z-index:2}
@@ -267,7 +272,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .done-view h2{font-size:30px;font-weight:900;margin:18px 0 10px}
 .done-view p{color:var(--mut);line-height:1.7;margin-bottom:24px}
 .footer{text-align:center;padding:40px 20px 110px;color:var(--mut);font-size:13px}
-@media(max-width:760px){.ba{grid-template-columns:1fr}.ba-arrow{transform:rotate(90deg);justify-content:center}.week{grid-template-columns:repeat(2,1fr)}.plans{grid-template-columns:1fr}.plan.hot{transform:none}.stat-band{grid-template-columns:1fr}.sticky-cta b{font-size:13px}.modal{padding:24px 18px}.steps3{grid-template-columns:1fr}#btnBuy2{font-size:17px!important;padding:16px 24px!important;max-width:100%}.ph-grid{grid-template-columns:repeat(3,1fr)}.wk{min-width:100px}.day.feat .db{height:150px;margin:10px 0 10px 10px}.day.feat .dcap{padding:8px 12px 10px 2px}}
+@media(max-width:760px){.ba{grid-template-columns:1fr}.ba-arrow{transform:rotate(90deg);justify-content:center}.week{grid-template-columns:repeat(2,1fr)}.plans{grid-template-columns:1fr}.plan.hot{transform:none}.stat-band{grid-template-columns:1fr}.sticky-cta b{font-size:13px}.modal{padding:24px 18px}.steps3{grid-template-columns:1fr}#btnBuy2{font-size:17px!important;padding:16px 24px!important;max-width:100%}.ph-grid{grid-template-columns:repeat(3,1fr)}.wk{min-width:100px}.day.feat .db{height:150px;margin:10px 0 10px 10px}.day.feat .dcap{padding:8px 12px 10px 2px}.chat-chips{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:14px}.chat-chips button{flex-shrink:0}}
 </style>
 </head>
 <body>
@@ -381,6 +386,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
           <button id="chatSend" title="Enviar">➤</button>
         </div>
       </div>
+      <p class="tiny" id="chatLeft" style="margin-top:8px;display:none"></p>
       <p class="tiny" style="margin-top:10px">💡 Cuanto más lo uses, más entendemos tu visión, tu producto y tu cuenta: el contenido sale cada vez mejor y más útil.</p>
     </div>
 
@@ -433,8 +439,10 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 <!-- LIGHTBOX -->
 <div class="lb" id="lb"><div class="lb-box">
   <button class="x" id="xLb">✕</button>
+  <button class="lb-nav prev" id="lbPrev" aria-label="Posteo anterior">‹</button>
+  <button class="lb-nav next" id="lbNext" aria-label="Posteo siguiente">›</button>
   <div id="lbMedia"></div>
-  <div class="lb-cap"><p id="lbCap"></p><div class="tags" id="lbTags"></div>
+  <div class="lb-cap"><h3 id="lbHeadline" style="display:none"></h3><p id="lbCap"></p><div class="tags" id="lbTags"></div>
     <div class="lb-actions">
       <button class="lb-btn" id="lbPhoto">📷 Cambiar foto</button>
       <button class="lb-btn ghost" id="lbImprove">💬 Mejorar este posteo</button>
@@ -549,6 +557,8 @@ function show(id) {
   $('#btnBuy2').onclick = openRegTrial;
   $('#btnBuy3').onclick = openRegTrial;
   $('#xLb').onclick = () => $('#lb').classList.remove('open');
+  $('#lbPrev').onclick = (e) => { e.stopPropagation(); lbNav(-1); };
+  $('#lbNext').onclick = (e) => { e.stopPropagation(); lbNav(1); };
   $('#lb').addEventListener('click', (e) => { if (e.target.id === 'lb') $('#lb').classList.remove('open'); });
 
   // ¿Ya generaste tu semana en este navegador? Mostrala directo.
@@ -756,22 +766,40 @@ function renderWeek() {
     const isV = p.type === 'video';
     const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
-      : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}">`;
+      : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
     return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div></div>`;
   }).join('');
   $$('#rWeek .day').forEach((d) => { d.onclick = () => openLb(parseInt(d.dataset.i, 10)); });
 }
 
-let lbPost = -1;
-function openLb(i) {
-  lbPost = i;
-  const p = TRIAL.posts[i];
+let lbPost = -1, lbWeekPos = 0;
+function lbRender() {
+  const wk = TRIAL.week || [];
+  const w = wk[lbWeekPos];
+  if (!w) return;
+  lbPost = w.post;
+  const p = TRIAL.posts[lbPost];
   $('#lbMedia').innerHTML = p.type === 'video'
     ? `<video src="${p.video}" controls playsinline></video>`
     : `<img src="${p.image}" alt="Posteo">`;
+  const hl = $('#lbHeadline');
+  if (p.headline) { hl.textContent = p.headline; hl.style.display = 'block'; }
+  else { hl.textContent = ''; hl.style.display = 'none'; }
   $('#lbCap').textContent = p.caption || '';
   $('#lbTags').textContent = p.hashtags || '';
+}
+function openLb(i) {
+  const wk = TRIAL.week || [];
+  const pos = wk.findIndex((x) => x.post === i);
+  lbWeekPos = pos >= 0 ? pos : 0;
+  lbRender();
   $('#lb').classList.add('open');
+}
+function lbNav(d) {
+  const n = (TRIAL.week || []).length;
+  if (!n) return;
+  lbWeekPos = (lbWeekPos + d + n) % n;
+  lbRender();
 }
 function lbDayName() {
   const w = (TRIAL.week || []).find((x) => x.post === lbPost);
@@ -817,7 +845,7 @@ function initTrialChat() {
   }
   if (chatInit || !TRIAL) return;
   chatInit = true;
-  chatAddMsg('¡Hola! Soy tu editor 👋 Tus 5 posteos ya están creados. Si alguno no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
+  chatAddMsg('¡Hola! Soy tu editor 👋 Tus 5 posteos + 1 reel ya están creados. Si algo no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
   const send = () => {
     const inp = $('#chatIn');
     const v = inp.value.trim();
@@ -1049,6 +1077,13 @@ async function sendTrialChat(text) {
     if (!r.ok) throw new Error(d.error || 'error');
     chatHist.push({ role: 'bot', text: d.reply });
     chatAddMsg(d.reply, 'bot');
+    if (typeof d.chat_remaining === 'number') {
+      const cl2 = $('#chatLeft');
+      cl2.style.display = 'block';
+      cl2.textContent = d.chat_remaining > 0
+        ? `💬 Te quedan ${d.chat_remaining} mensajes hoy en la prueba`
+        : '💬 Usaste tus mensajes de hoy — mañana seguimos 🙂';
+    }
     if (d.edits && d.edits.length) {
       for (const e of d.edits) {
         if (TRIAL.posts[e.post]) {
