@@ -2099,10 +2099,105 @@ function fotosView() {
         ${logo ? `<button class="btn btn-danger btn-sm" id="btnLogoRm">Quitar</button>` : ''}
       </div>
     </div>
-    <input type="file" id="a_logo" accept="image/*" style="display:none">
-    <div class="hint">El logo se dibuja en la esquina inferior de cada diseño que generamos.</div>
+    <input type="file" id="a_logo" accept="image/*,.pdf,.docx" style="display:none">
+    <div class="hint">El logo se dibuja en la esquina inferior de cada diseño que generamos. Aceptamos imagen, PDF o Word.</div>
   </div>
   <div id="aMsg"></div>`;
+}
+
+/* ---------- Logo: acepta imagen, PDF o Word → se convierte a PNG en el dispositivo ---------- */
+function loadScriptOnce(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector('script[data-lib="' + src + '"]')) return res();
+    const s = document.createElement('script');
+    s.src = src;
+    s.setAttribute('data-lib', src);
+    s.onload = () => res();
+    s.onerror = () => rej(new Error('No se pudo cargar la herramienta de conversión. Revisá tu conexión e intentá de nuevo.'));
+    document.head.appendChild(s);
+  });
+}
+function cancelledErr() { const e = new Error('cancelado'); e.cancelled = true; return e; }
+async function pdfToPngBlob(file) {
+  const V = '3.11.174';
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + V + '/pdf.min.js');
+  const lib = window.pdfjsLib;
+  if (!lib) throw new Error('No se pudo leer el PDF');
+  lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + V + '/pdf.worker.min.js';
+  const data = await file.arrayBuffer();
+  const pdf = await lib.getDocument({ data }).promise;
+  const pg1 = await pdf.getPage(1);
+  const v1 = pg1.getViewport({ scale: 1 });
+  const scale = Math.min(2.5, 1600 / Math.max(v1.width, v1.height));
+  const vp = pg1.getViewport({ scale });
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+  const cx = cv.getContext('2d');
+  cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, cv.width, cv.height);
+  await pg1.render({ canvasContext: cx, viewport: vp }).promise;
+  try { await pdf.destroy(); } catch (_) {}
+  return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('No se pudo convertir el PDF')), 'image/png'));
+}
+function pickLogoImage(imgs) {
+  return new Promise((resolve, reject) => {
+    const ov = document.createElement('div');
+    ov.setAttribute('style', 'position:fixed;inset:0;background:rgba(10,30,51,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px');
+    const box = document.createElement('div');
+    box.setAttribute('style', 'background:#fff;border-radius:18px;padding:18px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)');
+    box.innerHTML = '<div style="font-weight:800;font-size:16px;margin-bottom:4px">Elegí tu logo</div>' +
+      '<div style="font-size:13px;color:#47617A;margin-bottom:12px">Tu Word tiene varias imágenes. Tocá la que sea tu logo.</div>';
+    const grid = document.createElement('div');
+    grid.setAttribute('style', 'display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:44vh;overflow:auto');
+    const cancel = document.createElement('button');
+    cancel.className = 'btn btn-soft btn-sm';
+    cancel.setAttribute('style', 'margin-top:12px;width:100%');
+    cancel.textContent = 'Cancelar';
+    box.appendChild(grid); box.appendChild(cancel); ov.appendChild(box);
+    const close = (fn) => { try { document.body.removeChild(ov); } catch (_) {} imgs.forEach(i => { try { URL.revokeObjectURL(i.url); } catch (_) {} }); fn(); };
+    imgs.forEach(im => {
+      const b = document.createElement('button');
+      b.setAttribute('style', 'border:2px solid #E3EEF6;border-radius:12px;background:#fff;padding:8px;cursor:pointer');
+      const im2 = document.createElement('img');
+      im2.src = im.url; im2.alt = im.name;
+      im2.setAttribute('style', 'width:100%;height:90px;object-fit:contain;pointer-events:none');
+      b.appendChild(im2);
+      b.onclick = () => close(() => resolve(im.blob));
+      grid.appendChild(b);
+    });
+    cancel.onclick = () => close(() => reject(cancelledErr()));
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(() => reject(cancelledErr())); });
+    document.body.appendChild(ov);
+  });
+}
+async function docxToPngBlob(file) {
+  await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  const JZ = window.JSZip;
+  if (!JZ) throw new Error('No se pudo leer el Word');
+  const zip = await JZ.loadAsync(file);
+  const okExt = /\.(png|jpe?g|webp|gif)$/i;
+  const found = [];
+  const jobs = [];
+  zip.forEach((rel, ze) => {
+    if (!ze.dir && /^word\/media\//i.test(rel) && okExt.test(rel)) {
+      jobs.push(ze.async('blob').then(b => { if (b && b.size) found.push({ name: rel.split('/').pop(), blob: b, url: '' }); }));
+    }
+  });
+  await Promise.all(jobs);
+  if (!found.length) throw new Error('No encontramos imágenes dentro del Word. Probá con un PDF o una foto del logo.');
+  found.forEach(f => { f.url = URL.createObjectURL(f.blob); });
+  if (found.length === 1) { const b = found[0].blob; try { URL.revokeObjectURL(found[0].url); } catch (_) {} return b; }
+  return pickLogoImage(found);
+}
+/* Siempre devuelve un File de imagen: PDF/Word se convierten, imagen pasa directo */
+async function logoFileToImage(file) {
+  const nm = (file.name || '').toLowerCase();
+  const tp = file.type || '';
+  const isPdf = tp === 'application/pdf' || nm.endsWith('.pdf');
+  const isDocx = nm.endsWith('.docx') || tp === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (isPdf) return new File([await pdfToPngBlob(file)], 'logo.png', { type: 'image/png' });
+  if (isDocx) return new File([await docxToPngBlob(file)], 'logo.png', { type: 'image/png' });
+  if (tp.startsWith('image/')) return file;
+  throw new Error('Ese formato no lo aceptamos. Subí una imagen, un PDF o un Word.');
 }
 
 function bindFotos() {
@@ -2124,7 +2219,15 @@ function bindFotos() {
   const bLogo = $('#btnLogoAdd');
   if (bLogo) bLogo.onclick = () => $('#a_logo').click();
   const al = $('#a_logo');
-  if (al) al.onchange = () => { if (al.files[0]) up([al.files[0]], 'logo'); };
+  if (al) al.onchange = async () => {
+    const orig = al.files[0]; al.value = '';
+    if (!orig) return;
+    try {
+      const nm = (orig.name || '').toLowerCase();
+      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#aMsg').innerHTML = '<div class="hint" style="margin:0">⏳ Convirtiendo tu archivo a imagen…</div>';
+      await up([await logoFileToImage(orig)], 'logo');
+    } catch (e) { if (e && e.cancelled) $('#aMsg').innerHTML = ''; else msg('Error: ' + esc(e.message || 'No se pudo subir'), false); }
+  };
   const bLrm = $('#btnLogoRm');
   if (bLrm) bLrm.onclick = async () => {
     const logo = assetLogo();
@@ -2467,7 +2570,8 @@ function ajustesView() {
           <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
           ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
         </div>
-        <input type="file" id="s_logofile" accept="image/*" style="display:none">
+        <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
+        <div class="hint" style="font-size:12px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
       </div>
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
@@ -2735,8 +2839,8 @@ function onboardingView() {
         ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:56px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : ''}
         <button class="btn btn-ghost btn-sm" id="ob_logo">📤 ${assetLogo() ? 'Cambiar logo' : 'Subir logo'}</button>
       </div>
-      <input type="file" id="ob_logofile" accept="image/*" style="display:none">
-      <div class="hint">Al subirlo sacamos tus colores automáticamente. Sin logo no podemos seguir.</div>
+      <input type="file" id="ob_logofile" accept="image/*,.pdf,.docx" style="display:none">
+      <div class="hint">Al subirlo sacamos tus colores automáticamente (aceptamos imagen, PDF o Word). Sin logo no podemos seguir.</div>
     </div>
     <div class="field"><label>Tus colores *</label>
       <div style="display:flex;gap:10px">
@@ -2795,11 +2899,15 @@ function bindOnboarding() {
   if (bl) bl.onclick = () => $('#ob_logofile').click();
   const lf = $('#ob_logofile');
   if (lf) lf.onchange = async () => {
-    if (!lf.files[0]) return;
+    const orig = lf.files[0]; lf.value = '';
+    if (!orig) return;
     try {
-      await uploadAssetFile(lf.files[0], 'logo');
+      const nm = (orig.name || '').toLowerCase();
+      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#obMsg').innerHTML = '<div class="hint">⏳ Convirtiendo tu archivo a imagen…</div>';
+      const f = await logoFileToImage(orig);
+      await uploadAssetFile(f, 'logo');
       try {
-        const img = await loadImageFile(lf.files[0]);
+        const img = await loadImageFile(f);
         const cols = extractTopColors(img, 3);
         if (cols[0]) o.c1 = cols[0];
         if (cols[1]) o.c2 = cols[1];
@@ -2807,7 +2915,7 @@ function bindOnboarding() {
       } catch (e) { /* mantiene los colores actuales */ }
       render();
     }
-    catch (e) { $('#obMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+    catch (e) { $('#obMsg').innerHTML = (e && e.cancelled) ? '' : `<div class="err">${esc(e.message)}</div>`; }
   };
   const fin = $('#obFinish');
   if (fin) fin.onclick = async () => {
@@ -3891,18 +3999,22 @@ function bindSettings() {
   if (bBlog) bBlog.onclick = () => $('#s_logofile').click();
   const slf = $('#s_logofile');
   if (slf) slf.onchange = async () => {
-    if (!slf.files[0]) return;
+    const orig = slf.files[0]; slf.value = '';
+    if (!orig) return;
     try {
-      await uploadAssetFile(slf.files[0], 'logo');
+      const nm = (orig.name || '').toLowerCase();
+      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:14px;color:var(--dim)">⏳ Convirtiendo tu archivo a imagen…</span>';
+      const f = await logoFileToImage(orig);
+      await uploadAssetFile(f, 'logo');
       try {
-        const img = await loadImageFile(slf.files[0]);
+        const img = await loadImageFile(f);
         const cols = extractTopColors(img, 3);
         if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
       } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
       render();
     }
-    catch (e) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`; }
+    catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`; }
   };
   // --- vista previa de marca ---
   const lumInk = (hex) => {
