@@ -3093,7 +3093,7 @@ async function showExpiredModal() {
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
       <div style="font-size:42px">\U0001F512</div>
       <h2>Tu prueba gratis termin\u00f3</h2>
-      <p class="pz-exp-sub">Tus posteos se frenaron. Eleg\u00ed tu plan para seguir publicando con tu marca.</p>
+      <p class="pz-exp-sub">Elegí tu plan y seguimos publicando por vos.</p>
       <div class="pz-exp-plans">${rows}</div>
       ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes \U0001F680</button>'}
       <button class="pz-exp-later" id="pzExpLater">Por ahora no</button>
