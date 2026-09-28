@@ -41,10 +41,16 @@ async function sendEmail({ to, subject, html }) {
 // Recordatorio semanal: armar los posteos de la semana.
 // Va a quienes tienen cuenta pero NO instalaron la app en el teléfono
 // (los que la instalaron reciben push en el futuro, no emails).
-function weeklyReminderEmail(user, baseUrl) {
+// Si el usuario tiene racha activa, el asunto la celebra: "Tu racha sigue viva 🔥".
+function weeklyReminderEmail(user, baseUrl, streak) {
   const name = (user.email || '').split('@')[0];
   const cta = `${baseUrl}/#/app/semana`;
-  const subject = 'Armá los posteos de tu semana 📱';
+  const hasStreak = streak && streak.current > 0 && streak.level;
+  const subject = hasStreak ? `Tu racha sigue viva ${streak.level.emoji}` : 'Armá los posteos de tu semana 📱';
+  const streakLine = hasStreak ? `
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Llevás <b>${streak.current} ${streak.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b> ${streak.level.emoji} — armá esta semana y la racha sigue creciendo.
+    </p>` : '';
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
   <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
@@ -52,6 +58,7 @@ function weeklyReminderEmail(user, baseUrl) {
   </div>
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+    ${streakLine}
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
       Nueva semana, nuevos posteos. Entrá a Posta y armá los de tu negocio en 1 minuto:
       nosotros los diseñamos y los publicamos por vos.

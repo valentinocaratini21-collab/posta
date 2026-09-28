@@ -123,6 +123,7 @@ function startScheduler(db) {
 // sin opt-out, con cuenta creada hace más de 1 día, en trial o plan activo.
 async function sendWeeklyReminders(db) {
   const { emailConfigured, weeklyReminderEmail } = require('./email');
+  const streaks = require('./streaks');
   if (!emailConfigured()) {
     console.log('[email semanal] sin RESEND_API_KEY: no se envía nada esta semana');
     return { sent: 0, skipped: 0, failed: 0, unconfigured: true };
@@ -139,7 +140,11 @@ async function sendWeeklyReminders(db) {
   let sent = 0, failed = 0;
   for (const u of users) {
     try {
-      const r = await weeklyReminderEmail(u, base);
+      const st = getSettings(db, u.id) || {};
+      const tz = st.timezone || 'America/Argentina/Buenos_Aires';
+      const weekKey = streaks.mondayKeyOf(streaks.tzToday(tz));
+      const sk = streaks.publicStreak(db, u.id, weekKey, streaks.tzToday(tz));
+      const r = await weeklyReminderEmail(u, base, sk);
       if (r && r.ok) sent++; else failed++;
     } catch (e) {
       failed++;

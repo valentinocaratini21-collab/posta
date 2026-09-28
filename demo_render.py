@@ -37,6 +37,8 @@ DEFAULT_COLORS = {
     "btn": "#FEC14D",         # pill superior + botón CTA
     "btn_text": "#0A1E33",     # texto sobre pill/CTA
     "watermark": "#47617A",   # marca de agua
+    "detail": "#FEC14D",      # acento: detalles (anillo del sello, borde del pill)
+    "detail_text": "#0A1E33",  # texto sobre el acento
 }
 
 
@@ -139,6 +141,25 @@ def load_photo(photo_path, w=W, h=H, focus=0.5):
 
 def navy_shade(img, y0=0.30, y1=1.0, max_a=215):
     """Degradado navy desde abajo sobre la imagen."""
+    return color_shade(img, NAVY, y0, y1, max_a)
+
+
+def luminance(rgb):
+    """Luminancia relativa 0..1."""
+    r, g, b = [v / 255 for v in rgb]
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def shade(rgb, amt):
+    """Aclara (amt>0) u oscurece (amt<0) un color RGB. amt en -100..100."""
+    f = amt / 100
+    if f >= 0:
+        return tuple(int(v + (255 - v) * f) for v in rgb)
+    return tuple(int(v * (1 + f)) for v in rgb)
+
+
+def color_shade(img, rgb, y0=0.30, y1=1.0, max_a=215):
+    """Degradado de un color cualquiera desde abajo sobre la imagen."""
     ov = Image.new("L", (1, H), 0)
     px = ov.load()
     for y in range(H):
@@ -151,7 +172,13 @@ def navy_shade(img, y0=0.30, y1=1.0, max_a=215):
             a = int(max_a * (t - y0) / (y1 - y0))
         px[0, y] = a
     ov = ov.resize((W, H))
-    return Image.composite(Image.new("RGB", (W, H), NAVY), img, ov)
+    return Image.composite(Image.new("RGB", (W, H), rgb), img, ov)
+
+
+def brand_veil(rgb):
+    """Velo oscuro derivado del color principal: si el principal es claro se
+    oscurece para que el texto blanco siga legible, manteniendo su familia."""
+    return rgb if luminance(rgb) <= 0.4 else shade(rgb, -55)
 
 
 def white_fade(img, fade_start=0.38, fade_end=0.68):
@@ -196,26 +223,25 @@ def wrap_fit(draw, fonts_dir, text, max_w, start_size, max_lines=3):
 
 
 def grade_photo(p):
-    """Tratamiento suave: la foto sigue siendo foto (no un fantasma).
-    Brillo 1.05 (antes 1.22), velo blanco 0.10 (antes 0.42), contraste 1.06,
-    saturacion 1.06 y balance de blancos estrecho a +-8% (antes +-22%)."""
+    """High-key blanco: balance de blancos neutro + exposicion levantada."""
     st = ImageStat.Stat(p)
     mr, mg, mb = st.mean[0], st.mean[1], st.mean[2]
     lum = (mr + mg + mb) / 3.0 or 1.0
 
-    def cg(m):
-        return min(max(lum / m, 0.92), 1.08) if m > 1 else 1.0
+    def cg(m, lo, hi):
+        return min(max(lum / m, lo), hi) if m > 1 else 1.0
 
+    s = 0.65
+    egr = 1 + (cg(mr, 0.86, 1.16) - 1) * s
+    egg = 1 + (cg(mg, 0.93, 1.07) - 1) * s
+    egb = 1 + (cg(mb, 0.86, 1.22) - 1) * s
     r, g, b = p.split()
-    egr, egg, egb = cg(mr), cg(mg), cg(mb)
     r = r.point(lambda v: 255 if v * egr >= 255 else int(v * egr))
     g = g.point(lambda v: 255 if v * egg >= 255 else int(v * egg))
     b = b.point(lambda v: 255 if v * egb >= 255 else int(v * egb))
     p = Image.merge("RGB", (r, g, b))
-    p = ImageEnhance.Brightness(p).enhance(1.05)
-    p = ImageEnhance.Contrast(p).enhance(1.06)
-    p = ImageEnhance.Color(p).enhance(1.06)
-    p = Image.blend(p, Image.new("RGB", p.size, (255, 255, 255)), 0.10)
+    p = ImageEnhance.Brightness(p).enhance(1.22)
+    p = Image.blend(p, Image.new("RGB", p.size, (255, 255, 255)), 0.42)
     return p
 
 
@@ -238,6 +264,7 @@ def pill_nuevo(d, fonts_dir, text, C, y=64, x_right=None, left=False):
         x1 = W - MX if x_right is None else x_right
         x0 = x1 - w
     d.rounded_rectangle([x0, y, x0 + w, y + h], radius=h // 2, fill=C["btn"])
+    d.rounded_rectangle([x0, y, x0 + w, y + h], radius=h // 2, outline=C["detail"], width=4)
     cx = x0 + w / 2
     cw = tw(d, text, f, tracking)
     ltext(d, cx - cw / 2, y + pad_y - 5, text, f, fill=C["btn_text"], tracking=tracking)
@@ -355,10 +382,10 @@ def style_editorial(fonts_dir, p, C, hs):
 
 
 def style_nocturno(fonts_dir, p, C, hs):
-    """Estilo 3 NOCTURNO: foto con velo navy, texto blanco abajo."""
+    """Estilo 3 NOCTURNO: foto con velo del color principal, texto blanco abajo."""
     focus = float(p.get("focus", 0.5) or 0.5)
     base = load_photo(p["photo"], W, H, focus)
-    img = navy_shade(base, y0=0.25, y1=1.0, max_a=225)
+    img = color_shade(base, brand_veil(C["accent"]), y0=0.25, y1=1.0, max_a=225)
     d = ImageDraw.Draw(img)
     white = (255, 255, 255)
     f0 = B(fonts_dir, 32)
@@ -508,12 +535,12 @@ def style_sello(fonts_dir, p, C, hs):
         tag = str(p["pill"]).upper()
         cr = 140
         ccx, ccy = W // 2, 560
-        d.ellipse([ccx - cr, ccy - cr, ccx + cr, ccy + cr], fill=C["btn"])
-        d.ellipse([ccx - cr + 12, ccy - cr + 12, ccx + cr - 12, ccy + cr - 12], outline=C["btn_text"], width=4)
+        d.ellipse([ccx - cr, ccy - cr, ccx + cr, ccy + cr], fill=C["accent"])
+        d.ellipse([ccx - cr + 12, ccy - cr + 12, ccx + cr - 12, ccy + cr - 12], outline=C["detail"], width=4)
         f0 = B(fonts_dir, 38)
         while tw(d, tag, f0, 6) > cr * 2 - 80 and f0.size > 18:
             f0 = B(fonts_dir, f0.size - 2)
-        ctext(d, ccx, ccy - f0.size // 2 - 4, tag, f0, fill=C["btn_text"], tracking=6)
+        ctext(d, ccx, ccy - f0.size // 2 - 4, tag, f0, fill=C["accent_text"], tracking=6)
 
     y = 770
     f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 125), 2)
@@ -603,9 +630,10 @@ def style_cita(fonts_dir, p, C, hs):
 
 
 def style_tipografico(fonts_dir, p, C, hs):
-    """Estilo 8 TIPOGRAFICO: fondo navy, titular gigante, franja de foto abajo."""
+    """Estilo 8 TIPOGRAFICO: fondo derivado del color principal, titular gigante, franja de foto abajo."""
     focus = float(p.get("focus", 0.5) or 0.5)
-    img = Image.new("RGB", (W, H), NAVY)
+    bg = brand_veil(C["accent"])
+    img = Image.new("RGB", (W, H), bg)
     d = ImageDraw.Draw(img)
     white = (255, 255, 255)
     if p.get("pill"):
@@ -650,7 +678,7 @@ def style_tipografico(fonts_dir, p, C, hs):
     for yy in range(160):
         px[0, yy] = int(255 * (1 - yy / 160))
     ov = ov.resize((W, 160))
-    top = Image.new("RGB", (W, 160), NAVY)
+    top = Image.new("RGB", (W, 160), bg)
     region = img.crop((0, H - band_h, W, H - band_h + 160))
     img.paste(Image.composite(top, region, ov), (0, H - band_h))
     # watermark con pastilla navy para que se lea sobre la foto
@@ -660,7 +688,7 @@ def style_tipografico(fonts_dir, p, C, hs):
     ww = tw(d, wt, wf) + 56
     wh = 64
     wx1, wy1 = W - MX, H - 36
-    d.rounded_rectangle([wx1 - ww, wy1 - wh, wx1, wy1], radius=wh // 2, fill=NAVY)
+    d.rounded_rectangle([wx1 - ww, wy1 - wh, wx1, wy1], radius=wh // 2, fill=bg)
     rtext(d, wx1 - 28, wy1 - wh // 2 - 14, wt, wf, fill=(235, 240, 245))
     return img, y + 20
 

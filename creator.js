@@ -344,21 +344,26 @@ function parseBrandColors(settings) {
 // Prioridad: colores pedidos por el cliente > colores de su marca > neutro premium.
 // NUNCA la paleta de Posta (celeste/amarillo) salvo que el cliente la pida explícitamente.
 function resolvePalette(detected, brandColors) {
-  let c1, c2, label;
+  let c1, c2, c3, label;
   if (detected.length) {
     c1 = detected[0].hex;
     c2 = detected[1] ? detected[1].hex : luminance(c1) > 0.55 ? '#0A1E33' : shade(c1, -25);
+    c3 = null; // se deriva abajo
     label = detected.map((d) => d.name).join(' y ');
     label = label.charAt(0).toUpperCase() + label.slice(1);
   } else if (brandColors.length >= 2) {
     c1 = brandColors[0];
     c2 = brandColors[1];
+    c3 = brandColors[2] || null; // Acento: el tercer slot de "Mi marca"
     label = 'Mi marca';
   } else {
     c1 = '#0A1E33';
     c2 = '#47617A';
+    c3 = null;
     label = 'Neutro premium';
   }
+  // Sin tercer color explícito: se deriva del principal (siempre hay acento)
+  if (!c3) c3 = luminance(c1) > 0.55 ? shade(c1, -30) : shade(c1, 30);
   return {
     label,
     render: {
@@ -368,6 +373,8 @@ function resolvePalette(detected, brandColors) {
       subline: '#47617A',
       btn: c2,
       btn_text: luminance(c2) > 0.6 ? '#0A1E33' : '#FFFFFF',
+      detail: c3,
+      detail_text: luminance(c3) > 0.6 ? '#0A1E33' : '#FFFFFF',
       watermark: '#47617A',
     },
   };

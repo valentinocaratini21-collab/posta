@@ -19,6 +19,7 @@ const mp = require('./mercadopago');
 const demo = require('./demo');
 const { sendEmail } = require('./email');
 const os = require('os');
+const streaks = require('./streaks');
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -802,6 +803,33 @@ app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   recordSignal(req.session.userId, post, signal);
   res.json({ ok: true });
+});
+
+// ---------- Rachas ----------
+// El cliente la llama cuando runAutopilot termina bien (semana armada).
+// Idempotente por semana: no suma doble si arma dos veces la misma semana.
+app.post('/api/streak/week-armed', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const tz = userTz(uid);
+  const weekKey = mondayKeyOf(tzToday(tz));
+  res.json(streaks.recordWeekArmed(db, uid, weekKey));
+});
+
+app.get('/api/streak', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const tz = userTz(uid);
+  const weekKey = mondayKeyOf(tzToday(tz));
+  res.json(streaks.publicStreak(db, uid, weekKey, tzToday(tz)));
+});
+
+// Prueba social 100% anónima: solo agregados, solo con masa crítica (15+ días).
+app.get('/api/streak/social', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const tz = userTz(uid);
+  const thisMon = mondayKeyOf(tzToday(tz));
+  res.json(streaks.socialProof(db, {
+    excludeUserId: uid, thisMon, prevMon: shiftDays(thisMon, -7),
+  }));
 });
 
 // Resumen para el dashboard "Mi semana": semana actual, aprobación, ritmo y mes.

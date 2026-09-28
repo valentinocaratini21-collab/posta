@@ -236,6 +236,17 @@ try {
   }
 } catch (e) { console.error('[posta] backfill referral_code:', e.message); }
 
+// Rachas: semanas consecutivas armando la semana (píldora, celebraciones, emails)
+db.exec(`
+CREATE TABLE IF NOT EXISTS streaks (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  current INTEGER NOT NULL DEFAULT 0,
+  best INTEGER NOT NULL DEFAULT 0,
+  last_week TEXT NOT NULL DEFAULT '',
+  started_at INTEGER NOT NULL DEFAULT 0
+);
+`);
+
 // Backfill: timezone vacío → default
 try { db.exec(`UPDATE settings SET timezone='America/Argentina/Buenos_Aires' WHERE timezone IS NULL OR timezone=''`); } catch (e) {}
 
