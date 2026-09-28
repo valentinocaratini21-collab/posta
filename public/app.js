@@ -2572,15 +2572,21 @@ function ajustesView() {
       </div>
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
+      <div style="font-size:12px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
       <div style="display:flex;gap:10px">
         ${[0, 1, 2].map(i => `
         <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
           <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
           <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:76px;text-align:center;font-size:12px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
-          <div style="font-size:10px;font-weight:800;color:var(--dim);letter-spacing:.5px;text-transform:uppercase">${['Principal', 'Secundario', 'Acento'][i]}</div>
+          <div style="position:relative">
+            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:11px;font-weight:800;color:var(--dim);letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:7px 22px 7px 10px;background:#F2F9FD;max-width:104px;cursor:pointer">
+              ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
+            </select>
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);pointer-events:none">⌄</span>
+          </div>
         </div>`).join('')}
       </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
+      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
     </div>
     <div class="field"><label>Vista previa</label>
       <div id="brandPrev"></div>
@@ -4056,6 +4062,24 @@ function bindSettings() {
         if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
       });
     }
+  });
+  // Reordenar roles: el menú de cada color permite elegir Principal/Secundario/Acento;
+  // los colores se intercambian de lugar solos. El rol es posicional: el menú vuelve a su lugar.
+  const swapBrandColors = (a, b) => {
+    const pa = document.getElementById('s_c' + a), pb = document.getElementById('s_c' + b);
+    if (!pa || !pb) return;
+    const va = pa.value;
+    pa.value = pb.value; pb.value = va;
+    syncHexFromPicker(a); syncHexFromPicker(b);
+    markBrandDirty(); renderBrandPrev();
+  };
+  [0, 1, 2].forEach((i) => {
+    const sel = document.getElementById('s_r' + i);
+    if (sel) sel.addEventListener('change', () => {
+      const to = parseInt(sel.value, 10);
+      sel.value = String(i);
+      if (Number.isInteger(to) && to >= 0 && to <= 2 && to !== i) swapBrandColors(i, to);
+    });
   });
   renderBrandPrev();
   const bBlogDel = $('#btnBrandLogoDel');
