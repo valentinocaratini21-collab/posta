@@ -117,7 +117,7 @@ function emptyWeekEmail(user, baseUrl) {
       botón y los armamos por vos — textos, diseños y reel con tu marca y tu estilo.
     </p>
     <p style="text-align:center;margin:0 0 8px">
-      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">⚡ Armar mi semana</a>
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">⚡ Armemos tu semana</a>
     </p>`);
   return sendEmail({ to: user.email, subject, html });
 }
