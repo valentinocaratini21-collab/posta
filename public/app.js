@@ -442,10 +442,7 @@ function authView(mode) {
 }
 
 /* ---------- APP SHELL ---------- */
-const TABS = [
-  ['semana', '🏠', 'Mi semana'],
-  ['ajustes', '⚙️', 'Ajustes'],
-];
+/* ---------- Shell ---------- */
 let IDEAS = [];
 let CHAT = [];       // [{role:'user'|'assistant', text}]
 let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo}
@@ -556,6 +553,9 @@ function igConnectHere() {
 }
 function setupChecklistHtml() {
   const rows = [];
+  if (!(PROFILE && (PROFILE.business_name || '').trim())) {
+    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posta se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
+  }
   if (!(PROFILE && PROFILE.ig_connected)) {
     rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
   }
@@ -568,32 +568,22 @@ function setupChecklistHtml() {
 }
 
 function appShell(tab, content) {
-  const MAIN_TABS = [['semana', '🏠', 'Mi semana']];
-  const MORE_TABS = [['ajustes', '⚙️', 'Ajustes']];
-  const moreOn = MORE_TABS.some(([k]) => k === tab);
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
-    <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-ghost btn-sm" data-tab="ajustes" aria-label="Ajustes">⚙️</button>
+      <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button>
+    </div></div>
   ${setupChecklistHtml()}
   <div class="app-shell">
     <div class="sidebar">
       <a class="logo" href="#/" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
-      ${TABS.map(([k, i, l]) => `<button class="side-link ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span>${l}</button>`).join('')}
       <div class="grow"></div>
       <div class="side-user">${esc(ME?.email || '')}</div>
+      <button class="side-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="ico">⚙️</span>Ajustes</button>
       <button class="side-link" id="btnLogout"><span class="ico">🚪</span>Salir</button>
     </div>
     <div class="main">${content}</div>
-  </div>
-  <nav class="mbar">
-    ${MAIN_TABS.map(([k, i, l]) => `<button class="mbar-btn ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span><span class="lbl">${l}</span></button>`).join('')}
-    <button class="mbar-btn ${moreOn ? 'on' : ''}" id="mbarMore"><span class="ico">⋯</span><span class="lbl">Más</span></button>
-  </nav>
-  <div class="msheet" id="msheet"><div class="msheet-bg" id="msheetBg"></div>
-    <div class="msheet-card">
-      ${MORE_TABS.map(([k, i, l]) => `<button class="msheet-btn ${k === tab ? 'on' : ''}" data-tab="${k}"><span class="ico">${i}</span>${l}</button>`).join('')}
-      ${pwaIsInstalled() ? '' : '<button class="msheet-btn" id="msheetInstall"><span class="ico">📲</span>Instalar app</button>'}
-    </div>
   </div>`;
 }
 
@@ -2422,7 +2412,16 @@ async function semanaView() {
   const slots = suggestSlots(draftN, scheduled);
   const pill = sk && sk.current > 0 && sk.level
     ? `<button class="streak-pill" id="streakPill" title="Tu racha: se apaga si pasás 72h sin publicar"><span class="sp-top">${esc(sk.level.emoji)} Racha ${sk.current}</span><span class="sp-sub">vence en ${fmtStreakLeft(sk.expiresInMs)}</span></button>` : '';
-  const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${pill}</div>`;
+  // Encabezado con la identidad del negocio: tiene que sentirse SUYO, no una app genérica.
+  const bizName = (PROFILE && PROFILE.business_name || '').trim();
+  const bizLogo = assetLogo();
+  const bizColor = (typeof brandColors === 'function' && brandColors()[0]) || '#2793C8';
+  const bizIcon = bizLogo
+    ? `<img src="${esc(bizLogo.file_path)}" alt="Logo" style="width:46px;height:46px;border-radius:13px;object-fit:cover;border:1px solid var(--line);background:#fff;flex-shrink:0">`
+    : `<div style="width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#fff;background:${esc(bizColor)};flex-shrink:0">${esc((bizName || 'M')[0].toUpperCase())}</div>`;
+  const head = (bizName || bizLogo)
+    ? `<div class="page-head"><div style="display:flex;gap:12px;align-items:center">${bizIcon}<div class="ph-txt"><h1>${esc(bizName || 'Mi negocio')}</h1><p class="sub">Tu semana, armada con un clic.</p></div></div>${pill}</div>`
+    : `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${pill}</div>`;
   const socialBar = soc && soc.shown
     ? `<div class="social-proof">🔥 ${soc.count} negocios llevan 15+ días seguidos armando su semana con Posta</div>` : '';
   const expBanner = sk && sk.expiringSoon ? `
@@ -2501,14 +2500,15 @@ async function semanaView() {
         <button class="btn btn-soft" data-opencreator>✨ Crear posteo</button>
       </div>`;
 
+  // Orden por importancia: lo que pide tu acción → lo que viene → crear/cambiar → balance.
   return `${head}
-  ${socialBar}
   ${expBanner}
   ${heroCard}
-  ${nextUp}
-  ${upcomingCard}
   ${redoMini}
   ${failedCard}
+  ${nextUp}
+  ${upcomingCard}
+  ${chatCardHTML()}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
@@ -2519,9 +2519,9 @@ async function semanaView() {
       : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
          <button class="btn btn-soft btn-block" data-opencreator style="margin-top:12px">✨ Crear otro posteo</button>`}
   </div>
-  ${chatCardHTML()}
-  ${creatorCard}
   ${nudgeBlock}
+  ${creatorCard}
+  ${socialBar}
   <div class="row2">
     <div class="card"><h3>📊 Tu ritmo</h3><p class="d">Posteos por semana (últimas 8)</p><div class="bars">${bars}</div></div>
     <div class="card"><h3>👍 Aprobados sin cambios</h3>${apBlock}</div>
@@ -3171,16 +3171,15 @@ async function showExpiredModal() {
 
 function bindApp(tab) {
   pwaWire();
-  $$('.mtab,.side-link[data-tab],.mbar-btn[data-tab],.msheet-btn[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
+  $$('[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
   const sg = $('#setupIgRow');
   if (sg) sg.onclick = igConnectHere;
+  const sb = $('#setupBizRow');
+  if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
-  const mm = $('#mbarMore'), ms = $('#msheet'), mb = $('#msheetBg');
-  if (mm && ms) mm.onclick = () => ms.classList.add('open');
-  if (mb && ms) mb.onclick = () => ms.classList.remove('open');
 
   if (tab === 'semana') bindSemana();
   if (tab === 'onboarding') bindOnboarding();
