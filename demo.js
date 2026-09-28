@@ -1244,6 +1244,23 @@ const CATEGORY_COLORS = {
 const IG_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const EXTRACT_COLORS_SCRIPT = path.join(__dirname, 'extract_colors.py');
 
+// Extrae hasta 2 colores dominantes (hex) de un buffer de imagen.
+// Para el logo del cliente: así los colores quedan idénticos a su marca.
+function extractColorsFromBuffer(buf) {
+  return new Promise((resolve, reject) => {
+    if (!Buffer.isBuffer(buf) || !buf.length) return reject(new Error('Imagen vacía'));
+    const tmp = path.join(os.tmpdir(), `posta-logo-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.jpg`);
+    fs.writeFileSync(tmp, buf);
+    execFile('python3', [EXTRACT_COLORS_SCRIPT, tmp], { timeout: 10000 }, (err, stdout) => {
+      try { fs.unlinkSync(tmp); } catch (_) {}
+      if (err) return reject(new Error('No pudimos leer los colores'));
+      const cols = String(stdout || '').trim().split(/\s+/).filter((c) => /^#[0-9A-F]{6}$/.test(c));
+      if (!cols.length) return reject(new Error('No encontramos colores en esa imagen'));
+      resolve(cols.slice(0, 2));
+    });
+  });
+}
+
 function httpsGet(url, timeoutMs) {
   return new Promise((resolve, reject) => {
     let u;
@@ -1312,6 +1329,7 @@ module.exports = {
   generateDemo,
   redesignDemo,
   trialPhotoOptions,
+  extractColorsFromBuffer,
   toTu,
   demoHashtags,
   DEMO_TOPICS,

@@ -1679,6 +1679,34 @@ app.get('/api/trial/photo-options', (req, res) => {
   res.json({ ok: true, options: demo.trialPhotoOptions(out.category, out.business, used, 8) });
 });
 
+// Colores exactos desde el logo del cliente: sube la foto de su logo y
+// extraemos los 2 colores dominantes para usarlos idénticos en los posteos.
+const LOGO_COLORS_LIMIT = 20; // por día por IP (operación liviana)
+try { db.exec('CREATE TABLE IF NOT EXISTS trial_logo_usage (ip TEXT, day TEXT, count INTEGER DEFAULT 0, PRIMARY KEY (ip, day))'); } catch (e) {}
+function trialLogoAllowed(ip) {
+  const day = new Date().toISOString().slice(0, 10);
+  try {
+    const row = db.prepare('SELECT count FROM trial_logo_usage WHERE ip = ? AND day = ?').get(ip, day);
+    if (row && row.count >= LOGO_COLORS_LIMIT) return false;
+    db.prepare('INSERT INTO trial_logo_usage (ip, day, count) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET count = count + 1').run(ip, day);
+    return true;
+  } catch (e) { return true; }
+}
+app.post('/api/trial/logo-colors', express.json({ limit: '6mb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  if (!trialLogoAllowed(ip)) return res.status(429).json({ error: 'Demasiados intentos por hoy' });
+  const img = String((req.body && req.body.image) || '');
+  const m = /^data:(image\/(png|jpeg|webp));base64,([\s\S]+)$/.exec(img);
+  if (!m) return res.status(400).json({ error: 'Subí una foto de tu logo (JPG, PNG o WebP)' });
+  if (img.length > 4 * 1024 * 1024) return res.status(400).json({ error: 'La foto es muy pesada' });
+  try {
+    const colors = await demo.extractColorsFromBuffer(Buffer.from(m[3], 'base64'));
+    res.json({ ok: true, colors });
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'No pudimos leer los colores de tu logo' });
+  }
+});
+
 // ---------- Health ----------
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 
