@@ -495,7 +495,7 @@ function appShell(tab, content) {
   const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
   const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
-  const igBanner = (PROFILE && PROFILE.ig_connected) || tab === 'conectar' ? '' : `
+  const igBanner = (PROFILE && PROFILE.ig_connected) ? '' : `
   <div class="ig-banner"><span class="igb-ico">📸</span><span class="igb-txt"><b>Conectá tu Instagram</b><span>Publicá en automático en 1 minuto, sin contraseña.</span></span><button class="btn btn-primary btn-sm" data-ig-connect>Conectar ahora</button></div>`;
   const verifyBanner = (ME && !ME.email_verified) ? `
   <div class="verify-banner"><span class="igb-ico">📧</span><span class="igb-txt"><b>Verificá tu email</b><span>Te mandamos un link a tu casilla para activar tu cuenta.</span></span><button class="btn btn-primary btn-sm" id="btnResendVerify">Reenviar</button></div>` : '';
@@ -2593,7 +2593,7 @@ function ajustesView() {
   </details>`;
 }
 
-/* ---------- CONECTAR INSTAGRAM (primer ingreso) ---------- */
+/* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
   // Decisión normal post-registro/login: onboarding si falta el negocio, si no al panel
   const chosen = localStorage.getItem('posta_chosen_plan');
@@ -2604,56 +2604,81 @@ function postAuthLanding() {
     OB = freshOB();
   }
 }
-function conectarView() {
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const ok = q.get('ig') === 'ok';
-  const err = q.get('ig') === 'error' ? (q.get('msg') || 'No se pudo conectar.') : null;
-  const personal = q.get('ig') === 'personal';
-  return `<div style="max-width:540px;margin:6vh auto 48px;padding:0 20px;text-align:center">
-    <div style="font-size:64px;line-height:1">📸</div>
-    <h1 style="margin:16px 0 8px;font-size:28px">Conectá tu Instagram</h1>
-    <p style="color:var(--mut);font-size:16px;line-height:1.6;margin:0 0 20px">En 1 minuto Posta publica tu semana en automático.</p>
-    ${ok ? `<div class="okmsg" style="margin-bottom:16px;text-align:left">✅ <b>¡Instagram conectado!</b><br><span style="font-size:14px">Te llevamos a tu panel…</span></div>` : ''}
-    ${err ? `<div class="err" style="margin-bottom:16px;text-align:left">❌ ${esc(err)}</div>` : ''}
-    ${personal ? `<div class="ig-warn" style="margin-bottom:16px;text-align:left">⚠️ <b>Tu cuenta de Instagram es personal.</b> Para publicar necesitás una cuenta profesional (Business o Creator): hacé el cambio con la guía de abajo y probá de nuevo.</div>` : ''}
-    ${ok ? '' : `<div class="card" style="text-align:left;margin-bottom:20px">
-      <div style="display:grid;gap:10px;font-size:15px">
-        <div>✅ Publicamos tus posteos por vos</div>
-        <div>✅ Leemos tu perfil para conocer tu marca</div>
-        <div>🔒 Nunca vemos ni guardamos tu contraseña</div>
-      </div>
-    </div>
-    <button class="btn btn-primary btn-block" id="btnConnStart" style="padding:16px;font-size:17px">Conectar Instagram</button>
-    <div id="igMsg" style="margin-top:10px;text-align:left"></div>
-    <details class="card" style="margin:18px 0;text-align:left">
-      <summary style="font-weight:700;cursor:pointer">¿Cómo hago mi cuenta profesional?</summary>
-      <ol style="margin:12px 0 0 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
-        <li>Abrí Instagram y andá a tu perfil</li>
-        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
-        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
-        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
-      </ol>
-      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
-    </details>
-    <p class="hint" style="margin-bottom:18px">🛠 Nuestra app de Meta está en revisión: si la conexión falla, probá el modo demo en Ajustes → Instagram.</p>
-    <a href="#" id="btnConnSkip" style="color:var(--dim);font-size:14px">Lo hago después →</a>`}
-  </div>`;
+function igDismissKey() {
+  const id = (ME && (ME.id || ME.email)) || 'anon';
+  return 'posta_ig_dismissed_' + id;
 }
-function bindConectar() {
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  if (q.get('ig') === 'ok') {
-    // Conexión recién completada: refrescamos y seguimos al flujo normal
-    (async () => { try { await refreshSession(); } catch (e) {} setTimeout(postAuthLanding, 1600); })();
-    return;
+function maybeShowIgPopup(tab) {
+  try {
+    if (!ME || !PROFILE) return;
+    if (PROFILE.ig_connected) return;
+    if (tab === 'onboarding') return; // no interrumpir el onboarding
+    if (document.getElementById('igFirstOverlay')) return;
+    let dismissed = null;
+    try { dismissed = localStorage.getItem(igDismissKey()); } catch (e) {}
+    if (dismissed) return;
+    const ov = document.createElement('div');
+    ov.id = 'igFirstOverlay';
+    ov.className = 'pz-exp-overlay';
+    ov.innerHTML = `
+    <div class="pz-exp-modal" role="dialog" aria-modal="true">
+      <div style="font-size:52px;line-height:1">📸</div>
+      <h2>Conectá tu Instagram</h2>
+      <p class="pz-exp-sub">Así Posta deja tu semana lista para publicar.</p>
+      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:17px">Conectar Instagram</button>
+      <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
+      <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
+      <details style="margin:12px 0 4px;text-align:left">
+        <summary style="font-weight:700;cursor:pointer;font-size:14px;color:var(--mut)">¿Cómo hago mi cuenta profesional?</summary>
+        <ol style="margin:10px 0 0 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
+          <li>Abrí Instagram y andá a tu perfil</li>
+          <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
+          <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
+          <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
+        </ol>
+        <div class="hint" style="margin-top:6px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
+      </details>
+      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:14px">Lo hago después →</a></div>
+    </div>`;
+    document.body.appendChild(ov);
+    const go = ov.querySelector('#igFirstGo');
+    if (go) go.onclick = () => {
+      const cur = '/#' + ((location.hash.split('?')[0] || '#/app/semana').replace(/^#/, ''));
+      igConnect(cur);
+    };
+    const skip = ov.querySelector('#igFirstSkip');
+    if (skip) skip.onclick = (e) => {
+      e.preventDefault();
+      try { localStorage.setItem(igDismissKey(), '1'); } catch (e2) {}
+      ov.remove();
+    };
+  } catch (e) {}
+}
+/* ---------- toast global ---------- */
+function toast(html) {
+  try {
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0A1E33;color:#fff;padding:14px 20px;border-radius:14px;font-size:15px;line-height:1.5;z-index:10001;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:center';
+    t.innerHTML = html;
+    document.body.appendChild(t);
+    setTimeout(() => { try { t.remove(); } catch (e) {} }, 5200);
+  } catch (e) {}
+}
+/* ---------- resultado del OAuth (?ig=) en cualquier pantalla ---------- */
+function handleIgResult() {
+  let q = '';
+  try { q = location.hash.split('?')[1] || ''; } catch (e) {}
+  const hq = new URLSearchParams(q);
+  const r = hq.get('ig');
+  if (!r) return;
+  try { history.replaceState(null, '', location.pathname + location.hash.split('?')[0]); } catch (e) {}
+  if (r === 'ok') {
+    toast('✅ <b>¡Instagram conectado!</b>' + (hq.get('demo_off') ? '<br>El modo demo se apagó solo — ahora publicás de verdad.' : ''));
+  } else if (r === 'personal') {
+    toast('⚠️ <b>Tu cuenta de Instagram es personal.</b><br>Para publicar necesitás una cuenta profesional (Business o Creator).');
+  } else if (r === 'error') {
+    toast('❌ ' + esc(hq.get('msg') || 'No se pudo conectar tu Instagram.'));
   }
-  const b = $('#btnConnStart');
-  if (b) b.onclick = () => igConnect('/#/app/conectar');
-  const s = $('#btnConnSkip');
-  if (s) s.onclick = (e) => {
-    e.preventDefault();
-    try { localStorage.setItem('posta_ig_dismissed', '1'); } catch (e) {}
-    postAuthLanding();
-  };
 }
 
 /* ---------- ONBOARDING (4 pasos) ---------- */
@@ -2897,10 +2922,8 @@ async function render() {
           } catch (e) {}
           localStorage.removeItem('posta_trial_profile');
         }
-        // Primer ingreso: conectar Instagram de una (se puede saltear, una sola vez)
-        const needIg = !(PROFILE && PROFILE.ig_connected) && !localStorage.getItem('posta_ig_dismissed');
-        if (needIg) location.hash = '#/app/conectar';
-        else postAuthLanding();
+        // Primer ingreso: el popup de conectar Instagram aparece solo (una vez por cuenta)
+        postAuthLanding();
       } catch (e) {
         const dup = /ya está registrado/i.test(e.message || '');
         $('#formErr').innerHTML = `<div class="err">${dup ? `Ese email ya tiene cuenta. ¿Eras vos? <a href="#/login" style="color:var(--cel);font-weight:700">Entrá</a>` : esc(e.message)}</div>`;
@@ -2929,10 +2952,11 @@ async function render() {
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') content = await calendarView();
   else if (tab === 'historial') content = await historyView();
-  else if (tab === 'conectar') content = conectarView();
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
+  maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso)
   // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan)
   try {
     if (ME && ME.trial_expired && ME.plan_status === 'trial' && tab !== 'ajustes' && !sessionStorage.getItem('pz_exp_modal')) {
@@ -2998,7 +3022,6 @@ function bindApp(tab) {
   if (tab === 'video') bindVideo();
   if (tab === 'fotos') bindFotos();
   if (tab === 'onboarding') bindOnboarding();
-  if (tab === 'conectar') bindConectar();
   if (tab === 'calendario' || tab === 'historial') {
     $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
     $$('[data-act]').forEach(b => b.onclick = async () => {
@@ -3488,7 +3511,7 @@ async function igConnect(next) {
     const { url } = await api.get('/api/ig/start' + (nx ? '?next=' + encodeURIComponent(nx) : ''));
     location.href = url;
   } catch (e) {
-    const m = $('#igMsg');
+    const m = $('#igFirstMsg') || $('#igMsg');
     if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
     else alert('Error: ' + e.message);
   }
@@ -3990,25 +4013,6 @@ function bindSettings() {
       if (vm) vm.innerHTML = `<div class="err">❌ La verificación falló: ${esc(e.message)}</div>`;
     }
   };
-  // --- resultado del OAuth (?ig= en el hash) ---
-  (function igResult() {
-    let q = '';
-    try { q = location.hash.split('?')[1] || ''; } catch (e) {}
-    const hq = new URLSearchParams(q);
-    const r = hq.get('ig');
-    if (!r) return;
-    try { history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {}
-    const box = $('#igBanner');
-    if (!box) return;
-    if (r === 'ok') {
-      box.innerHTML = `<div class="ig-ok">✅ <b>¡Instagram conectado!</b>${hq.get('demo_off') ? ' El modo demo se apagó solo — ahora publicás de verdad.' : ''}<br><a class="btn btn-primary btn-sm" href="#/app/crear" style="margin-top:10px">Crear mi primer posteo →</a></div>`;
-    } else if (r === 'personal') {
-      box.innerHTML = `<div class="ig-warn">⚠️ <b>Tu cuenta de Instagram es personal.</b> Para publicar necesitás una cuenta profesional (Business o Creator).</div>`;
-      const g = $('#igProGuide'); if (g) g.style.display = '';
-    } else if (r === 'error') {
-      box.innerHTML = `<div class="err">❌ ${esc(hq.get('msg') || 'No se pudo conectar tu Instagram.')}</div>`;
-    }
-  })();
   const igProLink = $('#igProLink');
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
   const igRetry = $('#btnIgRetry');
