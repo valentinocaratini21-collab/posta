@@ -677,7 +677,7 @@ function loadImageFile(file) {
 }
 
 function wrapText(ctx, text, maxW) {
-  const words = text.split(' ');
+  const words = String(text || '').split(' ').filter(Boolean);
   const lines = [];
   let line = '';
   for (const w of words) {
@@ -1308,7 +1308,9 @@ function renderChatCaps() {
 }
 
 // Texto envuelto para el storyboard del reel
-function wrapText(ctx, text, x, y, maxW, lh) {
+// OJO: se llama drawWrappedText (no wrapText) porque wrapText ya existe
+// y devuelve un array de líneas. Esta versión dibuja directo en el canvas.
+function drawWrappedText(ctx, text, x, y, maxW, lh) {
   const words = String(text || '').split(' ').filter(Boolean);
   const lines = [];
   let line = '';
@@ -1356,7 +1358,7 @@ async function renderChatStoryboard() {
       ctx.font = '800 15px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      wrapText(ctx, tx, cv.width / 2, cv.height - 52, cv.width - 24, 19);
+      drawWrappedText(ctx, tx, cv.width / 2, cv.height - 52, cv.width - 24, 19);
       const d = document.createElement('div');
       d.className = 'chat-board-scene';
       d.appendChild(cv);
@@ -1839,12 +1841,11 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
 // Crea UN borrador a partir de una idea (texto + diseño o reel).
 // Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
 async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
-  const dstage = async (name, fn) => { try { return await fn(); } catch (e) { e._dbgStage = (e._dbgStage ? e._dbgStage + ' < ' : '') + 'draft:' + name; throw e; } };
-  const photos = await dstage('assetPhotos', async () => assetPhotos());
-  const logo = await dstage('logo', async () => assetLogo() ? await photoImg(assetLogo().file_path) : null);
-  const palIdx = await dstage('defaultPal', async () => defaultPal());
-  const handle = await dstage('handle', async () => (PROFILE || {}).ig_username || '');
-  const out = await dstage('POST /api/generate', () => api.post('/api/generate', { topic: idea.titulo }));
+  const photos = assetPhotos();
+  const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+  const palIdx = defaultPal();
+  const handle = (PROFILE || {}).ig_username || '';
+  const out = await api.post('/api/generate', { topic: idea.titulo });
   // Si viene del chat, se respeta el texto que el cliente eligió/editó (no se regenera)
   const chatTa = useChatText ? $('#chatCaption') : null;
   const chatHg = useChatText ? $('#chatHashtags') : null;
@@ -1853,24 +1854,23 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
   let imagePath = null, mediaType = 'image';
   if (asVideo) {
     try {
-      imagePath = await dstage('autopilotReel', () => autopilotReel(idea, photos, logo, palIdx, handle, idx));
+      imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx);
       mediaType = 'video';
-    } catch (e) { try { console.error('[AUTOPILOT-DEBUG] reel falló, fallback a estático:', e._dbgStage, e.message); } catch (e2) {} imagePath = null; /* fallback a diseño estático */ }
+    } catch (e) { imagePath = null; /* fallback a diseño estático */ }
   }
   if (!imagePath) {
-    const title = await dstage('title', async () => (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD');
+    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
     const ph = photos.length ? photos[idx % photos.length] : null;
-    const phImg = await dstage('photoImg', async () => ph ? await photoImg(ph.file_path) : null);
-    imagePath = await dstage('renderDesignImage', () => renderDesignImage({
+    imagePath = await renderDesignImage({
       tpl: 'gradiente', pal: palIdx,
       title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
       handle,
-      photoImg: phImg,
+      photoImg: ph ? await photoImg(ph.file_path) : null,
       logoImg: logo,
-    }));
+    });
   }
   try {
-    await dstage('POST /api/posts', () => api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType }));
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
@@ -1881,15 +1881,10 @@ async function runAutopilot(n, tag) {
   const prog = document.getElementById('apProg-' + t);
   const btn = document.querySelector('[data-autopilot="' + t + '"]');
   btn.disabled = true;
-  // DEBUG TEMPORAL: captura la etapa exacta y el stack del error
-  const stage = async (name, fn) => {
-    try { return await fn(); }
-    catch (e) { e._dbgStage = name; throw e; }
-  };
   try {
     // Si hay borradores sin revisar de una corrida anterior, preguntar antes de reemplazarlos
-    const existing = await stage('GET /api/posts', () => api.get('/api/posts'));
-    const oldDrafts = await stage('filtrar borradores', async () => existing.filter(p => p.status === 'draft'));
+    const existing = await api.get('/api/posts');
+    const oldDrafts = existing.filter(p => p.status === 'draft');
     if (oldDrafts.length) {
       const ok = confirm(`Hay ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazamos por una semana nueva?`);
       if (!ok) { btn.disabled = false; return; }
@@ -1898,18 +1893,18 @@ async function runAutopilot(n, tag) {
     let ideas = IDEAS;
     if (!ideas.length) {
       prog.innerHTML = `<div class="okmsg">💡 Generando ideas para tu negocio...</div>`;
-      const r = await stage('POST /api/ideas', () => api.post('/api/ideas', {}));
-      ideas = await stage('r.ideas || []', async () => r.ideas || []);
+      const r = await api.post('/api/ideas', {});
+      ideas = r.ideas || [];
       IDEAS = ideas;
     }
-    const picks = await stage('ideas.slice(0,n)', async () => ideas.slice(0, n));
+    const picks = ideas.slice(0, n);
     if (!picks.length) throw new Error('No hay ideas para programar');
     // Brand kit del cliente: fotos rotadas + logo + paleta de marca
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
       const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
       prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
-      await stage('draftFromIdea #' + i + (isReel ? ' (reel)' : ''), () => draftFromIdea(idea, isReel, i)); // borrador: el cliente revisa antes de programar
+      await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
     }
     prog.innerHTML = t === 'home'
       ? `<div class="okmsg">📋 ¡Tu semana está lista!</div><a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar mi semana →</a>`
@@ -1919,8 +1914,7 @@ async function runAutopilot(n, tag) {
       if (t === 'ideas') setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
     }, 900);
   } catch (e) {
-    try { console.error('[AUTOPILOT-DEBUG] etapa:', e._dbgStage, 'error:', e); } catch (e2) {}
-    prog.innerHTML = `<div class="err"><b>Error en etapa: ${esc(e._dbgStage || '?')}</b><br>Error: ${esc(e.message)}<pre style="text-align:left;font-size:11px;white-space:pre-wrap;max-height:300px;overflow:auto;background:#fff;padding:8px;border-radius:8px;margin-top:8px">${esc(e.stack || '(sin stack)')}</pre></div>`;
+    prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
     btn.disabled = false;
   }
 }
