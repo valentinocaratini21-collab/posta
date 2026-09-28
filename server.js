@@ -268,6 +268,7 @@ app.get('/api/profile', requireAuth, (req, res) => {
 
 app.put('/api/profile', requireAuth, (req, res) => {
   const { business_name, category, tone, description, ig_username, competitors, goal } = req.body || {};
+  if (!(business_name || '').trim()) return res.status(400).json({ error: 'El nombre del negocio es obligatorio' });
   getProfile(req.session.userId);
   db.prepare(
     `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, updated_at=datetime('now') WHERE user_id=?`
