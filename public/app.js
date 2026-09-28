@@ -666,6 +666,7 @@ function extractTopColors(img, n) {
   const cw = 120, chh = 120;
   const cv = document.createElement('canvas'); cv.width = cw; cv.height = chh;
   const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.imageSmoothingEnabled = false; // sin suavizado: los colores planos del logo quedan puros, sin tonos de borde inventados
   const s = Math.min(cw / img.naturalWidth, chh / img.naturalHeight);
   const w = img.naturalWidth * s, h = img.naturalHeight * s;
   cx.fillStyle = '#fff'; cx.fillRect(0, 0, cw, chh);
@@ -715,10 +716,21 @@ function extractTopColors(img, n) {
       track(buckets, k, r, g, b);
     }
   }
-  const ranked = Object.entries(buckets)
-    .map(([k, v]) => [k, v, v.n * (0.25 + 2 * (v.sat / v.n))])
-    .sort((a, b) => b[2] - a[2])
-    .map(([, v]) => hexOf(v));
+  const rgbOf = (e) => [(e.best >> 16) & 255, (e.best >> 8) & 255, e.best & 255];
+  const cDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  // Diversidad perceptual: un tono casi idéntico a uno ya elegido (ej. bordes
+  // anti-aliased del mismo navy) no ocupa el lugar de un color distinto
+  // (ej. el puntito celeste del logo).
+  const scored = Object.values(buckets)
+    .sort((a, b) => (b.n * (0.25 + 2 * (b.sat / b.n))) - (a.n * (0.25 + 2 * (a.sat / a.n))));
+  const picked = [];
+  for (const e of scored) {
+    if (picked.every(p => cDist(rgbOf(e), rgbOf(p)) >= 48)) {
+      picked.push(e);
+      if (picked.length === 3) break;
+    }
+  }
+  const ranked = picked.map(hexOf);
   // 3) El fondo (si es un color real, ej. navy de fitswapp) va como acento
   const out = bgIsReal ? [ranked[0], ranked[1], hexOf(bgE)].filter(Boolean) : ranked;
   return out.slice(0, n || 3);
