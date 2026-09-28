@@ -495,7 +495,7 @@ function appShell(tab, content) {
   const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
   const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
-  const igBanner = (PROFILE && PROFILE.ig_connected) ? '' : `
+  const igBanner = (PROFILE && PROFILE.ig_connected) || tab === 'conectar' ? '' : `
   <div class="ig-banner"><span class="igb-ico">📸</span><span class="igb-txt"><b>Conectá tu Instagram</b><span>Publicá en automático en 1 minuto, sin contraseña.</span></span><button class="btn btn-primary btn-sm" data-ig-connect>Conectar ahora</button></div>`;
   const verifyBanner = (ME && !ME.email_verified) ? `
   <div class="verify-banner"><span class="igb-ico">📧</span><span class="igb-txt"><b>Verificá tu email</b><span>Te mandamos un link a tu casilla para activar tu cuenta.</span></span><button class="btn btn-primary btn-sm" id="btnResendVerify">Reenviar</button></div>` : '';
@@ -2454,13 +2454,40 @@ function ajustesView() {
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Probá de nuevo.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
-  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu marca, tu plan y tus integraciones.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
   ${igMsg}${planMsg}${tokenWarn}
-  <div class="card card-hi-yl"><h3>💳 Mi plan</h3>
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div>
-  <div class="card card-hi-cel"><h3>🎁 Referidos · 50% off</h3>
-    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
+  <div class="card"><h3>🎨 Mi marca</h3>
+    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Tus fotos están en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a>. Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+    <div class="row2">
+      <div class="field"><label>Logo</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:14px">Sin logo</span>'}
+          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
+          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
+        </div>
+        <input type="file" id="s_logofile" accept="image/*" style="display:none">
+      </div>
+    </div>
+    <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
+      <div style="display:flex;gap:10px">
+        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
+      </div>
+      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano.</div>
+    </div>
+    <div class="field"><label>Vista previa</label>
+      <div id="brandPrev"></div>
+      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
+    </div>
+    <div class="field"><label>Foto de perfil</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="brand-pf" id="brandPf"></div>
+        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
+      <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
+    </div>
   </div>
   <div class="card"><h3>🏪 Tu negocio</h3>
   <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus ideas y posteos: cuanto más completos, mejores resultados.</p>
@@ -2497,39 +2524,6 @@ function ajustesView() {
       <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
-    </div>
-  </div>
-  <div class="card"><h3>🎨 Mi marca</h3>
-    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Tus fotos están en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a>. Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
-    <div class="row2">
-      <div class="field"><label>Logo</label>
-        <div style="display:flex;gap:10px;align-items:center">
-          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:14px">Sin logo</span>'}
-          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
-          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
-        </div>
-        <input type="file" id="s_logofile" accept="image/*" style="display:none">
-      </div>
-    </div>
-    <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
-      <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
-      </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano.</div>
-    </div>
-    <div class="field"><label>Vista previa</label>
-      <div id="brandPrev"></div>
-      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
-    </div>
-    <div class="field"><label>Foto de perfil</label>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="brand-pf" id="brandPf"></div>
-        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
-      <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
     </div>
   </div>
   <div class="card"><h3>📸 Instagram</h3>
@@ -2574,6 +2568,12 @@ function ajustesView() {
     </div>
     <div id="igMsg"></div>
   </div>
+  <div class="card card-hi-yl"><h3>💳 Mi plan</h3>
+    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div>
+  <div class="card card-hi-cel"><h3>🎁 Referidos · 50% off</h3>
+    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>📸 App de Meta</h4>
@@ -2591,6 +2591,69 @@ function ajustesView() {
     </div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
   </details>`;
+}
+
+/* ---------- CONECTAR INSTAGRAM (primer ingreso) ---------- */
+function postAuthLanding() {
+  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al panel
+  const chosen = localStorage.getItem('posta_chosen_plan');
+  if (PROFILE && PROFILE.business_name) {
+    location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '#/app/semana';
+  } else {
+    location.hash = '#/app/onboarding';
+    OB = freshOB();
+  }
+}
+function conectarView() {
+  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const ok = q.get('ig') === 'ok';
+  const err = q.get('ig') === 'error' ? (q.get('msg') || 'No se pudo conectar.') : null;
+  const personal = q.get('ig') === 'personal';
+  return `<div style="max-width:540px;margin:6vh auto 48px;padding:0 20px;text-align:center">
+    <div style="font-size:64px;line-height:1">📸</div>
+    <h1 style="margin:16px 0 8px;font-size:28px">Conectá tu Instagram</h1>
+    <p style="color:var(--mut);font-size:16px;line-height:1.6;margin:0 0 20px">En 1 minuto Posta publica tu semana en automático.</p>
+    ${ok ? `<div class="okmsg" style="margin-bottom:16px;text-align:left">✅ <b>¡Instagram conectado!</b><br><span style="font-size:14px">Te llevamos a tu panel…</span></div>` : ''}
+    ${err ? `<div class="err" style="margin-bottom:16px;text-align:left">❌ ${esc(err)}</div>` : ''}
+    ${personal ? `<div class="ig-warn" style="margin-bottom:16px;text-align:left">⚠️ <b>Tu cuenta de Instagram es personal.</b> Para publicar necesitás una cuenta profesional (Business o Creator): hacé el cambio con la guía de abajo y probá de nuevo.</div>` : ''}
+    ${ok ? '' : `<div class="card" style="text-align:left;margin-bottom:20px">
+      <div style="display:grid;gap:10px;font-size:15px">
+        <div>✅ Publicamos tus posteos por vos</div>
+        <div>✅ Leemos tu perfil para conocer tu marca</div>
+        <div>🔒 Nunca vemos ni guardamos tu contraseña</div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" id="btnConnStart" style="padding:16px;font-size:17px">Conectar Instagram</button>
+    <div id="igMsg" style="margin-top:10px;text-align:left"></div>
+    <details class="card" style="margin:18px 0;text-align:left">
+      <summary style="font-weight:700;cursor:pointer">¿Cómo hago mi cuenta profesional?</summary>
+      <ol style="margin:12px 0 0 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
+        <li>Abrí Instagram y andá a tu perfil</li>
+        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
+        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
+        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
+      </ol>
+      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
+    </details>
+    <p class="hint" style="margin-bottom:18px">🛠 Nuestra app de Meta está en revisión: si la conexión falla, probá el modo demo en Ajustes → Instagram.</p>
+    <a href="#" id="btnConnSkip" style="color:var(--dim);font-size:14px">Lo hago después →</a>`}
+  </div>`;
+}
+function bindConectar() {
+  const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  if (q.get('ig') === 'ok') {
+    // Conexión recién completada: refrescamos y seguimos al flujo normal
+    (async () => { try { await refreshSession(); } catch (e) {} setTimeout(postAuthLanding, 1600); })();
+    return;
+  }
+  const b = $('#btnConnStart');
+  if (b) b.onclick = () => igConnect('/#/app/conectar');
+  const s = $('#btnConnSkip');
+  if (s) s.onclick = (e) => {
+    e.preventDefault();
+    try { localStorage.setItem('posta_ig_dismissed', '1'); } catch (e) {}
+    postAuthLanding();
+  };
 }
 
 /* ---------- ONBOARDING (4 pasos) ---------- */
@@ -2834,14 +2897,10 @@ async function render() {
           } catch (e) {}
           localStorage.removeItem('posta_trial_profile');
         }
-        // Onboarding si el perfil está incompleto; si viene de /prueba, va a elegir plan
-        const chosen = localStorage.getItem('posta_chosen_plan');
-        if (PROFILE && PROFILE.business_name) {
-          location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '#/app/semana';
-        } else {
-          location.hash = '#/app/onboarding';
-          OB = freshOB();
-        }
+        // Primer ingreso: conectar Instagram de una (se puede saltear, una sola vez)
+        const needIg = !(PROFILE && PROFILE.ig_connected) && !localStorage.getItem('posta_ig_dismissed');
+        if (needIg) location.hash = '#/app/conectar';
+        else postAuthLanding();
       } catch (e) {
         const dup = /ya está registrado/i.test(e.message || '');
         $('#formErr').innerHTML = `<div class="err">${dup ? `Ese email ya tiene cuenta. ¿Eras vos? <a href="#/login" style="color:var(--cel);font-weight:700">Entrá</a>` : esc(e.message)}</div>`;
@@ -2870,6 +2929,7 @@ async function render() {
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') content = await calendarView();
   else if (tab === 'historial') content = await historyView();
+  else if (tab === 'conectar') content = conectarView();
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
@@ -2938,6 +2998,7 @@ function bindApp(tab) {
   if (tab === 'video') bindVideo();
   if (tab === 'fotos') bindFotos();
   if (tab === 'onboarding') bindOnboarding();
+  if (tab === 'conectar') bindConectar();
   if (tab === 'calendario' || tab === 'historial') {
     $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
     $$('[data-act]').forEach(b => b.onclick = async () => {
@@ -3421,9 +3482,12 @@ function bindCreator() {
   }
 }
 
-async function igConnect() {
-  try { const { url } = await api.get('/api/ig/start'); location.href = url; }
-  catch (e) {
+async function igConnect(next) {
+  try {
+    const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
+    const { url } = await api.get('/api/ig/start' + (nx ? '?next=' + encodeURIComponent(nx) : ''));
+    location.href = url;
+  } catch (e) {
     const m = $('#igMsg');
     if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
     else alert('Error: ' + e.message);
