@@ -3861,12 +3861,60 @@ function bindCreator() {
   }
 }
 
+let igWaitTimer = null;
 function igConnect(next) {
   const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
-  // Bounce por el servidor: /api/ig/go redirige a Instagram vía 302, así iOS
-  // no saca el flujo a la app de Instagram y el OAuth vuelve solo a Posta
-  // (celular y desktop). Navegar directo a instagram.com rompía el regreso.
-  location.href = '/api/ig/go' + (nx ? '?next=' + encodeURIComponent(nx) : '');
+  const url = '/api/ig/go' + (nx ? '?next=' + encodeURIComponent(nx) : '');
+  // El OAuth abre en pestaña nueva y Posta queda viva detectando la conexión
+  // sola (polling). Si Instagram pierde el contexto —ej. te pide login +
+  // verificación y te deja en el feed—, volvés a esta pestaña y reintentás
+  // con un toque, sin perder nada.
+  const w = window.open(url, '_blank', 'noopener');
+  if (!w) { location.href = url; return; } // popup bloqueado: fallback misma pestaña
+  igShowWaiting(url);
+}
+function igShowWaiting(url) {
+  igHideWaiting();
+  const ov = document.createElement('div');
+  ov.id = 'igWaitOverlay';
+  ov.className = 'pz-exp-overlay';
+  ov.innerHTML = `
+  <div class="pz-exp-modal" role="dialog" aria-modal="true">
+    <div style="font-size:52px;line-height:1">📸</div>
+    <h2>Conectando tu Instagram</h2>
+    <p class="pz-exp-sub" id="igWaitMsg">Se abrió una pestaña nueva: completá la autorización ahí.<br>Esta pantalla se actualiza sola ✨</p>
+    <div class="igwait-spin" style="margin:16px auto"></div>
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button class="btn btn-soft btn-block" id="igWaitRetry">Reintentar</button>
+      <button class="btn btn-ghost btn-block" id="igWaitCancel">Cancelar</button>
+    </div>
+    <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#igWaitRetry').onclick = () => { window.open(url, '_blank', 'noopener'); };
+  ov.querySelector('#igWaitCancel').onclick = igHideWaiting;
+  igWaitTimer = setInterval(async () => {
+    try {
+      const p = await api.get('/api/profile');
+      if (p && p.ig_connected) {
+        clearInterval(igWaitTimer); igWaitTimer = null;
+        const sp = ov.querySelector('.igwait-spin');
+        if (sp) sp.outerHTML = '<div style="font-size:52px;line-height:1;margin:16px auto">🎉</div>';
+        const m = ov.querySelector('#igWaitMsg');
+        if (m) m.innerHTML = `¡Listo! <b>${esc('@' + (p.ig_username || 'tu cuenta'))}</b> conectado.<br>Ya podés cerrar la otra pestaña.`;
+        const r = ov.querySelector('#igWaitRetry'); if (r) r.style.display = 'none';
+        const c = ov.querySelector('#igWaitCancel'); if (c) c.textContent = 'Cerrar';
+        try { await refreshSession(); } catch (e) {}
+        try { render(); } catch (e) {}
+        setTimeout(igHideWaiting, 4000);
+      }
+    } catch (e) { /* seguimos esperando */ }
+  }, 2000);
+}
+function igHideWaiting() {
+  if (igWaitTimer) { clearInterval(igWaitTimer); igWaitTimer = null; }
+  const ov = document.getElementById('igWaitOverlay');
+  if (ov) ov.remove();
 }
 function bindSettings() {
   // Acordeón de secciones en móvil
