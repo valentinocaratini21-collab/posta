@@ -32,6 +32,8 @@ async function publishSinglePost(db, post) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', post.id);
+    // La racha se alimenta con cada publicación (regla 72h)
+    try { require('./streaks').feedStreak(db, post.user_id); } catch (e) {}
     // Loop inteligente fase 1: si salió sin que el cliente lo tocara, cuenta como aprobado.
     // No pisa una señal manual previa (ej: 👎 marcado antes de publicarse).
     try {

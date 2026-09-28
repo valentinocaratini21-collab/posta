@@ -244,9 +244,14 @@ CREATE TABLE IF NOT EXISTS streaks (
   current INTEGER NOT NULL DEFAULT 0,
   best INTEGER NOT NULL DEFAULT 0,
   last_week TEXT NOT NULL DEFAULT '',
-  started_at INTEGER NOT NULL DEFAULT 0
+  started_at INTEGER NOT NULL DEFAULT 0,
+  fed_at INTEGER NOT NULL DEFAULT 0
 );
 `);
+// Migración 2026-09-28: la racha vence a las 72h sin publicar → columna fed_at.
+// Backfill: las rachas vivas reciben 72h de gracia desde el deploy.
+try { db.exec(`ALTER TABLE streaks ADD COLUMN fed_at INTEGER NOT NULL DEFAULT 0`); } catch (e) {}
+try { db.exec(`UPDATE streaks SET fed_at = ${Date.now()} WHERE current > 0 AND fed_at = 0`); } catch (e) {}
 
 // Backfill: timezone vacío → default
 try { db.exec(`UPDATE settings SET timezone='America/Argentina/Buenos_Aires' WHERE timezone IS NULL OR timezone=''`); } catch (e) {}

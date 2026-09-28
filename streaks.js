@@ -2,7 +2,15 @@
 // La semana se cuenta de lunes a domingo en la zona horaria del negocio.
 // Regla: POST /api/streak/week-armed se llama cuando runAutopilot termina bien.
 // Idempotente por semana: armar dos veces la misma semana no suma doble.
+//
+// VENCIMIENTO 72H: la racha se apaga si pasan 72 horas sin que salga ningún
+// posteo. Lo único que la alimenta es una publicación (feedStreak); armar la
+// semana sola no alcanza. fed_at = última publicación (o inicio de la racha,
+// como gracia para la primera publicación).
 'use strict';
+
+// 72 horas en ms: tiempo máximo sin publicar antes de que la racha se apague
+const STREAK_TTL_MS = 72 * 3600 * 1000;
 
 // Escalera de niveles (semanas consecutivas)
 const STREAK_LEVELS = [
@@ -53,36 +61,56 @@ function daysLeftInWeek(ymd) {
 
 // Registra la semana armada. weekKey = 'YYYY-MM-DD' del lunes.
 function recordWeekArmed(db, userId, weekKey) {
+  const now = Date.now();
   let s = db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(userId);
   if (!s) {
-    db.prepare('INSERT INTO streaks (user_id, current, best, last_week, started_at) VALUES (?, 0, 0, ?, 0)').run(userId, '');
-    s = { user_id: userId, current: 0, best: 0, last_week: '', started_at: 0 };
+    db.prepare('INSERT INTO streaks (user_id, current, best, last_week, started_at, fed_at) VALUES (?, 0, 0, ?, 0, ?)').run(userId, '', now);
+    s = { user_id: userId, current: 0, best: 0, last_week: '', started_at: 0, fed_at: now };
   }
   if (s.last_week === weekKey) {
     return { ...publicStreak(db, userId, weekKey), newWeek: false, leveledUp: false };
   }
   const continued = s.last_week === shiftDays(weekKey, -7) && (s.current || 0) > 0;
   const current = continued ? s.current + 1 : 1;
-  const startedAt = continued ? (s.started_at || Date.now()) : Date.now();
+  const startedAt = continued ? (s.started_at || now) : now;
   const best = Math.max(s.best || 0, current);
   const before = streakLevel(s.current || 0);
   const after = streakLevel(current);
   // Subir de nivel = pasar de un nivel con nombre a otro (la 1ra semana no es "subir")
   const leveledUp = !!before && !!after && before.name !== after.name;
-  db.prepare('UPDATE streaks SET current = ?, best = ?, last_week = ?, started_at = ? WHERE user_id = ?')
-    .run(current, best, weekKey, startedAt, userId);
+  if (continued) {
+    db.prepare('UPDATE streaks SET current = ?, best = ?, last_week = ?, started_at = ? WHERE user_id = ?')
+      .run(current, best, weekKey, startedAt, userId);
+  } else {
+    // Racha nueva o reiniciada: 72h de gracia desde acá para la primera publicación
+    db.prepare('UPDATE streaks SET current = ?, best = ?, last_week = ?, started_at = ?, fed_at = ? WHERE user_id = ?')
+      .run(current, best, weekKey, startedAt, now, userId);
+  }
   return { ...publicStreak(db, userId, weekKey), newWeek: true, leveledUp };
+}
+
+// Alimenta la racha: llamar en cada publicación exitosa (manual o automática).
+function feedStreak(db, userId) {
+  try { db.prepare('UPDATE streaks SET fed_at = ? WHERE user_id = ?').run(Date.now(), userId); } catch (e) {}
 }
 
 // Estado público de la racha para el frontend y los emails.
 function publicStreak(db, userId, weekKey, todayYmd) {
   const s = db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(userId)
-    || { current: 0, best: 0, last_week: '', started_at: 0 };
-  const current = s.current || 0;
+    || { current: 0, best: 0, last_week: '', started_at: 0, fed_at: 0 };
+  const now = Date.now();
+  let current = s.current || 0;
+  const fedAt = s.fed_at || 0;
+  // Vencimiento 72h: racha viva pero sin publicaciones en 72h → se apaga (se persiste)
+  if (current > 0 && fedAt > 0 && now - fedAt > STREAK_TTL_MS) {
+    try { db.prepare('UPDATE streaks SET current = 0 WHERE user_id = ?').run(userId); } catch (e) {}
+    current = 0;
+  }
   const level = streakLevel(current);
   const next = streakNextLevel(current);
   const weekArmed = s.last_week === weekKey;
   const daysLeft = todayYmd ? daysLeftInWeek(todayYmd) : null;
+  const expiresInMs = current > 0 && fedAt > 0 ? Math.max(0, STREAK_TTL_MS - (now - fedAt)) : 0;
   return {
     current,
     best: s.best || 0,
@@ -90,7 +118,8 @@ function publicStreak(db, userId, weekKey, todayYmd) {
     nextLevel: next ? { emoji: next.emoji, name: next.name, at: next.min } : null,
     weekArmed,
     daysLeft,
-    expiringSoon: current > 0 && !weekArmed && daysLeft !== null && daysLeft <= 2,
+    expiresInMs,
+    expiringSoon: current > 0 && expiresInMs > 0 && expiresInMs <= 24 * 3600 * 1000,
     startedAt: s.started_at || 0,
   };
 }
@@ -113,5 +142,6 @@ function socialProof(db, { excludeUserId, thisMon, prevMon, minDays = 15, minCou
 module.exports = {
   STREAK_LEVELS, streakLevel, streakNextLevel,
   tzToday, mondayKeyOf, shiftDays, daysLeftInWeek,
-  recordWeekArmed, publicStreak, socialProof,
+  recordWeekArmed, feedStreak, publicStreak, socialProof,
+  STREAK_TTL_MS,
 };
