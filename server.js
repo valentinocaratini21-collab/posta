@@ -81,7 +81,8 @@ app.use(
     secret: SESSION_SECRET || 'posta-dev-secret-cambiar-en-prod',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 30 * 24 * 3600 * 1000, httpOnly: true, secure: process.env.COOKIE_SECURE === '1' },
+    rolling: true, // cada request renueva la expiración: mientras uses Posta, nunca se cierra
+    cookie: { maxAge: 365 * 24 * 3600 * 1000, httpOnly: true, secure: process.env.COOKIE_SECURE === '1' },
   })
 );
 app.use('/media', express.static(MEDIA_DIR));
@@ -1488,10 +1489,11 @@ function trialChatAllowed(ip) {
   try {
     if (Math.random() < 0.05) db.exec(`DELETE FROM trial_chat_usage WHERE day < date('now', '-7 days')`);
     const row = db.prepare('SELECT count FROM trial_chat_usage WHERE ip = ? AND day = ?').get(ip, day);
-    if (row && row.count >= TRIAL_CHAT_LIMIT) return false;
+    if (row && row.count >= TRIAL_CHAT_LIMIT) return { ok: false, remaining: 0 };
     db.prepare('INSERT INTO trial_chat_usage (ip, day, count) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET count = count + 1').run(ip, day);
-    return true;
-  } catch (e) { return true; }
+    const now = db.prepare('SELECT count FROM trial_chat_usage WHERE ip = ? AND day = ?').get(ip, day);
+    return { ok: true, remaining: Math.max(0, TRIAL_CHAT_LIMIT - (now ? now.count : 1)) };
+  } catch (e) { return { ok: true, remaining: TRIAL_CHAT_LIMIT }; }
 }
 app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) => {
   const ip = demo.clientIp(req);
@@ -1500,7 +1502,8 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
   const igKey = String(ig || '').trim().replace(/^@/, '').toLowerCase();
   if (!msg) return res.status(400).json({ error: 'Escribí qué querés cambiar 🙂' });
   if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
-  if (!trialChatAllowed(ip)) return res.status(429).json({ error: 'chat_limit' });
+  const chatChk = trialChatAllowed(ip);
+  if (!chatChk.ok) return res.status(429).json({ error: 'chat_limit' });
   const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
   if (!hit) return res.status(404).json({ error: 'No encontramos tu semana. Generala de nuevo 🙂' });
   let out;
@@ -1519,7 +1522,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
     'Hablás con el dueño de "' + String(out.business || 'su negocio').slice(0, 60) + '" (rubro: ' + String(out.category || 'general').slice(0, 30) + ') que está probando gratis y YA tiene sus 5 posteos creados. ' +
     'Te pide cambios. Podés editar ÚNICAMENTE los textos: caption y hashtags de uno o varios posteos. ' +
-    'NO podés cambiar diseños, imágenes ni videos: si te pide eso, decile con buena onda que los diseños los retoca nuestro equipo cuando sea cliente. ' +
+    'NO podés cambiar diseños, fotos ni titulares (vienen en la imagen). Si te pide cambiar la FOTO de un posteo, guialo: "tocá el posteo y después el botón 📷 Cambiar foto". ' +
+    'Si te pide cambiar los COLORES, guialo: "tocá el botón 🎨 Colores que está acá abajo". ' +
+    'Si te pide cambiar el TITULAR del diseño, explicale en una línea que el titular es parte del diseño y ofrecé mejorar el caption en su lugar. ' +
     'Escribís en español rioplatense con voseo, tono cercano y canchero, 1-2 líneas.\n\n' +
     'Posteos (índice, día, caption actual, hashtags actuales):\n' +
     postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
@@ -1556,6 +1561,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     res.json({
       reply: String(parsed.reply || 'Listo ✅ ¿Algo más?').slice(0, 300),
       edits: edits.map((e) => ({ post: e.post, caption: posts[e.post].caption, hashtags: posts[e.post].hashtags })),
+      chat_remaining: chatChk.remaining,
     });
   } catch (e) {
     console.error('[posta] trial chat:', e.message);
