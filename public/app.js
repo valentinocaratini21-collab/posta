@@ -283,7 +283,7 @@ function landingView(cfg) {
     <div class="steps">
       <div class="step"><div class="num">1</div><h3>Contanos tu negocio una vez</h3><p>Qué vendés, tu estilo y tus competidores. Te lleva 2 minutos y no te pedimos más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Ideas estratégicas, diseños con tus fotos y tu marca, captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Tu semana, armada</h3><p>Ideas, diseños y captions programados a la mejor hora. Vos elegís cuándo sale cada posteo.</p></div>
+      <div class="step"><div class="num">3</div><h3>Tu semana, armada</h3><p>Ideas, diseños y captions programados a la mejor hora. Vos solo aprobás cuándo sale cada posteo.</p></div>
     </div>
   </div></div>
   <div class="section" id="incluye" style="background:var(--bg2)"><div class="wrap">
@@ -762,12 +762,12 @@ function creatorView() {
   const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
   if (c.step === 1) {
     return `
-    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Contanos la idea, la IA escribe el texto.</p></div></div>
+    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>
     ${stepsBar}
     <div class="card">
-      <div class="field"><label>¿De qué es el posteo?</label>
+      <div class="field"><label>¿Alguna idea en mente? <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
         <textarea id="c_topic" placeholder="${esc('Ej: ' + creatorChips().map(t => '"' + t + '"').join(', '))}">${esc(c.topic)}</textarea>
-        <div class="hint">Una frase alcanza. La IA lo convierte en caption + hashtags con tu tono.</div>
+        <div class="hint">Si no escribís nada, igual te armamos el posteo con nuestra estrategia. Una frase alcanza si querés guiarnos.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${creatorChips().map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
         </div></div>
@@ -775,7 +775,7 @@ function creatorView() {
         <div id="c_prodPhotoBox"></div>
         <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
         <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
-      <button class="btn btn-soft" id="btnGen">🤖 Generar con IA</button>
+      <button class="btn btn-soft" id="btnGen">✨ Armar mi posteo</button>
       <div id="genErr"></div>
       <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
         <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
@@ -786,7 +786,7 @@ function creatorView() {
   }
   if (c.step === 2) {
     return `
-    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — Diseñá la imagen del posteo (1080 × 1350).</p></div></div>
+    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>
     ${stepsBar}
     <div class="designer">
       <div>
@@ -839,7 +839,7 @@ function creatorView() {
       ? colors.slice(0, -1).join(', ') + ' y ' + colors[colors.length - 1]
       : colors.join(', ');
     return `
-    <div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Elegí tu diseño</h1><p class="sub">6 opciones hechas para tu idea. Elegí una o varias y programalas.</p></div></div>
+    <div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>
     <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
     ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
     ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
@@ -1018,8 +1018,8 @@ function recCardHTML(ideas, posts, ppw){
     </div>`;
   if (!ideas.length) return `<div class="card rec-card">
       <div class="rec-tag">✨ Tu próximo posteo</div>
-      <h3>¿Qué publicamos ahora?</h3>
-      <p>Generamos ideas pensadas para tu negocio y te recomendamos qué posteo crear primero.</p>
+      <h3>Ya pensamos qué publicar</h3>
+      <p>Ideas pensadas para tu negocio. Te decimos exactamente qué posteo crear primero.</p>
       <button class="btn btn-primary" id="btnRecGen">✨ Generar ideas</button>
     </div>`;
   const idea = ideas[pickNextIdea(ideas, posts)];
@@ -1393,8 +1393,8 @@ function chatCardHTML() {
     <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
   return `
   <div class="card" id="chatCard">
-    <h3 style="margin:0 0 6px">💬 ¿Tenés una idea? Charlemos</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Contanos tu idea y te damos nuestra opinión honesta. La pulimos juntos hasta que quede perfecta — recién ahí la convertimos en posteo.</p>
+    <h3 style="margin:0 0 6px">💬 Tu consultor de contenido</h3>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Preguntanos lo que sea: estrategia, ideas, qué publicar esta semana. Te respondemos con criterio de community manager.</p>
     <div class="chat-box" id="chatBox">
       ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Soy tu consultor de contenido. Contame qué idea tenés para tu Instagram y te digo la posta: si va a vender, qué le cambiaría y cómo la haría. ¿Qué tenés en mente?</div>`}
     </div>
@@ -1892,7 +1892,7 @@ function vTotalHTML() {
 function videoView() {
   const v = VSTATE;
   const photos = assetPhotos();
-  return `<div class="page-head"><div class="ph-ico">🎬</div><div class="ph-txt"><h1>Video</h1><p class="sub">Convertí tus fotos en un video vertical (1080×1920) para Reels y TikTok. Hasta 5 escenas, 60 segundos en total.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">🎬</div><div class="ph-txt"><h1>Video</h1><p class="sub">Tus fotos, convertidas en video vertical (1080×1920) para Reels y TikTok. Hasta 5 escenas, 60 segundos en total.</p></div></div>
   ${!photos.length ? `<div class="card tip-card"><p style="color:var(--mut);font-size:15px;margin:0">💡 Tip: subí tus fotos en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a> y las tenés siempre a mano para tus videos.</p></div>` : ''}
   <div class="card"><h3>Escenas (${v.scenes.length}/5)</h3>
     ${v.scenes.map((s, i) => `
@@ -2538,7 +2538,7 @@ async function historyView() {
   const mf = done.filter(p => p.status === 'failed' && inMk(p)).length;
   const summary = (mp || mf)
     ? `<p class="hist-sum">📊 Este mes: <b>${mp}</b> publicado${mp === 1 ? '' : 's'}${mf ? ` · <b>${mf}</b> fallaron` : ''}</p>` : '';
-  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Historial</h1><p class="sub">Todo lo que ya pasó por Posta. Marcá 👍/👎 y aprendemos lo que te gusta.</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Historial</h1><p class="sub">Todo lo que ya pasó por Posta. Marcá 👍/👎 y cada semana sale más a tu gusto.</p></div></div>
   ${summary}
   ${done.length ? done.map(p => postItem(p, `${p.status === 'published' ? sigBtns(p) : ''}${p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : ''}${p.status === 'published' ? `<button class="btn btn-ghost btn-sm" data-act="dup" data-id="${p.id}">Duplicar</button>` : ''}<button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar del historial">🗑️</button>`)).join('')
     : `<div class="empty"><div class="big">📊</div>Todavía no hay historial.</div>`}`;
@@ -2842,7 +2842,7 @@ function onboardingView() {
         <button class="btn btn-ghost btn-sm" id="ob_logo">📤 ${assetLogo() ? 'Cambiar logo' : 'Subir logo'}</button>
       </div>
       <input type="file" id="ob_logofile" accept="image/*,.pdf,.docx" style="display:none">
-      <div class="hint">Al subirlo sacamos tus colores automáticamente (aceptamos imagen, PDF o Word). Sin logo no podemos seguir.</div>
+      <div class="hint">Al subirlo sacamos tus colores automáticamente (aceptamos imagen, PDF o Word). Lo necesitamos para que tus diseños salgan con tu marca.</div>
     </div>
     <div class="field"><label>Tus colores *</label>
       <div style="display:flex;gap:10px">
@@ -3232,7 +3232,11 @@ function bindCreator() {
     $$('[data-chip]').forEach(b => b.onclick = () => { const t = $('#c_topic'); if (t) { t.value = b.dataset.chip; t.focus(); } });
     $('#btnGen').onclick = async () => {
       c.topic = $('#c_topic').value.trim();
-      if (!c.topic) { $('#genErr').innerHTML = `<div class="err">Escribí el tema del post primero</div>`; return; }
+      if (!c.topic) {
+        // Sin idea del usuario: Posta decide con los datos del negocio
+        const p = (typeof PROFILE !== 'undefined' && PROFILE) || {};
+        c.topic = [p.business_name, p.category].filter(Boolean).join(' — ') || 'Posteo para mi negocio';
+      }
       const btn = $('#btnGen');
       btn.disabled = true; btn.textContent = '🎨 Armándo tus 6 opciones...';
       try {
@@ -3255,7 +3259,7 @@ function bindCreator() {
           $('#genOut').style.display = 'block';
           $('#c_caption').value = c.caption; $('#c_tags').value = c.hashtags;
         } catch (e2) { $('#genErr').innerHTML = `<div class="err">${esc(e2.message)}</div>`; }
-        btn.disabled = false; btn.textContent = '🤖 Generar con IA';
+        btn.disabled = false; btn.textContent = '✨ Armar mi posteo';
       }
     };
     const toDesign = $('#btnToDesign');

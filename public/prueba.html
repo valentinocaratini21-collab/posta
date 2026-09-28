@@ -138,6 +138,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .ba-mock .grid{filter:grayscale(1);opacity:.5}
 .week{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
 .day{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.day:focus-visible{outline:2px solid var(--cel);outline-offset:2px}
 .day:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(10,30,51,.12)}
 .day .dh{background:var(--navy);color:#fff;padding:10px;text-align:center}
 .day .dh b{display:block;font-size:14px}
@@ -410,7 +411,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div style="text-align:center;margin-top:26px">
         <div><span id="capLine" style="display:none;font-size:15px;font-weight:800;color:#9A5B00;background:#FFF6E0;border:1.5px solid #FEC14D;border-radius:99px;padding:9px 22px;margin-bottom:16px"></span></div>
         <button class="btn btn-primary" id="btnBuy2" style="font-size:19px;padding:18px 46px">Guardar mi semana gratis 🚀</button>
-        <p class="tiny">3 días gratis · Sin tarjeta · Cancelás cuando quieras</p>
+        <p class="tiny">3 días gratis · Sin tarjeta · Cancelás cuando quieras<br>Tu semana queda guardada 72 horas, no la perdés 🙂</p>
       </div>
     </div>
   </div>
@@ -727,6 +728,7 @@ function renderResults() {
   const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
   const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>con los colores de tu perfil</b>' : '';
   $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Semana del ' + esc(firstDay.date) + ' al ' + esc(lastDay.date) + ' · 5 posteos + 1 reel: diseño, textos y hashtags, listos para publicar' + colBadge;
+  document.title = 'Tu semana está lista 🎉 | Posta';
 
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
   renderWeek();
@@ -758,23 +760,34 @@ function renderResults() {
   initTrialChat();
 }
 
+function trialWeekOrdered() {
+  const wk = (TRIAL && TRIAL.week) || [];
+  return [...wk].sort((a, b) => {
+    const pa = TRIAL.posts[a.post], pb = TRIAL.posts[b.post];
+    return (((pb && pb.type) === 'video') ? 1 : 0) - (((pa && pa.type) === 'video') ? 1 : 0);
+  });
+}
 function renderWeek() {
   const t = TRIAL;
   if (!t || !t.week) return;
-  $('#rWeek').innerHTML = t.week.map((w) => {
+  $('#rWeek').innerHTML = trialWeekOrdered().map((w) => {
     const p = t.posts[w.post];
     const isV = p.type === 'video';
     const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
-    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div></div>`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div></div>`;
   }).join('');
-  $$('#rWeek .day').forEach((d) => { d.onclick = () => openLb(parseInt(d.dataset.i, 10)); });
+  $$('#rWeek .day').forEach((d) => {
+    const open = () => openLb(parseInt(d.dataset.i, 10));
+    d.onclick = open;
+    d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  });
 }
 
 let lbPost = -1, lbWeekPos = 0;
 function lbRender() {
-  const wk = TRIAL.week || [];
+  const wk = trialWeekOrdered();
   const w = wk[lbWeekPos];
   if (!w) return;
   lbPost = w.post;
@@ -789,14 +802,14 @@ function lbRender() {
   $('#lbTags').textContent = p.hashtags || '';
 }
 function openLb(i) {
-  const wk = TRIAL.week || [];
+  const wk = trialWeekOrdered();
   const pos = wk.findIndex((x) => x.post === i);
   lbWeekPos = pos >= 0 ? pos : 0;
   lbRender();
   $('#lb').classList.add('open');
 }
 function lbNav(d) {
-  const n = (TRIAL.week || []).length;
+  const n = trialWeekOrdered().length;
   if (!n) return;
   lbWeekPos = (lbWeekPos + d + n) % n;
   lbRender();
