@@ -551,13 +551,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .sem-msg{margin:14px 0 0;font-size:15px;color:var(--mut);line-height:1.55}
 .sem-msg.ok{color:var(--green-d);font-weight:600}
 .sem-msg a{color:var(--cel)}
-.wk-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:6px}
-.wk-day{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 4px;text-align:center;display:flex;flex-direction:column;gap:2px;align-items:center}
-.wk-day .wd-n{font-size:11px;font-weight:700;color:var(--dim);text-transform:capitalize}
-.wk-day .wd-d{font-size:17px;font-weight:800;color:var(--txt)}
-.wk-day .wd-i{font-size:15px;line-height:1.2;min-height:18px}
-.wk-day.ok{background:rgba(34,197,94,.10);border-color:rgba(34,197,94,.35)}
-.wk-day.pend{background:rgba(254,193,77,.14);border-color:var(--yl-line)}
 .bars{display:flex;align-items:flex-end;gap:10px;height:150px;margin-top:10px}
 .bar-w{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;height:100%;min-width:0}
 .bar{width:100%;max-width:46px;border-radius:8px 8px 4px 4px;background:linear-gradient(180deg,#2793C8,#1E7FAE);min-height:5px}
@@ -581,7 +574,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .mstat b{font-size:24px;font-weight:800;color:#fff}
 .mstat.hl b{color:#FEC14D}
 .mstat span{font-size:12px;color:rgba(255,255,255,.85);line-height:1.35}
-@media(max-width:760px){.month-grid{grid-template-columns:repeat(2,1fr)}.wk-strip{gap:6px}.wk-day .wd-d{font-size:15px}}
+@media(max-width:760px){.month-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* ---------- Elegí tu diseño (creator: step options) ---------- */
 .opt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-bottom:8px}
@@ -621,9 +614,9 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 #multiCount{font-weight:700;font-size:15px}
 .modal-ov{position:fixed;inset:0;background:rgba(10,30,51,.55);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
 /* Rachas 🔥 */
-.streak-pill{margin-left:auto;align-self:center;background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:9px 15px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(254,193,77,.4);white-space:nowrap}
+.streak-pill{margin-left:auto;align-self:center;background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:7px 15px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(254,193,77,.4);white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.25}
 .streak-pill:active{transform:scale(.95)}
-.streak-exp{font-size:13px;font-weight:700;opacity:.7}
+.sp-sub{font-size:12px;font-weight:700;opacity:.65}
 .social-proof{margin:-6px 0 18px;padding:12px 16px;border-radius:12px;background:#F2F9FD;border:1px solid var(--line);color:var(--mut);font-size:14px;text-align:center;line-height:1.5}
 .streak-celeb{text-align:center;padding:6px 4px}
 .streak-celeb .big-emoji{font-size:76px;line-height:1}

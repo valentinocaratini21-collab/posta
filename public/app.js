@@ -445,9 +445,6 @@ function authView(mode) {
 const TABS = [
   ['semana', '🏠', 'Mi semana'],
   ['crear', '✨', 'Crear posteo'],
-  ['ideas', '💡', 'Ideas'],
-  ['video', '🎬', 'Video'],
-  ['fotos', '📷', 'Mis fotos'],
   ['historial', '📊', 'Historial'],
   ['ajustes', '⚙️', 'Ajustes'],
 ];
@@ -573,8 +570,8 @@ function setupChecklistHtml() {
 }
 
 function appShell(tab, content) {
-  const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
-  const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
+  const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear']];
+  const MORE_TABS = [['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
@@ -605,11 +602,6 @@ function appShell(tab, content) {
 /* ---------- CREAR ---------- */
 let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
 
-/* ---------- VIDEO ---------- */
-function freshVState() {
-  return { scenes: [{ image_path: '', text: '', duration: 3 }], music_path: '', result_url: '', caption: '', busy: false };
-}
-let VSTATE = freshVState();
 
 const BASE_PALETTES = [
   { name: 'Celeste', c: ['#2793C8', '#1E7FAE'], dark: false },
@@ -1128,46 +1120,27 @@ function checklistHTML(postsCount){
     <div class="check-steps">
       ${step(s1, 1, 'Contanos tu negocio', 'Unos 2 minutos, una sola vez.', '<a class="btn btn-soft btn-sm" href="#/app/ajustes">Completar</a>')}
       ${step(s2, 2, 'Conectá tu Instagram', 'Dejá tu semana lista para publicar.', '<button class="btn btn-primary btn-sm" data-ig-connect>Conectar Instagram</button>')}
-      ${step(s3, 3, 'Creá tu primer posteo', 'O armamos tu semana en 1 tap.', '<a class="btn btn-soft btn-sm" href="#/app/crear">Crear posteo</a>')}
+      ${step(s3, 3, 'Creá tu primer posteo', 'O armamos tu semana en 1 tap.', '<a class="btn btn-primary btn-sm" href="#/app/semana">⚡ Armar mi semana</a>')}
     </div>
   </div>`;
 }
-function recCardHTML(ideas, posts, ppw){
-  const drafts = posts.filter(p => p.status === 'draft');
-  if (drafts.length) return `<div class="card rec-card">
-      <div class="rec-tag">📋 Tu semana</div>
-      <h3>Preparamos ${drafts.length} ${drafts.length === 1 ? 'borrador' : 'borradores'} para que revises</h3>
-      <p>Mirá cada posteo, editá lo que quieras y programá la semana cuando esté lista 👇</p>
-    </div>`;
-  const ws = weekStartMonday(new Date());
-  const inWeek = posts.filter(p => { const d = postWeekDate(p); return d && d >= ws && ['scheduled','publishing','published'].includes(p.status); });
-  const missing = Math.max(0, ppw - inWeek.length);
-  if (!missing) return `<div class="card rec-card rec-done">
-      <div class="rec-tag">✨ Esta semana</div>
-      <h3>Tu semana está completa ✅</h3>
-      <p>Ya dejamos ${inWeek.length} ${inWeek.length === 1 ? 'posteo' : 'posteos'} programados o publicados (${ppw}/semana en tu plan). La próxima recomendación llega el lunes. 🚀</p>
-    </div>`;
-  if (!ideas.length) return `<div class="card rec-card">
-      <div class="rec-tag">✨ Tu próximo posteo</div>
-      <h3>Ya pensamos qué publicar</h3>
-      <p>Ideas pensadas para tu negocio. Te decimos exactamente qué posteo crear primero.</p>
-      <button class="btn btn-primary" id="btnRecGen">✨ Generar ideas</button>
-    </div>`;
-  const idea = ideas[pickNextIdea(ideas, posts)];
-  const isVideo = /reel|video/i.test(idea.formato || '');
-  const idx = IDEAS.indexOf(idea);
-  return `<div class="card rec-card">
-    <div class="rec-tag">✨ Tu próximo posteo recomendado</div>
-    <h3>${esc(idea.titulo)}</h3>
-    ${idea.angulo ? `<p>${esc(idea.angulo)}</p>` : ''}
-    <div class="rec-meta"><span class="badge b-scheduled">${esc(idea.formato || 'Post')}</span><span>📅 Nos faltan ${missing} de ${ppw} esta semana</span></div>
-    <button class="btn btn-primary" data-rec-idea="${idx}">${isVideo ? '🎬 Crear este video' : 'Crear este posteo'} →</button>
+// tag: 'semana' — la tarjeta vive en Mi semana; los ids se sufijan con el tag para no colisionar.
+// La semana ya está completa: el héroe lo celebra y ofrece sumar o rehacer,
+// en vez de invitar a "armar" de nuevo como si no hubiera nada.
+function weekDoneCardHTML() {
+  return `
+  <div class="card" style="border:2px solid rgba(34,197,94,.45);background:#F2FAF4">
+    <h3 style="margin:0 0 6px">✅ Tu semana está armada</h3>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 14px">Los posteos salen solos en sus horarios. Nada que hacer — solo vendé.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <a class="btn btn-soft btn-sm" href="#/app/crear">✨ Sumar otro posteo</a>
+      <button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button>
+    </div>
+    <div id="apProg-semana"></div>
   </div>`;
 }
-// tag: 'ideas' | 'semana' — la misma tarjeta vive en Ideas y en Mi semana;
-// los ids se sufijan con el tag para no colisionar.
 function autopilotCardHTML(tag) {
-  const t = tag || 'ideas';
+  const t = tag || 'semana';
   const ppw = (ME && ME.posts_per_week) || 3;
   const planName = (ME && ME.plan ? ME.plan[0].toUpperCase() + ME.plan.slice(1) : 'Esencial');
   const planTag = ME && ME.is_trial ? `${planName} (${ME.trial_expired ? 'prueba terminada' : 'trial'})` : planName;
@@ -1204,13 +1177,15 @@ function reviewCardHTML(drafts, slots) {
       <div class="info" style="flex:1;min-width:0">
         <div style="margin-bottom:6px"><span class="badge b-draft">Borrador ${i + 1}</span>${d.media_type === 'video' ? ' <span class="badge b-scheduled">🎬 reel</span>' : ''}</div>
         <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
-        ${d.hashtags ? `<div class="cap" style="font-size:12px;margin-top:6px">${esc(d.hashtags)}</div>` : ''}
+        <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="font-size:12px;margin-top:6px;padding:8px 10px">
       </div>
       <div class="acts" style="display:flex;flex-direction:column;gap:8px">
         <button class="btn btn-primary btn-sm" data-revnow="${d.id}" title="Publicar ahora en Instagram" style="font-size:16px">🚀</button>
+        <button class="btn btn-ghost btn-sm" data-revregen="${d.id}" title="Regenerar: nuevo diseño y nuevo texto" style="font-size:16px">↻</button>
         <button class="btn btn-ghost btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button>
       </div>
     </div>
+    ${d.media_type === 'video' ? '' : `<button class="btn btn-ghost btn-sm" data-revphoto="${d.id}" style="width:100%;margin:0 0 8px">🖼️ Cambiar foto</button><div id="revph-${d.id}"></div>`}
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:14px;flex-shrink:0">📅</span>
       <input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora sugeridos para el borrador ${i + 1}" style="font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--txt);font-family:inherit;flex:1;min-width:0">
@@ -1235,6 +1210,15 @@ function bindReview() {
     try { await api.patch('/api/posts/' + ta.dataset.revcap, { action: 'save-draft', caption: ta.value }); }
     catch (e) { /* se reintenta al programar */ }
   }));
+  // Guardar los hashtags al salir del campo
+  $$('[data-revhash]').forEach(inp => inp.addEventListener('change', async () => {
+    try { await api.patch('/api/posts/' + inp.dataset.revhash, { action: 'save-draft', hashtags: inp.value }); }
+    catch (e) { /* se reintenta al programar */ }
+  }));
+  // Regenerar un borrador (↻): nuevo diseño y nuevo texto del mismo tema, en el lugar
+  $$('[data-revregen]').forEach(b => b.onclick = () => regenDraft(+b.dataset.revregen, b));
+  // Cambiar la foto de un borrador: tira de fotos + subir nueva
+  $$('[data-revphoto]').forEach(b => b.onclick = () => togglePhotoPicker(+b.dataset.revphoto, b));
   // Eliminar borrador
   $$('[data-revdel]').forEach(b => b.onclick = async () => {
     if (!confirm('¿Eliminar este borrador?')) return;
@@ -1273,6 +1257,73 @@ function bindReview() {
       if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
       sw.disabled = false;
     }
+  };
+}
+
+// Borradores visibles en la tarjeta de revisión (para regenerar por id)
+let REVIEW_DRAFTS = [];
+// Regenerar UN borrador: nuevo texto del mismo tema + diseño con otro estilo.
+// Si se pasa photoPath, el diseño usa esa foto. Reemplaza en el lugar,
+// conserva el id y el día/hora sugeridos.
+async function regenDraft(id, btn, photoPath) {
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  if (!d || d.media_type === 'video') return;
+  const isBtn = !!(btn && btn.tagName === 'BUTTON');
+  const old = isBtn ? btn.innerHTML : null;
+  if (isBtn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+  try {
+    const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
+    const out = await api.post('/api/generate', { topic });
+    const photos = assetPhotos();
+    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+    const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
+    const title = (d.source_topic || topic).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const ph = photoPath ? { file_path: photoPath } : (photos.length ? photos[(idx + 1) % photos.length] : null);
+    const imagePath = await renderDesignImage({
+      tpl: pickTpl(idx + 1, false),
+      pal: defaultPal(),
+      title,
+      subtitle: (d.source_angle || '').split('.')[0].slice(0, 90),
+      handle: (PROFILE || {}).ig_username || '',
+      photoImg: ph ? await photoImg(ph.file_path) : null,
+      logoImg: logo,
+    });
+    await api.patch('/api/posts/' + id, {
+      action: 'save-draft',
+      image_path: imagePath,
+      caption: out.caption || d.caption,
+      hashtags: out.hashtags || d.hashtags,
+    });
+    render();
+  } catch (e) {
+    alert('No se pudo regenerar. Probá de nuevo.');
+    if (isBtn) { btn.disabled = false; btn.innerHTML = old; }
+  }
+}
+// Selector de foto por borrador: tira horizontal con tus fotos + subir nueva.
+// Elegir una regenera el diseño de ESE borrador con esa foto.
+function togglePhotoPicker(id, btn) {
+  const mount = document.getElementById('revph-' + id);
+  if (!mount) return;
+  if (mount.dataset.open === '1') { mount.innerHTML = ''; mount.dataset.open = ''; return; }
+  mount.dataset.open = '1';
+  const photos = assetPhotos();
+  mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
+    ${photos.map(p => `<img src="${esc(p.file_path)}" data-pickphoto="${esc(p.file_path)}" alt="Foto del negocio" style="width:64px;height:64px;flex-shrink:0;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line)">`).join('')}
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
+  </div>`;
+  mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => regenDraft(id, img, img.dataset.pickphoto));
+  const up = mount.querySelector('[data-uploadphoto]');
+  if (up) up.onchange = async () => {
+    const f = up.files[0]; if (!f) return;
+    if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
+    try {
+      const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+      ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+      await regenDraft(id, up, data.path);
+    } catch (e) { alert('No se pudo subir la foto: ' + e.message); }
   };
 }
 
@@ -1819,62 +1870,6 @@ function bindChat() {
   if (!CHAT_LOADED) { CHAT_LOADED = true; chatLoadHistory(); }
 }
 
-async function ideasView() {
-  let posts = [];
-  try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
-  const ppw = (ME && ME.posts_per_week) || 3;
-  return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos.</p></div></div>
-  ${checklistHTML(posts.length)}
-  ${recCardHTML(IDEAS, posts, ppw)}
-  ${chatCardHTML()}
-  ${IDEAS.length ? `<div id="ideasZone">${ideasList(posts)}</div>` : ''}
-  ${autopilotCardHTML('ideas')}
-  ${IDEAS.length ? '' : `
-  <div class="card" id="ideasEmpty"><div class="empty"><div class="big">💡</div>
-      Todavía no generamos ideas para tu negocio.<br>
-      <span style="font-size:14px">Tocá "⚡ Armemos tu semana" acá arriba 👆 o charlalo con el consultor</span>
-  </div></div>`}
-  <div id="ideasMsg"></div>`;
-}
-
-function ideasList(posts) {
-  const STOP = new Set('para con las los del una unos este esta estos estas como mas pero porque cuando donde tus sus mis son fue hay entre sobre todo todos muy sin tan'.split(' '));
-  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const hay = ' ' + (posts || []).map(p => norm(p.caption)).join(' ') + ' ';
-  const alreadyPosted = title => {
-    const words = norm(title).split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !STOP.has(w));
-    return words.length > 0 && words.filter(w => hay.includes(' ' + w)).length >= 2;
-  };
-  // Las ideas que ya posteaste ni se muestran: solo ves ideas frescas para actuar.
-  // Se conserva el índice original porque los botones lo usan contra IDEAS.
-  const fresh = IDEAS.map((idea, i) => ({ idea, i })).filter(({ idea }) => !alreadyPosted(idea.titulo));
-  const listHtml = fresh.length ? fresh.map(({ idea, i }) => {
-      const isVideo = /reel|video/i.test(idea.formato || '');
-      return `
-    <div class="post-item" style="align-items:flex-start">
-      <div class="info">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <span class="badge b-scheduled">${esc(idea.formato)}</span>
-          <b style="font-size:15px">${esc(idea.titulo)}</b>
-        </div>
-        <div class="cap" style="white-space:normal;line-height:1.6">${esc(idea.angulo)}</div>
-      </div>
-      <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">
-        ${isVideo ? `<button class="btn btn-primary btn-sm" data-video="${i}">🎬 Crear video →</button>` : `<button class="btn btn-ghost btn-sm" data-video="${i}">🎬 Reel</button>`}
-        <button class="btn btn-soft btn-sm" data-idea="${i}">Crear post →</button>
-        <button class="btn btn-ghost btn-sm" data-discard="${i}" title="Descartar esta idea">✕</button>
-      </div>
-    </div>`; }).join('')
-    : `<div class="empty"><div class="big">🎉</div>Ya cubriste todas estas ideas.<br><span style="font-size:14px">Tocá "↻ Regenerar" para ideas nuevas o charlalo con el consultor</span></div>`;
-  return `
-  <div class="card">
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <h3 style="margin:0">Ideas creadas para vos (${fresh.length})</h3>
-      <button class="btn btn-ghost btn-sm" id="btnRegenIdeas">↻ Regenerar</button>
-    </div>
-    ${listHtml}
-  </div>`;
-}
 
 async function renderDesignImage(o) {
   const cv = document.createElement('canvas');
@@ -1913,7 +1908,7 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
     if (usePhotos) return { image_path: photos[(idx + k) % photos.length].file_path, text, duration: 3 };
     // Sin fotos: generamos el diseño y lo usamos como escena (ya trae texto, no duplicamos)
     const image_path = await renderDesignImage({
-      tpl: 'gradiente', pal: palIdx,
+      tpl: DESIGN_TPLS[(idx + k) % DESIGN_TPLS.length], pal: palIdx,
       title: text.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD',
       subtitle: angle, handle, photoImg: null, logoImg,
     });
@@ -1930,11 +1925,20 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
 
 // Crea UN borrador a partir de una idea (texto + diseño o reel).
 // Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
+// Rotación de estilos de diseño: el autopilot y el chat generan los posteos
+// con plantillas distintas para que la semana no se vea toda igual.
+const DESIGN_TPLS = ['gradiente', 'claro', 'noche', 'promo'];
+let TPL_ROT = 0;
+function pickTpl(idx, fromChat) {
+  if (fromChat) return DESIGN_TPLS[(TPL_ROT++) % DESIGN_TPLS.length];
+  return DESIGN_TPLS[idx % DESIGN_TPLS.length];
+}
 async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
   const photos = assetPhotos();
   const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
   const palIdx = defaultPal();
   const handle = (PROFILE || {}).ig_username || '';
+  const tpl = pickTpl(idx, useChatText);
   const out = await api.post('/api/generate', { topic: idea.titulo });
   // Si viene del chat, se respeta el texto que el cliente eligió/editó (no se regenera)
   const chatTa = useChatText ? $('#chatCaption') : null;
@@ -1952,7 +1956,7 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
     const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
     const ph = photos.length ? photos[idx % photos.length] : null;
     imagePath = await renderDesignImage({
-      tpl: 'gradiente', pal: palIdx,
+      tpl, pal: palIdx,
       title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
       handle,
       photoImg: ph ? await photoImg(ph.file_path) : null,
@@ -1960,14 +1964,14 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
     });
   }
   try {
-    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType });
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType, source_topic: idea.titulo || '', source_angle: idea.angulo || '' });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
 }
 
 async function runAutopilot(n, tag) {
-  const t = tag || 'ideas';
+  const t = tag || 'semana';
   const prog = document.getElementById('apProg-' + t);
   const btn = document.querySelector('[data-autopilot="' + t + '"]');
   btn.disabled = true;
@@ -1979,6 +1983,13 @@ async function runAutopilot(n, tag) {
       const ok = confirm(`Hay ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazamos por una semana nueva?`);
       if (!ok) { btn.disabled = false; return; }
       for (const d of oldDrafts) { try { await api.delete('/api/posts/' + d.id); } catch (e) {} }
+    } else {
+      // Sin borradores pero con semana programada: no duplicar por accidente
+      const scheduled = existing.filter(p => p.status === 'scheduled');
+      if (scheduled.length) {
+        const ok = confirm(`Ya tenés ${scheduled.length} ${scheduled.length === 1 ? 'posteo programado' : 'posteos programados'} esta semana. ¿Sumamos una tanda nueva de borradores para revisar?`);
+        if (!ok) { btn.disabled = false; return; }
+      }
     }
     let ideas = IDEAS;
     if (!ideas.length) {
@@ -2001,10 +2012,9 @@ async function runAutopilot(n, tag) {
     let sk = null;
     try { sk = await api.post('/api/streak/week-armed', {}); } catch (e) {}
     setTimeout(() => {
-      // Al terminar, caés directo en Mi semana sobre tus borradores (ya no hay que buscarlos)
-      if (t === 'ideas') location.hash = '#/app/semana';
-      else render();
-      setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, t === 'ideas' ? 800 : 200);
+      // Al terminar, caés directo sobre tus borradores (ya no hay que buscarlos)
+      render();
+      setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
       if (sk && sk.newWeek) setTimeout(() => showStreakCelebration(sk), 600);
     }, 900);
   } catch (e) {
@@ -2015,288 +2025,15 @@ async function runAutopilot(n, tag) {
 
 function bindAutopilot() {
   $$('[data-autopilot]').forEach(b => b.onclick = () => {
-    const t = b.dataset.autopilot || 'ideas';
+    const t = b.dataset.autopilot || 'semana';
     const sel = document.getElementById('apCount-' + t);
-    runAutopilot(sel ? +sel.value : 3, t);
+    runAutopilot(sel ? +sel.value : ((ME && ME.posts_per_week) || 3), t);
   });
 }
 
-function bindIdeas() {
-  const gen = async () => {
-    const z = $('#ideasZone') || $('#ideasEmpty');
-    if (z) z.innerHTML = `<div class="empty"><div class="big">⏳</div>Estudiando tu negocio y tu competencia...</div>`;
-    try {
-      const { ideas } = await api.post('/api/ideas', {});
-      IDEAS = ideas || [];
-      render();
-    } catch (e) {
-      const z2 = $('#ideasZone') || $('#ideasEmpty');
-      if (z2) z2.innerHTML = `<div class="err">No se pudieron generar las ideas: ${esc(e.message)}</div>`;
-    }
-  };
-  const b = $('#btnGenIdeas'); if (b) b.onclick = gen;
-  const r = $('#btnRegenIdeas'); if (r) r.onclick = () => { if (confirm('¿Genero ideas nuevas? Las actuales se reemplazan.')) gen(); };
-  const rg = $('#btnRecGen'); if (rg) rg.onclick = gen;
-  $$('[data-rec-idea]').forEach(btn => btn.onclick = () => {
-    const idea = IDEAS[+btn.dataset.recIdea];
-    if (!idea) return;
-    if (/reel|video/i.test(idea.formato || '')) {
-      const photos = assetPhotos();
-      VSTATE = freshVState();
-      VSTATE.scenes = [{ image_path: photos.length ? photos[0].file_path : '', text: idea.titulo, duration: 4 }];
-      if (photos.length > 1) VSTATE.scenes.push({ image_path: photos[1].file_path, text: (idea.angulo || '').split('.')[0].slice(0, 80), duration: 4 });
-      location.hash = '#/app/video';
-    } else {
-      CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
-      location.hash = '#/app/crear';
-    }
-  });
-  $$('[data-idea]').forEach(btn => btn.onclick = () => {
-    const idea = IDEAS[+btn.dataset.idea];
-    CREATOR = { step: 1, topic: idea.titulo, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
-    location.hash = '#/app/crear';
-  });
-  $$('[data-discard]').forEach(btn => btn.onclick = () => {
-    IDEAS.splice(+btn.dataset.discard, 1);
-    render();
-  });
-  $$('[data-video]').forEach(btn => btn.onclick = () => {
-    const idea = IDEAS[+btn.dataset.video];
-    const photos = assetPhotos();
-    VSTATE = freshVState();
-    VSTATE.scenes = [{ image_path: photos.length ? photos[0].file_path : '', text: idea.titulo, duration: 4 }];
-    if (photos.length > 1) VSTATE.scenes.push({ image_path: photos[1].file_path, text: (idea.angulo || '').split('.')[0].slice(0, 80), duration: 4 });
-    location.hash = '#/app/video';
-  });
-  bindAutopilot();
-  bindReview();
-  bindChat();
-  if (window.__goAutopilot) {
-    window.__goAutopilot = false;
-    setTimeout(() => { const el = document.getElementById('autopilotCard-ideas'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
-  }
-}
 
-/* ---------- VIDEO 🎬 ---------- */
-function vTotalHTML() {
-  const total = VSTATE.scenes.reduce((a, s) => a + (+s.duration || 0), 0);
-  const over = total > 60;
-  return `⏱️ Duración total: <b style="color:${over ? 'var(--red-d)' : 'var(--txt)'}">${total}s</b> / 60s máx`;
-}
-
-function videoView() {
-  const v = VSTATE;
-  const photos = assetPhotos();
-  return `<div class="page-head"><div class="ph-ico">🎬</div><div class="ph-txt"><h1>Video</h1><p class="sub">Tus fotos, convertidas en video vertical (1080×1920) para Reels y TikTok. Hasta 5 escenas, 60 segundos en total.</p></div></div>
-  ${!photos.length ? `<div class="card tip-card"><p style="color:var(--mut);font-size:15px;margin:0">💡 Tip: subí tus fotos en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a> y las tenés siempre a mano para tus videos.</p></div>` : ''}
-  <div class="card"><h3>Escenas (${v.scenes.length}/5)</h3>
-    ${v.scenes.map((s, i) => `
-    <div class="post-item" style="align-items:flex-start;gap:14px">
-      <div style="width:72px;flex-shrink:0">
-        ${s.image_path ? `
-        <div class="vprev">
-          <img src="${esc(s.image_path)}" alt="">
-          <div class="vprev-txt" data-vprevtxt="${i}" style="${s.text ? '' : 'display:none'}">${esc(s.text)}</div>
-        </div>` : `<div class="vprev vprev-empty">🖼️</div>`}
-      </div>
-      <div class="info" style="flex:1">
-        <div class="scene-n">Escena ${i + 1}</div>
-        <div class="field" style="margin-bottom:8px"><label>Texto en pantalla</label><input data-vtext="${i}" value="${esc(s.text)}" placeholder="Ej: Nuevo ingreso 🔥" maxlength="140"></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
-          <div class="field" style="margin:0;width:110px"><label>Duración (seg)</label><input type="number" data-vdur="${i}" min="1" max="30" value="${s.duration}"></div>
-          <button class="btn btn-ghost btn-sm" data-vup="${i}">📤 Subir</button>
-          ${photos.length ? `<button class="btn btn-ghost btn-sm" data-vlib="${i}">🖼️ Mis fotos</button>` : ''}
-          ${i > 0 ? `<button class="btn btn-ghost btn-sm" data-vmove="${i}" data-vdir="-1" title="Subir escena">↑</button>` : ''}
-          ${i < v.scenes.length - 1 ? `<button class="btn btn-ghost btn-sm" data-vmove="${i}" data-vdir="1" title="Bajar escena">↓</button>` : ''}
-          ${v.scenes.length > 1 ? `<button class="btn btn-danger btn-sm" data-vrm="${i}">Quitar</button>` : ''}
-        </div>
-        <div data-vpicker="${i}" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
-          ${photos.map(a => `<img src="${a.file_path}" data-vpick="${i}:${a.file_path}" style="width:56px;height:80px;object-fit:cover;border-radius:8px;border:2px solid var(--line);cursor:pointer">`).join('')}
-        </div>
-      </div>
-    </div>`).join('')}
-    ${v.scenes.length < 5 ? `<button class="btn btn-ghost" id="btnVAdd">＋ Agregar escena</button>` : ''}
-    <div id="vTotal" class="hint" style="margin:12px 0 0">${vTotalHTML()}</div>
-    <input type="file" id="v_file" accept="image/*" style="display:none">
-  </div>
-  <div class="card"><h3>🎵 Música (opcional)</h3>
-    ${v.music_path ? `
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:14px;color:var(--mut)">🎵 ${esc(v.music_path.split('/').pop())}</span>
-        <audio src="${esc(v.music_path)}" controls style="height:36px;max-width:220px"></audio>
-        <button class="btn btn-ghost btn-sm" id="btnVMusicRm">Quitar</button>
-      </div>` : `
-      <button class="btn btn-ghost btn-sm" id="btnVMusicAdd">📤 Subir MP3</button>
-      <div class="hint">El video se corta a la duración de las escenas.</div>`}
-    <input type="file" id="v_music" accept="audio/mpeg" style="display:none">
-  </div>
-  <div class="card"><h3>Generar</h3>
-    <div class="field"><label>Caption (opcional, para programarlo)</label><textarea data-vcap style="min-height:80px" placeholder="Texto que acompaña el video...">${esc(v.caption)}</textarea></div>
-    <button class="btn btn-primary" id="btnVGen" ${v.busy ? 'disabled' : ''}>${v.busy ? '⏳ Generando video...' : '🎬 Generar video'}</button>
-    <div id="vMsg" style="margin-top:14px"></div>
-    ${v.result_url ? `
-    <div style="margin-top:18px;display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">
-      <video src="${esc(v.result_url)}" controls style="width:220px;border-radius:14px;border:1px solid var(--line)"></video>
-      <div style="flex:1;min-width:220px">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-          <a class="btn btn-soft btn-sm" href="${esc(v.result_url)}" download>⬇️ Descargar</a>
-        </div>
-        <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="v_when" value="${isoToLocalInput(slotDate19(0, (SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires'))}"></div>
-        <button class="btn btn-primary btn-sm" id="btnVSched">📅 Programar video</button>
-        <div id="vSchedMsg" style="margin-top:10px"></div>
-      </div>
-    </div>` : ''}
-  </div>`;
-}
-
-async function uploadAssetFile(file, kind) {
-  const r = await fetch('/api/assets?kind=' + kind, { method: 'POST', headers: { 'Content-Type': file.type || 'image/png' }, body: file });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || 'No se pudo subir');
-  ASSETS = await api.get('/api/assets');
-  return data.path;
-}
-
-function bindVideo() {
-  const v = VSTATE;
-  const rerender = () => render();
-  const vfile = $('#v_file');
-  let vfileIdx = 0;
-  // Subir imagen para escena (también queda en la librería)
-  $$('[data-vup]').forEach(b => b.onclick = () => { vfileIdx = +b.dataset.vup; vfile.click(); });
-  vfile.onchange = async () => {
-    const f = vfile.files[0]; if (!f) return;
-    const btn = document.querySelector(`[data-vup="${vfileIdx}"]`);
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Subiendo…'; }
-    try {
-      const p = await uploadAssetFile(f, 'photo');
-      v.scenes[vfileIdx].image_path = p;
-      rerender();
-    } catch (e) { alert('Error: ' + e.message); if (btn) { btn.disabled = false; btn.innerHTML = '📤 Subir'; } }
-    vfile.value = '';
-  };
-  // Elegir de la librería
-  $$('[data-vlib]').forEach(b => b.onclick = () => {
-    const z = document.querySelector(`[data-vpicker="${b.dataset.vlib}"]`);
-    z.style.display = z.style.display === 'none' ? 'flex' : 'none';
-  });
-  $$('[data-vpick]').forEach(im => im.onclick = () => {
-    const [i, ...rest] = im.dataset.vpick.split(':');
-    v.scenes[+i].image_path = rest.join(':');
-    rerender();
-  });
-  $$('[data-vtext]').forEach(inp => inp.oninput = () => {
-    const i = +inp.dataset.vtext;
-    v.scenes[i].text = inp.value;
-    const pt = document.querySelector(`[data-vprevtxt="${i}"]`);
-    if (pt) { pt.textContent = inp.value; pt.style.display = inp.value ? '' : 'none'; }
-  });
-  $$('[data-vdur]').forEach(inp => inp.onchange = () => {
-    v.scenes[+inp.dataset.vdur].duration = Math.min(30, Math.max(1, Math.round(+inp.value || 3)));
-    inp.value = v.scenes[+inp.dataset.vdur].duration;
-    const t = $('#vTotal');
-    if (t) t.innerHTML = vTotalHTML();
-  });
-  $$('[data-vrm]').forEach(b => b.onclick = () => { v.scenes.splice(+b.dataset.vrm, 1); rerender(); });
-  // Mover escena ↑ ↓
-  $$('[data-vmove]').forEach(b => b.onclick = () => {
-    const i = +b.dataset.vmove, j = i + (+b.dataset.vdir);
-    if (j < 0 || j >= v.scenes.length) return;
-    const [s] = v.scenes.splice(i, 1);
-    v.scenes.splice(j, 0, s);
-    rerender();
-  });
-  $$('[data-vcap]').forEach(inp => inp.oninput = () => { v.caption = inp.value; });
-  const bAdd = $('#btnVAdd');
-  if (bAdd) bAdd.onclick = () => { v.scenes.push({ image_path: '', text: '', duration: 3 }); rerender(); };
-  // Música
-  const bma = $('#btnVMusicAdd');
-  if (bma) bma.onclick = () => $('#v_music').click();
-  const vm = $('#v_music');
-  if (vm) vm.onchange = async () => {
-    const f = vm.files[0]; if (!f) return;
-    if (bma) { bma.disabled = true; bma.textContent = '⏳ Subiendo…'; }
-    try {
-      const r = await fetch('/api/audio', { method: 'POST', headers: { 'Content-Type': 'audio/mpeg' }, body: f });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
-      v.music_path = data.path;
-      rerender();
-    } catch (e) { alert('Error: ' + e.message); if (bma) { bma.disabled = false; bma.innerHTML = '📤 Subir MP3'; } }
-    vm.value = '';
-  };
-  const bmr = $('#btnVMusicRm');
-  if (bmr) bmr.onclick = () => { v.music_path = ''; rerender(); };
-  // Generar
-  const bg = $('#btnVGen');
-  if (bg) bg.onclick = async () => {
-    const missing = v.scenes.findIndex(s => !s.image_path);
-    if (missing >= 0) { $('#vMsg').innerHTML = `<div class="err">La escena ${missing + 1} no tiene imagen</div>`; return; }
-    const total = v.scenes.reduce((a, s) => a + s.duration, 0);
-    if (total > 60) { $('#vMsg').innerHTML = `<div class="err">El video no puede durar más de 60 segundos (ahora: ${total}s)</div>`; return; }
-    v.result_url = '';
-    v.busy = true; rerender();
-    try {
-      const r = await api.post('/api/videos', {
-        scenes: v.scenes.map(s => ({ image_path: s.image_path, text: s.text, duration: s.duration })),
-        music_path: v.music_path || undefined,
-      });
-      v.result_url = r.url;
-      $('#vMsg').innerHTML = `<div class="okmsg">✅ Video listo (${r.duration}s)</div>`;
-    } catch (e) {
-      $('#vMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-    }
-    v.busy = false;
-    rerender();
-  };
-  // Programar
-  const bs = $('#btnVSched');
-  if (bs) bs.onclick = async () => {
-    const when = $('#v_when').value;
-    if (!when) { $('#vSchedMsg').innerHTML = `<div class="err">Elegí fecha y hora</div>`; return; }
-    try {
-      await api.post('/api/posts', {
-        image_path: v.result_url, caption: v.caption, media_type: 'video',
-        scheduled_at: new Date(when).toISOString(),
-      });
-      $('#vSchedMsg').innerHTML = `<div class="okmsg">✅ Video programado. Se publica solo.</div>`;
-      VSTATE = freshVState();
-      setTimeout(() => location.hash = '#/app/semana', 1400);
-    } catch (e) { $('#vSchedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-  };
-}
 
 /* ---------- MIS FOTOS ---------- */
-function fotosView() {
-  const photos = assetPhotos();
-  const logo = assetLogo();
-  return `<div class="page-head"><div class="ph-ico">📷</div><div class="ph-txt"><h1>Mis fotos</h1><p class="sub">Tu librería: las fotos que usamos de fondo en tus diseños y videos, y tu logo que va en cada post.</p></div></div>
-  <div class="card"><h3>🖼️ Fotos (${photos.length}/20)</h3>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-      ${photos.map(a => `
-      <div style="position:relative">
-        <img src="${a.file_path}" data-lightbox="${a.file_path}" style="width:120px;height:150px;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:zoom-in">
-        <button class="btn btn-danger btn-sm foto-del" data-adel="${a.id}">✕</button>
-      </div>`).join('')}
-      ${photos.length < 20 ? `<button class="btn btn-ghost foto-add" id="btnAAdd">＋<br>Agregar</button>` : ''}
-    </div>
-    <input type="file" id="a_files" accept="image/*" multiple style="display:none">
-    <div class="hint">El autopilot usa tus fotos rotando: post 1 → foto 1, post 2 → foto 2, etc. Si no hay fotos, usa los diseños de plantilla.</div>
-  </div>
-  <div class="card"><h3>🔰 Tu logo</h3>
-    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-      ${logo ? `<img src="${logo.file_path}" style="max-width:160px;max-height:100px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:8px">` : `<div style="color:var(--dim);font-size:15px">Todavía no subiste tu logo.</div>`}
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-soft btn-sm" id="btnLogoAdd">${logo ? 'Cambiar logo' : 'Subir logo'}</button>
-        ${logo ? `<button class="btn btn-danger btn-sm" id="btnLogoRm">Quitar</button>` : ''}
-      </div>
-    </div>
-    <input type="file" id="a_logo" accept="image/*,.pdf,.docx" style="display:none">
-    <div class="hint">El logo se dibuja en la esquina inferior de cada diseño que generamos. Aceptamos imagen, PDF o Word.</div>
-  </div>
-  <div id="aMsg"></div>`;
-}
-
 /* ---------- Logo: acepta imagen, PDF o Word → se convierte a PNG en el dispositivo ---------- */
 function loadScriptOnce(src) {
   return new Promise((res, rej) => {
@@ -2390,49 +2127,6 @@ async function logoFileToImage(file) {
   if (isDocx) return new File([await docxToPngBlob(file)], 'logo.png', { type: 'image/png' });
   if (tp.startsWith('image/')) return file;
   throw new Error('Ese formato no lo aceptamos. Subí una imagen, un PDF o un Word.');
-}
-
-function bindFotos() {
-  const msg = (t, ok) => { $('#aMsg').innerHTML = `<div class="${ok ? 'okmsg' : 'err'}">${t}</div>`; };
-  const up = async (files, kind) => {
-    const total = files.length;
-    for (let i = 0; i < total; i++) {
-      if (total > 1) $('#aMsg').innerHTML = `<div class="hint" style="margin:0">⏳ Subiendo ${i + 1} de ${total}…</div>`;
-      try { await uploadAssetFile(files[i], kind); }
-      catch (e) { msg('Error: ' + esc(e.message), false); return; }
-    }
-    $('#aMsg').innerHTML = '';
-    render();
-  };
-  const bAdd = $('#btnAAdd');
-  if (bAdd) bAdd.onclick = () => $('#a_files').click();
-  const af = $('#a_files');
-  if (af) af.onchange = () => up([...af.files].slice(0, 20 - assetPhotos().length), 'photo');
-  const bLogo = $('#btnLogoAdd');
-  if (bLogo) bLogo.onclick = () => $('#a_logo').click();
-  const al = $('#a_logo');
-  if (al) al.onchange = async () => {
-    const orig = al.files[0]; al.value = '';
-    if (!orig) return;
-    try {
-      const nm = (orig.name || '').toLowerCase();
-      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#aMsg').innerHTML = '<div class="hint" style="margin:0">⏳ Convirtiendo tu archivo a imagen…</div>';
-      await up([await logoFileToImage(orig)], 'logo');
-    } catch (e) { if (e && e.cancelled) $('#aMsg').innerHTML = ''; else msg('Error: ' + esc(e.message || 'No se pudo subir'), false); }
-  };
-  const bLrm = $('#btnLogoRm');
-  if (bLrm) bLrm.onclick = async () => {
-    const logo = assetLogo();
-    if (logo && confirm('¿Quitar tu logo?')) { await api.del('/api/assets/' + logo.id); ASSETS = await api.get('/api/assets'); render(); }
-  };
-  $$('[data-adel]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Eliminar esta foto?')) return;
-    await api.del('/api/assets/' + b.dataset.adel);
-    ASSETS = await api.get('/api/assets');
-    render();
-  });
-  // Tap en una foto → verla en grande
-  $$('[data-lightbox]').forEach(el => el.onclick = () => openLightbox(el.dataset.lightbox, el.dataset.video === '1'));
 }
 
 /* ---------- CALENDARIO / HISTORIAL ---------- */
@@ -2724,32 +2418,19 @@ async function semanaView() {
   const draftN = drafts.length;
   const slots = suggestSlots(draftN, scheduled);
   const pill = sk && sk.current > 0 && sk.level
-    ? `<button class="streak-pill" id="streakPill" title="Tu racha: se apaga si pasás 72h sin publicar">${esc(sk.level.emoji)} Racha ${sk.current} <span class="streak-exp">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span></button>` : '';
+    ? `<button class="streak-pill" id="streakPill" title="Tu racha: se apaga si pasás 72h sin publicar"><span class="sp-top">${esc(sk.level.emoji)} Racha ${sk.current}</span><span class="sp-sub">vence en ${fmtStreakLeft(sk.expiresInMs)}</span></button>` : '';
   const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${pill}</div>`;
   const socialBar = soc && soc.shown
     ? `<div class="social-proof">🔥 ${soc.count} negocios llevan 15+ días seguidos armando su semana con Posta</div>` : '';
   const expBanner = sk && sk.expiringSoon ? `
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
     <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga en ${fmtStreakLeft(sk.expiresInMs)}</h3>
-    <p>${draftN > 0 ? 'Programá tus borradores acá abajo 👇 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
-    ${draftN > 0 ? '' : `<a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armemos tu semana</a>`}
+    <p>${draftN > 0 ? 'Programá tus borradores acá arriba 👆 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
   </div>` : '';
   if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
   const ws = new Date(w.start + 'T12:00:00'), we = new Date(w.end + 'T12:00:00');
   const pct = w.planned ? Math.min(100, Math.round((w.ready / w.planned) * 100)) : 0;
-
-  // Tira de 7 días (lun–dom)
-  const dayKey = (iso) => { try { return new Date(iso).toLocaleDateString('en-CA'); } catch { return ''; } };
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(ws); d.setDate(d.getDate() + i);
-    const key = d.toLocaleDateString('en-CA');
-    const todays = w.posts.filter(p => dayKey(p.published_at || p.scheduled_at) === key);
-    const cls = todays.some(p => p.status === 'published') ? 'ok' : todays.length ? 'pend' : 'empty';
-    const ico = cls === 'ok' ? '✅' : cls === 'pend' ? '📅' : '·';
-    days.push(`<div class="wk-day ${cls}"><span class="wd-n">${d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '')}</span><span class="wd-d">${d.getDate()}</span><span class="wd-i">${ico}</span></div>`);
-  }
 
   // Gráfico de ritmo: últimas 8 semanas (posteos por semana — datos propios)
   const maxT = Math.max(1, ...st.weekly.map(x => x.total));
@@ -2783,8 +2464,15 @@ async function semanaView() {
 
   // HERO: lo más importante primero. Con borradores → tus posteos esperando tu OK.
   // Sin borradores → el botón mágico: un click y la semana se arma acá mismo.
-  const heroCard = draftN > 0 ? reviewCardHTML(drafts, slots) : autopilotCardHTML('semana');
-  const redoCard = draftN > 0 ? autopilotCardHTML('semana') : '';
+  REVIEW_DRAFTS = drafts;
+  const weekDone = !w.missing;
+  const heroCard = draftN > 0 ? reviewCardHTML(drafts, slots)
+    : weekDone ? weekDoneCardHTML()
+    : autopilotCardHTML('semana');
+  // Rehacer es acción secundaria y sutil: nunca un segundo botón gigante de "armar"
+  const redoMini = draftN > 0
+    ? `<div style="text-align:center;margin:2px 0 18px"><button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button><div id="apProg-semana"></div></div>`
+    : '';
 
   return `${head}
   ${socialBar}
@@ -2792,7 +2480,7 @@ async function semanaView() {
   ${heroCard}
   ${nextUp}
   ${upcomingCard}
-  ${redoCard}
+  ${redoMini}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
@@ -2804,7 +2492,6 @@ async function semanaView() {
          <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
   ${chatCardHTML()}
-  <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div></div>
   ${nudgeBlock}
   <div class="row2">
     <div class="card"><h3>📊 Tu ritmo</h3><p class="d">Posteos por semana (últimas 8)</p><div class="bars">${bars}</div></div>
@@ -2831,7 +2518,6 @@ function bindSemana() {
   if (sp) sp.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
   };
-  $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
   $$('[data-nudge]').forEach(b => b.onclick = () => {
     const n = SEM_NUDGES[+b.dataset.nudge];
     if (!n) return;
@@ -2867,10 +2553,11 @@ function ajustesView() {
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
+  const photos = assetPhotos();
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
   ${igMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Acá definís tu logo, tus colores y tus fotos: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
@@ -2881,6 +2568,19 @@ function ajustesView() {
         <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
         <div class="hint" style="font-size:12px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
       </div>
+    </div>
+    <div class="field"><label>Fotos de tu negocio <span style="color:var(--dim);font-weight:400">(${photos.length}/20)</span></label>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        ${photos.map(a => `
+        <div style="position:relative">
+          <img src="${a.file_path}" data-lightbox="${a.file_path}" style="width:96px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:zoom-in">
+          <button class="btn btn-danger btn-sm foto-del" data-adel="${a.id}">✕</button>
+        </div>`).join('')}
+        ${photos.length < 20 ? `<button class="btn btn-ghost foto-add" id="btnAAdd">＋<br>Agregar</button>` : ''}
+      </div>
+      <input type="file" id="a_files" accept="image/*" multiple style="display:none">
+      <div class="hint">El autopilot usa tus fotos rotando en tus posteos: post 1 → foto 1, post 2 → foto 2, etc. Si no hay fotos, usa los diseños de plantilla.</div>
+      <div id="aMsg"></div>
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="font-size:12px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
@@ -3266,7 +2966,7 @@ function bindOnboarding() {
       await refreshSession();
       // Si viene de /prueba con plan preseleccionado, va directo a elegirlo
       const chosenPlan = localStorage.getItem('posta_chosen_plan');
-      location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/ideas';
+      location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/semana';
     } catch (e) {
       $('#obMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
       fin.disabled = false; fin.textContent = '✨ Listo, a crear contenido';
@@ -3388,9 +3088,9 @@ async function render() {
   let content = '';
   if (tab === 'semana') content = await semanaView();
   else if (tab === 'crear') content = creatorView();
-  else if (tab === 'ideas') content = await ideasView();
-  else if (tab === 'video') content = videoView();
-  else if (tab === 'fotos') content = fotosView();
+  else if (tab === 'ideas') { location.hash = '#/app/semana'; return; } // Ideas se fusionó en Mi semana
+  else if (tab === 'video') { location.hash = '#/app/semana'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
+  else if (tab === 'fotos') { location.hash = '#/app/ajustes'; return; } // Mis fotos vive en Ajustes > Mi marca
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/semana'; return; } // Calendario fusionado en Mi semana
   else if (tab === 'historial') content = await historyView();
@@ -3457,12 +3157,8 @@ function bindApp(tab) {
 
   if (tab === 'semana') bindSemana();
   if (tab === 'crear') bindCreator();
-  if (tab === 'ideas') bindIdeas();
-  if (tab === 'video') bindVideo();
-  if (tab === 'fotos') bindFotos();
   if (tab === 'onboarding') bindOnboarding();
   if (tab === 'historial' || tab === 'semana') {
-    $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
     $$('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, act = b.dataset.act;
       if (act === 'cancel' && !confirm('¿Cancelar este post?')) return;
@@ -3532,7 +3228,7 @@ function bindCreator() {
           </div>`
         : `<div style="display:flex;gap:8px;flex-wrap:wrap">
              <button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
-             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">🖼️ Mis fotos</button>` : ''}
+             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">🖼️ Tus fotos</button>` : ''}
            </div>
            <div id="prodPhLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
              ${assetPhotos().map(a => `<img src="${esc(a.file_path)}" data-prodpick="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer" alt="Tu foto">`).join('')}
@@ -3941,7 +3637,7 @@ function bindCreator() {
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags });
-        done('💾 Guardado como borrador. Lo revisás en Ideas → Revisá tu semana.', '#/app/ideas');
+        done('💾 Guardado como borrador. Lo revisás en Mi semana.', '#/app/semana');
       } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
     };
     $('#btnBack2').onclick = () => { c.step = c.fromOptions ? 'options' : 2; render(); };
@@ -4343,6 +4039,29 @@ function bindSettings() {
   // Marca
   const bBlog = $('#btnBrandLogo');
   if (bBlog) bBlog.onclick = () => $('#s_logofile').click();
+  // Fotos de la marca (librería, antes tab "Mis fotos")
+  const bAAdd = $('#btnAAdd');
+  if (bAAdd) bAAdd.onclick = () => $('#a_files').click();
+  const aFiles = $('#a_files');
+  if (aFiles) aFiles.onchange = async () => {
+    const files = [...aFiles.files].slice(0, 20 - assetPhotos().length);
+    aFiles.value = '';
+    const mEl = $('#aMsg');
+    for (let i = 0; i < files.length; i++) {
+      if (files.length > 1 && mEl) mEl.innerHTML = `<div class="hint" style="margin:0">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
+      try { await uploadAssetFile(files[i], 'photo'); }
+      catch (e) { if (mEl) mEl.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; return; }
+    }
+    if (mEl) mEl.innerHTML = '';
+    render();
+  };
+  $$('[data-adel]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Eliminar esta foto?')) return;
+    await api.del('/api/assets/' + b.dataset.adel);
+    ASSETS = await api.get('/api/assets');
+    render();
+  });
+  $$('[data-lightbox]').forEach(el => el.onclick = () => openLightbox(el.dataset.lightbox, el.dataset.video === '1'));
   // Si el creador ya tenía 6 opciones generadas, las regenera con los colores
   // nuevos para que el cambio se vea al instante (cero pasos extra).
   async function refreshCreatorWithNewColors(msgEl) {
