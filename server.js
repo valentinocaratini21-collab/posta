@@ -257,7 +257,14 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // ---------- Perfil del negocio ----------
-app.get('/api/profile', requireAuth, (req, res) => res.json(getProfile(req.session.userId)));
+app.get('/api/profile', requireAuth, (req, res) => {
+  const p = getProfile(req.session.userId);
+  let pending = false;
+  const at = req.session.igAttemptAt;
+  if (at && !p.ig_connected && Date.now() - at < 15 * 60 * 1000) pending = true;
+  else if (at) delete req.session.igAttemptAt; // conectado o vencido: limpiar
+  res.json({ ...p, ig_pending: pending });
+});
 
 app.put('/api/profile', requireAuth, (req, res) => {
   const { business_name, category, tone, description, ig_username, competitors, goal } = req.body || {};
@@ -998,6 +1005,10 @@ app.get('/api/ig/go', requireAuth, (req, res) => {
     const safe = String(r.error).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     return res.status(400).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>No se pudo iniciar la conexión</h2><p>${safe}</p><p><a href="/#/app/ajustes">\u2190 Volver a Posta</a></p></body></html>`);
   }
+  // Marca el intento: si Instagram deja al usuario varado en el feed (login +
+  // verificación que pierde el contexto OAuth), al volver a Posta mostramos el
+  // banner 'terminar de conectar' (ig_pending) por 15 minutos.
+  req.session.igAttemptAt = Date.now();
   res.redirect(r.url);
 });
 
@@ -1059,6 +1070,7 @@ app.get('/api/ig/callback', async (req, res) => {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(finalIgId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
+    delete req.session.igAttemptAt; // conectado: no más banner pendiente
     res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '')));
   } catch (e) {
     res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(e.message)));
