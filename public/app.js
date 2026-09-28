@@ -2856,7 +2856,7 @@ function ajustesView() {
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
       <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
     </div>
-    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:13px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Restablecer marca</button></div>
+    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:13px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
   </div></div>
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
@@ -3051,7 +3051,7 @@ function handleIgResult() {
   if (!r) return;
   try { history.replaceState(null, '', location.pathname + location.hash.split('?')[0]); } catch (e) {}
   if (r === 'ok') {
-    toast('✅ <b>¡Instagram conectado!</b>' + (hq.get('demo_off') ? '<br>El modo demo se apagó solo — ahora publicás de verdad.' : '') + (hq.get('brand_reset') ? '<br>Conectaste otra cuenta: restablecimos tu marca para el nuevo negocio.' : ''));
+    toast('✅ <b>¡Instagram conectado!</b>' + (hq.get('demo_off') ? '<br>El modo demo se apagó solo — ahora publicás de verdad.' : '') + (hq.get('brand_reset') ? '<br>Conectaste otra cuenta: reiniciamos tu marca y borramos los posteos pendientes del negocio anterior.' : ''));
   } else if (r === 'personal') {
     toast('⚠️ <b>Tu cuenta de Instagram es personal.</b><br>Para publicar necesitás una cuenta profesional (Business o Creator).');
   } else if (r === 'error') {
@@ -4425,27 +4425,15 @@ function bindSettings() {
     if (await refreshCreatorWithNewColors(brandMsgEl))
       brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada — diseños actualizados</span>';
   };
-  // Restablecer: borra logo, colores y nombre del negocio de una. Para cuando la marca
-  // quedó con datos de una prueba vieja o se quiere empezar de cero.
+  // Reiniciar todo: marca (logo, colores, nombre) + posteos pendientes (borradores y
+  // programados). Para cuando se cambió de negocio/cuenta. El historial publicado no se toca.
   const btnResetBrand = $('#btnResetBrand');
   if (btnResetBrand) btnResetBrand.onclick = async () => {
-    if (!confirm('¿Restablecer tu marca? Borra tu logo, tus colores y el nombre del negocio.')) return;
+    if (!confirm('¿Reiniciar todo? Se borran el logo, los colores, el nombre del negocio y los posteos pendientes (borradores y programados). El historial publicado no se toca.')) return;
     const brandMsgEl = $('#brandMsg');
     try {
-      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:14px">⏳ Restableciendo…</span>';
-      const logo = assetLogo();
-      if (logo && logo.id) { try { await api.del('/api/assets/' + logo.id); } catch (e) {} }
-      await api.put('/api/settings', { brand_colors: [] });
-      const p = PROFILE || {};
-      await api.put('/api/profile', {
-        business_name: '',
-        category: p.category || 'otro',
-        tone: p.tone || 'canchero',
-        description: p.description || '',
-        ig_username: p.ig_username || '',
-        competitors: p.competitors || '',
-        goal: p.goal || 'vender',
-      });
+      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:14px">⏳ Reiniciando…</span>';
+      await api.post('/api/brand/reset', {});
       ASSETS = await api.get('/api/assets').catch(() => []);
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
       await refreshSession();
