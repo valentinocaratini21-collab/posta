@@ -658,7 +658,7 @@ function ensureImageBaseUrl(db, userId, req) {
 }
 
 app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
-  const { image_path, caption, hashtags, scheduled_at, media_type } = req.body || {};
+  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
   // Anti-duplicados: mismo texto en las últimas 24h (no cancelado) = avisar en vez de crear otro
   const cap = (caption || '').trim();
@@ -669,23 +669,24 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const status = scheduled_at ? 'scheduled' : 'draft';
   const mt = media_type === 'video' ? 'video' : 'image';
   const r = db.prepare(
-    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
-  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt);
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '');
   ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
 app.patch('/api/posts/:id', requireAuth, (req, res) => {
-  const { scheduled_at, caption, hashtags, action } = req.body || {};
+  const { scheduled_at, caption, hashtags, image_path, action } = req.body || {};
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
   } else if (action === 'save-draft') {
-    // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot)
-    const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
-    db.prepare(`UPDATE posts SET caption=?, hashtags=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, post.id);
+    // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
+    // También acepta image_path para la regeneración de un borrador (↻).
+    const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags) || (image_path && image_path !== post.image_path);
+    db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, post.id);
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
     return res.json({ ok: true });
   } else {
