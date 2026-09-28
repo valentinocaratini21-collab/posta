@@ -163,28 +163,6 @@ function importTrialWeek(userId, igRaw) {
   return n;
 }
 
-// ---------- Verificación de email ----------
-// Al registrarse se manda un link por Resend (best-effort: si falla el envío,
-// el registro igual funciona y el usuario puede reenviarlo desde la app).
-function sendVerificationEmail(req, userId, email) {
-  try {
-    const token = crypto.randomBytes(32).toString('hex');
-    db.prepare('INSERT INTO email_tokens (token, user_id, created_at) VALUES (?, ?, ?)').run(token, userId, Date.now());
-    const host = req.get('host') || '';
-    const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
-    const link = `${baseUrl}/api/verify-email?token=${token}`;
-    sendEmail({
-      to: email,
-      subject: 'Verificá tu email en Posta ✉️',
-      html: `<div style="font-family:-apple-system,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;color:#0A1E33">`
-        + `<h2 style="margin:0 0 8px">Verificá tu email ✉️</h2>`
-        + `<p>Hola! Para activar tu cuenta de <b>Posta</b>, confirmá que este email es tuyo:</p>`
-        + `<p><a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 28px;border-radius:999px;text-decoration:none">Verificar mi email</a></p>`
-        + `<p style="color:#47617A;font-size:13px">El link vence en 24 horas. Si no creaste esta cuenta, ignorá este email.</p></div>`,
-    }).catch((e) => console.error('[posta] no se pudo enviar verificación:', e.message));
-  } catch (e) { console.error('[posta] token verificación:', e.message); }
-}
-
 app.post('/api/auth/register', (req, res) => {
   const { email, password, ref, trial_ig } = req.body || {};
   if (!email || !password || password.length < 6)
@@ -206,7 +184,6 @@ app.post('/api/auth/register', (req, res) => {
       const nImp = importTrialWeek(r.lastInsertRowid, trial_ig);
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
-    sendVerificationEmail(req, r.lastInsertRowid, email.trim().toLowerCase());
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: 'Ese email ya está registrado' });
@@ -224,29 +201,6 @@ app.post('/api/auth/login', (req, res) => {
     const nImp = importTrialWeek(user.id, trial_ig);
     if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${user.id}`);
   } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
-  res.json({ ok: true });
-});
-
-app.get('/api/verify-email', (req, res) => {
-  const token = String(req.query.token || '').trim();
-  const row = token ? db.prepare('SELECT user_id, created_at FROM email_tokens WHERE token = ?').get(token) : null;
-  const page = (title, msg) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head><body style="font-family:-apple-system,'Segoe UI',Roboto,sans-serif;display:flex;min-height:90vh;align-items:center;justify-content:center;background:#F2F9FD;color:#0A1E33;margin:0"><div style="text-align:center;padding:24px;max-width:420px"><h2 style="margin:0 0 10px">${title}</h2><p style="color:#47617A">${msg}</p><a href="/#/app/semana" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 32px;border-radius:999px;text-decoration:none;margin-top:8px">Entrar a Posta</a></div></body></html>`;
-  if (!row || Date.now() - row.created_at > 24 * 3600 * 1000) {
-    return res.status(400).send(page('😕 Este link ya no sirve', 'Venció o ya fue usado. Pedí uno nuevo desde tu cuenta de Posta.'));
-  }
-  db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(row.user_id);
-  db.prepare('DELETE FROM email_tokens WHERE user_id = ?').run(row.user_id);
-  res.send(page('Email verificado ✓', 'Tu cuenta de Posta ya está activada. A crear contenido 🚀'));
-});
-
-app.post('/api/auth/resend-verification', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, email, email_verified FROM users WHERE id = ?').get(req.session.userId);
-  if (!user) return res.status(401).json({ error: 'No hay sesión' });
-  if (user.email_verified) return res.json({ ok: true, already: true });
-  const last = db.prepare('SELECT created_at FROM email_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(user.id);
-  if (last && Date.now() - last.created_at < 2 * 60 * 1000)
-    return res.status(429).json({ error: 'Ya te mandamos un email recién. Esperá 2 minutos para reenviarlo.' });
-  sendVerificationEmail(req, user.id, user.email);
   res.json({ ok: true });
 });
 
@@ -1201,9 +1155,8 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     if (user.plan_status === 'active' && user.mp_preapproval_id) {
       return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
     }
-    if (!user.email_verified) {
-      return res.status(400).json({ error: 'Verificá tu email antes de suscribirte: te mandamos un link a tu casilla.', need_verification: true });
-    }
+    // Sin bloqueo por email sin verificar: si quiere pagar, que pague.
+    // MercadoPago ya valida al comprador en su checkout.
     // Guardar el email de MP para pre-completarlo la próxima vez
     try { db.prepare(`UPDATE users SET mp_payer_email=? WHERE id=?`).run(payerEmail, user.id); } catch (e) {}
     const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
