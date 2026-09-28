@@ -1188,6 +1188,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
         image: 'data:image/png;base64,' + bufs[i].toString('base64'),
         caption,
         hashtags: demoHashtags(cat, country, tone),
+        headline: specPosts[i].headline, // titular real renderizado en el diseño
       };
     });
 
@@ -1199,8 +1200,8 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags }
-        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags }
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline }
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline }
     ));
     return { posts, spec: savedSpec };
   } finally {
