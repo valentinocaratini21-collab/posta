@@ -449,20 +449,6 @@ function pwaReportInstalled() {
   try { localStorage.setItem('pwa-reported', '1'); } catch (e) {}
   try { api.post('/api/pwa-installed', {}).catch(() => {}); } catch (e) {}
 }
-function pwaBannerHtml() {
-  if (pwaIsInstalled() || pwaDismissed()) return '';
-  const ios = pwaIsIos();
-  const txt = ios
-    ? 'Instalá Posta en tu teléfono: tocá <b>Compartir</b> y elegí <b>“Agregar a pantalla de inicio”</b>.'
-    : 'Instalá Posta en tu teléfono para tenerla siempre a mano.';
-  const btnStyle = (!ios && !PWA_DEFERRED) ? ' style="display:none"' : '';
-  return `<div class="pwa-banner" id="pwaBanner">
-    <span class="pwa-ico">📲</span>
-    <div class="pwa-txt">${txt}</div>
-    <button class="btn btn-primary btn-sm" id="pwaInstallBtn"${btnStyle}>Instalar</button>
-    <button class="pwa-x" id="pwaDismiss" aria-label="Cerrar">✕</button>
-  </div>`;
-}
 async function pwaDoInstall() {
   if (PWA_DEFERRED) {
     PWA_DEFERRED.prompt();
@@ -491,20 +477,35 @@ function pwaWire() {
   };
 }
 
+/* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
+function igConnectHere() {
+  const cur = '/#' + ((location.hash.split('?')[0] || '#/app/semana').replace(/^#/, ''));
+  igConnect(cur);
+}
+function setupChecklistHtml() {
+  const rows = [];
+  if (ME && !ME.email_verified) {
+    rows.push(`<button class="setup-row" id="btnResendVerify"><span class="setup-ico">✉️</span><span class="setup-txt"><b>Verificá tu email</b><small>Te mandamos un link a tu casilla.</small></span><span class="setup-go">Reenviar →</span></button>`);
+  }
+  if (!(PROFILE && PROFILE.ig_connected)) {
+    rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
+  }
+  if (!pwaIsInstalled() && !pwaDismissed()) {
+    rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">📲</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
+  }
+  if (!rows.length) return '';
+  const n = rows.length;
+  return `<div class="setup-card"><div class="setup-title">🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}</div>${rows.join('')}</div>`;
+}
+
 function appShell(tab, content) {
   const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
   const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
-  const igBanner = (PROFILE && PROFILE.ig_connected) ? '' : `
-  <div class="ig-banner"><span class="igb-ico">📸</span><span class="igb-txt"><b>Conectá tu Instagram</b><span>Publicá en automático en 1 minuto, sin contraseña.</span></span><button class="btn btn-primary btn-sm" data-ig-connect>Conectar ahora</button></div>`;
-  const verifyBanner = (ME && !ME.email_verified) ? `
-  <div class="verify-banner"><span class="igb-ico">📧</span><span class="igb-txt"><b>Verificá tu email</b><span>Te mandamos un link a tu casilla para activar tu cuenta.</span></span><button class="btn btn-primary btn-sm" id="btnResendVerify">Reenviar</button></div>` : '';
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
     <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button></div>
-  ${pwaBannerHtml()}
-  ${igBanner}
-  ${verifyBanner}
+  ${setupChecklistHtml()}
   <div class="app-shell">
     <div class="sidebar">
       <a class="logo" href="#/" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
@@ -998,7 +999,7 @@ function checklistHTML(postsCount){
     <div class="pz-refbar check-bar"><div style="width:${Math.round(done / 3 * 100)}%"></div></div>
     <div class="check-steps">
       ${step(s1, 1, 'Contanos tu negocio', 'Unos 2 minutos, una sola vez.', '<a class="btn btn-soft btn-sm" href="#/app/ajustes">Completar</a>')}
-      ${step(s2, 2, 'Conectá tu Instagram', 'Publicá en automático en 1 minuto.', '<button class="btn btn-primary btn-sm" data-ig-connect>Conectar Instagram</button>')}
+      ${step(s2, 2, 'Conectá tu Instagram', 'Dejá tu semana lista para publicar.', '<button class="btn btn-primary btn-sm" data-ig-connect>Conectar Instagram</button>')}
       ${step(s3, 3, 'Creá tu primer posteo', 'O armá tu semana en 1 tap.', '<a class="btn btn-soft btn-sm" href="#/app/crear">Crear posteo</a>')}
     </div>
   </div>`;
@@ -2642,10 +2643,7 @@ function maybeShowIgPopup(tab) {
     </div>`;
     document.body.appendChild(ov);
     const go = ov.querySelector('#igFirstGo');
-    if (go) go.onclick = () => {
-      const cur = '/#' + ((location.hash.split('?')[0] || '#/app/semana').replace(/^#/, ''));
-      igConnect(cur);
-    };
+    if (go) go.onclick = igConnectHere;
     const skip = ov.querySelector('#igFirstSkip');
     if (skip) skip.onclick = (e) => {
       e.preventDefault();
@@ -3003,11 +3001,14 @@ function bindApp(tab) {
   pwaWire();
   $$('.mtab,.side-link[data-tab],.mbar-btn[data-tab],.msheet-btn[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
+  const sg = $('#setupIgRow');
+  if (sg) sg.onclick = igConnectHere;
   const rv = $('#btnResendVerify');
   if (rv) rv.onclick = async () => {
-    rv.disabled = true; rv.textContent = 'Enviando…';
-    try { await api.post('/api/auth/resend-verification'); rv.textContent = 'Email enviado ✓'; }
-    catch (e) { rv.disabled = false; rv.textContent = 'Reenviar'; alert(e.message); }
+    const go = rv.querySelector('.setup-go');
+    rv.disabled = true; if (go) go.textContent = 'Enviando…';
+    try { await api.post('/api/auth/resend-verification'); if (go) go.textContent = '¡Enviado ✓'; }
+    catch (e) { rv.disabled = false; if (go) go.textContent = 'Reenviar →'; alert(e.message); }
   };
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };

@@ -491,6 +491,17 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .ig-banner .btn{flex:none;box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .verify-banner{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#FEC14D 0%,#F6A92C 100%);color:#0A1E33;padding:12px 16px;position:relative;z-index:40}
 .verify-banner .btn{flex:none;background:#0A1E33;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.2)}
+/* Checklist compacto de configuración (reemplaza los 3 banners apilados) */
+.setup-card{background:#fff;border:1px solid #e3edf5;border-radius:16px;margin:12px 16px 0;padding:4px 6px;box-shadow:0 2px 12px rgba(10,30,51,.06)}
+.setup-title{font-weight:800;font-size:14px;color:var(--txt);padding:8px 10px 2px}
+.setup-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;padding:10px;border-radius:12px;cursor:pointer;font-family:inherit}
+.setup-row:active{background:#F2F9FD}
+.setup-row + .setup-row{border-top:1px solid #eef4f9}
+.setup-ico{font-size:22px;flex:none}
+.setup-txt{flex:1;display:flex;flex-direction:column;gap:1px;font-size:14px;color:var(--txt);min-width:0}
+.setup-txt small{color:var(--mut);font-size:12px}
+.setup-go{font-size:13px;font-weight:700;color:var(--cel);white-space:nowrap;flex:none}
+.setup-row:disabled{opacity:.6;cursor:default}
 
 .rec-card{border:1.5px solid var(--yl-line);background:linear-gradient(180deg,#FFFEFA 0%,#FFFDF3 100%);box-shadow:0 14px 36px rgba(254,193,77,.22);position:relative;overflow:hidden}
 .rec-card::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--yl),var(--cel))}
