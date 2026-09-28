@@ -135,6 +135,13 @@ CREATE TABLE IF NOT EXISTS deletion_requests (
   status TEXT NOT NULL DEFAULT 'done',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS nudges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT '',
+  sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_nudges_user ON nudges(user_id, sent_at);
 `);
 
 // Loop inteligente fase 1: señales del cliente por posteo (qué le gustó y qué no)

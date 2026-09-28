@@ -93,6 +93,16 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[email semanal] no se pudo programar:', e.message);
   }
+  // Nudge "ya tenemos tus posteos listos": todos los días 10:30 (Buenos Aires).
+  // Solo a usuarios con borradores sin revisar o semana vacía, con topes anti-spam.
+  try {
+    cron.schedule('30 10 * * *', () => {
+      sendContentNudges(db).catch((e) => console.error('[nudges]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Nudge de contenido por email: todos los días 10:30 (Buenos Aires)');
+  } catch (e) {
+    console.error('[nudges] no se pudo programar:', e.message);
+  }
   // Conciliación de descuentos con MercadoPago: cada 12 horas
   try {
     const { reconcileAll } = require('./billing-sync');
@@ -141,4 +151,70 @@ async function sendWeeklyReminders(db) {
   return { sent, failed };
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders };
+// Nudge diario "ya tenemos tus posteos listos" (todos los días 10:30 Buenos Aires).
+// REGLA DE ORO: el mensaje solo se manda si es verdad.
+//  - Caso A (borradores sin revisar): el usuario generó pero no revisó hace >24h
+//    y no tiene nada programado/publicado en los últimos 7 días → email "listos".
+//  - Caso B (semana vacía): sin borradores y sin nada programado → email honesto
+//    que NO promete posteos inexistentes, invita a armarlos en 2 minutos.
+// Topes anti-spam: sin nudge en los últimos 3 días, respeta email_opt_out,
+// solo trial o plan activo, cuenta con más de 1 día.
+async function sendContentNudges(db) {
+  const { emailConfigured, draftsNudgeEmail, emptyWeekEmail } = require('./email');
+  if (!emailConfigured()) {
+console.log('[nudges] sin RESEND_API_KEY: <redacted>');
+    return { sent: 0, skipped: 0 };
+  }
+  const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+  const users = db.prepare(`
+    SELECT u.id, u.email, p.business_name FROM users u
+    LEFT JOIN profiles p ON p.user_id = u.id
+    WHERE u.email IS NOT NULL AND u.email != ''
+      AND COALESCE(u.email_opt_out, 0) = 0
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+      AND datetime(u.created_at) < datetime('now', '-1 day')
+      AND NOT EXISTS (
+        SELECT 1 FROM nudges n
+        WHERE n.user_id = u.id AND datetime(n.sent_at) > datetime('now', '-3 days')
+      )
+  `).all();
+  let sent = 0, skipped = 0;
+  for (const u of users) {
+    try {
+      // ¿Tiene algo programado o publicado en los últimos 7 días? → está al día, no molestar
+      const live = db.prepare(`
+        SELECT COUNT(*) AS c FROM posts
+        WHERE user_id = ? AND status IN ('scheduled', 'publishing', 'published')
+          AND COALESCE(scheduled_at, published_at, created_at) > datetime('now', '-7 days')
+      `).get(u.id).c;
+      if (live > 0) { skipped++; continue; }
+      // Borradores generados hace más de 24h y todavía sin revisar
+      const drafts = db.prepare(`
+        SELECT COUNT(*) AS c FROM posts
+        WHERE user_id = ? AND status = 'draft'
+          AND datetime(created_at) < datetime('now', '-1 day')
+      `).get(u.id).c;
+      const name = (u.business_name || '').trim() || u.email.split('@')[0];
+      if (drafts > 0) {
+        const r = await draftsNudgeEmail({ email: u.email, name, count: drafts }, base);
+        if (r && r.ok) {
+          db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'drafts')`).run(u.id);
+          sent++;
+        }
+      } else {
+        const r = await emptyWeekEmail({ email: u.email, name }, base);
+        if (r && r.ok) {
+          db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'empty')`).run(u.id);
+          sent++;
+        }
+      }
+    } catch (e) {
+      console.error('[nudges] error con usuario', u.id, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400)); // no saturar el proveedor
+  }
+  console.log(`[nudges] enviados: ${sent}, omitidos (al día): ${skipped}, candidatos: ${users.length}`);
+  return { sent, skipped };
+}
+
+module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges };
