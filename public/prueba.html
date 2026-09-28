@@ -141,6 +141,23 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .day .db img,.day .db video{width:100%;height:100%;object-fit:cover;display:block}
 .day .vbadge{position:absolute;bottom:8px;right:8px;background:rgba(10,30,51,.8);color:#fff;font-size:11px;font-weight:800;padding:5px 10px;border-radius:99px}
 .day .dcap{padding:10px 12px;font-size:12px;color:var(--mut);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:44px}
+/* Reel protagonista */
+.day.feat{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);border:2px solid var(--yl);box-shadow:0 12px 32px rgba(254,193,77,.25)}
+.day.feat .dh{grid-column:1/-1;background:linear-gradient(135deg,#0A1E33,#2793C8)}
+.day.feat .db{aspect-ratio:1/1}
+.day.feat .dcap{-webkit-line-clamp:5;font-size:13px;align-self:center;padding:18px;min-height:0}
+/* Tira "cada semana" */
+.wkstrip{display:flex;gap:8px;align-items:stretch;overflow-x:auto;padding:6px 2px 12px;margin-top:14px}
+.wk{flex:1;min-width:118px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 10px;text-align:center}
+.wk b{display:block;font-size:13px;color:var(--navy);margin-bottom:4px}
+.wk span{font-size:12px;color:var(--mut)}
+.wk.now{border-color:var(--cel);background:var(--bg2)}
+.wk.now span{color:var(--cel);font-weight:800}
+.wk.future{border-style:dashed}
+.wk-arrow{align-self:center;color:var(--cel);font-weight:800;flex-shrink:0}
+/* Compartir */
+.share-row{text-align:center;margin:14px 0 4px}
+.share-btn{border:2px solid var(--cel);background:#fff;color:var(--cel);border-radius:999px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer}
 /* Chat de la prueba */
 .chat{background:#fff;border:1.5px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(10,30,51,.07)}
 .chat-msgs{padding:20px;display:flex;flex-direction:column;gap:12px;max-height:340px;overflow-y:auto;background:var(--bg2)}
@@ -321,6 +338,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <h3>Tu semana 📅</h3>
       <p class="lede">Tus 5 posteos, ya creados: diseño + caption + hashtags. Tocá cada uno para verlo completo.</p>
       <div class="week" id="rWeek"></div>
+      <div class="share-row"><button class="share-btn" id="btnShare">📤 Compartir mi semana</button></div>
       <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">¿Algo no te cierra? Pedilo por chat 👇</a></p>
     </div>
 
@@ -364,6 +382,15 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div class="sec">
       <h3>¿Cómo sigue? 👇</h3>
       <p class="lede">Esto fue una muestra. Imaginate esto <b>cada semana</b>, sin mover un dedo.</p>
+      <div class="wkstrip">
+        <div class="wk now"><b>Esta semana</b><span>✓ Lista</span></div>
+        <div class="wk-arrow">→</div>
+        <div class="wk future"><b>Próxima</b><span>Posta la arma</span></div>
+        <div class="wk-arrow">→</div>
+        <div class="wk future"><b>Siguiente</b><span>Posta la arma</span></div>
+        <div class="wk-arrow">→</div>
+        <div class="wk future"><b>Siempre</b><span>sin mover un dedo ♾️</span></div>
+      </div>
       <div class="steps3">
         <div class="step3"><div class="n">1</div><div><b>Creá tu cuenta gratis</b><p>30 segundos, sin tarjeta.</p></div></div>
         <div class="step3"><div class="n">2</div><div><b>Cada semana, lista para revisar</b><p>La armamos nosotros, vos la mirás.</p></div></div>
@@ -372,6 +399,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div style="text-align:center;margin-top:26px">
         <button class="btn btn-primary" id="btnBuy2" style="font-size:19px;padding:18px 46px">Guardar mi semana gratis 🚀</button>
         <p class="tiny">3 días gratis · Sin tarjeta · Cancelás cuando quieras</p>
+        <p class="tiny" id="capLine" style="display:none;margin-top:10px"></p>
       </div>
     </div>
   </div>
@@ -660,7 +688,8 @@ function renderResults() {
   const rt = $('#rTime');
   if (t.genSecs) {
     rt.style.display = 'block';
-    rt.textContent = t.genSecs < 60 ? `⏱ Armada en ${t.genSecs} segundos` : `⏱ Armada en ${Math.floor(t.genSecs / 60)} min ${t.genSecs % 60} s`;
+    const timeStr = t.genSecs < 60 ? `${t.genSecs} segundos` : `${Math.floor(t.genSecs / 60)} min ${t.genSecs % 60} s`;
+    rt.innerHTML = `⏱ Armada en ${timeStr}<br>💪 Hacer esto a mano te toma <b>unas 6 horas</b> por semana`;
   } else rt.style.display = 'none';
   const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
   const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>con los colores de tu perfil</b>' : '';
@@ -668,6 +697,26 @@ function renderResults() {
 
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
   renderWeek();
+
+  // CTA personalizado con el nombre del negocio
+  try {
+    const biz = String(t.business || 'tu negocio');
+    const short = biz.length > 26 ? biz.slice(0, 25) + '…' : biz;
+    const b2 = $('#btnBuy2');
+    if (b2) b2.textContent = `Guardar la semana de ${short} 🚀`;
+  } catch (e) {}
+  // Urgencia real: lugares restantes del mes
+  try {
+    fetch('/api/capacity').then((r) => r.json()).then((j) => {
+      if (j && j.ok && typeof j.spots_left === 'number') {
+        const el = $('#capLine');
+        if (el) {
+          el.style.display = 'block';
+          el.innerHTML = `🔥 <b>Quedan ${j.spots_left} lugares</b> de ${j.spots_total} este mes`;
+        }
+      }
+    }).catch(() => {});
+  } catch (e) {}
 
   show('v-results');
   const sc = $('#stickyCta');
@@ -680,10 +729,11 @@ function renderWeek() {
   if (!t || !t.week) return;
   $('#rWeek').innerHTML = t.week.map((w) => {
     const p = t.posts[w.post];
-    const media = p.type === 'video'
+    const isV = p.type === 'video';
+    const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}">`;
-    return `<div class="day" data-i="${w.post}"><div class="dh"><b>${esc(w.day)}</b><small>${esc(w.date)}</small></div><div class="db">${media}</div><div class="dcap">${esc((p.caption || '').split('\n')[0])}</div></div>`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div><div class="dcap">${esc((p.caption || '').split('\n')[0])}</div></div>`;
   }).join('');
   $$('#rWeek .day').forEach((d) => { d.onclick = () => openLb(parseInt(d.dataset.i, 10)); });
 }
@@ -704,6 +754,7 @@ function lbDayName() {
   return w ? w.day : 'este posteo';
 }
 $('#lbPhoto').onclick = () => { $('#lb').classList.remove('open'); openPhotoSheet(lbPost); };
+$('#btnShare').onclick = () => shareWeek();
 $('#lbImprove').onclick = () => {
   $('#lb').classList.remove('open');
   const inp = $('#chatIn');
@@ -862,6 +913,37 @@ async function trialRedesign(patch) {
   } finally { redesignBusy = false; }
 }
 
+/* ---------- Compartir la semana ---------- */
+async function shareWeek() {
+  const t = TRIAL;
+  if (!t || !t.posts) return;
+  const url = location.origin + '/prueba';
+  const text = `Mirá la semana de posteos que me armó Posta para ${t.business} 🚀 Probalo gratis:`;
+  try {
+    const files = [];
+    for (let i = 0; i < t.posts.length; i++) {
+      const p = t.posts[i];
+      const src = p.type === 'video' ? p.video : p.image;
+      if (!src) continue;
+      const blob = await (await fetch(src)).blob();
+      const ext = p.type === 'video' ? 'mp4' : 'png';
+      files.push(new File([blob], `posta-${t.business || 'semana'}-${i + 1}.${ext}`, { type: blob.type || (p.type === 'video' ? 'video/mp4' : 'image/png') }));
+    }
+    if (files.length && navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ title: 'Mi semana con Posta', text, url, files });
+      return;
+    }
+    throw new Error('no-share');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // el usuario canceló
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      toast('Enlace copiado — compartilo donde quieras 📤');
+    } catch (_) {
+      toast('Copiá el enlace de esta página para compartirla');
+    }
+  }
+}
 /* ---------- Sheet de fotos ---------- */
 let photoSheetIdx = -1;
 let photoSel = null;
