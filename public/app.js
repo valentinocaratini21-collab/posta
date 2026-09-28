@@ -2576,9 +2576,14 @@ function ajustesView() {
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `<input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
+        ${[0, 1, 2].map(i => `
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+          <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
+          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:76px;text-align:center;font-size:12px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
+          <div style="font-size:10px;font-weight:800;color:var(--dim);letter-spacing:.5px;text-transform:uppercase">${['Principal', 'Secundario', 'Acento'][i]}</div>
+        </div>`).join('')}
       </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano.</div>
+      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
     </div>
     <div class="field"><label>Vista previa</label>
       <div id="brandPrev"></div>
@@ -4042,9 +4047,27 @@ function bindSettings() {
   let brandDirty = false;
   const bDirtyEl = $('#brandDirty');
   function markBrandDirty() { if (!brandDirty) { brandDirty = true; if (bDirtyEl) bDirtyEl.style.display = ''; } }
-  ['s_c0', 's_c1', 's_c2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', () => { markBrandDirty(); renderBrandPrev(); });
+  const normHex = (v) => {
+    let h = String(v || '').trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(h)) h = h.split('').map(c => c + c).join('');
+    return /^[0-9a-fA-F]{6}$/.test(h) ? '#' + h.toUpperCase() : null;
+  };
+  const syncHexFromPicker = (i) => { const hx = $('#s_h' + i); const pk = $('#s_c' + i); if (hx && pk) hx.value = pk.value.toUpperCase(); };
+  ['s_c0', 's_c1', 's_c2'].forEach((id, i) => {
+    const pick = document.getElementById(id);
+    const hex = document.getElementById('s_h' + i);
+    if (pick) pick.addEventListener('input', () => { syncHexFromPicker(i); markBrandDirty(); renderBrandPrev(); });
+    if (hex && pick) {
+      hex.addEventListener('input', () => {
+        const n = normHex(hex.value);
+        if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
+      });
+      hex.addEventListener('change', () => {
+        const n = normHex(hex.value);
+        hex.value = n || pick.value.toUpperCase();
+        if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
+      });
+    }
   });
   renderBrandPrev();
   const bBlogDel = $('#btnBrandLogoDel');
@@ -4064,7 +4087,7 @@ function bindSettings() {
       const img = await loadImageUrl(logo.file_path);
       const cols = extractTopColors(img, 3);
       let filled = 0;
-      cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; filled++; } });
+      cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; syncHexFromPicker(i); filled++; } });
       if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:14px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
     } catch (e) { /* quedan los valores actuales */ }
   })();
