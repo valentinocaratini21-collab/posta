@@ -655,6 +655,10 @@ const PALETTES = BASE_PALETTES; // compat: usar getPalettes() para la lista efec
 
 // Saca los N colores dominantes de una imagen (se usa para autocompletar
 // los colores de marca desde el logo que sube el cliente).
+// - Devuelve el tono EXACTO más frecuente de cada grupo (no el centro aproximado
+//   del bucket): el color del logo sale idéntico al original.
+// - El puntaje mezcla frecuencia con saturación: un acento chico pero vivo
+//   (ej. el puntito del logo) le gana a variantes apagadas con más píxeles.
 // Regla: el FONDO del logo nunca es el principal. El color más frecuente de
 // toda la imagen suele ser el fondo → va como acento (si es un color real).
 // El principal es el color más fuerte del logo en sí (el "logo literal").
@@ -674,23 +678,31 @@ function extractTopColors(img, n) {
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
     return (mx - mn < 28) || (mx > 242 && mn > 225) || (mx < 24); // grises, blancos, negros
   };
+  // track: por bucket guarda cantidad, saturación acumulada y el tono exacto más frecuente
+  const track = (map, k, r, g, b) => {
+    let e = map[k];
+    if (!e) e = map[k] = { n: 0, sat: 0, exact: {}, best: 0, bestN: 0 };
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    e.n++; e.sat += (mx - mn) / 255;
+    const ek = (r << 16) | (g << 8) | b;
+    const c = (e.exact[ek] || 0) + 1;
+    e.exact[ek] = c;
+    if (c > e.bestN) { e.bestN = c; e.best = ek; }
+  };
+  const hexOf = (e) => '#' + [16, 8, 0].map(s => ((e.best >> s) & 255).toString(16).padStart(2, '0')).join('').toUpperCase();
   // 1) Fondo = el color más frecuente del ÁREA DEL LOGO (incluye neutros)
   const all = {};
   for (let y = 0; y < chh; y += 2) {
     for (let x = 0; x < cw; x += 2) {
       if (!inLogo(x, y)) continue;
       const i = (y * cw + x) * 4;
-      const k = key(d[i], d[i + 1], d[i + 2]);
-      all[k] = (all[k] || 0) + 1;
+      track(all, key(d[i], d[i + 1], d[i + 2]), d[i], d[i + 1], d[i + 2]);
     }
   }
-  const sorted = Object.entries(all).sort((a, b) => b[1] - a[1]);
+  const sorted = Object.entries(all).sort((a, b) => b[1].n - a[1].n);
   if (!sorted.length) return [];
-  const bgKey = sorted[0][0];
-  const toHex = (v) => Math.round(v * 32 + 16).toString(16).padStart(2, '0').toUpperCase();
-  const hexOf = (k) => '#' + k.split(',').map(Number).map(toHex).join('');
-  const [br, bgg, bb] = bgKey.split(',').map(v => Number(v) * 32 + 16);
-  const bgIsReal = !isNeutral(br, bgg, bb);
+  const bgKey = sorted[0][0], bgE = sorted[0][1];
+  const bgIsReal = !isNeutral((bgE.best >> 16) & 255, (bgE.best >> 8) & 255, bgE.best & 255);
   // 2) Principal y secundario: colores cromáticos que NO son el fondo
   const buckets = {};
   for (let y = 0; y < chh; y += 2) {
@@ -700,12 +712,15 @@ function extractTopColors(img, n) {
       const k = key(r, g, b);
       if (k === bgKey) continue;          // el fondo no compite por ser principal
       if (isNeutral(r, g, b)) continue;   // grises/blancos/negros
-      buckets[k] = (buckets[k] || 0) + 1;
+      track(buckets, k, r, g, b);
     }
   }
-  const ranked = Object.entries(buckets).sort((a, b) => b[1] - a[1]).map(([k]) => hexOf(k));
+  const ranked = Object.entries(buckets)
+    .map(([k, v]) => [k, v, v.n * (0.25 + 2 * (v.sat / v.n))])
+    .sort((a, b) => b[2] - a[2])
+    .map(([, v]) => hexOf(v));
   // 3) El fondo (si es un color real, ej. navy de fitswapp) va como acento
-  const out = bgIsReal ? [ranked[0], ranked[1], hexOf(bgKey)].filter(Boolean) : ranked;
+  const out = bgIsReal ? [ranked[0], ranked[1], hexOf(bgE)].filter(Boolean) : ranked;
   return out.slice(0, n || 3);
 }
 function loadImageFile(file) {
