@@ -616,22 +616,25 @@ const DEMO_TOPICS = {
       caption: 'Sorteo en {BIZ} 🎁\n\nEntradas dobles para la próxima fecha.\n\nComentá PARTICIPO y ya estás adentro 👇' },
   ],
   tecnologia: [
-    { kind: 'novedad', tag: 'NUEVO', headline: 'Llegó el último modelo',
+    // Cada tema tiene su foto asignada (no sorteada): el posteo y la foto
+    // siempre matchean. tech=smartphone en caja · tech-1=vendedor entregando
+    // · tech-2=accesorios · tech-3=técnico reparando.
+    { kind: 'novedad', tag: 'NUEVO', photo: 'tech', headline: 'Llegó el último modelo',
       subline: 'Lo tenemos disponible desde hoy.', cta: 'Quiero verlo',
       caption: 'Che, mirá lo que acaba de llegar 👀\n\nEl último modelo ya disponible en {BIZ}.\n\nEscribinos por DM y te lo reservamos 📩' },
-    { kind: 'promo', tag: 'OFERTA', headline: 'La oferta de la semana',
+    { kind: 'promo', tag: 'OFERTA', photo: 'tech-2', headline: 'La oferta de la semana',
       subline: 'Precio especial solo estos días.', cta: 'Aprovecharla',
       caption: 'Atención, que esto es posta 👇\n\nOferta semanal en {BIZ}: precios especiales.\n\nComentá INFO y te pasamos todo 👇' },
-    { kind: 'tip', tag: 'TIP', headline: 'Sacale más provecho',
+    { kind: 'tip', tag: 'TIP', photo: 'tech-1', headline: 'Sacale más provecho',
       subline: '3 trucos que casi nadie conoce.', cta: 'Ver los trucos',
       caption: 'Mirá lo que tenemos para vos ✨\n\n3 trucos para tu equipo, por {BIZ}.\n\nGuardá este post para no olvidarte 🔖' },
-    { kind: 'promo', tag: 'TRADE-IN', headline: 'Traé tu usado',
+    { kind: 'promo', tag: 'TRADE-IN', photo: 'tech-3', headline: 'Traé tu usado',
       subline: 'Te lo tomamos en parte de pago.', cta: 'Consultar',
       caption: 'Atención, que esto es posta 👇\n\nPlan canje en {BIZ}: tu usado vale más acá.\n\nComentá INFO y te cotizamos 👇' },
-    { kind: 'social', tag: 'REVIEW', headline: 'Lo probamos por vos',
+    { kind: 'social', tag: 'REVIEW', photo: 'office', headline: 'Lo probamos por vos',
       subline: 'Nuestra review honesta del último lanzamiento.', cta: 'Ver review',
       caption: 'Lo probamos por vos 📱\n\nReview honesta en {BIZ}, sin vueltas.\n\nGuardá este post 🔖' },
-    { kind: 'reserva', tag: 'SOPORTE', headline: 'Soporte sin vueltas',
+    { kind: 'reserva', tag: 'SOPORTE', photo: 'office-1', headline: 'Soporte sin vueltas',
       subline: 'Diagnosticamos tu equipo gratis.', cta: 'Pedir turno',
       caption: 'Che, mirá esto 👀\n\nSoporte técnico en {BIZ}: tu equipo listo en 24h.\n\nEscribinos por DM 📩' },
   ],
@@ -918,11 +921,41 @@ function sanitizeGoal(g) {
 }
 
 const GOAL_RULES = [
-  { kind: 'promo', kws: ['promo', 'descuento', 'oferta', '2x1', 'off', 'liquidaci', 'vender', 'venta', 'vend'] },
+  { kind: 'promo', kws: ['promo', 'descuento', 'oferta', '2x1', 'off', 'liquidaci', 'vender', 'venta', 'vend', 'canje', 'usado', 'trade'] },
   { kind: 'reserva', kws: ['reserva', 'turno', 'cita', 'visita'] },
-  { kind: 'novedad', kws: ['nuevo', 'nueva', 'lanzamiento', 'lleg'] },
+  { kind: 'novedad', kws: ['nuevo', 'nueva', 'lanzamiento', 'lleg', 'modelo'] },
   { kind: 'sorteo', kws: ['sorteo'] },
 ];
+
+// Palabras vacías para extraer frases con sentido del párrafo del cliente.
+const GOAL_STOP = new Set(('que de la el los las un una y o en con para por mi mis tu tus su sus del al se me te nos como mas muy tan este esta esto estos estas ese esa hay son es esta estan quiero queremos busco buscamos hago hacemos tengo tenemos vendo vendemos nuestro nuestra nuestros nuestras a e ni pero si no si tambien algo asi hacer hacen ser estoy estan este los del').split(' '));
+
+// Extrae la frase del cliente alrededor de una palabra clave ("plan canje",
+// "últimos modelos"): 1 a 3 palabras previas (sin cruzar comas ni puntos) +
+// la palabra completa. Devuelve '' si no hay una frase de 2+ palabras usable.
+function phraseAround(goal, kw) {
+  const clean = sanitizeGoal(goal);
+  if (clean.length < 30) return '';
+  const low = clean.toLowerCase();
+  const k = String(kw).toLowerCase();
+  let idx = low.indexOf(k);
+  while (idx >= 0) {
+    const m = clean.slice(idx).match(/^[a-záéíóúñü]+/i);
+    const word = m ? m[0] : kw;
+    // Solo las palabras después de la última coma/punto: no cruzar de cláusula.
+    const before = clean.slice(0, idx).split(/[.!?;,]+/).pop().split(/\s+/).filter(Boolean)
+      .map((w) => w.replace(/^[¿¡"'«(]+|[.,;:!?)"'»)]+$/g, ''));
+    // Probar de la frase más corta a la más larga: titulares punchy.
+    for (let take = 1; take <= 3 && take <= before.length; take++) {
+      const words = [...before.slice(-take), word];
+      while (words.length > 1 && GOAL_STOP.has(words[0].toLowerCase())) words.shift();
+      const phrase = words.join(' ');
+      if (phrase.split(/\s+/).length >= 2 && phrase.length >= 6 && phrase.length <= 42) return phrase;
+    }
+    idx = low.indexOf(k, idx + 1);
+  }
+  return '';
+}
 
 function applyGoal(topics, goal) {
   const clean = sanitizeGoal(goal);
@@ -936,8 +969,28 @@ function applyGoal(topics, goal) {
       break;
     }
   }
+  // Titular con las palabras del cliente: si el párrafo nombra algo que un
+  // posteo también nombra (ej. "plan canje"), ese posteo usa su frase como
+  // titular. Solo el primer match, para no recargar.
+  let usedPhrase = false;
+  const personalized = ordered.map((t) => {
+    if (usedPhrase) return t;
+    const hay = (t.headline + ' ' + t.caption).toLowerCase();
+    for (const r of GOAL_RULES) {
+      if (r.kind !== t.kind) continue;
+      const kw = r.kws.find((k) => g.includes(k) && hay.includes(k));
+      if (!kw) continue;
+      const phrase = phraseAround(clean, kw);
+      if (!phrase) continue;
+      usedPhrase = true;
+      return { ...t, headline: phrase.charAt(0).toUpperCase() + phrase.slice(1) };
+    }
+    return t;
+  });
+  // Si ya se personalizó un titular, no hace falta el "Tal como pediste".
+  if (usedPhrase) return { topics: personalized, goalLine: '' };
   const short = clean.length > 140 ? clean.slice(0, 140).trimEnd() + '…' : clean;
-  return { topics: ordered, goalLine: '\nTal como pediste: ' + short };
+  return { topics: personalized, goalLine: '\nTal como pediste: ' + short };
 }
 
 // ---------- Render con PIL (Python3) ----------
@@ -1009,7 +1062,19 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, acc
       if (socialIdx >= 0) stylesN[socialIdx] = 'cita';
     }
     const stockN = photoPath ? null : stockPhotosN(cat, n, business);
-    photos = topics.map((_, i) => (photoPath ? { userPhoto: true } : stockN[i]));
+    // Foto por tema: si el tema trae `photo` asignada se usa esa (matchea el
+    // posteo); si no, se sortea del pool evitando repetir la misma foto.
+    const usedPhotos = new Set();
+    photos = topics.map((t) => {
+      if (photoPath) return { userPhoto: true };
+      if (t.photo) {
+        const p = path.join(STOCK_DIR, t.photo + '.webp');
+        if (fs.existsSync(p) && !usedPhotos.has(p)) { usedPhotos.add(p); return p; }
+      }
+      const pick = stockN.find((s) => !usedPhotos.has(s)) || stockN[0];
+      usedPhotos.add(pick);
+      return pick;
+    });
   }
   const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
   const specPosts = topics.map((t, i) => {
@@ -1333,6 +1398,7 @@ module.exports = {
   checkRateLimit,
   clientIp,
   generateDemo,
+  buildDemoSpec,
   redesignDemo,
   trialPhotoOptions,
   extractColorsFromBuffer,
