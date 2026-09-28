@@ -484,9 +484,6 @@ function igConnectHere() {
 }
 function setupChecklistHtml() {
   const rows = [];
-  if (ME && !ME.email_verified) {
-    rows.push(`<button class="setup-row" id="btnResendVerify"><span class="setup-ico">✉️</span><span class="setup-txt"><b>Verificá tu email</b><small>Te mandamos un link a tu casilla.</small></span><span class="setup-go">Reenviar →</span></button>`);
-  }
   if (!(PROFILE && PROFILE.ig_connected)) {
     rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
   }
@@ -2556,7 +2553,7 @@ function ajustesView() {
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const planMsg = q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
-    : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Probá de nuevo.</div>` : '';
+    : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
@@ -3117,13 +3114,6 @@ function bindApp(tab) {
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
   const sg = $('#setupIgRow');
   if (sg) sg.onclick = igConnectHere;
-  const rv = $('#btnResendVerify');
-  if (rv) rv.onclick = async () => {
-    const go = rv.querySelector('.setup-go');
-    rv.disabled = true; if (go) go.textContent = 'Enviando…';
-    try { await api.post('/api/auth/resend-verification'); if (go) go.textContent = '¡Enviado ✓'; }
-    catch (e) { rv.disabled = false; if (go) go.textContent = 'Reenviar →'; alert(e.message); }
-  };
   const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
   if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
@@ -3807,7 +3797,8 @@ function bindSettings() {
             <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
               ${discLine}
               <div style="font-weight:800;margin-bottom:6px">Un paso más 💳</div>
-              <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>, el mismo con el que vas a pagar.</div>
+              <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>.</div>
+              <div style="font-size:13px;background:#FFF7E6;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;margin-bottom:10px">El comprobante de pago te va a llegar a <b>ese email</b>: fijate que sea el de tu cuenta de MercadoPago.</div>
               <div class="field"><input id="mpEmail" type="email" placeholder="tu@email.com" value="${preset}" autocomplete="email"></div>
               <button class="btn btn-primary btn-block" id="btnGoMP">Continuar al pago</button>
             </div>`;
@@ -3825,14 +3816,7 @@ function bindSettings() {
               const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em });
               location.href = init_point;
             } catch (e) {
-              const needV = /verificá tu email/i.test(e.message || '');
-              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}${needV ? ` <a href="#" id="planResend" style="color:var(--cel);font-weight:700">Reenviar email</a>` : ''}</div>`;
-              const pr = $('#planResend');
-              if (pr) pr.onclick = async (ev) => {
-                ev.preventDefault();
-                try { await api.post('/api/auth/resend-verification'); pr.textContent = 'Email enviado ✓'; pr.onclick = null; }
-                catch (e2) { alert(e2.message); }
-              };
+              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
             }
           };
         });
