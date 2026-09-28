@@ -977,17 +977,28 @@ app.get('/api/ig/start', requireAuth, (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   req.session.igState = state;
   req.session.igRedirect = redirectUri;
+  // Destino post-conexión (solo rutas internas de la app, anti open-redirect)
+  const nx = String(req.query.next || '');
+  if (/^\/#\/[^\s"'\\<>]*$/.test(nx)) req.session.igNext = nx;
+  else delete req.session.igNext;
   res.json({ url: getAuthUrl(embedUrl, state) });
 });
 
 app.get('/api/ig/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
+  // Destino post-OAuth: si el flujo empezó en una pantalla con ?next=, volvemos ahí
+  const igDest = () => {
+    const n = req.session.igNext;
+    delete req.session.igNext;
+    return (typeof n === 'string' && /^\/#\/[^\s"'\\<>]*$/.test(n)) ? n : '/#/app/ajustes';
+  };
+  const withQs = (base, qs) => base + (base.includes('?') ? '&' : '?') + qs;
   // Meta puede redirigir con error (permiso denegado, rol insuficiente, etc.)
   if (error) {
     const msg = /access_denied|user_denied/i.test(error)
       ? 'Denegaste el acceso a Instagram. Probá de nuevo y tocá "Permitir".'
       : (error_description || error);
-    return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(msg));
+    return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(msg)));
   }
   if (!req.session.userId || state !== req.session.igState) return res.status(400).send('Estado inválido');
   try {
@@ -1008,16 +1019,16 @@ app.get('/api/ig/callback', async (req, res) => {
     } catch (e) { console.error('[ig/callback] getIgProfile:', e.message); }
     // Solo las cuentas profesionales (Business/Creator) pueden publicar vía API
     if (/personal/i.test(accountType || '')) {
-      return res.redirect('/#/app/ajustes?ig=personal');
+      return res.redirect(withQs(igDest(), 'ig=personal'));
     }
     // Un Instagram = una sola prueba gratis en Posta (aunque lo desconecten después)
     const dupe = finalIgId ? db.prepare(`SELECT user_id FROM settings WHERE ig_user_id = ? AND user_id != ?`).get(finalIgId, req.session.userId) : null;
     if (dupe) {
-      return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya está vinculada a otra cuenta de Posta.'));
+      return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya está vinculada a otra cuenta de Posta.')));
     }
     const usedBefore = finalIgId ? db.prepare(`SELECT first_user_id FROM ig_registry WHERE ig_user_id = ?`).get(finalIgId) : null;
     if (usedBefore && usedBefore.first_user_id !== req.session.userId) {
-      return res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya fue usada en Posta. Cada cuenta de Instagram puede activar una sola prueba gratis.'));
+      return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent('Esta cuenta de Instagram ya fue usada en Posta. Cada cuenta de Instagram puede activar una sola prueba gratis.')));
     }
     const wasDemo = !!getSettings(req.session.userId).demo_mode;
     db.prepare(
@@ -1028,9 +1039,9 @@ app.get('/api/ig/callback', async (req, res) => {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(finalIgId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
-    res.redirect('/#/app/ajustes?ig=ok' + (wasDemo ? '&demo_off=1' : ''));
+    res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '')));
   } catch (e) {
-    res.redirect('/#/app/ajustes?ig=error&msg=' + encodeURIComponent(e.message));
+    res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(e.message)));
   }
 });
 
