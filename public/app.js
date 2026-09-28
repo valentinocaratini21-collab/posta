@@ -444,8 +444,6 @@ function authView(mode) {
 /* ---------- APP SHELL ---------- */
 const TABS = [
   ['semana', '🏠', 'Mi semana'],
-  ['crear', '✨', 'Crear posteo'],
-  ['historial', '📊', 'Historial'],
   ['ajustes', '⚙️', 'Ajustes'],
 ];
 let IDEAS = [];
@@ -570,8 +568,8 @@ function setupChecklistHtml() {
 }
 
 function appShell(tab, content) {
-  const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear']];
-  const MORE_TABS = [['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
+  const MAIN_TABS = [['semana', '🏠', 'Mi semana']];
+  const MORE_TABS = [['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
@@ -600,6 +598,7 @@ function appShell(tab, content) {
 }
 
 /* ---------- CREAR ---------- */
+let CREATOR_OPEN = false; // el creador manual vive dentro de Mi semana, plegado hasta que se abre
 let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
 
 
@@ -880,12 +879,16 @@ function creatorChips() {
   return M[p.category] || M.otro;
 }
 
-function creatorView() {
+function creatorView(embed) {
   const c = CREATOR;
+  const head1 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>`;
+  const head2 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>`;
+  const head3 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>`;
+  const headO = embed ? '' : `<div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>`;
   const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
   if (c.step === 1) {
     return `
-    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>
+    ${head1}
     ${stepsBar}
     <div class="card">
       <div class="field"><label>¿Alguna idea en mente? <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
@@ -909,7 +912,7 @@ function creatorView() {
   }
   if (c.step === 2) {
     return `
-    <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>
+    ${head2}
     ${stepsBar}
     <div class="designer">
       <div>
@@ -962,7 +965,7 @@ function creatorView() {
       ? colors.slice(0, -1).join(', ') + ' y ' + colors[colors.length - 1]
       : colors.join(', ');
     return `
-    <div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>
+    ${headO}
     <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
     ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
     ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
@@ -1055,7 +1058,7 @@ function creatorView() {
   const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   const minDt = now.toISOString().slice(0, 16);
   return `
-  <div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>
+  ${head3}
   ${stepsBar}
   <div class="card">
     <div style="display:flex;gap:22px;flex-wrap:wrap">
@@ -1133,7 +1136,7 @@ function weekDoneCardHTML() {
     <h3 style="margin:0 0 6px">✅ Tu semana está armada</h3>
     <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 14px">Los posteos salen solos en sus horarios. Nada que hacer — solo vendé.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <a class="btn btn-soft btn-sm" href="#/app/crear">✨ Sumar otro posteo</a>
+      <a class="btn btn-soft btn-sm" data-opencreator style="cursor:pointer">✨ Sumar otro posteo</a>
       <button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button>
     </div>
     <div id="apProg-semana"></div>
@@ -2254,7 +2257,7 @@ async function publishNowFlow(postId, mount) {
     }
     paint(Date.now() - t0 > 9000 ? 1 : 0, false);
   }
-  mount.innerHTML = `<div class="okmsg">⏳ Sigue publicándose… lo ves en el historial en un minuto.</div>`;
+  mount.innerHTML = `<div class="okmsg">⏳ Sigue publicándose… lo ves en Mi semana en un minuto.</div>`;
   return { ok: true, pending: true };
 }
 /* ---------- MI SEMANA (dashboard) ---------- */
@@ -2473,6 +2476,30 @@ async function semanaView() {
   const redoMini = draftN > 0
     ? `<div style="text-align:center;margin:2px 0 18px"><button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button><div id="apProg-semana"></div></div>`
     : '';
+  // Historial fusionado en Mi semana: los fallidos piden acción arriba,
+  // los publicados con 👍/👎 quedan abajo como "Ya salió".
+  const failed = allPosts.filter(p => p.status === 'failed').sort((a, b) => b.id - a.id);
+  const failedCard = failed.length ? `
+  <div class="card" style="border:2px solid rgba(214,69,69,.45);background:#FDF3F3">
+    <h3 style="margin:0 0 4px">⚠️ ${failed.length} ${failed.length === 1 ? 'posteo no salió' : 'posteos no salieron'}</h3>
+    <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Reintentalos acá, sin ir a otra pantalla.</p>
+    ${failed.map(p => postItem(p, `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button><button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar">🗑️</button>`)).join('')}
+  </div>` : '';
+  const published = allPosts.filter(p => p.status === 'published').sort((a, b) => b.id - a.id);
+  const publishedCard = published.length ? `
+  <div class="card"><h3>✅ Ya salió</h3>
+    <p class="d" style="margin-top:0">Marcá 👍/👎 y cada semana sale más a tu gusto.</p>
+    ${published.map(p => postItem(p, `${sigBtns(p)}<button class="btn btn-ghost btn-sm" data-act="dup" data-id="${p.id}">Duplicar</button><button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar">🗑️</button>`)).join('')}
+  </div>` : '';
+  // Creador manual plegado dentro de Mi semana: una sola sección, sin salir de la pantalla.
+  const creatorOpen = CREATOR_OPEN || CREATOR.step !== 1;
+  const creatorCard = creatorOpen
+    ? `<div id="creatorInline" style="scroll-margin-top:70px">${creatorView(true)}</div>`
+    : `<div class="card" style="text-align:center;padding:22px">
+        <h3 style="margin:0 0 6px">✨ Crear un posteo</h3>
+        <p class="d" style="margin:0 0 12px">Uno puntual, a tu medida, sin salir de acá.</p>
+        <button class="btn btn-soft" data-opencreator>✨ Crear posteo</button>
+      </div>`;
 
   return `${head}
   ${socialBar}
@@ -2481,6 +2508,7 @@ async function semanaView() {
   ${nextUp}
   ${upcomingCard}
   ${redoMini}
+  ${failedCard}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
@@ -2489,9 +2517,10 @@ async function semanaView() {
         ? `<p class="sem-msg">Tenemos ${draftN} ${draftN === 1 ? 'borrador listo' : 'borradores listos'} — programalos arriba 👆</p>`
         : `<p class="sem-msg">Nos ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar la semana.</p>`)
       : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
-         <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
+         <button class="btn btn-soft btn-block" data-opencreator style="margin-top:12px">✨ Crear otro posteo</button>`}
   </div>
   ${chatCardHTML()}
+  ${creatorCard}
   ${nudgeBlock}
   <div class="row2">
     <div class="card"><h3>📊 Tu ritmo</h3><p class="d">Posteos por semana (últimas 8)</p><div class="bars">${bars}</div></div>
@@ -2506,7 +2535,8 @@ async function semanaView() {
       <div class="mstat hl"><b>${mo.hours_saved} h</b><span>ahorradas (estimado)</span></div>
     </div>
     <p class="d">Hacer esto a mano te llevaría ~1,5 h por posteo entre idea, diseño, texto y publicación. Vos no moviste un dedo.</p>
-  </div>`;
+  </div>
+  ${publishedCard}`;
 }
 
 function bindSemana() {
@@ -2514,6 +2544,15 @@ function bindSemana() {
   bindAutopilot();
   bindChat();
   bindReview();
+  // Abrir el creador manual inline (plegado dentro de Mi semana)
+  const openCreatorInline = () => {
+    CREATOR_OPEN = true;
+    const go = () => { const el = $('#creatorInline'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    if ((location.hash || '') === '#/app/semana') { render(); setTimeout(go, 90); }
+    else location.hash = '#/app/semana';
+  };
+  $$('[data-opencreator]').forEach(b => b.onclick = openCreatorInline);
+  if (CREATOR_OPEN || CREATOR.step !== 1) bindCreator();
   const sp = $('#streakPill');
   if (sp) sp.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
@@ -2522,24 +2561,12 @@ function bindSemana() {
     const n = SEM_NUDGES[+b.dataset.nudge];
     if (!n) return;
     CREATOR = { step: 1, topic: n.topic, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {} };
-    location.hash = '#/app/crear';
+    CREATOR_OPEN = true;
+    if ((location.hash || '') === '#/app/semana') { render(); setTimeout(() => { const el = $('#creatorInline'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 90); }
+    else location.hash = '#/app/semana';
   });
 }
 
-async function historyView() {
-  const posts = await api.get('/api/posts');
-  const done = posts.filter(p => ['published', 'failed', 'cancelled'].includes(p.status));
-  const d = new Date(), mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  const inMk = (p) => (p.published_at || p.scheduled_at || p.created_at || '').slice(0, 7) === mk;
-  const mp = done.filter(p => p.status === 'published' && inMk(p)).length;
-  const mf = done.filter(p => p.status === 'failed' && inMk(p)).length;
-  const summary = (mp || mf)
-    ? `<p class="hist-sum">📊 Este mes: <b>${mp}</b> publicado${mp === 1 ? '' : 's'}${mf ? ` · <b>${mf}</b> fallaron` : ''}</p>` : '';
-  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Historial</h1><p class="sub">Todo lo que ya pasó por Posta. Marcá 👍/👎 y cada semana sale más a tu gusto.</p></div></div>
-  ${summary}
-  ${done.length ? done.map(p => postItem(p, `${p.status === 'published' ? sigBtns(p) : ''}${p.status === 'failed' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button>` : ''}${p.status === 'published' ? `<button class="btn btn-ghost btn-sm" data-act="dup" data-id="${p.id}">Duplicar</button>` : ''}<button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar del historial">🗑️</button>`)).join('')
-    : `<div class="empty"><div class="big">📊</div>Todavía no hay historial.</div>`}`;
-}
 
 /* ---------- AJUSTES ---------- */
 function ajustesView() {
@@ -2900,7 +2927,7 @@ function onboardingView() {
       ${o.step > 1 ? `<button class="btn btn-ghost" id="obBack">← Atrás</button>` : ''}
       ${o.step < 4 ? `<button class="btn btn-primary" id="obNext" style="flex:1">Continuar →</button>` : `<button class="btn btn-primary" id="obFinish" style="flex:1">✨ Listo, a crear contenido</button>`}
     </div>
-    <div style="text-align:center;margin-top:14px"><a href="#/app/crear" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
+    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
   </div>`;
 }
 
@@ -3087,13 +3114,13 @@ async function render() {
   const tab = (path.split('/')[2] || 'semana');
   let content = '';
   if (tab === 'semana') content = await semanaView();
-  else if (tab === 'crear') content = creatorView();
+  else if (tab === 'crear') { location.hash = '#/app/semana'; return; } // Creador manual fusionado en Mi semana
   else if (tab === 'ideas') { location.hash = '#/app/semana'; return; } // Ideas se fusionó en Mi semana
   else if (tab === 'video') { location.hash = '#/app/semana'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
   else if (tab === 'fotos') { location.hash = '#/app/ajustes'; return; } // Mis fotos vive en Ajustes > Mi marca
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/semana'; return; } // Calendario fusionado en Mi semana
-  else if (tab === 'historial') content = await historyView();
+  else if (tab === 'historial') { location.hash = '#/app/semana'; return; } // Historial fusionado en Mi semana
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
@@ -3156,9 +3183,8 @@ function bindApp(tab) {
   if (mb && ms) mb.onclick = () => ms.classList.remove('open');
 
   if (tab === 'semana') bindSemana();
-  if (tab === 'crear') bindCreator();
   if (tab === 'onboarding') bindOnboarding();
-  if (tab === 'historial' || tab === 'semana') {
+  if (tab === 'semana') {
     $$('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, act = b.dataset.act;
       if (act === 'cancel' && !confirm('¿Cancelar este post?')) return;
@@ -3189,7 +3215,7 @@ function bindApp(tab) {
       render();
     });
     bindSignalBtns();
-    // Tap en el caption expande/colapsa el texto completo (historial y calendario)
+    // Tap en el caption expande/colapsa el texto completo
     $$('.post-item').forEach(item => {
       const cap = item.querySelector('[data-cap]');
       const full = item.querySelector('.full-cap');
@@ -3597,6 +3623,7 @@ function bindCreator() {
   }
   if (c.step === 3) {
     const resetCreator = () => {
+      CREATOR_OPEN = false;
       CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {} };
     };
     const done = (msg, hash) => {
@@ -3626,7 +3653,7 @@ function bindCreator() {
           resetCreator();
           setTimeout(() => location.hash = '#/app/semana', 8000);
         } else if (r && r.ok) {
-          done('⏳ Se está publicando… lo ves en el historial en un minuto.');
+          done('⏳ Se está publicando… lo ves en Mi semana en un minuto.');
         }
         // si falló, publishNowFlow ya mostró el error con botón Reintentar
       } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
