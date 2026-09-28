@@ -3861,16 +3861,12 @@ function bindCreator() {
   }
 }
 
-async function igConnect(next) {
-  try {
-    const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
-    const { url } = await api.get('/api/ig/start' + (nx ? '?next=' + encodeURIComponent(nx) : ''));
-    location.href = url;
-  } catch (e) {
-    const m = $('#igFirstMsg') || $('#igMsg');
-    if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-    else alert('Error: ' + e.message);
-  }
+function igConnect(next) {
+  const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
+  // Bounce por el servidor: /api/ig/go redirige a Instagram vía 302, así iOS
+  // no saca el flujo a la app de Instagram y el OAuth vuelve solo a Posta
+  // (celular y desktop). Navegar directo a instagram.com rompía el regreso.
+  location.href = '/api/ig/go' + (nx ? '?next=' + encodeURIComponent(nx) : '');
 }
 function bindSettings() {
   // Acordeón de secciones en móvil
