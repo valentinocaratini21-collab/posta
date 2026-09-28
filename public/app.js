@@ -2856,6 +2856,7 @@ function ajustesView() {
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
       <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
     </div>
+    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:13px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Restablecer marca</button></div>
   </div></div>
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
@@ -2996,6 +2997,7 @@ function maybeShowIgPopup(tab) {
       <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:17px">Conectar Instagram</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
       <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
+      <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">💡 Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.</div>
       <details style="margin:12px 0 4px;text-align:left">
         <summary style="font-weight:700;cursor:pointer;font-size:14px;color:var(--mut)">¿Cómo hago mi cuenta profesional?</summary>
         <ol style="margin:10px 0 0 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
@@ -3009,6 +3011,17 @@ function maybeShowIgPopup(tab) {
       <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:14px">Lo hago después →</a></div>
     </div>`;
     document.body.appendChild(ov);
+    try {
+      if (navigator.storage && navigator.storage.estimate) {
+        navigator.storage.estimate().then(es => {
+          const q = es && es.quota;
+          if (q && q < 300 * 1024 * 1024) {
+            const tip = ov.querySelector('#igPrivTip');
+            if (tip) tip.style.display = '';
+          }
+        }).catch(() => {});
+      }
+    } catch (e2) {}
     const go = ov.querySelector('#igFirstGo');
     if (go) go.onclick = igConnectHere;
     const skip = ov.querySelector('#igFirstSkip');
@@ -3038,7 +3051,7 @@ function handleIgResult() {
   if (!r) return;
   try { history.replaceState(null, '', location.pathname + location.hash.split('?')[0]); } catch (e) {}
   if (r === 'ok') {
-    toast('✅ <b>¡Instagram conectado!</b>' + (hq.get('demo_off') ? '<br>El modo demo se apagó solo — ahora publicás de verdad.' : ''));
+    toast('✅ <b>¡Instagram conectado!</b>' + (hq.get('demo_off') ? '<br>El modo demo se apagó solo — ahora publicás de verdad.' : '') + (hq.get('brand_reset') ? '<br>Conectaste otra cuenta: restablecimos tu marca para el nuevo negocio.' : ''));
   } else if (r === 'personal') {
     toast('⚠️ <b>Tu cuenta de Instagram es personal.</b><br>Para publicar necesitás una cuenta profesional (Business o Creator).');
   } else if (r === 'error') {
@@ -3270,10 +3283,12 @@ async function render() {
         if (isReg) localStorage.removeItem('posta_ref');
         // Puente /prueba → cuenta: si viene de la prueba, pre-cargamos el perfil con los
         // datos que ya nos dio (negocio, rubro, etc.) y se saltea el onboarding.
+        // Solo si la prueba es fresca (24h): datos viejos de tests no deben volverse marca permanente.
         if (isReg) {
           try {
             const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
-            if (tp && tp.business_name) {
+            const fresh = tp && tp.saved_at && (Date.now() - tp.saved_at < 24 * 3600 * 1000);
+            if (fresh && tp.business_name) {
               const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
               await api.put('/api/profile', {
                 business_name: String(tp.business_name).slice(0, 80),
@@ -3899,7 +3914,7 @@ function renderIgResume() {
   <div style="position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;justify-content:center;padding:10px 12px;pointer-events:none">
     <div style="pointer-events:auto;background:#0A1E33;color:#fff;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:560px;width:100%">
       <div style="font-size:30px;line-height:1">📸</div>
-      <div style="flex:1;font-size:14px;line-height:1.45"><b>¡Casi terminás!</b><br>Te quedaste a un paso de conectar tu Instagram.</div>
+      <div style="flex:1;font-size:14px;line-height:1.45"><b>¡Casi terminás!</b><br>Se interrumpió la conexión (a veces Instagram pide un código y se corta). Tu sesión ya quedó iniciada: es un toque más.</div>
       <button class="btn btn-primary" id="igResumeGo" style="white-space:nowrap;padding:12px 16px">Terminar de conectar</button>
     </div>
   </div>`;
@@ -4409,6 +4424,36 @@ function bindSettings() {
     SETTINGS = await api.get('/api/settings');
     if (await refreshCreatorWithNewColors(brandMsgEl))
       brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada — diseños actualizados</span>';
+  };
+  // Restablecer: borra logo, colores y nombre del negocio de una. Para cuando la marca
+  // quedó con datos de una prueba vieja o se quiere empezar de cero.
+  const btnResetBrand = $('#btnResetBrand');
+  if (btnResetBrand) btnResetBrand.onclick = async () => {
+    if (!confirm('¿Restablecer tu marca? Borra tu logo, tus colores y el nombre del negocio.')) return;
+    const brandMsgEl = $('#brandMsg');
+    try {
+      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:14px">⏳ Restableciendo…</span>';
+      const logo = assetLogo();
+      if (logo && logo.id) { try { await api.del('/api/assets/' + logo.id); } catch (e) {} }
+      await api.put('/api/settings', { brand_colors: [] });
+      const p = PROFILE || {};
+      await api.put('/api/profile', {
+        business_name: '',
+        category: p.category || 'otro',
+        tone: p.tone || 'canchero',
+        description: p.description || '',
+        ig_username: p.ig_username || '',
+        competitors: p.competitors || '',
+        goal: p.goal || 'vender',
+      });
+      ASSETS = await api.get('/api/assets').catch(() => []);
+      SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
+      await refreshSession();
+      brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
+      render();
+    } catch (e) {
+      brandMsgEl.innerHTML = `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`;
+    }
   };
   $('#btnSaveSettings').onclick = async () => {
     await api.put('/api/settings', {

@@ -682,8 +682,11 @@ async function startTrial() {
     TRIAL = data;
     resetTrialChat();
     // Puente a la cuenta: guardamos los datos del negocio para pre-cargar el perfil al registrarse
+    // saved_at: la prueba es una sesión anónima fugaz; si el registro llega mucho después,
+    // esos datos viejos NO deben convertirse en la marca permanente de la cuenta.
     try {
       localStorage.setItem('posta_trial_profile', JSON.stringify({
+        saved_at: Date.now(),
         business_name: biz,
         category: $('#f_cat').value,
         description: $('#f_goal').value.trim(),
@@ -1171,9 +1174,11 @@ function closeReg() {
     await pj('/api/auth/register', body);
     try { localStorage.removeItem('posta_ref'); } catch (e) {}
     // Puente /prueba → cuenta: pre-cargamos el perfil con los datos de la prueba
+    // Solo si la prueba es fresca (24h): datos viejos de tests no deben volverse marca permanente.
     try {
       const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
-      if (tp && tp.business_name) {
+      const fresh = tp && tp.saved_at && (Date.now() - tp.saved_at < 24 * 3600 * 1000);
+      if (fresh && tp.business_name) {
         const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
         await pj('/api/profile', {
           business_name: String(tp.business_name).slice(0, 80),
