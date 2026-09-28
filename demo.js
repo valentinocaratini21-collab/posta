@@ -80,7 +80,13 @@ const COUNTRIES = ['AR', 'UY'];
 function fam(f, n) { const a = [f]; for (let i = 1; i <= n; i++) a.push(f + '-' + i); return a; }
 const FASHION = fam('fashion', 6), FOOD = fam('food', 6), BEAUTY = fam('beauty', 6),
       FITNESS = fam('fitness', 5), PETS = fam('pets', 5), HOME = fam('home', 6),
-      OFFICE = fam('office', 5), LIFE = fam('lifestyle', 6), BAR = fam('bar', 5);
+      LIFE = fam('lifestyle', 6), BAR = fam('bar', 5);
+// OJO: office-3 y office-5 son fotos de un consultorio DENTAL (mal etiquetadas
+// como "oficina"): solo las usa el rubro salud. El resto de los rubros usa
+// la oficina genérica, para que un dentista nunca aparezca en otro negocio.
+const OFFICE = ['office', 'office-1', 'office-2', 'office-4'],
+      DENTAL = ['office-3', 'office-5'],
+      TECH = fam('tech', 3);
 
 // Pool curado solo para cafés: si el nombre del negocio suena a café,
 // usamos únicamente fotos creíbles de café (nada de cerveza, ensaladas
@@ -101,10 +107,10 @@ const CATEGORY_PHOTOS = {
   deco: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
   flores: [...HOME.slice(0, 4), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
   inmobiliaria: [...HOME.slice(0, 5), ...OFFICE.slice(0, 3), ...LIFE.slice(0, 2)],
-  salud: [...OFFICE.slice(0, 4), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
+  salud: [...DENTAL, ...OFFICE.slice(0, 2), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
   profesionales: [...OFFICE, ...HOME.slice(0, 2), ...LIFE.slice(0, 3)],
   educacion: [...OFFICE, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
-  tecnologia: [...OFFICE, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
+  tecnologia: [...TECH, ...OFFICE.slice(0, 2)],
   turismo: [...LIFE, ...BAR.slice(0, 2), ...FOOD.slice(0, 2)],
   eventos: [...BAR.slice(0, 4), ...LIFE.slice(0, 4), ...FOOD.slice(0, 2)],
   fotografia: [...LIFE.slice(0, 5), ...FASHION.slice(0, 3), ...OFFICE.slice(0, 2)],
@@ -908,7 +914,7 @@ function sanitizeGoal(g) {
     .replace(/<[^>]*>/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 300);
+    .slice(0, 400);
 }
 
 const GOAL_RULES = [

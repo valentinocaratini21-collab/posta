@@ -1289,7 +1289,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
-  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 300);
+  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const accent = String(fields.accent || '').trim().slice(0, 7);
   const btn = String(fields.btn || '').trim().slice(0, 7);
   if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
@@ -1366,7 +1366,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
-  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 300);
+  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
