@@ -168,6 +168,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .cp-row b{display:block;font-size:13px;color:var(--navy);margin-bottom:4px}
 .cp-row input[type=text]{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px 12px;font-family:ui-monospace,monospace;font-size:16px;color:var(--navy);outline:none;text-transform:uppercase}
 .cp-row input[type=text]:focus{border-color:var(--cel)}
+.cp-logo{display:block;width:100%;border:2px dashed var(--cel);background:var(--bg2);border-radius:12px;padding:13px;font-size:15px;font-weight:700;color:var(--navy);cursor:pointer;margin-bottom:8px}
+.cp-logo:disabled{opacity:.5;cursor:wait}
 /* Sheet de fotos */
 .sheet{background:#fff;border-radius:20px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;padding:22px;position:relative;animation:pop .2s ease}
 .sheet h4{margin:0 0 14px;color:var(--navy);font-size:17px}
@@ -338,6 +340,8 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         </div>
         <div class="colorpanel" id="colorPanel">
           <p class="cp-title">🎨 Los colores de tu marca, idénticos</p>
+          <button class="cp-logo" id="cpLogoBtn">📷 Usar los colores de mi logo<input type="file" id="cpLogoFile" accept="image/jpeg,image/png,image/webp" hidden></button>
+          <p class="tiny" style="margin:0 0 12px">Subí una foto de tu logo y detectamos tus colores exactos.</p>
           <div class="cp-row">
             <input type="color" id="cpAccent" value="#2793C8">
             <div><b>Principal</b><input type="text" id="cpAccentHex" maxlength="7" placeholder="#2793C8" autocomplete="off" spellcheck="false"></div>
@@ -773,6 +777,29 @@ function initTrialChat() {
       const v = normHex(e.target.value);
       if (v) $('#' + c).value = v;
     });
+  });
+  $('#cpLogoBtn').onclick = () => $('#cpLogoFile').click();
+  $('#cpLogoFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const b = $('#cpLogoBtn');
+    b.disabled = true; b.textContent = 'Detectando tus colores…';
+    try {
+      const dataUrl = await fileToDataUrl(f, 800);
+      const r = await fetch('/api/trial/logo-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || 'No pudimos leer tu logo');
+      const cols = j.colors || [];
+      if (cols[0]) { $('#cpAccent').value = cols[0]; $('#cpAccentHex').value = cols[0]; }
+      if (cols[1]) { $('#cpBtn').value = cols[1]; $('#cpBtnHex').value = cols[1]; }
+      toast(cols.length > 1 ? 'Colores detectados de tu logo ✓' : 'Color detectado de tu logo ✓');
+    } catch (err) { toast(err.message || 'No pudimos leer tu logo'); }
+    b.disabled = false; b.innerHTML = '📷 Usar los colores de mi logo';
   });
   $('#cpApply').onclick = async () => {
     const accent = normHex($('#cpAccentHex').value);
