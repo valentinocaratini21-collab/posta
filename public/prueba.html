@@ -151,12 +151,31 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .chat-chips{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap;background:#fff;border-top:1px solid var(--line)}
 .chat-chips button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s}
 .chat-chips button:hover{border-color:var(--cel);background:var(--bg2)}
+#chipColors{background:var(--yl);border-color:var(--yl);color:var(--navy)}
 .chat-input{display:flex;gap:8px;padding:12px 16px;background:#fff;border-top:1px solid var(--line)}
 .chat-input input{flex:1;border:2px solid var(--line);border-radius:12px;padding:12px 14px;font-family:inherit;font-size:16px;color:var(--navy);outline:none}
 .chat-input input:focus{border-color:var(--cel)}
 .chat-input button{border:none;background:var(--yl);color:var(--navy);font-weight:900;font-size:18px;width:48px;border-radius:12px;cursor:pointer;flex-shrink:0}
 .chat-input button:disabled{opacity:.5}
 .msg .mini-cta{display:block;margin-top:10px;background:var(--yl);color:var(--navy);font-weight:800;text-align:center;padding:10px;border-radius:10px;cursor:pointer;font-size:13px}
+/* Panel de colores */
+.colorpanel{background:#fff;border-top:1px solid var(--line);padding:16px;display:none}
+.colorpanel.open{display:block;animation:pop .2s ease}
+.cp-title{font-weight:800;color:var(--navy);margin:0 0 12px;font-size:15px}
+.cp-row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.cp-row input[type=color]{width:52px;height:52px;border:2px solid var(--line);border-radius:12px;padding:2px;background:#fff;cursor:pointer;flex-shrink:0}
+.cp-row>div{flex:1}
+.cp-row b{display:block;font-size:13px;color:var(--navy);margin-bottom:4px}
+.cp-row input[type=text]{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px 12px;font-family:ui-monospace,monospace;font-size:16px;color:var(--navy);outline:none;text-transform:uppercase}
+.cp-row input[type=text]:focus{border-color:var(--cel)}
+/* Sheet de fotos */
+.sheet{background:#fff;border-radius:20px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;padding:22px;position:relative;animation:pop .2s ease}
+.sheet h4{margin:0 0 14px;color:var(--navy);font-size:17px}
+.ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ph-grid button{border:2px solid var(--line);border-radius:12px;overflow:hidden;padding:0;cursor:pointer;background:#fff;aspect-ratio:4/5}
+.ph-grid button.sel{border-color:var(--cel);box-shadow:0 0 0 2px var(--cel)}
+.ph-grid img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-loading{text-align:center;padding:30px 10px;color:var(--mut);font-size:14px}
 .stat-band{background:var(--navy);color:#fff;border-radius:20px;padding:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:40px 0}
 .stat-band .st{text-align:center}
 .stat-band .st .n{font-size:clamp(28px,4vw,44px);font-weight:900;color:var(--yl)}
@@ -202,6 +221,24 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .lb-cap p{font-size:14px;line-height:1.65;white-space:pre-line}
 .lb-cap .tags{color:var(--cel);font-size:13px;margin-top:10px;line-height:1.6}
 .lb .x{position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.9);width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;z-index:2}
+.lb-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.lb-btn{flex:1;min-width:150px;border:none;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff}
+.lb-btn.ghost{background:var(--bg2);color:var(--navy)}
+/* Sheet cambiar foto */
+.sheet{position:fixed;inset:0;background:rgba(10,30,51,.55);display:none;align-items:flex-end;justify-content:center;z-index:60}
+.sheet.open{display:flex}
+.sheet-box{background:#fff;width:100%;max-width:520px;max-height:88vh;border-radius:20px 20px 0 0;overflow:hidden;display:flex;flex-direction:column}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e6eef5;font-size:17px}
+.sheet-head .x{border:none;background:var(--bg2);width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--navy)}
+.sheet-body{padding:18px;overflow-y:auto}
+.ph-opt{width:100%;border:2px dashed var(--blue);background:var(--bg2);border-radius:14px;padding:16px;font-size:16px;font-weight:700;color:var(--navy);cursor:pointer}
+.ph-sep{text-align:center;color:var(--mut);font-size:13px;margin:14px 0 10px}
+.ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.ph-grid img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;cursor:pointer;border:3px solid transparent}
+.ph-grid img.sel{border-color:var(--yel)}
+.ph-loading{grid-column:1/-1;text-align:center;color:var(--mut);padding:18px;font-size:14px}
+#phApply{width:100%;opacity:.5}
+#phApply:not([disabled]){opacity:1}
 .done-view{max-width:560px;margin:60px auto;text-align:center;padding:0 20px}
 .done-view h2{font-size:30px;font-weight:900;margin:18px 0 10px}
 .done-view p{color:var(--mut);line-height:1.7;margin-bottom:24px}
@@ -282,6 +319,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <h3>Tu semana 📅</h3>
       <p class="lede">Tus 5 posteos, ya creados: diseño + caption + hashtags. Tocá cada uno para verlo completo.</p>
       <div class="week" id="rWeek"></div>
+      <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">¿Algo no te cierra? Pedilo por chat 👇</a></p>
     </div>
 
     <div class="sec">
@@ -291,8 +329,25 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
         <div class="chat-msgs" id="chatMsgs"></div>
         <div class="chat-chips" id="chatChips">
           <button data-m="Hacé los captions más cancheros">🔥 Más cancheros</button>
-          <button data-m="Agregales un llamado a la acción a todos los posteos">📣 Con llamado a la acción</button>
+          <button data-m="Hacé los captions más divertidos">😂 Más divertidos</button>
+          <button data-m="Hacé los captions más profesionales">💼 Más profesionales</button>
           <button data-m="Acortá los captions, que sean más directos">✂️ Más directos</button>
+          <button data-m="Agregales un llamado a la acción a todos los posteos">📣 Con llamado a la acción</button>
+          <button data-m="Hacé los captions más cercanos y cálidos">🤝 Más cercanos</button>
+          <button id="chipColors">🎨 Colores</button>
+        </div>
+        <div class="colorpanel" id="colorPanel">
+          <p class="cp-title">🎨 Los colores de tu marca, idénticos</p>
+          <div class="cp-row">
+            <input type="color" id="cpAccent" value="#2793C8">
+            <div><b>Principal</b><input type="text" id="cpAccentHex" maxlength="7" placeholder="#2793C8" autocomplete="off" spellcheck="false"></div>
+          </div>
+          <div class="cp-row">
+            <input type="color" id="cpBtn" value="#FEC14D">
+            <div><b>Acento</b><input type="text" id="cpBtnHex" maxlength="7" placeholder="#FEC14D" autocomplete="off" spellcheck="false"></div>
+          </div>
+          <button class="btn btn-primary btn-block" id="cpApply">Aplicar colores</button>
+          <p class="tiny" style="margin:8px 0 0">Tus posteos se vuelven a generar con estos colores exactos.</p>
         </div>
         <div class="chat-input">
           <input type="text" id="chatIn" placeholder="Ej: el del miércoles, hacelo más divertido" maxlength="300" autocomplete="off">
@@ -342,7 +397,23 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 <div class="lb" id="lb"><div class="lb-box">
   <button class="x" id="xLb">✕</button>
   <div id="lbMedia"></div>
-  <div class="lb-cap"><p id="lbCap"></p><div class="tags" id="lbTags"></div></div>
+  <div class="lb-cap"><p id="lbCap"></p><div class="tags" id="lbTags"></div>
+    <div class="lb-actions">
+      <button class="lb-btn" id="lbPhoto">📷 Cambiar foto</button>
+      <button class="lb-btn ghost" id="lbImprove">💬 Mejorar este posteo</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Sheet: cambiar foto -->
+<div class="sheet" id="photoSheet" aria-hidden="true"><div class="sheet-box">
+  <div class="sheet-head"><b id="photoSheetTitle">Cambiar foto</b><button class="x" id="xPhoto">✕</button></div>
+  <div class="sheet-body">
+    <button class="ph-opt" id="phUploadBtn">📤 Subir una foto mía<input type="file" id="phFile" accept="image/jpeg,image/png,image/webp" hidden></button>
+    <div class="ph-sep">o elegí otra de Posta</div>
+    <div class="ph-grid" id="phGrid"><div class="ph-loading">Buscando fotos…</div></div>
+    <button class="cta-main" id="phApply" disabled>Usar esta foto</button>
+  </div>
 </div></div>
 
 <div class="footer">Posta · Vos vendé. Nosotros posteamos. · Hecho en Argentina 🇦🇷</div>
@@ -398,6 +469,22 @@ const TEST_KEY_QS = (() => {
   const k = new URLSearchParams(location.search).get('test_key');
   return k ? '?test_key=' + encodeURIComponent(k) : '';
 })();
+function saveTrial() { try { if (!TEST_KEY_QS) idb.set(TRIAL); } catch (e) {} }
+let _toastT = null;
+function toast(msg) {
+  let el = $('#toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.style.cssText = 'position:fixed;left:50%;bottom:88px;transform:translateX(-50%) translateY(20px);background:#0A1E33;color:#fff;padding:12px 18px;border-radius:14px;font-size:15px;font-weight:600;z-index:99;opacity:0;transition:all .25s ease;max-width:92vw;text-align:center;box-shadow:0 8px 24px rgba(10,30,51,.3)';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(-50%) translateY(20px)'; }, 2800);
+}
 
 function show(id) {
   ['v-onboarding','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
@@ -590,7 +677,7 @@ function renderWeek() {
   $('#rWeek').innerHTML = t.week.map((w) => {
     const p = t.posts[w.post];
     const media = p.type === 'video'
-      ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">▶ VIDEO</span>`
+      ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}">`;
     return `<div class="day" data-i="${w.post}"><div class="dh"><b>${esc(w.day)}</b><small>${esc(w.date)}</small></div><div class="db">${media}</div><div class="dcap">${esc((p.caption || '').split('\n')[0])}</div></div>`;
   }).join('');
@@ -606,27 +693,21 @@ function openLb(i) {
     : `<img src="${p.image}" alt="Posteo">`;
   $('#lbCap').textContent = p.caption || '';
   $('#lbTags').textContent = p.hashtags || '';
-  let mb = $('#lbImprove');
-  if (!mb) {
-    mb = document.createElement('button');
-    mb.id = 'lbImprove';
-    mb.className = 'btn btn-primary btn-block';
-    mb.style.cssText = 'margin:0 20px 20px;width:calc(100% - 40px)';
-    mb.textContent = '💬 Mejorar este posteo';
-    mb.onclick = () => {
-      $('#lb').classList.remove('open');
-      const w = (TRIAL.week || []).find((x) => x.post === lbPost);
-      const day = w ? w.day : 'este posteo';
-      const inp = $('#chatIn');
-      inp.value = `Del post del ${day}: `;
-      const sec = $('#trialChat');
-      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 500);
-    };
-    document.querySelector('#lb .lb-box').appendChild(mb);
-  }
   $('#lb').classList.add('open');
 }
+function lbDayName() {
+  const w = (TRIAL.week || []).find((x) => x.post === lbPost);
+  return w ? w.day : 'este posteo';
+}
+$('#lbPhoto').onclick = () => { $('#lb').classList.remove('open'); openPhotoSheet(lbPost); };
+$('#lbImprove').onclick = () => {
+  $('#lb').classList.remove('open');
+  const inp = $('#chatIn');
+  inp.value = `Del post del ${lbDayName()}: `;
+  const sec = $('#trialChat');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { try { inp.focus(); } catch (e) {} }, 500);
+};
 
 // ---------- Chat de la prueba: pedir cambios con palabras simples ----------
 // Sin vueltas: el visitante escribe qué quiere mejorar ("el del miércoles,
@@ -645,6 +726,16 @@ function chatAddMsg(text, who, html) {
   return d;
 }
 function initTrialChat() {
+  const cl = $('#chatLink');
+  if (cl && !cl.dataset.bound) {
+    cl.dataset.bound = '1';
+    cl.onclick = (e) => {
+      e.preventDefault();
+      const sec = $('#trialChat');
+      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => { try { $('#chatIn').focus(); } catch (err) {} }, 600);
+    };
+  }
   if (chatInit || !TRIAL) return;
   chatInit = true;
   chatAddMsg('¡Hola! Soy tu editor 👋 Tus 5 posteos ya están creados. Si alguno no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
@@ -656,9 +747,150 @@ function initTrialChat() {
   };
   $('#chatSend').onclick = send;
   $('#chatIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
-  document.querySelectorAll('#chatChips button').forEach((b) => {
+  document.querySelectorAll('#chatChips button[data-m]').forEach((b) => {
     b.onclick = () => { if (!chatBusy) sendTrialChat(b.dataset.m); };
   });
+  $('#chipColors').onclick = () => {
+    const p = $('#colorPanel');
+    const open = p.classList.toggle('open');
+    if (open) {
+      $('#cpAccent').value = TRIAL.accent || '#2793C8';
+      $('#cpAccentHex').value = TRIAL.accent || '#2793C8';
+      $('#cpBtn').value = TRIAL.btn || '#FEC14D';
+      $('#cpBtnHex').value = TRIAL.btn || '#FEC14D';
+      p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+  // sincronizar selector <-> hex (con o sin #)
+  const normHex = (v) => {
+    v = String(v || '').trim();
+    if (v && v[0] !== '#') v = '#' + v;
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : null;
+  };
+  [['cpAccent', 'cpAccentHex'], ['cpBtn', 'cpBtnHex']].forEach(([c, h]) => {
+    $('#' + c).addEventListener('input', (e) => { $('#' + h).value = e.target.value.toUpperCase(); });
+    $('#' + h).addEventListener('input', (e) => {
+      const v = normHex(e.target.value);
+      if (v) $('#' + c).value = v;
+    });
+  });
+  $('#cpApply').onclick = async () => {
+    const accent = normHex($('#cpAccentHex').value);
+    const btn = normHex($('#cpBtnHex').value);
+    if (!accent || !btn) { toast('Revisá los colores: usá formato #2793C8'); return; }
+    const b = $('#cpApply');
+    b.disabled = true; b.textContent = 'Aplicando colores exactos…';
+    try {
+      await trialRedesign({ colors: { accent, btn } });
+      toast('Colores actualizados en tus 5 posteos ✓');
+      $('#colorPanel').classList.remove('open');
+    } catch (e) { toast(e.message || 'No se pudo aplicar'); }
+    b.disabled = false; b.textContent = 'Aplicar colores';
+  };
+  // --- sheet de fotos ---
+  $('#xPhoto').onclick = () => $('#photoSheet').classList.remove('open');
+  $('#photoSheet').addEventListener('click', (e) => { if (e.target.id === 'photoSheet') $('#photoSheet').classList.remove('open'); });
+  $('#phUploadBtn').onclick = () => $('#phFile').click();
+  $('#phFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const dataUrl = await fileToDataUrl(f, 1080);
+      await applyPhoto(photoSheetIdx, dataUrl);
+    } catch (err) { toast(err.message || 'No se pudo leer la foto'); }
+  });
+  $('#phApply').onclick = async () => {
+    if (photoSel == null) return;
+    $('#phApply').disabled = true; $('#phApply').textContent = 'Aplicando tu foto…';
+    try { await applyPhoto(photoSheetIdx, photoSel); }
+    catch (e) { toast(e.message || 'No se pudo aplicar'); }
+    $('#phApply').disabled = false; $('#phApply').textContent = 'Usar esta foto';
+  };
+}
+
+/* ---------- Rediseño (colores / fotos) ---------- */
+let redesignBusy = false;
+async function trialRedesign(patch) {
+  if (redesignBusy) return;
+  redesignBusy = true;
+  try {
+    const r = await fetch('/api/trial/redesign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ ig: TRIAL.ig }, patch)),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo aplicar el cambio');
+    if (j.accent) TRIAL.accent = j.accent;
+    if (j.btn) TRIAL.btn = j.btn;
+    if (j.design) TRIAL.design = j.design;
+    TRIAL.posts = j.posts;
+    TRIAL.video_ok = j.video_ok;
+    TRIAL.gen_ms = j.gen_ms;
+    TRIAL.genSecs = j.gen_ms ? Math.round(j.gen_ms / 1000) : TRIAL.genSecs;
+    saveTrial();
+    renderResults();
+    return j;
+  } finally { redesignBusy = false; }
+}
+
+/* ---------- Sheet de fotos ---------- */
+let photoSheetIdx = -1;
+let photoSel = null;
+function openPhotoSheet(i) {
+  photoSheetIdx = i; photoSel = null;
+  $('#phApply').disabled = true;
+  $('#photoSheetTitle').textContent = 'Cambiar foto del ' + lbDayName();
+  $('#phGrid').innerHTML = '<div class="ph-loading">Buscando fotos…</div>';
+  $('#photoSheet').classList.add('open');
+  fetch('/api/trial/photo-options?ig=' + encodeURIComponent(TRIAL.ig))
+    .then((r) => r.json())
+    .then((j) => {
+      const opts = (j && j.ok && j.options) || [];
+      if (!opts.length) { $('#phGrid').innerHTML = '<div class="ph-loading">No hay más fotos para este rubro.</div>'; return; }
+      $('#phGrid').innerHTML = opts.map((o) => `<img src="${esc(o.url)}" data-u="${esc(o.url)}" loading="lazy" alt="Opción de foto">`).join('');
+      $$('#phGrid img').forEach((im) => {
+        im.onclick = () => {
+          $$('#phGrid img').forEach((x) => x.classList.remove('sel'));
+          im.classList.add('sel');
+          photoSel = im.dataset.u;
+          $('#phApply').disabled = false;
+        };
+      });
+    })
+    .catch(() => { $('#phGrid').innerHTML = '<div class="ph-loading">No se pudieron cargar las fotos.</div>'; });
+}
+function fileToDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const sc = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * sc), h = Math.round(img.height * sc);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Formato no soportado')); };
+    img.src = url;
+  });
+}
+async function applyPhoto(idx, photo) {
+  const btn = $('#phApply');
+  const origSheet = $('#photoSheetTitle').textContent;
+  $('#photoSheetTitle').textContent = 'Aplicando tu foto…';
+  try {
+    await trialRedesign({ photos: [{ index: idx, photo }] });
+    $('#photoSheet').classList.remove('open');
+    openLb(idx);
+    const w = (TRIAL.week || []).find((x) => x.post === idx);
+    toast('Foto actualizada en el post del ' + (w ? w.day : 'día') + ' ✓');
+  } finally {
+    $('#photoSheetTitle').textContent = origSheet;
+  }
 }
 function resetTrialChat() {
   chatInit = false; chatHist = []; chatBusy = false;
