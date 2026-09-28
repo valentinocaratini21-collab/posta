@@ -851,6 +851,3 @@ textarea.in{resize:vertical;min-height:96px}
 .pz-offline h2{font-size:24px;color:var(--txt);margin:12px 0 6px}
 .pz-offline p{color:var(--mut);font-size:15px;line-height:1.5}
 
-/* Spinner del overlay "Conectando tu Instagram" */
-.igwait-spin{width:46px;height:46px;border-radius:50%;border:4px solid #e6f2fa;border-top-color:#2793C8;animation:igspin .9s linear infinite}
-@keyframes igspin{to{transform:rotate(360deg)}}
