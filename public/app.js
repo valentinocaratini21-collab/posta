@@ -2448,6 +2448,7 @@ async function historyView() {
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
+  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const planMsg = q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
@@ -2457,8 +2458,8 @@ function ajustesView() {
   const bc = brandColors();
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
   ${igMsg}${planMsg}${tokenWarn}
-  <div class="card"><h3>🎨 Mi marca</h3>
-    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Tus fotos están en <a href="#/app/fotos" style="color:var(--cel);font-weight:700">Mis fotos</a>. Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
@@ -2489,9 +2490,9 @@ function ajustesView() {
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
       <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenés cambios sin guardar</span>
     </div>
-  </div>
-  <div class="card"><h3>🏪 Tu negocio</h3>
-  <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus ideas y posteos: cuanto más completos, mejores resultados.</p>
+  </div></div>
+  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
     <div class="row2">
       <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
       <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
@@ -2526,8 +2527,8 @@ function ajustesView() {
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
-  </div>
-  <div class="card"><h3>📸 Instagram</h3>
+  </div></div>
+  <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="igBanner"></div>
     <div class="ig-checklist">
       <div class="t">Tu Instagram está listo cuando:</div>
@@ -2568,13 +2569,13 @@ function ajustesView() {
       <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
     <div id="igMsg"></div>
-  </div>
-  <div class="card card-hi-yl"><h3>💳 Mi plan</h3>
+  </div></div>
+  <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div>
-  <div class="card card-hi-cel"><h3>🎁 Referidos · 50% off</h3>
+  </div></div>
+  <div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div>
+  </div></div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>📸 App de Meta</h4>
@@ -3518,6 +3519,12 @@ async function igConnect(next) {
   }
 }
 function bindSettings() {
+  // Acordeón de secciones en móvil
+  $$('.ajsec-h').forEach(h => {
+    const tg = () => h.parentElement.classList.toggle('open');
+    h.onclick = tg;
+    h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
+  });
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');

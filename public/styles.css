@@ -502,6 +502,26 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .setup-txt small{color:var(--mut);font-size:12px}
 .setup-go{font-size:13px;font-weight:700;color:var(--cel);white-space:nowrap;flex:none}
 .setup-row:disabled{opacity:.6;cursor:default}
+/* Acordeón de Ajustes: en desktop todo visible como antes; en móvil, secciones plegables */
+.ajsec-h{margin-bottom:14px}
+.ajsec-h h3{margin:0}
+.ajsec-c{display:none}
+@media(max-width:760px){
+  .ajsec-h{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .ajsec:not(.open)>.ajsec-h{margin-bottom:0}
+  .ajsec-c{display:block;color:var(--mut);font-size:22px;line-height:1;transition:transform .18s}
+  .ajsec.open .ajsec-c{transform:rotate(180deg)}
+  .ajsec-b{display:none}
+  .ajsec.open>.ajsec-b{display:block}
+  /* Checklist y encabezado compactos en móvil */
+  .setup-card{margin:8px 12px 0;padding:2px 4px}
+  .setup-title{font-size:13px;padding:6px 10px 0}
+  .setup-row{padding:8px 10px;gap:8px}
+  .setup-ico{font-size:20px}
+  .setup-txt{font-size:13.5px}
+  .setup-txt small{display:none}
+  .page-head{margin-bottom:14px}
+}
 
 .rec-card{border:1.5px solid var(--yl-line);background:linear-gradient(180deg,#FFFEFA 0%,#FFFDF3 100%);box-shadow:0 14px 36px rgba(254,193,77,.22);position:relative;overflow:hidden}
 .rec-card::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--yl),var(--cel))}
