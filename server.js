@@ -944,11 +944,18 @@ app.get('/api/ig/avatar', requireAuth, async (req, res) => {
     res.json({ username: u, pic_url: pic, name: nm });
   } catch (e) { res.json({ username: u, pic_url: null }); }
 });
-app.get('/api/ig/start', requireAuth, (req, res) => {
+// Prepara el OAuth de Instagram: valida la Embed URL, guarda state en sesión
+// y devuelve la URL de autorización de Meta.
+// IMPORTANTE iOS: el frontend NO navega directo a instagram.com (iOS lo sacaría
+// a la app de Instagram y el regreso a Posta se pierde). En su lugar va a
+// /api/ig/go, que hace 302 al authorize: los universal links solo actúan en taps
+// del usuario, no en redirects del servidor, así el ida y vuelta queda en Safari
+// y vuelve solo a Posta. Vale también para desktop.
+function buildIgAuth(req) {
   const s = getSettings(req.session.userId);
   const embedUrl = s.ig_embed_url || process.env.META_IG_EMBED_URL || process.env.IG_EMBED_URL;
   if (!embedUrl)
-    return res.status(400).json({ error: 'Configurá tu Instagram Embed URL en Ajustes' });
+    return { error: 'Configurá tu Instagram Embed URL en Ajustes' };
   // redirect_uri para el intercambio del code: el de la Embed URL, o el de este host
   let redirectUri = '';
   try {
@@ -964,10 +971,10 @@ app.get('/api/ig/start', requireAuth, (req, res) => {
     const ru = new URL(redirectUri);
     const thisHost = req.get('host');
     if (ru.host !== thisHost) {
-      return res.status(400).json({ error: `Tu Embed URL redirige a ${ru.host}, pero tiene que volver a Posta. En el dashboard de Meta → tu app → caso de uso Instagram → "API setup with Instagram login", poné como redirect URI: https://${thisHost}/api/ig/callback` });
+      return { error: `Tu Embed URL redirige a ${ru.host}, pero tiene que volver a Posta. En el dashboard de Meta \u2192 tu app \u2192 caso de uso Instagram \u2192 "API setup with Instagram login", pon\u00e9 como redirect URI: https://${thisHost}/api/ig/callback` };
     }
   } catch (e) {
-    return res.status(400).json({ error: 'La Embed URL no es válida. Revisala en Ajustes → Integraciones.' });
+    return { error: 'La Embed URL no es válida. Revisala en Ajustes \u2192 Integraciones.' };
   }
   const state = crypto.randomBytes(16).toString('hex');
   req.session.igState = state;
@@ -976,7 +983,22 @@ app.get('/api/ig/start', requireAuth, (req, res) => {
   const nx = String(req.query.next || '');
   if (/^\/#\/[^\s"'\\<>]*$/.test(nx)) req.session.igNext = nx;
   else delete req.session.igNext;
-  res.json({ url: getAuthUrl(embedUrl, state) });
+  return { url: getAuthUrl(embedUrl, state) };
+}
+app.get('/api/ig/start', requireAuth, (req, res) => {
+  const r = buildIgAuth(req);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ url: r.url });
+});
+// Bounce del OAuth: el navegador llega a instagram.com vía 302 del servidor
+// (no saca a la app de Instagram) y el callback vuelve solo a Posta.
+app.get('/api/ig/go', requireAuth, (req, res) => {
+  const r = buildIgAuth(req);
+  if (r.error) {
+    const safe = String(r.error).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return res.status(400).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>No se pudo iniciar la conexión</h2><p>${safe}</p><p><a href="/#/app/ajustes">\u2190 Volver a Posta</a></p></body></html>`);
+  }
+  res.redirect(r.url);
 });
 
 app.get('/api/ig/callback', async (req, res) => {
