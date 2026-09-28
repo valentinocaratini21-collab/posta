@@ -623,6 +623,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 /* Rachas 🔥 */
 .streak-pill{margin-left:auto;align-self:center;background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:9px 15px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(254,193,77,.4);white-space:nowrap}
 .streak-pill:active{transform:scale(.95)}
+.streak-exp{font-size:13px;font-weight:700;opacity:.7}
 .social-proof{margin:-6px 0 18px;padding:12px 16px;border-radius:12px;background:#F2F9FD;border:1px solid var(--line);color:var(--mut);font-size:14px;text-align:center;line-height:1.5}
 .streak-celeb{text-align:center;padding:6px 4px}
 .streak-celeb .big-emoji{font-size:76px;line-height:1}

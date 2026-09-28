@@ -448,7 +448,6 @@ const TABS = [
   ['ideas', '💡', 'Ideas'],
   ['video', '🎬', 'Video'],
   ['fotos', '📷', 'Mis fotos'],
-  ['calendario', '📅', 'Calendario'],
   ['historial', '📊', 'Historial'],
   ['ajustes', '⚙️', 'Ajustes'],
 ];
@@ -575,7 +574,7 @@ function setupChecklistHtml() {
 
 function appShell(tab, content) {
   const MAIN_TABS = [['semana', '🏠', 'Mi semana'], ['crear', '✨', 'Crear'], ['ideas', '💡', 'Ideas'], ['video', '🎬', 'Video']];
-  const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['calendario', '📅', 'Calendario'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
+  const MORE_TABS = [['fotos', '📷', 'Mis fotos'], ['historial', '📊', 'Historial'], ['ajustes', '⚙️', 'Ajustes']];
   const moreOn = MORE_TABS.some(([k]) => k === tab);
   return `
   <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
@@ -1165,7 +1164,7 @@ function recCardHTML(ideas, posts, ppw){
     <button class="btn btn-primary" data-rec-idea="${idx}">${isVideo ? '🎬 Crear este video' : 'Crear este posteo'} →</button>
   </div>`;
 }
-// tag: 'ideas' | 'home' — la misma tarjeta vive en Ideas y en Mi semana;
+// tag: 'ideas' | 'semana' — la misma tarjeta vive en Ideas y en Mi semana;
 // los ids se sufijan con el tag para no colisionar.
 function autopilotCardHTML(tag) {
   const t = tag || 'ideas';
@@ -1188,14 +1187,15 @@ function autopilotCardHTML(tag) {
   </div>`;
 }
 
-function reviewCardHTML(drafts) {
+function reviewCardHTML(drafts, slots) {
+  const s = slots || [];
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 6px">📋 Revisá tu semana</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px">Mirá cada posteo, editá el texto si querés. Publicá el que quieras <b>ahora</b> con 🚀 o programá toda la semana con un clic. Nada sale sin tu OK.</p>
+    <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px">Ya les pusimos día y hora a cada uno — cambialos si querés. Tocá <b>Programar semana</b> y salen solos. Nada sale sin tu OK.</p>
     ${drafts.map((d, i) => `
-    <div style="margin-bottom:16px">
-    <div class="post-item" style="align-items:flex-start;margin-bottom:0">
+    <div style="margin-bottom:18px">
+    <div class="post-item" style="align-items:flex-start;margin-bottom:8px">
       <div style="width:72px;flex-shrink:0">
         ${d.media_type === 'video'
           ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#0A1E33;cursor:zoom-in"></video>`
@@ -1211,13 +1211,16 @@ function reviewCardHTML(drafts) {
         <button class="btn btn-ghost btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button>
       </div>
     </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:14px;flex-shrink:0">📅</span>
+      <input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora sugeridos para el borrador ${i + 1}" style="font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--txt);font-family:inherit;flex:1;min-width:0">
+    </div>
     <div id="revnowm-${d.id}"></div>
     </div>`).join('')}
     <div style="margin-top:10px">
       <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Programar semana</button>
     </div>
     <div id="revMsg"></div>
-    <p style="font-size:13px;color:var(--dim);margin:10px 0 0">Se programan a las 19:00, un día cada uno, empezando mañana.</p>
   </div>`;
 }
 
@@ -1250,19 +1253,22 @@ function bindReview() {
     await publishNowFlow(id, mount);
     render();
   });
-  // Programar toda la semana
+  // Programar toda la semana: usa el día/hora de cada borrador (ya vienen sugeridos)
   const sw = $('#btnScheduleWeek');
   if (sw) sw.onclick = async () => {
     sw.disabled = true;
     const m = $('#revMsg');
     try {
-      const tas = $$('[data-revcap]');
+      const tas = $$('#reviewCard [data-revcap]');
       for (let i = 0; i < tas.length; i++) {
-        await api.patch('/api/posts/' + tas[i].dataset.revcap, {
-          scheduled_at: slotDate(i), caption: tas[i].value,
+        const id = tas[i].dataset.revcap;
+        const winp = document.querySelector(`#reviewCard [data-revwhen="${id}"]`);
+        const when = (winp && winp.value) ? new Date(winp.value).toISOString() : slotDate(i);
+        await api.patch('/api/posts/' + id, {
+          scheduled_at: when, caption: tas[i].value,
         });
       }
-      location.hash = '#/app/calendario';
+      render();
     } catch (e) {
       if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
       sw.disabled = false;
@@ -1817,13 +1823,11 @@ async function ideasView() {
   let posts = [];
   try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
   const ppw = (ME && ME.posts_per_week) || 3;
-  const drafts = posts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
   return `<div class="page-head"><div class="ph-ico">💡</div><div class="ph-txt"><h1>Ideas</h1><p class="sub">Nosotros pensamos el contenido por vos.</p></div></div>
   ${checklistHTML(posts.length)}
   ${recCardHTML(IDEAS, posts, ppw)}
   ${chatCardHTML()}
   ${IDEAS.length ? `<div id="ideasZone">${ideasList(posts)}</div>` : ''}
-  ${drafts.length ? reviewCardHTML(drafts) : ''}
   ${autopilotCardHTML('ideas')}
   ${IDEAS.length ? '' : `
   <div class="card" id="ideasEmpty"><div class="empty"><div class="big">💡</div>
@@ -1883,6 +1887,21 @@ async function renderDesignImage(o) {
 }
 function slotDate(i) {
   return slotDate19(i, (SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires');
+}
+// Horarios sugeridos para N borradores: 19:00 en la zona horaria del negocio,
+// un día cada uno, salteando los días que ya tienen posteos programados.
+function suggestSlots(n, scheduledPosts) {
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const taken = new Set((scheduledPosts || []).map(p => tzDayKey(p.scheduled_at, tz)).filter(Boolean));
+  const out = [];
+  let off = 0, guard = 0;
+  while (out.length < n && guard++ < 120) {
+    const iso = slotDate19(off, tz); off++;
+    const k = tzDayKey(iso, tz);
+    if (k && !taken.has(k)) { taken.add(k); out.push(iso); }
+  }
+  while (out.length < n) out.push(slotDate19(off++, tz)); // respaldo: no dejar huecos
+  return out;
 }
 // El último post de la semana del autopilot es un reel: 3 escenas con fotos
 // del cliente (o diseños generados si no tiene) + textos de la idea.
@@ -1977,15 +1996,15 @@ async function runAutopilot(n, tag) {
       prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
       await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
     }
-    prog.innerHTML = t === 'home'
-      ? `<div class="okmsg">📋 ¡Tu semana está lista!</div><a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar mi semana →</a>`
-      : `<div class="okmsg">📋 ¡Tu semana está lista!</div>`;
+    prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>`;
     // Racha: registrar la semana armada (idempotente por semana)
     let sk = null;
     try { sk = await api.post('/api/streak/week-armed', {}); } catch (e) {}
     setTimeout(() => {
-      render();
-      if (t === 'ideas') setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+      // Al terminar, caés directo en Mi semana sobre tus borradores (ya no hay que buscarlos)
+      if (t === 'ideas') location.hash = '#/app/semana';
+      else render();
+      setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, t === 'ideas' ? 800 : 200);
       if (sk && sk.newWeek) setTimeout(() => showStreakCelebration(sk), 600);
     }, 900);
   } catch (e) {
@@ -2242,7 +2261,7 @@ function bindVideo() {
       });
       $('#vSchedMsg').innerHTML = `<div class="okmsg">✅ Video programado. Se publica solo.</div>`;
       VSTATE = freshVState();
-      setTimeout(() => location.hash = '#/app/calendario', 1400);
+      setTimeout(() => location.hash = '#/app/semana', 1400);
     } catch (e) { $('#vSchedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
   };
 }
@@ -2613,6 +2632,14 @@ function streakNextTxt(sk) {
   const falta = sk.nextLevel.at - sk.current;
   return `<p class="d">Te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${esc(sk.nextLevel.emoji)} ${esc(sk.nextLevel.name)}</p>`;
 }
+// "38h" / "2d" / "menos de 1h" — cuánto le queda de vida a la racha (72h desde la última publicación)
+function fmtStreakLeft(ms) {
+  if (!ms || ms <= 0) return 'menos de 1h';
+  const h = ms / 36e5;
+  if (h < 1) return 'menos de 1h';
+  if (h < 48) return Math.ceil(h) + 'h';
+  return Math.floor(h / 24) + 'd';
+}
 function streakShareBtns() {
   return `<button class="btn btn-primary btn-block" id="streakShareBtn" style="margin-top:10px">📤 Compartir mi racha</button>
   <button class="btn btn-ghost btn-block" id="streakCloseBtn" style="margin-top:8px">Cerrar</button>`;
@@ -2638,11 +2665,12 @@ function streakPillModal(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
   const warn = sk.expiringSoon
-    ? `<p class="warn">⏳ Tu racha se apaga ${sk.daysLeft === 0 ? 'hoy' : sk.daysLeft === 1 ? 'en 1 día' : `en ${sk.daysLeft} días`} — armá tu semana y seguí sumando.</p>` : '';
+    ? `<p class="warn">⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)} si no sale ningún posteo — programá y seguí sumando.</p>` : '';
   streakModalShell(`
     <div class="big-emoji">${lv.emoji}</div>
     <h3 style="margin:12px 0 4px">${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</h3>
     <p class="d" style="margin:0 0 4px">Nivel ${esc(lv.name)} · Mejor racha: ${sk.best} ${sk.best === 1 ? 'semana' : 'semanas'}</p>
+    <p class="d" style="margin:0 0 4px">La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
     ${streakNextTxt(sk)}
     ${warn}
     ${streakShareBtns()}`);
@@ -2688,15 +2716,23 @@ async function semanaView() {
   let sk = null, soc = null;
   try { sk = await api.get('/api/streak'); } catch (e) {}
   try { soc = await api.get('/api/streak/social'); } catch (e) {}
+  // Borradores y programados viven acá, en Mi semana: se revisan y programan sin salir de la pantalla.
+  let allPosts = [];
+  try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
+  const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
+  const scheduled = allPosts.filter(p => p.status === 'scheduled').sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  const draftN = drafts.length;
+  const slots = suggestSlots(draftN, scheduled);
   const pill = sk && sk.current > 0 && sk.level
-    ? `<button class="streak-pill" id="streakPill" title="Tu racha">${esc(sk.level.emoji)} ${sk.current}</button>` : '';
+    ? `<button class="streak-pill" id="streakPill" title="Tu racha: se apaga si pasás 72h sin publicar">${esc(sk.level.emoji)} Racha ${sk.current} <span class="streak-exp">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span></button>` : '';
   const head = `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${pill}</div>`;
   const socialBar = soc && soc.shown
     ? `<div class="social-proof">🔥 ${soc.count} negocios llevan 15+ días seguidos armando su semana con Posta</div>` : '';
   const expBanner = sk && sk.expiringSoon ? `
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
-    <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga ${sk.daysLeft === 0 ? 'hoy' : sk.daysLeft === 1 ? 'en 1 día' : `en ${sk.daysLeft} días`}</h3>
-    <p>Armá tu semana antes del domingo y la racha sigue viva. <a href="#/app/ideas">Armar mi semana →</a></p></div></div>
+    <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga en ${fmtStreakLeft(sk.expiresInMs)}</h3>
+    <p>${draftN > 0 ? 'Programá tus borradores acá abajo 👇 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
+    ${draftN > 0 ? '' : `<a class="btn btn-primary btn-block" href="#/app/ideas" data-goto-autopilot style="margin-top:12px">⚡ Armemos tu semana</a>`}
   </div>` : '';
   if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
@@ -2735,31 +2771,40 @@ async function semanaView() {
       <button class="btn btn-primary btn-sm" data-nudge="${i}">Armar idea →</button>
     </div>`).join('');
 
-  const drafts = (w.by_status && w.by_status.draft) || 0;
+  const nextUp = scheduled.length ? `
+  <div class="card" style="border:1.5px solid var(--cel);background:#F2F9FD">
+    <div class="nudge-top"><span class="nudge-ico">📍</span><div><h3 style="margin:0">Próximo posteo: ${relDay(scheduled[0].scheduled_at)}</h3>
+    <p style="margin:4px 0 0">Sale solo, no tenés que hacer nada.</p></div></div>
+  </div>` : '';
+  const upcomingCard = scheduled.length ? `
+  <div class="card" id="upcomingCard"><h3>📅 Próximos posteos</h3>
+    ${scheduled.map(p => postItem(p, `${sigBtns(p)}<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button><button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>`)).join('')}
+  </div>` : '';
+
+  // HERO: lo más importante primero. Con borradores → tus posteos esperando tu OK.
+  // Sin borradores → el botón mágico: un click y la semana se arma acá mismo.
+  const heroCard = draftN > 0 ? reviewCardHTML(drafts, slots) : autopilotCardHTML('semana');
+  const redoCard = draftN > 0 ? autopilotCardHTML('semana') : '';
 
   return `${head}
   ${socialBar}
-  ${drafts > 0 ? `
-  <div class="card" id="draftsBanner" style="border:1.5px solid #FEC14D;background:#FFF9EC">
-    <div class="nudge-top"><span class="nudge-ico">🎁</span><div><h3>Tenemos ${drafts} ${drafts === 1 ? 'borrador listo' : 'borradores listos'}</h3>
-    <p>De tu prueba gratis — revisalos y programalos con un clic. Nada sale sin tu OK.</p></div></div>
-    <a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar y programar →</a>
-  </div>` : ''}
   ${expBanner}
+  ${heroCard}
+  ${nextUp}
+  ${upcomingCard}
+  ${redoCard}
   <div class="card sem-hero">
     <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
     <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
     ${w.missing
-      ? (drafts > 0
-        ? `<p class="sem-msg">Completemos la semana programando tus borradores.</p>
-           <a class="btn btn-primary btn-block" href="#/app/ideas" style="margin-top:12px">Revisar borradores →</a>`
+      ? (draftN > 0
+        ? `<p class="sem-msg">Tenemos ${draftN} ${draftN === 1 ? 'borrador listo' : 'borradores listos'} — programalos arriba 👆</p>`
         : `<p class="sem-msg">Nos ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar la semana.</p>`)
       : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
          <a class="btn btn-soft btn-block" href="#/app/crear" style="margin-top:12px">✨ Crear otro posteo</a>`}
   </div>
-  ${(w.missing && !drafts) ? autopilotCardHTML('home') : ''}
   ${chatCardHTML()}
-  <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div><p class="d" style="margin:12px 0 0"><a href="#/app/calendario">Ver programados y borradores →</a></p></div>
+  <div class="card"><h3>📅 Día por día</h3><div class="wk-strip">${days.join('')}</div></div>
   ${nudgeBlock}
   <div class="row2">
     <div class="card"><h3>📊 Tu ritmo</h3><p class="d">Posteos por semana (últimas 8)</p><div class="bars">${bars}</div></div>
@@ -2781,6 +2826,7 @@ function bindSemana() {
   bindSignalBtns();
   bindAutopilot();
   bindChat();
+  bindReview();
   const sp = $('#streakPill');
   if (sp) sp.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
@@ -2794,22 +2840,6 @@ function bindSemana() {
   });
 }
 
-async function calendarView() {
-  const posts = await api.get('/api/posts?status=scheduled');
-  const drafts = await api.get('/api/posts?status=draft');
-  const all = [...posts, ...drafts];
-  const head = `<div class="page-head"><div class="ph-ico">📅</div><div class="ph-txt"><h1>Calendario</h1><p class="sub">Tus próximos posteos. Se publican solos a la hora indicada.</p></div></div>`;
-  if (!all.length) return head + `<div class="empty"><div class="big">📭</div>Todavía no armamos tus posteos.<br><br><a class="btn btn-primary" href="#/app/ideas" data-goto-autopilot>⚡ Armemos tu semana</a><div style="margin-top:12px"><a href="#/app/crear" class="mut" style="font-size:14px">o crear un posteo suelto →</a></div></div>`;
-  const nextLine = posts.length ? `<p class="cal-next">📍 Próximo posteo: <b>${relDay(posts[0].scheduled_at)}</b> — sale solo, no tenés que hacer nada.</p>` : '';
-  const draftNudge = drafts.length ? `<p class="cal-draft-nudge">✏️ Dejamos ${drafts.length === 1 ? '1 borrador' : `${drafts.length} borradores`} sin fecha — poneles día y hora abajo para que salgan solos.</p>` : '';
-  return head + nextLine + draftNudge
-  + all.map(p => postItem(p, `
-      ${sigBtns(p)}
-      ${p.status === 'scheduled' ? `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button>` : ''}
-      ${p.status === 'draft' ? `<span class="sched-row"><button class="btn btn-primary btn-sm" data-act="now" data-id="${p.id}" title="Publicar ahora en Instagram">🚀 Ahora</button><input type="datetime-local" id="sched-${p.id}"><button class="btn btn-soft btn-sm" data-act="sched" data-id="${p.id}">📅 Programar</button></span>` : ''}
-      <button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>
-    `)).join('');
-}
 async function historyView() {
   const posts = await api.get('/api/posts');
   const done = posts.filter(p => ['published', 'failed', 'cancelled'].includes(p.status));
@@ -3362,7 +3392,7 @@ async function render() {
   else if (tab === 'video') content = videoView();
   else if (tab === 'fotos') content = fotosView();
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
-  else if (tab === 'calendario') content = await calendarView();
+  else if (tab === 'calendario') { location.hash = '#/app/semana'; return; } // Calendario fusionado en Mi semana
   else if (tab === 'historial') content = await historyView();
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
@@ -3431,7 +3461,7 @@ function bindApp(tab) {
   if (tab === 'video') bindVideo();
   if (tab === 'fotos') bindFotos();
   if (tab === 'onboarding') bindOnboarding();
-  if (tab === 'calendario' || tab === 'historial') {
+  if (tab === 'historial' || tab === 'semana') {
     $$('[data-goto-autopilot]').forEach(a => a.addEventListener('click', () => { window.__goAutopilot = true; }));
     $$('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, act = b.dataset.act;
@@ -3443,7 +3473,7 @@ function bindApp(tab) {
       }
       if (act === 'dup') {
         await api.post(`/api/posts/${id}/duplicate`, {});
-        location.hash = '#/app/calendario'; return;
+        location.hash = '#/app/semana'; return;
       }
       if (act === 'sched') {
         const inp = $(`#sched-${id}`);
@@ -3827,12 +3857,12 @@ function bindCreator() {
           return { image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date(v).toISOString() };
         });
         const r = await api.post('/api/creator/schedule', { items });
-        $('#schedMsg').innerHTML = `<div class="okmsg">✅ ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/calendario">ver en Calendario</a></div>`;
+        $('#schedMsg').innerHTML = `<div class="okmsg">✅ ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/semana">ver en Mi semana</a></div>`;
         c.selected = [];
         $$('.opt-selbox').forEach(ch => { ch.checked = false; });
         $$('.opt-card').forEach(cd => cd.classList.remove('selected'));
         updateMultiBar();
-        setTimeout(() => { $('#schedModal').style.display = 'none'; location.hash = '#/app/calendario'; }, 1800);
+        setTimeout(() => { $('#schedModal').style.display = 'none'; location.hash = '#/app/semana'; }, 1800);
       } catch (e) {
         $('#schedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
         btn.disabled = false; btn.textContent = '✅ Confirmar';
@@ -3876,7 +3906,7 @@ function bindCreator() {
     const done = (msg, hash) => {
       $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
       resetCreator();
-      setTimeout(() => location.hash = hash || '#/app/calendario', 1400);
+      setTimeout(() => location.hash = hash || '#/app/semana', 1400);
     };
     $('#btnSchedule').onclick = async () => {
       const when = $('#p_when').value;
@@ -3898,7 +3928,7 @@ function bindCreator() {
         if (r && r.ok && r.permalink) {
           // publishNowFlow ya mostró "¡Publicado! Ver en IG ↗"
           resetCreator();
-          setTimeout(() => location.hash = '#/app/calendario', 8000);
+          setTimeout(() => location.hash = '#/app/semana', 8000);
         } else if (r && r.ok) {
           done('⏳ Se está publicando… lo ves en el historial en un minuto.');
         }
