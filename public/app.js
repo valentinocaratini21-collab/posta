@@ -1965,7 +1965,7 @@ function chatCardHTML(compact) {
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
-  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Tu community manager</h3>`;
+  const title = `<div class="cm-head${compact ? ' sm' : ''}"><img class="cm-avatar" src="cm-avatar.webp" alt="Tu community manager"><div class="cm-meta"><div class="cm-name">Tu community manager</div><div class="cm-status"><i></i>en línea</div></div></div>`;
   const wrap = compact
     ? `<div id="chatCard" style="margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)">`
     : `<div class="card" id="chatCard">`;
