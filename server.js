@@ -315,9 +315,10 @@ const OB_STEPS = [
   { key: 'instagram', pregunta: '¿Cuál es tu Instagram? O pasame el de un competidor que te guste para chusmear el estilo. Si no tenés, decime "saltear".' },
   { key: 'logo', pregunta: 'Subí tu logo y saco tus colores de ahí 🎨. Si no lo tenés a mano, decime "saltear".' },
   { key: 'objetivo', pregunta: '¿Cuál es tu objetivo principal con Instagram?' },
+  { key: 'fotos', pregunta: '📸 Última: subí hasta 5 fotos de tu negocio — tu local, tus productos, vos laburando. Con esas fotos la IA aprende cómo se ve lo que hacés y te genera contenido nuevo cada semana, sin que tengas que pensar en fotos. Sacalas con luz de día si podés ☀️ Si preferís, escribí "saltear".' },
 ];
 const OB_GOAL_CHIPS = ['Vender más', 'Conseguir seguidores', 'Llenar mi local', 'Contar novedades'];
-const OB_GREETING = '¡Hola! Soy tu community manager 🙌 Te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. Son 7, dale que va:';
+const OB_GREETING = '¡Hola! Soy tu community manager 🙌 Te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. Son 8, dale que va:';
 
 app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
   try {
@@ -359,6 +360,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
       ok: true, done: false, reply, answered: userCount,
       chips: step.key === 'objetivo' ? OB_GOAL_CHIPS : null,
       awaitLogo: step.key === 'logo',
+      awaitPhotos: step.key === 'fotos',
     });
   } catch (e) {
     console.error('[onboarding/chat]', e.message);
@@ -1304,8 +1306,17 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
 app.delete('/api/assets/:id', requireAuth, (req, res) => {
   const a = db.prepare('SELECT * FROM assets WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!a) return res.status(404).json({ error: 'No encontrado' });
-  try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(a.file_path))); } catch (_) {}
   db.prepare('DELETE FROM assets WHERE id = ?').run(a.id);
+  // Si algún posteo ya usa esa foto, se conserva el archivo para no romperlo:
+  // sale de la biblioteca (no se usa más en posteos nuevos) pero los existentes siguen viéndose.
+  let used = 0;
+  try {
+    used = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND image_path = ?`).get(req.session.userId, a.file_path).c;
+    if (!used) used = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND carousel_paths LIKE ?`).get(req.session.userId, `%${a.file_path}%`).c;
+  } catch (e) {}
+  if (!used) {
+    try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(a.file_path))); } catch (_) {}
+  }
   res.json({ ok: true });
 });
 
