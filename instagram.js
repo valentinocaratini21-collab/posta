@@ -393,6 +393,120 @@ async function analyzeInstagram(igUserId, accessToken) {
   }
 }
 
+// ---------- Track B: análisis profundo de Instagram ("Conocer al cliente a fondo") ----------
+// Métricas reales de un posteo: alcance, impresiones, guardados, compartidos, visitas al perfil.
+// Nunca lanza: métricas no disponibles o errores → {} parcial con gracia.
+async function getPostInsights(mediaId, accessToken) {
+  const out = {};
+  try {
+    if (!mediaId || !accessToken) return out;
+    const url = `${IG_HOST}/${API_VERSION}/${mediaId}/insights?metric=reach,impressions,saved,shares,profile_visits&access_token=${accessToken}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return out;
+    const data = await res.json();
+    const rows = Array.isArray(data.data) ? data.data : [];
+    const wanted = ['reach', 'impressions', 'saved', 'shares', 'profile_visits'];
+    for (const row of rows) {
+      if (!wanted.includes(row.name)) continue;
+      const vals = Array.isArray(row.values) ? row.values : [];
+      const v = vals.length && vals[0] && typeof vals[0].value === 'number' ? vals[0].value : null;
+      if (v !== null) out[row.name] = v;
+    }
+  } catch (e) { /* gracia: devolvemos lo que haya */ }
+  return out;
+}
+
+// Análisis profundo: trae hasta 25 posteos, rankea por engagement, trae insights de los
+// 10 mejores (secuencial, cada uno en try/catch) y hace UNA llamada a gpt-4o-mini que
+// devuelve learnings {top_temas[], mejor_formato, patrones[], resumen} en rioplatense.
+// Devuelve { learnings } o { learnings: null } si no hay datos/token. Nunca lanza.
+async function analyzeInstagramDeep(igUserId, accessToken) {
+  try {
+    if (!igUserId || !accessToken) return { learnings: null };
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return { learnings: null };
+    const url = `${IG_HOST}/${API_VERSION}/${igUserId}/media?fields=caption,like_count,comments_count,media_type,timestamp&limit=25&access_token=${accessToken}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return { learnings: null };
+    const data = await res.json();
+    const items = Array.isArray(data.data) ? data.data : [];
+    if (!items.length) return { learnings: null };
+    const typeName = t => (t === 'CAROUSEL_ALBUM' ? 'carrusel' : t === 'VIDEO' ? 'reel' : 'posteo');
+    const ranked = items
+      .map(m => ({ ...m, eng: (Number(m.like_count) || 0) + (Number(m.comments_count) || 0) }))
+      .sort((a, b) => b.eng - a.eng);
+    const top = [];
+    for (const m of ranked.slice(0, 10)) {
+      let ins = {};
+      try { ins = await getPostInsights(m.id, accessToken); } catch (e) { ins = {}; }
+      top.push({
+        id: m.id,
+        tipo: typeName(m.media_type),
+        caption: String(m.caption || '').slice(0, 300),
+        likes: Number(m.like_count) || 0,
+        comments: Number(m.comments_count) || 0,
+        fecha: String(m.timestamp || '').slice(0, 10),
+        insights: ins && typeof ins === 'object' ? ins : {},
+      });
+    }
+    const lines = top.map((p, i) => {
+      const first = p.caption.split('\n')[0].slice(0, 120).trim() || 'sin texto';
+      let extras = '';
+      if (p.insights.reach != null) extras += `, alcance ${p.insights.reach}`;
+      if (p.insights.impressions != null) extras += `, impresiones ${p.insights.impressions}`;
+      if (p.insights.saved != null) extras += `, guardados ${p.insights.saved}`;
+      if (p.insights.shares != null) extras += `, compartidos ${p.insights.shares}`;
+      return `${i + 1}. ${p.tipo} (${p.fecha}): "${first}" — ${p.likes} likes, ${p.comments} comentarios${extras}`;
+    }).join('\n');
+    const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Sos un estratega de contenido de Instagram argentino. Analizás los posteos con más engagement de una cuenta de negocio y sacás aprendizajes accionables para crear mejores posteos.\n' +
+              'Hablás en español rioplatense, tono directo y práctico, sin vueltas.\n' +
+              'Respondé SOLO con un JSON con esta forma exacta:\n' +
+              '{"top_temas": ["tema1", "tema2", "tema3"], "mejor_formato": "reel" | "carrusel" | "posteo", "patrones": ["patrón 1", "patrón 2"], "resumen": "2-3 oraciones con el aprendizaje clave"}\n' +
+              '- top_temas: 3 a 5 temas que más rindieron, cortitos.\n' +
+              '- mejor_formato: el formato que mejor rindió ("reel", "carrusel" o "posteo").\n' +
+              '- patrones: 2 a 4 patrones concretos que se repiten en los que rindieron (ej: "los que muestran el proceso rinden más que los de producto terminado").\n' +
+              '- resumen: 2 o 3 oraciones con el aprendizaje clave, listo para guiar el próximo contenido.',
+          },
+          { role: 'user', content: 'Estos son los 10 posteos con más engagement de la cuenta:\n' + lines },
+        ],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!gptRes.ok) return { learnings: null };
+    const gj = await gptRes.json();
+    const raw = gj && gj.choices && gj.choices[0] && gj.choices[0].message && gj.choices[0].message.content;
+    if (!raw) return { learnings: null };
+    let learnings;
+    try { learnings = JSON.parse(raw); } catch (e) { return { learnings: null }; }
+    if (!learnings || typeof learnings !== 'object' || !Array.isArray(learnings.top_temas) || !learnings.top_temas.length) {
+      return { learnings: null };
+    }
+    // Normalizar al contrato: {top_temas[], mejor_formato, patrones[], resumen}
+    const str = v => String(v || '').trim();
+    const arr = v => Array.isArray(v) ? v.map(str).filter(Boolean) : [];
+    return {
+      learnings: {
+        top_temas: arr(learnings.top_temas).slice(0, 8),
+        mejor_formato: str(learnings.mejor_formato) || 'posteo',
+        patrones: arr(learnings.patrones).slice(0, 8),
+        resumen: str(learnings.resumen),
+      },
+    };
+  } catch (e) {
+    return { learnings: null };
+  }
+}
+
 module.exports = {
   getAuthUrl,
   exchangeCodeForTokens,
@@ -404,4 +518,6 @@ module.exports = {
   publishStory,
   publishCarousel,
   analyzeInstagram,
+  getPostInsights,
+  analyzeInstagramDeep,
 };

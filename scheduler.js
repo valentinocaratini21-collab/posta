@@ -179,6 +179,17 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[best-hour] no se pudo programar:', e.message);
   }
+  // Análisis profundo de Instagram semanal: lunes 9:00 (Buenos Aires).
+  // Track B "Conocer al cliente a fondo": aprende qué rinde en cada cuenta con IG
+  // conectado y guarda los learnings en content_learnings (1 llamada GPT por usuario).
+  try {
+    cron.schedule('0 9 * * 1', () => {
+      refreshContentLearnings(db).catch((e) => console.error('[learnings]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Análisis profundo de Instagram: lunes 9:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[learnings] no se pudo programar:', e.message);
+  }
 }
 
 // Recordatorio semanal por email (lunes 10:00 Buenos Aires).
@@ -399,4 +410,40 @@ async function refreshBestHours(db) {
   return { updated };
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours };
+// Track B: análisis profundo de Instagram semanal (lunes 9:00 Buenos Aires).
+// "Conocer al cliente a fondo": por cada usuario con IG conectado corre
+// analyzeInstagramDeep y guarda los learnings en content_learnings.
+// 1 llamada GPT por análisis (por usuario), nada en loops calientes.
+// Si no hay API key o no hay usuarios, no hace nada. Errores nunca rompen el server.
+async function refreshContentLearnings(db) {
+  if (!process.env.OPENAI_API_KEY) {
+    console.log('[learnings] sin OPENAI_API_KEY: se saltea el análisis esta semana');
+    return { updated: 0 };
+  }
+  const { analyzeInstagramDeep } = require('./instagram');
+  const users = db.prepare(`
+    SELECT u.id FROM users u JOIN settings s ON s.user_id = u.id
+    WHERE s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+      AND s.ig_access_token IS NOT NULL AND s.ig_access_token != ''
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+  `).all();
+  if (!users.length) return { updated: 0 };
+  let updated = 0;
+  for (const u of users) {
+    try {
+      const st = getSettings(db, u.id) || {};
+      const r = await analyzeInstagramDeep(st.ig_user_id, st.ig_access_token);
+      if (r && r.learnings) {
+        db.prepare(`INSERT INTO content_learnings (user_id, learnings_json, updated_at) VALUES (?, ?, datetime('now'))
+          ON CONFLICT(user_id) DO UPDATE SET learnings_json=excluded.learnings_json, updated_at=datetime('now')`)
+          .run(u.id, JSON.stringify(r.learnings));
+        updated++;
+      }
+    } catch (e) { console.error('[learnings] usuario', u.id, e.message); }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (updated) console.log(`[learnings] learnings actualizados para ${updated} usuarios`);
+  return { updated };
+}
+
+module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings };

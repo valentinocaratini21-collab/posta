@@ -149,6 +149,15 @@ const TIPO_LINES = {
 const tipoLine = t => (TIPO_LINES[t] ? '\n' + TIPO_LINES[t] : '');
 
 const TIPOS = ['promo', 'tip', 'social', 'detras', 'novedad'];
+// Familias de concepto visual por tipo de contenido: las usa el motor de
+// imágenes nivel agencia (/api/concept-shot) para dirigir la generación.
+const CONCEPT_FAMILIES = {
+  promo: 'oferta irresistible, producto héroe en escena',
+  tip: 'editorial limpio y conceptual',
+  social: 'prueba social, escena real y cálida',
+  detras: 'detrás de escena fotorrealista',
+  novedad: 'anuncio impactante de lanzamiento',
+};
 // Garantía dura de variedad: nunca dos ideas seguidas con el mismo tipo.
 function fixTipos(ideas) {
   let prev = null;
@@ -265,10 +274,43 @@ function captionPasses(caption) {
   return { ok: true, reason: '' };
 }
 
+// ---------- Helpers del ADN extendido ("Conocer al cliente a fondo") ----------
+// Los campos del ADN pueden venir como string o como array (de strings u objetos):
+// productos: [{nombre, precio}], servicios: [...], promos_activas: [...], tono_ejemplos: [...].
+function dnaList(v) {
+  if (!v) return '';
+  const one = (x) => {
+    if (x == null) return '';
+    if (typeof x === 'string') return x.trim();
+    if (typeof x === 'object') {
+      const nombre = String(x.nombre || x.name || x.servicio || x.producto || x.titulo || x.texto || x.frase || '').trim();
+      const precio = String(x.precio || x.price || '').trim();
+      return (nombre + (precio ? ` (${precio})` : '')).trim();
+    }
+    return String(x).trim();
+  };
+  const out = Array.isArray(v) ? v.map(one).filter(Boolean).join(' | ') : one(v);
+  return out.slice(0, 600);
+}
+// Línea de learnings: lo que rinde en el Instagram de ESTE cliente.
+function learningsLine(l) {
+  try {
+    const o = (l && typeof l === 'object') ? l : null;
+    if (!o) return '';
+    const resumen = String(o.resumen || '').trim().slice(0, 300);
+    const formato = String(o.mejor_formato || '').trim().slice(0, 60);
+    const temas = Array.isArray(o.top_temas)
+      ? o.top_temas.map(t => String(t || '').trim()).filter(Boolean).slice(0, 5).join(', ')
+      : '';
+    if (!resumen && !formato && !temas) return '';
+    return `En tu Instagram lo que más rinde es: ${resumen || 'todavía estamos aprendiendo de tu cuenta'} (mejor formato: ${formato || '—'}; temas que funcionan: ${temas || '—'})`;
+  } catch (e) { return ''; }
+}
+
 // ---------- Contexto del negocio + regla anti-invención ----------
 // Se inyecta en TODOS los prompts de generación. Sin datos del negocio, la IA
 // tiende a inventar uno entero (el caso "PRODCT XYZ" / power banks): esta regla lo frena.
-function businessContext({ business, category, description, dna, tone }) {
+function businessContext({ business, category, description, dna, tone, learnings }) {
   const d = dna || {};
   const parts = [];
   if (business) parts.push(`Negocio: ${business}`);
@@ -277,9 +319,24 @@ function businessContext({ business, category, description, dna, tone }) {
   if (d.producto_estrella) parts.push(`Producto/servicio estrella: ${d.producto_estrella}`);
   if (d.cliente_ideal) parts.push(`Cliente ideal: ${d.cliente_ideal}`);
   if (d.diferencial) parts.push(`Diferencial: ${d.diferencial}`);
+  // ADN extendido ("Conocer al cliente a fondo"): lo concreto que vende el negocio.
+  const prods = dnaList(d.productos);
+  if (prods) parts.push(`Productos: ${prods}`);
+  const servs = dnaList(d.servicios);
+  if (servs) parts.push(`Servicios: ${servs}`);
+  const promos = dnaList(d.promos_activas);
+  if (promos) parts.push(`Promos activas: ${promos}`);
+  const voz = dnaList(d.tono_ejemplos);
+  if (voz) parts.push(`Así habla el dueño: ${voz}`);
+  if (d.horarios) parts.push(`Horarios: ${String(d.horarios).slice(0, 120)}`);
+  if (d.ubicacion) parts.push(`Ubicación: ${String(d.ubicacion).slice(0, 120)}`);
+  const hasData = parts.length > 0;
   parts.push(`Tono: ${d.tono || tone || 'cercano'}`);
-  const ctx = parts.length ? parts.join('\n') : '(sin datos del negocio cargados)';
-  return `${ctx}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos.`;
+  const ctx = hasData
+    ? parts.join('\n')
+    : '(sin datos del negocio cargados)\nFALTAN DATOS: pedile al cliente el audio de 2 minutos contando de su negocio; no adivines.';
+  const learn = learningsLine(learnings);
+  return `${ctx}${learn ? '\n' + learn : ''}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos. PROHIBIDO: posteos motivacionales genéricos o frases inspiracionales desconectadas del negocio ("empezá la semana con todo", "nunca te rindas", "emprendé tus sueños"): cada idea tiene que vender algo concreto del negocio o hablarle a su cliente ideal sobre algo real de este negocio.`;
 }
 
 // Placeholders típicos de contenido inventado: si aparecen, el texto se descarta.
@@ -587,7 +644,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance, learnings }, apiKey) {
   const ephLine = ephemeris
     ? `\n⚠️ EFEMÉRIDE CERCA: ${ephemeris.emoji} ${ephemeris.name} es el ${ephemeris.date} (en ${ephemeris.daysLeft} días). La idea N°1 TIENE que ser sobre eso (enfoque: ${ephemeris.angle}). Es una fecha que vende mucho: no la ignores.`
     : '';
@@ -604,15 +661,15 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'system',
           content:
-            'Sos un estratega de marketing digital argentino experto en Instagram. Escribís en español rioplatense con voseo. Respondé SOLO con un JSON: {"ideas": [{"titulo": "...", "formato": "...", "tipo": "...", "angulo": "..."}]}. Generá exactamente 7 ideas de posts variadas: novedad, promo, tip educativo, testimonio, detrás de escena, comunidad y reel/video. "titulo" es el tema en una frase corta. "formato" es una de esas 7 categorías (para video usá exactamente "Reel/Video"). "tipo" es el tipo de contenido: uno de promo, tip, social, detras, novedad (promo=oferta con urgencia, tip=educativo, social=prueba social o comunidad, detras=detrás de escena humano, novedad=anuncio o lanzamiento). REGLA DURA: nunca dos ideas seguidas con el mismo tipo — alterná los tipos a lo largo de la semana. "angulo" es el enfoque estratégico en 1-2 frases, explicando por qué va a rendir y cómo diferenciarse de la competencia.',
+            'Sos un estratega de marketing digital argentino experto en Instagram. Escribís en español rioplatense con voseo. Respondé SOLO con un JSON: {"ideas": [{"titulo": "...", "formato": "...", "tipo": "...", "angulo": "...", "porque": "..."}]}. Generá exactamente 7 ideas de posts variadas: novedad, promo, tip educativo, testimonio, detrás de escena, comunidad y reel/video. "titulo" es el tema en una frase corta. "formato" es una de esas 7 categorías (para video usá exactamente "Reel/Video"). "tipo" es el tipo de contenido: uno de promo, tip, social, detras, novedad (promo=oferta con urgencia, tip=educativo, social=prueba social o comunidad, detras=detrás de escena humano, novedad=anuncio o lanzamiento). REGLA DURA: nunca dos ideas seguidas con el mismo tipo — alterná los tipos a lo largo de la semana. "angulo" es el enfoque estratégico en 1-2 frases, explicando por qué va a rendir y cómo diferenciarse de la competencia. REGLA DE CONCRECIÓN: cada idea TIENE que estar atada a algo concreto del contexto del negocio (un producto, un servicio, una promo activa, una pregunta frecuente o un tema que rinde en su Instagram) — PROHIBIDO ideas genéricas que servirían para cualquier negocio (motivación genérica, "emprendé tus sueños", tips sin producto). "porque" es UNA línea de estrategia en voseo que explica por qué este posteo vende para ESTE negocio, atada a un producto/servicio/promo REAL del contexto (ej: "porque el 2x1 de esta semana es tu gancho de precio y este reel lo muestra puesto, que es lo que más te rinde"). El "porque" además sugiere el ángulo visual: qué debería mostrarse en la imagen (producto, escena, persona, detalle) para guiar al diseñador.',
         },
         {
           role: 'user',
-          content: businessContext({ business, category, description, dna, tone }) +
+          content: businessContext({ business, category, description, dna, tone, learnings }) +
             `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}\nGenerá las 6 ideas.`,
         },
       ],
-      max_tokens: 900,
+      max_tokens: 1200,
       temperature: 0.9,
     }),
   });
@@ -626,6 +683,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
     formato: String(i.formato || 'Contenido').slice(0, 30),
     tipo: TIPOS.includes(String(i.tipo || '').toLowerCase()) ? String(i.tipo).toLowerCase() : TIPOS[idx % TIPOS.length],
     angulo: String(i.angulo || '').slice(0, 280),
+    porque: String(i.porque || '').slice(0, 200),
   }));
   // La primera idea es la de la efeméride: se marca para mostrarla destacada
   if (ephemeris && mapped.length) {
@@ -1207,4 +1265,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES };

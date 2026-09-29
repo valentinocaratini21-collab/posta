@@ -119,11 +119,20 @@ const requireAuth = (req, res, next) => {
 // Si la prueba gratis venció, no se puede generar ni programar: el paywall es "Mi plan"
 function requireTrialValid(req, res, next) {
   try {
-    const u = db.prepare('SELECT plan_status, trial_ends_at FROM users WHERE id = ?').get(req.session.userId);
-    if (u && u.plan_status === 'trial' && u.trial_ends_at && u.trial_ends_at <= Date.now())
+    const u = db.prepare('SELECT plan_status, trial_ends_at, created_at FROM users WHERE id = ?').get(req.session.userId);
+    if (u && u.plan_status === 'trial' && trialEffectiveEnd(u) <= Date.now())
       return res.status(402).json({ error: 'trial_expired', message: 'Tu prueba gratis terminó. Elegí un plan para seguir creando contenido.' });
   } catch (e) { /* ante la duda, dejar pasar */ }
   next();
+}
+// Fin efectivo de la prueba: respeta la política vigente (TRIAL_DAYS desde la creación),
+// aunque la cuenta se haya creado cuando la prueba duraba más.
+function trialEffectiveEnd(u) {
+  const tEnds = u.trial_ends_at || 0;
+  if (!tEnds) return 0;
+  const cMs = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+  const policyEnd = cMs ? cMs + TRIAL_DAYS * 86400000 : Infinity;
+  return Math.min(tEnds, policyEnd);
 }
 
 function getProfile(userId) {
@@ -154,6 +163,173 @@ function writeDna(userId, obj) {
   db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
 }
+// Learnings de contenido ("Conocer al cliente a fondo", Track B): qué rinde en el IG del cliente.
+// Lee la tabla content_learnings (la crea otro track); si no existe o no hay datos → null, sin romper.
+function getContentLearnings(userId) {
+  try {
+    const r = db.prepare('SELECT learnings_json FROM content_learnings WHERE user_id = ?').get(userId);
+    if (r && r.learnings_json) { const o = JSON.parse(r.learnings_json); return (o && typeof o === 'object') ? o : null; }
+  } catch (e) {}
+  return null;
+}
+// ===== Track A — ADN extendido: endpoints /api/dna =====
+// Whitelist de campos editables del ADN (todo lo demás —series, paused_tipos, etc.— nunca se toca).
+const DNA_WHITELIST = ['producto_estrella', 'cliente_ideal', 'diferencial', 'tono',
+  'productos', 'servicios', 'promos_activas', 'horarios', 'ubicacion', 'tono_ejemplos', 'preguntas_frecuentes'];
+const DNA_SCALARS = ['producto_estrella', 'cliente_ideal', 'diferencial', 'tono', 'horarios', 'ubicacion'];
+const DNA_LEGACY = ['producto_estrella', 'cliente_ideal', 'diferencial', 'tono'];
+// array -> campo clave para dedupe (null = array de strings).
+const DNA_ARRAYS = { productos: 'nombre', servicios: 'nombre', promos_activas: 'titulo', tono_ejemplos: null, preguntas_frecuentes: 'pregunta' };
+const DNA_SCHEMA_DOC = `{
+  "producto_estrella": "string",
+  "cliente_ideal": "string",
+  "diferencial": "string",
+  "tono": "string",
+  "productos": [{"nombre": "string", "precio": "string", "descripcion": "string", "es_estrella": false}],
+  "servicios": [{"nombre": "string", "precio": "string", "descripcion": "string"}],
+  "promos_activas": [{"titulo": "string", "detalle": "string", "vigencia": "string"}],
+  "horarios": "string",
+  "ubicacion": "string",
+  "tono_ejemplos": ["frase real del dueno"],
+  "preguntas_frecuentes": [{"pregunta": "string", "respuesta": "string"}]
+}`;
+const DNA_EXTRACTION_PROMPT = `Sos un extractor de datos de negocios para una app de marketing. Te paso un texto dictado por el dueno de un negocio. Devolvé SOLO un objeto JSON válido (sin markdown, sin explicaciones) siguiendo este esquema, incluyendo UNICAMENTE los campos que el texto mencione de forma explícita:\n${DNA_SCHEMA_DOC}\nReglas: los arrays van vacíos si no hay nada; NUNCA inventes ni deduzcas datos que no estén en el texto; usá las palabras del dueno cuando sea posible; es_estrella es true solo si el texto dice que ese producto es el principal, estrella o más vendido.`;
+
+function dnaIsEmpty(v) {
+  if (v === undefined || v === null) return true;
+  if (typeof v === 'string') return !v.trim();
+  if (Array.isArray(v)) return !v.length;
+  return false;
+}
+// Merge del ADN extraído sobre el existente. Escalares: se pisan solo si el valor no está vacío;
+// los 4 campos legacy no se pisan si ya tienen valor (protectLegacy). Arrays: dedupe por clave,
+// existentes primero, tope 20 items.
+function mergeExtractedDna(cur, extracted, opts) {
+  const protectLegacy = !!(opts && opts.protectLegacy);
+  const dna = { ...(cur || {}) };
+  for (const k of DNA_SCALARS) {
+    const v = extracted ? extracted[k] : undefined;
+    if (dnaIsEmpty(v)) continue;
+    if (protectLegacy && DNA_LEGACY.includes(k) && !dnaIsEmpty(cur && cur[k])) continue;
+    dna[k] = typeof v === 'string' ? v.trim() : v;
+  }
+  for (const k of Object.keys(DNA_ARRAYS)) {
+    const incoming = (extracted && Array.isArray(extracted[k])) ? extracted[k] : [];
+    if (!incoming.length) continue;
+    const key = DNA_ARRAYS[k];
+    const idOf = (it) => (key ? String(((it || {})[key]) || '') : String(it || '')).toLowerCase().trim();
+    const existing = (cur && Array.isArray(cur[k])) ? cur[k] : [];
+    const seen = new Set();
+    for (const it of existing) { const id = idOf(it); if (id) seen.add(id); }
+    const merged = [...existing];
+    for (const it of incoming) {
+      const id = idOf(it);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      merged.push(it);
+      if (merged.length >= 20) break;
+    }
+    dna[k] = merged;
+  }
+  return dna;
+}
+// Intenta parsear JSON; si falla, recorta al substring entre el primer { y el último }.
+function parseLooseJson(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  try { return JSON.parse(s); } catch (e) {}
+  const a = s.indexOf('{'), b = s.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }
+  return null;
+}
+// Extrae ADN estructurado de un texto con una sola llamada a gpt-4o-mini. Devuelve solo claves de la whitelist.
+async function extractDnaFromText(text, apiKey) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: DNA_EXTRACTION_PROMPT },
+        { role: 'user', content: 'Extraé los datos del negocio de este texto:\n\n' + String(text || '').slice(0, 6000) },
+      ],
+    }),
+  });
+  if (!r.ok) throw new Error('openai ' + r.status);
+  const j = await r.json();
+  const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  const parsed = parseLooseJson(content);
+  if (!parsed || typeof parsed !== 'object') throw new Error('json inválido');
+  const out = {};
+  for (const k of DNA_WHITELIST) if (parsed[k] !== undefined) out[k] = parsed[k];
+  return out;
+}
+
+app.get('/api/dna', requireAuth, (req, res) => {
+  res.json({ dna: readDna(req.session.userId) });
+});
+
+app.put('/api/dna', requireAuth, (req, res) => {
+  try {
+    const body = (req.body && typeof req.body === 'object') ? req.body : {};
+    const filtered = {};
+    for (const k of DNA_WHITELIST) if (body[k] !== undefined) filtered[k] = body[k];
+    const uid = req.session.userId;
+    const dna = mergeExtractedDna(readDna(uid), filtered, { protectLegacy: false });
+    writeDna(uid, dna);
+    res.json({ dna });
+  } catch (e) {
+    console.error('[dna] PUT:', e.message);
+    res.status(500).json({ error: 'No se pudo guardar el ADN. Probá de nuevo.' });
+  }
+});
+
+app.post('/api/dna/from-audio', requireAuth, async (req, res) => {
+  const audioDataUrl = (req.body && req.body.audioDataUrl) || '';
+  if (!String(audioDataUrl).startsWith('data:audio/'))
+    return res.status(400).json({ error: 'Falta el audio.' });
+  const apiKey = (getSettings(req.session.userId).openai_key) || process.env.OPENAI_API_KEY || '';
+  if (!apiKey)
+    return res.status(400).json({ error: 'No hay clave de OpenAI configurada. Agregala en Configuración.' });
+  let transcript = '';
+  try { transcript = await transcribeAudio(audioDataUrl, apiKey); }
+  catch (e) {
+    console.error('[dna] whisper:', e.message);
+    return res.status(400).json({ error: 'No se pudo transcribir el audio. Probá de nuevo.' });
+  }
+  if (!transcript)
+    return res.status(400).json({ error: 'No se entendió el audio. Probá de nuevo.' });
+  try {
+    const extracted = await extractDnaFromText(transcript, apiKey);
+    const uid = req.session.userId;
+    const dna = mergeExtractedDna(readDna(uid), extracted, { protectLegacy: true });
+    writeDna(uid, dna);
+    res.json({ transcript, extracted, dna });
+  } catch (e) {
+    console.error('[dna] extracción:', e.message);
+    res.status(400).json({ error: 'No se pudo procesar el audio. Probá de nuevo.' });
+  }
+});
+
+app.post('/api/dna/from-text', requireAuth, async (req, res) => {
+  const text = String((req.body && req.body.text) || '').trim();
+  if (!text) return res.status(400).json({ error: 'Falta el texto.' });
+  const apiKey = (getSettings(req.session.userId).openai_key) || process.env.OPENAI_API_KEY || '';
+  if (!apiKey)
+    return res.status(400).json({ error: 'No hay clave de OpenAI configurada. Agregala en Configuración.' });
+  try {
+    const extracted = await extractDnaFromText(text, apiKey);
+    const uid = req.session.userId;
+    const dna = mergeExtractedDna(readDna(uid), extracted, { protectLegacy: true });
+    writeDna(uid, dna);
+    res.json({ extracted, dna });
+  } catch (e) {
+    console.error('[dna] extracción:', e.message);
+    res.status(400).json({ error: 'No se pudo procesar el texto. Probá de nuevo.' });
+  }
+});
+// ===== Fin Track A — ADN extendido =====
 // Tipos de contenido válidos + mapeo de palabras del cliente a tipos.
 const TIPOS_VALIDOS = ['promo', 'tip', 'social', 'detras', 'novedad'];
 const TIPO_PLURAL = { promo: 'promos', tip: 'tips', social: 'posteos de prueba social', detras: 'posteos de detrás de escena', novedad: 'novedades' };
@@ -428,7 +604,7 @@ app.get('/api/auth/me', (req, res) => {
   if (!user) return res.json({ user: null });
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const nowMs = Date.now();
-  const tEnds = user.trial_ends_at || 0;
+  const tEnds = trialEffectiveEnd(user);
   const trialExpired = user.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs;
   const trialDaysLeft = (!trialExpired && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0;
   res.json({
@@ -857,8 +1033,10 @@ function weeklyQuota(userId) {
   const monday = streaks.mondayKeyOf(streaks.tzToday(tz));
   let used = 0;
   try {
+    // El cupo lo consumen las PUBLICACIONES (programados, publicándose, publicados).
+    // Los borradores son gratis: crear y probar no gasta el plan.
     used = db.prepare(`SELECT COUNT(*) AS n FROM posts
-      WHERE user_id = ? AND status != 'cancelled' AND media_type != 'story'
+      WHERE user_id = ? AND status IN ('scheduled','publishing','published') AND media_type != 'story'
       AND date(created_at) >= date(?)`).get(userId, monday).n || 0;
   } catch (e) { /* no bloquea */ }
   return { limit, used, left: Math.max(0, limit - used), plan: plan.id, plan_name: plan.name };
@@ -1246,6 +1424,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
         taste: tasteProfile(req.session.userId),
         recentTopics,
         ephemeris: upcomingEphemeris(12)[0] || null,
+        learnings: getContentLearnings(req.session.userId),
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
@@ -1396,7 +1575,7 @@ function ensureImageBaseUrl(db, userId, req) {
 }
 
 app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
-  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle, carousel_paths, tipo } = req.body || {};
+  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
   // Anti-duplicados: mismo texto en las últimas 24h (no cancelado) = avisar en vez de crear otro
   const cap = (caption || '').trim();
@@ -1406,8 +1585,9 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   }
   const status = scheduled_at ? 'scheduled' : 'draft';
   const mt = media_type === 'video' ? 'video' : media_type === 'story' ? 'story' : media_type === 'carousel' ? 'carousel' : 'image';
-  // Cupo del plan: las historias no consumen cupo (bonus de la casa). El carrusel cuenta como 1 posteo.
-  if (mt !== 'story') {
+  // Cupo del plan: solo las publicaciones consumen cupo (los borradores son gratis).
+  // Las historias no consumen cupo (bonus de la casa). El carrusel cuenta como 1 posteo.
+  if (status === 'scheduled' && mt !== 'story') {
     const q = weeklyQuota(req.session.userId);
     if (q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
@@ -1419,8 +1599,8 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
     cpaths = JSON.stringify(carousel_paths.filter(Boolean).slice(0, 10));
   }
   const r = db.prepare(
-    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '');
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500));
   ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
@@ -1445,6 +1625,15 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     return res.json({ ok: true });
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
+    // Programar SÍ consume cupo (las publicaciones son el límite del plan). Si el posteo
+    // ya estaba programado/publicado, no se descuenta de nuevo.
+    if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
+      const q = weeklyQuota(req.session.userId);
+      if (q.left <= 0) {
+        return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
+          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+      }
+    }
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
       scheduled_at || post.scheduled_at, caption ?? post.caption, hashtags ?? post.hashtags, post.id
     );
@@ -1479,6 +1668,14 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
   if (!['draft', 'scheduled', 'failed'].includes(post.status)) {
     return res.status(400).json({ error: 'Este posteo no se puede publicar ahora' });
   }
+  // Publicar ahora SÍ consume cupo (salvo que ya estuviera programado: ya se descontó).
+  if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
+    const q = weeklyQuota(req.session.userId);
+    if (q.left <= 0) {
+      return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+    }
+  }
   db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
   ensureImageBaseUrl(db, req.session.userId, req);
   // La publicación corre en segundo plano; el frontend consulta GET /api/posts/:id
@@ -1490,12 +1687,7 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
 app.post('/api/posts/:id/duplicate', requireAuth, requireTrialValid, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
-  // Duplicar también consume cupo del plan
-  const q = weeklyQuota(req.session.userId);
-  if (q.left <= 0) {
-    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-      message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
-  }
+  // Duplicar crea un borrador: los borradores no consumen cupo (se descuenta al programar/publicar).
   const r = db.prepare(
     'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
   ).run(req.session.userId, post.image_path, post.caption, post.hashtags, null, 'draft', post.media_type || 'image');
@@ -1593,7 +1785,7 @@ function recordSignal(userId, post, signal) {
 // Señal manual (👍/👎) sobre un posteo
 app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
   const { signal } = req.body || {};
-  if (!['approved', 'edited', 'rejected'].includes(signal)) return res.status(400).json({ error: 'Señal inválida' });
+  if (!['approved', 'edited', 'rejected', 'brought_clients', 'no_clients'].includes(signal)) return res.status(400).json({ error: 'Señal inválida' });
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   recordSignal(req.session.userId, post, signal);
@@ -1893,6 +2085,30 @@ app.get('/api/ig/callback', async (req, res) => {
     res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
   } catch (e) {
     res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(e.message)));
+  }
+});
+
+// Track B: análisis profundo de Instagram ("Conocer al cliente a fondo").
+// Corre analyzeInstagramDeep con las credenciales guardadas y guarda los learnings
+// en content_learnings. Nunca devuelve 500: errores → {ok:false, reason}.
+app.post('/api/ig/analyze', requireAuth, async (req, res) => {
+  try {
+    const s = getSettings(req.session.userId);
+    if (!s.ig_user_id || !s.ig_access_token) return res.json({ ok: false, reason: 'no_ig' });
+    const { analyzeInstagramDeep } = require('./instagram');
+    const r = await analyzeInstagramDeep(s.ig_user_id, s.ig_access_token);
+    if (r && r.learnings) {
+      try {
+        db.prepare(`INSERT INTO content_learnings (user_id, learnings_json, updated_at) VALUES (?, ?, datetime('now'))
+          ON CONFLICT(user_id) DO UPDATE SET learnings_json=excluded.learnings_json, updated_at=datetime('now')`)
+          .run(req.session.userId, JSON.stringify(r.learnings));
+      } catch (e) { console.error('[ig/analyze] save:', e.message); }
+      return res.json({ ok: true, learnings: r.learnings });
+    }
+    return res.json({ ok: false, reason: 'no_data' });
+  } catch (e) {
+    console.error('[ig/analyze]:', e.message);
+    return res.json({ ok: false, reason: 'error' });
   }
 });
 
@@ -2752,13 +2968,337 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
     const data = await r.json();
     const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
     if (!b64) throw new Error('OpenAI no devolvió imagen');
-    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
-    fs.writeFileSync(path.join(MEDIA_DIR, name), Buffer.from(b64, 'base64'));
+    const name = saveImageB64(b64);
     console.log(`[product-shot] generado para usuario ${req.session.userId} (${absRefs.length} refs)`);
     res.json({ ok: true, path: `/media/${name}` });
   } catch (e) {
     console.error('[product-shot]', e.message);
     res.status(500).json({ error: 'No se pudo generar la imagen' });
+  }
+});
+
+// ---------- Motor de imágenes nivel agencia ----------
+// Expande un brief corto en un prompt de imagen publicitaria premium (gpt-4o-mini),
+// que después se renderiza con gpt-image-1 en /api/concept-shot o /api/product-shot.
+
+// brand_colors llega como string JSON '["#2793C8","#FEC14D"]' o '' → extrae hex válidos.
+function parseBrandHexes(brandColorsRaw) {
+  try {
+    const arr = JSON.parse(String(brandColorsRaw || ''));
+    if (Array.isArray(arr)) return arr.filter((c) => /^#[0-9a-fA-F]{6}$/.test(c)).slice(0, 3);
+  } catch (e) {}
+  return [];
+}
+// Guarda un b64 de imagen en MEDIA_DIR y devuelve el nombre del archivo.
+function saveImageB64(b64) {
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
+  fs.writeFileSync(path.join(MEDIA_DIR, name), Buffer.from(b64, 'base64'));
+  return name;
+}
+// Familia visual según tipo de contenido: qué escena pide cada concepto.
+const CONCEPT_FAMILIES = {
+  promo: 'oferta irresistible, producto héroe en escena',
+  tip: 'editorial limpio y conceptual',
+  social: 'prueba social, escena real y cálida',
+  detras: 'detrás de escena fotorrealista',
+  novedad: 'anuncio impactante de lanzamiento',
+};
+// ADN extendido → línea compacta para el director de arte.
+function dnaBitsLine(dna) {
+  if (!dna || typeof dna !== 'object') return '';
+  const bits = [];
+  if (dna.producto_estrella) bits.push(`Producto estrella: ${String(dna.producto_estrella).slice(0, 120)}.`);
+  if (Array.isArray(dna.productos)) {
+    const prods = dna.productos.slice(0, 3).map((x) => (x && x.nombre) || x).filter(Boolean);
+    if (prods.length) bits.push(`Productos: ${prods.join(', ')}.`);
+  }
+  if (dna.tono) bits.push(`Tono de marca: ${String(dna.tono).slice(0, 80)}.`);
+  if (dna.diferencial) bits.push(`Diferencial: ${String(dna.diferencial).slice(0, 120)}.`);
+  return bits.join(' ');
+}
+// Learnings de contenido (Track B) → línea compacta.
+function learningsLineOf(learnings) {
+  if (!learnings || typeof learnings !== 'object') return '';
+  const bits = [];
+  for (const [k, v] of Object.entries(learnings)) {
+    if (v == null || (typeof v === 'object' && !Array.isArray(v))) continue;
+    const vs = Array.isArray(v) ? v.slice(0, 4).join(', ') : String(v);
+    if (!String(vs).trim()) continue;
+    bits.push(`${k}: ${String(vs).slice(0, 100)}`);
+    if (bits.length >= 4) break;
+  }
+  return bits.join(' | ');
+}
+// Llama a gpt-4o-mini como director de arte publicitario y devuelve el prompt
+// expandido listo para gpt-image-1. REGLA DURA: jamás inventar datos del negocio
+// (precios, direcciones, promos, teléfonos) en el texto de la imagen: solo el
+// headline provisto, tal cual, o ningún texto si viene vacío.
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme }, apiKey) {
+  const hexes = Array.isArray(paletteHex) ? paletteHex : [];
+  const fam = CONCEPT_FAMILIES[tipo] || 'contenido visual atractivo de alto nivel';
+  const textRule = headline
+    ? `Renderizás el titular "${String(headline).slice(0, 80)}" en ESPAÑOL, en negrita, DENTRO de la imagen, exactamente como está escrito. NINGÚN otro texto, letra, número, precio, dirección ni teléfono en la imagen.`
+    : `SIN texto en la imagen: ni letras, ni palabras, ni números, ni precios, ni direcciones, ni teléfonos.`;
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.7,
+      messages: [
+        { role: 'system', content:
+`Sos un director de arte publicitario de clase mundial. Expandís un brief corto en UN prompt de imagen publicitaria (en inglés), listo para un generador de imágenes. Devolvé SOLO el prompt, sin explicaciones ni comillas.
+
+El prompt DEBE exigir:
+- Una escena CONCRETA y ESPECÍFICA del rubro (nada genérico: describí objetos, ambiente, fondo, detalles tangibles).
+- La iluminación descripta (ej. luz natural suave de ventana, hora dorada, neón nocturno, estudio con softbox).
+- La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
+- Estética publicitaria premium: incluí los marcadores "fotografía comercial profesional" y "high-end advertising".
+- FORMATO VERTICAL 4:5, optimizado para verse en un CELULAR: es una pieza de Instagram, no un banner de web.
+- El titular (si lo hay) GRANDE, en negrita y con alto contraste: tiene que leerse perfecto en una pantalla de teléfono chica.
+- ZONA SEGURA: lo importante (titular, producto, caras) va en el centro de la imagen, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta.
+- Los colores EXACTOS de la paleta del cliente integrados EN la escena (props, vestuario, packaging, detalles del ambiente): ${hexes.join(', ') || 'sin paleta definida, usá colores armónicos del rubro'}. NUNCA como fondo plano de color.
+- "${textRule}"
+- "sin marca de agua".
+- Si el brief trae un ángulo estratégico, la escena tiene que EXPRESARLO visualmente (no describirlo con texto).
+REGLA DURA: JAMÁS inventes datos del negocio (precios, direcciones, promos, teléfonos, nombres de producto que no se provean). Solo el titular provisto, tal cual.` },
+        { role: 'user', content:
+`Negocio: ${businessName || 'sin nombre'}${category ? ` (${category})` : ''}
+Familia visual: ${fam}
+${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
+${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
+${dnaBits ? `Contexto del negocio: ${String(dnaBits).slice(0, 300)}` : ''}
+${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}`.trim() },
+      ],
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`brief ${r.status}: ${t.slice(0, 160)}`);
+  }
+  const j = await r.json().catch(() => null);
+  const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  if (!content.trim()) throw new Error('brief vacío de OpenAI');
+  return content.trim();
+}
+// idea puede venir como string u objeto {titulo, porque, angulo, headline}.
+function parseIdea(idea) {
+  if (idea && typeof idea === 'object' && !Array.isArray(idea)) return idea;
+  return { titulo: String(idea || '') };
+}
+// 1-2 datos comerciales reales del ADN para contrastar claims en el QA visual.
+function qaFactsLine(dna) {
+  if (!dna || typeof dna !== 'object') return '';
+  const facts = [];
+  if (Array.isArray(dna.productos) && dna.productos.length) {
+    const p = dna.productos[0];
+    if (p && (p.nombre || p.precio)) facts.push(`Producto real: ${(p.nombre || '')}${p.precio ? ` (${p.precio})` : ''}`);
+  }
+  if (Array.isArray(dna.promos_activas) && dna.promos_activas.length) {
+    const pr = dna.promos_activas[0];
+    if (pr && (pr.titulo || pr)) facts.push(`Promo real: ${pr.titulo || pr}`);
+  }
+  return facts.slice(0, 2).join(' | ');
+}
+// Ojo crítico: control de calidad visual de la imagen generada con gpt-4o-mini.
+// Verifica texto_ok / colores_ok / claims_ok y devuelve el objeto parseado.
+// Devuelve null si el QA no pudo correr (red/timeout): no bloquea, se entrega la imagen.
+// Si el JSON sale roto → texto_ok=false (conservador).
+async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
+  try {
+    const hexes = Array.isArray(paletteHex) ? paletteHex : [];
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        max_tokens: 300,
+        messages: [
+          { role: 'system', content:
+`Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
+{"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"detalle":"..."}
+- texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
+- mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
+- colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
+- claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
+- detalle: una línea explicando qué viste (máx 120 caracteres).` },
+          { role: 'user', content: [
+            { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
+          ] },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    const raw = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+    const parsed = parseLooseJson(raw);
+    if (!parsed || typeof parsed !== 'object')
+      return { texto_ok: false, colores_ok: true, claims_ok: true, mobile_ok: true, detalle: 'QA: respuesta ilegible (conservador)' };
+    return {
+      texto_ok: parsed.texto_ok !== false,
+      colores_ok: parsed.colores_ok !== false,
+      claims_ok: parsed.claims_ok !== false,
+      mobile_ok: parsed.mobile_ok !== false,
+      detalle: String(parsed.detalle || '').slice(0, 140),
+    };
+  } catch (e) {
+    return null; // QA silencioso: no bloquea la entrega de la imagen
+  }
+}
+// Llama a gpt-image-1 con refs (edits) o sin refs (generations). Devuelve el b64.
+// Lanza Error con el mensaje de OpenAI recortado si falla.
+async function genConceptImage(apiKey, prompt, absRefs) {
+  let r;
+  if (absRefs.length) {
+    const form = new FormData();
+    form.append('model', 'gpt-image-1');
+    form.append('prompt', prompt + ' IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.');
+    for (const p of absRefs) {
+      const buf = fs.readFileSync(p);
+      const ext = path.extname(p).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
+    }
+    form.append('size', '1024x1536'); // vertical 4:5: formato ideal para celular e Instagram
+    r = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(120000),
+    });
+  } else {
+    r = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536' }), // vertical 4:5: formato ideal para celular e Instagram
+      signal: AbortSignal.timeout(120000),
+    });
+  }
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(`OpenAI ${r.status}: ${t.slice(0, 160)}`);
+  }
+  const data = await r.json();
+  const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
+  if (!b64) throw new Error('OpenAI no devolvió imagen');
+  return b64;
+}
+// Devuelve SOLO el prompt expandido para un concepto. Útil para previsualizar
+// el brief antes de gastar una generación de imagen.
+app.post('/api/image-brief', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const { idea = '', tipo = '', headline = '', business_name = '', category = '' } = req.body || {};
+    const ideaObj = parseIdea(idea);
+    if (!String(headline || '').trim() && !String(ideaObj.titulo || '').trim())
+      return res.status(400).json({ error: 'Falta la idea o el titular del concepto' });
+    const profile = getProfile(uid);
+    const settings = getSettings(uid);
+    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
+    const prompt = await expandArtBrief({
+      headline: String(headline || '').trim(),
+      tipo: String(tipo || ''),
+      angle: ideaObj.porque || ideaObj.angulo || '',
+      theme: ideaObj.titulo || ideaObj.tema || '',
+      businessName: business_name || profile.business_name,
+      category: category || profile.category,
+      paletteHex: parseBrandHexes(settings.brand_colors),
+      dnaBits: dnaBitsLine(readDna(uid)),
+      learningsLine: learningsLineOf(getContentLearnings(uid)),
+    }, apiKey);
+    res.json({ prompt });
+  } catch (e) {
+    console.error('[image-brief]', e.message);
+    const isOpenAI = /^brief \d+/.test(e.message);
+    res.status(isOpenAI ? 502 : 500).json({ error: 'No se pudo expandir el brief: ' + e.message.slice(0, 200) });
+  }
+});
+// Genera una imagen de concepto nivel agencia con gpt-image-1.
+// Con refs válidas (fotos del usuario) → images/edits (el MISMO producto, otra escena).
+// Sin refs → images/generations (escena 100% sintética con la paleta del cliente).
+app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const { idea = '', tipo = '', headline = '', refs = [] } = req.body || {};
+    const ideaObj = parseIdea(idea);
+    const settings = getSettings(uid);
+    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
+    const profile = getProfile(uid);
+    const cleanHeadline = String(headline || '').trim();
+    const hexes = parseBrandHexes(settings.brand_colors);
+    const dna = readDna(uid);
+    const theme = ideaObj.titulo || ideaObj.tema || '';
+    let prompt;
+    try {
+      prompt = await expandArtBrief({
+        headline: cleanHeadline,
+        tipo: String(tipo || ''),
+        angle: ideaObj.porque || ideaObj.angulo || '',
+        theme,
+        businessName: profile.business_name,
+        category: profile.category,
+        paletteHex: hexes,
+        dnaBits: dnaBitsLine(dna),
+        learningsLine: learningsLineOf(getContentLearnings(uid)),
+      }, apiKey);
+    } catch (e) {
+      console.error('[concept-shot] brief:', e.message);
+      return res.status(502).json({ error: 'No se pudo expandir el brief: ' + e.message.slice(0, 200) });
+    }
+    const absRefs = refs.slice(0, 2)
+      .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
+      .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+    let b64;
+    try {
+      b64 = await genConceptImage(apiKey, prompt, absRefs);
+    } catch (e) {
+      console.error('[concept-shot] openai:', e.message);
+      return res.status(502).json({ error: 'OpenAI no pudo generar la imagen: ' + e.message.slice(0, 200) });
+    }
+    // Ojo crítico: QA de visión con gpt-4o-mini. Silencioso, rápido, máx 1 reintento.
+    const qa = await qaImageB64(b64, {
+      headline: cleanHeadline,
+      paletteHex: hexes,
+      dnaFacts: qaFactsLine(dna),
+    }, apiKey);
+    if (qa && (!qa.texto_ok || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok)) {
+      console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok}): ${qa.detalle}`);
+      let retryPrompt;
+      if (!qa.texto_ok && cleanHeadline) {
+        // El texto salió mal → regenerar SIN texto en la imagen.
+        try {
+          retryPrompt = await expandArtBrief({
+            headline: '', tipo: String(tipo || ''), angle: ideaObj.porque || ideaObj.angulo || '',
+            theme, businessName: profile.business_name, category: profile.category,
+            paletteHex: hexes, dnaBits: dnaBitsLine(dna),
+            learningsLine: learningsLineOf(getContentLearnings(uid)),
+          }, apiKey);
+        } catch (e) { retryPrompt = null; }
+      } else {
+        // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
+        retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
+      }
+      if (retryPrompt) {
+        try {
+          b64 = await genConceptImage(apiKey, retryPrompt, absRefs); // el reintento no pasa por QA
+          console.log('[concept-shot] reintento QA generado');
+        } catch (e) {
+          console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
+        }
+      }
+    }
+    const name = saveImageB64(b64);
+    console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${absRefs.length})`);
+    res.json({ ok: true, path: `/media/${name}` });
+  } catch (e) {
+    console.error('[concept-shot]', e.message);
+    res.status(500).json({ error: 'No se pudo generar la imagen: ' + e.message.slice(0, 200) });
   }
 });
 

@@ -385,4 +385,18 @@ try { db.exec(`UPDATE streaks SET fed_at = ${Date.now()} WHERE current > 0 AND f
 // Backfill: timezone vacío → default
 try { db.exec(`UPDATE settings SET timezone='America/Argentina/Buenos_Aires' WHERE timezone IS NULL OR timezone=''`); } catch (e) {}
 
+// Track B: análisis profundo de Instagram ("Conocer al cliente a fondo").
+// learnings_json = {top_temas[], mejor_formato, patrones[], resumen} por usuario.
+db.exec(`
+CREATE TABLE IF NOT EXISTS content_learnings (
+  user_id INTEGER PRIMARY KEY,
+  learnings_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+// Migración 2026-09-29 ("Conocer al cliente a fondo"): estrategia de cada posteo
+// ("por qué este posteo vende para este negocio"), generada junto con la idea.
+try { db.exec(`ALTER TABLE posts ADD COLUMN strategy_why TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+
 module.exports = db;
