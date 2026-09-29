@@ -1356,8 +1356,7 @@ function autopilotCardHTML(tag) {
     </div>
     <div id="apProg-${t}" style="margin-top:16px"></div>
     <div style="margin-top:4px">
-      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? Pedímelo acá 👇</p>
-      ${chatCardHTML(true, true, true)}
+      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? <a href="#/app/chat" style="color:var(--cel);font-weight:700">Preguntale a Posty 💬</a></p>
     </div>
   </div>`;
 }
@@ -2443,7 +2442,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
-  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 posta.</h3>`;
+  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Posty</h3>`;
   const wrap = compact
     ? `<div id="chatCard" style="${bareWrap ? 'margin:0 0 4px' : 'margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)'}">`
     : `<div class="card" id="chatCard">`;
@@ -3063,8 +3062,8 @@ async function chatView() {
   return `
   <div class="chat-home">
     <div class="chome-top">
-      <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="posta."></span>
-      <div><b>posta.</b><div class="chome-sub">te arma la semana y la publica por vos</div></div>
+      <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
+      <div><b>Posty</b><div class="chome-sub">te arma la semana y la publica por vos</div></div>
     </div>
     ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
@@ -3116,9 +3115,15 @@ async function chatGreet() {
   if (greeted) return;
   try { sessionStorage.setItem('posta_chat_greet', '1'); } catch (e) {}
   const running = (typeof AUTOPILOT_RUNNING !== 'undefined' && AUTOPILOT_RUNNING) || window.__autoWeekRunning;
+  // "Rueditas": si la primera semana está en revisión, el cliente ve el estado
+  // lindo y no el CTA de armar semana (reemplaza el saludo, no se suma).
+  let inReview = 0;
+  try { const rs = await api.get('/api/review-status'); inReview = (rs && rs.pending) || 0; } catch (e) {}
   let text, cta = '';
   if (running) {
     text = 'Estoy armando tu semana ahora mismo ⏳ Te aviso acá cuando esté lista.';
+  } else if (inReview > 0) {
+    text = 'Tu primera semana está en el horno ✨ La estamos dejando perfecta — te aviso acá cuando puedas revisarla.';
   } else if (drafts.length > 0) {
     text = `Tu semana está lista ✅ ¿La revisamos? Te la dejé acá abajo 👇`;
   } else if (scheduled.length > 0) {
@@ -3333,7 +3338,7 @@ async function showCommentInsights() {
 
 /* ---------- NIVEL DE LA MARCA DEL CLIENTE ---------- */
 // El que sube de nivel es el LOGO DEL CLIENTE (100 XP por post publicado, 150 si es reel).
-// posta. es el guía que festeja, no el protagonista: su avatar queda limpio, sin marcos ni badges.
+// Posty es el guía que festeja, no el protagonista: su avatar queda limpio, sin marcos ni badges.
 const POSTA_LVL_NAMES = { 1: 'Recién llegado', 2: 'Aprendiz del feed', 3: 'Ritmo agarrado', 4: 'Contenido serio', 5: 'Máquina de contenido', 6: 'Cara visible', 7: 'Referente del rubro', 8: 'Imparable', 9: 'Ídolo local', 10: 'Leyenda del barrio' };
 
 async function chatAvatarLevel() {
@@ -3341,7 +3346,7 @@ async function chatAvatarLevel() {
   try { lv = await api.get('/api/avatar-level'); } catch (e) {}
   if (!lv || !lv.ok) return;
   // Festejo de subida de nivel: una vez por nivel (el servidor guarda el seen).
-  // Habla de la MARCA DEL CLIENTE, no de posta.
+  // Habla de la MARCA DEL CLIENTE, no de Posty.
   const unseen = (lv.unseenLevels || []).filter(n => n > 1);
   if (unseen.length) {
     const top = Math.max.apply(null, unseen);
@@ -3395,11 +3400,11 @@ async function paintBrandStrip() {
   }
 }
 
-// Misiones de posta.: una activa por vez, narradas en el chat.
+// Misiones de Posty: una activa por vez, narradas en el chat.
 const POSTA_MISSION_DEFS = [
   { id: 'connect_ig', title: 'Conectá tu Instagram', why: 'Así publico por vos y leo tus comentarios.', cta: 'Conectar Instagram', go: '#/app/ajustes' },
   { id: 'photos', title: 'Subí fotos de tu negocio', why: 'Con tus fotos reales los posteos venden de verdad.', cta: 'Subir fotos', go: '#/app/semana' },
-  { id: 'dna', title: 'Contame de tu negocio', why: 'Dos minutos y te conozco a fondo.', cta: 'Contarle a posta.', go: '#/app/ajustes' },
+  { id: 'dna', title: 'Contame de tu negocio', why: 'Dos minutos y te conozco a fondo.', cta: 'Contarle a Posty', go: '#/app/ajustes' },
   { id: 'first_post', title: 'Publicá tu primer posteo', why: 'El primero es el que más cuesta — después sale solo.', cta: 'Ver mis borradores', act: 'drafts' },
   { id: 'first_week', title: 'Programá tu primera semana', why: 'Un tap y toda la semana sale sola.', cta: '📅 Programar mi semana', act: 'schedule' },
   { id: 'comments', title: 'Respondé tus comentarios', why: 'Responder rápido trae clientes.', cta: 'Ver comentarios', act: 'comments' },
@@ -3997,10 +4002,10 @@ function rebuildFrustrated() {
     d.className = 'card';
     d.setAttribute('style', 'border:1.5px solid #FEC14D;background:#FFF9EC;margin:0 0 12px');
     d.innerHTML = '<h3 style="margin:0 0 4px">🛑 Frenemos un toque</h3>' +
-      '<p style="margin:0;color:var(--mut);font-size:12.5px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata. Contame acá abajo en el chat <b>qué no te cierra</b> y lo resolvemos juntos 👇</p>';
+      '<p style="margin:0 0 12px;color:var(--mut);font-size:12.5px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata.</p>' +
+      '<a class="btn btn-primary btn-sm" href="#/app/chat">💬 Contame en el chat qué no te cierra</a>';
     main.prepend(d);
   }
-  setTimeout(() => { const c = document.getElementById('chatCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 400);
 }
 
 function bindAutopilot() {
@@ -4428,7 +4433,7 @@ function bindFastTrack() {
 /* ---------- MI SEMANA (dashboard) ---------- */
 let SEM_NUDGES = [];
 
-// Botones 👍/👎 para enseñarle a Posta lo que te gusta
+// Botones 👍/👎 para enseñarle a Posty lo que te gusta
 function sigBtns(p) {
   const a = p.signal === 'approved' ? ' on' : '';
   const r = p.signal === 'rejected' ? ' on' : '';
@@ -5582,12 +5587,8 @@ async function semanaView() {
     ${failed.map(p => postItem(p, `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button><button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar">🗑️</button>`)).join('')}
   </div>` : '';
 
-  // La pantalla son 5 bloques y nada más:
-  // 1. barra de puntos y streaks · 2. posteos · 3. AI (chat) · 4. misión de fotos · 5. tu progreso.
-  // Los posteos van primero: es el trabajo de la semana, nada de scrollear para llegar a lo importante.
-  // Las alertas transitorias (racha por apagarse, alcance, posteos fallidos) aparecen
-  // solo cuando hay algo que atender, arriba de todo.
-  const chatBlock = (draftN === 0 && !weekDone) ? '' : chatCardHTML(); // en el estado vacío el chat vive dentro de la tarjeta única
+  // Mi semana es el tablero puro: racha/progreso, posteos, agenda, fotos,
+  // misión y historial. El chat vive solo en su pestaña (#/app/chat).
   // 📷 Mis fotos: tira finita arriba de todo (solo si hay fotos/videos). Desde acá se borran.
   const mediaStrip = (assetPhotos().length || assetVideos().length) ? mediaCardHTML() : '';
   const planSlot = weekDone ? '' : `<div id="perfAlert"></div><div id="weeklyPlan"></div>`;
@@ -5648,7 +5649,7 @@ async function semanaView() {
     .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
   const salioCard = publishedList.length ? salioCardHTML(publishedList) : '';
   // Tarjeta "Contame de tu negocio" (nota de voz → ADN): vive pegada a la misión de fotos.
-  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${nextTeaser}${nextBack}${heroCard}${redoMini}${scheduledStrip}<div id="inspoCard"></div>${chatBlock}${mediaStrip}<div id="missionCard"></div><div id="dnaVoiceCard"></div>${salioCard}`;
+  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${nextTeaser}${nextBack}${heroCard}${redoMini}${scheduledStrip}<div id="inspoCard"></div>${mediaStrip}<div id="missionCard"></div><div id="dnaVoiceCard"></div>${salioCard}`;
 
   return topBlock;
 }
@@ -5679,7 +5680,6 @@ function bindSemana() {
   bindOutcomeBtns(); // loop liviano: ¿este posteo te trajo clientes?
   bindAutopilot();
   bindVaciarDrafts();
-  bindChat();
   bindReview();
   bindScheduleAll(); // "📅 Programar mi semana →": la semana entera en un tap
   // Track 4 "Pipeline perpetuo": teaser de la próxima semana ya armada.
@@ -6051,7 +6051,7 @@ function ajustesView() {
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
-  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al chat con posta. (chat-first).
+  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al chat con Posty (chat-first).
   const homeTab = '#/app/chat';
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
@@ -6520,7 +6520,7 @@ async function render() {
     // App instalada: se comporta como app, no como web. Va directo al chat
     // (o al login si no hay sesión) en vez de la landing de marketing.
     if (pwaIsStandalone()) { location.hash = '#/app/chat'; return; }
-    // Logueado en la web: la vista principal es el chat con posta. (chat-first).
+    // Logueado en la web: la vista principal es el chat con Posty (chat-first).
     // Visitante no logueado: la landing pública no cambia.
     await refreshSession();
     if (ME) { location.hash = '#/app/chat'; return; }
@@ -6537,7 +6537,7 @@ async function render() {
   if (!ME) { location.hash = '#/login'; return; }
   const tabRaw = path.split('/')[2] || '';
   // Chat-first en todas las plataformas: sin pestaña explícita se abre el
-  // chat con posta. Con pestaña explícita se respeta (navegación secundaria).
+  // chat con Posty. Con pestaña explícita se respeta (navegación secundaria).
   let tab = tabRaw || 'chat';
   let content = '';
   if (tab === 'chat') content = await chatView();
@@ -8277,9 +8277,11 @@ function bindSettings() {
 /* ---------- 📊 Panel de analytics (solo equipo Posta) ---------- */
 // Ruta oculta #/app/admin. Gate: token de admin (el mismo ADMIN_TOKEN del servidor).
 function adminToken() { try { return localStorage.getItem('posta_admin_token') || ''; } catch (e) { return ''; } }
-function adminApi(path) {
+function adminApi(path, method, data) {
   const t = adminToken();
-  return api.get('/api/admin/' + path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t));
+  const url = '/api/admin/' + path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t);
+  if (method === 'POST') return api.post(url, data || {});
+  return api.get(url);
 }
 async function adminView() {
   return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posta — solo equipo</p></div></div>
@@ -8310,6 +8312,7 @@ async function bindAdmin() {
       <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
       <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
       <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
+      <button class="btn btn-soft btn-sm" data-atab="review">✨ Revisión</button>
       <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
         <option value="7">7 días</option><option value="30" selected>30 días</option>
       </select>
@@ -8380,10 +8383,60 @@ async function bindAdmin() {
     $('#adQGo').onclick = go;
     $('#adQ').onkeydown = (e) => { if (e.key === 'Enter') go(); };
   }
+  // Cola de revisión de la "primera semana con rueditas": borradores con
+  // needs_review=1. Aprobar → visible al cliente + golden example. Editar →
+  // aplica caption, aprueba y guarda el golden con lo final. Rechazar → nota
+  // que alimenta el aprendizaje y regenera el borrador con otro enfoque.
+  async function showReview() {
+    body.innerHTML = `<div class="d">⏳ Cargando cola de revisión…</div>`;
+    let r;
+    try { r = await adminApi('review-queue'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const q = r.queue || [];
+    if (!q.length) { body.innerHTML = `<div class="d">✨ Nada pendiente. La cola está vacía.</div>`; return; }
+    body.innerHTML = `<div style="margin-bottom:10px;font-size:13px;color:var(--mut)">${q.length} borrador${q.length > 1 ? 'es' : ''} esperando revisión</div>` +
+      q.map(p => `
+      <div data-rev="${p.id}" style="border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px">
+          <b style="font-size:14px">${esc(p.business_name || p.email || ('Usuario ' + p.user_id))}</b>
+          <span style="font-size:11px;color:var(--mut)">${esc((p.created_at || '').slice(0, 16))} · ${esc(p.tipo || p.media_type || '')}</span>
+        </div>
+        ${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;border-radius:10px;margin-bottom:8px" loading="lazy">` : ''}
+        <div style="font-size:13.5px;white-space:pre-wrap;margin-bottom:4px">${esc(p.caption || '')}</div>
+        <div style="font-size:12px;color:var(--mut);margin-bottom:10px">${esc(p.hashtags || '')}</div>
+        <textarea data-rev-note rows="2" placeholder="Nota para el rechazo (¿qué hay que cambiar?)" style="font-size:16px;width:100%;border:2px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" data-rev-approve="${p.id}">✅ Aprobar</button>
+          <button class="btn btn-soft btn-sm" data-rev-edit="${p.id}">✏️ Aprobar con edición</button>
+          <button class="btn btn-soft btn-sm" data-rev-reject="${p.id}">🔄 Rechazar y regenerar</button>
+        </div>
+      </div>`).join('');
+    body.querySelectorAll('[data-rev-approve]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await adminApi('review/' + b.dataset.revApprove + '/approve', 'POST'); showReview(); }
+      catch (e) { alert('No se pudo aprobar'); b.disabled = false; }
+    });
+    body.querySelectorAll('[data-rev-edit]').forEach(b => b.onclick = async () => {
+      const orig = (q.find(x => String(x.id) === String(b.dataset.revEdit)) || {});
+      const cap = prompt('Caption final:', orig.caption || '');
+      if (cap === null) return;
+      b.disabled = true;
+      try { await adminApi('review/' + b.dataset.revEdit + '/edit', 'POST', { caption: cap }); showReview(); }
+      catch (e) { alert('No se pudo guardar'); b.disabled = false; }
+    });
+    body.querySelectorAll('[data-rev-reject]').forEach(b => b.onclick = async () => {
+      const card = body.querySelector(`[data-rev="${b.dataset.revReject}"]`);
+      const note = card && card.querySelector('[data-rev-note]') ? card.querySelector('[data-rev-note]').value.trim() : '';
+      if (!note) { alert('Escribí una nota: ¿qué hay que cambiar?'); return; }
+      b.disabled = true;
+      try { await adminApi('review/' + b.dataset.revReject + '/reject', 'POST', { note }); showReview(); }
+      catch (e) { alert('No se pudo rechazar'); b.disabled = false; }
+    });
+  }
   $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
     $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
     b.classList.add('btn-primary');
-    ({ funnel: showFunnel, activity: showActivity, users: showUsers })[b.dataset.atab]();
+    ({ funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview })[b.dataset.atab]();
   });
   const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
   const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
