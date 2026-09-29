@@ -306,7 +306,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_chatmsg_user ON chat_messages(user_id, id);
-// Mensajes proactivos de la IA (pedidos por chat, no tarjetas): 1 por tipo cada 7 días
+-- Mensajes proactivos de la IA (pedidos por chat, no tarjetas): 1 por tipo cada 7 días
 CREATE TABLE IF NOT EXISTS proactive_asks (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   kind TEXT NOT NULL,
