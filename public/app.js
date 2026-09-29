@@ -1349,14 +1349,31 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
           <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
         </div>
-        <button class="igmock-now" data-revnow="${d.id}" style="margin-top:2px">📤 Publicar ahora</button>
+        <button class="igmock-accept" data-revaccept="${d.id}">✅ Aceptar<span data-revacceptwhen="${d.id}">${(() => { const wt = fmtWhenTxt(isoToLocalInput(s[i] || '')); return wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; })()}</span></button>
+        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenTxt(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div class="igmock-icos" style="margin-top:8px">
           <button data-revedit="${d.id}">✏️ Editar</button>
-          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}">✨ Diseño</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}">🎬 Video</button>` : `<button data-revphoto="${d.id}">🖼️ Foto</button>`}
+          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">✨ Otro diseño</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
-        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenTxt(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
+        <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
+        <div class="aiedit" id="aiedit-${d.id}" hidden>
+          <div class="aiedit-row">
+            <input class="in" id="aiedit-inp-${d.id}" placeholder="¿Qué le cambio? Ej: más corto, sin emojis…" maxlength="200" autocomplete="off">
+            <button class="btn btn-primary btn-sm" id="aiedit-go-${d.id}">Aplicar</button>
+          </div>
+          <button class="rev-nowsub" id="aiedit-manual-${d.id}">o editalo a mano</button>
+          <div class="aiedit-msg" id="aiedit-msg-${d.id}"></div>
+        </div>
+        <div class="aiedit" id="aiphoto-${d.id}" hidden>
+          <div class="aiedit-row">
+            <input class="in" id="aiphoto-inp-${d.id}" placeholder="¿Qué foto uso? Ej: la del local…" maxlength="200" autocomplete="off">
+            <button class="btn btn-primary btn-sm" id="aiphoto-go-${d.id}">Aplicar</button>
+          </div>
+          <button class="rev-nowsub" id="aiphoto-manual-${d.id}">o elegí la foto vos</button>
+          <div class="aiedit-msg" id="aiphoto-msg-${d.id}"></div>
+        </div>
         <div id="revph-${d.id}"></div>
         <div id="revnowm-${d.id}"></div>
       </div>
@@ -1365,12 +1382,48 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
       ${drafts.length > 1 ? `<button class="car-arrow right" data-carnext aria-label="Posteo siguiente">›</button>` : ''}
       ${drafts.length > 1 ? `<div class="igmock-dots">${drafts.map((_, j) => `<i class="${j === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
     </div>
-    <div class="rev-schedule">
-      <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Aceptar y programar mi semana</button>
-      <p class="rev-promise">⏱ En 5 minutos tu semana queda lista y se publica sola.</p>
-    </div>
     <div id="revMsg"></div>
   </div>`;
+}
+
+// Edición de un borrador por IA (texto o foto): el cliente lo pide en lenguaje
+// natural y la IA lo aplica directo vía /api/ideas/chat (bloque ```edit).
+async function runAiEdit(id, kind) {
+  const idx = REVIEW_DRAFTS.findIndex(d => String(d.id) === String(id));
+  const inp = document.getElementById(kind === 'text' ? `aiedit-inp-${id}` : `aiphoto-inp-${id}`);
+  const msg = document.getElementById(kind === 'text' ? `aiedit-msg-${id}` : `aiphoto-msg-${id}`);
+  const go = document.getElementById(kind === 'text' ? `aiedit-go-${id}` : `aiphoto-go-${id}`);
+  if (!inp || !msg || idx < 0) return;
+  const instruction = (inp.value || '').trim();
+  if (!instruction) { msg.innerHTML = `<span style="color:var(--mut);font-size:13px">Contame qué le cambio 👆</span>`; inp.focus(); return; }
+  const n = idx + 1, total = REVIEW_DRAFTS.length;
+  const text = kind === 'text'
+    ? `El posteo ${n} de ${total}: ${instruction}`
+    : `El posteo ${n} de ${total}: cambiá la foto — ${instruction}`;
+  if (go) go.disabled = true;
+  msg.innerHTML = `<span style="color:var(--mut);font-size:13px">⏳ La IA lo está aplicando…</span>`;
+  try {
+    const body = {
+      messages: [{ role: 'user', text }],
+      drafts: REVIEW_DRAFTS.map(d => ({ id: d.id, caption: d.caption, when: d.scheduled_at })),
+    };
+    if (kind === 'photo') {
+      const lib = assetPhotos().slice().reverse().slice(0, 6);
+      body.photoPaths = lib.map(p => p.file_path);
+      body.library = await chatLibThumbs();
+    }
+    const r = await api.post('/api/ideas/chat', body);
+    if (r.edit && r.edit.ok) {
+      msg.innerHTML = `<span style="color:#1B7A3D;font-size:13px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`;
+      inp.value = '';
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      msg.innerHTML = `<span style="font-size:13px">${esc(r.reply || 'No pude aplicarlo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    msg.innerHTML = `<span style="color:#B3402E;font-size:13px">${esc(e.message || 'Error, probá de nuevo')}</span>`;
+  }
+  if (go) go.disabled = false;
 }
 
 function bindReview() {
@@ -1427,18 +1480,36 @@ function bindReview() {
     if (hp) { hp.textContent = inp.value || ''; hp.style.display = inp.value ? '' : 'none'; }
   }));
   // Texto colapsado por defecto: "Editar texto" expande los campos
+  // Editar por IA: el cliente dice qué cambiar y la IA lo aplica al borrador
   $$('[data-revedit]').forEach(b => b.onclick = () => {
     const id = b.dataset.revedit;
+    const panel = document.getElementById(`aiedit-${id}`);
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) { const i = document.getElementById(`aiedit-inp-${id}`); if (i) i.focus({ preventScroll: true }); }
+  });
+  $$('#reviewCard [id^="aiedit-manual-"]').forEach(b => b.onclick = () => {
+    const id = b.id.replace('aiedit-manual-', '');
     const f = document.querySelector(`[data-revfields="${id}"]`);
     const p = document.querySelector(`[data-revpreview="${id}"]`);
-    const hp = document.querySelector(`[data-revhashprev="${id}"]`);
+    const panel = document.getElementById(`aiedit-${id}`);
+    if (panel) panel.hidden = true;
     if (!f || !p) return;
-    const open = f.hidden;
-    f.hidden = !open;
-    p.style.display = open ? 'none' : '';
-    if (hp) hp.style.display = open ? 'none' : (hp.textContent ? '' : 'none');
-    b.textContent = open ? '✓ Listo' : '✏️ Editar';
-    if (open) { const ta = f.querySelector('textarea'); if (ta) ta.focus({ preventScroll: true }); }
+    f.hidden = false;
+    p.style.display = 'none';
+    const ta = f.querySelector('textarea'); if (ta) ta.focus({ preventScroll: true });
+  });
+  $$('#reviewCard [id^="aiedit-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiedit-go-', ''), 'text'));
+  // Otra foto por IA: el cliente describe qué foto quiere y la IA la elige de su librería
+  $$('#reviewCard [id^="aiphoto-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiphoto-go-', ''), 'photo'));
+  // Enter en los campos de edición por IA también aplica
+  $$('#reviewCard [id^="aiedit-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiedit-inp-', ''), 'text'); }));
+  $$('#reviewCard [id^="aiphoto-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiphoto-inp-', ''), 'photo'); }));
+  $$('#reviewCard [id^="aiphoto-manual-"]').forEach(b => b.onclick = () => {
+    const id = b.id.replace('aiphoto-manual-', '');
+    const panel = document.getElementById(`aiphoto-${id}`);
+    if (panel) panel.hidden = true;
+    togglePhotoPicker(+id);
   });
   // Al guardar el caption, refrescar el preview
   $$('[data-revcap]').forEach(ta => ta.addEventListener('change', () => {
@@ -1449,11 +1520,19 @@ function bindReview() {
   $$('#reviewCard [data-revwhen]').forEach(inp => inp.addEventListener('change', () => {
     const t = document.querySelector(`#reviewCard [data-revwhentxt="${inp.dataset.revwhen}"]`);
     if (t) t.textContent = fmtWhenTxt(inp.value);
+    const ab = document.querySelector(`#reviewCard [data-revacceptwhen="${inp.dataset.revwhen}"]`);
+    if (ab) { const wt = fmtWhenTxt(inp.value); ab.textContent = wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; }
   }));
   // Regenerar un borrador (↻): nuevo diseño y nuevo texto del mismo tema, en el lugar
   $$('[data-revregen]').forEach(b => b.onclick = () => regenDraft(+b.dataset.revregen, b));
   // Cambiar la foto de un borrador: tira de fotos + subir nueva
-  $$('[data-revphoto]').forEach(b => b.onclick = () => togglePhotoPicker(+b.dataset.revphoto, b));
+  $$('[data-revphoto]').forEach(b => b.onclick = () => {
+    const id = String(b.dataset.revphoto);
+    const panel = document.getElementById(`aiphoto-${id}`);
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) { const i = document.getElementById(`aiphoto-inp-${id}`); if (i) i.focus({ preventScroll: true }); }
+  });
   // Cambiar el video de un borrador reel: tira de videos + subir nuevo
   $$('[data-revvideo]').forEach(b => b.onclick = () => toggleVideoPicker(+b.dataset.revvideo, b));
   // Eliminar borrador (señal honesta: lo borró = no le gustó; va antes del DELETE)
@@ -1475,9 +1554,9 @@ function bindReview() {
     await publishNowFlow(id, mount);
     render();
   });
-  // Aceptar y programar toda la semana: usa el día/hora de cada borrador (ya vienen sugeridos)
-  const sw = $('#btnScheduleWeek');
-  if (sw) sw.onclick = async () => {
+  // Aceptar UN borrador: se programa con su día/hora y sale solo
+  $$('[data-revaccept]').forEach(b => b.onclick = async () => {
+    const id = +b.dataset.revaccept;
     const m = $('#revMsg');
     // Sin Instagram conectado, "sale solo" es mentira: pedir conectar antes de aceptar
     if (!(PROFILE && PROFILE.ig_connected)) {
@@ -1487,41 +1566,35 @@ function bindReview() {
       m.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    sw.disabled = true;
+    b.disabled = true;
     try {
-      const tas = $$('#reviewCard [data-revcap]');
-      const whens = [];
-      for (let i = 0; i < tas.length; i++) {
-        const id = tas[i].dataset.revcap;
-        const winp = document.querySelector(`#reviewCard [data-revwhen="${id}"]`);
-        const when = (winp && winp.value) ? new Date(winp.value).toISOString() : slotDate(i);
-        whens.push(when);
-        await api.patch('/api/posts/' + id, {
-          scheduled_at: when, caption: tas[i].value,
-        });
-      }
-      // Festejo: aceptar se siente como un logro, no como un trámite
-      const n = tas.length;
+      const ta = document.querySelector(`[data-revcap="${id}"]`);
+      const winp = document.querySelector(`#reviewCard [data-revwhen="${id}"]`);
+      const when = (winp && winp.value) ? new Date(winp.value).toISOString() : null;
+      await api.patch('/api/posts/' + id, { scheduled_at: when, caption: ta ? ta.value : undefined });
+      try { await api.post(`/api/posts/${id}/signal`, { signal: 'approved' }); } catch (e) {}
       try { await api.post('/api/funnel', { event: 'week_accepted' }); } catch (e) {}
-      const first = whens.filter(Boolean).sort()[0];
-      streakModalShell(`
-        <div class="big-emoji">🎉</div>
-        <h3 style="margin:12px 0 4px">¡Listo! Tu semana se publica sola</h3>
-        <p style="font-size:16px;margin:0 0 6px"><b>${n} ${n === 1 ? 'posteo programado' : 'posteos programados'}</b> ✅</p>
-        ${first ? `<p class="d">El primero sale ${relDay(first)} — no tenés que hacer nada más.</p>` : ''}
-        <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
-        ${celebRefHTML()}
-        <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
-      const cmo = document.getElementById('streakModal');
-      if (cmo) wireCelebRef(cmo);
-      const cg = $('#celebGo');
-      if (cg) cg.onclick = () => { closeStreakModal(); render(); };
-      else render();
+      const last = REVIEW_DRAFTS.filter(d => d.id !== id).length === 0;
+      if (last) {
+        // Festejo: aceptar se siente como un logro, no como un trámite
+        streakModalShell(`
+          <div class="big-emoji">🎉</div>
+          <h3 style="margin:12px 0 4px">¡Listo! Tu semana se publica sola</h3>
+          <p style="font-size:16px;margin:0 0 6px">Todos tus posteos quedaron programados ✅</p>
+          <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
+          ${celebRefHTML()}
+          <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
+        const cmo = document.getElementById('streakModal');
+        if (cmo) wireCelebRef(cmo);
+        const cg = $('#celebGo');
+        if (cg) cg.onclick = () => { closeStreakModal(); render(); };
+        else render();
+      } else render();
     } catch (e) {
       if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
-      sw.disabled = false;
+      b.disabled = false;
     }
-  };
+  });
 }
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
@@ -1967,28 +2040,25 @@ function chatCardHTML(compact) {
   const wrap = compact
     ? `<div id="chatCard" style="margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)">`
     : `<div class="card" id="chatCard">`;
-  const chips = `
+  const chips = !msgs ? `
     <div class="chat-chips" id="chatChips">
-      ${!msgs ? `
       <button data-chip="Haceme un posteo de promo para esta semana">✨ Haceme un posteo</button>
       <button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>
-      <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>` : ''}
-      <button class="chip-ico" id="chatPhotoBtn" title="Subir fotos">📷</button>
-      <button class="chip-ico" id="chatVideoBtn" title="Subir videos">🎬</button>
-    </div>`;
-  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name) ? PROFILE.business_name : '';
-  const greet = bizName ? `¡Hola! 👋 ¿Qué preparamos hoy para ${esc(bizName)}?` : `¡Hola! 👋 ¿Qué hacemos hoy?`;
+      <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>
+    </div>` : '';
   return `
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
-      ${msgs || `<div class="chat-msg ai">${greet}</div>`}
+      ${msgs || `<div class="chat-msg ai">¡Hola! 👋 ¿Qué hacemos hoy?</div>`}
     </div>${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
       <button class="btn btn-soft" id="chatMic" title="Pedir con nota de voz">🎙</button>
-      <input id="chatInput" class="in" placeholder="Escribime como en WhatsApp 💬" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="Pedime lo que sea… 💬" maxlength="2000" autocomplete="off">
+      <button class="btn btn-soft" id="chatPhotoBtn" title="Enviar fotos">📷</button>
+      <button class="btn btn-soft" id="chatVideoBtn" title="Enviar videos">🎬</button>
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
     </div>
@@ -2723,6 +2793,14 @@ async function runAutopilot(n, tag) {
     if (!ideas.length) {
       prog.innerHTML = `<div class="okmsg">💡 Generando ideas para tu negocio...</div>`;
       const r = await api.post('/api/ideas', {});
+      // Sin datos del negocio no generamos nada: primero el onboarding conversacional.
+      // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
+      if (r.need_profile) {
+        btn.disabled = false;
+        prog.innerHTML = `<div class="okmsg">👋 Para armar tu semana primero necesito conocer tu negocio — te llevo al chat...</div>`;
+        setTimeout(() => { OB = freshOB(); location.hash = '#/app/onboarding'; }, 1400);
+        return;
+      }
       ideas = r.ideas || [];
       IDEAS = ideas;
     }
