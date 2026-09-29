@@ -3007,6 +3007,8 @@ async function runAutopilot(n, tag) {
     try { quota = await api.get('/api/quota'); } catch (e) {}
     if (quota && quota.left < n) {
       btn.disabled = false;
+      // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
+      if (ME && ME.trial_expired) { showExpiredModal(); return; }
       if (quota.left <= 0) { quotaModal(quota); return; }
       quotaModal(quota, { onPartial: () => runAutopilot(quota.left, t) });
       return;
@@ -3034,8 +3036,7 @@ async function runAutopilot(n, tag) {
       // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
       if (r.need_profile) {
         btn.disabled = false;
-        prog.innerHTML = `<div class="okmsg">👋 Para armar tu semana primero necesito conocer tu negocio — te llevo al chat...</div>`;
-        setTimeout(() => { OB = freshOB(); location.hash = '#/app/onboarding'; }, 1400);
+        prog.innerHTML = `<div class="okmsg">👋 Para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/semana" style="color:var(--cel);font-weight:700">hacelo después →</a></div>`;
         return;
       }
       ideas = r.ideas || [];
@@ -3392,6 +3393,167 @@ async function publishNowFlow(postId, mount) {
   mount.innerHTML = `<div class="okmsg">⏳ Sigue publicándose… lo ves en Mi semana en un minuto.</div>`;
   return { ok: true, pending: true };
 }
+
+/* ============================================================
+   FAST-TRACK "Tu primer posteo" (Track A)
+   Hero card de Mi semana: 3 micro-pasos —
+   (1) elegir favorito entre 3 candidatos, (2) subir UNA foto opcional,
+   (3) publicar. La VISIBILIDAD la decide Track C: reemplaza heroCard
+   por fastTrackCardHTML(candidates) cuando aplique.
+   ============================================================ */
+let FT = null; // estado en vivo de la tarjeta: { sel, candidates, photoDone, publishing }
+
+function ftCandTitle(c) {
+  const t = String(c.source_topic || '').trim();
+  if (t) return cortar(t, 42);
+  const cap = String(c.caption || '').split('\n')[0].trim();
+  return cap ? cortar(cap, 42) : 'Posteo';
+}
+
+function fastTrackCardHTML(candidates) {
+  const cands = (Array.isArray(candidates) ? candidates : []).filter(Boolean).slice(0, 3);
+  if (!cands.length) return '';
+  // El primero va preseleccionado: un tap menos, la elección se puede cambiar.
+  FT = { sel: cands[0].id, candidates: cands, photoDone: false, photoPath: null, publishing: false };
+  const connected = !!(PROFILE && PROFILE.ig_connected);
+  return `
+  <div class="card ft-card" id="fastTrackCard">
+    <div class="ft-head">
+      <div class="ft-title">🚀 Tu primer posteo</div>
+      <div class="ft-sub">Elegí uno, publicalo, y listo — sale en tu Instagram.</div>
+    </div>
+    <div class="ft-step"><div class="ft-stepn">1</div><div class="ft-stepbody">
+      <div class="ft-stept">Elegí tu favorito</div>
+      <div class="ft-cands">
+        ${cands.map(c => `
+        <button type="button" class="ft-cand${c.id === FT.sel ? ' sel' : ''}" data-ftpick="${c.id}" aria-pressed="${c.id === FT.sel}">
+          <span class="ft-thumb">${c.image_path ? `<img src="${esc(c.image_path)}" data-ftthumb="${c.id}" alt="">` : `<span class="ft-nothumb">🖼️</span>`}<span class="ft-check">✓</span></span>
+          <span class="ft-candt">${esc(ftCandTitle(c))}</span>
+        </button>`).join('')}
+      </div>
+    </div></div>
+    <div class="ft-step"><div class="ft-stepn">2</div><div class="ft-stepbody">
+      <div class="ft-stept">Una foto <span style="font-weight:400;color:var(--mut)">(opcional)</span></div>
+      <button type="button" class="btn btn-soft ft-upload" id="ftPhotoBtn">📷 Subí una foto de lo que vendés</button>
+      <input type="file" id="ftPhotoInput" accept="image/*" style="display:none">
+      <div class="ft-photo-st" id="ftPhotoSt">Si subís una foto tuya, la usamos en el posteo.</div>
+      <button type="button" class="ft-skip" id="ftPhotoSkip">saltear →</button>
+    </div></div>
+    <div class="ft-step"><div class="ft-stepn">3</div><div class="ft-stepbody">
+      <div class="ft-stept">Publicar</div>
+      ${connected
+        ? `<button type="button" class="btn btn-primary btn-block ft-pub" id="ftPublish">🚀 Publicar ahora</button>`
+        : `<button type="button" class="btn btn-primary btn-block ft-pub" id="ftConnect">📸 Conectar Instagram</button>
+           <div class="ft-hint">Primero conectá tu Instagram; después publicás con un tap.</div>`}
+      <div id="ftPubMount"></div>
+    </div></div>
+  </div>`;
+}
+
+function bindFastTrack() {
+  const card = document.getElementById('fastTrackCard');
+  if (!card || !FT) return;
+  // Handlers asignados (no addEventListener): bindSemana corre en cada render,
+  // el DOM se reconstruye y no se duplican.
+  // Paso 1: elegir / cambiar favorito
+  card.querySelectorAll('[data-ftpick]').forEach(btn => {
+    btn.onclick = () => {
+      const id = Number(btn.dataset.ftpick);
+      FT.sel = id;
+      card.querySelectorAll('[data-ftpick]').forEach(b => {
+        const on = Number(b.dataset.ftpick) === id;
+        b.classList.toggle('sel', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    };
+  });
+  // Paso 2: foto opcional
+  const fileInput = document.getElementById('ftPhotoInput');
+  const photoBtn = document.getElementById('ftPhotoBtn');
+  const photoSkip = document.getElementById('ftPhotoSkip');
+  const photoSt = document.getElementById('ftPhotoSt');
+  const setSt = (html) => { if (photoSt) photoSt.innerHTML = html; };
+  if (photoBtn && fileInput) photoBtn.onclick = () => fileInput.click();
+  if (photoSkip) photoSkip.onclick = () => {
+    FT.photoDone = true;
+    setSt('✅ Listo — sale con la imagen que armó la IA.');
+    photoSkip.style.display = 'none';
+    if (photoBtn) photoBtn.style.display = 'none';
+  };
+  if (fileInput) fileInput.onchange = async () => {
+    const f = fileInput.files[0]; if (!f) return;
+    if (!f.type.startsWith('image/')) { setSt('❌ Elegí un archivo de imagen.'); return; }
+    const sel = FT.candidates.find(c => c.id === FT.sel) || FT.candidates[0];
+    if (photoBtn) photoBtn.style.display = 'none';
+    if (photoSkip) photoSkip.style.display = 'none';
+    try {
+      setSt('⏳ Subiendo…');
+      const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+      const newPath = data.path;
+      setSt('🎨 Mejorando la imagen…');
+      const improved = await aiConceptShot({
+        idea: { titulo: sel.source_topic || '', porque: sel.strategy_why || '', angulo: sel.source_angle || '' },
+        tipo: sel.tipo || '',
+        headline: ftCandTitle(sel),
+        refs: [newPath],
+      });
+      const finalPath = improved || newPath;
+      await api.patch('/api/posts/' + sel.id, { action: 'save-draft', image_path: finalPath });
+      sel.image_path = finalPath;
+      const rd = (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS : []).find(x => x.id === sel.id);
+      if (rd) rd.image_path = finalPath;
+      const thumb = card.querySelector(`[data-ftthumb="${sel.id}"]`);
+      if (thumb && thumb.tagName === 'IMG') thumb.src = finalPath;
+      FT.photoDone = true; FT.photoPath = finalPath;
+      setSt('✅ Listo — tu foto ya está en el posteo.');
+    } catch (e) {
+      // Nunca bloquear: se sigue con la imagen original.
+      setSt('😅 No pudimos mejorar la foto esta vez — sale con la imagen original, igual va a quedar bien.');
+      FT.photoDone = true;
+    }
+  };
+  // Paso 3: publicar (o conectar primero)
+  const conn = document.getElementById('ftConnect');
+  if (conn) conn.onclick = () => { igConnectHere(); };
+  const pub = document.getElementById('ftPublish');
+  if (pub) pub.onclick = async () => {
+    if (FT.publishing) return;
+    // Chequeo de cupo con el patrón existente (modal de mejora si no hay cupo).
+    const hasQuota = await checkQuotaOrModal();
+    if (!hasQuota) return;
+    const sel = FT.candidates.find(c => c.id === FT.sel) || FT.candidates[0];
+    if (!sel) return;
+    FT.publishing = true;
+    pub.disabled = true;
+    pub.textContent = '⏳ Publicando…';
+    const mount = document.getElementById('ftPubMount');
+    const res = await publishNowFlow(sel.id, mount);
+    if (res && res.ok) {
+      // Magia lograda: refrescamos la pantalla y festejamos.
+      try { render(); } catch (e) { /* sigue el modal igual */ }
+      streakModalShell(`
+        <div class="big-emoji">🎉</div>
+        <h3 style="margin:12px 0 4px">¡Tu primer posteo está saliendo!</h3>
+        <p class="d" style="font-size:16px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio 🎙️</b> — así los próximos posteos salen todavía mejor.</p>
+        <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:16px">🎙️ Contame de tu negocio</button>
+        <button class="btn btn-ghost btn-block" id="ftCelebClose" style="margin-top:8px">Ahora no</button>`);
+      const vb = document.getElementById('ftCelebVoice');
+      if (vb) vb.onclick = () => {
+        closeStreakModal();
+        const vc = document.getElementById('dnaVoiceCard');
+        if (vc) vc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+      const cb = document.getElementById('ftCelebClose');
+      if (cb) cb.onclick = closeStreakModal;
+    } else {
+      FT.publishing = false;
+      pub.disabled = false;
+      pub.textContent = '🚀 Publicar ahora';
+    }
+  };
+}
 /* ---------- MI SEMANA (dashboard) ---------- */
 let SEM_NUDGES = [];
 
@@ -3453,7 +3615,11 @@ function isPlanLimitErr(e) { return !!(e && e.status === 403 && e.data && e.data
 async function checkQuotaOrModal() {
   try {
     const q = await api.get('/api/quota');
-    if (q.left <= 0) { quotaModal(q); return false; }
+    if (q.left <= 0) {
+      // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
+      if (ME && ME.trial_expired) { showExpiredModal(); return false; }
+      quotaModal(q); return false;
+    }
   } catch (e) { /* si falla el chequeo, no bloquear */ }
   return true;
 }
@@ -4072,22 +4238,46 @@ async function loadMissionCard() {  const el = $('#missionCard');
   if (!el) return;
   let m;
   try { m = await api.get('/api/photo-mission'); } catch (e) { el.innerHTML = ''; return; }
-  if (!m || !m.shots || !m.shots.length) { el.innerHTML = ''; return; }
-  const done = Math.min(m.uploaded || 0, m.shots.length);
-  const complete = done >= m.shots.length;
+  if (!m || !m.need) { el.innerHTML = ''; return; }
+  // Una sola foto pedida, concreta y de SU negocio. El botón SUBE la foto directo (sin vueltas).
+  if (m.done) {
+    el.innerHTML = `
+    <div class="card mission-card">
+      <h3 style="margin:0 0 4px">📷 Tus posteos</h3>
+      <p style="margin:0;color:var(--mut);font-size:14px">✅ ¡Listo! Ya tenemos tu foto — la estamos usando en tus posteos de esta semana.</p>
+    </div>`;
+    return;
+  }
   el.innerHTML = `
   <div class="card mission-card">
-    <h3 style="margin:0 0 4px">📸 Misión de fotos de la semana</h3>
-    <p class="hint" style="margin:0 0 10px">3 fotos con tu celular, 2 minutos. <b>Los posteos con tus fotos reales funcionan mejor que cualquier diseño</b> — y la IA aprende cómo es tu producto.</p>
-    <div class="mission-shots">${m.shots.map((s, i) => `
-      <div class="mission-shot${i < done ? ' done' : ''}"><span class="mission-n">${i < done ? '✓' : (i + 1)}</span><span>${esc(s)}</span></div>`).join('')}</div>
-    <div class="mission-foot">
-      <span class="mission-prog">${complete ? '🎉 ¡Misión cumplida! Tus fotos van a protagonizar los posteos.' : `${done}/${m.shots.length} fotos subidas`}</span>
-      ${complete ? '' : `<button class="btn btn-primary btn-sm" id="missionUpload">＋ Subir fotos</button>`}
-    </div>
+    <h3 style="margin:0 0 4px">📋 Tareas para seguir mejorando tus posteos</h3>
+    <p style="margin:0 0 6px;font-size:15px">Nos falta <b>${esc(m.need)}</b> — 30 segundos con tu celular.</p>
+    <p class="hint" style="margin:0 0 10px">La usamos en tus posteos de esta semana: con tus fotos reales, venden más.</p>
+    <button class="btn btn-primary btn-sm" id="missionUpload">📷 Subir la foto</button>
+    <input type="file" id="missionFile" accept="image/*" style="display:none">
+    <div id="missionMsg" style="margin-top:8px"></div>
   </div>`;
-  const b = $('#missionUpload');
-  if (b) b.onclick = () => { const cc = $('#chatCard'); if (cc) cc.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  const b = $('#missionUpload'), inp = $('#missionFile');
+  if (b && inp) {
+    b.onclick = () => inp.click();
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      if (!f || !f.type.startsWith('image/')) return;
+      const msg = $('#missionMsg');
+      b.disabled = true;
+      if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo…</div>`;
+      try {
+        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+        if (!r.ok) throw new Error('No se pudo subir la foto');
+        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+        loadMissionCard(); // re-render → estado hecho
+      } catch (e) {
+        b.disabled = false;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
+      }
+      inp.value = '';
+    };
+  }
 }
 
 /* ---------- "Ya salió": historial de publicados con outcome loop liviano ---------- */
@@ -4420,11 +4610,19 @@ async function semanaView() {
     ? `<button class="xp-strip" id="xpStrip" aria-label="Ver el progreso de tu racha">${stripInner}</button>`
     : `<div class="xp-strip" id="xpStrip" style="cursor:default">${stripInner}</div>`;
 
-  // HERO: lo más importante primero. Con borradores → tus posteos esperando tu OK.
-  // Sin borradores → el botón mágico: un click y la semana se arma acá mismo.
+  // HERO: lo más importante primero.
+  // Fast-track "Tu primer posteo" (Track A/C): si la cuenta NUNCA publicó y hay
+  // borradores con foto, la hero es la tarjeta de publicación rápida — reemplaza
+  // tanto al autopilot como a la revisión. La condición se auto-resuelve: al
+  // publicar por cualquier lado (Mi semana, creador, chat), publishedCount > 0
+  // y la tarjeta desaparece sola. Sin flags en el servidor.
   REVIEW_DRAFTS = drafts;
   const weekDone = !w.missing;
-  const heroCard = draftN > 0 ? reviewCardHTML(drafts, slots)
+  const publishedCount = allPosts.filter(p => p.status === 'published').length;
+  const ftCandidates = drafts.slice().sort((a, b) => b.id - a.id).filter(p => p.image_path).slice(0, 3);
+  const showFastTrack = publishedCount === 0 && ftCandidates.length > 0;
+  const heroCard = showFastTrack && typeof fastTrackCardHTML === 'function' ? fastTrackCardHTML(ftCandidates)
+    : draftN > 0 ? reviewCardHTML(drafts, slots)
     : weekDone ? weekDoneCardHTML()
     : autopilotCardHTML('semana');
   // Rehacer es acción secundaria: link de texto sutil al pie de la revisión, nunca un botón.
@@ -4512,12 +4710,46 @@ async function semanaView() {
   return topBlock;
 }
 
+/* ---------- FAST-TRACK "TU PRIMER POSTEO" — integración (Track C) ---------- */
+// La tarjeta y el festejo los construye Track A; acá vive el handoff post-publish
+// a la nota de voz: cierra el modal de festejo (el que esté abierto) y scrollea
+// a la tarjeta "Contame de tu negocio", que ya existe en topBlock (#dnaVoiceCard).
+// El festejo NO se duplica acá: esto solo responde al botón del modal.
+function fastTrackCloseModals() {
+  document.querySelectorAll('.modal-ov').forEach(ov => {
+    if (ov.style.display !== 'none') ov.remove();
+  });
+}
+function fastTrackGoToVoice() {
+  fastTrackCloseModals();
+  const el = document.getElementById('dnaVoiceCard');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// Botón de handoff en voseo para el modal de festejo. Si Track A ya lo incluyó
+// en su modal, este HTML no hace falta — el binding delegado igual lo atiende.
+function fastTrackVoiceCtaHTML() {
+  return `<button class="btn btn-primary btn-block" data-ft-voice style="margin-top:10px">🎙️ Contame de tu negocio</button>`;
+}
+
 function bindSemana() {
   bindSignalBtns();
   bindOutcomeBtns(); // loop liviano: ¿este posteo te trajo clientes?
   bindAutopilot();
   bindChat();
   bindReview();
+  // Fast-track "Tu primer posteo" (Track A): su tarjeta es la hero cuando aplica.
+  // Defensivo: si la tarjeta de Track A aún no está definida, queda el flujo normal.
+  if (typeof bindFastTrack === 'function') { window.__ftHookedByTrackC = true; bindFastTrack(); }
+  // Handoff post-publish → nota de voz: delegación única para el botón
+  // "🎙️ Contame de tu negocio" del modal de festejo (funciona aunque Track A
+  // agregue el botón después de esta integración).
+  if (!window.__ftVoiceBound) {
+    window.__ftVoiceBound = true;
+    document.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest && e.target.closest('[data-ft-voice]');
+      if (b) { e.preventDefault(); fastTrackGoToVoice(); }
+    });
+  }
   bindMediaCard(); // tira "Mis fotos": borrar desde acá
   // Misión de fotos semanal
   loadMissionCard().catch(() => {});
@@ -4531,6 +4763,10 @@ function bindSemana() {
   // Festejo de primera publicación (una vez por cuenta): se chequea al entrar a Mi semana
   setTimeout(() => maybeFirstPublishCelebration(), 1200);
   setTimeout(() => maybeMilestoneCelebration(), 2600);
+  // Track A · Fast-track "Tu primer posteo": la visibilidad la decide Track C
+  // (heroCard → fastTrackCardHTML); este hook solo cablea, y es no-op sin la tarjeta.
+  // Si Track C ya lo cableó (window.__ftHookedByTrackC), no se duplica.
+  if (typeof bindFastTrack === 'function' && !window.__ftHookedByTrackC) bindFastTrack();
   const xs = $('#xpStrip');
   if (xs) xs.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
@@ -4835,6 +5071,30 @@ function freshOB() {
     colors: [],          // [c1,c2,c3] extraídos del logo
   };
 }
+// ---- Onboarding diferible: el progreso vive en localStorage ('posta_ob') y se retoma ----
+const OB_KEY = 'posta_ob';
+function saveOB() {
+  try {
+    if (!OB) return;
+    const { loading, _resumePending, ...rest } = OB; // transitorios: no se persisten
+    localStorage.setItem(OB_KEY, JSON.stringify(rest));
+  } catch (e) {}
+}
+function loadOB() {
+  try {
+    const raw = localStorage.getItem(OB_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || typeof o !== 'object' || !Array.isArray(o.chat) || typeof o.step !== 'number') return null; // corrupto
+    if (o.phase === 'summary' && o.profile) { /* resumen sin confirmar: se retoma */ }
+    else if (o.done || o.step >= (o.total || 8)) return null; // ya terminado: se descarta
+    const clean = Object.assign(freshOB(), o, { loading: false });
+    const last = clean.chat[clean.chat.length - 1];
+    if (clean.phase === 'chat' && !clean.done && last && last.role === 'user') clean._resumePending = true; // la respuesta de la IA quedó en vuelo: se re-pide al entrar
+    return clean;
+  } catch (e) { return null; }
+}
+function clearOB() { try { localStorage.removeItem(OB_KEY); } catch (e) {} }
 // ---- Onboarding conversacional ----
 function obScroll() {
   const b = $('#obBox');
@@ -4861,12 +5121,13 @@ async function obNext() {
   } catch (e) {
     o.chat.push({ role: 'assistant', text: 'Tuve un problema de conexión 😅 ¿probamos de nuevo? Escribime tu respuesta.' });
   }
-  o.loading = false; render(); obScroll();
+  o.loading = false; saveOB(); render(); obScroll();
 }
 async function obSend(text) {
   const o = OB; if (!o || o.loading || o.done || o.phase !== 'chat') return;
   o.chat.push({ role: 'user', text: (text || '').trim() });
   o.chips = null;
+  saveOB();
   render(); obScroll();
   obNext();
 }
@@ -4887,7 +5148,7 @@ async function obFinish() {
     o.chat.push({ role: 'assistant', text: 'Tuve un problema cerrando 😅 escribime "listo" y lo intentamos de nuevo.' });
     o.done = false; o.phase = 'chat';
   }
-  o.loading = false; render(); obScroll();
+  o.loading = false; saveOB(); render(); obScroll();
 }
 async function obConfirmSave() {
   const o = OB, p = o.profile || {};
@@ -4907,6 +5168,7 @@ async function obConfirmSave() {
     if (colors.length >= 2) await api.put('/api/settings', { brand_colors: colors });
     SETTINGS = await api.get('/api/settings');
     await refreshSession();
+    clearOB(); // onboarding confirmado: ya no hay nada que retomar
     const chosenPlan = localStorage.getItem('posta_chosen_plan');
     location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/semana';
   } catch (e) {
@@ -4934,11 +5196,12 @@ function obSummaryHTML() {
       <button class="btn btn-ghost" id="obFix">✏️ Corregir</button>
       <button class="btn btn-primary" id="obConfirm" style="flex:1">✅ Todo bien, arranquemos</button>
     </div>
+    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Hacerlo después →</a></div>
   </div>`;
 }
 function onboardingView() {
   const o = OB;
-  if (!o.started) { o.started = true; setTimeout(obNext, 60); }
+  if (!o.started || o._resumePending) { o.started = true; o._resumePending = false; setTimeout(() => { if (OB === o && !o.loading && !o.done && o.phase === 'chat') obNext(); }, 60); }
   if (o.phase === 'summary' && o.profile) return obSummaryHTML();
   const msgs = o.chat.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.role === 'user' && !m.text ? '⏭️ Salteado' : m.text)}</div>`).join('');
   const pct = Math.round((o.step / o.total) * 100);
@@ -4946,7 +5209,10 @@ function onboardingView() {
   <div class="card" style="max-width:640px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <span style="font-size:13px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
-      ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
+      <span style="display:flex;gap:10px;align-items:center;flex:none">
+        ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
+        <a href="#/app/semana" style="color:var(--dim);font-size:13px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
+      </span>
     </div>
     <div style="height:6px;border-radius:99px;background:var(--line);margin:0 0 14px;overflow:hidden"><div style="height:100%;width:${pct}%;border-radius:99px;background:linear-gradient(90deg,var(--cel),var(--yel));transition:width .4s"></div></div>
     <div class="chat-box" id="obBox" style="min-height:230px;max-height:48vh">${msgs}${o.loading ? `<div class="chat-msg ai">⏳ …</div>` : ''}</div>
@@ -4959,7 +5225,6 @@ function onboardingView() {
     </div>
     ${o.awaitPhotos && !o.loading ? `<div id="obPhotosPrev" class="ob-photos-prev"></div>` : ''}
     <div id="obMsg" style="margin-top:8px"></div>
-    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
   </div>`;
 }
 
@@ -5029,6 +5294,7 @@ function bindOnboarding() {
   if (fx) fx.onclick = () => {
     o.phase = 'chat';
     o.chat.push({ role: 'assistant', text: 'Dale, decime qué tengo que corregir 👇' });
+    saveOB();
     render(); obScroll();
   };
   obScroll();
@@ -5040,64 +5306,6 @@ const GOALS = [
   ['fidelizar', '🤝', 'Fidelizar clientes', 'Que te vuelvan a elegir, siempre'],
   ['referente', '🎓', 'Ser referente', 'Posicionarte como experto en tu rubro'],
 ];
-function onboardingView() {
-  const o = OB;
-  const stepsBar = `<div class="steps-bar">${[1, 2, 3, 4].map(i => `<div class="s ${i <= o.step ? 'on' : ''}"></div>`).join('')}</div>`;
-  let body = '';
-  if (o.step === 1) body = `
-    <h3>Tu negocio 🏪</h3>
-    <div class="field"><label>Nombre del negocio</label><input id="ob_biz" value="${esc(o.business_name)}" placeholder="Mi Tienda"></div>
-    <div class="field"><label>Rubro</label><select id="ob_cat">
-      ${CATS.map(([v, ico, t]) => `<option ${catSel(o.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-    </select></div>
-    <div class="field" id="ob_catother_w" style="${catSel(o.category) === 'otro' ? '' : 'display:none'}"><label>¿Cuál?</label><input id="ob_catother" value="${esc(catCustom(o.category))}" placeholder="Ej: veterinaria, librería..." maxlength="40"></div>
-    <div class="field"><label>Contanos en una frase qué hacés</label><textarea id="ob_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(o.description)}</textarea></div>`;
-  if (o.step === 2) body = `
-    <h3>Tus competidores 🔍</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Los estudiamos para crear contenido que te haga <b>destacar</b>, no copiar.</p>
-    <div class="field"><label>Nombres o usuarios de Instagram, separados por coma</label><input id="ob_comp" value="${esc(o.competitors)}" placeholder="tiendaX, @competidor2"></div>
-    <div class="hint">Si no tenés a mano, saltealo y lo agregás después en Ajustes.</div>`;
-  if (o.step === 3) {
-    body = `
-    <h3>Tu estilo 🎨</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Tu logo y tus colores: todo lo que generemos sale con tu marca, no con la nuestra.</p>
-    <div class="field"><label>Logo de tu marca *</label>
-      <div style="display:flex;gap:10px;align-items:center">
-        ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:56px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : ''}
-        <button class="btn btn-ghost btn-sm" id="ob_logo">📤 ${assetLogo() ? 'Cambiar logo' : 'Subir logo'}</button>
-      </div>
-      <input type="file" id="ob_logofile" accept="image/*,.pdf,.docx" style="display:none">
-      <div class="hint">Al subirlo sacamos tus colores automáticamente (aceptamos imagen, PDF o Word). Lo necesitamos para que tus diseños salgan con tu marca.</div>
-    </div>
-    <div class="field"><label>Tus colores *</label>
-      <div style="display:flex;gap:10px">
-        ${['c1', 'c2', 'c3'].map(k => `<input type="color" id="ob_${k}" value="${o[k]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">`).join('')}
-      </div>
-      <div class="hint">Salen de tu logo solos. Tocá cada uno si querés ajustarlo a mano.</div>
-    </div>
-    <div class="hint" style="margin-top:4px">🎨 Todo lo que generemos va a usar estos colores: son la identidad de tu marca.</div>`;
-  }
-  if (o.step === 4) body = `
-    <h3>Tu objetivo 🎯</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:18px">Para enfocar las ideas y los textos en lo que más te sirve.</p>
-    <div style="display:grid;gap:12px">
-      ${GOALS.map(([v, ico, t, d]) => `
-      <button class="goal-card ${o.goal === v ? 'on' : ''}" data-goal="${v}">
-        <span class="gc-ico">${ico}</span>
-        <span><b class="gc-t">${t}</b><br><span class="gc-d">${d}</span></span>
-      </button>`).join('')}
-    </div>`;
-  return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Te configuramos todo</h1><p class="sub">Paso ${o.step} de 4 — 2 minutos y no te pedimos más nada.</p></div></div>
-  ${stepsBar}
-  <div class="card" style="max-width:640px">${body}
-    <div id="obMsg" style="margin-top:8px"></div>
-    <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap">
-      ${o.step > 1 ? `<button class="btn btn-ghost" id="obBack">← Atrás</button>` : ''}
-      ${o.step < 4 ? `<button class="btn btn-primary" id="obNext" style="flex:1">Continuar →</button>` : `<button class="btn btn-primary" id="obFinish" style="flex:1">✨ Listo, a crear contenido</button>`}
-    </div>
-    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
-  </div>`;
-}
 
 /* ---------- ROUTER ---------- */
 async function render() {
@@ -5219,13 +5427,22 @@ async function render() {
   else if (tab === 'ideas') { location.hash = '#/app/semana'; return; } // Ideas se fusionó en Mi semana
   else if (tab === 'video') { location.hash = '#/app/semana'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
   else if (tab === 'fotos') { location.hash = '#/app/ajustes'; return; } // Mis fotos vive en Ajustes > Mi marca
-  else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
+  else if (tab === 'onboarding') { if (!OB) OB = loadOB() || freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/semana'; return; } // Calendario fusionado en Mi semana
   else if (tab === 'historial') { location.hash = '#/app/semana'; return; } // Historial fusionado en Mi semana
   else if (tab === 'ads') content = await adsView(); // 🚀 Potenciar: billetera + boost de posteos
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // Si vino con ?plan=1 o ?plan_sel= → la sección Mi plan queda abierta Y en pantalla (no arriba de Ajustes)
+  try {
+    const _pq = new URLSearchParams(location.hash.split('?')[1] || '');
+    if (tab === 'ajustes' && (_pq.get('plan') || _pq.get('plan_sel'))) {
+      const _pz = document.getElementById('planZone');
+      const _card = _pz && _pz.closest('.card');
+      if (_card) setTimeout(() => _card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+    }
+  } catch (e) {}
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
   if (!(PROFILE && PROFILE.ig_pending)) maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso)
@@ -5254,11 +5471,11 @@ async function showExpiredModal() {
   ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
-      <div style="font-size:42px">\U0001F512</div>
+      <div style="font-size:42px">🔒</div>
       <h2>Tu prueba gratis termin\u00f3</h2>
       <p class="pz-exp-sub">Elegí tu plan y seguimos publicando por vos.</p>
       <div class="pz-exp-plans">${rows}</div>
-      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes \U0001F680</button>'}
+      ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes 🚀</button>'}
       <button class="pz-exp-later" id="pzExpLater">Por ahora no</button>
     </div>`;
   document.body.appendChild(ov);
@@ -5983,7 +6200,7 @@ function bindSettings() {
     };
   }
   const bOnb = $('#btnOnb');
-  if (bOnb) bOnb.onclick = () => { OB = freshOB(); location.hash = '#/app/onboarding'; };
+  if (bOnb) bOnb.onclick = () => { OB = loadOB() || freshOB(); location.hash = '#/app/onboarding'; };
   const bPrev = $('#btnPreview');
   if (bPrev) bPrev.onclick = openPreview;
   function openPreview() {
