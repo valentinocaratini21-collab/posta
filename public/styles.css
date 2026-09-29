@@ -28,6 +28,11 @@ button{font-family:inherit}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#CFE7F5;border-radius:8px;border:2px solid #fff}
 .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+/* Onboarding: miniaturas de las fotos del negocio */
+.ob-photos-prev{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ob-ph-thumb{width:64px;height:64px;border-radius:14px;overflow:hidden;border:1.5px solid var(--line);opacity:.5;transition:opacity .25s,border-color .25s;flex:none}
+.ob-ph-thumb.done{opacity:1;border-color:var(--cel)}
+.ob-ph-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 :focus-visible{outline:2px solid var(--cel);outline-offset:2px;border-radius:8px}
 
 /* ---------- nav ---------- */
@@ -748,19 +753,20 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .streak-pill{margin-left:auto;align-self:center;background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:7px 15px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(254,193,77,.4);white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.25}
 .streak-pill:active{transform:scale(.95)}
 /* Racha gamificada: HUD de puntos y niveles (debajo del header de Mi semana) */
-.xp-strip{display:block;width:100%;text-align:left;background:linear-gradient(135deg,#0A1E33,#1E3E62);border:none;border-radius:16px;padding:12px 14px;margin:0 0 14px;cursor:pointer;color:#fff;box-shadow:0 3px 14px rgba(10,30,51,.28);font-family:inherit}
+.xp-strip{display:block;width:100%;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:14px 16px;margin:0 0 14px;cursor:pointer;color:var(--txt);box-shadow:var(--shadow);font-family:inherit}
 .xp-strip:active{transform:scale(.99)}
-.xp-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.xp-pts{font-weight:800;font-size:16px;color:#FEC14D;white-space:nowrap}
-.xp-lvl{font-size:13.5px;font-weight:700;color:rgba(255,255,255,.92);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.xp-timer{margin-left:auto;font-size:13px;font-weight:700;color:#FEC14D;white-space:nowrap}
-.xp-bar{display:block;height:10px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden}
-.xp-bar>span{display:block;height:100%;background:linear-gradient(90deg,#FEC14D,#FFE1A1);border-radius:999px;transition:width .5s}
-.xp-sub{display:block;font-size:12.5px;color:rgba(255,255,255,.85);margin-top:6px;font-weight:600}
-.xp-stats{display:block;font-size:12.5px;color:rgba(255,255,255,.9);margin-top:8px;font-weight:600}
-.xp-weekbar{display:block;height:8px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden;margin-top:8px}
+.xp-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.xp-lvl{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xp-pts{margin-left:auto;font-weight:800;font-size:13px;color:#8A5E00;background:#FFF3D1;border-radius:999px;padding:5px 11px;white-space:nowrap;flex:none}
+.xp-timer{font-size:12.5px;font-weight:700;color:var(--mut);background:var(--bg2);border:1px solid var(--line-soft);border-radius:999px;padding:5px 11px;white-space:nowrap;flex:none}
+.xp-bar{display:block;height:10px;background:#EEF4F9;border-radius:999px;overflow:hidden}
+.xp-bar>span{display:block;height:100%;background:linear-gradient(90deg,#FEC14D,#FFD97A);border-radius:999px;transition:width .5s}
+.xp-sub{display:block;font-size:12.5px;color:var(--mut);margin-top:6px;font-weight:700}
+.xp-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.xp-stats>span{font-size:12.5px;color:var(--mut);font-weight:700;background:var(--bg2);border:1px solid var(--line-soft);border-radius:999px;padding:5px 11px;white-space:nowrap}
+.xp-weekbar{display:block;height:8px;background:#EEF4F9;border-radius:999px;overflow:hidden;margin-top:10px}
 .xp-weekbar>span{display:block;height:100%;background:linear-gradient(90deg,#2793C8,#7CC4E8);border-radius:999px;transition:width .5s}
-.xp-weektxt{display:block;font-size:12px;color:rgba(255,255,255,.92);margin-top:5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xp-weektxt{display:block;font-size:13px;color:var(--txt);margin-top:7px;font-weight:700}
 /* Modal de racha PRO: héroe oscuro + camino de niveles + stats */
 .stk-hero{background:linear-gradient(160deg,#0A1E33 0%,#0e2c47 55%,#155a7d 100%);border-radius:16px;padding:26px 18px 20px;color:#fff;text-align:center;margin-bottom:6px}
 .stk-badge{width:92px;height:92px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:50px;background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.55),rgba(255,255,255,0) 55%),linear-gradient(160deg,#FEC14D,#eda52c);box-shadow:0 0 0 6px rgba(254,193,77,.16),0 0 34px rgba(254,193,77,.45)}
@@ -1094,6 +1100,8 @@ textarea.in{resize:vertical;min-height:96px}
   .chat-input-row .btn{width:44px;height:44px;font-size:18px}
   .chat-input-row .in{padding:12px 16px;font-size:16px;min-width:0}
   .chat-box{max-height:260px}
+  /* Pill de fecha del borrador: texto más largo ("Programado para ..."), entra en 360px */
+  .igmock-when2{font-size:12.5px;padding:9px 13px;gap:6px}
   /* Chips: tira horizontal desplazable en vez de apilarse en 3 filas */
   .chat-chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .chat-chips::-webkit-scrollbar{display:none}

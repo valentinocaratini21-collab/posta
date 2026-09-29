@@ -48,6 +48,27 @@ const api = {
   del: (u) => api.req('DELETE', u),
 };
 
+// Sube un archivo a /api/assets (logo, photo, video). El endpoint recibe el binario
+// crudo con Content-Type de imagen/video. Devuelve {ok, id, path, kind}.
+async function uploadAssetFile(file, kind) {
+  const k = kind === 'logo' ? 'logo' : kind === 'video' ? 'video' : 'photo';
+  let r;
+  try {
+    r = await fetch('/api/assets?kind=' + k, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch (e) {
+    throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.ok) throw new Error((data && (data.error || data.message)) || 'No se pudo subir el archivo');
+  try { if (typeof ASSETS !== 'undefined') ASSETS = await api.get('/api/assets').catch(() => ASSETS); } catch (e) {}
+  return data;
+}
+
 let ME = null;
 let PROFILE = null;
 let SETTINGS = null;
@@ -1041,7 +1062,7 @@ function creatorView(embed) {
     <div class="myphotos-card" style="padding:14px 18px">
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <span style="font-weight:700">📷 Tus fotos</span>
-        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('')}</div>
+        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:14px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
         <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">📤 Subir más</button>
         <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
       </div>
@@ -1284,7 +1305,7 @@ function bindMediaCard() {
     add.disabled = false; inp.value = '';
   };
   $$('#mediaCard [data-mediadel]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Borrar este archivo?')) return;
+    if (!confirm('¿Borrar? No se va a usar más en tus posteos nuevos.')) return;
     try { await api.delete('/api/assets/' + b.dataset.mediadel); } catch (e) {}
     ASSETS = await api.get('/api/assets').catch(() => ASSETS);
     render();
@@ -1300,6 +1321,11 @@ function fmtWhenTxt(v) {
   const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const p2 = n => String(n).padStart(2, '0');
   return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+// Pill de fecha del borrador: aclara que es la fecha programada de salida
+function fmtWhenPill(v) {
+  const wt = fmtWhenTxt(v);
+  return wt === 'Elegir día y hora' ? wt : `Programado para ${wt}`;
 }
 // Badge de estrategia (tipo de contenido) junto al pill de fecha
 function tipoBadge(t) {
@@ -1371,7 +1397,7 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
         </div>
         <button class="igmock-accept" data-revaccept="${d.id}">✅ Aceptar<span data-revacceptwhen="${d.id}">${(() => { const wt = fmtWhenTxt(isoToLocalInput(s[i] || '')); return wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; })()}</span></button>
-        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenTxt(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
+        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenPill(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div class="igmock-icos" style="margin-top:8px">
           <button data-revedit="${d.id}">✏️ Editar</button>
           ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">✨ Otro diseño</button>`}
@@ -1650,7 +1676,7 @@ function bindReview() {
   // La fecha se muestra linda en español; al cambiarla se refresca el texto visible
   $$('#reviewCard [data-revwhen]').forEach(inp => inp.addEventListener('change', () => {
     const t = document.querySelector(`#reviewCard [data-revwhentxt="${inp.dataset.revwhen}"]`);
-    if (t) t.textContent = fmtWhenTxt(inp.value);
+    if (t) t.textContent = fmtWhenPill(inp.value);
     const ab = document.querySelector(`#reviewCard [data-revacceptwhen="${inp.dataset.revwhen}"]`);
     if (ab) { const wt = fmtWhenTxt(inp.value); ab.textContent = wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; }
   }));
@@ -4105,22 +4131,20 @@ async function semanaView() {
   WEEKLY_BARS_HTML = weeksWithData >= 3
     ? st.weekly.map(x => `<div class="bar-w"><div class="bar" style="height:${Math.max(4, Math.round((x.total / maxT) * 100))}%"></div><span>${esc(x.label)}</span></div>`).join('')
     : '';
-  const tasteN = st.taste_learned || 0;
-
   // Barra superior unificada: racha + tu progreso en un solo vistazo.
   // La tarjeta "Tu progreso" del fondo se eliminó — su info vive acá arriba.
   const hasStreak = sk && sk.current > 0 && sk.level;
   const nl = hasStreak ? sk.nextLevel : null;
   const lvlPct = nl ? Math.min(99, Math.round((sk.current / nl.at) * 100)) : 100;
   const weekTxt = w.missing
-    ? (draftN > 0 ? `Tenemos ${draftN} ${draftN === 1 ? 'borrador' : 'borradores'} — programalos arriba 👆` : `Faltan ${w.missing} para completar la semana`)
+    ? (draftN > 0 ? `Tenemos ${draftN} ${draftN === 1 ? 'borrador' : 'borradores'} — revisalos abajo 👇` : `Faltan ${w.missing} para completar la semana`)
     : `✅ ${w.ready}/${w.planned} — semana armada, se publica sola`;
   const statsTxt = mo.published > 0
-    ? `≈${mo.hours_saved_total} h ahorradas · 📮 ${mo.published} ${mo.published === 1 ? 'publicado' : 'publicados'}${tasteN >= 3 ? ` · 🧠 ${tasteN}` : ''}`
-    : `Cada posteo te ahorra ≈1,5 h ⏱`;
+    ? `<span>⏱ ≈${mo.hours_saved_total} h ahorradas</span><span>📮 ${mo.published} ${mo.published === 1 ? 'publicado' : 'publicados'}</span>`
+    : `<span>⏱ Cada posteo te ahorra ≈1,5 h</span>`;
   const stripInner = `
     <span class="xp-row">${hasStreak
-      ? `<span class="xp-pts">⚡ ${sk.current * 100} pts</span><span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span><span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>`
+      ? `<span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span><span class="xp-pts">⚡ ${sk.current * 100} pts</span><span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>`
       : `<span class="xp-lvl">🔥 Publicá esta semana y empezá tu racha</span>`}</span>
     ${hasStreak ? `<span class="xp-bar"><span style="width:${lvlPct}%"></span></span>
     <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>` : ''}
@@ -4158,6 +4182,8 @@ async function semanaView() {
   // Las alertas transitorias (racha por apagarse, alcance, posteos fallidos) aparecen
   // solo cuando hay algo que atender, arriba de todo.
   const chatBlock = (draftN === 0 && !weekDone) ? '' : chatCardHTML(); // en el estado vacío el chat vive dentro de la tarjeta única
+  // 📷 Mis fotos: tira finita arriba de todo (solo si hay fotos/videos). Desde acá se borran.
+  const mediaStrip = (assetPhotos().length || assetVideos().length) ? mediaCardHTML() : '';
   const planSlot = weekDone ? '' : `<div id="perfAlert"></div><div id="weeklyPlan"></div>`;
   // Programados: tira compacta dentro del bloque "posteos" — la semana existe y se ve.
   const fmtShort = (iso) => {
@@ -4183,7 +4209,7 @@ async function semanaView() {
       </div>`).join('')}
     </div>
   </div>` : '';
-  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${heroCard}${redoMini}${scheduledStrip}${chatBlock}<div id="missionCard"></div>`;
+  const topBlock = `${mediaStrip}${xpStrip}${expBanner}${planSlot}${failedCard}${heroCard}${redoMini}${scheduledStrip}${chatBlock}<div id="missionCard"></div>`;
 
   return topBlock;
 }
@@ -4193,6 +4219,7 @@ function bindSemana() {
   bindAutopilot();
   bindChat();
   bindReview();
+  bindMediaCard(); // tira "Mis fotos": borrar desde acá
   // Misión de fotos semanal
   loadMissionCard().catch(() => {});
   // Sugerencia de serie + alerta honesta de rendimiento
@@ -4484,8 +4511,8 @@ let IG_MODE_WARN = false;  // aviso: modo Real elegido sin cuenta conectada
 function freshOB() {
   return {
     chat: [],            // [{role:'user'|'assistant', text}]
-    step: 0, total: 7,   // respuestas dadas
-    chips: null, awaitLogo: false,
+    step: 0, total: 8,   // respuestas dadas
+    chips: null, awaitLogo: false, awaitPhotos: false,
     loading: false, done: false, started: false,
     phase: 'chat',       // 'chat' | 'summary'
     profile: null, summary: null,
@@ -4508,6 +4535,7 @@ async function obNext() {
       o.step = typeof r.answered === 'number' ? r.answered : o.step;
       o.chips = r.chips || null;
       o.awaitLogo = !!r.awaitLogo;
+      o.awaitPhotos = !!r.awaitPhotos;
     } else {
       // Sin respuesta válida: sacar el mensaje del usuario para que reintente
       const ui = o.chat.map((m, i) => m.role === 'user' ? i : -1).filter(i => i >= 0).pop();
@@ -4609,9 +4637,11 @@ function onboardingView() {
     ${o.chips && !o.loading ? `<div class="chat-chips" style="margin-top:10px">${o.chips.map(c => `<button data-obchip="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
     <div class="chat-input-row" style="margin-top:10px">
       ${o.awaitLogo && !o.loading ? `<button class="btn btn-soft" id="obLogoBtn" title="Subir logo">📤</button><input type="file" id="obLogoFile" accept="image/*,.pdf,.docx" hidden>` : ''}
-      <input id="obInput" class="in" placeholder="Escribí tu respuesta…" maxlength="600" autocomplete="off" ${o.loading ? 'disabled' : ''}>
+      ${o.awaitPhotos && !o.loading ? `<button class="btn btn-soft" id="obPhotosBtn" title="Subir fotos">📸</button><input type="file" id="obPhotosFile" accept="image/*" multiple hidden>` : ''}
+      <input id="obInput" class="in" placeholder="${o.awaitPhotos ? 'O escribí "saltear"' : 'Escribí tu respuesta…'}" maxlength="600" autocomplete="off" ${o.loading ? 'disabled' : ''}>
       <button class="btn btn-primary" id="obSend" title="Enviar" ${o.loading ? 'disabled' : ''}>➤</button>
     </div>
+    ${o.awaitPhotos && !o.loading ? `<div id="obPhotosPrev" class="ob-photos-prev"></div>` : ''}
     <div id="obMsg" style="margin-top:8px"></div>
     <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
   </div>`;
@@ -4650,6 +4680,35 @@ function bindOnboarding() {
     };
   }
   const cf = $('#obConfirm'); if (cf) cf.onclick = obConfirmSave;
+  // Paso de fotos del onboarding: hasta 5 fotos del negocio → biblioteca semilla
+  // para que la IA genere contenido parecido cada semana.
+  const pb = $('#obPhotosBtn'), pf = $('#obPhotosFile'), pv = $('#obPhotosPrev');
+  if (pb && pf) {
+    pb.onclick = () => pf.click();
+    pf.onchange = async () => {
+      const files = [...pf.files].filter(f => f.type.startsWith('image/')).slice(0, 5);
+      pf.value = '';
+      if (!files.length) return;
+      const msg = $('#obMsg');
+      pb.disabled = true;
+      let ok = 0;
+      try {
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          if (pv) pv.insertAdjacentHTML('beforeend', `<span class="ob-ph-thumb"><img src="${URL.createObjectURL(f)}" alt=""></span>`);
+          if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
+          await uploadAssetFile(f, 'photo');
+          ok++;
+          if (pv && pv.lastElementChild) pv.lastElementChild.classList.add('done');
+        }
+        if (msg) msg.innerHTML = '';
+        obSend(`✅ ${ok} ${ok === 1 ? 'foto subida' : 'fotos subidas'}`);
+      } catch (e) {
+        pb.disabled = false;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudieron subir')}</div>`;
+      }
+    };
+  }
   const fx = $('#obFix');
   if (fx) fx.onclick = () => {
     o.phase = 'chat';
@@ -5230,6 +5289,16 @@ function bindCreator() {
     };
     // ---- Subir fotos a la librería (arriba de las opciones) ----
     $('#btnUploadPhotos').onclick = () => $('#mpFiles').click();
+    // ---- Borrar foto de la librería: no se usa más en posteos nuevos ----
+    $$('#mpRow [data-mpdel]').forEach(b => b.onclick = async (ev) => {
+      ev.stopPropagation();
+      if (!confirm('¿Borrar esta foto? No se va a usar más en tus posteos nuevos.')) return;
+      try {
+        await api.delete('/api/assets/' + b.dataset.mpdel);
+        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+        render(); // refresca el creador y la tira de Mis fotos
+      } catch (e) { alert('No se pudo borrar: ' + (e.message || e)); }
+    });
     $('#mpFiles').onchange = async () => {
       const files = Array.from($('#mpFiles').files || []).filter(f => f.type.startsWith('image/'));
       if (!files.length) return;
