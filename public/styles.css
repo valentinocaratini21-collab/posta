@@ -178,7 +178,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .sidebar .grow{flex:1}
 .side-user{margin:0 4px 8px;padding:10px 14px;font-size:13px;color:var(--mut);background:var(--bg2);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 /* main */
-.main{flex:1;padding:36px 32px 64px;max-width:1060px;background:transparent;animation:fadeUp .22s ease}
+.main{flex:1;min-width:0;padding:36px 32px 64px;max-width:1060px;background:transparent;animation:fadeUp .22s ease}
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 /* page head: chip + título */
 .page-head{display:flex;gap:15px;align-items:flex-start;margin-bottom:26px}
@@ -298,6 +298,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .igmock-icos button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 2px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-size:12px;font-weight:700;color:var(--txt);cursor:pointer;font-family:inherit;white-space:nowrap}
 .igmock-icos button:active{transform:scale(.97)}
 .igmock-icos button.danger{color:#C0392B}
+@media(max-width:760px){.igmock-icos{flex-wrap:wrap}.igmock-icos button{flex:1 1 30%;min-width:0}}
 .igmock-now{width:100%;padding:12px;border-radius:14px;border:1.5px solid #2793C8;background:#fff;color:#0A1E33;font-size:14.5px;font-weight:800;cursor:pointer;font-family:inherit}
 .igmock-now:active{transform:scale(.985)}
 .igmock-now:disabled{opacity:.55;cursor:default}
@@ -753,10 +754,12 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .streak-pill{margin-left:auto;align-self:center;background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:7px 15px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 2px 10px rgba(254,193,77,.4);white-space:nowrap;display:flex;flex-direction:column;align-items:center;line-height:1.25}
 .streak-pill:active{transform:scale(.95)}
 /* Racha gamificada: HUD de puntos y niveles (debajo del header de Mi semana) */
-.xp-strip{display:block;width:100%;text-align:left;background:linear-gradient(135deg,#2793C8,#1B7CA9);border:none;border-radius:20px;padding:14px 16px;margin:0 0 14px;cursor:pointer;color:#fff;box-shadow:0 4px 14px rgba(39,147,200,.35);font-family:inherit}
-.xp-strip:active{transform:scale(.99)}
+.xp-strip{display:block;width:100%;text-align:left;background:linear-gradient(135deg,#0A1E33 0%,#16406b 50%,#0A1E33 100%);background-size:220% 220%;animation:xpSheen 7s ease-in-out infinite;border:none;border-radius:20px;padding:14px 16px;margin:0 0 14px;cursor:pointer;color:#fff;box-shadow:0 4px 14px rgba(10,30,51,.35);font-family:inherit;-webkit-tap-highlight-color:transparent}
+.xp-strip:active{transform:scale(.99);filter:brightness(1.22)}
+@keyframes xpSheen{0%,100%{background-position:0% 40%}50%{background-position:100% 60%}}
+@media(prefers-reduced-motion:reduce){.xp-strip{animation:none}}
 .xp-title{display:block;font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.85);margin-bottom:8px}
-.xp-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.xp-row{display:flex;align-items:center;gap:8px;row-gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .xp-lvl{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
 .xp-pts{margin-left:auto;font-weight:800;font-size:13px;color:#8A5E00;background:#FFF3D1;border-radius:999px;padding:5px 11px;white-space:nowrap;flex:none}
 .xp-timer{font-size:12.5px;font-weight:700;color:#fff;background:rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;white-space:nowrap;flex:none}
@@ -905,6 +908,11 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
 .chat-chips button{border:1.5px solid var(--line);background:#F4F8FB;color:var(--txt);font-size:13px;font-weight:700;border-radius:999px;padding:8px 14px;cursor:pointer;font-family:inherit}
 .chat-chips button:active{transform:scale(.96);border-color:var(--cel)}
+/* Chips de quick-reply contextuales: fila scrolleable sobre el input, un tap = enviar */
+.chat-quick{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 6px;margin:0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chat-quick::-webkit-scrollbar{display:none}
+.chat-quick button{flex:0 0 auto;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 15px;font-size:14px;font-weight:700;color:#0A1E33;cursor:pointer;font-family:inherit;white-space:nowrap}
+.chat-quick button:active{background:var(--cel);border-color:var(--cel);color:#fff;transform:scale(.96)}
 .chat-idea-card{display:block;width:100%;text-align:left;background:#fff;border:2px solid var(--yel);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;font-family:inherit;color:var(--txt)}
 .chat-idea-card:last-of-type{margin-bottom:0}
 .chat-idea-card:active{transform:scale(.98);border-color:var(--cel)}
@@ -1178,3 +1186,48 @@ textarea.in{resize:vertical;min-height:96px}
 .rev-hashprev.expanded{white-space:normal;overflow:visible}
 .opt-caption.expanded{display:block;-webkit-line-clamp:unset;overflow:visible}
 .rev-more{display:block;margin:2px 0 6px;padding:4px 0;border:none;background:none;color:var(--cel);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation}
+
+/* ---------- Chat-first mobile: el chat es el home del celular ---------- */
+.bnav{display:none}
+.chome-top{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
+.chome-top .chome-sub{font-size:12px;color:var(--mut);line-height:1.4}
+.chat-cta-row{margin:6px 0 2px;align-self:flex-start}
+.chat-drafts{margin:16px 0 8px}
+.chat-drafts-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.chat-drafts-head span{font-size:13px;color:var(--mut)}
+.chat-draft{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:10px;background:#fff;box-shadow:var(--shadow)}
+.chat-draft>img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--bg2)}
+.chat-draft .igmock-badge{position:absolute;top:8px;right:8px}
+.chat-draft-body{padding:10px 12px 12px}
+.chat-draft-actions{display:flex;gap:8px;margin-top:10px}
+.chat-draft-actions .btn{flex:1}
+/* Avatar de la IA: burbujas del asistente en todo el chat */
+.chat-msg.ai{position:relative;margin-left:38px;max-width:calc(88% - 38px)}
+.chat-msg.ai::before{content:'';position:absolute;left:-36px;bottom:2px;width:30px;height:30px;border-radius:50%;background:#fff url('ai-avatar.png') center/cover no-repeat;border:1px solid var(--line)}
+.chome-ava{width:44px;height:44px;border-radius:50%;object-fit:cover;border:1.5px solid var(--line);flex-shrink:0}
+/* Progresión visual del avatar de posta.: badge de nivel + marco por tier */
+.chome-ava-wrap{position:relative;display:inline-block;flex-shrink:0;line-height:0}
+.ava-lvl{position:absolute;right:-5px;bottom:-5px;min-width:23px;height:23px;padding:0 5px;border-radius:999px;background:#0A1E33;color:#FEC14D;font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(10,30,51,.3);line-height:1}
+.chome-ava-wrap.tier-bronze .chome-ava{border:2.5px solid #CD7F32;box-shadow:0 0 12px rgba(205,127,50,.6)}
+.chome-ava-wrap.tier-silver .chome-ava{border:2.5px solid #C0C0C0;box-shadow:0 0 14px rgba(160,170,185,.75)}
+.chome-ava-wrap.tier-gold .chome-ava{border:2.5px solid #FEC14D;box-shadow:0 0 16px rgba(254,193,77,.85)}
+/* Tarjeta de misión de posta. en el chat */
+.chat-mission{max-width:100%;margin:4px 0 10px;background:#FFFDF6;border:1.5px dashed #FEC14D;border-radius:18px;padding:14px 16px}
+.chat-mission-tag{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0A1E33;background:#FEC14D;border-radius:999px;padding:3px 10px;margin-bottom:8px}
+.chat-mission-intro{font-size:14px;color:var(--txt);margin:0 0 8px;line-height:1.5}
+.chat-mission-title{font-size:17px;font-weight:800;color:#0A1E33;margin:0 0 4px}
+.chat-mission-why{font-size:13.5px;color:var(--mut);margin:0 0 12px;line-height:1.5}
+.chat-mission .btn{font-size:16px}
+/* Chip del nivel de posta. en la tira TU PROGRESO */
+.xp-ava{display:inline-block;font-size:12px;font-weight:700;color:#FEC14D;background:rgba(254,193,77,.14);border:1px solid rgba(254,193,77,.4);border-radius:999px;padding:3px 10px;margin:6px 0 0;white-space:nowrap}
+@media(max-width:760px){
+  /* Bottom nav: Chat · Semana · Ajustes (solo mobile) */
+  .bnav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:70;background:rgba(255,255,255,.97);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));}
+  .bnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;background:none;border:0;font-size:11px;color:var(--mut);font-family:inherit;cursor:pointer;padding:6px 2px;touch-action:manipulation}
+  .bnav button .bi{font-size:22px;line-height:1.2}
+  .bnav button.on{color:var(--cel);font-weight:800}
+  /* Chat home: conversación amplia, input pegado arriba del bottom nav */
+  .chat-home .chat-box{max-height:56vh;min-height:200px}
+  .chat-home .chat-input-row{position:sticky;bottom:78px;z-index:5;background:var(--bg);padding:8px 0}
+  .chat-home #chatCard{margin:0}
+}

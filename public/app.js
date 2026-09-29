@@ -9,7 +9,34 @@ const cortar = (t, max) => {
   if (s.length <= max) return s;
   const c = s.slice(0, max);
   const i = c.lastIndexOf(' ');
-  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+  const cut = (i > max * 0.4 ? c.slice(0, i) : c).trim();
+  return sinColgada(cut.split(' ').filter(Boolean)).join(' ');
+};
+// Palabras en las que un titular JAMÁS debe terminar (se vería cortado a mitad de oración,
+// ej. "Tip: Cómo organizar tu contenido de").
+const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','una','unos','unas','y','e','o','u','ni','que','en','con','por','para','sin','sobre','entre','hasta','desde','durante','a','ante','bajo','contra','hacia','tras','mediante','segun','según','como','cómo','pero','mas','más','si','sí','no','tu','tus','su','sus','mi','mis','nuestro','nuestra','esta','este','esto','es','son','hay','se','le','les','lo','me','te']);
+const sinColgada = (words) => {
+  const w = words.slice();
+  while (w.length > 1 && HEADLINE_DANGLING.has(String(w[w.length - 1]).toLowerCase().replace(/[.,;:!?¿¡()"“”'']/g, ''))) w.pop();
+  return w;
+};
+// Titular COMPLETO para imágenes: nunca cortado a mitad de oración ni terminado en
+// preposición/artículo. Prefiere la primera oración si entra; si no, recorta por
+// palabras y retrocede hasta una palabra "firme".
+const makeHeadline = (text, maxWords = 6, maxChars = 70) => {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const m = s.match(/^[^.!?…]+[.!?…]/);
+  const first = (m ? m[0] : s).trim();
+  const fw = first.split(' ').filter(Boolean);
+  const words = fw.length <= maxWords ? sinColgada(fw) : sinColgada(s.split(' ').filter(Boolean).slice(0, maxWords));
+  let out = words.join(' ');
+  if (out.length > maxChars) {
+    const c = out.slice(0, maxChars);
+    const i = c.lastIndexOf(' ');
+    out = sinColgada((i > maxChars * 0.4 ? c.slice(0, i) : c).trim().split(' ').filter(Boolean)).join(' ');
+  }
+  return out;
 };
 
 const api = {
@@ -614,6 +641,14 @@ function pwaIsInstalled() {
 function pwaIsStandalone() {
   try { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone; } catch (e) { return false; }
 }
+// Chat-first mobile: el celular abre directo en el chat (desktop sin cambios).
+function isMobileApp() {
+  try {
+    if (pwaIsStandalone()) return true;
+    if (window.matchMedia && matchMedia('(max-width:760px)').matches) return true;
+    return false;
+  } catch (e) { return false; }
+}
 function pwaIsIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 }
@@ -732,7 +767,12 @@ function appShell(tab, content) {
       <button class="side-link" id="btnLogout"><span class="ico">🚪</span>Salir</button>
     </div>
     <div class="main">${content}</div>
-  </div>`;
+  </div>
+  <nav class="bnav" aria-label="Navegación">
+    <button data-tab="chat" class="${tab === 'chat' ? 'on' : ''}"><span class="bi">💬</span><span>Chat</span></button>
+    <button data-tab="semana" class="${tab === 'semana' ? 'on' : ''}"><span class="bi">📋</span><span>Semana</span></button>
+    <button data-tab="ajustes" class="${tab === 'ajustes' ? 'on' : ''}"><span class="bi">⚙️</span><span>Ajustes</span></button>
+  </nav>`;
 }
 
 /* ---------- CREAR ---------- */
@@ -1473,7 +1513,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
-        ${d.strategy_why ? `<div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:8px">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
+        ${d.strategy_why ? `<div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
         <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
         <div class="aiedit" id="aiedit-${d.id}" hidden>
           <div class="aiedit-row">
@@ -1913,7 +1953,7 @@ async function regenDraft(id, btn) {
     const photos = assetPhotos().slice().reverse();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
-    const title = (d.source_topic || topic).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const title = makeHeadline(d.source_topic || topic, 5).toUpperCase() || 'NOVEDAD';
     const ph = photos.length ? photos[(idx + 1) % photos.length] : null;
     const imagePath = await renderDesignImage({
       tpl: pickTpl(idx + 1, false),
@@ -2002,7 +2042,7 @@ async function changeDraftPhoto(id, el, photoPath) {
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
     const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
-    const title = topic.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const title = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
     const imagePath = await renderDesignImage({
       tpl: pickTpl(idx + 1, false),
       pal: defaultPal(),
@@ -2229,7 +2269,7 @@ async function renderChatStoryboard() {
   try {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     const handle = (PROFILE || {}).ig_username || '';
-    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const title = makeHeadline(idea.titulo || 'NOVEDAD', 5).toUpperCase() || 'NOVEDAD';
     const angle = (idea.angulo || '').split('.')[0].slice(0, 90);
     const texts = [title, angle || title, handle ? '@' + handle : 'SEGUINOS 👇'];
     const ph = lib.length ? await photoImg(lib[CHAT_PHOTO_IDX % lib.length].file_path) : null;
@@ -2277,7 +2317,7 @@ async function renderChatPreviews() {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const handle = (PROFILE || {}).ig_username || '';
-    const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const title = makeHeadline(idea.titulo || 'NOVEDAD', 5).toUpperCase() || 'NOVEDAD';
     // Bajada con copy real (primera línea del caption elegido); el ángulo es un brief y nunca se imprime.
     const cap0 = (CHAT_CAPTIONS[CHAT_CAP_SEL] || '');
     const subtitle = cortar(String(cap0 || idea.titulo || '').split('\n')[0], 90);
@@ -2406,7 +2446,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
-  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Tu community manager</h3>`;
+  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 posta.</h3>`;
   const wrap = compact
     ? `<div id="chatCard" style="${bareWrap ? 'margin:0 0 4px' : 'margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)'}">`
     : `<div class="card" id="chatCard">`;
@@ -2692,6 +2732,25 @@ async function chatSend() {
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(sendText)}</div>`);
   inp.value = '';
   chatScroll();
+  // "Armame la semana" (chip) → dispara el autopilot directo, como el CTA.
+  if (/arma(m|r)?(me)? la semana|armemos (mi|la) semana/i.test(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
+    try { track('autopilot_start', { from: 'chat' }); } catch (e) {}
+    runAutopilotSmart((typeof ME !== 'undefined' && ME && ME.posts_per_week) || 3, 'semana');
+    return;
+  }
+  // "¿qué preguntan en mis comentarios?" → insights del análisis (antes que el flujo de responder comentarios).
+  if (/\bcomentarios?\b/i.test(sendText) && /(pregunt|duda|objeci|quieren|frena|dicen)/i.test(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
+    showCommentInsights();
+    return;
+  }
+  // "¿qué sale esta semana?" → la agenda, adentro del chat.
+  if (/qu[eé] sale|esta semana|mi semana|\bagenda\b|programados/i.test(sendText) && !/arma/i.test(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
+    showWeekInChat();
+    return;
+  }
   // "comentarios" → la IA trae los pendientes de Instagram y deja la respuesta lista, acá en el chat
   if (/\bcomentarios?\b/i.test(sendText) && !/sin comentarios/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
@@ -2997,9 +3056,417 @@ function bindChat() {
   renderChatPhotos();
   renderChatPreviews();
   renderChatStoryboard();
-  if (!CHAT_LOADED) { CHAT_LOADED = true; chatLoadHistory(); }
+  if (!CHAT_LOADED) { CHAT_LOADED = true; try { window.__chatHistP = chatLoadHistory(); } catch (e) { window.__chatHistP = null; } }
 }
 
+/* ---------- CHAT-FIRST MOBILE: el chat es el home del celular ---------- */
+// Vista #/app/chat: el chat a pantalla completa, con saludo proactivo y
+// las tarjetas de la semana adentro. Mi semana y Ajustes siguen como pestañas.
+async function chatView() {
+  return `
+  <div class="chat-home">
+    <div class="chome-top">
+      <span class="chome-ava-wrap" id="chomeAvaWrap"><img src="ai-avatar.png" class="chome-ava" alt="posta."><span class="ava-lvl" id="avaLvl" hidden></span></span>
+      <div><b>posta.</b><div class="chome-sub">te arma la semana y la publica por vos</div></div>
+    </div>
+    ${chatCardHTML(true, true, true)}
+    <div id="revMsg"></div>
+    <div id="apProg-semana"></div>
+    <div id="chatDraftCards"></div>
+    <div id="chatMissionMount"></div>
+  </div>`;
+}
+
+async function bindChatView() {
+  bindChat();
+  bindReview();
+  bindScheduleAll();
+  bindAutopilot();
+  // El auto-arranque de la semana también aplica entrando por el chat.
+  if (typeof maybeAutoStartWeek === 'function') { try { maybeAutoStartWeek(); } catch (e) {} }
+  // El saludo va DESPUÉS del historial (chatLoadHistory reemplaza el box):
+  // si ya cargó antes, no hay nada que esperar.
+  try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
+  try { await chatGreet(); } catch (e) {}
+}
+
+// Mensaje del asistente solo local: no se loguea al servidor (no ensucia el contexto de la IA).
+function chatSayLocal(text) {
+  try { CHAT.push({ role: 'assistant', text }); } catch (e) {}
+  const box = document.getElementById('chatBox');
+  if (box) box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(text)}</div>`);
+  if (typeof chatScroll === 'function') chatScroll();
+}
+
+// Saludo proactivo con el estado REAL (una sola burbuja, una vez por sesión).
+// La IA "recibe": sabe si la semana está lista, armándose, programada o vacía.
+async function chatGreet() {
+  let greeted = false;
+  try { greeted = sessionStorage.getItem('posta_chat_greet') === '1'; } catch (e) {}
+  // Estado real, compuesto del lado cliente con lo que ya existe.
+  let all = [];
+  try { all = await api.get('/api/posts'); } catch (e) { all = []; }
+  const thisMon = mondayKey(new Date());
+  const drafts = all.filter(p => p.status === 'draft' && (!p.week_key || p.week_key === thisMon)).sort((a, b) => a.id - b.id);
+  const scheduled = all.filter(p => p.status === 'scheduled');
+  try { REVIEW_DRAFTS = drafts; } catch (e) {}
+  renderChatDraftCards(drafts);
+  // Chips de quick-reply contextuales (van siempre, el saludo solo una vez por sesión).
+  try { renderQuickChips(drafts, scheduled, (typeof AUTOPILOT_RUNNING !== 'undefined' && AUTOPILOT_RUNNING) || window.__autoWeekRunning); } catch (e) {}
+  // Nivel del avatar + misiones: siempre se actualizan (no son el saludo).
+  try { chatAvatarLevel(); } catch (e) {}
+  try { chatMissions(all); } catch (e) {}
+  if (greeted) return;
+  try { sessionStorage.setItem('posta_chat_greet', '1'); } catch (e) {}
+  const running = (typeof AUTOPILOT_RUNNING !== 'undefined' && AUTOPILOT_RUNNING) || window.__autoWeekRunning;
+  let text, cta = '';
+  if (running) {
+    text = 'Estoy armando tu semana ahora mismo ⏳ Te aviso acá cuando esté lista.';
+  } else if (drafts.length > 0) {
+    text = `Tu semana está lista ✅ ¿La revisamos? Te la dejé acá abajo 👇`;
+  } else if (scheduled.length > 0) {
+    // Resumen proactivo (hoy / mañana a la noche): reemplaza el saludo
+    // genérico, no se suma — una sola burbuja por apertura.
+    text = chatSchedSummary(scheduled) || 'Tu semana sale sola 📅 La próxima ya se está armando.';
+  } else {
+    text = '¿Te armo tu semana? 👇';
+    cta = `<div class="chat-cta-row"><button class="btn btn-primary" data-autopilot="semana">⚡ Armar mi semana</button></div>`;
+  }
+  chatSayLocal(text);
+  const box = document.getElementById('chatBox');
+  if (box && cta) {
+    box.insertAdjacentHTML('beforeend', cta);
+    if (typeof chatScroll === 'function') chatScroll();
+  }
+  // El CTA trae data-autopilot: cablearlo (el gate de ADN del autopilot
+  // maneja solo el caso sin datos, con mini-entrevista en este mismo chat).
+  if (cta && typeof bindAutopilot === 'function') bindAutopilot();
+}
+
+// Tarjetas de borrador dentro del chat: reusan las acciones de la revisión
+// (data-revaccept / data-revvars vía bindReview, #btnScheduleAll vía bindScheduleAll).
+// Nada se publica sin el tap: el ✅ programa ese borrador, el 📅 programa toda la semana.
+async function renderChatDraftCards(drafts) {
+  const mount = document.getElementById('chatDraftCards');
+  if (!mount) return;
+  let list = drafts;
+  if (!Array.isArray(list)) {
+    try {
+      const all = await api.get('/api/posts');
+      const thisMon = mondayKey(new Date());
+      list = all.filter(p => p.status === 'draft' && (!p.week_key || p.week_key === thisMon)).sort((a, b) => a.id - b.id);
+    } catch (e) { list = []; }
+  }
+  try { REVIEW_DRAFTS = list; } catch (e) {}
+  if (!list.length) { mount.innerHTML = ''; return; }
+  const n = list.length;
+  mount.innerHTML = `
+  <div class="chat-drafts">
+    <div class="chat-drafts-head"><b>📋 Tu semana</b><span>${n} ${n === 1 ? 'borrador' : 'borradores'}</span></div>
+    <button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin-bottom:10px">📅 Programar mi semana →</button>
+    ${list.map((d, i) => `
+    <div class="chat-draft">
+      ${d.image_path ? `<img src="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" alt="Borrador ${i + 1}" loading="lazy">` : ''}
+      ${d.media_type === 'video' ? `<span class="igmock-badge">🎬 Reel</span>` : ''}
+      ${d.media_type === 'story' ? `<span class="igmock-badge">📱 Historia</span>` : ''}
+      <div class="chat-draft-body">
+        <div class="rev-preview" data-revpreview="${d.id}">${esc((d.caption || '').trim() || 'Sin texto todavía')}</div>
+        ${((d.caption || '').length > 120) ? `<button class="rev-more" data-revmore="${d.id}">ver más ▾</button>` : ''}
+        <div class="chat-draft-actions">
+          <button class="btn btn-primary btn-sm" data-revaccept="${d.id}">✅ Programar</button>
+          <button class="btn btn-soft btn-sm" data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">🔄 Otras 3</button>
+        </div>
+        <div id="revvar-${d.id}"></div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+  if (typeof bindReview === 'function') bindReview();
+  if (typeof bindScheduleAll === 'function') bindScheduleAll();
+  // Lightbox en las tarjetas del chat (bindReview lo scopea a #reviewCard).
+  $$('#chatDraftCards [data-lightbox]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    if (typeof openLightbox === 'function') openLightbox(el.dataset.lightbox, el.dataset.video === '1');
+  });
+}
+
+
+/* ---------- CAPA PROACTIVA DEL CHAT ---------- */
+// Chips de quick-reply contextuales sobre el input: un tap manda el mensaje.
+// El estado ya lo trae chatGreet (no fetchea de más).
+function renderQuickChips(drafts, scheduled, running) {
+  const card = document.getElementById('chatCard');
+  const inputRow = card ? card.querySelector('.chat-input-row') : null;
+  if (!inputRow) return;
+  let mount = document.getElementById('chatQuickChips');
+  if (!mount) {
+    mount = document.createElement('div');
+    mount.id = 'chatQuickChips';
+    mount.className = 'chat-quick';
+    inputRow.parentNode.insertBefore(mount, inputRow);
+  }
+  const dN = (drafts || []).length, sN = (scheduled || []).length;
+  let chips;
+  if (running) {
+    chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬'];
+  } else if (dN > 0 || sN > 0) {
+    chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬', '💡 Dame una idea para vender'];
+  } else {
+    chips = ['⚡ Armame la semana', '💡 Dame una idea para vender'];
+  }
+  mount.innerHTML = chips.map(c => `<button type="button" data-qchip="${esc(c)}">${esc(c)}</button>`).join('');
+  mount.querySelectorAll('[data-qchip]').forEach(b => b.onclick = () => {
+    const i = document.getElementById('chatInput');
+    if (!i) return;
+    i.value = b.dataset.qchip;
+    chatSend();
+  });
+}
+
+// Utilidades de agenda con la zona horaria del usuario (misma convención que "Lo que se viene").
+function chatAgendaKit() {
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const dayKey = (d) => { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } };
+  const parse = (iso) => {
+    const s0 = String(iso || '');
+    let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
+    if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+    return new Date(s);
+  };
+  const title = (p) => {
+    const t = String(p.source_topic || '').trim();
+    if (t) return t;
+    const c = String(p.caption || '').split('\n')[0].trim();
+    return c ? cortar(c, 50) : 'tu posteo';
+  };
+  const hour = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz }); } catch (e) { return ''; } };
+  const dayLabel = (d, todayK, tomorrowK) => {
+    const k = dayKey(d);
+    if (k === todayK) return 'Hoy';
+    if (k === tomorrowK) return 'Mañana';
+    try { return d.toLocaleDateString('es-AR', { weekday: 'long', timeZone: tz }); } catch (e) { return k; }
+  };
+  return { tz, dayKey, parse, title, hour, dayLabel };
+}
+
+// Resumen proactivo para el saludo: si hay posteos HOY → "Hoy sale…";
+// si es de noche y hay mañana → "Mañana sale…". '' = saludo genérico.
+function chatSchedSummary(scheduled) {
+  try {
+    const K = chatAgendaKit();
+    const items = (scheduled || []).map(p => ({ p, d: K.parse(p.scheduled_at) }))
+      .filter(x => !isNaN(x.d) && x.d.getTime() > Date.now() - 1800e3)
+      .sort((a, b) => a.d - b.d);
+    if (!items.length) return '';
+    const todayK = K.dayKey(new Date()), tomorrowK = K.dayKey(new Date(Date.now() + 864e5));
+    const today = items.filter(x => K.dayKey(x.d) === todayK);
+    if (today.length === 1) return `Hoy sale ${K.title(today[0].p)} a las ${K.hour(today[0].d)} 📅`;
+    if (today.length > 1) return `Hoy salen ${today.length} posteos 📅 — ${today.map(x => K.hour(x.d)).join(' y ')}`;
+    let hNow = 12;
+    try { hNow = parseInt(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', hour12: false, timeZone: K.tz }), 10); } catch (e) {}
+    const tomorrow = items.filter(x => K.dayKey(x.d) === tomorrowK);
+    if (tomorrow.length && hNow >= 18) {
+      return tomorrow.length === 1
+        ? `Mañana sale ${K.title(tomorrow[0].p)} a las ${K.hour(tomorrow[0].d)} 📅`
+        : `Mañana salen ${tomorrow.length} posteos 📅 — ${tomorrow.map(x => K.hour(x.d)).join(' y ')}`;
+    }
+    return '';
+  } catch (e) { return ''; }
+}
+
+// Intent "¿qué sale esta semana?": la agenda, adentro del chat.
+async function showWeekInChat() {
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', '<div class="chat-msg ai" id="chatWeekTyping">⏳ Revisando tu agenda…</div>');
+  if (typeof chatScroll === 'function') chatScroll();
+  let all = [];
+  try { all = await api.get('/api/posts'); } catch (e) { all = []; }
+  const el = document.getElementById('chatWeekTyping');
+  if (el) el.remove();
+  const K = chatAgendaKit();
+  const items = all.filter(p => p.status === 'scheduled')
+    .map(p => ({ p, d: K.parse(p.scheduled_at) }))
+    .filter(x => !isNaN(x.d)).sort((a, b) => a.d - b.d);
+  if (!items.length) { chatSayLocal('Todavía no tenés nada programado. ¿Te armo la semana? 👇'); return; }
+  const todayK = K.dayKey(new Date()), tomorrowK = K.dayKey(new Date(Date.now() + 864e5));
+  const lines = ['📅 Tu semana:'];
+  items.slice(0, 10).forEach(x => lines.push(`• ${K.dayLabel(x.d, todayK, tomorrowK)} ${K.hour(x.d)} — ${K.title(x.p)}`));
+  chatSayLocal(lines.join('\n'));
+  try { track('chat_week_summary'); } catch (e) {}
+}
+
+// Intent "¿qué preguntan en mis comentarios?": FAQs/objeciones/deseos del
+// análisis de IG (ig-comments.js → ADN). Rioplatense, corto.
+async function showCommentInsights() {
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', '<div class="chat-msg ai" id="chatInsTyping">💬 Revisando qué preguntan en tus comentarios…</div>');
+  if (typeof chatScroll === 'function') chatScroll();
+  const done = () => { const el = document.getElementById('chatInsTyping'); if (el) el.remove(); };
+  let dna = {};
+  try { dna = await api.get('/api/dna'); } catch (e) { dna = {}; }
+  const read = (d) => ({
+    faqs: ((d && d.preguntas_frecuentes) || []).map(f => (f && f.pregunta) || f).filter(Boolean),
+    objs: ((d && d.objeciones) || []).filter(Boolean),
+    des: ((d && d.deseos) || []).filter(Boolean),
+  });
+  let r = read(dna);
+  if (!r.faqs.length && !r.objs.length && !r.des.length) {
+    const igOn = !!((typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected) ||
+      (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.ig_user_id));
+    if (!igOn) {
+      done();
+      chatSayLocal('Todavía no leí tus comentarios 💬 Conectá tu Instagram en Ajustes y los analizo todas las semanas.');
+      return;
+    }
+    // Dispara el análisis en segundo plano (si está fresco, vuelve al instante).
+    try { api.post('/api/ig/mine-comments', {}).catch(() => {}); } catch (e) {}
+    done();
+    chatSayLocal('Todavía no los analicé — ya me puse a leerlos 💬 Preguntame de nuevo en unos minutos.');
+    return;
+  }
+  done();
+  const lines = ['💬 Esto es lo que más aparece en tus comentarios:'];
+  r.faqs.slice(0, 5).forEach((q, i) => lines.push(`${i + 1}. ${String(q).slice(0, 140)}`));
+  if (r.objs.length) lines.push('', `Lo que más les frena: ${r.objs.slice(0, 3).join(' · ')}`);
+  if (r.des.length) lines.push(`Lo que más quieren: ${r.des.slice(0, 3).join(' · ')}`);
+  chatSayLocal(lines.join('\n'));
+  try { track('chat_comment_insights'); } catch (e) {}
+}
+
+/* ---------- NIVELES Y MISIONES DE posta. ---------- */
+// posta. sube de nivel con cada posteo publicado (100 XP, 150 si es reel).
+// El marco del avatar evoluciona: 3-4 bronce, 5-6 plata, 7+ oro.
+const POSTA_LVL_NAMES = { 1: 'Recién llegado', 2: 'Aprendiz del feed', 3: 'Ritmo agarrado', 4: 'Contenido serio', 5: 'Máquina de contenido', 6: 'Cara visible', 7: 'Referente del rubro', 8: 'Imparable', 9: 'Ídolo local', 10: 'Leyenda del barrio' };
+
+async function chatAvatarLevel() {
+  let lv = null;
+  try { lv = await api.get('/api/avatar-level'); } catch (e) {}
+  if (!lv || !lv.ok) return;
+  // Header del chat: badge con el número + marco según tier.
+  try {
+    const wrap = document.getElementById('chomeAvaWrap');
+    const badge = document.getElementById('avaLvl');
+    if (wrap && badge) {
+      wrap.classList.remove('tier-bronze', 'tier-silver', 'tier-gold');
+      if (lv.tier && lv.tier !== 'none') wrap.classList.add('tier-' + lv.tier);
+      badge.hidden = false;
+      badge.textContent = lv.level;
+      badge.title = 'Nivel ' + lv.level + ': ' + (POSTA_LVL_NAMES[lv.level] || '');
+    }
+  } catch (e) {}
+  // Tira TU PROGRESO (Mi semana): chip con el nivel, si existe.
+  try { paintAvatarStrip(lv); } catch (e) {}
+  // Festejo de subida de nivel: una vez por nivel (el servidor guarda el seen).
+  const unseen = (lv.unseenLevels || []).filter(n => n > 1);
+  if (unseen.length) {
+    const top = Math.max.apply(null, unseen);
+    const tierMsg = lv.tier === 'gold' ? ' Desbloqueé mi marco de oro 🥇'
+      : lv.tier === 'silver' ? ' Desbloqueé mi marco de plata 🥈'
+      : lv.tier === 'bronze' ? ' Desbloqueé mi marco de bronce 🥉' : '';
+    chatSayLocal(`¡Subí al nivel ${top}: ${POSTA_LVL_NAMES[top] || ''}! 🎉${tierMsg}`);
+    try { track('avatar_levelup', { level: top }); } catch (e) {}
+    try { api.post('/api/avatar-level/seen', { levels: unseen }); } catch (e) {}
+  }
+}
+
+// Chip del nivel de posta. en la tira TU PROGRESO (no rompe la racha existente).
+function paintAvatarStrip(lv) {
+  const el = document.getElementById('xpAvaLvl');
+  if (!el || !lv || !lv.ok) return;
+  el.textContent = `🤖 posta. Nv ${lv.level}`;
+  el.title = POSTA_LVL_NAMES[lv.level] || '';
+}
+
+// Misiones de posta.: una activa por vez, narradas en el chat.
+const POSTA_MISSION_DEFS = [
+  { id: 'connect_ig', title: 'Conectá tu Instagram', why: 'Así publico por vos y leo tus comentarios.', cta: 'Conectar Instagram', go: '#/app/ajustes' },
+  { id: 'photos', title: 'Subí fotos de tu negocio', why: 'Con tus fotos reales los posteos venden de verdad.', cta: 'Subir fotos', go: '#/app/semana' },
+  { id: 'dna', title: 'Contame de tu negocio', why: 'Dos minutos y te conozco a fondo.', cta: 'Contarle a posta.', go: '#/app/ajustes' },
+  { id: 'first_post', title: 'Publicá tu primer posteo', why: 'El primero es el que más cuesta — después sale solo.', cta: 'Ver mis borradores', act: 'drafts' },
+  { id: 'first_week', title: 'Programá tu primera semana', why: 'Un tap y toda la semana sale sola.', cta: '📅 Programar mi semana', act: 'schedule' },
+  { id: 'comments', title: 'Respondé tus comentarios', why: 'Responder rápido trae clientes.', cta: 'Ver comentarios', act: 'comments' },
+];
+
+async function chatMissions(all) {
+  const mount = document.getElementById('chatMissionMount');
+  if (!mount) return;
+  const posts = Array.isArray(all) ? all : [];
+  const published = posts.filter(p => p.status === 'published');
+  const scheduled = posts.filter(p => p.status === 'scheduled');
+  const igOn = !!((typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected));
+  let photosN = 0, dnaComplete = false, pendingComments = 0;
+  try {
+    const [assets, dnaSt, com] = await Promise.all([
+      api.get('/api/assets').catch(() => []),
+      api.get('/api/dna/status').catch(() => ({})),
+      igOn ? api.get('/api/comments').catch(() => ({})) : Promise.resolve({ comments: [] }),
+    ]);
+    photosN = (assets || []).filter(a => a.kind === 'photo').length;
+    dnaComplete = !!(dnaSt && dnaSt.complete);
+    pendingComments = ((com && com.comments) || []).length;
+  } catch (e) {}
+  const done = {
+    connect_ig: igOn,
+    photos: photosN > 0,
+    dna: dnaComplete,
+    first_post: published.length > 0,
+    first_week: scheduled.length > 0 || published.length >= 3,
+    comments: igOn && pendingComments === 0,
+  };
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem('posta_missions_done') || '[]'); } catch (e) { seen = []; }
+  const nowDone = POSTA_MISSION_DEFS.filter(m => done[m.id]).map(m => m.id);
+  const newly = nowDone.filter(id => !seen.includes(id));
+  if (newly.length) {
+    const m = POSTA_MISSION_DEFS.find(x => x.id === newly[0]);
+    if (m) chatSayLocal(`¡Misión cumplida! 🎉 ${m.title} — seguimos.`);
+    try { localStorage.setItem('posta_missions_done', JSON.stringify(Array.from(new Set(seen.concat(nowDone))))); } catch (e) {}
+  }
+  const active = POSTA_MISSION_DEFS.find(m => !done[m.id]);
+  if (!active) {
+    mount.innerHTML = '';
+    // Todo hecho: felicitar una sola vez, sin spamear.
+    let ok = false;
+    try { ok = localStorage.getItem('posta_missions_all') === '1'; } catch (e) {}
+    if (!ok && nowDone.length) {
+      try { localStorage.setItem('posta_missions_all', '1'); } catch (e) {}
+      chatSayLocal('Tu Instagram está perfecto 🌟 Misión cumplida — yo me ocupo de que siga así.');
+    }
+    return;
+  }
+  mount.innerHTML = `
+  <div class="chat-mission">
+    <div class="chat-mission-tag">🎯 Misión</div>
+    <p class="chat-mission-intro">Para que tu Instagram quede perfecto, empecemos por esto 👇</p>
+    <p class="chat-mission-title">${esc(active.title)}</p>
+    <p class="chat-mission-why">${esc(active.why)}</p>
+    <button class="btn btn-primary btn-block" data-mcta="${esc(active.id)}">${esc(active.cta)}</button>
+  </div>`;
+  const b = mount.querySelector('[data-mcta]');
+  if (b) b.onclick = () => {
+    try { track('chat_mission_cta', { mission: active.id }); } catch (e) {}
+    if (active.go) { location.hash = active.go; return; }
+    if (active.act === 'drafts') {
+      const el = document.getElementById('chatDraftCards');
+      if (el && el.innerHTML.trim()) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      const i = document.getElementById('chatInput');
+      if (i) { i.value = '⚡ Armame la semana'; chatSend(); }
+      return;
+    }
+    if (active.act === 'schedule') {
+      const s = document.getElementById('btnScheduleAll');
+      if (s) { s.click(); return; }
+      chatSayLocal('Todavía no hay borradores para programar — armemos tu semana primero 👇');
+      return;
+    }
+    if (active.act === 'comments') {
+      const i = document.getElementById('chatInput');
+      if (i) { i.value = 'comentarios'; chatSend(); }
+      return;
+    }
+  };
+}
 
 async function renderDesignImage(o) {
   const cv = document.createElement('canvas');
@@ -3091,7 +3558,7 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub, on
     // Sin fotos: generamos el diseño y lo usamos como escena (ya trae texto, no duplicamos)
     const image_path = await renderDesignImage({
       tpl: DESIGN_TPLS[(idx + k) % DESIGN_TPLS.length], pal: palIdx,
-      title: String(headline || text).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD',
+      title: makeHeadline(headline || text, 5).toUpperCase() || 'NOVEDAD',
       subtitle: angle, handle, photoImg: null, logoImg,
     });
     return { image_path, text: '', duration: 3 };
@@ -3140,13 +3607,12 @@ function tipoFromText(t) {
   if (/cliente|testimonio|rese[nñ]a|opini[oó]n|comunidad|gracias/i.test(s)) return 'social';
   return 'novedad';
 }
-// Titular corto para la imagen: el título de la idea (máx 6 palabras) o la
-// primera línea del caption. Si no hay nada usable, '' (el backend genera sin texto).
+// Titular corto y COMPLETO para la imagen: el título de la idea o la primera
+// línea del caption, jamás cortado a mitad de oración (makeHeadline).
 function pickHeadline(idea, caption = '') {
-  const tw = String((idea && idea.titulo) || '').trim().split(/\s+/).filter(Boolean);
-  if (tw.length) return tw.slice(0, 6).join(' ');
-  const cw = String(caption || '').split('\n')[0].trim().split(/\s+/).filter(Boolean);
-  return cw.length ? cw.slice(0, 6).join(' ') : '';
+  const t = makeHeadline((idea && idea.titulo) || '', 6);
+  if (t) return t;
+  return makeHeadline(String(caption || '').split('\n')[0], 6);
 }
 // Motor de imágenes nivel agencia: concept shot generado con IA a partir de la
 // idea y las fotos reales del cliente. Devuelve el path o null si falla
@@ -3204,7 +3670,7 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false, onProg
   if (!imagePath) {
     // Titular sobre la imagen: lo escribe la IA (con punch); fallback al tema truncado.
     const title = String(out.overlay || '').trim().toUpperCase()
-      || (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+      || makeHeadline(idea.titulo || 'NOVEDAD', 5).toUpperCase() || 'NOVEDAD';
     // La bajada la escribe la IA como copy real (suboverlay); el ángulo es un brief y nunca se imprime.
     const subtitle = String(out.suboverlay || '').trim() || cortar(String(caption || '').split('\n')[0], 90);
     // Fotos FRESCAS (subidas esta semana): protagonistas. Sin fotos nuevas pero con
@@ -3377,6 +3843,14 @@ async function runAutopilot(n, tag) {
     // Si no salió NINGÚN borrador, algo está roto: mostrar el error en vez de un festejo vacío
     if (firstErr && !live.length) throw firstErr;
     prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
+    // Chat-first: si el usuario está en el chat, la promesa "te aviso acá mismo"
+    // se cumple acá — el aviso cae como mensaje de la IA y se muestran las tarjetas.
+    try {
+      if ((location.hash || '').startsWith('#/app/chat') && document.getElementById('chatBox')) {
+        chatSayLocal('¡Tu semana está lista! 📋 ¿La revisamos? 👇');
+        if (typeof renderChatDraftCards === 'function') renderChatDraftCards();
+      }
+    } catch (e) {}
     // Historias automáticas: 2 por semana con las primeras ideas (foto + título).
     // Se programan junto con la semana: más presencia, cero trabajo extra.
     // (No consumen cupo del plan; si el cupo frenó la corrida, tampoco se crean.)
@@ -3388,8 +3862,8 @@ async function runAutopilot(n, tag) {
       const nStories = Math.min(2, picks.length - 1);
       for (let si = 0; si < nStories; si++) {
         const idea = picks[si];
-        const title = (idea.titulo || 'Novedad').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-        const subtitle = (idea.angulo || '').split('.')[0].slice(0, 80);
+        const title = makeHeadline(idea.titulo || 'Novedad', 5).toUpperCase() || 'NOVEDAD';
+        const subtitle = makeHeadline((idea.angulo || '').split('.')[0], 12, 80);
         const ph = sPhotos.length ? sPhotos[(si + 1) % sPhotos.length] : null;
         let sPath = null;
         try {
@@ -5048,6 +5522,7 @@ async function semanaView() {
     <span class="xp-row">${hasStreak
       ? `<span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span><span class="xp-pts">⚡ ${sk.current * 100} pts</span><span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>`
       : `<span class="xp-lvl">🔥 Publicá esta semana y empezá tu racha</span>`}</span>
+    <span class="xp-ava" id="xpAvaLvl"></span>
     ${hasStreak ? `<span class="xp-bar"><span style="width:${lvlPct}%"></span></span>
     <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>` : ''}
     <span class="xp-stats">${statsTxt}</span>
@@ -5237,6 +5712,8 @@ function bindSemana() {
   if (xs) xs.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
   };
+  // Nivel del avatar de posta. en la tira (no rompe la racha): se llena async.
+  try { api.get('/api/avatar-level').then(lv => { try { paintAvatarStrip(lv); } catch (e) {} }).catch(() => {}); } catch (e) {}
   // Track 3 · "La semana esperándote al entrar": si la semana está vacía y ya
   // tenemos los datos del negocio, se arma sola en segundo plano. No bloquea el binding.
   // Si el usuario toca "⚡ Armemos tu semana" a mano mientras el auto corre, el flag
@@ -5562,10 +6039,12 @@ function ajustesView() {
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
-  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al panel
+  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al panel.
+  // En el celular el panel es el chat (chat-first); en desktop, Mi semana.
+  const homeTab = isMobileApp() ? '#/app/chat' : '#/app/semana';
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
-    location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : '#/app/semana';
+    location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
   } else {
     location.hash = '#/app/onboarding';
     OB = freshOB();
@@ -6027,9 +6506,9 @@ async function render() {
     return;
   }
   if (path === '#/' || path === '') {
-    // App instalada: se comporta como app, no como web. Va directo a la cuenta
+    // App instalada: se comporta como app, no como web. Va directo al chat
     // (o al login si no hay sesión) en vez de la landing de marketing.
-    if (pwaIsStandalone()) { location.hash = '#/app/semana'; return; }
+    if (pwaIsStandalone()) { location.hash = '#/app/chat'; return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
@@ -6041,9 +6520,15 @@ async function render() {
   await refreshSession();
   if (!ME && NET_OFFLINE) { root.innerHTML = offlineView(); bindOffline(); return; }
   if (!ME) { location.hash = '#/login'; return; }
-  const tab = (path.split('/')[2] || 'semana');
+  const tabRaw = path.split('/')[2] || '';
+  // Chat-first mobile: sin pestaña explícita el celular abre en el chat.
+  // Con pestaña explícita se respeta (el bottom nav lleva a Mi semana).
+  // En desktop #/app/chat no existe: cae a Mi semana (desktop sin cambios).
+  let tab = tabRaw || (isMobileApp() ? 'chat' : 'semana');
+  if (tab === 'chat' && !isMobileApp()) { location.hash = '#/app/semana'; return; }
   let content = '';
-  if (tab === 'semana') content = await semanaView();
+  if (tab === 'chat') content = await chatView();
+  else if (tab === 'semana') content = await semanaView();
   else if (tab === 'crear') { location.hash = '#/app/semana'; return; } // Creador manual fusionado en Mi semana
   else if (tab === 'ideas') { location.hash = '#/app/semana'; return; } // Ideas se fusionó en Mi semana
   else if (tab === 'video') { location.hash = '#/app/semana'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
@@ -6114,6 +6599,7 @@ async function showExpiredModal() {
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin') bindAdmin();
+  if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
   pwaWire();
   // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
   if (!window.__revMoreWired) {
