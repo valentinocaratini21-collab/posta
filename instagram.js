@@ -288,6 +288,111 @@ async function publishStory(media, creds, demoMode) {
   return publishStoryReal(media, creds);
 }
 
+// ---------- Carrusel (2-10 imágenes) ----------
+// API de Meta: un contenedor por imagen hija (is_carousel_item), después el
+// contenedor CAROUSEL con children[], esperar FINISHED y publicar.
+async function publishCarouselReal({ imageUrls, caption }, { igUserId, accessToken }) {
+  let urls = (Array.isArray(imageUrls) ? imageUrls : []).filter(Boolean);
+  if (urls.length < 2) throw new Error('El carrusel necesita al menos 2 imágenes');
+  urls = urls.slice(0, 10);
+  const children = [];
+  for (const url of urls) {
+    const r = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url: url, is_carousel_item: true, access_token: accessToken }),
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message);
+    if (!j.id) throw new Error('Meta no devolvió el contenedor de la imagen');
+    children.push(j.id);
+  }
+  const cRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ media_type: 'CAROUSEL', children, caption, access_token: accessToken }),
+  });
+  const created = await cRes.json();
+  if (created.error) throw new Error(created.error.message);
+  if (!created.id) throw new Error('Meta no devolvió el contenedor del carrusel');
+  let status = '';
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const stRes = await fetch(`${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`);
+    const st = await stRes.json();
+    status = st.status_code || '';
+    if (status === 'FINISHED') break;
+    if (status === 'ERROR') throw new Error('Instagram no pudo procesar el carrusel.');
+  }
+  if (status !== 'FINISHED') throw new Error('Instagram tardó demasiado en procesar el carrusel. Probá de nuevo.');
+  const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ creation_id: created.id, access_token: accessToken }),
+  });
+  const published = await pubRes.json();
+  if (published.error) throw new Error(published.error.message);
+  const mediaRes = await fetch(`${IG_HOST}/${API_VERSION}/${published.id}?fields=permalink&access_token=${accessToken}`);
+  const media = await mediaRes.json();
+  return { success: true, permalink: media.permalink || '', mediaId: published.id };
+}
+
+async function publishCarousel(media, creds, demoMode) {
+  if (demoMode) {
+    await new Promise((r) => setTimeout(r, 1200));
+    const fakeId = Math.random().toString(36).slice(2, 10);
+    return {
+      success: true,
+      permalink: `https://www.instagram.com/p/demo_${fakeId}/`,
+      mediaId: `demo_${fakeId}`,
+      demo: true,
+    };
+  }
+  if (!creds.igUserId || !creds.accessToken) {
+    throw new Error('Instagram no conectado. Conectá tu cuenta en Ajustes.');
+  }
+  return publishCarouselReal(media, creds);
+}
+
+// ---------- Análisis del Instagram actual ----------
+// Trae los últimos 20 posteos y resume qué rinde: la IA conoce la cuenta
+// desde el día uno. Nunca rompe: try/catch amplio, "" sin datos.
+async function analyzeInstagram(igUserId, accessToken) {
+  try {
+    if (!igUserId || !accessToken) return { summary: '' };
+    const url = `${IG_HOST}/${API_VERSION}/${igUserId}/media?fields=caption,like_count,comments_count,media_type,timestamp&limit=20&access_token=${accessToken}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return { summary: '' };
+    const data = await res.json();
+    const items = Array.isArray(data.data) ? data.data : [];
+    if (!items.length) return { summary: '' };
+    const ranked = items
+      .map(m => ({ ...m, eng: (Number(m.like_count) || 0) + (Number(m.comments_count) || 0) }))
+      .sort((a, b) => b.eng - a.eng);
+    const typeName = t => (t === 'CAROUSEL_ALBUM' ? 'carrusel' : t === 'VIDEO' ? 'reel' : 'posteo');
+    const topDesc = ranked.slice(0, 3).map(m => {
+      const cap = String(m.caption || '').split('\n')[0].slice(0, 50).trim() || 'sin texto';
+      return `${typeName(m.media_type)} "${cap}"`;
+    }).join('; ');
+    // Frecuencia semanal aproximada
+    let freq = '';
+    const times = items.map(m => new Date(m.timestamp).getTime()).filter(t => !isNaN(t));
+    if (times.length >= 2) {
+      const spanDays = Math.max(1, (Math.max(...times) - Math.min(...times)) / 86400000);
+      const perWeek = (items.length / spanDays) * 7;
+      const n = Math.round(perWeek);
+      freq = n >= 1
+        ? `Solés publicar ${n} ${n === 1 ? 'vez' : 'veces'} por semana`
+        : 'Solés publicar menos de 1 vez por semana';
+    }
+    let summary = `En tu Instagram: tus posteos con más engagement son: ${topDesc}.`;
+    if (freq) summary += ` ${freq}.`;
+    return { summary };
+  } catch (e) {
+    return { summary: '' };
+  }
+}
+
 module.exports = {
   getAuthUrl,
   exchangeCodeForTokens,
@@ -297,4 +402,6 @@ module.exports = {
   publishPost,
   publishVideo,
   publishStory,
+  publishCarousel,
+  analyzeInstagram,
 };

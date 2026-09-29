@@ -52,7 +52,9 @@ CREATE TABLE IF NOT EXISTS posts (
   ig_permalink TEXT DEFAULT '',
   error TEXT DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  published_at TEXT
+  published_at TEXT,
+  carousel_paths TEXT DEFAULT '',
+  tipo TEXT DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_posts_due ON posts(status, scheduled_at);
@@ -73,6 +75,9 @@ try { db.exec(`ALTER TABLE users ADD COLUMN plan_status TEXT DEFAULT 'trial'`); 
 try { db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Todo-en-uno v2: métricas, mejor horario, funnel y comentarios
 try { db.exec(`ALTER TABLE posts ADD COLUMN ig_media_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN carousel_paths TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN tipo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE post_signals ADD COLUMN caption TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN best_hour INTEGER DEFAULT 19`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS post_metrics (
   post_id INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
@@ -229,6 +234,7 @@ CREATE TABLE IF NOT EXISTS post_signals (
   idea_text TEXT DEFAULT '',
   template TEXT DEFAULT '',
   caption_style TEXT DEFAULT '',
+  caption TEXT DEFAULT '',
   hashtags TEXT DEFAULT '',
   scheduled_for TEXT DEFAULT '',
   rubro TEXT DEFAULT '',
@@ -238,6 +244,22 @@ CREATE TABLE IF NOT EXISTS post_signals (
 );
 CREATE INDEX IF NOT EXISTS idx_signals_user_week ON post_signals(user_id, week_key);
 CREATE INDEX IF NOT EXISTS idx_signals_signal ON post_signals(user_id, client_signal);
+CREATE TABLE IF NOT EXISTS milestones_seen (
+  user_id INTEGER NOT NULL,
+  milestone INTEGER NOT NULL,
+  seen_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, milestone)
+);
+CREATE TABLE IF NOT EXISTS pillars_cache (
+  user_id INTEGER PRIMARY KEY,
+  month_key TEXT DEFAULT '',
+  pillars_json TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS recycled_posts (
+  post_id INTEGER PRIMARY KEY,
+  new_post_id INTEGER,
+  created_at INTEGER
+);
 `);
 
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
@@ -288,6 +310,24 @@ CREATE TABLE IF NOT EXISTS chat_state (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   idea_json TEXT NOT NULL DEFAULT '{}',
   updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS business_dna (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  dna_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS style_rules (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rule_key TEXT NOT NULL,
+  rule_text TEXT NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 1,
+  active INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, rule_key)
+);
+CREATE TABLE IF NOT EXISTS ig_analysis (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  summary TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `);
 try {

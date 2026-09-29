@@ -5,10 +5,10 @@
 const HOOKS = {
   canchero: [
     'Che, mirá esto 👀',
-    'Esto te va a volar la cabeza 🔥',
-    'Atención, que esto es posta 👇',
-    'No lo vas a poder creer 🤯',
-    'Mirá lo que tenemos para vos ✨',
+    'Te lo muestro sin vueltas 👇',
+    'Esto se va a agotar 🔥',
+    'Precio amigo, calidad de verdad 💥',
+    'Lo que pedían, llegó ✨',
   ],
   profesional: [
     'Te presentamos nuestra novedad',
@@ -69,13 +69,13 @@ const GENERIC_TAGS = ['#argentina', '#emprendedor', '#marketingdigital'];
 const ENERGY_HOOKS = {
   canchero: [
     'Pará todo lo que estás haciendo 🛑',
-    'Esto no es un post más 🔥',
     'Te lo digo de una: lo necesitás 💥',
     'Mirá esto y después me contás 🤩',
     'Si te gusta lo bueno, seguí leyendo 👀',
     'Alerta: esto vuela 🚨',
     'Lo que estabas esperando, llegó ✨',
     'No digas que no te avisamos ⚡',
+    'Recién llegado y ya es favorito 🔥',
   ],
   profesional: [
     'Presentamos lo último de nuestra colección',
@@ -122,6 +122,29 @@ const GOAL_CTAS = {
 };
 const goalLine = g => (GOAL_LINES[g] ? '\n' + GOAL_LINES[g] : '');
 
+// Mix de contenidos de la semana: cada idea lleva un tipo para que la semana
+// no sea toda promo (o toda tips). Se inyecta al prompt del caption como GOAL_LINES.
+const TIPO_LINES = {
+  promo: 'PROMO: oferta concreta con precio/beneficio claro y urgencia real.',
+  tip: 'Contenido EDUCATIVO: enseña algo útil del rubro, tono de experto generoso.',
+  social: 'PRUEBA SOCIAL: muestra clientes contentos, resultados, testimonios.',
+  detras: 'DETRÁS DE ESCENA: muestra el lado humano del negocio, el proceso, el equipo.',
+  novedad: 'NOVEDAD: anuncia algo nuevo con expectativa, como un lanzamiento.',
+};
+const tipoLine = t => (TIPO_LINES[t] ? '\n' + TIPO_LINES[t] : '');
+
+const TIPOS = ['promo', 'tip', 'social', 'detras', 'novedad'];
+// Garantía dura de variedad: nunca dos ideas seguidas con el mismo tipo.
+function fixTipos(ideas) {
+  let prev = null;
+  return (ideas || []).map((idea, i) => {
+    let t = TIPOS.includes(idea.tipo) ? idea.tipo : TIPOS[i % TIPOS.length];
+    if (t === prev) t = TIPOS[(TIPOS.indexOf(t) + 1) % TIPOS.length];
+    prev = t;
+    return { ...idea, tipo: t };
+  });
+}
+
 function stripEmojis(s) {
   return String(s || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '').replace(/ {2,}/g, ' ');
 }
@@ -148,29 +171,158 @@ function templateCaption({ business, category, tone, topic, feedback, seed, goal
   return caption;
 }
 
+// Estándar de calidad Posta: si vendemos posteos, tienen que ser los mejores.
+// El prompt enseña TÉCNICA concreta, prohíbe los tics de IA y muestra ejemplos.
+const CAPTION_CRAFT = `
+Escribís captions de Instagram en español rioplatense con voseo, para negocios reales argentinos.
+Tono: cercano y canchero, como el dueño del local hablando con un cliente amigo. Nunca corporativo, nunca genérico.
+
+TÉCNICAS DE HOOK (elegí UNA por caption, la que mejor pegue con el tema):
+- Pregunta que duele o da curiosidad: "¿Cuántas veces te pasó que...?"
+- Número concreto: "3 errores que...", "Solo quedan 5"
+- Confesión o detrás de escena: "Te voy a ser honesto..."
+- Contraste: "Antes lo hacíamos así. Ahora..."
+- Directo sin humo: el producto + el beneficio en una línea.
+
+REGLAS DE ORO:
+- Sé ESPECÍFICO: nombrá el producto, el precio si hay promo, el día, el lugar. Lo genérico no vende.
+- Variá la ESTRUCTURA: algunos captions cuentan una mini historia, otros son una lista corta, otros van directo en 2-3 líneas. Nunca repitas la misma estructura en captions seguidos.
+- 1 o 2 emojis bien puestos, nunca más. Cada emoji tiene que sumar, no decorar.
+- El CTA es UNA acción concreta: escribinos, comentá X, guardalo, pasá por el local.
+- Adaptá el vocabulario al rubro: una parrilla habla de fuego y juntadas; una boutique, de estilo y ocasiones; un gimnasio, de constancia y resultados.
+
+PROHIBIDO (suena a IA, está quemado):
+- "En el mundo actual" / "En el mundo de hoy"
+- "¿Estás listo para llevar tu X al siguiente nivel?"
+- "¡No te lo podés perder!" / "¡No te lo pierdas!"
+- "Sumergite", "Descubrí el poder de", "Desbloqueá tu"
+- "Te presentamos" / "Les presentamos" / "Atención, que"
+- Preguntas retóricas vacías ("¿A quién no le gusta...?")
+- "Mirá lo que tenemos para vos"
+
+EJEMPLOS del nivel esperado:
+1. "El vacío del domingo no se discute. 🔥 Vuelta y vuelta, chimichurri de la casa y la mesa llena. Reservá por DM que los domingos vuelan."
+2. "3 cosas que nadie te dice antes de teñirte de rubio 👇 1. El retoque es cada 3 semanas. 2. Sin matizador se pone naranja. 3. Con nosotras no te pasa ninguna. Turnos por DM."
+3. "Llegaron las camperas de cuero. Nada más que decir. Bueno sí: quedan 6. Te esperamos en el local o pedila por DM."
+`.trim();
+
 const ENERGY_SYSTEM = (n) =>
-  `Sos un community manager argentino experto en Instagram que vende de verdad. ` +
-  `Escribís en español rioplatense con voseo, tono cercano, canchero y con ENERGÍA: ` +
-  `nada de lenguaje corporativo ni frases de manual. Cada caption lleva: un hook inicial ` +
-  `que frene el scroll (1 línea con punch), el contenido con onda y un call to action claro. ` +
-  `Usá 1 o 2 emojis bien puestos, nunca más. ` +
-  `Respondé SOLO con un JSON: {"captions": ["...", ...], "hashtags": "#tag1 #tag2 ..."}. ` +
-  `Generá exactamente ${n} captions DISTINTOS entre sí. Máximo 8 hashtags relevantes para Argentina.`;
+  `Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n${CAPTION_CRAFT}\n` +
+  `Respondé SOLO con un JSON: {"captions": ["...", ...], "overlays": ["...", ...], "hashtags": "#tag1 #tag2 ..."}. ` +
+  `"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis (ej: "2X1 ESTE FINDE", "LLEGÓ LO NUEVO", "HASTA 40% OFF"). ` +
+  `Generá exactamente ${n} captions DISTINTOS entre sí (distinta técnica de hook y distinta estructura). ` +
+  `Hashtags: máximo 8, mezclá grandes, de nicho y locales.`;
+
+// Frases prohibidas (extraídas del PROHIBIDO de CAPTION_CRAFT): suenan a IA y están quemadas.
+// Se matchean sin acentos y en minúsculas.
+const BANNED_PHRASES = [
+  'en el mundo actual',
+  'en el mundo de hoy',
+  'al siguiente nivel',
+  'no te lo podes perder',
+  'no te lo pierdas',
+  'sumergite',
+  'descubri el poder de',
+  'desbloquea tu',
+  'te presentamos',
+  'les presentamos',
+  'atencion, que',
+  '¿a quien no le gusta',
+  'mira lo que tenemos para vos',
+];
+
+// Señales de CTA (sin acentos): el caption tiene que pedir UNA acción concreta.
+// 'dm' se chequea aparte con word boundary para no matchear "admirar", etc.
+const CTA_SIGNALS = ['comenta', 'guarda', 'escribinos', 'pasa por', 'link', 'turno', 'pedilo', 'reserva'];
+
+// Puerta de calidad automática: el cliente nunca ve un caption mediocre.
+// Devuelve { ok, reason }.
+function captionPasses(caption) {
+  const c = String(caption || '');
+  const low = c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const p of BANNED_PHRASES) {
+    if (low.includes(p)) return { ok: false, reason: `contiene la frase quemada "${p}"` };
+  }
+  if (c.trim().length < 40) return { ok: false, reason: 'es demasiado corto (menos de 40 caracteres)' };
+  const hasCta = CTA_SIGNALS.some(s => low.includes(s)) || /\bdm\b/.test(low);
+  if (!hasCta) return { ok: false, reason: 'le falta un llamado a la acción claro (DM, comentario, guardado…)' };
+  return { ok: true, reason: '' };
+}
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// ---------- Datos reales para la IA: rendimiento y mejores horarios ----------
+// Brief de rendimiento: top 3 posteos por alcance (últimos 30 días), con formato.
+// Para que la IA sepa qué rinde en ESTA cuenta y lo use al proponer.
+function fmtNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1000) return (Math.round(n / 100) / 10).toString().replace('.', ',') + 'k';
+  return String(n);
+}
+function performanceBrief(db, userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT p.caption, p.media_type, m.reach, m.saved
+      FROM post_metrics m
+      JOIN posts p ON p.id = m.post_id
+      WHERE p.user_id = ? AND p.status = 'published'
+        AND p.published_at >= datetime('now', '-30 days')
+        AND m.reach > 0
+      ORDER BY m.reach DESC LIMIT 3
+    `).all(userId);
+    if (!rows.length) return '';
+    const fmtName = t => t === 'carousel' ? 'carrusel' : t === 'video' ? 'reel' : t === 'story' ? 'historia' : 'posteo';
+    const lines = rows.map((r, i) => {
+      const cap = String(r.caption || '').split('\n')[0].slice(0, 60).trim() || 'Posteo';
+      return `${i + 1}. "${cap}" — ${fmtNum(r.reach)} alcance, ${fmtNum(r.saved)} guardados (${fmtName(r.media_type)})`;
+    });
+    return `Tus posteos con más alcance (últimos 30 días):\n${lines.join('\n')}`;
+  } catch (e) { return ''; }
+}
+// Voz del cliente: sus 3 captions con más alcance como few-shot de tono y ritmo.
+// Menos de 3 → "" (no alcanza para imitar una voz).
+function voiceExamples(db, userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT p.caption
+      FROM post_metrics m
+      JOIN posts p ON p.id = m.post_id
+      WHERE p.user_id = ? AND p.status = 'published'
+        AND p.published_at >= datetime('now', '-90 days')
+        AND m.reach > 0 AND p.caption != ''
+      ORDER BY m.reach DESC LIMIT 3
+    `).all(userId);
+    if (rows.length < 3) return '';
+    const lines = rows.map((r, i) => `${i + 1}. "${String(r.caption || '').replace(/\s+/g, ' ').trim().slice(0, 120)}"`);
+    return `Escribí con LA VOZ del cliente (ejemplos reales suyos, no los copies, imitá el tono y ritmo):\n${lines.join('\n')}`;
+  } catch (e) { return ''; }
+}
+// Mejores horarios medidos (users.best_hour, lo calcula refreshBestHours).
+// Sin IG conectado no hay medición real → "".
+function bestHoursLine(db, userId) {
+  try {
+    const s = db.prepare('SELECT ig_user_id FROM settings WHERE user_id = ?').get(userId) || {};
+    if (!s.ig_user_id) return '';
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(userId) || {};
+    const h = parseInt(u.best_hour, 10);
+    if (!h || h < 9 || h > 21) return '';
+    return `Tus mejores horarios para publicar: ${h}h.`;
+  } catch (e) { return ''; }
+}
+
 function templateGenerate({ business, category, tone, topic, goal }) {
   const t = HOOKS[tone] ? tone : 'canchero';
   const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: Math.floor(Math.random() * 1000), goal });
+  const overlay = String(topic).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
   const tags = [...(HASHTAGS[category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
-  return { caption, hashtags: tags.join(' ') };
+  return { caption, overlay, hashtags: tags.join(' ') };
 }
 
-async function openaiGenerate({ business, category, tone, topic, competitors, goal, taste }, apiKey) {
+async function openaiGenerate({ business, category, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -184,16 +336,20 @@ async function openaiGenerate({ business, category, tone, topic, competitors, go
         {
           role: 'system',
           content:
-            'Sos un community manager argentino experto en Instagram que vende de verdad. ' +
-            'Escribís en español rioplatense con voseo, tono cercano, canchero y con ENERGÍA: ' +
-            'nada de lenguaje corporativo ni frases de manual. El caption lleva un hook inicial ' +
-            'que frene el scroll (1 línea con punch), el contenido con onda y un call to action claro. ' +
-            'Usá 1 o 2 emojis bien puestos, nunca más. ' +
-            'Respondé SOLO con un JSON: {"caption": "...", "hashtags": "#tag1 #tag2 ..."}. Máximo 8 hashtags relevantes para Argentina.',
+            'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
+            CAPTION_CRAFT +
+            '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
+            '"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis. ' +
+            'Hashtags: máximo 8, mezclá grandes, de nicho y locales.',
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${taste || ''}\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${tipoLine(tipo)}${taste || ''}` +
+            (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
+            (feedback ? `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}` : '') +
+            (voice ? `\n${voice}` : '') +
+            (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '') +
+            `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
       ],
       max_tokens: 500,
@@ -205,6 +361,7 @@ async function openaiGenerate({ business, category, tone, topic, competitors, go
   const parsed = JSON.parse(data.choices[0].message.content);
   return {
     caption: parsed.caption || '',
+    overlay: parsed.overlay || '',
     hashtags: parsed.hashtags || '',
   };
 }
@@ -212,7 +369,18 @@ async function openaiGenerate({ business, category, tone, topic, competitors, go
 async function generateContent(input, apiKey) {
   if (apiKey) {
     try {
-      return await openaiGenerate(input, apiKey);
+      const out = await openaiGenerate(input, apiKey);
+      const check = captionPasses(out.caption);
+      if (!check.ok) {
+        // Puerta de calidad: UN solo reintento con feedback de qué falló. Nunca loopear.
+        const fb = `El caption anterior no pasó el control de calidad: ${check.reason}. Regeneralo corrigiendo eso, sin cambiar el tema.`;
+        try {
+          return await openaiGenerate({ ...input, feedback: fb }, apiKey);
+        } catch (e2) {
+          console.error('Reintento de calidad falló, va el original:', e2.message);
+        }
+      }
+      return out;
     } catch (e) {
       console.error('OpenAI falló, usando plantillas:', e.message);
     }
@@ -221,7 +389,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, tone, topic, feedback, goal, taste }, n, apiKey) {
+async function openaiCaptions({ business, category, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -236,9 +404,12 @@ async function openaiCaptions({ business, category, tone, topic, feedback, goal,
         {
           role: 'user',
           content:
-            `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}${goalLine(goal)}` +
+            `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}${goalLine(goal)}${tipoLine(tipo)}` +
             (feedback ? `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}` : '') +
             (taste ? `\n${taste}` : '') +
+            (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
+            (voice ? `\n${voice}` : '') +
+            (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '') +
             `\nGenerá los ${n} captions y los hashtags.`,
         },
       ],
@@ -252,24 +423,53 @@ async function openaiCaptions({ business, category, tone, topic, feedback, goal,
   const caps = Array.isArray(parsed.captions) ? parsed.captions.map(String).filter(Boolean) : [];
   if (!caps.length) throw new Error('Sin captions');
   while (caps.length < n) caps.push(caps[caps.length % Math.max(caps.length, 1)]);
-  return { captions: caps.slice(0, n), hashtags: String(parsed.hashtags || '') };
+  const ovs = Array.isArray(parsed.overlays) ? parsed.overlays.map(String).filter(Boolean) : [];
+  return { captions: caps.slice(0, n), overlays: ovs.slice(0, n), hashtags: String(parsed.hashtags || '') };
 }
 
 async function generateCaptions(input, n, apiKey) {
   if (apiKey) {
     try {
-      return await openaiCaptions(input, n, apiKey);
+      const out = await openaiCaptions(input, n, apiKey);
+      // Puerta de calidad por caption: los que fallen se regeneran individualmente (1 intento c/u).
+      const fixedCaps = [];
+      const fixedOvs = [];
+      for (let i = 0; i < out.captions.length; i++) {
+        const cap = out.captions[i];
+        const check = captionPasses(cap);
+        if (check.ok) {
+          fixedCaps.push(cap);
+          fixedOvs.push(out.overlays[i] || '');
+          continue;
+        }
+        try {
+          const one = await generateContent({
+            ...input,
+            topic: `${input.topic} (variante ${i + 1})`,
+            feedback: `El caption anterior no pasó el control de calidad: ${check.reason}. Regeneralo corrigiendo eso, sin cambiar el tema.`,
+          }, apiKey);
+          fixedCaps.push(one.caption);
+          fixedOvs.push(one.overlay || '');
+        } catch (e) {
+          console.error('Regeneración individual falló, va el original:', e.message);
+          fixedCaps.push(cap);
+          fixedOvs.push(out.overlays[i] || '');
+        }
+      }
+      return { captions: fixedCaps, overlays: fixedOvs, hashtags: out.hashtags };
     } catch (e) {
       console.error('OpenAI captions falló, usando plantillas:', e.message);
     }
   }
   const seedBase = input.seedBase || 0;
   const captions = [];
-  for (let i = 0; i < n; i++) captions.push(templateCaption({ ...input, seed: seedBase + i }));
+  const overlays = [];
+  const ovFb = String(input.topic || '').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+  for (let i = 0; i < n; i++) { captions.push(templateCaption({ ...input, seed: seedBase + i })); overlays.push(ovFb); }
   const tags = [...(HASHTAGS[input.category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
-  return { captions, hashtags: tags.join(' ') };
+  return { captions, overlays, hashtags: tags.join(' ') };
 }
 
 // ---------- Motor de ideas: nosotros pensamos el contenido por el cliente ----------
@@ -317,13 +517,13 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     ? ` Diferenciate de ${competitors}: mostrá lo que ellos no tienen.`
     : '';
   const all = [
-    { formato: 'Novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` + ga },
-    { formato: 'Promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' + ga },
-    { formato: 'Tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' + ga },
-    { formato: 'Testimonio', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' + ga },
-    { formato: 'Detrás de escena', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' + ga },
-    { formato: 'Comunidad', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
-    { formato: 'Reel/Video', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
+    { formato: 'Novedad', tipo: 'novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` + ga },
+    { formato: 'Promo', tipo: 'promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' + ga },
+    { formato: 'Tip', tipo: 'tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' + ga },
+    { formato: 'Testimonio', tipo: 'social', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' + ga },
+    { formato: 'Detrás de escena', tipo: 'detras', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' + ga },
+    { formato: 'Comunidad', tipo: 'social', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
+    { formato: 'Reel/Video', tipo: 'novedad', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
   ];
   // Si un tema ya se posteó, se saca de la lista (2+ palabras significativas en común)
   if (recentTopics) {
@@ -335,14 +535,14 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   // La efeméride va primera y marcada, también en el fallback sin IA
   function withEphemeris(list) {
     if (ephemeris && list.length) {
-      const themed = { formato: 'Promo', titulo: `${ephemeris.name}: promo especial`, angulo: `${ephemeris.angle}. Fecha que vende: no la dejes pasar.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
+      const themed = { formato: 'Promo', tipo: 'promo', titulo: `${ephemeris.name}: promo especial`, angulo: `${ephemeris.angle}. Fecha que vende: no la dejes pasar.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
       return [themed, ...list.slice(0, 6)];
     }
     return list;
   }
 }
 
-async function openaiIdeas({ business, category, tone, description, competitors, taste, recentTopics, ephemeris }, apiKey) {
+async function openaiIdeas({ business, category, tone, description, competitors, taste, recentTopics, ephemeris, performance }, apiKey) {
   const ephLine = ephemeris
     ? `\n⚠️ EFEMÉRIDE CERCA: ${ephemeris.emoji} ${ephemeris.name} es el ${ephemeris.date} (en ${ephemeris.daysLeft} días). La idea N°1 TIENE que ser sobre eso (enfoque: ${ephemeris.angle}). Es una fecha que vende mucho: no la ignores.`
     : '';
@@ -359,11 +559,11 @@ async function openaiIdeas({ business, category, tone, description, competitors,
         {
           role: 'system',
           content:
-            'Sos un estratega de marketing digital argentino experto en Instagram. Escribís en español rioplatense con voseo. Respondé SOLO con un JSON: {"ideas": [{"titulo": "...", "formato": "...", "angulo": "..."}]}. Generá exactamente 7 ideas de posts variadas: novedad, promo, tip educativo, testimonio, detrás de escena, comunidad y reel/video. "titulo" es el tema en una frase corta. "formato" es una de esas 7 categorías (para video usá exactamente "Reel/Video"). "angulo" es el enfoque estratégico en 1-2 frases, explicando por qué va a rendir y cómo diferenciarse de la competencia.',
+            'Sos un estratega de marketing digital argentino experto en Instagram. Escribís en español rioplatense con voseo. Respondé SOLO con un JSON: {"ideas": [{"titulo": "...", "formato": "...", "tipo": "...", "angulo": "..."}]}. Generá exactamente 7 ideas de posts variadas: novedad, promo, tip educativo, testimonio, detrás de escena, comunidad y reel/video. "titulo" es el tema en una frase corta. "formato" es una de esas 7 categorías (para video usá exactamente "Reel/Video"). "tipo" es el tipo de contenido: uno de promo, tip, social, detras, novedad (promo=oferta con urgencia, tip=educativo, social=prueba social o comunidad, detras=detrás de escena humano, novedad=anuncio o lanzamiento). REGLA DURA: nunca dos ideas seguidas con el mismo tipo — alterná los tipos a lo largo de la semana. "angulo" es el enfoque estratégico en 1-2 frases, explicando por qué va a rendir y cómo diferenciarse de la competencia.',
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}\nGenerá las 6 ideas.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 900,
@@ -375,31 +575,98 @@ async function openaiIdeas({ business, category, tone, description, competitors,
   const parsed = JSON.parse(data.choices[0].message.content);
   const ideas = Array.isArray(parsed.ideas) ? parsed.ideas.slice(0, 7) : [];
   if (!ideas.length) throw new Error('Sin ideas');
-  const mapped = ideas.map(i => ({
+  const mapped = ideas.map((i, idx) => ({
     titulo: String(i.titulo || '').slice(0, 120),
     formato: String(i.formato || 'Contenido').slice(0, 30),
+    tipo: TIPOS.includes(String(i.tipo || '').toLowerCase()) ? String(i.tipo).toLowerCase() : TIPOS[idx % TIPOS.length],
     angulo: String(i.angulo || '').slice(0, 280),
   }));
   // La primera idea es la de la efeméride: se marca para mostrarla destacada
-  if (ephemeris && mapped.length) mapped[0].ephemeris = `${ephemeris.emoji} ${ephemeris.name}`;
+  if (ephemeris && mapped.length) {
+    mapped[0].ephemeris = `${ephemeris.emoji} ${ephemeris.name}`;
+    mapped[0].tipo = 'promo';
+  }
   return mapped;
 }
 
 async function generateIdeas(input, apiKey) {
+  let ideas = null;
   if (apiKey) {
     try {
-      return await openaiIdeas(input, apiKey);
+      ideas = await openaiIdeas(input, apiKey);
     } catch (e) {
       console.error('OpenAI ideas falló, usando plantillas:', e.message);
     }
   }
-  return templateIdeas(input);
+  if (!ideas) ideas = templateIdeas(input);
+  // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.
+  return fixTipos(ideas);
+}
+
+// ---------- Pilares de contenido del mes ----------
+// La estrategia mensual que guía la semana: 3-4 temas/ángulos que más van a
+// vender y fidelizar. Con fallback por plantillas si no hay API key.
+function templatePillars({ business }) {
+  const biz = business || 'tu negocio';
+  return [
+    { titulo: 'Ofertas que venden', enfoque: `Promos concretas de ${biz} con precio, urgencia y CTA directo por DM.` },
+    { titulo: 'Tips de experto', enfoque: 'Contenido educativo del rubro: enseña algo útil, posiciona y se guarda.' },
+    { titulo: 'Comunidad', enfoque: 'Clientes, testimonios y detrás de escena: el lado humano que fideliza.' },
+    { titulo: 'Novedades', enfoque: 'Lanzamientos y lo nuevo, con expectativa y revelación.' },
+  ];
+}
+async function generatePillars({ business, category, description, performance }, apiKey) {
+  if (apiKey) {
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: 'Sos un estratega de contenidos argentino experto en Instagram. Escribís en español rioplatense con voseo. Respondé SOLO con un JSON: {"pilares": [{"titulo": "...", "enfoque": "..."}]}.',
+            },
+            {
+              role: 'user',
+              content:
+                `Negocio: ${business || 'no especificado'}\nRubro: ${category || 'no especificado'}\nDescripción: ${description || 'no indicada'}` +
+                (performance ? `\nRendimiento real de la cuenta:\n${performance}` : '') +
+                `\nGenerá 4 pilares de contenido para el mes: los 4 temas o ángulos que más van a vender y fidelizar este mes, distintos entre sí. "titulo" corto (máx 6 palabras), "enfoque" en 1 línea concreta y accionable.`,
+            },
+          ],
+          max_tokens: 500,
+          temperature: 0.8,
+        }),
+      });
+      if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+      const data = await res.json();
+      const parsed = JSON.parse(data.choices[0].message.content);
+      const ps = Array.isArray(parsed.pilares) ? parsed.pilares : [];
+      const mapped = ps
+        .map(p => ({
+          titulo: String(p.titulo || '').slice(0, 60).trim(),
+          enfoque: String(p.enfoque || '').slice(0, 160).trim(),
+        }))
+        .filter(p => p.titulo && p.enfoque)
+        .slice(0, 4);
+      if (mapped.length >= 3) return mapped;
+    } catch (e) {
+      console.error('OpenAI pilares falló, usando plantillas:', e.message);
+    }
+  }
+  return templatePillars({ business });
 }
 
 // ---------- Chat consultor de ideas ----------
 // El cliente cuenta su idea, la IA opina con honestidad y la pulen juntos.
 // Cuando la idea está cerrada y aprobada, la IA la devuelve en un bloque ```idea {...}```
-async function openaiChatIdea({ messages, profile, taste, photos, library }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -427,15 +694,83 @@ async function openaiChatIdea({ messages, profile, taste, photos, library }, api
     (libPhotos.length
       ? `El cliente tiene ${libPhotos.length} fotos guardadas: son las PRIMERAS ${libPhotos.length} imágenes que ves, en orden (índice 0 = la más nueva). Las que vienen después son las que adjuntó recién en este chat. Si te pide usar una guardada ("la del asado", "la segunda"), elegí el índice correcto mirándolas. `
       : '') +
+    ((cleanPhotos.length || libPhotos.length)
+      ? 'Como director de fotografía: opiná brevemente sobre la calidad de cada foto que ves (luz, foco, encuadre) y recomendá cuál conviene usar como protagonista y por qué. Si alguna está oscura o borrosa, decilo sin vueltas. '
+      : '') +
     'Cuando la idea esté concreta y el cliente la apruebe (o te pida hacerla), cerrá tu mensaje con un bloque ' +
     'exacto así:\n```idea\n{"titulo": "título corto del post", "angulo": "ángulo en 1-2 líneas", "caption": "texto dictado por el cliente o null", "photo_index": 2, "colors": ["#D63A2F"]}\n```\n' +
     'caption va null salvo que el cliente te haya dictado el texto. photo_index y colors van null si no los pidió. ' +
     'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.';
+  // Borradores que el cliente está mirando AHORA: puede pedirte cambios sobre ellos.
+  const draftList = (Array.isArray(drafts) ? drafts : [])
+    .map((d, i) => `${i + 1}. [${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
+    .join('\n');
+  const draftsGuide = draftList
+    ? 'Borradores que el cliente está revisando AHORA MISMO (los ve en pantalla):\n' + draftList + '\n' +
+      'Si te pide cambiar algo de un borrador ("el segundo", "el de la promo", "cambiale el texto al primero", "sacale los emojis al último"): ' +
+      'identificá cuál es por su número o por el tema, y aplicá el cambio DIRECTO con este bloque al final de tu mensaje:\n' +
+      '```edit\n{"draft": 2, "caption": "texto nuevo completo", "hashtags": "#tags nuevos"}\n```\n' +
+      'El número es el de la lista de arriba (1 = primero). Incluí solo los campos que cambian. ' +
+      'El cambio se aplica solo al borrador, sin más pasos ni preguntas. Después del bloque, confirmá en 1 línea con onda qué cambiaste. ' +
+      'Si no entendés a cuál se refiere, preguntá corto ("¿el primero o el segundo?") en vez de adivinar.'
+    : '';
+  // ADN del negocio: entrevista breve si falta, contexto si ya está.
+  const dnaGuide = (needDna && !dna)
+    ? 'El cliente aún no tiene su ADN cargado. Conducí una entrevista breve y cálida, UNA pregunta por mensaje: ' +
+      '1) ¿cuál es tu producto o servicio estrella? 2) ¿quién es tu cliente ideal? 3) ¿qué te diferencia de la competencia? 4) ¿cómo querés sonar? ' +
+      'Si el cliente quiere otra cosa (un posteo), atendelo primero y retomá la entrevista después con naturalidad. ' +
+      'Cuando tengas las 4 respuestas, cerrá con el bloque exacto:\n```dna\n{"producto_estrella": "...", "cliente_ideal": "...", "diferencial": "...", "tono": "..."}\n```'
+    : '';
+  // Modo frustración: el cliente ya probó varias variantes o lo dijo.
+  const frustGuide = frustrated
+    ? 'El cliente está frustrado (ya probó varias variantes o lo dijo). Dejá de proponer variantes. ' +
+      'Preguntá directo y corto qué no le funciona: ¿el texto? ¿la foto? ¿el tono? UNA pregunta, nada más. Nada de optimismo vacío.'
+    : '';
+  // Opciones tocables para aclaraciones.
+  const optionsGuide =
+    'Cuando necesites una aclaración para avanzar, hacé UNA pregunta corta y ofrecé 2-3 opciones tocables con el bloque:\n' +
+    '```options\n["Opción 1","Opción 2"]\n```\n' +
+    'Las opciones van DESPUÉS de tu pregunta, no reemplazan tu mensaje.';
+  // Reglas permanentes dictadas por el cliente.
+  const ruleGuide =
+    'Si el cliente te dicta una regla permanente ("siempre sin emojis", "nunca mayúsculas", "hablá de precios"), ' +
+    'confirmala en 1 línea y cerrá con el bloque:\n```rule\n{"add": "siempre sin emojis"}\n```\n' +
+    'Si te pide sacar una regla, usa {"remove": "..."}.';
+  // Guion de reel segundo por segundo.
+  const scriptGuide =
+    'Si la idea es un REEL, incluí el guion segundo por segundo en el bloque idea:\n' +
+    '```idea\n{"titulo": "...", "angulo": "...", "script": [{"seg": "0-3s", "visual": "qué se ve", "texto": "qué se dice/muestra"}, {"seg": "3-6s", "visual": "...", "texto": "..."}]}\n```\n' +
+    'El hook va en los primeros 3 segundos (visual + texto que frene el scroll). 3 a 5 escenas.';
+  // Moodboard: referencias de estilo que muestra el cliente.
+  const inspoGuide =
+    'Si el cliente te muestra posteos que le gustan como referencia de estilo ("me gusta este estilo", "quiero algo así"), ' +
+    'analizá qué tienen en común (tono visual, tipografía, colores, ritmo del texto) y cerrá con:\n' +
+    '```inspo\n{"estilo": "tu análisis en 2-3 líneas: qué tomar de esas referencias"}\n```';
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide;
+  // ADN ya cargado: solo los campos presentes.
+  const dnaCtx = (() => {
+    if (!dna || typeof dna !== 'object') return '';
+    const parts = [];
+    if (dna.producto_estrella) parts.push(`producto estrella: ${dna.producto_estrella}`);
+    if (dna.cliente_ideal) parts.push(`cliente ideal: ${dna.cliente_ideal}`);
+    if (dna.diferencial) parts.push(`diferencial: ${dna.diferencial}`);
+    if (dna.tono) parts.push(`tono: ${dna.tono}`);
+    return parts.length ? `ADN del negocio: ${parts.join('; ')}.\n` : '';
+  })();
+  const rulesCtx = (Array.isArray(styleRules) && styleRules.length)
+    ? `Reglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}\n`
+    : '';
   const ctx =
     `Negocio: ${p.business_name || 'no especificado'}\nRubro: ${p.category || 'no especificado'}\n` +
     `Tono: ${p.tone || 'canchero'}\nDescripción: ${p.description || 'no indicada'}\n` +
     `Competidores: ${p.competitors || 'no indicados'}\nObjetivo: ${p.goal || 'vender más'}\n` +
+    dnaCtx +
     (taste ? `Lo que le gustó/no le gustó antes: ${taste}\n` : '') +
+    (performance ? `Rendimiento real de tu cuenta:\n${performance}\n` : '') +
+    (igAnalysis ? `Análisis de tu Instagram actual:\n${igAnalysis}\n` : '') +
+    (voice ? `${voice}\n` : '') +
+    rulesCtx +
+    (note ? `\n${note}\n` : '') +
     'Charlemos la idea del cliente.';
   const omsgs = messages.map(m => ({ role: m.role, content: m.text }));
   // Orden: primero las fotos GUARDADAS (índices 0..N-1, 0 = la más nueva), después las adjuntadas en el chat.
@@ -466,11 +801,11 @@ async function openaiChatIdea({ messages, profile, taste, photos, library }, api
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: sys },
+        { role: 'system', content: sysFull },
         { role: 'user', content: ctx },
         ...omsgs,
       ],
-      max_tokens: 400,
+      max_tokens: 500,
       temperature: 0.9,
     }),
   });
@@ -550,11 +885,11 @@ function templateChatIdea({ messages, profile }) {
     ideaBlock(c.titulo, c.angulo);
 }
 
-async function chatIdea({ messages, profile, taste, photos, library }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
@@ -580,11 +915,89 @@ async function chatIdea({ messages, profile, taste, photos, library }, apiKey) {
             .map(c => (c.startsWith('#') ? c : '#' + c).toUpperCase());
           if (hexes.length) idea.colors = hexes;
         }
+        // Guion de reel segundo por segundo (```idea con "script")
+        if (Array.isArray(j.script)) {
+          const scenes = j.script.slice(0, 6).map(s => {
+            if (!s || typeof s !== 'object') return null;
+            const seg = String(s.seg || '').slice(0, 12).trim();
+            const visual = String(s.visual || '').slice(0, 200).trim();
+            const texto = String(s.texto || '').slice(0, 200).trim();
+            if (!seg && !visual && !texto) return null;
+            return { seg, visual, texto };
+          }).filter(Boolean);
+          if (scenes.length) idea.script = scenes;
+        }
       }
       text = String(text).replace(m[0], '').trim();
     } catch (e) { /* bloque inválido: se ignora */ }
   }
-  return { reply: text, idea };
+  // Extrae el pedido de edición directa sobre un borrador (```edit)
+  let edit = null;
+  const me = String(text).match(/```edit\s*([\s\S]*?)```/);
+  if (me) {
+    try {
+      const j = JSON.parse(me[1]);
+      if (j && Number.isInteger(j.draft) && j.draft >= 1) {
+        edit = { draft: j.draft };
+        if (typeof j.caption === 'string' && j.caption.trim()) edit.caption = j.caption.trim().slice(0, 900);
+        if (typeof j.hashtags === 'string' && j.hashtags.trim()) edit.hashtags = j.hashtags.trim().slice(0, 300);
+      }
+      text = String(text).replace(me[0], '').trim();
+    } catch (e) { /* bloque inválido: se ignora */ }
+  }
+  // ADN del negocio (```dna)
+  let dnaOut = null;
+  const md = String(text).match(/```dna\s*([\s\S]*?)```/);
+  if (md) {
+    try {
+      const j = JSON.parse(md[1]);
+      if (j && typeof j === 'object') {
+        dnaOut = {};
+        for (const k of ['producto_estrella', 'cliente_ideal', 'diferencial', 'tono']) {
+          if (typeof j[k] === 'string' && j[k].trim()) dnaOut[k] = j[k].trim().slice(0, 300);
+        }
+        if (!Object.keys(dnaOut).length) dnaOut = null;
+      }
+      text = String(text).replace(md[0], '').trim();
+    } catch (e) { /* bloque inválido: se ignora */ }
+  }
+  // Opciones tocables (```options)
+  let options = null;
+  const mo = String(text).match(/```options\s*([\s\S]*?)```/);
+  if (mo) {
+    try {
+      const j = JSON.parse(mo[1]);
+      if (Array.isArray(j)) {
+        options = j.map(s => String(s).trim()).filter(Boolean).slice(0, 3);
+        if (!options.length) options = null;
+      }
+      text = String(text).replace(mo[0], '').trim();
+    } catch (e) { /* bloque inválido: se ignora */ }
+  }
+  // Regla permanente (```rule)
+  let rule = null;
+  const mr = String(text).match(/```rule\s*([\s\S]*?)```/);
+  if (mr) {
+    try {
+      const j = JSON.parse(mr[1]);
+      if (j && typeof j === 'object') {
+        if (typeof j.add === 'string' && j.add.trim()) rule = { add: j.add.trim().slice(0, 200) };
+        else if (typeof j.remove === 'string' && j.remove.trim()) rule = { remove: j.remove.trim().slice(0, 200) };
+      }
+      text = String(text).replace(mr[0], '').trim();
+    } catch (e) { /* bloque inválido: se ignora */ }
+  }
+  // Moodboard (```inspo)
+  let inspo = null;
+  const mi = String(text).match(/```inspo\s*([\s\S]*?)```/);
+  if (mi) {
+    try {
+      const j = JSON.parse(mi[1]);
+      if (j && typeof j.estilo === 'string' && j.estilo.trim()) inspo = j.estilo.trim().slice(0, 500);
+      text = String(text).replace(mi[0], '').trim();
+    } catch (e) { /* bloque inválido: se ignora */ }
+  }
+  return { reply: text, idea, edit, dna: dnaOut, options, rule, inspo };
 }
 
 // ---------- Respuesta sugerida a un comentario de Instagram ----------
@@ -669,4 +1082,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, HASHTAGS };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS };

@@ -186,7 +186,7 @@ function weeklyReportEmail(user, baseUrl, rows) {
     ${bestCap ? `<p style="font-size:15px;margin:0 0 12px;color:#0A1E33">🏆 Tu mejor posteo: <b>"${bestCap.replace(/</g, '&lt;')}"</b></p>` : ''}
     ${cards}
     <p style="font-size:15px;line-height:1.6;margin:16px 0 20px;color:#47617A">
-      Todo esto pasó sin que muevas un dedo. La semana que viene, más. 🚀
+      Todo esto, mientras vos atendías tu negocio. La semana que viene, más. 🚀
     </p>
     <p style="text-align:center;margin:0">
       <a href="${baseUrl}/" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi semana →</a>

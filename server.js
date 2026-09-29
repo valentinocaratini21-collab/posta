@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
-const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples } = require('./generator');
 const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
@@ -51,7 +51,7 @@ if (IS_PROD && !SESSION_SECRET) {
 }
 if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // Sesiones persistentes en SQLite: cada deploy reinicia el servidor y la memoria
 // se pierde; sin este store cada deploy deslogueaba a todos los usuarios.
@@ -133,6 +133,71 @@ function getSettings(userId) {
     s = db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
   }
   return s;
+}
+// ADN del negocio (dna_json): lectura/escritura con merge (nunca pisar campos como series o pausas).
+function readDna(userId) {
+  try {
+    const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(userId);
+    if (r && r.dna_json) { const o = JSON.parse(r.dna_json); return (o && typeof o === 'object') ? o : {}; }
+  } catch (e) {}
+  return {};
+}
+function writeDna(userId, obj) {
+  db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
+}
+// Tipos de contenido válidos + mapeo de palabras del cliente a tipos.
+const TIPOS_VALIDOS = ['promo', 'tip', 'social', 'detras', 'novedad'];
+const TIPO_PLURAL = { promo: 'promos', tip: 'tips', social: 'posteos de prueba social', detras: 'posteos de detrás de escena', novedad: 'novedades' };
+function palabraATipo(w) {
+  const s = String(w || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (/^promos?$/.test(s)) return 'promo';
+  if (/^tips?$/.test(s)) return 'tip';
+  if (/^(posteo|contenido)s?$/.test(s)) return null;
+  if (/social|testimonios?|resenas?|clientes/.test(s)) return 'social';
+  if (/detras|bts|equipo|cocina|taller/.test(s)) return 'detras';
+  if (/novedad|novedades|nuevo|nuevos/.test(s)) return 'novedad';
+  return null;
+}
+// Tipos pausados por el cliente (expiran a los 30 días).
+function pausedTipos(userId) {
+  const dna = readDna(userId);
+  const pt = (dna && typeof dna.paused_tipos === 'object' && dna.paused_tipos) || {};
+  const out = {};
+  const now = Date.now();
+  for (const t of TIPOS_VALIDOS) {
+    if (pt[t] && (now - pt[t]) < 30 * 86400000) out[t] = true;
+  }
+  return out;
+}
+function setPausedTipo(userId, tipo, paused) {
+  if (!TIPOS_VALIDOS.includes(tipo)) return false;
+  const dna = readDna(userId);
+  const pt = (dna && typeof dna.paused_tipos === 'object' && dna.paused_tipos) || {};
+  if (paused) pt[tipo] = Date.now();
+  else delete pt[tipo];
+  dna.paused_tipos = pt;
+  writeDna(userId, dna);
+  return true;
+}
+// Transcribe un data URL de audio con Whisper. Devuelve el texto o lanza.
+async function transcribeAudio(dataUrl, apiKey) {
+  const m = String(dataUrl).match(/^data:(audio\/[\w+.-]+);base64,(.+)$/);
+  if (!m) throw new Error('audio inválido');
+  const buf = Buffer.from(m[2], 'base64');
+  if (!buf.length || buf.length > 12 * 1024 * 1024) throw new Error('audio inválido');
+  const form = new FormData();
+  form.append('file', new Blob([buf], { type: m[1] }), 'audio.webm');
+  form.append('model', 'whisper-1');
+  form.append('language', 'es');
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
+  });
+  if (!r.ok) throw new Error(`whisper ${r.status}`);
+  const j = await r.json();
+  return String((j && j.text) || '').trim();
 }
 function maskSettings(s) {
   const c = { ...s };
@@ -356,20 +421,28 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
 
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
-  const { topic, n, seed } = req.body || {};
+  const { topic, n, seed, tipo } = req.body || {};
   if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del posteo' });
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
   const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
   try {
+    let styleRules = [];
+    try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(req.session.userId).map(r => r.rule_text); } catch (e) {}
+    let voice = '';
+    try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, req.session.userId) || ''; } catch (e) {}
     const input = {
       business: profile.business_name,
       category: profile.category,
       tone: profile.tone,
       topic: topic.trim(),
+      tipo: tipo || '',
       competitors: profile.competitors,
       goal: profile.goal,
       taste: tasteProfile(req.session.userId),
+      performance: [performanceBrief(db, req.session.userId), bestHoursLine(db, req.session.userId)].filter(Boolean).join('\n'),
+      styleRules,
+      voice,
       seedBase: parseInt(seed, 10) || 0,
     };
     const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
@@ -469,23 +542,102 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 // ---------- Chat consultor de ideas: el cliente trae su idea, la pulen juntos ----------
 // Hasta que la idea no queda exactamente como quiere el cliente, no se manda nada.
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
-  const { messages, photos, library } = req.body || {};
-  if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'Contanos tu idea' });
-  const clean = messages
+  const { messages, photos, library, drafts, audio } = req.body || {};
+  if (!Array.isArray(messages) || !messages.length) {
+    if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
+  }
+  const clean = (Array.isArray(messages) ? messages : [])
     .slice(-10)
     .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
     .filter(m => m.text.trim());
+  // Nota de voz: transcribir con Whisper y usar el texto como mensaje del usuario.
+  let chatNote = '';
+  if (typeof audio === 'string' && audio.startsWith('data:audio/')) {
+    const akey = (getSettings(req.session.userId).openai_key || process.env.OPENAI_API_KEY || '');
+    const noAudio = { reply: 'No pude escuchar tu audio 🙏 ¿me lo escribís en una línea?', idea: null };
+    if (!akey) return res.json(noAudio);
+    let heard = '';
+    try { heard = await transcribeAudio(audio, akey); } catch (e) { console.error('[chat] whisper:', e.message); }
+    if (!heard) return res.json(noAudio);
+    const lastUser = [...clean].reverse().find(m => m.role === 'user');
+    if (lastUser) lastUser.text = heard.slice(0, 2000);
+    else clean.push({ role: 'user', text: heard.slice(0, 2000) });
+    chatNote = 'El cliente mandó una NOTA DE VOZ transcripta: convertí lo que pide en un posteo concreto, sin pedirle más datos salvo que sea imposible.';
+  }
   if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  // "no me propongas más promos" / "volvé a proponerme promos" → pausa directa, sin IA.
+  {
+    const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+    const pm = lastUserText.match(/no (?:me )?propongas m[áa]s ([\wáéíóúñ ]{2,30})/i);
+    const um = !pm && lastUserText.match(/volv[ée] a proponerme ([\wáéíóúñ ]{2,30})/i);
+    const mm = pm || um;
+    if (mm) {
+      const tipo = palabraATipo(mm[1].trim().split(/\s+/).pop());
+      if (tipo) {
+        const uid = req.session.userId;
+        setPausedTipo(uid, tipo, !!pm);
+        const reply = pm
+          ? `Listo, pauso ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} por un tiempo 👍`
+          : `Dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
+        try {
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', lastUserText.slice(0, 2000));
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
+        } catch (e) {}
+        return res.json({ reply, idea: null });
+      }
+    }
+  }
   const cleanPhotos = Array.isArray(photos)
     ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4)
     : [];
   const cleanLibrary = Array.isArray(library)
     ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6)
     : [];
+  // Borradores en revisión: la IA los ve y puede editarlos directo (bloque ```edit)
+  const cleanDrafts = Array.isArray(drafts)
+    ? drafts.map(d => ({
+        id: parseInt(d && d.id, 10) || 0,
+        caption: String((d && d.caption) || '').slice(0, 300),
+        when: String((d && d.when) || '').slice(0, 10),
+      })).filter(d => d.id).slice(0, 10)
+    : [];
   try {
     const settings = getSettings(req.session.userId);
+    const uid0 = req.session.userId;
+    const perfLine = [performanceBrief(db, uid0), bestHoursLine(db, uid0)].filter(Boolean).join('\n');
+    // ADN del negocio: si no existe, la IA hace la entrevista (needDna)
+    let dna = null, needDna = false;
+    try {
+      const dnarow = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid0);
+      if (dnarow && dnarow.dna_json) { try { dna = JSON.parse(dnarow.dna_json); } catch (e) { dna = null; } }
+    } catch (e) {}
+    if (!dna || !Object.keys(dna).length) needDna = true;
+    // Análisis de su Instagram (si se corrió al conectar)
+    let igAnalysis = '';
+    try {
+      const iar = db.prepare('SELECT summary FROM ig_analysis WHERE user_id = ?').get(uid0);
+      if (iar && iar.summary) igAnalysis = iar.summary;
+    } catch (e) {}
+    // Reglas de estilo que el cliente dictó o que aprendimos de sus ediciones
+    let styleRules = [];
+    try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid0).map(r => r.rule_text); } catch (e) {}
+    // Frustración: bronca en el mensaje o ≥3 'rejected' en 30 min → la IA cambia de modo
+    const lastUserText = clean[clean.length - 1].text || '';
+    let frustrated = /no me gusta|horrible|malísimo|malisimo|pésimo|pesimo|otra vez|de nuevo|ya te dije/i.test(lastUserText);
+    if (!frustrated) {
+      try {
+        const rej = db.prepare(`SELECT COUNT(*) AS c FROM post_signals WHERE user_id = ? AND client_signal = 'rejected' AND updated_at > datetime('now', '-30 minutes')`).get(uid0);
+        frustrated = rej && rej.c >= 3;
+      } catch (e) {}
+    }
+    // Voz del cliente: sus mejores captions como few-shot (si hay 3+ con alcance)
+    let voice = '';
+    try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid0) || ''; } catch (e) {}
+    // Inspiración visual (moodboard): que la IA la vea en contexto junto al gusto
+    let inspoLine = '';
+    try { if (dna && dna.inspo) inspoLine = `\nInspiración visual del cliente: ${dna.inspo}`; } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId), photos: cleanPhotos, library: cleanLibrary },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, igAnalysis, frustrated, styleRules, voice, note: chatNote },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -493,50 +645,61 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
     if (out.idea) db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
     else db.prepare('DELETE FROM chat_state WHERE user_id=?').run(uid);
-    res.json(out);
+    // La IA cerró el ADN del negocio → persistirlo con MERGE (no pisar serie, pausas ni inspo)
+    let dnaSaved = false;
+    if (out.dna && typeof out.dna === 'object') {
+      try {
+        const cur = readDna(uid);
+        writeDna(uid, { ...cur, ...out.dna });
+        dnaSaved = true;
+      } catch (e) { console.error('[chat] dna save:', e.message); }
+    }
+    // La IA dictó una regla de estilo explícita → agregarla o quitarla
+    if (out.rule && typeof out.rule === 'object') {
+      try {
+        const { normKey } = require('./style-learn');
+        if (out.rule.add) {
+          const key = normKey(out.rule.add);
+          if (key) db.prepare(`INSERT INTO style_rules (user_id, rule_key, rule_text, hits, active) VALUES (?, ?, ?, 1, 1)
+            ON CONFLICT(user_id, rule_key) DO UPDATE SET rule_text=excluded.rule_text, active=1`).run(uid, key, String(out.rule.add).slice(0, 200));
+        }
+        if (out.rule.remove) {
+          const key = normKey(out.rule.remove);
+          if (key) db.prepare('DELETE FROM style_rules WHERE user_id = ? AND rule_key = ?').run(uid, key);
+        }
+      } catch (e) { console.error('[chat] rule save:', e.message); }
+    }
+    // La IA sugirió una inspiración visual (moodboard) → guardarla en el ADN
+    if (out.inspo && typeof out.inspo === 'string' && out.inspo.trim()) {
+      try {
+        const irow = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+        let iobj = {};
+        if (irow && irow.dna_json) { try { iobj = JSON.parse(irow.dna_json); } catch (e) { iobj = {}; } }
+        iobj.inspo = out.inspo.trim().slice(0, 500);
+        db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
+          ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(uid, JSON.stringify(iobj));
+      } catch (e) { console.error('[chat] inspo save:', e.message); }
+    }
+    // Edición directa de un borrador pedida por el cliente vía chat
+    let editApplied = null;
+    if (out.edit && out.edit.draft >= 1 && out.edit.draft <= cleanDrafts.length
+        && (out.edit.caption !== undefined || out.edit.hashtags !== undefined)) {
+      const target = cleanDrafts[out.edit.draft - 1];
+      const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+      if (post && (post.status === 'draft' || post.status === 'scheduled')) {
+        db.prepare('UPDATE posts SET caption = ?, hashtags = ? WHERE id = ?').run(
+          out.edit.caption !== undefined ? out.edit.caption : post.caption,
+          out.edit.hashtags !== undefined ? out.edit.hashtags : post.hashtags,
+          post.id
+        );
+        recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
+        editApplied = { ok: true, draftId: post.id };
+      }
+    }
+    res.json({ reply: out.reply, idea: out.idea || null, edit: editApplied, dna: dnaSaved, options: out.options || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'No pudimos responder, probá de nuevo' });
-  }
-});
-
-// Nota de voz → texto (Whisper). El cliente pide su posteo hablando.
-app.post('/api/voice/transcribe', requireAuth, requireTrialValid, async (req, res) => {
-  try {
-    const chunks = [];
-    let size = 0;
-    for await (const c of req) {
-      chunks.push(c); size += c.length;
-      if (size > 15 * 1024 * 1024) return res.status(413).json({ error: 'La nota es muy larga (máx. 1 minuto)' });
-    }
-    const buf = Buffer.concat(chunks);
-    if (buf.length < 1000) return res.status(400).json({ error: 'No se escuchó nada, probá de nuevo' });
-    const settings = getSettings(req.session.userId);
-    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
-    if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
-    const ct = String(req.headers['content-type'] || '').toLowerCase();
-    const ext = ct.includes('webm') ? 'webm' : ct.includes('mp4') ? 'mp4' : 'm4a';
-    const form = new FormData();
-    form.append('model', 'whisper-1');
-    form.append('language', 'es');
-    form.append('file', new Blob([buf], { type: 'audio/' + ext }), `nota.${ext}`);
-    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(60000),
-    });
-    if (!r.ok) {
-      const t = await r.text().catch(() => '');
-      throw new Error(`Whisper ${r.status}: ${t.slice(0, 120)}`);
-    }
-    const data = await r.json();
-    const text = String((data && data.text) || '').trim();
-    if (!text) return res.status(400).json({ error: 'No se entendió el audio, probá de nuevo' });
-    res.json({ ok: true, text });
-  } catch (e) {
-    console.error('[voice]', e.message);
-    res.status(500).json({ error: 'No pudimos transcribir la nota de voz' });
   }
 });
 
@@ -1074,7 +1237,7 @@ function ensureImageBaseUrl(db, userId, req) {
 }
 
 app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
-  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle } = req.body || {};
+  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle, carousel_paths, tipo } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
   // Anti-duplicados: mismo texto en las últimas 24h (no cancelado) = avisar en vez de crear otro
   const cap = (caption || '').trim();
@@ -1083,8 +1246,8 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
     if (dup) return res.status(409).json({ error: 'Ya creaste este posteo hoy. Lo ves en tu historial.', post_id: dup.id });
   }
   const status = scheduled_at ? 'scheduled' : 'draft';
-  const mt = media_type === 'video' ? 'video' : media_type === 'story' ? 'story' : 'image';
-  // Cupo del plan: las historias no consumen cupo (bonus de la casa)
+  const mt = media_type === 'video' ? 'video' : media_type === 'story' ? 'story' : media_type === 'carousel' ? 'carousel' : 'image';
+  // Cupo del plan: las historias no consumen cupo (bonus de la casa). El carrusel cuenta como 1 posteo.
   if (mt !== 'story') {
     const q = weeklyQuota(req.session.userId);
     if (q.left <= 0) {
@@ -1092,9 +1255,13 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
         message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
     }
   }
+  let cpaths = '';
+  if (mt === 'carousel' && Array.isArray(carousel_paths)) {
+    cpaths = JSON.stringify(carousel_paths.filter(Boolean).slice(0, 10));
+  }
   const r = db.prepare(
-    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle) VALUES (?,?,?,?,?,?,?,?,?)'
-  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '');
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '');
   ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
@@ -1110,6 +1277,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
     // También acepta image_path para la regeneración de un borrador (↻).
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags) || (image_path && image_path !== post.image_path);
+    // Style-learn: si editó el caption a mano, aprendemos QUÉ cambió (sin emojis, más corto, con precios...)
+    if (caption !== undefined && caption !== post.caption) {
+      try { require('./style-learn').learnFromCaptionEdit(db, req.session.userId, post.caption, caption); } catch (e) {}
+    }
     db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, post.id);
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
     return res.json({ ok: true });
@@ -1210,8 +1381,7 @@ function postWeekKey(p, tz) {
 function tasteProfile(userId) {
   try {
     const rows = db.prepare(`
-      SELECT p.caption, s.client_signal AS sig FROM post_signals s
-      JOIN posts p ON p.id = s.post_id
+      SELECT s.caption AS caption, s.client_signal AS sig FROM post_signals s
       WHERE s.user_id = ? AND s.client_signal IN ('approved','rejected')
       ORDER BY s.updated_at DESC LIMIT 12
     `).all(userId);
@@ -1235,13 +1405,13 @@ function recordSignal(userId, post, signal) {
     const prof = getProfile(userId) || {};
     const wk = postWeekKey(post, tz);
     db.prepare(`
-      INSERT INTO post_signals (user_id, post_id, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
-      VALUES (?,?,?,?,?,?,?,datetime('now'))
+      INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
+      VALUES (?,?,?,?,?,?,?,?,datetime('now'))
       ON CONFLICT(user_id, post_id) DO UPDATE SET
-        client_signal=excluded.client_signal, hashtags=excluded.hashtags,
+        client_signal=excluded.client_signal, caption=excluded.caption, hashtags=excluded.hashtags,
         scheduled_for=excluded.scheduled_for, rubro=excluded.rubro,
         week_key=excluded.week_key, updated_at=datetime('now')
-    `).run(userId, post.id, post.hashtags || '', post.scheduled_at || '', prof.category || '', signal, wk);
+    `).run(userId, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', prof.category || '', signal, wk);
   } catch (e) { console.error('[posta] recordSignal:', e.message); }
 }
 
@@ -1324,6 +1494,8 @@ app.get('/api/stats/summary', requireAuth, (req, res) => {
   const mk = tzToday(tz).slice(0, 7);
   const monthPublished = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published' AND substr(published_at, 1, 7) = ?`).get(uid, mk).c;
   const monthScheduled = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'scheduled'`).get(uid).c;
+  const totalPublished = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published'`).get(uid).c;
+  const tasteLearned = db.prepare(`SELECT COUNT(*) AS c FROM post_signals WHERE user_id = ? AND client_signal IN ('approved','rejected','edited')`).get(uid).c;
 
   res.json({
     week: {
@@ -1350,7 +1522,9 @@ app.get('/api/stats/summary', requireAuth, (req, res) => {
       published: monthPublished,
       scheduled: monthScheduled,
       hours_saved: Math.round(monthPublished * 1.5 * 10) / 10, // estimado: ~1,5 h por posteo hecho a mano
+      hours_saved_total: Math.round(totalPublished * 1.5 * 10) / 10,
     },
+    taste_learned: tasteLearned,
   });
 });
 
@@ -1524,6 +1698,21 @@ app.get('/api/ig/callback', async (req, res) => {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(finalIgId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
+    // Análisis de su Instagram en background: la IA los conoce desde el día uno. Nunca bloquea la conexión.
+    try {
+      const { analyzeInstagram } = require('./instagram');
+      analyzeInstagram(finalIgId, accessToken)
+        .then(r => {
+          if (r && r.summary) {
+            try {
+              db.prepare(`INSERT INTO ig_analysis (user_id, summary, updated_at) VALUES (?, ?, datetime('now'))
+                ON CONFLICT(user_id) DO UPDATE SET summary=excluded.summary, updated_at=datetime('now')`)
+                .run(req.session.userId, String(r.summary).slice(0, 4000));
+            } catch (e) { console.error('[ig] analysis save:', e.message); }
+          }
+        })
+        .catch(e => console.error('[ig] analyze:', e.message));
+    } catch (e) { console.error('[ig] analyze:', e.message); }
     track(req.session.userId, 'ig_connected');
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
     res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
@@ -1817,6 +2006,475 @@ app.get('/api/publish-celebration', requireAuth, (req, res) => {
 app.post('/api/publish-celebration/seen', requireAuth, (req, res) => {
   db.prepare('UPDATE users SET publish_celebrated = 1 WHERE id = ?').run(req.session.userId);
   res.json({ ok: true });
+});
+
+// Hitos de publicaciones: 10, 25, 50, 100 (el hito 1 lo cubre /api/publish-celebration).
+const MILESTONES = [10, 25, 50, 100];
+app.get('/api/milestones', requireAuth, (req, res) => {
+  const seen = db.prepare('SELECT milestone FROM milestones_seen WHERE user_id = ?').all(req.session.userId).map(r => r.milestone);
+  const total = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published'`).get(req.session.userId).c;
+  const hit = MILESTONES.find(m => total >= m && !seen.includes(m));
+  res.json({ ok: true, show: !!hit, milestone: hit || null, total });
+});
+app.post('/api/milestones/seen', requireAuth, (req, res) => {
+  const m = Number(req.body && req.body.milestone);
+  if (MILESTONES.includes(m)) db.prepare('INSERT OR IGNORE INTO milestones_seen (user_id, milestone) VALUES (?, ?)').run(req.session.userId, m);
+  res.json({ ok: true });
+});
+
+// Sugerencias proactivas del CM: detecta patrones y propone (máx 2).
+app.get('/api/proactive-tips', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const tips = [];
+    // (a) Sin promo hace 3+ semanas
+    const totalPub = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published'`).get(uid).c;
+    const lastPromo = db.prepare(`SELECT published_at FROM posts WHERE user_id = ? AND tipo = 'promo' AND status = 'published' ORDER BY published_at DESC LIMIT 1`).get(uid);
+    if (lastPromo && lastPromo.published_at) {
+      const days = (Date.now() - new Date(lastPromo.published_at).getTime()) / 86400000;
+      if (days >= 21) {
+        const weeks = Math.floor(days / 7);
+        tips.push({ icon: '💡', text: `Hace ${weeks} semanas no hacés una promo — ¿armamos una?` });
+      }
+    } else if (totalPub >= 3) {
+      tips.push({ icon: '💡', text: 'Todavía no probaste una promo — ¿armamos una?' });
+    }
+    // (b) Formato con mejor alcance promedio (últimos 30 días, mín 2 posteos por formato)
+    if (tips.length < 2) {
+      const rows = db.prepare(`
+        SELECT p.media_type AS mt, AVG(m.reach) AS avg_reach, COUNT(*) AS n
+        FROM post_metrics m JOIN posts p ON p.id = m.post_id
+        WHERE p.user_id = ? AND p.status = 'published' AND p.published_at >= datetime('now', '-30 days') AND m.reach > 0
+        GROUP BY p.media_type HAVING COUNT(*) >= 2
+        ORDER BY avg_reach DESC
+      `).all(uid);
+      if (rows.length >= 2) {
+        const restAvg = rows.slice(1).reduce((s, r) => s + r.avg_reach, 0) / (rows.length - 1);
+        if (restAvg > 0) {
+          const x = rows[0].avg_reach / restAvg;
+          if (x >= 1.5) {
+            const fmtName = rows[0].mt === 'carousel' ? 'carruseles' : rows[0].mt === 'video' ? 'reels' : 'posteos con foto';
+            tips.push({ icon: '🔥', text: `Tus ${fmtName} rinden ${x.toFixed(1).replace('.', ',')}x más que el resto — ¿repetimos la fórmula?` });
+          }
+        }
+      }
+    }
+    // (c) Tipo muy rechazado sin señales positivas: sugerir pausarlo
+    if (tips.length < 2) {
+      try {
+        const rej = db.prepare(`
+          SELECT p.tipo AS tipo, COUNT(*) AS n
+          FROM post_signals s JOIN posts p ON p.id = s.post_id
+          WHERE s.user_id = ? AND s.client_signal = 'rejected' AND s.updated_at >= datetime('now', '-30 days')
+            AND p.tipo != '' AND p.user_id = ?
+          GROUP BY p.tipo HAVING COUNT(*) >= 3
+        `).all(uid, uid);
+        const paused = pausedTipos(uid);
+        for (const r of rej) {
+          if (!TIPOS_VALIDOS.includes(r.tipo) || paused[r.tipo]) continue;
+          const good = db.prepare(`
+            SELECT COUNT(*) AS c FROM post_signals s JOIN posts p ON p.id = s.post_id
+            WHERE s.user_id = ? AND s.client_signal IN ('edited','approved') AND s.updated_at >= datetime('now', '-30 days')
+              AND p.tipo = ? AND p.user_id = ?
+          `).get(uid, r.tipo, uid).c;
+          if (!good) {
+            const pl = TIPO_PLURAL[r.tipo] || r.tipo;
+            const seg = (r.tipo === 'promo' || r.tipo === 'novedad') ? 'seguidas' : 'seguidos';
+            tips.push({ icon: '🚫', kind: 'pause-tipo', tipo: r.tipo, text: `Rechazaste ${r.n} ${pl} ${seg}. ¿Los pauso un tiempo?` });
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+    res.json({ ok: true, tips: tips.slice(0, 2) });
+  } catch (e) {
+    console.error('[proactive-tips]', e.message);
+    res.json({ ok: true, tips: [] });
+  }
+});
+
+/* ---------- Plan semanal sugerido: mix de tipos con su porqué ---------- */
+const DIAS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+function buildWeeklyPlan(uid) {
+  const plan = [];
+  const used = new Set();
+  const paused = pausedTipos(uid);
+  const addTipo = (t, pq) => {
+    if (used.has(t) || !t || paused[t]) return;
+    used.add(t);
+    plan.push({ tipo: t, por_que: pq });
+  };
+  // 0. Serie fija del cliente (si la activó): va primera.
+  const dna = readDna(uid);
+  const series = (dna && typeof dna.series === 'object' && dna.series) || null;
+  if (series && series.nombre && TIPOS_VALIDOS.includes(series.tipo)) {
+    const wd = parseInt(series.weekday, 10);
+    const dia = DIAS_ES[(wd >= 0 && wd <= 6) ? wd : 1] || 'lunes';
+    plan.push({ tipo: 'serie', serie_tipo: series.tipo, nombre: String(series.nombre).slice(0, 60), por_que: `tu serie de los ${dia}` });
+  }
+  // Pilares del mes (si existen)
+  let pillars = [];
+  try {
+    const mk = new Date().toISOString().slice(0, 7);
+    const cached = db.prepare('SELECT pillars_json FROM pillars_cache WHERE user_id = ? AND month_key = ?').get(uid, mk);
+    if (cached && cached.pillars_json) pillars = JSON.parse(cached.pillars_json) || [];
+  } catch (e) {}
+  // Tipos usados en los últimos 7 días (para variar)
+  let lastWeekTipos = [];
+  try {
+    lastWeekTipos = db.prepare(`SELECT tipo FROM posts WHERE user_id = ? AND tipo != '' AND status != 'cancelled' AND created_at >= datetime('now', '-7 days')`).all(uid).map(r => r.tipo);
+  } catch (e) {}
+  // ¿Falta una promo? (misma lógica que proactive-tips)
+  let needPromo = false, promoWeeks = 0;
+  try {
+    const lastPromo = db.prepare(`SELECT COALESCE(published_at, created_at) AS d FROM posts WHERE user_id = ? AND tipo = 'promo' AND status != 'cancelled' ORDER BY d DESC LIMIT 1`).get(uid);
+    if (lastPromo && lastPromo.d) {
+      const days = (Date.now() - new Date(lastPromo.d).getTime()) / 86400000;
+      if (days >= 21) { needPromo = true; promoWeeks = Math.floor(days / 7); }
+    } else {
+      const totalPub = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published'`).get(uid).c;
+      if (totalPub >= 3) needPromo = true;
+    }
+  } catch (e) {}
+  // 1. Promo prioritaria si hace falta
+  if (needPromo) addTipo('promo', promoWeeks > 0 ? `hace ${promoWeeks} semanas no hacés promo` : 'todavía no probaste una promo');
+  // 2. Tipos ligados a los pilares del mes
+  pillars.forEach(p => {
+    if (plan.length >= 4) return;
+    const s = `${p.titulo || ''} ${p.enfoque || ''}`.toLowerCase();
+    let t = 'novedad';
+    if (/promo|oferta|descuento|venta|precio|vender/.test(s)) t = 'promo';
+    else if (/tip|consejo|educ|enseñ|gu[ií]a|aprende/.test(s)) t = 'tip';
+    else if (/comunidad|cliente|testimonio|rese[ñn]a|confianza|opini/.test(s)) t = 'social';
+    else if (/detr[aá]s|equipo|proceso|humano|historia|cocina|taller/.test(s)) t = 'detras';
+    if (lastWeekTipos.includes(t)) return; // prefiere variar vs la semana pasada
+    addTipo(t, `pilar del mes: ${p.titulo || 'contenido'}`);
+  });
+  // 3. Completa con variedad (defaults por tipo)
+  const defaults = {
+    tip: 'los tips te posicionan como referente',
+    social: 'la prueba social genera confianza',
+    detras: 'el detrás de escena humaniza tu marca',
+    novedad: 'las novedades mantienen tu cuenta fresca',
+    promo: 'las promos venden directo',
+  };
+  for (const t of ['tip', 'social', 'detras', 'novedad', 'promo']) {
+    if (plan.length >= 4) break;
+    if (!used.has(t)) addTipo(t, defaults[t]);
+  }
+  const out = plan.slice(0, 4);
+  // 4. Sin serie pero con historial (3+ semanas): sugerir activar una.
+  if (!series) {
+    try {
+      const w = db.prepare(`SELECT COUNT(DISTINCT strftime('%Y-%W', published_at)) AS w FROM posts WHERE user_id = ? AND status = 'published' AND published_at IS NOT NULL`).get(uid);
+      if (w && w.w >= 3) {
+        out.push({ kind: 'suggest-serie', nombre_sugerido: 'El tip del lunes', tipo: 'tip', weekday: 1, texto: 'Ya tenés constancia: una serie fija como "El tip del lunes" crea hábito en tu audiencia. ¿La activamos?' });
+      }
+    } catch (e) {}
+  }
+  return out;
+}
+app.get('/api/weekly-plan', requireAuth, (req, res) => {
+  try {
+    res.json({ ok: true, plan: buildWeeklyPlan(req.session.userId) });
+  } catch (e) {
+    console.error('[weekly-plan]', e.message);
+    res.json({ ok: true, plan: [] });
+  }
+});
+
+/* ---------- Alerta honesta: el alcance cayó ≥40% semana contra semana ---------- */
+app.get('/api/performance-alert', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const avgFor = (d0, d1) => db.prepare(`
+      SELECT AVG(m.reach) AS avg_reach, COUNT(*) AS n
+      FROM post_metrics m JOIN posts p ON p.id = m.post_id
+      WHERE p.user_id = ? AND p.status = 'published' AND m.reach > 0
+        AND p.published_at >= datetime('now', ?) AND p.published_at < datetime('now', ?)
+    `).get(uid, `-${d0} days`, d1 === 0 ? '+1 day' : `-${d1} days`);
+    const cur = avgFor(7, 0);
+    const prev = avgFor(14, 7);
+    if (!cur || cur.n < 2 || !prev || prev.n < 2 || !prev.avg_reach || prev.avg_reach <= 0) {
+      return res.json({ ok: true, alert: false });
+    }
+    const drop = (prev.avg_reach - cur.avg_reach) / prev.avg_reach;
+    if (drop < 0.4) return res.json({ ok: true, alert: false });
+    const dropPct = Math.round(drop * 100);
+    let diagnostico = 'El alcance bajó en todos los formatos por igual.';
+    let plan = 'Probamos hooks nuevos y un carrusel esta semana para reactivar.';
+    try {
+      const fmtFor = (d0, d1) => db.prepare(`
+        SELECT p.media_type AS mt, AVG(m.reach) AS avg_reach, COUNT(*) AS n
+        FROM post_metrics m JOIN posts p ON p.id = m.post_id
+        WHERE p.user_id = ? AND p.status = 'published' AND m.reach > 0
+          AND p.published_at >= datetime('now', ?) AND p.published_at < datetime('now', ?)
+        GROUP BY p.media_type
+      `).all(uid, `-${d0} days`, d1 === 0 ? '+1 day' : `-${d1} days`);
+      const c = fmtFor(7, 0), p = fmtFor(14, 7);
+      const fmtName = mt => mt === 'carousel' ? 'carruseles' : mt === 'video' ? 'reels' : mt === 'story' ? 'historias' : 'posteos con foto';
+      let worst = null, worstDrop = 0;
+      c.forEach(cr => {
+        const pr = p.find(x => x.mt === cr.mt);
+        if (pr && pr.avg_reach > 0) {
+          const d = (pr.avg_reach - cr.avg_reach) / pr.avg_reach;
+          if (d > worstDrop) { worstDrop = d; worst = cr.mt; }
+        }
+      });
+      if (worst && worstDrop >= 0.3) {
+        diagnostico = `Tus ${fmtName(worst)} cayeron ${Math.round(worstDrop * 100)}% en alcance.`;
+        const best = c.slice().sort((a, b) => b.avg_reach - a.avg_reach)[0];
+        plan = best && best.mt === worst
+          ? `Esta semana los priorizamos con hooks más fuertes.`
+          : `Esta semana priorizamos ${fmtName(best.mt)}, tu formato más fuerte ahora.`;
+      } else if (cur.n < prev.n) {
+        const diff = prev.n - cur.n;
+        diagnostico = `Publicaste ${diff} ${diff === 1 ? 'posteo menos' : 'posteos menos'} que la semana anterior.`;
+        plan = 'La constancia es lo que más pesa: esta semana la armamos completa.';
+      }
+    } catch (e) {}
+    res.json({ ok: true, alert: true, dropPct, diagnostico, plan });
+  } catch (e) {
+    console.error('[performance-alert]', e.message);
+    res.json({ ok: true, alert: false });
+  }
+});
+
+/* ---------- Lista de fotos de la semana (director de fotografía) ---------- */
+const SHOT_TEMPLATES = {
+  promo: [
+    { foto: 'Tu producto estrella en primer plano, sobre fondo liso y despejado', para: 'la promo de la semana', tip: 'Luz natural de costado (ventana): sacala de día, nunca con flash' },
+    { foto: 'El producto en manos de alguien, en uso real', para: 'la promo de la semana', tip: 'Acercate: que el producto ocupe al menos la mitad del encuadre' },
+  ],
+  tip: [
+    { foto: 'Una foto que ilustre el consejo: el antes/después, el detalle, el proceso', para: 'el tip de la semana', tip: 'Que la foto "explique" sola: si necesita texto para entenderse, no sirve' },
+    { foto: 'Plano detalle de lo que estás enseñando (textura, paso a paso)', para: 'el tip de la semana', tip: 'Foco nítido en el detalle: tocá la pantalla para enfocar antes de disparar' },
+  ],
+  social: [
+    { foto: 'Un cliente real usando tu producto o en tu local (con su permiso)', para: 'la prueba social', tip: 'Las caras venden: pedí permiso y sacala en el momento, no posada' },
+    { foto: 'Captura de una reseña linda que te dejaron (WhatsApp, Google, IG)', para: 'la prueba social', tip: 'Recortá solo el mensaje: que se lea grande en el celular' },
+  ],
+  detras: [
+    { foto: 'Tu equipo trabajando: manos en acción, el local en movimiento', para: 'el detrás de escena', tip: 'Fotos robadas, no posadas: dispará mientras trabajan de verdad' },
+    { foto: 'Un rincón de tu lugar que los clientes no suelen ver', para: 'el detrás de escena', tip: 'Buscá la luz más linda del local y poné el detalle ahí' },
+  ],
+  novedad: [
+    { foto: 'Lo nuevo: el producto, el cambio, lo que llegó esta semana', para: 'la novedad', tip: 'Presentación de "unboxing": que se note que es algo nuevo' },
+    { foto: 'Vos o tu equipo presentando la novedad, mirando a cámara', para: 'la novedad', tip: 'Mirá al lente, no a la pantalla: conecta mucho más' },
+  ],
+  serie: [
+    { foto: 'La foto protagonista de tu serie: simple, repetible cada semana', para: 'tu serie semanal', tip: 'Pensá en formato fijo: el mismo encuadre cada semana crea marca' },
+  ],
+};
+async function personalizeShots(shots, profile, apiKey) {
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Sos director de fotografía de un community manager. Personalizá la lista de fotos para el negocio indicado. Respondé SOLO JSON: {"shots":[{"foto":"...","para":"...","tip":"..."}]}. "foto": qué fotografiar, concreto y posible con un celular. "para": para qué posteo es. "tip": un consejo de luz o encuadre. Español rioplatense, una línea por campo.' },
+          { role: 'user', content: `Negocio: ${profile.business_name || ''} (${profile.category || ''}). ${profile.description || ''}\nFotos pedidas:\n${shots.map((s, i) => `${i + 1}. ${s.foto} — para: ${s.para}`).join('\n')}` },
+        ],
+        max_tokens: 700, temperature: 0.7,
+      }),
+    });
+    const j = await r.json();
+    const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+    const mm = txt.match(/\{[\s\S]*\}/);
+    if (mm) {
+      const p = JSON.parse(mm[0]);
+      if (Array.isArray(p.shots) && p.shots.length) {
+        return p.shots.slice(0, 3).map(s => ({
+          foto: String((s && s.foto) || '').slice(0, 200) || 'Foto del negocio',
+          para: String((s && s.para) || '').slice(0, 120),
+          tip: String((s && s.tip) || '').slice(0, 200),
+        })).filter(s => s.foto && s.para);
+      }
+    }
+  } catch (e) {}
+  return shots;
+}
+app.get('/api/shot-list', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const plan = buildWeeklyPlan(uid);
+    const shots = [];
+    const usedTipos = new Set();
+    const take = (t, nombre) => {
+      const tpl = SHOT_TEMPLATES[t] || SHOT_TEMPLATES.novedad;
+      const s = tpl[shots.length % tpl.length];
+      shots.push(t === 'serie'
+        ? { foto: s.foto, para: `tu serie "${nombre || 'semanal'}"`, tip: s.tip }
+        : { foto: s.foto, para: s.para, tip: s.tip });
+      usedTipos.add(t);
+    };
+    for (const it of plan) {
+      if (shots.length >= 3) break;
+      const t = it.tipo;
+      if (t !== 'serie' && !TIPOS_VALIDOS.includes(t)) continue;
+      if (usedTipos.has(t)) continue;
+      take(t, it.nombre);
+    }
+    for (const t of TIPOS_VALIDOS) {
+      if (shots.length >= 3) break;
+      if (!usedTipos.has(t)) take(t);
+    }
+    const key = getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '';
+    const final = key ? await personalizeShots(shots.slice(0, 3), getProfile(uid), key) : shots.slice(0, 3);
+    res.json({ ok: true, shots: final });
+  } catch (e) {
+    console.error('[shot-list]', e.message);
+    res.json({ ok: true, shots: [] });
+  }
+});
+
+/* ---------- Reciclaje inteligente: republicar lo que voló ---------- */
+app.get('/api/recycle-suggest', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const row = db.prepare(`
+      SELECT p.id, p.caption, p.image_path, m.reach, p.published_at
+      FROM post_metrics m JOIN posts p ON p.id = m.post_id
+      WHERE p.user_id = ? AND p.status = 'published' AND m.reach > 0
+        AND p.published_at < datetime('now', '-60 days')
+        AND p.id NOT IN (SELECT post_id FROM recycled_posts)
+      ORDER BY m.reach DESC LIMIT 1
+    `).get(uid);
+    if (!row) return res.json({ ok: true, suggestion: null });
+    const daysAgo = Math.max(60, Math.round((Date.now() - new Date(row.published_at).getTime()) / 86400000));
+    res.json({
+      ok: true,
+      suggestion: {
+        post_id: row.id,
+        caption: String(row.caption || '').slice(0, 120),
+        reach: Math.round(row.reach),
+        days_ago: daysAgo,
+        thumb: row.image_path || null,
+      },
+    });
+  } catch (e) {
+    console.error('[recycle-suggest]', e.message);
+    res.json({ ok: true, suggestion: null });
+  }
+});
+app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = parseInt((req.body || {}).post_id, 10);
+    if (!postId) return res.status(400).json({ error: 'Post inválido' });
+    const old = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ? AND status = 'published'`).get(postId, uid);
+    if (!old) return res.status(404).json({ error: 'Post no encontrado' });
+    if (db.prepare('SELECT post_id FROM recycled_posts WHERE post_id = ?').get(postId))
+      return res.status(400).json({ error: 'Ya lo republicamos' });
+    const profile = getProfile(uid);
+    const apiKey = getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '';
+    let caption = '', hashtags = '';
+    if (apiKey) {
+      try {
+        const out = await generateContent({
+          business: profile.business_name, category: profile.category, tone: profile.tone,
+          topic: `Reescribí este posteo que funcionó muy bien, con texto fresco y otro ángulo. NO lo copies: hacelo nuevo sobre la misma idea. Idea original: "${String(old.caption || '').slice(0, 300)}"`,
+          competitors: profile.competitors, goal: profile.goal,
+          taste: tasteProfile(uid),
+          tipo: TIPOS_VALIDOS.includes(old.tipo) ? old.tipo : '',
+          performance: performanceBrief(db, uid),
+        }, apiKey);
+        caption = (out && out.caption) || ''; hashtags = (out && out.hashtags) || '';
+      } catch (e) { console.error('[recycle] generate:', e.message); }
+    }
+    if (!String(caption).trim()) caption = String(old.caption || '').slice(0, 500);
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, tipo) VALUES (?,?,?,?,?,?,?,?)`)
+      .run(uid, '', caption, hashtags, 'draft', 'image', 'reciclado', TIPOS_VALIDOS.includes(old.tipo) ? old.tipo : '');
+    const newId = r.lastInsertRowid;
+    db.prepare('INSERT INTO recycled_posts (post_id, new_post_id, created_at) VALUES (?,?,?)').run(postId, newId, Date.now());
+    try { recordSignal(uid, { id: newId, caption, hashtags, scheduled_at: '' }, 'recycled'); } catch (e) {}
+    res.json({ ok: true, draft_id: newId });
+  } catch (e) {
+    console.error('[recycle]', e.message);
+    res.status(500).json({ error: 'No se pudo republicar' });
+  }
+});
+
+/* ---------- Serie fija semanal ---------- */
+app.get('/api/series', requireAuth, (req, res) => {
+  try {
+    const dna = readDna(req.session.userId);
+    const s = (dna && typeof dna.series === 'object' && dna.series) || null;
+    res.json({ ok: true, series: (s && s.nombre)
+      ? { nombre: String(s.nombre).slice(0, 60), weekday: Math.min(6, Math.max(0, parseInt(s.weekday, 10) || 0)), tipo: TIPOS_VALIDOS.includes(s.tipo) ? s.tipo : 'tip' }
+      : null });
+  } catch (e) { res.json({ ok: true, series: null }); }
+});
+app.post('/api/series', requireAuth, (req, res) => {
+  try {
+    const { nombre, weekday, tipo } = req.body || {};
+    const wd = parseInt(weekday, 10);
+    if (!nombre || typeof nombre !== 'string' || !nombre.trim() || !(wd >= 0 && wd <= 6) || !TIPOS_VALIDOS.includes(tipo))
+      return res.status(400).json({ error: 'Datos inválidos' });
+    const dna = readDna(req.session.userId);
+    dna.series = { nombre: nombre.trim().slice(0, 60), weekday: wd, tipo };
+    writeDna(req.session.userId, dna);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[series]', e.message);
+    res.status(500).json({ error: 'No se pudo guardar' });
+  }
+});
+
+/* ---------- Pausar un tipo de contenido ---------- */
+app.post('/api/pause-tipo', requireAuth, (req, res) => {
+  try {
+    const { tipo, paused } = req.body || {};
+    if (!TIPOS_VALIDOS.includes(tipo)) return res.status(400).json({ error: 'Tipo inválido' });
+    setPausedTipo(req.session.userId, tipo, !!paused);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[pause-tipo]', e.message);
+    res.status(500).json({ error: 'No se pudo guardar' });
+  }
+});
+
+// Pilares del mes: 3-4 focos de contenido, con cache mensual.
+async function buildPillars(uid) {
+  const profile = getProfile(uid) || {};
+  const settings = getSettings(uid) || {};
+  const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
+  return generatePillars({
+    business: profile.business_name,
+    category: profile.category,
+    description: profile.description,
+    performance: performanceBrief(db, uid),
+  }, key);
+}
+app.get('/api/pillars', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const mk = new Date().toISOString().slice(0, 7);
+    const cached = db.prepare('SELECT month_key, pillars_json FROM pillars_cache WHERE user_id = ?').get(uid);
+    if (cached && cached.month_key === mk && cached.pillars_json) {
+      return res.json({ ok: true, pillars: JSON.parse(cached.pillars_json), cached: true });
+    }
+    const pillars = await buildPillars(uid);
+    db.prepare('INSERT INTO pillars_cache (user_id, month_key, pillars_json) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET month_key=excluded.month_key, pillars_json=excluded.pillars_json').run(uid, mk, JSON.stringify(pillars));
+    res.json({ ok: true, pillars, cached: false });
+  } catch (e) {
+    console.error('[pillars]', e.message);
+    res.status(500).json({ error: 'No se pudieron generar los pilares' });
+  }
+});
+app.post('/api/pillars/refresh', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const mk = new Date().toISOString().slice(0, 7);
+    const pillars = await buildPillars(uid);
+    db.prepare('INSERT INTO pillars_cache (user_id, month_key, pillars_json) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET month_key=excluded.month_key, pillars_json=excluded.pillars_json').run(uid, mk, JSON.stringify(pillars));
+    res.json({ ok: true, pillars });
+  } catch (e) {
+    console.error('[pillars/refresh]', e.message);
+    res.status(500).json({ error: 'No se pudieron regenerar los pilares' });
+  }
 });
 
 // Misión de fotos de la semana: 3 fotos concretas + cuántas ya subió.

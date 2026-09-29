@@ -2,7 +2,7 @@
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
-const { publishPost, publishVideo, publishStory } = require('./instagram');
+const { publishPost, publishVideo, publishStory, publishCarousel } = require('./instagram');
 
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   const file = path.basename(imagePath);
@@ -26,12 +26,21 @@ async function publishSinglePost(db, post) {
     const caption = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
     const creds = { igUserId: settings.ig_user_id, accessToken: settings.ig_access_token };
     const isStory = post.media_type === 'story';
+    const isCarousel = post.media_type === 'carousel';
+    let carouselUrls = [];
+    if (isCarousel) {
+      try { carouselUrls = JSON.parse(post.carousel_paths || '[]'); } catch (e) { carouselUrls = []; }
+      if (!Array.isArray(carouselUrls) || !carouselUrls.length) carouselUrls = [post.image_path];
+      carouselUrls = carouselUrls.filter(Boolean).map(p => publicImageUrl(p, settings.image_base_url));
+    }
     const result =
       post.media_type === 'video'
         ? await publishVideo({ videoUrl: mediaUrl, caption }, creds, demoMode)
         : isStory
           ? await publishStory({ imageUrl: mediaUrl }, creds, demoMode)
-          : await publishPost({ imageUrl: mediaUrl, caption }, creds, demoMode);
+          : isCarousel
+            ? await publishCarousel({ imageUrls: carouselUrls, caption }, creds, demoMode)
+            : await publishPost({ imageUrl: mediaUrl, caption }, creds, demoMode);
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
