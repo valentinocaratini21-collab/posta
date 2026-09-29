@@ -208,7 +208,18 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .sticky-cta{position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;backdrop-filter:blur(8px);display:none}
 .sticky-cta .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .sticky-cta b{font-size:15px}
-/* Cómo sigue: 3 pasos */
+/* Preguntas previas a generar (v-questions): conversacional, una a la vez */
+.qcard{background:#fff;border:1px solid var(--line);border-radius:22px;padding:34px 30px;max-width:560px;margin:40px auto;box-shadow:var(--shadow);text-align:center}
+.qcard h2{font-size:24px}
+.q-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px}
+.q-opt{display:flex;align-items:center;gap:10px;background:#F7FAFD;border:2px solid var(--line);border-radius:16px;padding:15px 14px;font-size:15.5px;font-weight:700;color:var(--txt);cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,transform .15s}
+.q-opt:hover{border-color:var(--cel)}
+.q-opt:active{transform:scale(.97);border-color:var(--cel)}
+.q-opt .qe{font-size:22px}
+.q-field{width:100%;background:#FBFDFF;border:1.5px solid var(--line);border-radius:16px;color:var(--txt);font-size:16px;padding:15px 18px;font-family:inherit;outline:none;line-height:1.5;margin:6px 0 12px}
+.q-field:focus{border-color:var(--cel);box-shadow:0 0 0 3px rgba(39,147,200,.15)}
+.linklike{background:none;border:none;color:var(--mut);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:480px){.qcard{padding:26px 18px;margin:24px auto}.qcard h2{font-size:21px}.q-opts{grid-template-columns:1fr}.q-opt{padding:13px 14px;font-size:15px}}
 .steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
 .step3{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:18px;display:flex;gap:14px;align-items:flex-start;text-align:left}
 .step3 .n{flex:0 0 36px;width:36px;height:36px;border-radius:50%;background:var(--yl);color:var(--navy);font-weight:900;display:flex;align-items:center;justify-content:center;font-size:17px}
@@ -288,7 +299,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
     <div class="hero">
       <span class="pill">TE CONFIGURAMOS TODO 🚀</span>
       <h1>Tu semana de posteos, armada.<br><span class="hl">Nosotros nos encargamos de todo.</span></h1>
-      <p class="sub">Describí tu negocio en detalle (1 minuto) y te mostramos tus ideas, diseños, textos y hashtags — como si ya fueras cliente. Sin tarjeta.</p>
+      <p class="sub">Contanos de tu negocio (1 minuto), respondé 3 preguntas rápidas y mirá tu semana — ideas, diseños, textos y hashtags — como si ya fueras cliente. Sin tarjeta.</p>
     </div>
     <div class="card form-card">
       <div class="err" id="obErr"></div>
@@ -317,6 +328,20 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div class="bcard"><div class="bi">💳</div><div><b>En pesos, sin vueltas</b><p>Pagás por MercadoPago y cancelás cuando quieras.</p></div></div>
     </div>
   </div>
+  </div>
+</div>
+
+<!-- VISTA: 3 preguntas rápidas antes de generar (para que los posteos salgan a medida) -->
+<div id="v-questions" style="display:none">
+  <div class="wrap">
+    <div class="qcard">
+      <span class="pill" id="qPill">ÚLTIMAS 3 PREGUNTAS 🤏</span>
+      <p class="tiny" id="qStep" style="margin:10px 0 0">1 de 3</p>
+      <h2 id="qTitle" style="margin:6px 0 4px"></h2>
+      <p class="sub" id="qSub" style="margin:0 0 18px"></p>
+      <div id="qBody"></div>
+      <button class="linklike" id="qSkip" style="margin-top:14px">Omitir →</button>
+    </div>
   </div>
 </div>
 
@@ -533,7 +558,7 @@ function toast(msg) {
 }
 
 function show(id) {
-  ['v-onboarding','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
+  ['v-onboarding','v-questions','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
   window.scrollTo({ top: 0 });
 }
 
@@ -628,9 +653,68 @@ async function startTrial() {
     return;
   }
   err.style.display = 'none';
+  TRIAL_BIZ = biz;
+  TRIAL_DESC = gv;
+  showQuestions();
+}
 
+// ---------- 3 preguntas rápidas antes de generar ----------
+// La conclusión: mejor esperar un poquito y preguntar qué quiere,
+// que mostrar posteos flojos que frustran. Una a la vez, todas omisibles.
+const TRIAL_QS = [
+  { key: 'goal_key', type: 'options', title: '¿Qué buscás con tu Instagram?', sub: 'Así cada posteo apunta directo a eso 🎯',
+    options: [['vender', '🛒', 'Vender más'], ['seguidores', '📣', 'Más seguidores'], ['lanzamiento', '🚀', 'Lanzar algo nuevo'], ['fidelizar', '💛', 'Fidelizar clientes']] },
+  { key: 'producto', type: 'text', title: '¿Qué es lo principal que vendés u ofrecés?', sub: 'Con tus palabras, cortito ✍️',
+    ph: 'Ej: hamburguesas smash, cortes de pelo…', cta: 'Continuar →', max: 120 },
+  { key: 'diferencial', type: 'text', title: '¿Qué te hace diferente?', sub: 'Eso que tu competencia no tiene 💪',
+    ph: 'Ej: ingredientes frescos todos los días…', cta: 'Ver mis posteos ✨', max: 200 },
+];
+let qIdx = 0;
+let TRIAL_BIZ = '';
+let TRIAL_DESC = '';
+let ACTIVE_QS = TRIAL_QS;
+const TRIAL_ANS = {};
+function showQuestions() {
+  qIdx = 0;
+  // Si la descripción ya es rica (100+ caracteres), el producto y el diferencial
+  // suelen estar ahí: solo preguntamos el objetivo (1 toque, el dato de más valor).
+  ACTIVE_QS = TRIAL_DESC.length >= 100 ? TRIAL_QS.filter((q) => q.key === 'goal_key') : TRIAL_QS;
+  for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
+  show('v-questions');
+  renderQ();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function renderQ() {
+  const q = ACTIVE_QS[qIdx];
+  $('#qPill').textContent = ACTIVE_QS.length > 1 ? 'ÚLTIMAS ' + ACTIVE_QS.length + ' PREGUNTAS 🤏' : 'UNA ÚLTIMA PREGUNTA 🤏';
+  $('#qStep').textContent = ACTIVE_QS.length > 1 ? ((qIdx + 1) + ' de ' + ACTIVE_QS.length) : 'Última pregunta 🤏';
+  $('#qTitle').textContent = q.title;
+  $('#qSub').textContent = q.sub;
+  const body = $('#qBody');
+  if (q.type === 'options') {
+    body.innerHTML = `<div class="q-opts">${q.options.map((o) => `<button type="button" class="q-opt" data-v="${o[0]}"><span class="qe">${o[1]}</span>${esc(o[2])}</button>`).join('')}</div>`;
+    body.querySelectorAll('.q-opt').forEach((b) => { b.onclick = () => qAnswer(b.dataset.v); });
+  } else {
+    body.innerHTML = `<input type="text" class="q-field" id="qInput" placeholder="${esc(q.ph)}" maxlength="${q.max}" autocomplete="off"><button class="btn btn-primary btn-block" id="qGo">${esc(q.cta)}</button>`;
+    const inp = $('#qInput'), go = $('#qGo');
+    const send = () => qAnswer(inp.value.trim());
+    go.onclick = send;
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
+  }
+  $('#qSkip').onclick = () => qAnswer('');
+}
+function qAnswer(value) {
+  TRIAL_ANS[ACTIVE_QS[qIdx].key] = value;
+  qIdx++;
+  if (qIdx >= ACTIVE_QS.length) beginGeneration();
+  else { renderQ(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+
+// ---------- generación (corre después de las preguntas) ----------
+async function beginGeneration() {
   show('v-loading');
-  $('#tkTitle').textContent = 'Armando tu semana para ' + biz + '…';
+  $('#tkTitle').textContent = 'Armando tu semana para ' + TRIAL_BIZ + '…';
   const box = $('#tkSteps');
   box.innerHTML = TK_STEPS.map((s, i) => `<div class="tstep" id="tk${i}"><div class="ic">${s[0]}</div><div><b>${s[1]}</b><small>${s[2]}</small></div></div>`).join('');
   const bar = $('#tkBar'), pct = $('#tkPct');
@@ -660,13 +744,17 @@ async function startTrial() {
   }
 
   const fd = new FormData();
-  fd.append('business', biz);
+  fd.append('business', TRIAL_BIZ);
   fd.append('ig', $('#f_ig').value.trim());
   fd.append('category', $('#f_cat').value);
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
   fd.append('goal', $('#f_goal').value.trim());
   fd.append('competitors', compHandles.map((h) => '@' + h).join(', '));
+  // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
+  fd.append('goal_key', TRIAL_ANS.goal_key || '');
+  fd.append('producto', TRIAL_ANS.producto || '');
+  fd.append('diferencial', TRIAL_ANS.diferencial || '');
 
   try {
     const t0 = Date.now();
@@ -687,7 +775,7 @@ async function startTrial() {
     try {
       localStorage.setItem('posta_trial_profile', JSON.stringify({
         saved_at: Date.now(),
-        business_name: biz,
+        business_name: TRIAL_BIZ,
         category: $('#f_cat').value,
         description: $('#f_goal').value.trim(),
         competitors: compHandles.map((h) => '@' + h).join(', '),

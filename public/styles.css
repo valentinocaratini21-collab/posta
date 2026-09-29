@@ -17,8 +17,10 @@
   --r:20px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--txt);font-family:"Montserrat",-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+html{scroll-behavior:smooth;overflow-x:clip}
+body{background:var(--bg);color:var(--txt);font-family:"Montserrat",-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:clip}
+/* Anti-zoom en iPhone: sin doble-tap zoom en elementos tocables (el zoom por pellizco sigue disponible) */
+button,a,input,select,textarea,label,[role="button"]{touch-action:manipulation}
 ::selection{background:rgba(39,147,200,.22)}
 a{color:inherit;text-decoration:none}
 button{font-family:inherit}
@@ -303,6 +305,10 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .aiedit-row{display:flex;gap:8px}
 .aiedit-row .in{flex:1;min-width:0}
 .aiedit-msg{margin-top:8px;font-size:13px}
+.rev-voice{margin-top:14px;padding-top:12px;border-top:1.5px solid var(--line);text-align:center}
+.rev-voice-btn{display:inline-flex;align-items:center;gap:8px;background:#0A1E33;color:#fff;border:none;border-radius:999px;padding:13px 22px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+.rev-voice-btn.btn-rec{background:#B3402E}
+.rev-voice-msg{margin-top:8px;min-height:20px}
 .rev-when{display:flex;align-items:center;gap:8px}
 .rev-dt{font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--txt);font-family:inherit;flex:1;min-width:0}
 .rev-promise{text-align:center;font-size:13px;color:var(--dim);margin:8px 0 0}
@@ -751,6 +757,10 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .xp-bar{display:block;height:10px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden}
 .xp-bar>span{display:block;height:100%;background:linear-gradient(90deg,#FEC14D,#FFE1A1);border-radius:999px;transition:width .5s}
 .xp-sub{display:block;font-size:12.5px;color:rgba(255,255,255,.85);margin-top:6px;font-weight:600}
+.xp-stats{display:block;font-size:12.5px;color:rgba(255,255,255,.9);margin-top:8px;font-weight:600}
+.xp-weekbar{display:block;height:8px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden;margin-top:8px}
+.xp-weekbar>span{display:block;height:100%;background:linear-gradient(90deg,#2793C8,#7CC4E8);border-radius:999px;transition:width .5s}
+.xp-weektxt{display:block;font-size:12px;color:rgba(255,255,255,.92);margin-top:5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Modal de racha PRO: héroe oscuro + camino de niveles + stats */
 .stk-hero{background:linear-gradient(160deg,#0A1E33 0%,#0e2c47 55%,#155a7d 100%);border-radius:16px;padding:26px 18px 20px;color:#fff;text-align:center;margin-bottom:6px}
 .stk-badge{width:92px;height:92px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:50px;background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.55),rgba(255,255,255,0) 55%),linear-gradient(160deg,#FEC14D,#eda52c);box-shadow:0 0 0 6px rgba(254,193,77,.16),0 0 34px rgba(254,193,77,.45)}
@@ -1069,3 +1079,40 @@ textarea.in{resize:vertical;min-height:96px}
 .script-row:first-of-type{border-top:0}
 .script-seg{font-weight:800;white-space:nowrap;color:var(--cel)}
 .igmock-nodesign{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:280px;background:#f4f7fb;border-radius:8px;color:#5b6b82;font-size:14px;padding:20px;text-align:center}
+
+/* ============================================================
+   PULIDO MÓVIL (2026-09-29): todo más aireado y proporcionado
+   en el celular — nada apretado, nada gigante.
+   ============================================================ */
+@media(max-width:480px){
+  /* Tarjetas: menos padding, más aire entre secciones */
+  .card{padding:18px 15px;margin-bottom:16px;border-radius:20px}
+  .card h3{font-size:19px}
+  /* Chat: botones más chicos para que el input respire (antes el
+     placeholder quedaba cortado: "Pedim") */
+  .chat-input-row{gap:6px}
+  .chat-input-row .btn{width:44px;height:44px;font-size:18px}
+  .chat-input-row .in{padding:12px 16px;font-size:16px;min-width:0}
+  .chat-box{max-height:260px}
+  /* Chips: tira horizontal desplazable en vez de apilarse en 3 filas */
+  .chat-chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .chat-chips::-webkit-scrollbar{display:none}
+  .chat-chips button{flex:0 0 auto;font-size:12.5px;padding:8px 13px}
+  /* Misión de fotos: texto más compacto */
+  .mission-shot{font-size:13.5px;padding:9px 11px;line-height:1.45}
+  .mission-card .hint{font-size:13.5px;line-height:1.5}
+  .mission-foot .btn{padding:11px 20px;font-size:14.5px}
+  /* Barra de racha + progreso: compacta */
+  .xp-strip{padding:10px 12px;margin-bottom:12px}
+  .xp-pts{font-size:15px}
+  .xp-row{margin-bottom:6px}
+  .xp-stats{font-size:12px;margin-top:6px}
+  .xp-weekbar{margin-top:6px}
+  .xp-weektxt{font-size:11.5px}
+  /* Botones primarios: un toque menos altos en el celular */
+  .btn{padding:13px 24px;font-size:15.5px}
+  /* Revisión de borradores: CTA más proporcionado */
+  .igmock-accept{padding:12px 18px;font-size:15px}
+  /* Nota de voz: que no domine la tarjeta */
+  .rev-voice-btn{padding:11px 18px;font-size:14px}
+}

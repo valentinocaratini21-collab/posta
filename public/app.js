@@ -2,16 +2,25 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Corta un texto SIN partir palabras a la mitad: si el corte cae dentro de una
+// palabra, retrocede al espacio anterior. Nunca devuelve "efecti".
+const cortar = (t, max) => {
+  const s = String(t || '').trim();
+  if (s.length <= max) return s;
+  const c = s.slice(0, max);
+  const i = c.lastIndexOf(' ');
+  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+};
 
 const api = {
-  async req(method, url, body) {
+  async req(method, url, body, opts = {}) {
     let r;
     try {
       r = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(opts.timeout || 30000),
       });
     } catch (e) {
       const err = new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
@@ -32,7 +41,7 @@ const api = {
     return data;
   },
   get: (u) => api.req('GET', u),
-  post: (u, b) => api.req('POST', u, b),
+  post: (u, b, o) => api.req('POST', u, b, o),
   put: (u, b) => api.req('PUT', u, b),
   patch: (u, b) => api.req('PATCH', u, b),
   delete: (u) => api.req('DELETE', u),
@@ -513,7 +522,11 @@ window.addEventListener('appinstalled', () => {
 });
 function pwaIsInstalled() {
   try { if (localStorage.getItem('pwa-installed') === '1') return true; } catch (e) {}
-  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+  return pwaIsStandalone();
+}
+// Solo modo instalado real (sin el flag de localStorage): decide si la app arranca como app.
+function pwaIsStandalone() {
+  try { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone; } catch (e) { return false; }
 }
 function pwaIsIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
@@ -1196,6 +1209,10 @@ function weekDoneCardHTML() {
     <div id="apProg-semana"></div>
   </div>`;
 }
+// Estado vacío (sin borradores): UNA sola tarjeta. Antes eran dos
+// ("autopilot" + "community manager") que decían lo mismo: las dos
+// ofrecían armar posteos. El chat vive adentro como vía para pedidos
+// puntuales, no como tarjeta separada que repite el mensaje.
 function autopilotCardHTML(tag) {
   const t = tag || 'semana';
   const ppw = (ME && ME.posts_per_week) || 3;
@@ -1204,16 +1221,20 @@ function autopilotCardHTML(tag) {
   const opts = [3, 5, 7].filter(v => v <= ppw).map(v => `<option value="${v}" ${v === ppw ? 'selected' : ''}>${v} posteos por semana</option>`).join('');
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
-    <h3>🚀 Llenamos tu semana en autopilot</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel. Vos los revisás y aprobás — recién ahí se programan. ⏱ En 5 minutos tu semana queda lista y se publica sola.</p>
+    <h3>🚀 Armemos tu semana</h3>
+    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — nada sale sin tu OK.</p>
     <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
+      <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
       </select>
       <button class="btn btn-primary" data-autopilot="${t}">⚡ Armemos tu semana</button>
     </div>
     <div id="apProg-${t}" style="margin-top:16px"></div>
+    <div style="margin-top:4px">
+      <p style="color:var(--mut);font-size:14px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? Pedímelo acá 👇</p>
+      ${chatCardHTML(true, true, true)}
+    </div>
   </div>`;
 }
 
@@ -1382,8 +1403,104 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
       ${drafts.length > 1 ? `<button class="car-arrow right" data-carnext aria-label="Posteo siguiente">›</button>` : ''}
       ${drafts.length > 1 ? `<div class="igmock-dots">${drafts.map((_, j) => `<i class="${j === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
     </div>
+    <div class="rev-voice">
+      <button class="rev-voice-btn" id="revVoiceBtn">🎙 ¿Cambiar algo? Pedilo por voz</button>
+      <div class="rev-voice-msg" id="revVoiceMsg"></div>
+    </div>
     <div id="revMsg"></div>
   </div>`;
+}
+
+// Nota de voz para pedir cambios en los borradores: vive abajo de los posteos,
+// cero fricción. Graba, se transcribe con Whisper y la IA lo aplica directo.
+let DVOICE_REC = null, DVOICE_CHUNKS = [], DVOICE_MIME = '', DVOICE_TIMER = null, DVOICE_START = 0;
+function draftVoiceMsg(html) {
+  const m = document.getElementById('revVoiceMsg');
+  if (m) m.innerHTML = html;
+}
+function draftVoiceUI(rec) {
+  const b = document.getElementById('revVoiceBtn');
+  if (!b) return;
+  b.classList.toggle('btn-rec', !!rec);
+  if (!rec) b.innerHTML = '🎙 ¿Cambiar algo? Pedilo por voz';
+}
+function draftVoiceTick() {
+  if (!DVOICE_REC) return;
+  const b = document.getElementById('revVoiceBtn');
+  const s = Math.floor((Date.now() - DVOICE_START) / 1000);
+  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  if (b) b.innerHTML = `🔴 ${t} — tocá para enviar`;
+  draftVoiceMsg('<span style="color:var(--mut);font-size:13px">🔴 Grabando… contame qué le cambio a tus posteos</span>');
+}
+async function draftVoiceToggle() {
+  if (DVOICE_REC) { draftVoiceStop(); return; }
+  if (!REVIEW_DRAFTS.length) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    draftVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 Tu navegador no soporta notas de voz.</span>');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    DVOICE_CHUNKS = [];
+    DVOICE_MIME = rec.mimeType || '';
+    rec.ondataavailable = e => { if (e.data && e.data.size) DVOICE_CHUNKS.push(e.data); };
+    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); draftVoiceSend(); };
+    DVOICE_REC = rec;
+    rec.start();
+    DVOICE_START = Date.now();
+    draftVoiceUI(true);
+    clearInterval(DVOICE_TIMER);
+    DVOICE_TIMER = setInterval(draftVoiceTick, 500);
+    draftVoiceTick();
+    setTimeout(() => { if (DVOICE_REC) draftVoiceStop(); }, 90000);
+  } catch (e) {
+    draftVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 No pudimos usar el micrófono. Revisá el permiso.</span>');
+  }
+}
+function draftVoiceStop() {
+  const rec = DVOICE_REC;
+  DVOICE_REC = null;
+  clearInterval(DVOICE_TIMER);
+  draftVoiceUI(false);
+  if (rec) { try { rec.stop(); } catch (e) { draftVoiceSend(); } }
+}
+async function draftVoiceSend() {
+  const chunks = DVOICE_CHUNKS; DVOICE_CHUNKS = [];
+  draftVoiceUI(false);
+  const blob = new Blob(chunks, { type: DVOICE_MIME || 'audio/mp4' });
+  if (blob.size < 1500) { draftVoiceMsg(''); return; }
+  const dataUrl = await new Promise((res) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result || ''));
+    fr.onerror = () => res('');
+    fr.readAsDataURL(blob);
+  });
+  if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
+    draftVoiceMsg('<span style="color:#B3402E;font-size:13px">No pudimos procesar la nota. Probá de nuevo.</span>');
+    return;
+  }
+  draftVoiceMsg('<span style="color:var(--mut);font-size:13px">⏳ Escuchando y aplicando…</span>');
+  try {
+    const lib = assetPhotos().slice().reverse().slice(0, 6);
+    const r = await api.post('/api/ideas/chat', {
+      messages: [{ role: 'user', text: '🎙️ Nota de voz' }],
+      audio: dataUrl,
+      drafts: REVIEW_DRAFTS.map(d => ({ id: d.id, caption: d.caption, when: d.scheduled_at })),
+      library: await chatLibThumbs(),
+      photoPaths: lib.map(p => p.file_path),
+    }, { timeout: 90000 });
+    if (r.edit && r.edit.ok) {
+      draftVoiceMsg(`<span style="color:#1B7A3D;font-size:13px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`);
+      setTimeout(() => { try { render(); } catch (e) {} }, 1200);
+    } else {
+      draftVoiceMsg(`<span style="font-size:13px">${esc(r.reply || 'No te escuché bien, probá de nuevo')}</span>`);
+    }
+  } catch (e) {
+    draftVoiceMsg(`<span style="color:#B3402E;font-size:13px">${esc(e.message || 'Error, probá de nuevo')}</span>`);
+  }
 }
 
 // Edición de un borrador por IA (texto o foto): el cliente lo pide en lenguaje
@@ -1409,10 +1526,21 @@ async function runAiEdit(id, kind) {
     };
     if (kind === 'photo') {
       const lib = assetPhotos().slice().reverse().slice(0, 6);
+      if (!lib.length) {
+        // Sin fotos no hay nada que la IA pueda elegir: llevar al picker manual
+        msg.innerHTML = `<span style="color:var(--mut);font-size:13px">Primero subí una foto 📸 Elegila vos:</span>`;
+        setTimeout(() => {
+          const panel = document.getElementById(`aiphoto-${id}`);
+          if (panel) panel.hidden = true;
+          togglePhotoPicker(+id);
+        }, 800);
+        if (go) go.disabled = false;
+        return;
+      }
       body.photoPaths = lib.map(p => p.file_path);
       body.library = await chatLibThumbs();
     }
-    const r = await api.post('/api/ideas/chat', body);
+    const r = await api.post('/api/ideas/chat', body, { timeout: 60000 });
     if (r.edit && r.edit.ok) {
       msg.innerHTML = `<span style="color:#1B7A3D;font-size:13px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`;
       inp.value = '';
@@ -1502,6 +1630,9 @@ function bindReview() {
   $$('#reviewCard [id^="aiedit-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiedit-go-', ''), 'text'));
   // Otra foto por IA: el cliente describe qué foto quiere y la IA la elige de su librería
   $$('#reviewCard [id^="aiphoto-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiphoto-go-', ''), 'photo'));
+  // Nota de voz para pedir cambios: abajo de los posteos
+  const rvb = document.getElementById('revVoiceBtn');
+  if (rvb) rvb.onclick = draftVoiceToggle;
   // Enter en los campos de edición por IA también aplica
   $$('#reviewCard [id^="aiedit-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiedit-inp-', ''), 'text'); }));
   $$('#reviewCard [id^="aiphoto-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiphoto-inp-', ''), 'photo'); }));
@@ -1599,6 +1730,7 @@ function bindReview() {
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
 let REVIEW_DRAFTS = [];
+let WEEKLY_BARS_HTML = ''; // gráfico de constancia: vive en el modal de racha (la tarjeta "Tu progreso" se eliminó)
 // Regenerar UN borrador: texto nuevo del mismo tema + diseño con otro estilo.
 // Reemplaza en el lugar, conserva el id y el día/hora sugeridos.
 async function regenDraft(id, btn) {
@@ -1623,7 +1755,7 @@ async function regenDraft(id, btn) {
       tpl: pickTpl(idx + 1, false),
       pal: defaultPal(),
       title,
-      subtitle: (d.source_angle || '').split('.')[0].slice(0, 90),
+      subtitle: cortar(String(d.caption || '').split('\n')[0], 90),
       handle: (PROFILE || {}).ig_username || '',
       photoImg: ph ? await photoImg(ph.file_path) : null,
       logoImg: logo,
@@ -1655,7 +1787,7 @@ async function changeDraftPhoto(id, el, photoPath) {
       tpl: pickTpl(idx + 1, false),
       pal: defaultPal(),
       title,
-      subtitle: (d.source_angle || '').split('.')[0].slice(0, 90),
+      subtitle: cortar(String(d.caption || '').split('\n')[0], 90),
       handle: (PROFILE || {}).ig_username || '',
       photoImg: await photoImg(photoPath),
       logoImg: logo,
@@ -1838,7 +1970,7 @@ function renderChatCaps() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chat-cap-opt' + (i === CHAT_CAP_SEL ? ' sel' : '');
-    const prev = c.length > 90 ? c.slice(0, 90) + '…' : c;
+    const prev = c.length > 90 ? cortar(c, 90) + '…' : c;
     b.innerHTML = `<b>Opción ${i + 1}</b><span>${esc(prev)}</span>`;
     b.onclick = () => {
       CHAT_CAP_SEL = i;
@@ -1925,7 +2057,9 @@ async function renderChatPreviews() {
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const handle = (PROFILE || {}).ig_username || '';
     const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-    const subtitle = (idea.angulo || '').split('.')[0].slice(0, 90);
+    // Bajada con copy real (primera línea del caption elegido); el ángulo es un brief y nunca se imprime.
+    const cap0 = (CHAT_CAPTIONS[CHAT_CAP_SEL] || '');
+    const subtitle = cortar(String(cap0 || idea.titulo || '').split('\n')[0], 90);
     const styles = chatStyles();
     const pair = [styles[CHAT_STYLE_IDX % styles.length], styles[(CHAT_STYLE_IDX + 1) % styles.length]];
     const phEntry = lib.length ? lib[CHAT_PHOTO_IDX % lib.length] : null;
@@ -2029,7 +2163,7 @@ async function draftFromPreview(idea, prev) {
   }
 }
 
-function chatCardHTML(compact) {
+function chatCardHTML(compact, noEditChip, bareWrap) {
   const msgs = CHAT.map(m => `
     <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
@@ -2038,12 +2172,13 @@ function chatCardHTML(compact) {
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
   const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Tu community manager</h3>`;
   const wrap = compact
-    ? `<div id="chatCard" style="margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)">`
+    ? `<div id="chatCard" style="${bareWrap ? 'margin:0 0 4px' : 'margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)'}">`
     : `<div class="card" id="chatCard">`;
+  // Sin borradores no hay nada que editar: el chip "Editá un borrador" es un callejón sin salida.
   const chips = !msgs ? `
     <div class="chat-chips" id="chatChips">
       <button data-chip="Haceme un posteo de promo para esta semana">✨ Haceme un posteo</button>
-      <button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>
+      ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>`}
       <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>
     </div>` : '';
   return `
@@ -2085,7 +2220,7 @@ function renderChatOptions(options) {
   wrap.className = 'chat-chips';
   wrap.id = 'chatOptions';
   options.slice(0, 4).forEach(opt => {
-    const label = String(opt).slice(0, 60).trim();
+    const label = cortar(String(opt), 60);
     if (!label) return;
     const b = document.createElement('button');
     b.type = 'button';
@@ -2349,7 +2484,7 @@ async function showCommentsInChat() {
       ${list.map(c => `
       <div data-chatcm="${c.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
         <div style="font-size:14px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
-        <textarea class="in" data-chatcmreply="${c.id}" rows="2" style="font-size:15px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
+        <textarea class="in" data-chatcmreply="${c.id}" rows="2" style="font-size:16px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn btn-primary btn-sm" data-chatcmdo="reply" data-id="${c.id}">💬 Responder</button>
           <button class="btn btn-ghost btn-sm" data-chatcmdo="dismiss" data-id="${c.id}">Descartar</button>
@@ -2464,7 +2599,7 @@ async function chatMakePost(asVideo) {
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
     CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
-    const doneText = '¡Listo! Te lo dejé en revisión acá abajo 👇 Nada se programa hasta que vos lo apruebes.';
+    const doneText = '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.';
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
@@ -2645,9 +2780,9 @@ function suggestSlots(n, scheduledPosts) {
 }
 // El último post de la semana del autopilot es un reel: 3 escenas con fotos
 // del cliente (o diseños generados si no tiene) + textos de la idea.
-async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx) {
+async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub) {
   const title = (idea.titulo || 'NOVEDAD').toUpperCase();
-  const angle = (idea.angulo || '').split('.')[0].slice(0, 90);
+  const angle = String(sub || '').trim() || cortar(String(idea.titulo || ''), 90);
   const usePhotos = photos.length > 0;
   const sceneImg = async (text, k) => {
     if (usePhotos) return { image_path: photos[(idx + k) % photos.length].file_path, text, duration: 3 };
@@ -2714,7 +2849,7 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
       mediaType = 'video';
     } else {
       try {
-        imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx);
+        imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx, out.suboverlay);
         mediaType = 'video';
       } catch (e) { imagePath = null; /* fallback a diseño estático */ }
     }
@@ -2723,7 +2858,8 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
     // Titular sobre la imagen: lo escribe la IA (con punch); fallback al tema truncado.
     const title = String(out.overlay || '').trim().toUpperCase()
       || (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-    const subtitle = (idea.angulo || '').split('.')[0].slice(0, 90);
+    // La bajada la escribe la IA como copy real (suboverlay); el ángulo es un brief y nunca se imprime.
+    const subtitle = String(out.suboverlay || '').trim() || cortar(String(caption || '').split('\n')[0], 90);
     // Fotos FRESCAS (subidas esta semana): protagonistas. Sin fotos nuevas pero con
     // historia: la IA genera una variación basada en sus fotos reales (aprende su producto).
     const wk = mondayKey();
@@ -3836,16 +3972,16 @@ async function loadMissionCard() {  const el = $('#missionCard');
   el.innerHTML = `
   <div class="card mission-card">
     <h3 style="margin:0 0 4px">📸 Misión de fotos de la semana</h3>
-    <p class="hint" style="margin:0 0 10px">Sacá estas fotos con tu celular y subilas — <b>van a protagonizar tus posteos</b>. Si una semana no subís, creamos imágenes nuevas basadas en tus fotos anteriores: cada vez conocemos mejor tu producto.</p>
+    <p class="hint" style="margin:0 0 10px">3 fotos con tu celular, 2 minutos. <b>Los posteos con tus fotos reales funcionan mejor que cualquier diseño</b> — y la IA aprende cómo es tu producto.</p>
     <div class="mission-shots">${m.shots.map((s, i) => `
       <div class="mission-shot${i < done ? ' done' : ''}"><span class="mission-n">${i < done ? '✓' : (i + 1)}</span><span>${esc(s)}</span></div>`).join('')}</div>
     <div class="mission-foot">
-      <span class="mission-prog">${complete ? '🎉 ¡Misión cumplida!' : `${done}/${m.shots.length} fotos subidas`}</span>
+      <span class="mission-prog">${complete ? '🎉 ¡Misión cumplida! Tus fotos van a protagonizar los posteos.' : `${done}/${m.shots.length} fotos subidas`}</span>
       ${complete ? '' : `<button class="btn btn-primary btn-sm" id="missionUpload">＋ Subir fotos</button>`}
     </div>
   </div>`;
   const b = $('#missionUpload');
-  if (b) b.onclick = () => { const mc = $('#mediaCard'); if (mc) mc.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  if (b) b.onclick = () => { const cc = $('#chatCard'); if (cc) cc.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 }
 function showStreakCelebration(sk) {
   if (!sk || !sk.current) return;
@@ -3899,6 +4035,7 @@ function streakPillModal(sk) {
       <div class="stk-stat"><b>🏆 ${sk.best}</b><span>mejor racha</span></div>
       <div class="stk-stat"><b>+100</b><span>pts por semana</span></div>
     </div>
+    ${WEEKLY_BARS_HTML ? `<p class="d" style="margin:14px 0 6px;text-align:center">Posteos por semana</p><div class="bars" style="height:90px;margin:0 0 4px">${WEEKLY_BARS_HTML}</div>` : ''}
     ${warn}
     <p class="stk-rule">La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
     ${streakShareBtns()}`);
@@ -3950,60 +4087,49 @@ async function semanaView() {
   const scheduled = allPosts.filter(p => p.status === 'scheduled').sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const draftN = drafts.length;
   const slots = suggestSlots(draftN, scheduled);
-  // HUD gamificado de la racha: puntos, nivel, barra de progreso y countdown 72h.
-  // 1 semana publicada = 100 pts. La barra mide el avance hacia el próximo nivel.
-  // Reemplaza a la píldora: todo lo que mostraba ella vive acá, con más juego.
-  const xpStrip = sk && sk.current > 0 && sk.level ? (() => {
-    const pts = sk.current * 100;
-    const nl = sk.nextLevel;
-    const pct = nl ? Math.min(99, Math.round((sk.current / nl.at) * 100)) : 100;
-    return `
-    <button class="xp-strip" id="xpStrip" aria-label="Ver el progreso de tu racha">
-      <span class="xp-row">
-        <span class="xp-pts">⚡ ${pts} pts</span>
-        <span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span>
-        <span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>
-      </span>
-      <span class="xp-bar"><span style="width:${pct}%"></span></span>
-      <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>
-    </button>`;
-  })() : '';
+  // La barra superior se construye más abajo: lleva racha + progreso juntos
+  // (la tarjeta "Tu progreso" del fondo se eliminó — nadie la miraba).
+  let xpStrip = '';
   const expBanner = sk && sk.expiringSoon ? `
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
     <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga en ${fmtStreakLeft(sk.expiresInMs)}</h3>
-    <p>${draftN > 0 ? 'Programá tus borradores acá arriba 👆 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
+    <p>${draftN > 0 ? 'Programá tus borradores acá abajo 👇 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
   </div>` : '';
   if (!st) return `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
   const pct = w.planned ? Math.min(100, Math.round((w.ready / w.planned) * 100)) : 0;
 
-  // Gráfico de ritmo: últimas 8 semanas (posteos por semana — datos propios)
+  // Gráfico de constancia (últimas 8 semanas): vive en el modal de racha.
   const maxT = Math.max(1, ...st.weekly.map(x => x.total));
-  const bars = st.weekly.map(x => `<div class="bar-w"><div class="bar" style="height:${Math.max(4, Math.round((x.total / maxT) * 100))}%"></div><span>${esc(x.label)}</span></div>`).join('');
-
-  // 📈 Tu progreso v3: solo información positiva y sin duplicados.
-  // Queda: héroe de horas ahorradas + posteos publicados + aprendizaje del gusto.
-  // Afuera: % de aprobados (se lee como castigo), racha (ya está en el bloque 1).
   const weeksWithData = (st.weekly || []).filter(x => x.total > 0).length;
+  WEEKLY_BARS_HTML = weeksWithData >= 3
+    ? st.weekly.map(x => `<div class="bar-w"><div class="bar" style="height:${Math.max(4, Math.round((x.total / maxT) * 100))}%"></div><span>${esc(x.label)}</span></div>`).join('')
+    : '';
   const tasteN = st.taste_learned || 0;
-  const tasteLine = tasteN >= 3
-    ? `<div class="prog-line">🧠 Posta ya aprendió ${tasteN} cosas de tu gusto — cada semana sale más a tu manera.</div>` : '';
-  const progBody = mo.published > 0 ? `
-    <div class="prog-hero"><b>≈${mo.hours_saved_total}&nbsp;h</b><span>ahorradas con Posta,<br>mientras atendías tu negocio</span></div>
-    ${(mo.hours_saved > 0 && mo.hours_saved !== mo.hours_saved_total) ? `<p class="d" style="margin:6px 0 0;text-align:center">Este mes sumaste ≈${mo.hours_saved} h</p>` : ''}
-    <div class="prog-line" style="margin-top:10px">📮 ${mo.published} ${mo.published === 1 ? 'posteo publicado' : 'posteos publicados'}</div>
-    ${tasteLine}
-    ${weeksWithData >= 3 ? `<p class="d" style="margin:12px 0 4px">Posteos por semana</p><div class="bars" style="height:90px;margin:0">${bars}</div>` : ''}`
-  : `
-    <p class="d" style="margin:0">Cuando salga tu primer posteo, acá vas a ver tus horas ahorradas y tu constancia semana a semana. Cada posteo son ≈1,5 h que no hiciste a mano.</p>`;
 
-
-  // Progreso de la semana: vive como primera fila de "Tu progreso" (una tarjeta menos en la pantalla).
-  const semStripInner = `
-    <div class="pz-refbar check-bar" style="flex:1;margin:0"><div style="width:${pct}%"></div></div>
-    <span>${w.missing
-      ? (draftN > 0 ? `Tenemos ${draftN} ${draftN === 1 ? 'borrador' : 'borradores'} — programalos arriba 👆` : `Faltan ${w.missing} para completar la semana`)
-      : `✅ ${w.ready}/${w.planned} — semana armada, se publica sola`}</span>`;
+  // Barra superior unificada: racha + tu progreso en un solo vistazo.
+  // La tarjeta "Tu progreso" del fondo se eliminó — su info vive acá arriba.
+  const hasStreak = sk && sk.current > 0 && sk.level;
+  const nl = hasStreak ? sk.nextLevel : null;
+  const lvlPct = nl ? Math.min(99, Math.round((sk.current / nl.at) * 100)) : 100;
+  const weekTxt = w.missing
+    ? (draftN > 0 ? `Tenemos ${draftN} ${draftN === 1 ? 'borrador' : 'borradores'} — programalos arriba 👆` : `Faltan ${w.missing} para completar la semana`)
+    : `✅ ${w.ready}/${w.planned} — semana armada, se publica sola`;
+  const statsTxt = mo.published > 0
+    ? `≈${mo.hours_saved_total} h ahorradas · 📮 ${mo.published} ${mo.published === 1 ? 'publicado' : 'publicados'}${tasteN >= 3 ? ` · 🧠 ${tasteN}` : ''}`
+    : `Cada posteo te ahorra ≈1,5 h ⏱`;
+  const stripInner = `
+    <span class="xp-row">${hasStreak
+      ? `<span class="xp-pts">⚡ ${sk.current * 100} pts</span><span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span><span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>`
+      : `<span class="xp-lvl">🔥 Publicá esta semana y empezá tu racha</span>`}</span>
+    ${hasStreak ? `<span class="xp-bar"><span style="width:${lvlPct}%"></span></span>
+    <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>` : ''}
+    <span class="xp-stats">${statsTxt}</span>
+    <span class="xp-weekbar"><span style="width:${pct}%"></span></span>
+    <span class="xp-weektxt">${weekTxt}</span>`;
+  xpStrip = hasStreak
+    ? `<button class="xp-strip" id="xpStrip" aria-label="Ver el progreso de tu racha">${stripInner}</button>`
+    : `<div class="xp-strip" id="xpStrip" style="cursor:default">${stripInner}</div>`;
 
   // HERO: lo más importante primero. Con borradores → tus posteos esperando tu OK.
   // Sin borradores → el botón mágico: un click y la semana se arma acá mismo.
@@ -4027,10 +4153,11 @@ async function semanaView() {
   </div>` : '';
 
   // La pantalla son 5 bloques y nada más:
-  // 1. barra de puntos y streaks · 2. AI (chat) · 3. posteos · 4. misión de fotos · 5. tu progreso.
+  // 1. barra de puntos y streaks · 2. posteos · 3. AI (chat) · 4. misión de fotos · 5. tu progreso.
+  // Los posteos van primero: es el trabajo de la semana, nada de scrollear para llegar a lo importante.
   // Las alertas transitorias (racha por apagarse, alcance, posteos fallidos) aparecen
   // solo cuando hay algo que atender, arriba de todo.
-  const chatBlock = chatCardHTML();
+  const chatBlock = (draftN === 0 && !weekDone) ? '' : chatCardHTML(); // en el estado vacío el chat vive dentro de la tarjeta única
   const planSlot = weekDone ? '' : `<div id="perfAlert"></div><div id="weeklyPlan"></div>`;
   // Programados: tira compacta dentro del bloque "posteos" — la semana existe y se ve.
   const fmtShort = (iso) => {
@@ -4056,14 +4183,9 @@ async function semanaView() {
       </div>`).join('')}
     </div>
   </div>` : '';
-  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${chatBlock}${heroCard}${redoMini}${scheduledStrip}<div id="missionCard"></div>`;
+  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${heroCard}${redoMini}${scheduledStrip}${chatBlock}<div id="missionCard"></div>`;
 
-  return `${topBlock}
-  <div class="card month-card">
-    <h3 style="margin:0 0 2px">📈 Tu progreso</h3>
-    <div class="sem-strip" style="margin:2px 0 12px">${semStripInner}</div>
-    ${progBody}
-  </div>`;
+  return topBlock;
 }
 
 function bindSemana() {
@@ -4123,7 +4245,7 @@ function ajustesView() {
           <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
           <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:88px;text-align:center;font-size:16px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
           <div style="position:relative">
-            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:11px;font-weight:800;color:var(--dim);letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:7px 22px 7px 10px;background:#F2F9FD;max-width:104px;cursor:pointer">
+            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:16px;font-weight:700;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:9px 30px 9px 14px;background:#F2F9FD;max-width:150px;cursor:pointer">
               ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
             </select>
             <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);pointer-events:none">⌄</span>
@@ -4701,6 +4823,9 @@ async function render() {
     return;
   }
   if (path === '#/' || path === '') {
+    // App instalada: se comporta como app, no como web. Va directo a la cuenta
+    // (o al login si no hay sesión) en vez de la landing de marketing.
+    if (pwaIsStandalone()) { location.hash = '#/app/semana'; return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
