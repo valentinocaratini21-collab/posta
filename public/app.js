@@ -205,7 +205,7 @@ async function refreshSession() {
 // Pantalla cuando hay sesión pero no hay internet: reintentar, nunca pedir login.
 function offlineView() {
   return `<div class="pz-offline">
-    <div style="font-size:52px">📡</div>
+    <div style="font-size:46px">📡</div>
     <h2>Sin conexión</h2>
     <p>No pudimos hablar con el servidor.<br>Tu sesión sigue abierta, solo te falta internet.</p>
     <button class="btn btn-primary" id="btnRetryConn" style="margin-top:14px">Reintentar</button>
@@ -305,7 +305,7 @@ function planCardsHTML(plans) {
       <h3>Plan ${esc(p.name)}</h3>
       <div class="price">${esc(p.price_label)}<small>/mes</small></div>
       ${pzPerDayHTML(p)}
-      <p style="color:var(--mut);font-size:14px;margin-bottom:18px">${esc(p.tagline)}</p>
+      <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="#/registro">Empezar ahora</a>
     </div>`).join('');
@@ -539,12 +539,12 @@ function landingView(cfg) {
       <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-primary" href="#/registro" style="font-size:18px;padding:18px 44px">Empezar ahora</a>
+      <a class="btn btn-primary" href="#/registro" style="font-size:16px;padding:18px 44px">Empezar ahora</a>
       <div style="margin-top:18px"><a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a></div>
     </div>
   </div></div>
   <div class="footer"><div class="wrap">
-    <span class="logo" style="font-size:20px">Posta<span class="dot">.</span></span>
+    <span class="logo" style="font-size:17.5px">Posta<span class="dot">.</span></span>
     <span>Hecho en Argentina 🇦🇷 · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
   </div></div>
@@ -566,7 +566,7 @@ function authView(mode) {
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? 'Entrar' : 'Crear cuenta'}</button>
-    <p style="text-align:center;margin-top:18px;font-size:14px;color:var(--dim)">
+    <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
       ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
     </p>
   </div></div>`;
@@ -698,7 +698,7 @@ function pwaInstallModal() {
   ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzPwaClose" aria-label="Cerrar">✕</button>
-      <div style="font-size:42px">📲</div>
+      <div style="font-size:37px">📲</div>
       <h2>Guardá Posta en tu celu</h2>
       <p class="pz-exp-sub">Queda como una app, con su ícono en la pantalla de inicio.</p>
       <div class="pz-pwa-steps">${steps}</div>
@@ -752,11 +752,7 @@ function setupChecklistHtml() {
 
 function appShell(tab, content) {
   return `
-  <div class="mtop"><a class="logo" href="#/app/chat">Posta<span class="dot">.</span></a>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-ghost btn-sm" data-tab="ajustes" aria-label="Ajustes">⚙️</button>
-      <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button>
-    </div></div>
+  <div class="mtop"><a class="logo" href="#/app/chat">Posta<span class="dot">.</span></a></div>
   ${setupChecklistHtml()}
   <div class="app-shell">
     <div class="sidebar">
@@ -766,7 +762,6 @@ function appShell(tab, content) {
       <button class="side-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="ico">💬</span>Chat</button>
       <button class="side-link ${tab === 'semana' ? 'on' : ''}" data-tab="semana"><span class="ico">📋</span>Mi semana</button>
       <button class="side-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="ico">⚙️</span>Ajustes</button>
-      <button class="side-link" id="btnLogout"><span class="ico">🚪</span>Salir</button>
     </div>
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
@@ -1147,7 +1142,7 @@ function creatorView(embed) {
         </div>
       </div>
       <div><div class="preview-box"><canvas id="postCanvas"></canvas></div>
-      <p style="color:var(--dim);font-size:13px;margin-top:10px;text-align:center">Vista previa real — así se va a ver en el feed.</p></div>
+      <p style="color:var(--dim);font-size:11.5px;margin-top:10px;text-align:center">Vista previa real — así se va a ver en el feed.</p></div>
     </div>`;
   }
   if (c.step === 'options') {
@@ -1169,7 +1164,7 @@ function creatorView(embed) {
     <div class="myphotos-card" style="padding:14px 18px">
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <span style="font-weight:700">📷 Tus fotos</span>
-        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:14px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
+        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:12.5px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
         <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">📤 Subir más</button>
         <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
       </div>
@@ -1329,7 +1324,7 @@ function weekDoneCardHTML() {
   return `
   <div class="card" style="border:2px solid rgba(34,197,94,.45);background:#F2FAF4">
     <h3 style="margin:0 0 6px">✅ Tu semana está armada</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 14px">Los posteos salen solos en sus horarios. Nada que hacer — solo vendé.</p>
+    <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 14px">Los posteos salen solos en sus horarios. Nada que hacer — solo vendé.</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <a class="btn btn-soft btn-sm" data-opencreator style="cursor:pointer">✨ Sumar otro posteo</a>
       <button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button>
@@ -1351,8 +1346,8 @@ function autopilotCardHTML(tag) {
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Armemos tu semana</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — nada sale sin tu OK.</p>
-    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
+    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — nada sale sin tu OK.</p>
+    <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
@@ -1361,7 +1356,7 @@ function autopilotCardHTML(tag) {
     </div>
     <div id="apProg-${t}" style="margin-top:16px"></div>
     <div style="margin-top:4px">
-      <p style="color:var(--mut);font-size:14px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? Pedímelo acá 👇</p>
+      <p style="color:var(--mut);font-size:12.5px;margin:14px 0 10px;padding-top:14px;border-top:1.5px solid var(--line)">¿O algo puntual? Pedímelo acá 👇</p>
       ${chatCardHTML(true, true, true)}
     </div>
   </div>`;
@@ -1453,7 +1448,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
-    <p style="color:var(--mut);font-size:14px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
     ${n ? `<button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin:6px 0 10px">📅 Programar mi semana →</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
@@ -1515,7 +1510,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
-        ${d.strategy_why ? `<div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
+        ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
         <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
         <div class="aiedit" id="aiedit-${d.id}" hidden>
           <div class="aiedit-row">
@@ -1569,13 +1564,13 @@ function draftVoiceTick() {
   const s = Math.floor((Date.now() - DVOICE_START) / 1000);
   const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   if (b) b.innerHTML = `🔴 ${t} — tocá para enviar`;
-  draftVoiceMsg('<span style="color:var(--mut);font-size:13px">🔴 Grabando… contame qué le cambio a tus posteos</span>');
+  draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué le cambio a tus posteos</span>');
 }
 async function draftVoiceToggle() {
   if (DVOICE_REC) { draftVoiceStop(); return; }
   if (!REVIEW_DRAFTS.length) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    draftVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 Tu navegador no soporta notas de voz.</span>');
+    draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
     return;
   }
   try {
@@ -1596,7 +1591,7 @@ async function draftVoiceToggle() {
     draftVoiceTick();
     setTimeout(() => { if (DVOICE_REC) draftVoiceStop(); }, 90000);
   } catch (e) {
-    draftVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 No pudimos usar el micrófono. Revisá el permiso.</span>');
+    draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso.</span>');
   }
 }
 function draftVoiceStop() {
@@ -1618,10 +1613,10 @@ async function draftVoiceSend() {
     fr.readAsDataURL(blob);
   });
   if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
-    draftVoiceMsg('<span style="color:#B3402E;font-size:13px">No pudimos procesar la nota. Probá de nuevo.</span>');
+    draftVoiceMsg('<span style="color:#B3402E;font-size:11.5px">No pudimos procesar la nota. Probá de nuevo.</span>');
     return;
   }
-  draftVoiceMsg('<span style="color:var(--mut);font-size:13px">⏳ Escuchando y aplicando…</span>');
+  draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">⏳ Escuchando y aplicando…</span>');
   try {
     const lib = assetPhotos().slice().reverse().slice(0, 6);
     const r = await api.post('/api/ideas/chat', {
@@ -1632,13 +1627,13 @@ async function draftVoiceSend() {
       photoPaths: lib.map(p => p.file_path),
     }, { timeout: 90000 });
     if (r.edit && r.edit.ok) {
-      draftVoiceMsg(`<span style="color:#1B7A3D;font-size:13px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`);
+      draftVoiceMsg(`<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`);
       setTimeout(() => { try { render(); } catch (e) {} }, 1200);
     } else {
-      draftVoiceMsg(`<span style="font-size:13px">${esc(r.reply || 'No te escuché bien, probá de nuevo')}</span>`);
+      draftVoiceMsg(`<span style="font-size:11.5px">${esc(r.reply || 'No te escuché bien, probá de nuevo')}</span>`);
     }
   } catch (e) {
-    draftVoiceMsg(`<span style="color:#B3402E;font-size:13px">${esc(e.message || 'Error, probá de nuevo')}</span>`);
+    draftVoiceMsg(`<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error, probá de nuevo')}</span>`);
   }
 }
 
@@ -1651,13 +1646,13 @@ async function runAiEdit(id, kind) {
   const go = document.getElementById(kind === 'text' ? `aiedit-go-${id}` : `aiphoto-go-${id}`);
   if (!inp || !msg || idx < 0) return;
   const instruction = (inp.value || '').trim();
-  if (!instruction) { msg.innerHTML = `<span style="color:var(--mut);font-size:13px">Contame qué le cambio 👆</span>`; inp.focus(); return; }
+  if (!instruction) { msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Contame qué le cambio 👆</span>`; inp.focus(); return; }
   const n = idx + 1, total = REVIEW_DRAFTS.length;
   const text = kind === 'text'
     ? `El posteo ${n} de ${total}: ${instruction}`
     : `El posteo ${n} de ${total}: cambiá la foto — ${instruction}`;
   if (go) go.disabled = true;
-  msg.innerHTML = `<span style="color:var(--mut);font-size:13px">⏳ La IA lo está aplicando…</span>`;
+  msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ La IA lo está aplicando…</span>`;
   try {
     const body = {
       messages: [{ role: 'user', text }],
@@ -1667,7 +1662,7 @@ async function runAiEdit(id, kind) {
       const lib = assetPhotos().slice().reverse().slice(0, 6);
       if (!lib.length) {
         // Sin fotos no hay nada que la IA pueda elegir: llevar al picker manual
-        msg.innerHTML = `<span style="color:var(--mut);font-size:13px">Primero subí una foto 📸 Elegila vos:</span>`;
+        msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Primero subí una foto 📸 Elegila vos:</span>`;
         setTimeout(() => {
           const panel = document.getElementById(`aiphoto-${id}`);
           if (panel) panel.hidden = true;
@@ -1681,14 +1676,14 @@ async function runAiEdit(id, kind) {
     }
     const r = await api.post('/api/ideas/chat', body, { timeout: 60000 });
     if (r.edit && r.edit.ok) {
-      msg.innerHTML = `<span style="color:#1B7A3D;font-size:13px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`;
+      msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`;
       inp.value = '';
       setTimeout(() => { try { render(); } catch (e) {} }, 900);
     } else {
-      msg.innerHTML = `<span style="font-size:13px">${esc(r.reply || 'No pude aplicarlo, probá de nuevo')}</span>`;
+      msg.innerHTML = `<span style="font-size:11.5px">${esc(r.reply || 'No pude aplicarlo, probá de nuevo')}</span>`;
     }
   } catch (e) {
-    msg.innerHTML = `<span style="color:#B3402E;font-size:13px">${esc(e.message || 'Error, probá de nuevo')}</span>`;
+    msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error, probá de nuevo')}</span>`;
   }
   if (go) go.disabled = false;
 }
@@ -1861,7 +1856,7 @@ function bindReview() {
         streakModalShell(`
           <div class="big-emoji">🎉</div>
           <h3 style="margin:12px 0 4px">¡Listo! Tu semana se publica sola</h3>
-          <p style="font-size:16px;margin:0 0 6px">Todos tus posteos quedaron programados ✅</p>
+          <p style="font-size:14px;margin:0 0 6px">Todos tus posteos quedaron programados ✅</p>
           <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
           ${celebRefHTML()}
           <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
@@ -1906,7 +1901,7 @@ function bindScheduleAll() {
         streakModalShell(`
           <div class="big-emoji">📅</div>
           <h3 style="margin:12px 0 4px">✅ Tu semana está programada</h3>
-          <p style="font-size:16px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+          <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
           <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
           ${celebRefHTML()}
           <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
@@ -1998,17 +1993,17 @@ async function draftVariants(id, btn) {
     if (!variants.length) throw new Error('no_variants');
     mount.innerHTML = `<div style="margin-top:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <b style="font-size:15px">🔄 Elegí tu favorita</b>
+        <b style="font-size:13px">🔄 Elegí tu favorita</b>
         <button class="btn btn-ghost btn-sm" data-varclose="${id}">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
         ${variants.map((v, i) => `
         <button data-varpick="${id}" data-vari="${i}" style="border:2px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg2);padding:0;cursor:pointer;text-align:left;font-family:inherit;min-height:44px">
           <img src="${esc(v.image_path)}" alt="Opción ${i + 1}" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block">
-          <div style="padding:8px 10px;font-size:12px;color:var(--mut);line-height:1.4;max-height:78px;overflow:hidden">${esc(String(v.caption || '').split('\n')[0].slice(0, 90) || 'Opción ' + (i + 1))}</div>
+          <div style="padding:8px 10px;font-size:10.5px;color:var(--mut);line-height:1.4;max-height:78px;overflow:hidden">${esc(String(v.caption || '').split('\n')[0].slice(0, 90) || 'Opción ' + (i + 1))}</div>
         </button>`).join('')}
       </div>
-      <p style="font-size:12.5px;color:var(--dim);margin:8px 0 0">Tocá una para reemplazar la imagen y el texto del borrador.</p>
+      <p style="font-size:11px;color:var(--dim);margin:8px 0 0">Tocá una para reemplazar la imagen y el texto del borrador.</p>
     </div>`;
     mount.querySelector('[data-varclose]').onclick = () => { mount.innerHTML = ''; mount.dataset.open = ''; };
     mount.querySelectorAll('[data-varpick]').forEach(p => p.onclick = async () => {
@@ -2110,7 +2105,7 @@ function toggleVideoPicker(id, btn) {
   mount.dataset.open = '1';
   const vids = assetVideos();
   mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
-    ${vids.map(v => `<div style="position:relative;flex-shrink:0"><video src="${esc(v.file_path)}" data-pickvideo="${esc(v.file_path)}" muted playsinline preload="metadata" style="width:64px;height:64px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line);background:#0A1E33"></video><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;pointer-events:none">▶</span></div>`).join('')}
+    ${vids.map(v => `<div style="position:relative;flex-shrink:0"><video src="${esc(v.file_path)}" data-pickvideo="${esc(v.file_path)}" muted playsinline preload="metadata" style="width:64px;height:64px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line);background:#0A1E33"></video><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;pointer-events:none">▶</span></div>`).join('')}
     <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nuevo video">＋<input type="file" accept="video/*" data-uploadvideo style="display:none"></label>
   </div>`;
   mount.querySelectorAll('[data-pickvideo]').forEach(v => v.onclick = () => changeDraftVideo(id, v, v.dataset.pickvideo));
@@ -2151,18 +2146,18 @@ function proposalHTML() {
   return `
     <div class="chat-proposal">
       <div style="font-weight:800;margin-bottom:4px">${isOrder ? '🧾 Tu pedido' : '✨ Idea lista'}: ${esc(CHAT_IDEA.titulo)}</div>
-      ${bits.length ? `<div style="font-size:13px;color:var(--mut);margin-bottom:6px">${bits.join(' · ')}</div>` : ''}
-      ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
+      ${bits.length ? `<div style="font-size:11.5px;color:var(--mut);margin-bottom:6px">${bits.join(' · ')}</div>` : ''}
+      ${CHAT_IDEA.angulo ? `<div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
       ${Array.isArray(CHAT_IDEA.script) && CHAT_IDEA.script.length ? `
       <div style="margin:10px 0 4px">
-        <div style="font-weight:800;font-size:14px;margin-bottom:6px">🎬 Guion del reel:</div>
+        <div style="font-weight:800;font-size:12.5px;margin-bottom:6px">🎬 Guion del reel:</div>
         ${CHAT_IDEA.script.slice(0, 6).map(s => `
           <div class="script-row"><span class="script-seg">${esc(String((s && s.seg) || ''))}</span><span>${esc(String((s && s.visual) || ''))}</span><span style="color:var(--mut)">${esc(String((s && s.texto) || ''))}</span></div>`).join('')}
       </div>` : ''}
-      <div style="font-weight:700;font-size:14px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
-      <div class="chat-previews" id="chatPreviews"><div style="font-size:13px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
+      <div style="font-weight:700;font-size:12.5px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
+      <div class="chat-previews" id="chatPreviews"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px">
-        <div style="font-weight:700;font-size:14px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span></div>
+        <div style="font-weight:700;font-size:12.5px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span></div>
         <button class="btn btn-soft btn-sm" id="chatMoreCaps" type="button" title="Generar 3 textos nuevos">🔄 Otras</button>
       </div>
       <div class="chat-caps" id="chatCaps"></div>
@@ -2170,13 +2165,13 @@ function proposalHTML() {
       <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
       <details class="chat-board">
         <summary>🎬 Ver cómo sería el reel <span style="color:var(--mut);font-weight:400">(3 escenas)</span></summary>
-        <div class="chat-board-row" id="chatBoard"><div style="font-size:13px;color:var(--mut)">⏳ Generando…</div></div>
+        <div class="chat-board-row" id="chatBoard"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando…</div></div>
       </details>
       <div class="chat-proposal-btns">
         <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo posteo</button>
         <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
       </div>
-      <div style="font-size:12px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
+      <div style="font-size:10.5px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
     </div>`;
 }
 
@@ -2359,7 +2354,7 @@ async function renderChatPreviews() {
       box.appendChild(d);
     });
   } catch (e) {
-    box.innerHTML = `<div style="font-size:13px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
+    box.innerHTML = `<div style="font-size:11.5px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
     CHAT_PREVIEWS = [];
   }
 }
@@ -2446,7 +2441,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
     <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
+    <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
   const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 posta.</h3>`;
   const wrap = compact
@@ -2521,7 +2516,7 @@ function renderChatPhotos() {
   if (!box) return;
   box.innerHTML = CHAT_PHOTOS.map((p, i) => `
     <div class="chat-photo">
-      ${p.aiUrl ? `<img src="${esc(p.aiUrl)}">${p.kind === 'video' ? `<span class="vid-badge">▶</span>` : ''}` : (p.kind === 'video' ? `<span class="vid-badge" style="left:50%;top:50%;transform:translate(-50%,-50%);bottom:auto;font-size:20px">🎬</span>` : `<img src="${esc(p.file_path)}">`)}
+      ${p.aiUrl ? `<img src="${esc(p.aiUrl)}">${p.kind === 'video' ? `<span class="vid-badge">▶</span>` : ''}` : (p.kind === 'video' ? `<span class="vid-badge" style="left:50%;top:50%;transform:translate(-50%,-50%);bottom:auto;font-size:17.5px">🎬</span>` : `<img src="${esc(p.file_path)}">`)}
       <button data-chatrm="${i}" title="Quitar">✕</button>
     </div>`).join('');
   box.querySelectorAll('[data-chatrm]').forEach(b => b.onclick = () => {
@@ -2782,10 +2777,10 @@ async function showCommentsInChat() {
   const html = list.length ? `
     <div class="chat-msg ai" style="max-width:100%">
       <div style="font-weight:800;margin-bottom:4px">💬 ${list.length} ${list.length === 1 ? 'comentario' : 'comentarios'} para responder</div>
-      <div style="font-size:13px;color:var(--mut);margin-bottom:8px">Te dejé la respuesta lista — la editás si querés y sale en un toque.</div>
+      <div style="font-size:11.5px;color:var(--mut);margin-bottom:8px">Te dejé la respuesta lista — la editás si querés y sale en un toque.</div>
       ${list.map(c => `
       <div data-chatcm="${c.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
-        <div style="font-size:14px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
+        <div style="font-size:12.5px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
         <textarea class="in" data-chatcmreply="${c.id}" rows="2" style="font-size:16px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn btn-primary btn-sm" data-chatcmdo="reply" data-id="${c.id}">💬 Responder</button>
@@ -2860,8 +2855,8 @@ function renderChatIdeaOptions(ideas) {
     card.type = 'button';
     card.className = 'chat-idea-card';
     card.innerHTML = `
-      <div style="font-weight:800;font-size:15px;margin-bottom:4px">✨ ${esc(String(idea.titulo || ('Idea ' + (i + 1))))}</div>
-      ${idea.angulo ? `<div style="font-size:13px;color:var(--mut)">${esc(String(idea.angulo))}</div>` : ''}`;
+      <div style="font-weight:800;font-size:13px;margin-bottom:4px">✨ ${esc(String(idea.titulo || ('Idea ' + (i + 1))))}</div>
+      ${idea.angulo ? `<div style="font-size:11.5px;color:var(--mut)">${esc(String(idea.angulo))}</div>` : ''}`;
     card.onclick = () => {
       // La elegida queda marcada como elegida; las otras se descartan visualmente
       wrap.querySelectorAll('.chat-idea-card').forEach(el => el.classList.add('chat-idea-off'));
@@ -3068,7 +3063,7 @@ async function chatView() {
   return `
   <div class="chat-home">
     <div class="chome-top">
-      <span class="chome-ava-wrap" id="chomeAvaWrap"><img src="ai-avatar.png" class="chome-ava" alt="posta."><span class="ava-lvl" id="avaLvl" hidden></span></span>
+      <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="posta."></span>
       <div><b>posta.</b><div class="chome-sub">te arma la semana y la publica por vos</div></div>
     </div>
     ${chatCardHTML(true, true, true)}
@@ -3336,48 +3331,68 @@ async function showCommentInsights() {
   try { track('chat_comment_insights'); } catch (e) {}
 }
 
-/* ---------- NIVELES Y MISIONES DE posta. ---------- */
-// posta. sube de nivel con cada posteo publicado (100 XP, 150 si es reel).
-// El marco del avatar evoluciona: 3-4 bronce, 5-6 plata, 7+ oro.
+/* ---------- NIVEL DE LA MARCA DEL CLIENTE ---------- */
+// El que sube de nivel es el LOGO DEL CLIENTE (100 XP por post publicado, 150 si es reel).
+// posta. es el guía que festeja, no el protagonista: su avatar queda limpio, sin marcos ni badges.
 const POSTA_LVL_NAMES = { 1: 'Recién llegado', 2: 'Aprendiz del feed', 3: 'Ritmo agarrado', 4: 'Contenido serio', 5: 'Máquina de contenido', 6: 'Cara visible', 7: 'Referente del rubro', 8: 'Imparable', 9: 'Ídolo local', 10: 'Leyenda del barrio' };
 
 async function chatAvatarLevel() {
   let lv = null;
   try { lv = await api.get('/api/avatar-level'); } catch (e) {}
   if (!lv || !lv.ok) return;
-  // Header del chat: badge con el número + marco según tier.
-  try {
-    const wrap = document.getElementById('chomeAvaWrap');
-    const badge = document.getElementById('avaLvl');
-    if (wrap && badge) {
-      wrap.classList.remove('tier-bronze', 'tier-silver', 'tier-gold');
-      if (lv.tier && lv.tier !== 'none') wrap.classList.add('tier-' + lv.tier);
-      badge.hidden = false;
-      badge.textContent = lv.level;
-      badge.title = 'Nivel ' + lv.level + ': ' + (POSTA_LVL_NAMES[lv.level] || '');
-    }
-  } catch (e) {}
-  // Tira TU PROGRESO (Mi semana): chip con el nivel, si existe.
-  try { paintAvatarStrip(lv); } catch (e) {}
   // Festejo de subida de nivel: una vez por nivel (el servidor guarda el seen).
+  // Habla de la MARCA DEL CLIENTE, no de posta.
   const unseen = (lv.unseenLevels || []).filter(n => n > 1);
   if (unseen.length) {
     const top = Math.max.apply(null, unseen);
-    const tierMsg = lv.tier === 'gold' ? ' Desbloqueé mi marco de oro 🥇'
-      : lv.tier === 'silver' ? ' Desbloqueé mi marco de plata 🥈'
-      : lv.tier === 'bronze' ? ' Desbloqueé mi marco de bronce 🥉' : '';
-    chatSayLocal(`¡Subí al nivel ${top}: ${POSTA_LVL_NAMES[top] || ''}! 🎉${tierMsg}`);
-    try { track('avatar_levelup', { level: top }); } catch (e) {}
+    const tierMsg = lv.tier === 'gold' ? ' Tu logo ahora tiene marco de oro 🥇'
+      : lv.tier === 'silver' ? ' Tu logo ahora tiene marco de plata 🥈'
+      : lv.tier === 'bronze' ? ' Tu logo ahora tiene marco de bronce 🥉' : '';
+    chatSayLocal(`¡Tu marca subió al nivel ${top}: ${POSTA_LVL_NAMES[top] || ''}! 🎉${tierMsg}`);
+    try { track('brand_levelup', { level: top }); } catch (e) {}
     try { api.post('/api/avatar-level/seen', { levels: unseen }); } catch (e) {}
   }
 }
 
-// Chip del nivel de posta. en la tira TU PROGRESO (no rompe la racha existente).
-function paintAvatarStrip(lv) {
-  const el = document.getElementById('xpAvaLvl');
-  if (!el || !lv || !lv.ok) return;
-  el.textContent = `🤖 posta. Nv ${lv.level}`;
-  el.title = POSTA_LVL_NAMES[lv.level] || '';
+// Pinta el nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con
+// marco de nivel (bronce/plata/oro) + badge, nombre del negocio, UNA barra
+// al siguiente nivel y 2-3 stats. Si no hay logo: inicial con la paleta del cliente.
+async function paintBrandStrip() {
+  const mount = document.getElementById('xpBrand');
+  if (!mount) return;
+  let lv = null;
+  try { lv = await api.get('/api/avatar-level'); } catch (e) {}
+  let logo = (typeof assetLogo === 'function') ? assetLogo() : null;
+  if (!logo) { try { const a = await api.get('/api/assets'); if (Array.isArray(a)) logo = a.find(x => x.kind === 'logo'); } catch (e) {} }
+  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  const lvl = (lv && lv.ok) ? lv.level : 1;
+  const lvlName = (lv && lv.ok && (lv.levelName || POSTA_LVL_NAMES[lv.level])) || POSTA_LVL_NAMES[1];
+  const tier = (lv && lv.ok && lv.tier) || 'none';
+  const xp = (lv && lv.ok && lv.xp) || 0;
+  const published = (lv && lv.ok && lv.published) || 0;
+  let pct = 0, sub;
+  if (lv && lv.ok && lv.nextXp) {
+    pct = Math.min(99, Math.round((xp / lv.nextXp) * 100));
+    sub = `${xp} de ${lv.nextXp} pts · próximo: ${lv.nextName}`;
+  } else if (lv && lv.ok) { pct = 100; sub = `👑 ¡Nivel máximo: ${lvlName}!`; }
+  else { sub = 'Publicá para subir de nivel'; }
+  const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
+  const fbBg = bc[0] || '#2793C8';
+  const initial = (biz.trim()[0] || 'M').toUpperCase();
+  const logoHtml = (logo && logo.file_path)
+    ? `<img src="${esc(logo.file_path)}" alt="logo">`
+    : `<span class="xp-logo-fallback" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
+  mount.innerHTML = `
+    <span class="xp-logo-wrap tier-${tier}">${logoHtml}<span class="xp-lvl-badge">${lvl}</span></span>
+    <span class="xp-brand-txt"><span class="xp-title">Tu progreso</span><b class="xp-biz">${esc(biz)}</b><span class="xp-lvlname">Nivel ${lvl} · ${esc(lvlName)}</span></span>`;
+  const bar = document.getElementById('xpBrandBar'); if (bar) bar.style.width = pct + '%';
+  const subEl = document.getElementById('xpBrandSub'); if (subEl) subEl.textContent = sub;
+  const stats = document.getElementById('xpBrandStats');
+  if (stats) {
+    let streakTxt = '';
+    try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakTxt = `<span>🔥 ${sk.current} ${sk.current === 1 ? 'semana' : 'semanas'}</span>`; } catch (e) {}
+    stats.innerHTML = `<span>⚡ ${xp} pts</span>${streakTxt}<span>📮 ${published} ${published === 1 ? 'publicado' : 'publicados'}</span>`;
+  }
 }
 
 // Misiones de posta.: una activa por vez, narradas en el chat.
@@ -3947,9 +3962,9 @@ function rebuildWatchStart() {
   const bar = document.createElement('div');
   bar.id = 'rebuildBar';
   bar.setAttribute('role', 'status');
-  bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:14px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
-  bar.innerHTML = '<span style="font-size:18px">🔄</span>' +
-    '<span style="flex:1;min-width:0"><b>Armando de nuevo con otro enfoque…</b><br><span style="color:var(--mut);font-size:13px">Tus borradores aparecen acá abajo cuando estén listos 👇</span></span>';
+  bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
+  bar.innerHTML = '<span style="font-size:16px">🔄</span>' +
+    '<span style="flex:1;min-width:0"><b>Armando de nuevo con otro enfoque…</b><br><span style="color:var(--mut);font-size:11.5px">Tus borradores aparecen acá abajo cuando estén listos 👇</span></span>';
   main.prepend(bar);
   if (__rebuildPoll) clearInterval(__rebuildPoll);
   let waited = 0;
@@ -3966,7 +3981,7 @@ function rebuildWatchStart() {
     if (waited >= 6 * 60 * 1000) {
       clearInterval(__rebuildPoll); __rebuildPoll = null;
       const b3 = document.getElementById('rebuildBar');
-      if (b3) b3.innerHTML = '<span style="font-size:18px">⏳</span><span style="flex:1;min-width:0">Está tardando más de lo normal — si en unos minutos no aparecen, contame en el chat 👇</span>';
+      if (b3) b3.innerHTML = '<span style="font-size:16px">⏳</span><span style="flex:1;min-width:0">Está tardando más de lo normal — si en unos minutos no aparecen, contame en el chat 👇</span>';
     }
   }, 5000);
 }
@@ -3982,7 +3997,7 @@ function rebuildFrustrated() {
     d.className = 'card';
     d.setAttribute('style', 'border:1.5px solid #FEC14D;background:#FFF9EC;margin:0 0 12px');
     d.innerHTML = '<h3 style="margin:0 0 4px">🛑 Frenemos un toque</h3>' +
-      '<p style="margin:0;color:var(--mut);font-size:14px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata. Contame acá abajo en el chat <b>qué no te cierra</b> y lo resolvemos juntos 👇</p>';
+      '<p style="margin:0;color:var(--mut);font-size:12.5px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata. Contame acá abajo en el chat <b>qué no te cierra</b> y lo resolvemos juntos 👇</p>';
     main.prepend(d);
   }
   setTimeout(() => { const c = document.getElementById('chatCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 400);
@@ -4064,8 +4079,8 @@ function pickLogoImage(imgs) {
     ov.setAttribute('style', 'position:fixed;inset:0;background:rgba(10,30,51,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px');
     const box = document.createElement('div');
     box.setAttribute('style', 'background:#fff;border-radius:18px;padding:18px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)');
-    box.innerHTML = '<div style="font-weight:800;font-size:16px;margin-bottom:4px">Elegí tu logo</div>' +
-      '<div style="font-size:13px;color:#47617A;margin-bottom:12px">Tu Word tiene varias imágenes. Tocá la que sea tu logo.</div>';
+    box.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:4px">Elegí tu logo</div>' +
+      '<div style="font-size:11.5px;color:#47617A;margin-bottom:12px">Tu Word tiene varias imágenes. Tocá la que sea tu logo.</div>';
     const grid = document.createElement('div');
     grid.setAttribute('style', 'display:grid;grid-template-columns:1fr 1fr;gap:10px;max-height:44vh;overflow:auto');
     const cancel = document.createElement('button');
@@ -4392,8 +4407,8 @@ function bindFastTrack() {
       streakModalShell(`
         <div class="big-emoji">🎉</div>
         <h3 style="margin:12px 0 4px">¡Tu primer posteo está saliendo!</h3>
-        <p class="d" style="font-size:16px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio 🎙️</b> — así los próximos posteos salen todavía mejor.</p>
-        <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:16px">🎙️ Contame de tu negocio</button>
+        <p class="d" style="font-size:14px">Ya está publicado (o publicándose) en tu Instagram.<br>Mientras sale, <b>contame de tu negocio 🎙️</b> — así los próximos posteos salen todavía mejor.</p>
+        <button class="btn btn-primary btn-block" id="ftCelebVoice" style="margin-top:10px;font-size:14px">🎙️ Contame de tu negocio</button>
         <button class="btn btn-ghost btn-block" id="ftCelebClose" style="margin-top:8px">Ahora no</button>`);
       const vb = document.getElementById('ftCelebVoice');
       if (vb) vb.onclick = () => {
@@ -4485,7 +4500,7 @@ function quotaModal(q, opts = {}) {
   streakModalShell(`
     <div class="big-emoji">🚀</div>
     <h3 style="margin:12px 0 4px">Llegaste al tope de tu semana</h3>
-    <p style="font-size:16px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b>.</p>
+    <p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b>.</p>
     <p class="d">Mejorá tu paquete para seguir posteando esta semana — se activa al instante, sin vueltas.</p>
     ${left > 0 && opts.onPartial ? `<button class="btn btn-soft btn-block" id="qPartial" style="margin-top:10px">Armar solo ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
     <button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>
@@ -4572,7 +4587,7 @@ async function maybeFirstPublishCelebration() {
   streakModalShell(`
     <div class="big-emoji">🎉</div>
     <h3 style="margin:12px 0 4px">¿Viste? Salió solo</h3>
-    <p style="font-size:16px;margin:0 0 6px">Tu primer ${isVideo ? 'reel' : 'posteo'} ya está en Instagram — <b>vos no hiciste nada</b>.</p>
+    <p style="font-size:14px;margin:0 0 6px">Tu primer ${isVideo ? 'reel' : 'posteo'} ya está en Instagram — <b>vos no hiciste nada</b>.</p>
     ${p.ig_permalink ? `<a class="btn btn-primary btn-block" href="${esc(p.ig_permalink)}" target="_blank" rel="noopener" style="margin:8px 0">Ver en Instagram →</a>` : ''}
     ${celebRefHTML()}
     <button class="btn btn-ghost btn-block" id="pubCelebClose" style="margin-top:6px">Seguir →</button>`);
@@ -4594,7 +4609,7 @@ async function maybeMilestoneCelebration() {
   streakModalShell(`
     <div class="big-emoji">🏆</div>
     <h3 style="margin:12px 0 4px">¡${r.milestone} posteos publicados!</h3>
-    <p style="font-size:16px;margin:0 0 6px">Tu constancia está dando frutos — y esto recién empieza. 🚀</p>
+    <p style="font-size:14px;margin:0 0 6px">Tu constancia está dando frutos — y esto recién empieza. 🚀</p>
     <button class="btn btn-primary btn-block" id="msCelebClose" style="margin-top:8px">Seguir →</button>`);
   try { await api.post('/api/milestones/seen', { milestone: r.milestone }); } catch (e) {}
   const mc = document.getElementById('msCelebClose');
@@ -4615,7 +4630,7 @@ async function loadProactiveTips() {
   <div class="card" id="cmTipsCard" style="border:1.5px solid #FEC14D;background:#FFFDF6">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <h3 style="margin:0 0 8px">💡 Sugerencias de tu CM</h3>
-      <button id="cmTipsX" aria-label="Ocultar sugerencias" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--mut);padding:0">✕</button>
+      <button id="cmTipsX" aria-label="Ocultar sugerencias" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">✕</button>
     </div>
     ${tips.map(t => t && t.kind === 'pause-tipo'
       ? `<div class="cm-tip pause-tip"><span>🚫</span><span style="flex:1">${esc(t.texto || '')}</span><span class="pause-btns"><button class="btn btn-soft btn-sm" data-pause-yes="${esc(t.tipo || '')}">Sí, pausalas</button><button class="btn btn-ghost btn-sm" data-pause-no>No</button></span></div>`
@@ -4649,7 +4664,7 @@ async function loadWeeklyPlan() {
   if (!sug) { el.innerHTML = ''; return; }
   el.innerHTML = `
   <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:12px">
-    <span style="font-size:30px">📺</span>
+    <span style="font-size:26.5px">📺</span>
     <div style="flex:1"><b>${esc(sug.nombre_sugerido || 'Tu serie')}</b><div class="d" style="margin-top:2px">Tu serie fija de cada semana.</div></div>
     <button class="btn btn-primary" data-serie-nombre="${esc(sug.nombre_sugerido || '')}" data-serie-weekday="${esc(sug.weekday ?? '')}" data-serie-tipo="${esc(sug.tipo || '')}">Crear</button>
   </div>`;
@@ -4695,13 +4710,13 @@ async function loadRecycleSuggest() {
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFFDF6;margin-bottom:14px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <h3 style="margin:0 0 8px">♻️ Republicar</h3>
-      <button id="recycleX" aria-label="Ocultar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--mut);padding:0">✕</button>
+      <button id="recycleX" aria-label="Ocultar" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">✕</button>
     </div>
     <div style="display:flex;gap:10px;align-items:center">
       ${s.thumb ? `<img src="${esc(s.thumb)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:10px;flex:none">` : ''}
       <div style="min-width:0">
-        <div style="font-weight:700;font-size:14.5px;line-height:1.35">Este posteo voló hace ${esc(s.days_ago)} días (${esc(s.reach)} alcance)</div>
-        <div class="d" style="font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(s.caption)}</div>
+        <div style="font-weight:700;font-size:13px;line-height:1.35">Este posteo voló hace ${esc(s.days_ago)} días (${esc(s.reach)} alcance)</div>
+        <div class="d" style="font-size:11.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(s.caption)}</div>
       </div>
     </div>
     <button class="btn btn-primary btn-block" id="recycleGo" style="margin-top:10px">♻️ Republicar con diseño fresco</button>
@@ -4735,10 +4750,10 @@ async function loadPerformanceAlert() {
   <div class="card" style="border:1.5px solid #E0A32E;background:#FFFDF6;margin-bottom:14px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <h3 style="margin:0 0 8px">⚠️ Tu alcance bajó ${esc(String(r.dropPct))}%</h3>
-      <button id="perfAlertX" aria-label="Ocultar alerta" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--mut);padding:0">✕</button>
+      <button id="perfAlertX" aria-label="Ocultar alerta" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">✕</button>
     </div>
     <p class="d" style="margin:0 0 6px">${esc(r.diagnostico || '')}</p>
-    <p style="margin:0;font-weight:700;font-size:14.5px">💪 ${esc(r.plan || '')}</p>
+    <p style="margin:0;font-weight:700;font-size:13px">💪 ${esc(r.plan || '')}</p>
   </div>`;
   const x = document.getElementById('perfAlertX');
   if (x) x.onclick = () => { _perfAlertDismissed = true; const c = el.firstElementChild; if (c) c.remove(); };
@@ -4795,15 +4810,15 @@ async function loadReportCard() {
     <h3 style="margin:0 0 4px">📊 Tu semana en números</h3>
     <p class="hint" style="margin:0 0 12px">Así rindieron tus posteos en los últimos 7 días.</p>
     <div style="display:flex;gap:8px;margin-bottom:12px">
-      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:20px;font-weight:800">${fmt(t.reach)}</div><div style="font-size:11px;opacity:.8">alcance</div></div>
-      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:20px;font-weight:800">${fmt(t.likes)}</div><div style="font-size:11px;opacity:.8">likes</div></div>
-      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:20px;font-weight:800">${fmt(t.comments)}</div><div style="font-size:11px;opacity:.8">comentarios</div></div>
+      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:17.5px;font-weight:800">${fmt(t.reach)}</div><div style="font-size:10px;opacity:.8">alcance</div></div>
+      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:17.5px;font-weight:800">${fmt(t.likes)}</div><div style="font-size:10px;opacity:.8">likes</div></div>
+      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:17.5px;font-weight:800">${fmt(t.comments)}</div><div style="font-size:10px;opacity:.8">comentarios</div></div>
     </div>
     ${posts.slice(0, 5).map(p => `
       <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #EDF1F5">
         <img src="${esc(p.image_path)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0" alt="">
-        <div style="flex:1;min-width:0;font-size:13px"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.id === bestId ? '🏆 ' : ''}${esc(String(p.caption || '').split('\n')[0] || (p.media_type === 'story' ? 'Historia' : 'Posteo'))}</div>
-        <div style="color:var(--mut);font-size:12px">👁️ ${fmt(p.reach)} · ❤️ ${fmt(p.likes)} · 💬 ${fmt(p.comments)}</div></div>
+        <div style="flex:1;min-width:0;font-size:11.5px"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.id === bestId ? '🏆 ' : ''}${esc(String(p.caption || '').split('\n')[0] || (p.media_type === 'story' ? 'Historia' : 'Posteo'))}</div>
+        <div style="color:var(--mut);font-size:10.5px">👁️ ${fmt(p.reach)} · ❤️ ${fmt(p.likes)} · 💬 ${fmt(p.comments)}</div></div>
       </div>`).join('')}
   </div>`;
 }
@@ -4822,8 +4837,8 @@ function adsRecCardHTML(r, budgets) {
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
       <img src="${esc(r.image_path)}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;flex-shrink:0" alt="">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.caption || 'Posteo')}</div>
-        <div style="color:var(--mut);font-size:12px">👁️ ${Number(r.reach || 0).toLocaleString('es-AR')} alcance · ⚡ ${r.er_pct}% interacción</div>
+        <div style="font-weight:700;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.caption || 'Posteo')}</div>
+        <div style="color:var(--mut);font-size:10.5px">👁️ ${Number(r.reach || 0).toLocaleString('es-AR')} alcance · ⚡ ${r.er_pct}% interacción</div>
       </div>
     </div>
     <p class="d" style="margin:0 0 2px">Rindió por encima de tu promedio — la plata va a un ganador probado.</p>
@@ -4890,7 +4905,7 @@ async function adsRecAction(card, opts) {
   }
   // Con crédito: confirmación inline, misma pantalla
   box.innerHTML = `
-    <div style="background:#FFF7E8;border:1px solid var(--yel);border-radius:12px;padding:10px 12px;font-size:14px">
+    <div style="background:#FFF7E8;border:1px solid var(--yel);border-radius:12px;padding:10px 12px;font-size:12.5px">
       <div style="margin-bottom:8px">Se debitan <b>${fmtARSc(budget)}</b> de tu crédito por 7 días de pauta en Instagram y Facebook.</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary btn-sm" data-ok style="flex:1">Confirmar 🚀</button>
@@ -4933,7 +4948,7 @@ function adsBoostCardHTML(cfg, recs) {
     <h3 style="margin:0 0 4px">🚀 Te recomendamos potenciar</h3>
     <p class="d" style="margin:0 0 10px">Rindieron más que tu promedio — un toque y llegan a más gente.</p>
     ${list.slice(0, 2).map(r => adsRecCardHTML(r, budgets)).join('')}
-    <a href="#/app/ads" style="font-size:13px;color:var(--cel);font-weight:700">Ver mi crédito e historial →</a>
+    <a href="#/app/ads" style="font-size:11.5px;color:var(--cel);font-weight:700">Ver mi crédito e historial →</a>
   </div>`;
 }
 
@@ -5031,9 +5046,9 @@ async function adsView() {
     : b.status === 'pending' ? '⏳ Activándose' : b.status === 'finished' ? '✅ Finalizada' : esc(b.status || '');
   const boostRows = bl.length ? bl.map(b => `
     <div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #EDF1F5">
-      <div style="flex:1;min-width:0;font-size:13px">
+      <div style="flex:1;min-width:0;font-size:11.5px">
         <div style="font-weight:700">${statusTxt(b)} · ${fmtARSc(b.budget_cents)}</div>
-        <div style="color:var(--mut);font-size:12px">${b.last_reach ? `👁️ ${Number(b.last_reach).toLocaleString('es-AR')} alcance · 💸 ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
+        <div style="color:var(--mut);font-size:10.5px">${b.last_reach ? `👁️ ${Number(b.last_reach).toLocaleString('es-AR')} alcance · 💸 ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
       </div>
     </div>`).join('')
     : `<p class="d" style="margin:0">Todavía no potenciaste ningún posteo.</p>`;
@@ -5046,10 +5061,10 @@ async function adsView() {
   ${topupBanner}
   <div class="card" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 4px">💰 Tu crédito</h3>
-    <div style="font-size:34px;font-weight:800;margin:2px 0 6px">${fmtARSc(bal)}</div>
+    <div style="font-size:30px;font-weight:800;margin:2px 0 6px">${fmtARSc(bal)}</div>
     <p class="d" style="margin:0 0 10px">Un solo precio por potenciar tu posteo durante 7 días en Instagram y Facebook. Sin letra chica.</p>
     ${cfg && cfg.mp_ready ? `
-      <p style="font-weight:700;font-size:14px;margin:0 0 8px">Cargar crédito</p>
+      <p style="font-weight:700;font-size:12.5px;margin:0 0 8px">Cargar crédito</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${topupBtns}</div>
       <div id="adsMsg"></div>
     ` : `<p class="d">La carga de crédito se habilita en estos días. Escribinos y la activamos para tu cuenta.</p>`}
@@ -5103,14 +5118,14 @@ async function loadMissionCard() {  const el = $('#missionCard');
     el.innerHTML = `
     <div class="card mission-card">
       <h3 style="margin:0 0 4px">📷 Tus posteos</h3>
-      <p style="margin:0;color:var(--mut);font-size:14px">✅ ¡Listo! Ya tenemos tu foto — la estamos usando en tus posteos de esta semana.</p>
+      <p style="margin:0;color:var(--mut);font-size:12.5px">✅ ¡Listo! Ya tenemos tu foto — la estamos usando en tus posteos de esta semana.</p>
     </div>`;
     return;
   }
   el.innerHTML = `
   <div class="card mission-card">
     <h3 style="margin:0 0 4px">📋 Tareas para seguir mejorando tus posteos</h3>
-    <p style="margin:0 0 6px;font-size:15px">Nos falta <b>${esc(m.need)}</b> — 30 segundos con tu celular.</p>
+    <p style="margin:0 0 6px;font-size:13px">Nos falta <b>${esc(m.need)}</b> — 30 segundos con tu celular.</p>
     <p class="hint" style="margin:0 0 10px">La usamos en tus posteos de esta semana: con tus fotos reales, venden más.</p>
     <button class="btn btn-primary btn-sm" id="missionUpload">📷 Subir la foto</button>
     <input type="file" id="missionFile" accept="image/*" style="display:none">
@@ -5153,8 +5168,8 @@ async function loadInspoCard() {
     el.innerHTML = `
     <div class="card" style="opacity:.85">
       <h3 style="margin:0 0 4px">🎨 Tu estilo de referencia</h3>
-      <p style="margin:0;color:var(--mut);font-size:14px">✅ Ya tenemos tu estilo de referencia: lo usamos para diseñar tus posteos.</p>
-      <p style="margin:8px 0 0;font-size:13.5px;color:var(--dim);font-style:italic">“${esc(inspo.slice(0, 160))}”</p>
+      <p style="margin:0;color:var(--mut);font-size:12.5px">✅ Ya tenemos tu estilo de referencia: lo usamos para diseñar tus posteos.</p>
+      <p style="margin:8px 0 0;font-size:12px;color:var(--dim);font-style:italic">“${esc(inspo.slice(0, 160))}”</p>
       <div style="text-align:right;margin-top:4px"><button class="btn btn-ghost btn-sm" id="inspoChange">cambiar</button></div>
     </div>`;
     const ch = document.getElementById('inspoChange');
@@ -5167,7 +5182,7 @@ function inspoIdleHTML(el) {
   el.innerHTML = `
   <div class="card" style="border:2px solid var(--cel)">
     <h3 style="margin:0 0 4px">🎨 ¿Te gusta algún estilo?</h3>
-    <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Subí un posteo de Instagram que te guste y lo usamos de referencia para tus diseños.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Subí un posteo de Instagram que te guste y lo usamos de referencia para tus diseños.</p>
     <div style="text-align:center"><button class="btn btn-primary btn-sm" id="inspoUpload">🎨 Subir referencia</button></div>
     <input type="file" id="inspoFile" accept="image/*" style="display:none">
     <div id="inspoMsg" style="margin-top:8px;text-align:center"></div>
@@ -5220,18 +5235,18 @@ function salioCardHTML(publishedList) {
     let foot = '';
     if (old && !hasOutcome) {
       foot = `<div style="margin-top:6px">
-        <div style="font-size:11.5px;color:var(--mut);line-height:1.4;margin-bottom:4px">¿Este posteo te trajo clientes?</div>
+        <div style="font-size:10px;color:var(--mut);line-height:1.4;margin-bottom:4px">¿Este posteo te trajo clientes?</div>
         <div class="pub-rate"><button class="sig-btn" data-oc-sig="brought_clients" data-id="${p.id}" title="Sí, me trajo clientes">👍</button><button class="sig-btn" data-oc-sig="no_clients" data-id="${p.id}" title="No">👎</button></div>
       </div>`;
     } else if (hasOutcome) {
-      foot = `<div style="font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.4">${sig === 'brought_clients' ? '✅ Te trajo clientes' : '📭 Sin clientes todavía'}</div>`;
+      foot = `<div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4">${sig === 'brought_clients' ? '✅ Te trajo clientes' : '📭 Sin clientes todavía'}</div>`;
     }
     return `<div class="pub-thumb">${media}${foot}</div>`;
   }).join('');
   return `
   <div class="card" style="margin-top:12px">
     <h3 style="margin:0 0 4px">✅ Ya salió</h3>
-    <p style="color:var(--mut);font-size:13px;margin:0 0 10px">Contanos cómo rindió cada posteo: así la IA aprende qué te trae clientes de verdad.</p>
+    <p style="color:var(--mut);font-size:11.5px;margin:0 0 10px">Contanos cómo rindió cada posteo: así la IA aprende qué te trae clientes de verdad.</p>
     <div class="pub-strip">${items}</div>
   </div>`;
 }
@@ -5259,7 +5274,7 @@ function dnaVoiceIdleHTML() {
   return `
   <div class="card" style="border:2px solid var(--cel)">
     <h3 style="margin:0 0 4px">🎙️ Contame de tu negocio</h3>
-    <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Hablame 2 minutos de tu negocio y la IA aprende cómo se ve lo que hacés.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Hablame 2 minutos de tu negocio y la IA aprende cómo se ve lo que hacés.</p>
     <div style="text-align:center"><button class="rev-voice-btn" id="dnaVoiceBtn">🎙️ Grabar nota de voz</button></div>
     <div class="rev-voice-msg" id="dnaVoiceMsg" style="text-align:center"></div>
   </div>`;
@@ -5282,7 +5297,7 @@ function dnaVoiceTick() {
 async function dnaVoiceToggle() {
   if (DNAV_REC) { dnaVoiceStop(); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 Tu navegador no soporta notas de voz.</span>');
+    dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
     return;
   }
   try {
@@ -5302,10 +5317,10 @@ async function dnaVoiceToggle() {
     clearInterval(DNAV_TIMER);
     DNAV_TIMER = setInterval(dnaVoiceTick, 500);
     dnaVoiceTick();
-    dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">🔴 Grabando… contame qué vendés, tus precios y tus promos</span>');
+    dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué vendés, tus precios y tus promos</span>');
     setTimeout(() => { if (DNAV_REC) dnaVoiceStop(); }, 180000);
   } catch (e) {
-    dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 No pudimos usar el micrófono. Revisá el permiso en tu navegador y probá de nuevo.</span>');
+    dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso en tu navegador y probá de nuevo.</span>');
   }
 }
 function dnaVoiceStop() {
@@ -5319,7 +5334,7 @@ function dnaVoiceStop() {
 async function dnaVoiceSend() {
   const chunks = DNAV_CHUNKS; DNAV_CHUNKS = [];
   const blob = new Blob(chunks, { type: DNAV_MIME || 'audio/mp4' });
-  if (blob.size < 1500) { dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">Parece que no se grabó nada. Probá de nuevo.</span>'); return; }
+  if (blob.size < 1500) { dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">Parece que no se grabó nada. Probá de nuevo.</span>'); return; }
   const dataUrl = await new Promise((res) => {
     const fr = new FileReader();
     fr.onload = () => res(String(fr.result || ''));
@@ -5327,10 +5342,10 @@ async function dnaVoiceSend() {
     fr.readAsDataURL(blob);
   });
   if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
-    dnaVoiceMsg('<span style="color:#B3402E;font-size:13px">No pudimos procesar la nota. Probá de nuevo.</span>');
+    dnaVoiceMsg('<span style="color:#B3402E;font-size:11.5px">No pudimos procesar la nota. Probá de nuevo.</span>');
     return;
   }
-  dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">⏳ Escuchando y aprendiendo de tu negocio…</span>');
+  dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">⏳ Escuchando y aprendiendo de tu negocio…</span>');
   try {
     const r = await api.post('/api/dna/from-audio', { audioDataUrl: dataUrl }, { timeout: 120000 });
     const el = document.getElementById('dnaVoiceCard');
@@ -5338,15 +5353,15 @@ async function dnaVoiceSend() {
     <div class="card" style="border:2px solid var(--cel)">
       <h3 style="margin:0 0 4px">🧬 La IA ya te conoce mejor</h3>
       ${dnaExtractedSummaryHTML(r.extracted)}
-      ${r.transcript ? `<details style="margin-top:10px"><summary style="font-size:13px;color:var(--dim);cursor:pointer">Ver lo que dijiste</summary><p style="font-size:13.5px;color:var(--mut);font-style:italic;margin:8px 0 0">“${esc(r.transcript)}”</p></details>` : ''}
-      <p style="font-size:13px;color:var(--mut);margin:12px 0 0">Lo guardamos en <b>Ajustes → Tu negocio</b>, donde podés verlo y corregirlo cuando quieras.</p>
+      ${r.transcript ? `<details style="margin-top:10px"><summary style="font-size:11.5px;color:var(--dim);cursor:pointer">Ver lo que dijiste</summary><p style="font-size:12px;color:var(--mut);font-style:italic;margin:8px 0 0">“${esc(r.transcript)}”</p></details>` : ''}
+      <p style="font-size:11.5px;color:var(--mut);margin:12px 0 0">Lo guardamos en <b>Ajustes → Tu negocio</b>, donde podés verlo y corregirlo cuando quieras.</p>
       <div style="text-align:center;margin-top:10px"><button class="rev-voice-btn" id="dnaVoiceAgain">🎙️ Contar más</button></div>
       <div class="rev-voice-msg" id="dnaVoiceMsg" style="text-align:center"></div>
     </div>`;
     const ag = document.getElementById('dnaVoiceAgain');
     if (ag) ag.onclick = () => { loadDnaVoiceCard(); dnaVoiceToggle(); };
   } catch (e) {
-    dnaVoiceMsg(`<span style="color:#B3402E;font-size:13px">${esc((e && e.message) || 'No pudimos procesar la nota. Probá de nuevo.')}</span>`);
+    dnaVoiceMsg(`<span style="color:#B3402E;font-size:11.5px">${esc((e && e.message) || 'No pudimos procesar la nota. Probá de nuevo.')}</span>`);
   }
 }
 function dnaExtractedSummaryHTML(extracted) {
@@ -5373,9 +5388,9 @@ function dnaExtractedSummaryHTML(extracted) {
       txt = String(v).trim();
     }
     if (!txt) continue;
-    rows.push(`<div style="font-size:14px;margin:6px 0"><b>${DNA_LABELS[k]}:</b> ${esc(txt)}</div>`);
+    rows.push(`<div style="font-size:12.5px;margin:6px 0"><b>${DNA_LABELS[k]}:</b> ${esc(txt)}</div>`);
   }
-  if (!rows.length) return `<p style="font-size:14px;color:var(--mut);margin:8px 0">Te escuché perfecto, pero no detecté datos nuevos del negocio. Probá contando tus productos, precios o promos.</p>`;
+  if (!rows.length) return `<p style="font-size:12.5px;color:var(--mut);margin:8px 0">Te escuché perfecto, pero no detecté datos nuevos del negocio. Probá contando tus productos, precios o promos.</p>`;
   return `<div style="margin-top:8px">${rows.join('')}</div>`;
 }
 function showStreakCelebration(sk) {
@@ -5386,8 +5401,8 @@ function showStreakCelebration(sk) {
   streakModalShell(`
     <div class="big-emoji">${lv.emoji}</div>
     <h3 style="margin:12px 0 4px">${sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!'}</h3>
-    <p style="font-size:18px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
-    <p style="font-size:17px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
+    <p style="font-size:16px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
+    <p style="font-size:15px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
     ${streakNextTxt(sk)}
     ${streakShareBtns()}`);
   wireStreakModalBtns(sk);
@@ -5520,16 +5535,10 @@ async function semanaView() {
     ? `<span>⏱ ≈${mo.hours_saved_total} h ahorradas</span><span>📮 ${mo.published} ${mo.published === 1 ? 'publicado' : 'publicados'}</span>`
     : `<span>⏱ Cada posteo te ahorra ≈1,5 h</span>`;
   const stripInner = `
-    <span class="xp-title">Tu progreso</span>
-    <span class="xp-row">${hasStreak
-      ? `<span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span><span class="xp-pts">⚡ ${sk.current * 100} pts</span><span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>`
-      : `<span class="xp-lvl">🔥 Publicá esta semana y empezá tu racha</span>`}</span>
-    <span class="xp-ava" id="xpAvaLvl"></span>
-    ${hasStreak ? `<span class="xp-bar"><span style="width:${lvlPct}%"></span></span>
-    <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>` : ''}
-    <span class="xp-stats">${statsTxt}</span>
-    <span class="xp-weekbar"><span style="width:${pct}%"></span></span>
-    <span class="xp-weektxt">${weekTxt}</span>`;
+    <span class="xp-brand" id="xpBrand"></span>
+    <span class="xp-bar"><span id="xpBrandBar" style="width:0%"></span></span>
+    <span class="xp-sub" id="xpBrandSub">Cargando tu progreso…</span>
+    <span class="xp-stats" id="xpBrandStats"></span>`;
   xpStrip = hasStreak
     ? `<button class="xp-strip" id="xpStrip" aria-label="Ver el progreso de tu racha">${stripInner}</button>`
     : `<div class="xp-strip" id="xpStrip" style="cursor:default">${stripInner}</div>`;
@@ -5553,9 +5562,9 @@ async function semanaView() {
   // la N+1 ya se armó sola en segundo plano. Toca → la revisa como corriente.
   const nextTeaser = (!viewingNext && draftN === 0 && nextDrafts.length > 0 && weekDone) ? `
   <button class="card" id="nextWeekTeaser" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1.5px solid rgba(39,147,200,.35);background:#F4FAFE;cursor:pointer;margin:0 0 12px">
-    <span style="font-size:20px">✨</span>
-    <span style="flex:1;min-width:0"><b>Tu próxima semana ya está lista</b><br><span style="color:var(--mut);font-size:13px">La armamos mientras programabas — tocala para revisarla</span></span>
-    <span style="font-size:20px;color:var(--cel)">›</span>
+    <span style="font-size:17.5px">✨</span>
+    <span style="flex:1;min-width:0"><b>Tu próxima semana ya está lista</b><br><span style="color:var(--mut);font-size:11.5px">La armamos mientras programabas — tocala para revisarla</span></span>
+    <span style="font-size:17.5px;color:var(--cel)">›</span>
   </button>` : '';
   const nextBack = viewingNext ? `
   <div style="margin:-4px 0 10px"><button class="rev-nowsub" id="nextWeekBack" style="padding:0">‹ volver a esta semana</button></div>` : '';
@@ -5569,7 +5578,7 @@ async function semanaView() {
   const failedCard = failed.length ? `
   <div class="card" style="border:2px solid rgba(214,69,69,.45);background:#FDF3F3">
     <h3 style="margin:0 0 4px">⚠️ ${failed.length} ${failed.length === 1 ? 'posteo no salió' : 'posteos no salieron'}</h3>
-    <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Reintentalos acá, sin ir a otra pantalla.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Reintentalos acá, sin ir a otra pantalla.</p>
     ${failed.map(p => postItem(p, `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button><button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar">🗑️</button>`)).join('')}
   </div>` : '';
 
@@ -5619,7 +5628,7 @@ async function semanaView() {
   }
   const scheduledStrip = schedGroups.length ? `
   <div class="card sched-card">
-    <h3 style="margin:0">📅 Lo que se viene <span style="font-weight:400;color:var(--mut);font-size:13px">— sale solo</span></h3>
+    <h3 style="margin:0">📅 Lo que se viene <span style="font-weight:400;color:var(--mut);font-size:11.5px">— sale solo</span></h3>
     ${schedGroups.map(g => `
     <div class="sched-day">
       <div class="sched-daylabel">${esc(g.label)}</div>
@@ -5714,8 +5723,8 @@ function bindSemana() {
   if (xs) xs.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
   };
-  // Nivel del avatar de posta. en la tira (no rompe la racha): se llena async.
-  try { api.get('/api/avatar-level').then(lv => { try { paintAvatarStrip(lv); } catch (e) {} }).catch(() => {}); } catch (e) {}
+  // Nivel de la MARCA en la tira (logo del cliente): se llena async.
+  try { paintBrandStrip(); } catch (e) {}
   // Track 3 · "La semana esperándote al entrar": si la semana está vacía y ya
   // tenemos los datos del negocio, se arma sola en segundo plano. No bloquea el binding.
   // Si el usuario toca "⚡ Armemos tu semana" a mano mientras el auto corre, el flag
@@ -5749,8 +5758,8 @@ function autoWeekShowBar() {
   const bar = document.createElement('div');
   bar.id = 'autoWeekBar';
   bar.setAttribute('role', 'status');
-  bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:14px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
-  bar.innerHTML = '<span style="font-size:18px">✨</span>' +
+  bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
+  bar.innerHTML = '<span style="font-size:16px">✨</span>' +
     '<span style="flex:1;min-width:0">Armando tu semana en segundo plano…</span>' +
     '<button class="btn btn-ghost btn-sm" id="autoWeekCancelBtn" type="button">Cancelar</button>';
   main.prepend(bar);
@@ -5858,20 +5867,20 @@ function ajustesView() {
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
   ${igMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
-          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:14px">Sin logo</span>'}
+          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
           <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
           ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
         </div>
         <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
-        <div class="hint" style="font-size:12px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
+        <div class="hint" style="font-size:10.5px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
       </div>
     </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
-      <div style="font-size:12px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
+      <div style="font-size:10.5px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
       <div style="display:flex;gap:10px">
         ${[0, 1, 2].map(i => `
         <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
@@ -5899,12 +5908,12 @@ function ajustesView() {
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
-      <span id="brandDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
+      <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
     </div>
-    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:13px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
+    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
   </div></div>
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-  <p style="color:var(--mut);font-size:14px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
+  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
     <div class="row2">
       <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
       <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
@@ -5934,7 +5943,7 @@ function ajustesView() {
       <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
     <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
-      <label style="font-size:15px">🧬 Lo que la IA sabe de tu negocio</label>
+      <label style="font-size:13px">🧬 Lo que la IA sabe de tu negocio</label>
       <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
       <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
         <textarea id="s_dna_productos" rows="3" placeholder="Remera oversize — $25.000&#10;Zapatillas retro — $89.900"></textarea></div>
@@ -5952,7 +5961,7 @@ function ajustesView() {
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
-      <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
+      <span id="profDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
@@ -5999,8 +6008,8 @@ function ajustesView() {
     </div>
     <div id="igVerifyMsg" style="margin-top:10px"></div>
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
-      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:13px">(gratis, 30 segundos)</span></div>
-      <ol style="margin:0 0 12px 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
+      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
+      <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
         <li>Abrí Instagram y andá a tu perfil</li>
         <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
         <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
@@ -6030,13 +6039,14 @@ function ajustesView() {
           <p class="hint">La clave secreta de tu app. Nunca la compartas.</p></div>
       </div>
       <p class="hint">Los encontrás en <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com</a> → tu app → Configuración.</p>
-      <div class="field" style="margin-top:10px"><button class="btn btn-ghost" id="btnTestMeta" type="button">Probar conexión</button> <span id="metaTestMsg" style="font-size:13px"></span></div>
+      <div class="field" style="margin-top:10px"><button class="btn btn-ghost" id="btnTestMeta" type="button">Probar conexión</button> <span id="metaTestMsg" style="font-size:11.5px"></span></div>
       <div class="field"><label>Instagram Embed URL</label>
         <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?...">
         <p class="hint">La dirección que Meta genera para conectar tu Instagram. Se copia del dashboard de Meta: caso de uso Instagram → "API setup with Instagram login".</p></div>
     </div>
     <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
-  </details>`;
+  </details>
+  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">🚪 Salir</button></div>`;
 }
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
@@ -6069,16 +6079,16 @@ function maybeShowIgPopup(tab) {
     ov.className = 'pz-exp-overlay';
     ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
-      <div style="font-size:52px;line-height:1">📸</div>
+      <div style="font-size:46px;line-height:1">📸</div>
       <h2>Conectá tu Instagram</h2>
       <p class="pz-exp-sub">Así Posta deja tu semana lista para publicar.</p>
-      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:17px">Conectar Instagram</button>
+      <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">Conectar Instagram</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
       <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
       <div class="hint" id="igPrivTip" style="margin-top:8px;display:none">💡 Parece que estás en navegación privada: ahí Instagram suele pedirte un código de verificación extra. En una ventana normal son 2 toques.</div>
       <details style="margin:12px 0 4px;text-align:left">
-        <summary style="font-weight:700;cursor:pointer;font-size:14px;color:var(--mut)">¿Cómo hago mi cuenta profesional?</summary>
-        <ol style="margin:10px 0 0 20px;padding:0;font-size:14px;color:var(--mut);line-height:1.8">
+        <summary style="font-weight:700;cursor:pointer;font-size:12.5px;color:var(--mut)">¿Cómo hago mi cuenta profesional?</summary>
+        <ol style="margin:10px 0 0 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
           <li>Abrí Instagram y andá a tu perfil</li>
           <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
           <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
@@ -6086,7 +6096,7 @@ function maybeShowIgPopup(tab) {
         </ol>
         <div class="hint" style="margin-top:6px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram.</div>
       </details>
-      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:14px">Lo hago después →</a></div>
+      <div style="margin-top:8px"><a href="#" id="igFirstSkip" style="color:var(--dim);font-size:12.5px">Lo hago después →</a></div>
     </div>`;
     document.body.appendChild(ov);
     try {
@@ -6114,7 +6124,7 @@ function maybeShowIgPopup(tab) {
 function toast(html) {
   try {
     const t = document.createElement('div');
-    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0A1E33;color:#fff;padding:14px 20px;border-radius:14px;font-size:15px;line-height:1.5;z-index:10001;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:center';
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0A1E33;color:#fff;padding:14px 20px;border-radius:14px;font-size:13px;line-height:1.5;z-index:10001;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:center';
     t.innerHTML = html;
     document.body.appendChild(t);
     setTimeout(() => { try { t.remove(); } catch (e) {} }, 5200);
@@ -6289,15 +6299,15 @@ function obSummaryHTML() {
   ].filter(([, , v]) => v);
   return `<div class="page-head"><div class="ph-ico">🧠</div><div class="ph-txt"><h1>Esto entendí</h1><p class="sub">Revisalo — con esto armo tu contenido.</p></div></div>
   <div class="card" style="max-width:640px">
-    <p style="font-size:16px;line-height:1.65;margin:0 0 14px">${esc(o.summary || '')}</p>
+    <p style="font-size:14px;line-height:1.65;margin:0 0 14px">${esc(o.summary || '')}</p>
     ${rows.map(([ico, k, v]) => `<div class="cm-tip"><span>${ico}</span><span><b>${esc(k)}:</b> ${esc(v)}</span></div>`).join('')}
-    ${o.colors.length >= 2 ? `<div class="cm-tip"><span>🎨</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:13px">de tu logo</span></span></div>` : ''}
+    ${o.colors.length >= 2 ? `<div class="cm-tip"><span>🎨</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:11.5px">de tu logo</span></span></div>` : ''}
     <div id="obMsg" style="margin-top:8px"></div>
     <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
       <button class="btn btn-ghost" id="obFix">✏️ Corregir</button>
       <button class="btn btn-primary" id="obConfirm" style="flex:1">✅ Todo bien, arranquemos</button>
     </div>
-    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Hacerlo después →</a></div>
+    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:12.5px">Hacerlo después →</a></div>
   </div>`;
 }
 function onboardingView() {
@@ -6309,10 +6319,10 @@ function onboardingView() {
   return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Te conozco primero</h1><p class="sub">Una charla rápida — con esto armo todo por vos.</p></div></div>
   <div class="card" style="max-width:640px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <span style="font-size:13px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
+      <span style="font-size:11.5px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
       <span style="display:flex;gap:10px;align-items:center;flex:none">
         ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
-        <a href="#/app/semana" style="color:var(--dim);font-size:13px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
+        <a href="#/app/semana" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
       </span>
     </div>
     <div style="height:6px;border-radius:99px;background:var(--line);margin:0 0 14px;overflow:hidden"><div style="height:100%;width:${pct}%;border-radius:99px;background:linear-gradient(90deg,var(--cel),var(--yel));transition:width .4s"></div></div>
@@ -6582,7 +6592,7 @@ async function showExpiredModal() {
   ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
-      <div style="font-size:42px">🔒</div>
+      <div style="font-size:37px">🔒</div>
       <h2>Tu prueba gratis termin\u00f3</h2>
       <p class="pz-exp-sub">Elegí tu plan y seguimos publicando por vos.</p>
       <div class="pz-exp-plans">${rows}</div>
@@ -6628,9 +6638,8 @@ function bindApp(tab) {
   if (sg) sg.onclick = igConnectHere;
   const sb = $('#setupBizRow');
   if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
-  const lo1 = $('#btnLogout'), lo2 = $('#btnLogoutM');
-  if (lo1) lo1.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
-  if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
+  const loA = $('#btnLogoutAj');
+  if (loA) loA.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
 
   if (tab === 'semana') bindSemana();
   if (tab === 'ads') bindAds();
@@ -7209,8 +7218,8 @@ function renderIgResume() {
   b.innerHTML = `
   <div style="position:fixed;top:0;left:0;right:0;z-index:9000;display:flex;justify-content:center;padding:10px 12px;pointer-events:none">
     <div style="pointer-events:auto;background:#0A1E33;color:#fff;border-radius:16px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 32px rgba(0,0,0,.35);max-width:560px;width:100%">
-      <div style="font-size:30px;line-height:1">📸</div>
-      <div style="flex:1;font-size:14px;line-height:1.45"><b>¡Casi terminás!</b><br>Se interrumpió la conexión (a veces Instagram pide un código y se corta). Tu sesión ya quedó iniciada: es un toque más.</div>
+      <div style="font-size:26.5px;line-height:1">📸</div>
+      <div style="flex:1;font-size:12.5px;line-height:1.45"><b>¡Casi terminás!</b><br>Se interrumpió la conexión (a veces Instagram pide un código y se corta). Tu sesión ya quedó iniciada: es un toque más.</div>
       <button class="btn btn-primary" id="igResumeGo" style="white-space:nowrap;padding:12px 16px">Terminar de conectar</button>
     </div>
   </div>`;
@@ -7286,7 +7295,7 @@ function bindSettings() {
       competitors: compChips.join(', '), goal: $('#s_goal').value,
     });
     await api.put('/api/settings', { timezone: $('#s_tz').value });
-    $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
+    $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
     profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
     PROFILE = await api.get('/api/profile');
     SETTINGS = await api.get('/api/settings');
@@ -7314,7 +7323,7 @@ function bindSettings() {
   };
   // --- chips de fuente por bloque (Expertos en información): dna.fuentes = { campo: 'etiqueta' } ---
   // Si un campo no tiene fuente registrada, se muestra sin chip (defensivo).
-  const DNA_SRC_STYLE = 'font-size:11px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap';
+  const DNA_SRC_STYLE = 'font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap';
   const dnaSrcChip = (fuentes, field) => {
     const t = (fuentes && typeof fuentes === 'object' && fuentes[field]) || '';
     return t ? `<span style="${DNA_SRC_STYLE}">${esc(String(t))}</span>` : '';
@@ -7343,10 +7352,10 @@ function bindSettings() {
     const promos = webArrOf(w.promos || d.website_promos || d.web_promos);
     const groups = [['🛍️ Productos', prods], ['💲 Precios', precios], ['🎉 Promos', promos]].filter(([, a]) => a.length);
     if (!groups.length) { webDnaZone.innerHTML = ''; return; }
-    const tag = '<span style="font-size:11px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">🌐 de tu web</span>';
+    const tag = '<span style="font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">🌐 de tu web</span>';
     webDnaZone.innerHTML = `
       <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:14px;margin-bottom:10px">🌐 Lo que encontramos en tu web</div>
+        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">🌐 Lo que encontramos en tu web</div>
         ${groups.map(([t, arr]) => `
           <div class="field" style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${t} ${tag}</label>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${arr.map(it => `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`).join('')}</div>
@@ -7382,7 +7391,7 @@ function bindSettings() {
     if (it && typeof it === 'object') {
       const q = String(it.pregunta || '').trim();
       const a = String(it.respuesta || '').trim();
-      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:14px">❓ ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:13px">💬 ${esc(a)}</div>` : ''}</div>`;
+      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:12.5px">❓ ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:11.5px">💬 ${esc(a)}</div>` : ''}</div>`;
     }
     return `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`;
   };
@@ -7405,13 +7414,13 @@ function bindSettings() {
     if (!blocks.length) { zone.innerHTML = ''; return; }
     zone.innerHTML = `
       <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:14px;margin-bottom:10px">📚 Datos de otras fuentes</div>
+        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">📚 Datos de otras fuentes</div>
         ${blocks.map(([field, title, v]) => `
           <div class="field" style="margin-bottom:10px">
             <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)} ${dnaSrcChip(fuentes, field)}</label>
             <div style="margin-top:6px">${Array.isArray(v)
               ? v.slice(0, 6).map(dnaInfoLine).join('') + (v.length > 6 ? `<div class="hint">…y ${v.length - 6} más</div>` : '')
-              : `<div style="font-size:14px">${esc(String(v))}</div>`}</div>
+              : `<div style="font-size:12.5px">${esc(String(v))}</div>`}</div>
           </div>`).join('')}
         <div class="hint">La IA usa estos datos para crear posteos que venden de verdad.</div>
       </div>`;
@@ -7430,9 +7439,9 @@ function bindSettings() {
           ubicacion: dnaEls.ubicacion.value.trim(),
         });
         paintDna(r && r.dna);
-        if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
+        if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
       } catch (e) {
-        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:14px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
+        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
       }
     };
   }
@@ -7463,7 +7472,7 @@ function bindSettings() {
     if (webStatus.ok) {
       webZone.innerHTML = `
         <div class="okmsg">✅ <b>${esc(webStatus.url || 'Tu web')}</b><br>Analizada el ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' <b>(parcial:</b> no pudimos leer todas las páginas)' : ''}</div>
-        <p style="color:var(--mut);font-size:14px;margin:10px 0 14px">Sacamos de tu web productos, precios y promos para que la IA cree posteos que venden.</p>
+        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">Sacamos de tu web productos, precios y promos para que la IA cree posteos que venden.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-soft btn-sm" id="btnWebRe">🔄 Analizar de nuevo</button> <span id="webMsg"></span>
         </div>${err}`;
@@ -7472,7 +7481,7 @@ function bindSettings() {
     } else {
       const det = String(webStatus.url || '').trim();
       webZone.innerHTML = `
-        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">${det ? `Detectamos esta web en tu bio de Instagram 👇` : '¿Tenés web? La estudiamos y sacamos productos, precios y promos para que la IA cree posteos que venden.'}</p>
+        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${det ? `Detectamos esta web en tu bio de Instagram 👇` : '¿Tenés web? La estudiamos y sacamos productos, precios y promos para que la IA cree posteos que venden.'}</p>
         <div class="field" style="margin-bottom:10px"><label>URL de tu web o publicación</label>
           <input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         </div>
@@ -7483,7 +7492,7 @@ function bindSettings() {
       const b = $('#btnWebGo');
       if (b) b.onclick = () => {
         const u = normWebUrl(($('#s_weburl') || {}).value);
-        if (!u) { const m = $('#webMsg'); if (m) m.innerHTML = '<span style="color:#B3402E;font-size:14px">Pegá la URL de tu web</span>'; return; }
+        if (!u) { const m = $('#webMsg'); if (m) m.innerHTML = '<span style="color:#B3402E;font-size:12.5px">Pegá la URL de tu web</span>'; return; }
         runWebAnalyze({ url: u });
       };
     }
@@ -7530,7 +7539,7 @@ function bindSettings() {
       if (b) b.onclick = runStoriesAnalyze;
     } else {
       storiesZone.innerHTML = `
-        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">Leemos tus historias de las últimas 24h y sacamos las promos y anuncios que publicaste, para que la IA cree posteos al día. <b>Ojo:</b> Instagram solo nos deja ver las de las últimas 24 horas, no el archivo.</p>
+        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Leemos tus historias de las últimas 24h y sacamos las promos y anuncios que publicaste, para que la IA cree posteos al día. <b>Ojo:</b> Instagram solo nos deja ver las de las últimas 24 horas, no el archivo.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" id="btnStoriesGo">📱 Analizar historias</button> <span id="storiesMsg"></span>
         </div>${err}`;
@@ -7578,8 +7587,8 @@ function bindSettings() {
       const c = srcCommentsStatus.counts || {};
       const n = Number(c.comments || 0);
       srcCommentsCard.innerHTML = `
-        <div class="okmsg">✅ <b>${n} comentarios</b> analizados${c.posts ? ` de ${c.posts} posteos` : ''}<br><span style="color:var(--dim);font-size:13px">Último análisis: ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}</span></div>
-        <p style="color:var(--mut);font-size:14px;margin:10px 0 14px">La IA leyó lo que te preguntan tus seguidores y lo usa para crear posteos que responden antes de que pregunten.</p>
+        <div class="okmsg">✅ <b>${n} comentarios</b> analizados${c.posts ? ` de ${c.posts} posteos` : ''}<br><span style="color:var(--dim);font-size:11.5px">Último análisis: ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}</span></div>
+        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">La IA leyó lo que te preguntan tus seguidores y lo usa para crear posteos que responden antes de que pregunten.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-soft btn-sm" id="btnSrcCommentsRe">🔄 Analizar de nuevo</button> <span id="srcCommentsMsg"></span>
         </div>${err}`;
@@ -7587,7 +7596,7 @@ function bindSettings() {
       if (b) b.onclick = () => runCommentsMine({ force: true });
     } else {
       srcCommentsCard.innerHTML = `
-        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">Leemos los comentarios de tus últimos posteos y la IA saca <b>qué te preguntan</b>, <b>qué objeciones tienen</b> y <b>qué desean</b> — sin pedirte nada más. Esos datos entrenan a la IA para vender mejor.</p>
+        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Leemos los comentarios de tus últimos posteos y la IA saca <b>qué te preguntan</b>, <b>qué objeciones tienen</b> y <b>qué desean</b> — sin pedirte nada más. Esos datos entrenan a la IA para vender mejor.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">💬 Analizar comentarios</button> <span id="srcCommentsMsg"></span>
         </div>${err}`;
@@ -7621,23 +7630,23 @@ function bindSettings() {
     // Sin key: explicación + cómo conseguirla.
     if (!placesStatus.has_key) {
       placesZone.innerHTML = `
-        <div class="hint" style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;font-size:14px">
+        <div class="hint" style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12.5px">
           🔑 <b>Todavía no conectamos Google.</b><br>
           Para leer las reseñas de tu negocio necesitás una clave de Google Places API: entrás a
           <b>console.cloud.google.com</b> → activás la API <b>"Places API"</b> → creás una API key.
           Pasanos la key y la activamos por vos.
         </div>
-        <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Con eso sacamos lo que repiten tus clientes (atención, precios, calidad) y testimonios reales que la IA puede usar en los posteos.</p>${err}`;
+        <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Con eso sacamos lo que repiten tus clientes (atención, precios, calidad) y testimonios reales que la IA puede usar en los posteos.</p>${err}`;
       return;
     }
     if (placesStatus.ok) {
-      const chips = (placesStatus.puntos_fuertes || []).map(x => `<span style="display:inline-block;background:#FFF6E3;border:1px solid #F5D98B;color:#8a6d1a;border-radius:999px;padding:4px 12px;margin:0 6px 6px 0;font-size:13px;font-weight:700">${esc(x)}</span>`).join('');
-      const tests = (placesStatus.testimonios || []).map(t => `<div style="border-left:3px solid #2793C8;padding:6px 12px;margin:0 0 10px;font-size:14px;color:var(--txt)">"${esc(t.cita || '')}"${t.autor ? ` <b style="color:var(--dim)">— ${esc(t.autor)}</b>` : ''}</div>`).join('');
+      const chips = (placesStatus.puntos_fuertes || []).map(x => `<span style="display:inline-block;background:#FFF6E3;border:1px solid #F5D98B;color:#8a6d1a;border-radius:999px;padding:4px 12px;margin:0 6px 6px 0;font-size:11.5px;font-weight:700">${esc(x)}</span>`).join('');
+      const tests = (placesStatus.testimonios || []).map(t => `<div style="border-left:3px solid #2793C8;padding:6px 12px;margin:0 0 10px;font-size:12.5px;color:var(--txt)">"${esc(t.cita || '')}"${t.autor ? ` <b style="color:var(--dim)">— ${esc(t.autor)}</b>` : ''}</div>`).join('');
       placesZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(placesStatus.place_name || 'Tu negocio')}</b>${placesStatus.rating ? ` <span style="color:#f5a623">★</span> ${esc(String(placesStatus.rating))}` : ''}${placesStatus.total_ratings ? ` <span style="color:var(--dim);font-weight:400">(${esc(String(placesStatus.total_ratings))} reseñas)</span>` : ''}<br><span style="font-size:13px;color:var(--mut)">Analizado el ${esc(fmtWebAt(placesStatus.analyzed_at))}${placesStatus.partial ? ' (parcial)' : ''}</span></div>
-        ${chips ? `<div style="font-weight:800;margin:12px 0 6px;font-size:14px">Lo que más repiten tus clientes</div><div>${chips}</div>` : ''}
-        ${tests ? `<div style="font-weight:800;margin:12px 0 6px;font-size:14px">Testimonios reales</div><div>${tests}</div>` : '<p style="color:var(--mut);font-size:14px;margin:12px 0 0">Todavía no encontramos reseñas para citar.</p>'}
-        <p style="color:var(--mut);font-size:13px;margin:12px 0">Los puntos fuertes y testimonios quedan en "🧬 Lo que la IA sabe" para que la IA los use.</p>
+        <div class="okmsg">✅ <b>${esc(placesStatus.place_name || 'Tu negocio')}</b>${placesStatus.rating ? ` <span style="color:#f5a623">★</span> ${esc(String(placesStatus.rating))}` : ''}${placesStatus.total_ratings ? ` <span style="color:var(--dim);font-weight:400">(${esc(String(placesStatus.total_ratings))} reseñas)</span>` : ''}<br><span style="font-size:11.5px;color:var(--mut)">Analizado el ${esc(fmtWebAt(placesStatus.analyzed_at))}${placesStatus.partial ? ' (parcial)' : ''}</span></div>
+        ${chips ? `<div style="font-weight:800;margin:12px 0 6px;font-size:12.5px">Lo que más repiten tus clientes</div><div>${chips}</div>` : ''}
+        ${tests ? `<div style="font-weight:800;margin:12px 0 6px;font-size:12.5px">Testimonios reales</div><div>${tests}</div>` : '<p style="color:var(--mut);font-size:12.5px;margin:12px 0 0">Todavía no encontramos reseñas para citar.</p>'}
+        <p style="color:var(--mut);font-size:11.5px;margin:12px 0">Los puntos fuertes y testimonios quedan en "🧬 Lo que la IA sabe" para que la IA los use.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-soft btn-sm" id="btnPlacesRe">🔄 Buscar de nuevo</button> <span id="placesMsg"></span>
         </div>${err}`;
@@ -7645,7 +7654,7 @@ function bindSettings() {
       if (b) b.onclick = () => runPlacesAnalyze({ force: true });
     } else {
       placesZone.innerHTML = `
-        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">Buscamos tu negocio en Google, leemos las reseñas y sacamos lo que más repiten tus clientes + testimonios reales que la IA usa para vender.</p>
+        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Buscamos tu negocio en Google, leemos las reseñas y sacamos lo que más repiten tus clientes + testimonios reales que la IA usa para vender.</p>
         <div class="field" style="margin-bottom:10px"><label>Nombre de tu negocio en Google <span style="color:var(--dim);font-weight:400">(opcional: si lo dejás vacío usamos tu perfil)</span></label>
           <input id="s_placesq" style="font-size:16px" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         </div>
@@ -7682,7 +7691,7 @@ function bindSettings() {
     if (fbStatus.ok) {
       fbZone.innerHTML = `
         <div class="okmsg">✅ <b>${esc(fbStatus.page || 'Tu página')}</b><br>Analizada el ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' <b>(parcial:</b> tu página tiene poquitos datos)' : ''}</div>
-        <p style="color:var(--mut);font-size:14px;margin:10px 0 14px">Sacamos de tu página horarios, ubicación, descripción y lo que dicen tus clientes para que la IA hable de tu negocio con datos reales.</p>
+        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">Sacamos de tu página horarios, ubicación, descripción y lo que dicen tus clientes para que la IA hable de tu negocio con datos reales.</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-soft btn-sm" id="btnFbRe">🔄 Analizar de nuevo</button> <span id="fbMsg"></span>
         </div>${err}`;
@@ -7690,7 +7699,7 @@ function bindSettings() {
       if (b) b.onclick = () => runFbAnalyze({ force: true });
     } else {
       fbZone.innerHTML = `
-        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">¿Tenés página de Facebook? La estudiamos: horarios, ubicación, descripción y opiniones de tus clientes. Si tu Instagram está conectado la detectamos sola 👇</p>
+        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Tenés página de Facebook? La estudiamos: horarios, ubicación, descripción y opiniones de tus clientes. Si tu Instagram está conectado la detectamos sola 👇</p>
         <div class="field" style="margin-bottom:6px"><label>URL o ID de tu página de Facebook</label>
           <input id="s_fbpage" placeholder="https://www.facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         </div>
@@ -7751,12 +7760,12 @@ function bindSettings() {
           <h3 style="margin:0">🤖 Cómo me ve la IA</h3>
           <button class="btn btn-ghost btn-sm" id="pvX">✕</button>
         </div>
-        <p style="color:var(--mut);font-size:13px;margin:0 0 8px">Con estos datos creamos tus ideas y posteos:</p>
+        <p style="color:var(--mut);font-size:11.5px;margin:0 0 8px">Con estos datos creamos tus ideas y posteos:</p>
         ${row('🏪', 'Negocio', esc(biz) || '<span class="pv-warn">Falta el nombre</span>')}
         ${row('📸', 'Instagram', igu ? '@' + esc(igu) : '<span class="pv-warn">Sin usuario</span>')}
         ${row(catE[1], 'Rubro', esc(catTxt))}
         ${row(toneE[1], 'Tono de la IA', esc(toneE[2]))}
-        ${row(goalE[1], 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:13px">${esc(goalE[3])}</span>` : ''))}
+        ${row(goalE[1], 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">${esc(goalE[3])}</span>` : ''))}
         ${row('🕐', 'Zona horaria', esc(tzE[1] || '—'))}
         ${row('📝', 'Descripción', desc ? esc(desc.length > 160 ? desc.slice(0, 160) + '…' : desc) : '<span class="pv-warn">Sin descripción.</span>')}
         ${row('⚔️', 'Competidores', chips)}
@@ -7783,7 +7792,7 @@ function bindSettings() {
       if (pcm) pcm.innerHTML = hasActive
         ? '✅ ¡Pago recibido! Tu plan ya está activo.'
         : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.';
-      const statusTag = !hasActive ? `<span style="font-size:13px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
+      const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
       // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
       let refInfo = null;
@@ -7821,8 +7830,8 @@ function bindSettings() {
             <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
               ${discLine}
               <div style="font-weight:800;margin-bottom:6px">Un paso más 💳</div>
-              <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>.</div>
-              <div style="font-size:13px;background:#FFF7E6;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;margin-bottom:10px">El comprobante de pago te va a llegar a <b>ese email</b>: fijate que sea el de tu cuenta de MercadoPago.</div>
+              <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>.</div>
+              <div style="font-size:11.5px;background:#FFF7E6;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;margin-bottom:10px">El comprobante de pago te va a llegar a <b>ese email</b>: fijate que sea el de tu cuenta de MercadoPago.</div>
               <div class="field"><input id="mpEmail" type="email" placeholder="tu@email.com" value="${preset}" autocomplete="email"></div>
               <button class="btn btn-primary btn-block" id="btnGoMP">Continuar al pago</button>
             </div>`;
@@ -7849,14 +7858,14 @@ function bindSettings() {
       if (!hasActive) {
         z.innerHTML = `
         <div style="margin-bottom:16px">
-          <div style="font-size:13px;color:var(--dim)">Plan actual</div>
-          <div style="font-size:20px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
+          <div style="font-size:11.5px;color:var(--dim)">Plan actual</div>
+          <div style="font-size:17.5px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
         </div>
         ${trialBanner}
-        <div style="font-size:16px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
+        <div style="font-size:14px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
         <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
         <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:13px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
+        <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
         bindSub();
       } else if (ME && ME.plan === 'free') {
         z.innerHTML = `
@@ -7879,7 +7888,7 @@ function bindSettings() {
           <button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>
         </div>
         <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:13px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
+        <p style="font-size:11.5px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
         $('#btnCancelSub').onclick = async () => {
           if (!confirm('¿Cancelar tu suscripción? Mantenés tu plan hasta el fin del período ya pago.')) return;
           const b = $('#btnCancelSub'); b.disabled = true; b.textContent = 'Cancelando...';
@@ -7957,17 +7966,17 @@ function bindSettings() {
       <div class="pz-refrow">
         <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
       </div>
-      <details style="font-size:13px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">👀 Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
+      <details style="font-size:11.5px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">👀 Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
       <div class="pz-ref-slots">${slots}</div>
       <div class="pz-refbar"><div style="width:${pct}%"></div></div>
-      <p style="font-size:14px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
+      <p style="font-size:12.5px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
       ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link 🎉</div>${info.joined.map(nm => `<div class="pz-ref-join">✓ ${esc(nm)}</div>`).join('')}</div>` : ''}
       ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">📋 Copiar mensaje</button></div>`).join('')}</div>` : ''}
       ${info.discount_active
         ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
-        : `<p style="font-size:14px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
+        : `<p style="font-size:12.5px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
       <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
-      <span id="pzRefMsg" style="font-size:13px"></span>`;
+      <span id="pzRefMsg" style="font-size:11.5px"></span>`;
     const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
     const copyLink = async (okMsg) => {
       const v = $('#pzRefLink').value;
@@ -8018,7 +8027,7 @@ function bindSettings() {
     try {
       const cc = (typeof CREATOR !== 'undefined' && CREATOR) || null;
       if (!cc || !Array.isArray(cc.options) || cc.options.length !== 6 || !cc.topic) return false;
-      if (msgEl) msgEl.innerHTML = '<span style="font-size:14px;color:var(--cel)">🎨 Actualizando tus diseños…</span>';
+      if (msgEl) msgEl.innerHTML = '<span style="font-size:12.5px;color:var(--cel)">🎨 Actualizando tus diseños…</span>';
       const out = await api.post('/api/creator/options', { topic: cc.topic, productPhoto: cc.productPhoto || undefined });
       if (out && Array.isArray(out.options) && out.options.length === 6) {
         cc.options = out.options; cc.detected = out.detected || null;
@@ -8036,7 +8045,7 @@ function bindSettings() {
     if (!orig) return;
     try {
       const nm = (orig.name || '').toLowerCase();
-      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:14px;color:var(--dim)">⏳ Convirtiendo tu archivo a imagen…</span>';
+      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--dim)">⏳ Convirtiendo tu archivo a imagen…</span>';
       const f = await logoFileToImage(orig);
       await uploadAssetFile(f, 'logo');
       try {
@@ -8046,10 +8055,10 @@ function bindSettings() {
       } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
       const refreshed = await refreshCreatorWithNewColors($('#brandMsg'));
-      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:14px;color:var(--cel)">✅ Colores actualizados en tus diseños</span>';
+      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--cel)">✅ Colores actualizados en tus diseños</span>';
       render();
     }
-    catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`; }
+    catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`; }
   };
   // --- vista previa de marca ---
   const lumInk = (hex) => {
@@ -8136,20 +8145,20 @@ function bindSettings() {
       const cols = extractTopColors(img, 3);
       let filled = 0;
       cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; syncHexFromPicker(i); filled++; } });
-      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:14px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
+      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:12.5px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
     } catch (e) { /* quedan los valores actuales */ }
   })();
   $('#btnSaveBrand').onclick = async () => {
     const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
     const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
-    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:14px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
+    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:12.5px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
     await api.put('/api/settings', { brand_colors: colors });
     const brandMsgEl = $('#brandMsg');
-    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada</span>';
+    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada</span>';
     brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
     SETTINGS = await api.get('/api/settings');
     if (await refreshCreatorWithNewColors(brandMsgEl))
-      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Marca guardada — diseños actualizados</span>';
+      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada — diseños actualizados</span>';
   };
   // Reiniciar todo: marca (logo, colores, nombre) + posteos pendientes (borradores y
   // programados). Para cuando se cambió de negocio/cuenta. El historial publicado no se toca.
@@ -8158,7 +8167,7 @@ function bindSettings() {
     if (!confirm('¿Reiniciar todo? Se borran el logo, los colores, el nombre del negocio y los posteos pendientes (borradores y programados). El historial publicado no se toca.')) return;
     const brandMsgEl = $('#brandMsg');
     try {
-      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:14px">⏳ Reiniciando…</span>';
+      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:12.5px">⏳ Reiniciando…</span>';
       await api.post('/api/brand/reset', {});
       ASSETS = await api.get('/api/assets').catch(() => []);
       SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
@@ -8166,7 +8175,7 @@ function bindSettings() {
       brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
       render();
     } catch (e) {
-      brandMsgEl.innerHTML = `<span style="color:var(--red);font-size:14px">${esc(e.message)}</span>`;
+      brandMsgEl.innerHTML = `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`;
     }
   };
   $('#btnSaveSettings').onclick = async () => {
@@ -8174,7 +8183,7 @@ function bindSettings() {
       meta_app_id: $('#s_appid').value,
       meta_app_secret: $('#s_appsecret').value, ig_embed_url: $('#s_igembed').value,
     });
-    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
+    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
   };
   const btm = $('#btnTestMeta');
   if (btm) btm.onclick = async () => {
@@ -8319,10 +8328,10 @@ async function bindAdmin() {
       <div style="padding:12px 0;border-bottom:1px solid var(--line)">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
           <b>${i + 1}. ${esc(s.label)}</b>
-          <span style="font-size:20px;font-weight:800">${s.users}</span>
+          <span style="font-size:17.5px;font-weight:800">${s.users}</span>
         </div>
         ${bar(s.pct_first)}
-        <div style="font-size:13px;color:var(--mut);margin-top:4px">${s.pct_prev}% del paso anterior · ${s.pct_first}% del inicio</div>
+        <div style="font-size:11.5px;color:var(--mut);margin-top:4px">${s.pct_prev}% del paso anterior · ${s.pct_first}% del inicio</div>
       </div>`).join('') || `<div class="d">Todavía no hay datos.</div>`;
   }
   async function showActivity() {
@@ -8339,7 +8348,7 @@ async function bindAdmin() {
         ${dau.map(x => `<div title="${esc(x.d)}: ${x.n}" style="flex:1;background:var(--cel);border-radius:4px 4px 0 0;height:${Math.max(3, x.n / maxD * 88)}px;min-width:8px"></div>`).join('')}
       </div>
       <h4 style="margin:0 0 8px">Eventos más comunes</h4>
-      ${tops.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-family:monospace;font-size:13px">${esc(k)}</span><b>${v}</b></div>`).join('') || '<div class="d">Sin datos.</div>'}`;
+      ${tops.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-family:monospace;font-size:11.5px">${esc(k)}</span><b>${v}</b></div>`).join('') || '<div class="d">Sin datos.</div>'}`;
   }
   async function showUsers() {
     body.innerHTML = `
@@ -8354,7 +8363,7 @@ async function bindAdmin() {
       catch (e) { $('#adUsers').innerHTML = `<div class="err">Error.</div>`; return; }
       $('#adUsers').innerHTML = (r.users || []).map(u => `
         <button class="btn btn-ghost btn-block" data-uid="${u.id}" style="text-align:left;margin-bottom:6px">
-          <b>${esc(u.email)}</b><br><span style="font-size:12px;color:var(--mut)">${esc(u.plan || '')} · ${esc(u.plan_status || '')} · desde ${esc((u.created_at || '').slice(0, 10))}</span>
+          <b>${esc(u.email)}</b><br><span style="font-size:10.5px;color:var(--mut)">${esc(u.plan || '')} · ${esc(u.plan_status || '')} · desde ${esc((u.created_at || '').slice(0, 10))}</span>
         </button>`).join('') || `<div class="d">Sin resultados.</div>`;
       $$('#adUsers [data-uid]').forEach(b => b.onclick = async () => {
         $('#adTimeline').innerHTML = `<div class="d">⏳ Cargando línea de tiempo…</div>`;
@@ -8364,7 +8373,7 @@ async function bindAdmin() {
         $('#adTimeline').innerHTML = `<h4 style="margin:0 0 8px">Línea de tiempo</h4>` + ((t.events || []).map(e => {
           let pr = '';
           try { const o = JSON.parse(e.props || '{}'); const ks = Object.keys(o).slice(0, 4); if (ks.length) pr = ' <span style="color:var(--mut)">(' + ks.map(k => k + ': ' + String(o[k]).slice(0, 24)).join(', ') + ')</span>'; } catch (ee) {}
-          return `<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:14px"><span style="color:var(--mut);font-size:12px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:13px">${esc(e.name)}</b>${pr}</div>`;
+          return `<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--mut);font-size:10.5px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:11.5px">${esc(e.name)}</b>${pr}</div>`;
         }).join('') || `<div class="d">Sin eventos.</div>`);
       });
     };
