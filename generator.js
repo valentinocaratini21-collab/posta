@@ -2,6 +2,21 @@
 // Usa OpenAI si hay API key configurada, si no usa el motor de plantillas local
 // con voz argentina (voseo).
 
+// Detecta si un texto es un brief/instrucción en vez de copy ("Compartí un carrusel con...").
+// Eso nunca se imprime en un diseño.
+function looksLikeBrief(t) {
+  const s = String(t || '').trim().toLowerCase();
+  return /^(compart[íi]|public[áa]|hac[ée]|sub[íi]|mostr[áa]|cont[áa]|cre[áa]|escrib[íi]|arm[áa]|sac[áa]|grab[áa]|poste[áa]|eleg[íi]|us[áa]|prob[áa])\b/.test(s)
+    || /\b(carrusel con|posteo sobre|hacé un post)\b/.test(s);
+}
+// Corta un texto SIN partir palabras a la mitad (nunca "efecti").
+function cortar(t, max) {
+  const s = String(t || '').trim();
+  if (s.length <= max) return s;
+  const c = s.slice(0, max);
+  const i = c.lastIndexOf(' ');
+  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+}
 const HOOKS = {
   canchero: [
     'Che, mirá esto 👀',
@@ -343,7 +358,7 @@ function templateGenerate({ business, category, tone, topic, goal }) {
   const tags = [...(HASHTAGS[category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
-  return { caption, overlay, hashtags: tags.join(' ') };
+  return { caption, overlay, suboverlay: String(caption).split('\n')[0].slice(0, 140), hashtags: tags.join(' ') };
 }
 
 async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice }, apiKey) {
@@ -362,8 +377,10 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
           content:
             'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
             CAPTION_CRAFT +
-            '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
+            '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "suboverlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
             '"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis. ' +
+            '"suboverlay" es la bajada de MÁXIMO 12 palabras que va DEBAJO del titular: tiene que ser COPY del posteo, lo que leería un seguidor (ej: "Probalo antes de que vuele, quedan pocos"). ' +
+            'PROHIBIDO que la bajada sea una instrucción o descripción de la tarea: nunca "Compartí un carrusel con…", "Publicá una foto de…", "Hacé un posteo sobre…". ' +
             'Hashtags: máximo 8, mezclá grandes, de nicho y locales.',
         },
         {
@@ -384,9 +401,11 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
   if (!res.ok) throw new Error(`OpenAI ${res.status}`);
   const data = await res.json();
   const parsed = JSON.parse(data.choices[0].message.content);
+  const sub = String(parsed.suboverlay || '').trim();
   return {
     caption: parsed.caption || '',
     overlay: parsed.overlay || '',
+    suboverlay: looksLikeBrief(sub) ? '' : sub.slice(0, 140),
     hashtags: parsed.hashtags || '',
   };
 }
@@ -695,7 +714,10 @@ async function generatePillars({ business, category, description, performance },
 // ---------- Chat consultor de ideas ----------
 // El cliente cuenta su idea, la IA opina con honestidad y la pulen juntos.
 // Cuando la idea está cerrada y aprobada, la IA la devuelve en un bloque ```idea {...}```
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note }, apiKey) {
+// Modelo del chat consultor: el cerebro de la conversación con el cliente.
+// gpt-4o (no mini): el chat es la cara del producto y necesita el modelo más capaz.
+const CHAT_MODEL = 'gpt-4o';
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note, tz }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -731,7 +753,9 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'Cuando la idea esté concreta y el cliente la apruebe (o te pida hacerla), cerrá tu mensaje con un bloque ' +
     'exacto así:\n```idea\n{"titulo": "título corto del post", "angulo": "ángulo en 1-2 líneas", "caption": "texto dictado por el cliente o null", "photo_index": 2, "colors": ["#D63A2F"]}\n```\n' +
     'caption va null salvo que el cliente te haya dictado el texto. photo_index y colors van null si no los pidió. ' +
-    'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.';
+    'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.' +
+    'Si un mensaje del cliente no te cierra, preguntá corto en voseo qué quiso decir. ' +
+    'PROHIBIDO responder "no puedo ayudarte con eso" o cualquier rechazo genérico: siempre hay algo útil para hacer o proponer.';
   // Borradores que el cliente está mirando AHORA: puede pedirte cambios sobre ellos.
   const draftList = (Array.isArray(drafts) ? drafts : [])
     .map((d, i) => `${i + 1}. [${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
@@ -742,10 +766,15 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'identificá cuál es por su número o por el tema, y aplicá el cambio DIRECTO con este bloque al final de tu mensaje:\n' +
       '```edit\n{"draft": 2, "caption": "texto nuevo completo", "hashtags": "#tags nuevos"}\n```\n' +
       'El número es el de la lista de arriba (1 = primero). Incluí solo los campos que cambian. ' +
+      'Si te pide cambiar VARIOS a la vez ("a todos sacales los emojis", "los tres más cancheros"): emití VARIOS bloques ```edit seguidos, uno por borrador. ' +
+      'Para REPROGRAMAR ("el segundo pasalo para mañana a las 18", "el viernes a la mañana el tercero"): agregá "when" con formato exacto "AAAA-MM-DD HH:MM" en hora local del cliente ' +
+      '(usá la fecha actual del contexto para calcular el día; si dice "a la mañana" usá 10:00, "al mediodía" 13:00, "a la tarde" 17:00, "a la noche" 20:00). ' +
+      'Confirmá siempre el día y la hora en tu mensaje ("listo, el segundo sale mañana miércoles a las 18"). ' +
       'Si te pide cambiar la FOTO ("poné la del local", "usá otra foto", "la del producto"): mirá sus fotos guardadas ' +
       '(las PRIMERAS imágenes que ves, índice 0 = la más nueva) y elegí la que mejor calce con lo que pide, ' +
       'devolviendo su índice en el bloque: ```edit\\n{\"draft\": 2, \"photo_index\": 3}\\n``` ' +
       'Solo cambiá la foto si te lo piden explícito o si la actual no tiene nada que ver con el tema. ' +
+      'Si te pide una foto que no ves entre sus guardadas, NO adivines: decilo en 1 línea con onda y pedile que la suba. ' +
       'El cambio se aplica solo al borrador, sin más pasos ni preguntas. Después del bloque, confirmá en 1 línea con onda qué cambiaste. ' +
       'Si no entendés a cuál se refiere, preguntá corto ("¿el primero o el segundo?") en vez de adivinar.'
     : '';
@@ -781,7 +810,17 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'Si el cliente te muestra posteos que le gustan como referencia de estilo ("me gusta este estilo", "quiero algo así"), ' +
     'analizá qué tienen en común (tono visual, tipografía, colores, ritmo del texto) y cerrá con:\n' +
     '```inspo\n{"estilo": "tu análisis en 2-3 líneas: qué tomar de esas referencias"}\n```';
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide;
+  // Confirmación pelada ("dale", "sí", "ok", "de una"): el cliente aprobó tu última propuesta.
+  // Se maneja con instrucción explícita porque es el momento donde el modelo más se equivoca:
+  // confirmar es AVANZAR (cerrar con ```idea), nunca preguntar ni rechazar.
+  const lastUserMsg = (messages[messages.length - 1] || {}).text || '';
+  const isConfirm = lastUserMsg.trim().length < 25 &&
+    /^(dale|sí|si|sip|ok|okay|de una|hacelo|hacela|genial|perfecto|joya|buenísimo|buenisimo|listo|va|me gusta|me encanta)[.!…\s]*$/i.test(lastUserMsg.trim());
+  const confirmGuide = isConfirm
+    ? 'El cliente acaba de CONFIRMAR tu propuesta con un "dale"/"sí"/"ok": NO hagas preguntas, NO digas que no podés ayudar, cerrá la idea AHORA MISMO con el bloque ```idea. ' +
+      'Si tu propuesta anterior no tenía todos los datos del bloque, cerrala igual con lo que tengas (título + ángulo como mínimo). Confirmar es avanzar, nunca frenar.'
+    : '';
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide;
   // ADN ya cargado: solo los campos presentes.
   const dnaCtx = (() => {
     if (!dna || typeof dna !== 'object') return '';
@@ -795,7 +834,17 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const rulesCtx = (Array.isArray(styleRules) && styleRules.length)
     ? `Reglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}\n`
     : '';
+  // Fecha y hora actual (hora local del cliente): para "mañana", "el viernes", "esta semana" y reprogramar.
+  const nowLine = (() => {
+    try {
+      const z = tz || 'America/Argentina/Buenos_Aires';
+      const fecha = new Intl.DateTimeFormat('es-AR', { timeZone: z, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+      const hora = new Intl.DateTimeFormat('es-AR', { timeZone: z, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+      return `Hoy es ${fecha}, ${hora} hs (hora local del cliente).\n`;
+    } catch (e) { return ''; }
+  })();
   const ctx =
+    nowLine +
     `Negocio: ${p.business_name || 'no especificado'}\nRubro: ${p.category || 'no especificado'}\n` +
     `Tono: ${p.tone || 'canchero'}\nDescripción: ${p.description || 'no indicada'}\n` +
     `Competidores: ${p.competitors || 'no indicados'}\nObjetivo: ${p.goal || 'vender más'}\n` +
@@ -834,14 +883,14 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'Authorization': ['Bearer', apiKey].join(' '),
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: CHAT_MODEL,
       messages: [
         { role: 'system', content: sysFull },
         { role: 'user', content: ctx },
         ...omsgs,
       ],
       max_tokens: 500,
-      temperature: 0.9,
+      temperature: 0.7,
     }),
   });
   if (!res.ok) throw new Error('OpenAI chat: ' + res.status);
@@ -859,7 +908,7 @@ function templateChatIdea({ messages, profile }) {
   const all = userMsgs.join(' ').toLowerCase();
   const turn = userMsgs.length;
   const first = (userMsgs[0] || '').trim();
-  const echo = last.length > 90 ? last.slice(0, 90).trim() + '…' : last;
+  const echo = last.length > 90 ? cortar(last, 90) + '…' : last;
   const has = (...ws) => ws.some(w => all.includes(w));
   const yes = /^(dale|hacelo|hacela|hace|si\b|sí|sip|ok|okay|genial|perfecto|me gusta\b|me encanta\b|va\b|de una)/i.test(last);
   const topicShort = ((yes && first ? first : last).split(' ').slice(0, 6).join(' ').trim() || `Novedades de ${biz}`).slice(0, 80);
@@ -920,11 +969,67 @@ function templateChatIdea({ messages, profile }) {
     ideaBlock(c.titulo, c.angulo);
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note }, apiKey) {
+// Parsea el JSON del bloque ```idea. Devuelve el objeto idea o null (válido pero sin título).
+// Lanza si el JSON está roto (el llamador decide si intenta reparar).
+function parseIdeaJson(raw) {
+  const j = JSON.parse(raw);
+  if (!j || !j.titulo) return null;
+  const idea = { titulo: String(j.titulo).slice(0, 120), angulo: String(j.angulo || '').slice(0, 280) };
+  if (typeof j.caption === 'string' && j.caption.trim()) idea.caption = cortar(j.caption.trim(), 900);
+  if (Number.isInteger(j.photo_index) && j.photo_index >= 0 && j.photo_index < 8) idea.photo_index = j.photo_index;
+  if (Array.isArray(j.colors)) {
+    const hexes = j.colors.map(c => String(c).trim())
+      .filter(c => /^#?[0-9a-fA-F]{6}$/.test(c)).slice(0, 3)
+      .map(c => (c.startsWith('#') ? c : '#' + c).toUpperCase());
+    if (hexes.length) idea.colors = hexes;
+  }
+  // Guion de reel segundo por segundo (```idea con "script")
+  if (Array.isArray(j.script)) {
+    const scenes = j.script.slice(0, 6).map(s => {
+      if (!s || typeof s !== 'object') return null;
+      const seg = String(s.seg || '').slice(0, 12).trim();
+      const visual = String(s.visual || '').slice(0, 200).trim();
+      const texto = String(s.texto || '').slice(0, 200).trim();
+      if (!seg && !visual && !texto) return null;
+      return { seg, visual, texto };
+    }).filter(Boolean);
+    if (scenes.length) idea.script = scenes;
+  }
+  return idea;
+}
+
+// El modelo emitió el bloque ```idea con JSON roto: un único reintento pidiendo solo el JSON.
+// Si también falla, lanza (la idea no se pierde en silencio: el bloque queda visible en el texto).
+async function repairIdeaJson(brokenRaw, apiKey) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      messages: [
+        { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```idea, sin ningún otro texto. El JSON debe tener "titulo" (string) y "angulo" (string); opcionalmente "caption", "photo_index", "colors" y "script".' },
+        { role: 'user', content: 'Corregí este JSON para que sea válido:\n' + String(brokenRaw || '').slice(0, 2000) },
+      ],
+      max_tokens: 600,
+      temperature: 0,
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error('repair: ' + res.status);
+  const data = await res.json();
+  const out = String((data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
+  const mm = out.match(/```idea\s*([\s\S]*?)```/) || out.match(/(\{[\s\S]*\})/);
+  if (!mm) throw new Error('repair sin JSON');
+  const idea = parseIdeaJson(mm[1]);
+  if (!idea) throw new Error('repair sin título');
+  return idea;
+}
+
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note, tz }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note, tz }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
@@ -934,52 +1039,35 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     console.log('[chat] motor: plantilla (sin API key)');
     text = templateChatIdea({ messages, profile });
   }
-  // Extrae la propuesta cerrada si la IA la incluyó (incluye los campos del MODO PEDIDO)
+  // Extrae la propuesta cerrada si la IA la incluyó (incluye los campos del MODO PEDIDO).
+  // Si el bloque existe pero el JSON está roto, un intento de reparación: la idea confirmada
+  // por el cliente jamás se pierde en silencio por un error de formato.
   let idea = null;
   const m = String(text).match(/```idea\s*([\s\S]*?)```/);
   if (m) {
-    try {
-      const j = JSON.parse(m[1]);
-      if (j && j.titulo) {
-        idea = { titulo: String(j.titulo).slice(0, 120), angulo: String(j.angulo || '').slice(0, 280) };
-        if (typeof j.caption === 'string' && j.caption.trim()) idea.caption = j.caption.trim().slice(0, 900);
-        if (Number.isInteger(j.photo_index) && j.photo_index >= 0 && j.photo_index < 8) idea.photo_index = j.photo_index;
-        if (Array.isArray(j.colors)) {
-          const hexes = j.colors.map(c => String(c).trim())
-            .filter(c => /^#?[0-9a-fA-F]{6}$/.test(c)).slice(0, 3)
-            .map(c => (c.startsWith('#') ? c : '#' + c).toUpperCase());
-          if (hexes.length) idea.colors = hexes;
-        }
-        // Guion de reel segundo por segundo (```idea con "script")
-        if (Array.isArray(j.script)) {
-          const scenes = j.script.slice(0, 6).map(s => {
-            if (!s || typeof s !== 'object') return null;
-            const seg = String(s.seg || '').slice(0, 12).trim();
-            const visual = String(s.visual || '').slice(0, 200).trim();
-            const texto = String(s.texto || '').slice(0, 200).trim();
-            if (!seg && !visual && !texto) return null;
-            return { seg, visual, texto };
-          }).filter(Boolean);
-          if (scenes.length) idea.script = scenes;
-        }
-      }
-      text = String(text).replace(m[0], '').trim();
-    } catch (e) { /* bloque inválido: se ignora */ }
+    let parsed = false;
+    try { idea = parseIdeaJson(m[1]); parsed = true; } catch (e) {}
+    if (!parsed && apiKey) {
+      try { idea = await repairIdeaJson(m[1], apiKey); parsed = true; } catch (e) {}
+    }
+    if (parsed) text = String(text).replace(m[0], '').trim();
   }
-  // Extrae el pedido de edición directa sobre un borrador (```edit)
-  let edit = null;
-  const me = String(text).match(/```edit\s*([\s\S]*?)```/);
-  if (me) {
+  // Extrae los pedidos de edición directa sobre borradores (```edit).
+  // Pueden ser VARIOS bloques (uno por borrador) cuando el cliente pide cambiar varios a la vez.
+  let edits = [];
+  for (const me of String(text).matchAll(/```edit\s*([\s\S]*?)```/g)) {
     try {
       const j = JSON.parse(me[1]);
       if (j && Number.isInteger(j.draft) && j.draft >= 1) {
-        edit = { draft: j.draft };
-        if (typeof j.caption === 'string' && j.caption.trim()) edit.caption = j.caption.trim().slice(0, 900);
-        if (typeof j.hashtags === 'string' && j.hashtags.trim()) edit.hashtags = j.hashtags.trim().slice(0, 300);
-        if (Number.isInteger(j.photo_index) && j.photo_index >= 0) edit.photo_index = j.photo_index;
+        const e = { draft: j.draft };
+        if (typeof j.caption === 'string' && j.caption.trim()) e.caption = cortar(j.caption.trim(), 900);
+        if (typeof j.hashtags === 'string' && j.hashtags.trim()) e.hashtags = cortar(j.hashtags.trim(), 300);
+        if (Number.isInteger(j.photo_index) && j.photo_index >= 0) e.photo_index = j.photo_index;
+        if (typeof j.when === 'string' && j.when.trim()) e.when = j.when.trim().slice(0, 32);
+        edits.push(e);
       }
-      text = String(text).replace(me[0], '').trim();
     } catch (e) { /* bloque inválido: se ignora */ }
+    text = String(text).replace(me[0], '').trim();
   }
   // ADN del negocio (```dna)
   let dnaOut = null;
@@ -1033,7 +1121,7 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
       text = String(text).replace(mi[0], '').trim();
     } catch (e) { /* bloque inválido: se ignora */ }
   }
-  return { reply: text, idea, edit, dna: dnaOut, options, rule, inspo };
+  return { reply: text, idea, edits, dna: dnaOut, options, rule, inspo };
 }
 
 // ---------- Respuesta sugerida a un comentario de Instagram ----------
@@ -1086,7 +1174,7 @@ async function openaiMission({ business, category, description }, apiKey) {
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category || 'no indicado'}\nDescripción: ${description || 'no indicada'}\nDame exactamente 3 fotos que el dueño puede sacar con su celular ESTA SEMANA para el Instagram del negocio. Cada una en MÁXIMO 90 caracteres: qué fotografiar (concreto, nada genérico) + tip de 3-5 palabras. Variadas: producto/servicio, persona/equipo, y local o detrás de escena.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category || 'no indicado'}\nDescripción: ${description || 'no indicada'}\nDame exactamente 3 fotos que el dueño puede sacar con su celular ESTA SEMANA para el Instagram del negocio. REGLAS DURAS: cada foto en MÁXIMO 90 caracteres totales (si te pasás, se corta); formato "qué fotografiar" + tip de 3-5 palabras; variadas: producto/servicio, persona trabajando, y detalle o detrás de escena. Nada de "equipo en reunión creativa" ni oficinas genéricas salvo que el negocio realmente sea eso. Si la descripción es pobre o dice "no indicada", no inventes: pedí fotos que CUALQUIER negocio puede sacar (su producto, el dueño trabajando, un detalle lindo). Tono: hablale al dueño con voseo, como un amigo.`,
         },
       ],
       max_tokens: 400,
@@ -1098,7 +1186,8 @@ async function openaiMission({ business, category, description }, apiKey) {
   const parsed = JSON.parse(data.choices[0].message.content);
   const shots = Array.isArray(parsed.shots) ? parsed.shots.slice(0, 3) : [];
   if (shots.length < 3) throw new Error('Sin misión');
-  return shots.map(s => String(s).slice(0, 100));
+  // Forzar el largo en el servidor: el modelo suele ignorar el límite de 90.
+  return shots.map(s => cortar(String(s), 90));
 }
 function templateMission() {
   return [

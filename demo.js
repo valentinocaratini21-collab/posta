@@ -925,7 +925,16 @@ const GOAL_RULES = [
   { kind: 'reserva', kws: ['reserva', 'turno', 'cita', 'visita'] },
   { kind: 'novedad', kws: ['nuevo', 'nueva', 'lanzamiento', 'lleg', 'modelo'] },
   { kind: 'sorteo', kws: ['sorteo'] },
+  { kind: 'social', kws: ['comunidad', 'clientes', 'fidelizar', 'familia'] },
 ];
+// Objetivo elegido en las preguntas previas de /prueba: se inyecta como
+// palabras clave para que el reorder de arriba lo tenga en cuenta siempre.
+const GOAL_KEY_KWS = {
+  vender: 'vender promo oferta',
+  seguidores: 'sorteo seguidores',
+  lanzamiento: 'lanzamiento nuevo',
+  fidelizar: 'comunidad clientes',
+};
 
 // Palabras vacías para extraer frases con sentido del párrafo del cliente.
 const GOAL_STOP = new Set(('que de la el los las un una y o en con para por mi mis tu tus su sus del al se me te nos como mas muy tan este esta esto estos estas ese esa hay son es esta estan quiero queremos busco buscamos hago hacemos tengo tenemos vendo vendemos nuestro nuestra nuestros nuestras a e ni pero si no si tambien algo asi hacer hacen ser estoy estan este los del').split(' '));
@@ -957,10 +966,11 @@ function phraseAround(goal, kw) {
   return '';
 }
 
-function applyGoal(topics, goal) {
+function applyGoal(topics, goal, goal_key) {
   const clean = sanitizeGoal(goal);
-  if (!clean) return { topics, goalLine: '' };
-  const g = clean.toLowerCase();
+  const keyKws = (goal_key && GOAL_KEY_KWS[goal_key]) ? GOAL_KEY_KWS[goal_key] + ' ' : '';
+  if (!clean && !keyKws) return { topics, goalLine: '' };
+  const g = (keyKws + clean).toLowerCase();
   let ordered = topics;
   for (const r of GOAL_RULES) {
     const i = topics.findIndex((t) => t.kind === r.kind);
@@ -1036,10 +1046,10 @@ function renderDemoVideo(pngPath, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, accent, btn, count, base }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
-  const { topics: allTopics, goalLine } = applyGoal(DEMO_TOPICS[cat], goal);
+  const { topics: allTopics, goalLine } = applyGoal(DEMO_TOPICS[cat], goal, goal_key);
   const topics = allTopics.slice(0, n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
@@ -1160,9 +1170,9 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, accent, btn, count });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 

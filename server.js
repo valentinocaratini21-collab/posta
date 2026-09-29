@@ -33,6 +33,14 @@ function track(userId, event, meta = '') {
   } catch (e) { /* el tracking nunca bloquea */ }
 }
 
+// Corta un texto SIN partir palabras a la mitad (nunca "efecti").
+function cortar(t, max) {
+  const s = String(t || '').trim();
+  if (s.length <= max) return s;
+  const c = s.slice(0, max);
+  const i = c.lastIndexOf(' ');
+  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+}
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -343,7 +351,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
           });
           const j = await r.json();
           const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
-          reply = txt.slice(0, 500) || `¡Buenísimo! ${step.pregunta}`;
+          reply = cortar(txt, 500) || `¡Buenísimo! ${step.pregunta}`;
         } catch (e) { reply = `¡Buenísimo! ${step.pregunta}`; }
       }
     }
@@ -391,7 +399,7 @@ app.post('/api/onboarding/finish', requireAuth, async (req, res) => {
         }
       } catch (e) { console.error('[onboarding/extract]', e.message); }
     }
-    if (!profile.business_name && history[0] && history[0].text) profile.business_name = history[0].text.slice(0, 80);
+    if (!profile.business_name && history[0] && history[0].text) profile.business_name = cortar(history[0].text, 80);
     if (!summary) summary = profile.business_name ? `¡Listo! Ya conozco a ${profile.business_name} 🙌` : '¡Listo! Ya te conozco un poco más 🙌';
     res.json({ ok: true, profile, summary });
   } catch (e) {
@@ -743,7 +751,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     let inspoLine = '';
     try { if (dna && dna.inspo) inspoLine = `\nInspiración visual del cliente: ${dna.inspo}`; } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, igAnalysis, frustrated, styleRules, voice, note: chatNote },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, igAnalysis, frustrated, styleRules, voice, note: chatNote, tz: userTz(uid0) },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -786,26 +794,30 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(uid, JSON.stringify(iobj));
       } catch (e) { console.error('[chat] inspo save:', e.message); }
     }
-    // Edición directa de un borrador pedida por el cliente vía chat
+    // Edición directa de borradores pedida por el cliente vía chat.
+    // La IA puede mandar VARIOS bloques ```edit (uno por borrador) y reprogramar con "when".
     let editApplied = null;
-    if (out.edit && out.edit.draft >= 1 && out.edit.draft <= cleanDrafts.length
-        && (out.edit.caption !== undefined || out.edit.hashtags !== undefined || out.edit.photo_index !== undefined)) {
-      const target = cleanDrafts[out.edit.draft - 1];
-      const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
-      if (post && (post.status === 'draft' || post.status === 'scheduled')) {
+    if (Array.isArray(out.edits) && out.edits.length) {
+      let n = 0;
+      for (const ed of out.edits) {
+        if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
+        if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined) continue;
+        const target = cleanDrafts[ed.draft - 1];
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+        if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) continue;
         db.prepare('UPDATE posts SET caption = ?, hashtags = ? WHERE id = ?').run(
-          out.edit.caption !== undefined ? out.edit.caption : post.caption,
-          out.edit.hashtags !== undefined ? out.edit.hashtags : post.hashtags,
+          ed.caption !== undefined ? ed.caption : post.caption,
+          ed.hashtags !== undefined ? ed.hashtags : post.hashtags,
           post.id
         );
         // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
-        if (Number.isInteger(out.edit.photo_index) && out.edit.photo_index >= 0) {
+        if (Number.isInteger(ed.photo_index) && ed.photo_index >= 0) {
           const { photoPaths } = req.body || {};
           let newPath = null;
-          if (Array.isArray(photoPaths) && photoPaths[out.edit.photo_index]) newPath = photoPaths[out.edit.photo_index];
+          if (Array.isArray(photoPaths) && photoPaths[ed.photo_index]) newPath = photoPaths[ed.photo_index];
           else {
             const rows = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid);
-            if (rows[out.edit.photo_index]) newPath = rows[out.edit.photo_index].file_path;
+            if (rows[ed.photo_index]) newPath = rows[ed.photo_index].file_path;
           }
           // Validar que la foto sea del usuario antes de usarla
           if (newPath && String(newPath).startsWith('/media/')) {
@@ -813,9 +825,17 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
             if (own) db.prepare(`UPDATE posts SET image_path = ? WHERE id = ?`).run(String(newPath), post.id);
           }
         }
+        // Reprogramar: "AAAA-MM-DD HH:MM" en hora local del cliente → UTC. Solo futuro.
+        if (typeof ed.when === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(ed.when.trim())) {
+          const iso = zonedWallToUtc(ed.when.trim(), userTz(uid));
+          if (iso && new Date(iso).getTime() > Date.now() + 5 * 60 * 1000) {
+            db.prepare('UPDATE posts SET scheduled_at = ?, status = ? WHERE id = ?').run(iso, 'scheduled', post.id);
+          }
+        }
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
-        editApplied = { ok: true, draftId: post.id };
+        n++;
       }
+      if (n) editApplied = { ok: true, count: n };
     }
     res.json({ reply: out.reply, idea: out.idea || null, edit: editApplied, dna: dnaSaved, options: out.options || null });
   } catch (e) {
@@ -1500,6 +1520,22 @@ function shiftDays(ymd, n) {
 function userTz(userId) {
   try { return getSettings(userId).timezone || 'America/Argentina/Buenos_Aires'; }
   catch { return 'America/Argentina/Buenos_Aires'; }
+}
+// "2026-09-30 18:00" como hora local en tz → ISO UTC. null si es inválido.
+function zonedWallToUtc(s, tz) {
+  try {
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+    if (!m) return null;
+    const Y = +m[1], Mo = +m[2], D = +m[3], h = +m[4], mi = +m[5];
+    if (Y < 2026 || Y > 2030 || Mo < 1 || Mo > 12 || D < 1 || D > 31 || h > 23 || mi > 59) return null;
+    const zone = tz || DEFAULT_TZ;
+    const guess = Date.UTC(Y, Mo - 1, D, h, mi);
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const parts = {};
+    for (const p of fmt.formatToParts(new Date(guess))) parts[p.type] = p.value;
+    const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, (+parts.hour % 24), +parts.minute, +parts.second);
+    return new Date(guess - (asUtc - guess)).toISOString();
+  } catch (e) { return null; }
 }
 function postWeekKey(p, tz) {
   return mondayKeyOf(ymdInTz(p.scheduled_at || p.published_at || p.created_at, tz) || tzToday(tz));
@@ -2823,6 +2859,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
+  // Preguntas previas de /prueba (opcionales): objetivo + producto + diferencial.
+  // Se suman a la descripción para que ideas y posteos salgan a medida.
+  const goal_key = ['vender', 'seguidores', 'lanzamiento', 'fidelizar'].includes(String(fields.goal_key || '').trim())
+    ? String(fields.goal_key).trim() : '';
+  const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
+  const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
+  const richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -2889,8 +2932,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       fs.writeFileSync(photoPath, file.buffer);
     }
     // 6 ideas pensadas para SU negocio + semana Pro: 5 posteos (4 imágenes + 1 video)
-    const ideas = await generateIdeas({ business, category, tone, description: goal, competitors }, null);
-    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, count: 5 });
+    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors }, null);
+    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5 });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
