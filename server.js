@@ -6,7 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
-const { generateContent, generateCaptions, generateIdeas, chatIdea } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply } = require('./generator');
+const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
@@ -20,6 +21,17 @@ const demo = require('./demo');
 const { sendEmail } = require('./email');
 const os = require('os');
 const streaks = require('./streaks');
+const metaAds = require('./meta_ads');
+const { AD_FEE_PCT, AD_MIN_TOPUP_CENTS, AD_TOPUP_OPTIONS, AD_BUDGET_OPTIONS, AD_MIN_BUDGET_CENTS, AD_DEFAULT_DAYS, adSplit, fmtARS } = require('./config/ads');
+
+// Funnel: eventos de conversión (prueba → registro → conexión → semana → pago).
+// Tabla funnel_events (db.js). Sin PII: solo user_id + evento.
+function track(userId, event, meta = '') {
+  try {
+    db.prepare('INSERT INTO funnel_events (user_id, event, meta) VALUES (?,?,?)')
+      .run(userId || null, event, String(meta || '').slice(0, 200));
+  } catch (e) { /* el tracking nunca bloquea */ }
+}
 
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -197,6 +209,7 @@ app.post('/api/auth/register', (req, res) => {
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
       streakFromTrialImport(r.lastInsertRowid, nImp);
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
+    track(r.lastInsertRowid, 'registered');
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: 'Ese email ya está registrado' });
@@ -263,7 +276,12 @@ app.get('/api/profile', requireAuth, (req, res) => {
   const at = req.session.igAttemptAt;
   if (at && !p.ig_connected && Date.now() - at < 15 * 60 * 1000) pending = true;
   else if (at) delete req.session.igAttemptAt; // conectado o vencido: limpiar
-  res.json({ ...p, ig_pending: pending });
+  let bestHour = 19;
+  try {
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(req.session.userId);
+    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
+  } catch (e) {}
+  res.json({ ...p, ig_pending: pending, best_hour: bestHour });
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
@@ -451,7 +469,7 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 // ---------- Chat consultor de ideas: el cliente trae su idea, la pulen juntos ----------
 // Hasta que la idea no queda exactamente como quiere el cliente, no se manda nada.
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
-  const { messages, photos } = req.body || {};
+  const { messages, photos, library } = req.body || {};
   if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'Contanos tu idea' });
   const clean = messages
     .slice(-10)
@@ -461,10 +479,13 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
   const cleanPhotos = Array.isArray(photos)
     ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4)
     : [];
+  const cleanLibrary = Array.isArray(library)
+    ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6)
+    : [];
   try {
     const settings = getSettings(req.session.userId);
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId), photos: cleanPhotos },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId), photos: cleanPhotos, library: cleanLibrary },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -477,6 +498,391 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'No pudimos responder, probá de nuevo' });
   }
+});
+
+// Nota de voz → texto (Whisper). El cliente pide su posteo hablando.
+app.post('/api/voice/transcribe', requireAuth, requireTrialValid, async (req, res) => {
+  try {
+    const chunks = [];
+    let size = 0;
+    for await (const c of req) {
+      chunks.push(c); size += c.length;
+      if (size > 15 * 1024 * 1024) return res.status(413).json({ error: 'La nota es muy larga (máx. 1 minuto)' });
+    }
+    const buf = Buffer.concat(chunks);
+    if (buf.length < 1000) return res.status(400).json({ error: 'No se escuchó nada, probá de nuevo' });
+    const settings = getSettings(req.session.userId);
+    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
+    const ct = String(req.headers['content-type'] || '').toLowerCase();
+    const ext = ct.includes('webm') ? 'webm' : ct.includes('mp4') ? 'mp4' : 'm4a';
+    const form = new FormData();
+    form.append('model', 'whisper-1');
+    form.append('language', 'es');
+    form.append('file', new Blob([buf], { type: 'audio/' + ext }), `nota.${ext}`);
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      throw new Error(`Whisper ${r.status}: ${t.slice(0, 120)}`);
+    }
+    const data = await r.json();
+    const text = String((data && data.text) || '').trim();
+    if (!text) return res.status(400).json({ error: 'No se entendió el audio, probá de nuevo' });
+    res.json({ ok: true, text });
+  } catch (e) {
+    console.error('[voice]', e.message);
+    res.status(500).json({ error: 'No pudimos transcribir la nota de voz' });
+  }
+});
+
+// Cupo semanal por plan: posteos (feed + reels) creados de lunes a domingo.
+// Las historias son un bonus de la casa y no consumen cupo.
+function weeklyQuota(userId) {
+  const user = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(userId) || {};
+  const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
+  const limit = plan.postsPerWeek || 3;
+  const st = getSettings(userId) || {};
+  const tz = st.timezone || 'America/Argentina/Buenos_Aires';
+  const monday = streaks.mondayKeyOf(streaks.tzToday(tz));
+  let used = 0;
+  try {
+    used = db.prepare(`SELECT COUNT(*) AS n FROM posts
+      WHERE user_id = ? AND status != 'cancelled' AND media_type != 'story'
+      AND date(created_at) >= date(?)`).get(userId, monday).n || 0;
+  } catch (e) { /* no bloquea */ }
+  return { limit, used, left: Math.max(0, limit - used), plan: plan.id, plan_name: plan.name };
+}
+app.get('/api/quota', requireAuth, (req, res) => res.json(weeklyQuota(req.session.userId)));
+// El frontend avisa hitos que solo él conoce (ej: semana aceptada).
+app.post('/api/funnel', requireAuth, (req, res) => {
+  const { event } = req.body || {};
+  if (!/^[a-z_]{3,30}$/.test(event || '')) return res.status(400).json({ error: 'evento inválido' });
+  track(req.session.userId, 'client_' + event);
+  res.json({ ok: true });
+});
+
+// Panel del funnel (solo Valentino): ?token=ADMIN_TOKEN. Sin PII, solo conteos.
+app.get('/api/admin/funnel', (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  const events = ['prueba_done', 'registered', 'ig_connected', 'client_week_accepted', 'first_published', 'subscribed'];
+  const totals = {};
+  for (const e of events) {
+    try {
+      totals[e] = db.prepare(`SELECT COUNT(*) AS n FROM funnel_events WHERE event = ? AND datetime(created_at) >= datetime('now', ?)`).get(e, `-${days} days`).n;
+    } catch (err) { totals[e] = 0; }
+  }
+  let byDay = [];
+  try {
+    byDay = db.prepare(`SELECT date(created_at) AS d, event, COUNT(*) AS n FROM funnel_events
+      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d, event ORDER BY d DESC LIMIT 400`).all(`-${days} days`);
+  } catch (err) { /* tabla nueva */ }
+  res.json({ days, totals, by_day: byDay, admin_token_set: true });
+});
+
+// ---------- Publicidad: billetera + boost de posteos ganadores ----------
+// Billetera (helpers)
+function getAdWallet(userId) {
+  let w = db.prepare('SELECT * FROM ad_wallets WHERE user_id = ?').get(userId);
+  if (!w) {
+    db.prepare('INSERT INTO ad_wallets (user_id) VALUES (?)').run(userId);
+    w = db.prepare('SELECT * FROM ad_wallets WHERE user_id = ?').get(userId);
+  }
+  return w;
+}
+function adWalletMove(userId, amountCents, kind, ref, note) {
+  const w = getAdWallet(userId);
+  const after = w.balance_cents + amountCents;
+  if (after < 0) throw new Error('Saldo insuficiente');
+  db.prepare(`UPDATE ad_wallets SET balance_cents = ?, updated_at = datetime('now') WHERE user_id = ?`).run(after, userId);
+  db.prepare(`INSERT INTO ad_transactions (user_id, kind, amount_cents, balance_after, ref, note) VALUES (?,?,?,?,?,?)`)
+    .run(userId, kind, amountCents, after, ref || '', note || '');
+  return after;
+}
+// País del negocio (para el targeting de la pauta): UY si el plan es UY, si no AR
+function adCountry(userId) {
+  try {
+    const u = db.prepare('SELECT plan FROM users WHERE id = ?').get(userId);
+    if (u && u.plan && String(u.plan).toUpperCase().includes('UY')) return 'UY';
+    const st = getSettings(userId) || {};
+    if (st.country === 'UY' || st.country === 'UYU') return 'UY';
+  } catch (e) {}
+  return 'AR';
+}
+
+// Config + saldo para el frontend
+app.get('/api/ads/config', requireAuth, (req, res) => {
+  const w = getAdWallet(req.session.userId);
+  res.json({
+    ok: true,
+    balance_cents: w.balance_cents,
+    currency: w.currency,
+    fee_pct: AD_FEE_PCT,
+    min_topup_cents: AD_MIN_TOPUP_CENTS,
+    topup_options: AD_TOPUP_OPTIONS,
+    budget_options: AD_BUDGET_OPTIONS,
+    min_budget_cents: AD_MIN_BUDGET_CENTS,
+    default_days: AD_DEFAULT_DAYS,
+    ads_ready: metaAds.adsConfigured(),
+    mp_ready: mp.mpConfigured(),
+  });
+});
+
+// Crear preferencia de MercadoPago para cargar crédito
+app.post('/api/ads/topup', requireAuth, async (req, res) => {
+  const cents = Math.round(Number(req.body.amount_cents) || 0);
+  if (!mp.mpConfigured()) return res.status(503).json({ error: 'Pagos no configurados todavía. Escribinos y lo habilitamos.' });
+  if (!(cents >= AD_MIN_TOPUP_CENTS)) {
+    return res.status(400).json({ error: `La carga mínima es de ${fmtARS(AD_MIN_TOPUP_CENTS)}` });
+  }
+  const user = db.prepare('SELECT email, mp_payer_email FROM users WHERE id = ?').get(req.session.userId) || {};
+  const host = req.get('host') || '';
+  const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
+  const ref = `adtopup_${req.session.userId}_${Date.now().toString(36)}`;
+  const backPath = req.body.return_to === 'semana' ? '#/app/semana' : '#/app/ads';
+  try {
+    const r = await mp.createTopupPreference({
+      userId: req.session.userId, amountCents: cents, baseUrl,
+      payerEmail: user.mp_payer_email || user.email, ref, backPath,
+    });
+    res.json({ ok: true, init_point: r.init_point });
+  } catch (e) {
+    res.status(502).json({ error: e.message || 'No se pudo generar el pago' });
+  }
+});
+
+// Webhook de pagos únicos: acredita el crédito (idempotente por payment id)
+app.post('/api/ads/webhook', async (req, res) => {
+  const topic = req.query.topic || req.query.type || (req.body && req.body.type);
+  const mpId = req.query.id || (req.body && req.body.data && req.body.data.id);
+  if (!mp.mpConfigured()) return res.status(200).json({ ok: false, warning: 'MP no configurado' });
+  if (topic !== 'payment' || !mpId) return res.status(200).json({ ok: true, ignored: true });
+  try {
+    const pay = await mp.getPayment(mpId);
+    const ref = String(pay.external_reference || '');
+    const m = ref.match(/^adtopup_(\d+)_/);
+    if (!m || pay.status !== 'approved') return res.status(200).json({ ok: true, ignored: true });
+    const userId = Number(m[1]);
+    const dup = db.prepare(`SELECT id FROM ad_transactions WHERE ref = ? AND kind = 'topup'`).get(String(pay.id));
+    if (dup) return res.status(200).json({ ok: true, deduped: true });
+    const cents = Math.round(Number(pay.transaction_amount || 0) * 100);
+    if (!(cents > 0)) return res.status(200).json({ ok: true, ignored: true });
+    const after = adWalletMove(userId, cents, 'topup', String(pay.id), 'Carga de crédito publicitario');
+    // El 20% se reconoce como ganancia de Posta EN EL MOMENTO DE LA CARGA (no espera a que usen el crédito).
+    // Es solo contabilidad interna: el cliente sigue viendo sus $10.000 completos en la billetera.
+    try {
+      const feeCents = Math.round(cents * AD_FEE_PCT / 100);
+      if (feeCents > 0) {
+        db.prepare(`INSERT INTO ad_transactions (user_id, kind, amount_cents, balance_after, ref, note)
+          VALUES (?, 'fee_earned', ?, ?, ?, 'Comisión Posta (interna, al cargar)')`)
+          .run(userId, feeCents, after, String(pay.id));
+      }
+    } catch (e) {}
+    try { track(userId, 'ad_topup', String(cents)); } catch (e) {}
+    console.log(`[posta] 💰 Crédito ads acreditado: usuario ${userId}, ${fmtARS(cents)} (MP ${pay.id})`);
+    res.status(200).json({ ok: true, balance_cents: after });
+  } catch (e) {
+    console.error('[posta] Webhook ads falló:', e.message);
+    res.status(200).json({ ok: false, error: 'retry' });
+  }
+});
+
+// Recomendaciones: posteos publicados (30d) con engagement rate arriba del promedio.
+// Solo ganadores probados — nunca se pauta un posteo nuevo sin datos.
+app.get('/api/ads/recommendations', requireAuth, (req, res) => {
+  let rows = [];
+  try {
+    rows = db.prepare(`
+      SELECT p.id, p.image_path, p.caption, p.ig_media_id,
+             COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
+             COALESCE(m.comments,0) AS comments, COALESCE(m.saves,0) AS saves
+      FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ? AND p.status = 'published'
+        AND p.ig_media_id IS NOT NULL AND p.ig_media_id != ''
+        AND datetime(p.published_at) >= datetime('now', '-30 days')`).all(req.session.userId);
+  } catch (e) {}
+  let boostedIds = [];
+  try {
+    boostedIds = db.prepare(`SELECT ig_media_id FROM ad_boosts WHERE user_id = ? AND status IN ('pending','active')`).all(req.session.userId).map(r => r.ig_media_id);
+  } catch (e) {}
+  const boosted = new Set(boostedIds);
+  const scored = rows
+    .filter(r => !boosted.has(r.ig_media_id) && r.reach >= 50)
+    .map(r => {
+      const eng = (r.likes || 0) + (r.comments || 0) + (r.saves || 0);
+      return { ...r, eng, er: r.reach > 0 ? eng / r.reach : 0 };
+    });
+  const avg = scored.length ? scored.reduce((a, r) => a + r.er, 0) / scored.length : 0;
+  const top = scored.filter(r => r.er >= avg * 1.2 && r.er > 0).sort((a, b) => b.er - a.er).slice(0, 3);
+  res.json({
+    ok: true,
+    recommendations: top.map(r => ({
+      post_id: r.id, image_path: r.image_path, caption: (r.caption || '').slice(0, 90),
+      ig_media_id: r.ig_media_id, reach: r.reach, likes: r.likes, comments: r.comments,
+      saves: r.saves, er_pct: Math.round(r.er * 1000) / 10,
+    })),
+    avg_er_pct: Math.round(avg * 1000) / 10,
+    has_data: scored.length > 0,
+  });
+});
+
+// Crear una pauta: debita la billetera y la lanza en Meta (o queda pendiente)
+app.post('/api/ads/boost', requireAuth, async (req, res) => {
+  const postId = Number(req.body.post_id) || 0;
+  const budgetCents = Math.round(Number(req.body.budget_cents) || 0);
+  if (!postId) return res.status(400).json({ error: 'Elegí un posteo' });
+  if (!(budgetCents >= AD_MIN_BUDGET_CENTS)) {
+    return res.status(400).json({ error: `El presupuesto mínimo por pauta es de ${fmtARS(AD_MIN_BUDGET_CENTS)}` });
+  }
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, req.session.userId);
+  if (!post || !post.ig_media_id) {
+    return res.status(400).json({ error: 'Ese posteo no se puede potenciar: tiene que estar publicado en Instagram' });
+  }
+  const { fee_cents, spend_cents } = adSplit(budgetCents);
+  const w = getAdWallet(req.session.userId);
+  if (w.balance_cents < budgetCents) {
+    return res.status(402).json({ error: 'no_balance', message: 'No tenés crédito suficiente para esta pauta. Cargá crédito primero.' });
+  }
+  adWalletMove(req.session.userId, -budgetCents, 'boost_hold', '', `Pauta: ${(post.caption || 'posteo').slice(0, 40)}`);
+  const br = db.prepare(`INSERT INTO ad_boosts
+    (user_id, post_id, ig_media_id, budget_cents, fee_cents, spend_cents, currency, status, objective, duration_days)
+    VALUES (?,?,?,?,?,?,'ARS','pending','engagement',?)`)
+    .run(req.session.userId, postId, post.ig_media_id, budgetCents, fee_cents, spendCents, AD_DEFAULT_DAYS);
+  const boostId = br.lastInsertRowid;
+  try { track(req.session.userId, 'ad_boost', String(budgetCents)); } catch (e) {}
+
+  // Lanzar en Meta si está configurado; si no, queda pendiente y la activa el equipo
+  let launched = false, launchError = '';
+  if (metaAds.adsConfigured()) {
+    try {
+      const user = db.prepare('SELECT ig_user_id FROM users WHERE id = ?').get(req.session.userId) || {};
+      if (!user.ig_user_id) throw new Error('Conectá tu Instagram primero');
+      const pageId = await metaAds.resolvePageId(user.ig_user_id);
+      const r = await metaAds.createBoost({
+        name: `Posta · Boost #${boostId} · u${req.session.userId}`,
+        pageId, igUserId: user.ig_user_id, igMediaId: post.ig_media_id,
+        spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
+      });
+      db.prepare(`UPDATE ad_boosts SET status='active', meta_campaign_id=?, meta_adset_id=?, meta_ad_id=?, started_at=datetime('now'), error='' WHERE id=?`)
+        .run(r.campaignId, r.adsetId, r.adId, boostId);
+      launched = true;
+    } catch (e) {
+      launchError = String(e.message || e).slice(0, 300);
+      db.prepare(`UPDATE ad_boosts SET error=? WHERE id=?`).run(launchError, boostId);
+    }
+  }
+  const w2 = getAdWallet(req.session.userId);
+  res.json({
+    ok: true, boost_id: boostId, launched, launch_error: launchError,
+    balance_cents: w2.balance_cents,
+    message: launched
+      ? '🚀 Tu pauta ya está corriendo en Instagram y Facebook.'
+      : '¡Listo! Tu pauta quedó programada: la activamos en las próximas horas y te avisamos.',
+  });
+});
+
+// Historial de pautas (refresca métricas de las activas, best effort)
+app.get('/api/ads/boosts', requireAuth, async (req, res) => {
+  let boosts = [];
+  try { boosts = db.prepare(`SELECT * FROM ad_boosts WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(req.session.userId); } catch (e) {}
+  if (metaAds.adsConfigured()) {
+    for (const b of boosts) {
+      if (b.status !== 'active' || !b.meta_campaign_id) continue;
+      const stale = !b.stats_updated_at || (Date.now() - new Date(b.stats_updated_at + 'Z').getTime() > 3600000);
+      if (!stale) continue;
+      try {
+        const s = await metaAds.getBoostStats(b.meta_campaign_id);
+        if (s) {
+          db.prepare(`UPDATE ad_boosts SET last_spend_cents=?, last_reach=?, last_impressions=?, stats_updated_at=datetime('now') WHERE id=?`)
+            .run(s.spend_cents, s.reach, s.impressions, b.id);
+          b.last_spend_cents = s.spend_cents; b.last_reach = s.reach; b.last_impressions = s.impressions;
+        }
+      } catch (e) { /* no bloquea el historial */ }
+    }
+  }
+  res.json({ ok: true, boosts: boosts.map(b => ({ ...b })) });
+});
+
+// Admin: pautas pendientes de activación manual (equipo Posta)
+app.get('/api/admin/ads', (req, res) => {
+  const token = process.env.ADMIN_TOKEN || '';
+  if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  let pending = [];
+  try {
+    pending = db.prepare(`SELECT b.*, u.email FROM ad_boosts b JOIN users u ON u.id = b.user_id
+      WHERE b.status = 'pending' ORDER BY b.id DESC LIMIT 50`).all();
+  } catch (e) {}
+  // Caja: comisión ganada al cargar vs crédito que se les debe a los clientes
+  let earned = 0, walletsTotal = 0, spent = 0;
+  try {
+    earned = db.prepare(`SELECT COALESCE(SUM(amount_cents),0) AS n FROM ad_transactions WHERE kind = 'fee_earned'`).get().n;
+    walletsTotal = db.prepare(`SELECT COALESCE(SUM(balance_cents),0) AS n FROM ad_wallets`).get().n;
+    spent = db.prepare(`SELECT COALESCE(SUM(spend_cents),0) AS n FROM ad_boosts WHERE status = 'active'`).get().n;
+  } catch (e) {}
+  res.json({ ok: true, pending, ads_configured: metaAds.adsConfigured(),
+    earned_cents: earned, wallets_total_cents: walletsTotal, active_spend_cents: spent });
+});
+
+// ---------- Reporte semanal "tu semana en números" (in-app) ----------
+app.get('/api/weekly-report', requireAuth, (req, res) => {
+  let posts = [];
+  try {
+    posts = db.prepare(`
+      SELECT p.id, p.caption, p.image_path, p.media_type, p.published_at,
+             COALESCE(m.reach,0) AS reach, COALESCE(m.likes,0) AS likes,
+             COALESCE(m.comments,0) AS comments, COALESCE(m.saved,0) AS saved
+      FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ? AND p.status = 'published'
+        AND datetime(p.published_at) >= datetime('now', '-7 days')
+      ORDER BY p.published_at DESC LIMIT 10`).all(req.session.userId);
+  } catch (e) { /* tabla nueva */ }
+  const totals = posts.reduce((a, r) => ({
+    reach: a.reach + r.reach, likes: a.likes + r.likes, comments: a.comments + r.comments,
+  }), { reach: 0, likes: 0, comments: 0 });
+  res.json({ posts, totals });
+});
+
+// ---------- Comentarios de Instagram: responder en un toque ----------
+app.get('/api/comments', requireAuth, (req, res) => {
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, username, text, suggested, ig_media_id, created_at FROM comment_queue
+      WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
+  } catch (e) { /* tabla nueva */ }
+  res.json({ comments: rows });
+});
+app.post('/api/comments/refresh', requireAuth, requireTrialValid, async (req, res) => {
+  try {
+    const { syncComments } = require('./insights');
+    const st = getSettings(req.session.userId) || {};
+    const n = await syncComments(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    res.json({ ok: true, fresh: n });
+  } catch (e) {
+    res.status(500).json({ error: 'No pudimos revisar los comentarios' });
+  }
+});
+app.post('/api/comments/:id/reply', requireAuth, async (req, res) => {
+  try {
+    const { replyComment } = require('./insights');
+    const c = db.prepare('SELECT * FROM comment_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!c || c.status !== 'pending') return res.status(404).json({ error: 'Comentario no encontrado' });
+    const message = String((req.body && req.body.message) || c.suggested || '').slice(0, 1000);
+    if (!message.trim()) return res.status(400).json({ error: 'La respuesta está vacía' });
+    await replyComment(db, req.session.userId, c.ig_comment_id, message);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'No pudimos responder: ' + String(e.message).slice(0, 120) });
+  }
+});
+app.post('/api/comments/:id/dismiss', requireAuth, (req, res) => {
+  try { db.prepare(`UPDATE comment_queue SET status='dismissed' WHERE id = ? AND user_id = ?`).run(req.params.id, req.session.userId); } catch (e) {}
+  res.json({ ok: true });
 });
 
 // Historial del chat consultor (persiste entre sesiones) + idea cerrada pendiente
@@ -526,6 +932,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
         goal: profile.goal,
         taste: tasteProfile(req.session.userId),
         recentTopics,
+        ephemeris: upcomingEphemeris(12)[0] || null,
       },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
@@ -551,15 +958,23 @@ app.get('/api/assets', requireAuth, (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/assets', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), (req, res) => {
-  if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
-  const kind = req.query.kind === 'logo' ? 'logo' : 'photo';
+app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'], limit: '100mb' }), (req, res) => {
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'Archivo vacío' });
+  const qk = req.query.kind;
+  const kind = qk === 'logo' ? 'logo' : qk === 'video' ? 'video' : 'photo';
+  const ct = req.get('Content-Type') || '';
+  if (kind === 'video' && !ct.startsWith('video/')) return res.status(400).json({ error: 'Tiene que ser un video' });
+  if (kind !== 'video' && !ct.startsWith('image/')) return res.status(400).json({ error: 'Tiene que ser una imagen' });
   if (kind === 'photo') {
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'photo'`).get(req.session.userId).c;
     if (n >= 20) return res.status(400).json({ error: 'Llegaste al máximo de 20 fotos' });
   }
-  const ct = req.get('Content-Type') || '';
-  const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
+  if (kind === 'video') {
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'video'`).get(req.session.userId).c;
+    if (n >= 10) return res.status(400).json({ error: 'Llegaste al máximo de 10 videos' });
+  }
+  const ext = ct.includes('quicktime') ? 'mov' : ct.includes('mp4') ? 'mp4' : ct.includes('webm') ? 'webm'
+    : ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
   const filePath = `/media/${name}`;
@@ -668,7 +1083,15 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
     if (dup) return res.status(409).json({ error: 'Ya creaste este posteo hoy. Lo ves en tu historial.', post_id: dup.id });
   }
   const status = scheduled_at ? 'scheduled' : 'draft';
-  const mt = media_type === 'video' ? 'video' : 'image';
+  const mt = media_type === 'video' ? 'video' : media_type === 'story' ? 'story' : 'image';
+  // Cupo del plan: las historias no consumen cupo (bonus de la casa)
+  if (mt !== 'story') {
+    const q = weeklyQuota(req.session.userId);
+    if (q.left <= 0) {
+      return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+    }
+  }
   const r = db.prepare(
     'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle) VALUES (?,?,?,?,?,?,?,?,?)'
   ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '');
@@ -737,6 +1160,12 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
 app.post('/api/posts/:id/duplicate', requireAuth, requireTrialValid, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  // Duplicar también consume cupo del plan
+  const q = weeklyQuota(req.session.userId);
+  if (q.left <= 0) {
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
+      message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+  }
   const r = db.prepare(
     'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
   ).run(req.session.userId, post.image_path, post.caption, post.hashtags, null, 'draft', post.media_type || 'image');
@@ -1095,6 +1524,7 @@ app.get('/api/ig/callback', async (req, res) => {
       db.prepare(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id) VALUES (?, ?)`).run(finalIgId, req.session.userId);
     } catch (e) { /* no bloquea la conexión */ }
     db.prepare(`UPDATE profiles SET ig_username=?, ig_connected=1 WHERE user_id=?`).run(username, req.session.userId);
+    track(req.session.userId, 'ig_connected');
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
     res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
   } catch (e) {
@@ -1322,6 +1752,7 @@ app.post('/api/billing/webhook', async (req, res) => {
     if (sub.status === 'authorized') {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
+      track(Number(userId), 'subscribed', planId);
       console.log(`[posta] ✅ Plan ${planId} activado para el usuario ${userId} (MP ${mpId})`);
     } else if (['cancelled', 'paused'].includes(sub.status)) {
       db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
@@ -1369,6 +1800,89 @@ app.get('/api/referrals/mine', requireAuth, (req, res) => {
   res.json({ ok: true, code: s.code, link: `${baseUrl}/?ref=${s.code}`, referred_count: s.referred_count, needed: s.needed, discount_active: s.discount_active, invited: !!(me && me.referred_by), joined, pending });
   // Si los referidos cambiaron desde la suscripción, sincronizar el monto con MP (no bloquea)
   reconcileUser(db, req.session.userId).catch(() => {});
+});
+
+// Festejo de primera publicación: el momento donde la confianza se cristaliza.
+// Devuelve el primer posteo publicado si el usuario todavía no lo celebró.
+app.get('/api/publish-celebration', requireAuth, (req, res) => {
+  const me = db.prepare('SELECT COALESCE(publish_celebrated, 0) AS pc FROM users WHERE id = ?').get(req.session.userId);
+  if (me && me.pc) return res.json({ ok: true, show: false });
+  const first = db.prepare(
+    `SELECT id, caption, hashtags, media_type, image_path, ig_permalink, published_at
+     FROM posts WHERE user_id = ? AND status = 'published' ORDER BY published_at ASC, id ASC LIMIT 1`
+  ).get(req.session.userId);
+  if (!first) return res.json({ ok: true, show: false });
+  res.json({ ok: true, show: true, post: first });
+});
+app.post('/api/publish-celebration/seen', requireAuth, (req, res) => {
+  db.prepare('UPDATE users SET publish_celebrated = 1 WHERE id = ?').run(req.session.userId);
+  res.json({ ok: true });
+});
+
+// Misión de fotos de la semana: 3 fotos concretas + cuántas ya subió.
+// Si no existe la de esta semana, se genera (IA con el contexto del negocio) y se cachea.
+app.get('/api/photo-mission', requireAuth, async (req, res) => {
+  try {
+    const { getOrCreateMission } = require('./photo-mission');
+    res.json({ ok: true, ...(await getOrCreateMission(db, req.session.userId)) });
+  } catch (e) {
+    console.error('[misión]', e.message);
+    res.json({ ok: true, week_key: '', shots: [], uploaded: 0 });
+  }
+});
+
+// Product shot con IA: si el cliente no subió fotos ESTA semana pero tiene de
+// antes, la IA genera una variación nueva BASADA en sus fotos reales (referencia).
+// Así el sistema "aprende" cómo se ve su producto y no repite las mismas fotos.
+app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const { refs = [], idea = '', angle = '' } = req.body || {};
+    const profile = getProfile(req.session.userId);
+    const settings = getSettings(req.session.userId);
+    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
+    const absRefs = refs.slice(0, 2)
+      .map(fp => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
+      .filter(p => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+    if (!absRefs.length) return res.status(400).json({ error: 'Sin fotos de referencia' });
+    const prompt =
+      `Foto promocional fotorrealista para el Instagram de "${profile.business_name || 'un negocio'}"` +
+      `${profile.category ? ` (${profile.category})` : ''}. ` +
+      `INSPIRADA EN las fotos de referencia: el MISMO producto, los MISMOS colores, la MISMA estética y estilo fotográfico. ` +
+      `Tiene que parecer sacada en el mismo lugar, otro momento. ` +
+      `Tema del posteo: ${idea || 'novedad'}. ${angle || ''} ` +
+      `Sin texto, sin letras, sin logos, sin marcas de agua. Calidad de fotografía comercial profesional.`;
+    const form = new FormData();
+    form.append('model', 'gpt-image-1');
+    form.append('prompt', prompt);
+    for (const p of absRefs) {
+      const buf = fs.readFileSync(p);
+      const ext = path.extname(p).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
+    }
+    form.append('size', '1024x1024');
+    const r = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      throw new Error(`OpenAI ${r.status}: ${t.slice(0, 200)}`);
+    }
+    const data = await r.json();
+    const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
+    if (!b64) throw new Error('OpenAI no devolvió imagen');
+    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
+    fs.writeFileSync(path.join(MEDIA_DIR, name), Buffer.from(b64, 'base64'));
+    console.log(`[product-shot] generado para usuario ${req.session.userId} (${absRefs.length} refs)`);
+    res.json({ ok: true, path: `/media/${name}` });
+  } catch (e) {
+    console.error('[product-shot]', e.message);
+    res.status(500).json({ error: 'No se pudo generar la imagen' });
+  }
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas
@@ -1521,6 +2035,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         out.cached = true;
         out.spots_left = spotsLeft();
         out.week = buildTrialWeek((out.posts || []).length);
+        track(null, 'prueba_done', igKey + '|cached');
         return res.json(out);
       }
       if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
@@ -1576,6 +2091,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
+    track(null, 'prueba_done', igKey);
     res.json(out);
   } catch (e) {
     console.error('[posta] Error en prueba completa:', e.message);

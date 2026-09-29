@@ -104,4 +104,42 @@ async function updateSubscriptionAmount(preapprovalId, amount) {
   });
 }
 
-module.exports = { mpConfigured, createSubscription, getSubscription, cancelSubscription, updateSubscriptionAmount };
+// Pago ÚNICO (billetera de publicidad): crea una preferencia de checkout y
+// devuelve el init_point. El webhook /api/ads/webhook acredita el saldo con
+// external_reference = ref (formato "adtopup_<userId>_<rand>").
+async function createTopupPreference({ userId, amountCents, currency = 'ARS', baseUrl, payerEmail, ref, backPath }) {
+  if (!mpConfigured()) throw new Error('Pagos no configurados todavía');
+  const amount = Math.round(Number(amountCents)) / 100;
+  if (!(amount > 0)) throw new Error('Monto inválido');
+  const back = backPath || '#/app/ads'; // a dónde vuelve el cliente después de pagar
+  const pref = await mpFetch('/checkout/preferences', {
+    method: 'POST',
+    body: {
+      items: [{
+        title: 'Posta — Crédito de publicidad',
+        description: 'Se usa para potenciar tus posteos en Instagram y Facebook',
+        quantity: 1,
+        unit_price: amount,
+        currency_id: currency,
+      }],
+      payer: payerEmail ? { email: payerEmail } : undefined,
+      external_reference: ref || `adtopup_${userId}_${Date.now().toString(36)}`,
+      back_urls: {
+        success: `${baseUrl}/${back}?topup=ok`,
+        pending: `${baseUrl}/${back}?topup=pending`,
+        failure: `${baseUrl}/${back}?topup=error`,
+      },
+      auto_return: 'approved',
+      notification_url: `${baseUrl}/api/ads/webhook`,
+    },
+  });
+  return { init_point: pref.init_point, preference_id: pref.id };
+}
+
+// Lee un pago único para validar su estado real (usado por el webhook de ads).
+async function getPayment(paymentId) {
+  if (!mpConfigured()) throw new Error('Pagos no configurados todavía');
+  return mpFetch(`/v1/payments/${encodeURIComponent(paymentId)}`);
+}
+
+module.exports = { mpConfigured, createSubscription, getSubscription, cancelSubscription, updateSubscriptionAmount, createTopupPreference, getPayment };

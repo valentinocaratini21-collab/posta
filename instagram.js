@@ -228,6 +228,66 @@ async function publishVideo(media, creds, demoMode) {
   return publishVideoReal(media, creds);
 }
 
+// ---------- Historias ----------
+// Publicación real: crear el contenedor STORIES, esperar y publicar.
+async function publishStoryReal({ imageUrl }, { igUserId, accessToken }) {
+  const createRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      image_url: imageUrl,
+      media_type: 'STORIES',
+      access_token: accessToken,
+    }),
+  });
+  const created = await createRes.json();
+  if (created.error) throw new Error(created.error.message);
+  if (!created.id) throw new Error('Meta no devolvió el contenedor de la historia');
+
+  let status = '';
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const stRes = await fetch(
+      `${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`
+    );
+    const st = await stRes.json();
+    status = st.status_code || '';
+    if (status === 'FINISHED') break;
+    if (status === 'ERROR')
+      throw new Error('Instagram no pudo descargar la imagen. Revisá que la URL sea pública: ' + imageUrl);
+  }
+  if (status !== 'FINISHED') throw new Error('Instagram tardó demasiado en procesar la historia. Probá de nuevo.');
+
+  const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      creation_id: created.id,
+      access_token: accessToken,
+    }),
+  });
+  const published = await pubRes.json();
+  if (published.error) throw new Error(published.error.message);
+  return { success: true, permalink: '', mediaId: published.id };
+}
+
+async function publishStory(media, creds, demoMode) {
+  if (demoMode) {
+    await new Promise((r) => setTimeout(r, 1200));
+    const fakeId = Math.random().toString(36).slice(2, 10);
+    return {
+      success: true,
+      permalink: '',
+      mediaId: `demo_${fakeId}`,
+      demo: true,
+    };
+  }
+  if (!creds.igUserId || !creds.accessToken) {
+    throw new Error('Instagram no conectado. Conectá tu cuenta en Ajustes.');
+  }
+  return publishStoryReal(media, creds);
+}
+
 module.exports = {
   getAuthUrl,
   exchangeCodeForTokens,
@@ -236,4 +296,5 @@ module.exports = {
   refreshLongLivedToken,
   publishPost,
   publishVideo,
+  publishStory,
 };

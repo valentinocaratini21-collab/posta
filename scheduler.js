@@ -2,7 +2,7 @@
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
-const { publishPost, publishVideo } = require('./instagram');
+const { publishPost, publishVideo, publishStory } = require('./instagram');
 
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   const file = path.basename(imagePath);
@@ -25,13 +25,21 @@ async function publishSinglePost(db, post) {
     const mediaUrl = publicImageUrl(post.image_path, settings.image_base_url);
     const caption = [post.caption, post.hashtags].filter(Boolean).join('\n\n');
     const creds = { igUserId: settings.ig_user_id, accessToken: settings.ig_access_token };
+    const isStory = post.media_type === 'story';
     const result =
       post.media_type === 'video'
         ? await publishVideo({ videoUrl: mediaUrl, caption }, creds, demoMode)
-        : await publishPost({ imageUrl: mediaUrl, caption }, creds, demoMode);
+        : isStory
+          ? await publishStory({ imageUrl: mediaUrl }, creds, demoMode)
+          : await publishPost({ imageUrl: mediaUrl, caption }, creds, demoMode);
     db.prepare(
-      `UPDATE posts SET status = 'published', ig_permalink = ?, published_at = datetime('now') WHERE id = ?`
-    ).run(result.permalink || '', post.id);
+      `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
+    ).run(result.permalink || '', result.mediaId || '', post.id);
+    // Funnel: primera publicación del usuario
+    try {
+      const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'`).get(post.user_id).n;
+      if (n <= 1) db.prepare(`INSERT INTO funnel_events (user_id, event) VALUES (?, 'first_published')`).run(post.user_id);
+    } catch (e) { /* el tracking nunca bloquea */ }
     // La racha se alimenta con cada publicación (regla 72h)
     try { require('./streaks').feedStreak(db, post.user_id); } catch (e) {}
     // Loop inteligente fase 1: si salió sin que el cliente lo tocara, cuenta como aprobado.
@@ -50,6 +58,17 @@ async function publishSinglePost(db, post) {
       }
     } catch (e) { console.error('[posta] signal auto:', e.message); }
     console.log(`[posta] Post #${post.id} publicado${result.demo ? ' (demo)' : ''}`);
+    // Aviso "ya salió": la prueba de que se publica solo (respeta opt-out, no en demo)
+    try {
+      if (!result.demo) {
+        const u = db.prepare('SELECT email, name, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
+        if (u && u.email && !u.oo) {
+          const { publishedEmail } = require('./email');
+          const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+          await publishedEmail(u, post, base, result.permalink || '');
+        }
+      }
+    } catch (e) { console.error('[email ya-salió]', e.message); }
     return { ok: true, permalink: result.permalink || '' };
   } catch (e) {
     const msg = String(e.message).slice(0, 500);
@@ -118,6 +137,39 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[billing-sync] no se pudo iniciar:', e.message);
   }
+  // Reporte semanal de resultados: domingo 19:30 (Buenos Aires).
+  // "Tu semana en números": alcance, likes y mejor posteo de los últimos 7 días.
+  try {
+    cron.schedule('30 19 * * 0', () => {
+      sendWeeklyReports(db).catch((e) => console.error('[reporte semanal]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Reporte semanal de resultados: domingo 19:30 (Buenos Aires)');
+  } catch (e) {
+    console.error('[reporte semanal] no se pudo programar:', e.message);
+  }
+  // Comentarios de Instagram: 9:00 y 17:00 (Buenos Aires).
+  // Baja comentarios nuevos y deja la respuesta sugerida lista en la cola.
+  try {
+    cron.schedule('0 9,17 * * *', () => {
+      syncAllComments(db).catch((e) => console.error('[comentarios]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Sync de comentarios: 9:00 y 17:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[comentarios] no se pudo programar:', e.message);
+  }
+  // Mejor horario de publicación: lunes 6:00 (Buenos Aires), una vez por semana.
+  try {
+    cron.schedule('0 6 * * 1', () => {
+      refreshBestHours(db).catch((e) => console.error('[best-hour]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Refresh de mejor horario: lunes 6:00 (Buenos Aires)');
+    // Primera pasada a los 3 minutos del arranque
+    setTimeout(() => {
+      refreshBestHours(db).catch((e) => console.error('[best-hour]', e.message));
+    }, 3 * 60 * 1000);
+  } catch (e) {
+    console.error('[best-hour] no se pudo programar:', e.message);
+  }
 }
 
 // Recordatorio semanal por email (lunes 10:00 Buenos Aires).
@@ -146,7 +198,14 @@ async function sendWeeklyReminders(db) {
       const tz = st.timezone || 'America/Argentina/Buenos_Aires';
       const weekKey = streaks.mondayKeyOf(streaks.tzToday(tz));
       const sk = streaks.publicStreak(db, u.id, weekKey, streaks.tzToday(tz));
-      const r = await weeklyReminderEmail(u, base, sk);
+      // Misión de fotos de la semana: se genera el lunes y viaja en el email
+      let missionShots = null;
+      try {
+        const { getOrCreateMission } = require('./photo-mission');
+        const pm = await getOrCreateMission(db, u.id);
+        missionShots = pm.shots;
+      } catch (e) { console.error('[email semanal] misión:', e.message); }
+      const r = await weeklyReminderEmail(u, base, sk, missionShots);
       if (r && r.ok) sent++; else failed++;
     } catch (e) {
       failed++;
@@ -224,4 +283,111 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
   return { sent, skipped };
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges };
+// Reporte semanal de resultados (domingo 19:30 Buenos Aires).
+// A cada usuario con posteos publicados en los últimos 7 días: alcance, likes
+// y mejor posteo. La prueba visible de que Posta funciona.
+async function sendWeeklyReports(db) {
+  const { emailConfigured, weeklyReportEmail } = require('./email');
+  const { getCreds, fetchMediaInsights } = require('./insights');
+  if (!emailConfigured()) {
+    console.log('[reporte semanal] sin RESEND_API_KEY: <redacted>');
+    return { sent: 0 };
+  }
+  const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+  const users = db.prepare(`
+    SELECT DISTINCT u.id, u.email, u.name FROM users u
+    JOIN posts p ON p.user_id = u.id
+    WHERE p.status = 'published'
+      AND datetime(p.published_at) >= datetime('now', '-7 days')
+      AND u.email IS NOT NULL AND u.email != ''
+      AND COALESCE(u.email_opt_out, 0) = 0
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+  `).all();
+  let sent = 0;
+  for (const u of users) {
+    try {
+      const creds = getCreds(db, u.id);
+      const posts = db.prepare(`
+        SELECT id, caption, image_path, media_type, ig_media_id, published_at FROM posts
+        WHERE user_id = ? AND status = 'published'
+          AND datetime(published_at) >= datetime('now', '-7 days')
+          AND COALESCE(ig_media_id, '') != '' AND ig_media_id NOT LIKE 'demo_%'
+        ORDER BY published_at DESC LIMIT 10
+      `).all(u.id);
+      if (!posts.length) continue;
+      const rows = [];
+      for (const p of posts) {
+        let m = db.prepare('SELECT reach, likes, comments, saved FROM post_metrics WHERE post_id = ?').get(p.id);
+        if (creds) {
+          try {
+            const fresh = await fetchMediaInsights(p.ig_media_id, creds.accessToken);
+            db.prepare(`INSERT INTO post_metrics (post_id, reach, likes, comments, saved, fetched_at)
+                        VALUES (?,?,?,?,?,datetime('now'))
+                        ON CONFLICT(post_id) DO UPDATE SET reach=excluded.reach, likes=excluded.likes,
+                        comments=excluded.comments, saved=excluded.saved, fetched_at=excluded.fetched_at`)
+              .run(p.id, fresh.reach, fresh.likes, fresh.comments, fresh.saved);
+            m = fresh;
+          } catch (e) { console.error('[reporte] métricas post', p.id, e.message); }
+        }
+        rows.push({ caption: p.caption, image_path: p.image_path, media_type: p.media_type, ...(m || {}) });
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      const r = await weeklyReportEmail({ email: u.email, name: u.name }, base, rows);
+      if (r && r.ok) sent++;
+    } catch (e) {
+      console.error('[reporte semanal] falló', u.email, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  console.log(`[reporte semanal] enviados: ${sent} de ${users.length}`);
+  return { sent };
+}
+
+// Baja comentarios nuevos de todos los usuarios con IG conectado (2x por día).
+async function syncAllComments(db) {
+  const { syncComments } = require('./insights');
+  const { suggestReply } = require('./generator');
+  const users = db.prepare(`
+    SELECT u.id FROM users u JOIN settings s ON s.user_id = u.id
+    WHERE s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+  `).all();
+  let total = 0;
+  for (const u of users) {
+    try {
+      const st = getSettings(db, u.id) || {};
+      const apiKey = st.openai_key || process.env.OPENAI_API_KEY || '';
+      total += await syncComments(db, u.id, suggestReply, apiKey);
+    } catch (e) { console.error('[comentarios] usuario', u.id, e.message); }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (total) console.log(`[comentarios] ${total} comentarios nuevos en cola`);
+  return { fresh: total };
+}
+
+// Mejor horario por cuenta (1x por semana): hora con más seguidores conectados.
+async function refreshBestHours(db) {
+  const { getCreds, fetchBestHour } = require('./insights');
+  const users = db.prepare(`
+    SELECT u.id FROM users u JOIN settings s ON s.user_id = u.id
+    WHERE s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+  `).all();
+  let updated = 0;
+  for (const u of users) {
+    try {
+      const creds = getCreds(db, u.id);
+      if (!creds) continue;
+      const h = await fetchBestHour(creds.igUserId, creds.accessToken);
+      if (h !== null && h !== undefined) {
+        db.prepare('UPDATE users SET best_hour = ? WHERE id = ?').run(h, u.id);
+        updated++;
+      }
+    } catch (e) { console.error('[best-hour] usuario', u.id, e.message); }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (updated) console.log(`[best-hour] actualizado para ${updated} usuarios`);
+  return { updated };
+}
+
+module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours };

@@ -309,7 +309,7 @@ function sigWords(s) {
     .split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !TOPIC_STOP.has(w));
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics }) {
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris }) {
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
@@ -329,12 +329,23 @@ function templateIdeas({ business, category, competitors, goal, recentTopics }) 
   if (recentTopics) {
     const rw = new Set(sigWords(recentTopics));
     const fresh = all.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
-    if (fresh.length >= 4) return fresh;
+    if (fresh.length >= 4) return withEphemeris(fresh);
   }
-  return all;
+  return withEphemeris(all);
+  // La efeméride va primera y marcada, también en el fallback sin IA
+  function withEphemeris(list) {
+    if (ephemeris && list.length) {
+      const themed = { formato: 'Promo', titulo: `${ephemeris.name}: promo especial`, angulo: `${ephemeris.angle}. Fecha que vende: no la dejes pasar.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
+      return [themed, ...list.slice(0, 6)];
+    }
+    return list;
+  }
 }
 
-async function openaiIdeas({ business, category, tone, description, competitors, taste, recentTopics }, apiKey) {
+async function openaiIdeas({ business, category, tone, description, competitors, taste, recentTopics, ephemeris }, apiKey) {
+  const ephLine = ephemeris
+    ? `\n⚠️ EFEMÉRIDE CERCA: ${ephemeris.emoji} ${ephemeris.name} es el ${ephemeris.date} (en ${ephemeris.daysLeft} días). La idea N°1 TIENE que ser sobre eso (enfoque: ${ephemeris.angle}). Es una fecha que vende mucho: no la ignores.`
+    : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -352,7 +363,7 @@ async function openaiIdeas({ business, category, tone, description, competitors,
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}\nGenerá las 6 ideas.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 900,
@@ -364,11 +375,14 @@ async function openaiIdeas({ business, category, tone, description, competitors,
   const parsed = JSON.parse(data.choices[0].message.content);
   const ideas = Array.isArray(parsed.ideas) ? parsed.ideas.slice(0, 7) : [];
   if (!ideas.length) throw new Error('Sin ideas');
-  return ideas.map(i => ({
+  const mapped = ideas.map(i => ({
     titulo: String(i.titulo || '').slice(0, 120),
     formato: String(i.formato || 'Contenido').slice(0, 30),
     angulo: String(i.angulo || '').slice(0, 280),
   }));
+  // La primera idea es la de la efeméride: se marca para mostrarla destacada
+  if (ephemeris && mapped.length) mapped[0].ephemeris = `${ephemeris.emoji} ${ephemeris.name}`;
+  return mapped;
 }
 
 async function generateIdeas(input, apiKey) {
@@ -385,9 +399,10 @@ async function generateIdeas(input, apiKey) {
 // ---------- Chat consultor de ideas ----------
 // El cliente cuenta su idea, la IA opina con honestidad y la pulen juntos.
 // Cuando la idea está cerrada y aprobada, la IA la devuelve en un bloque ```idea {...}```
-async function openaiChatIdea({ messages, profile, taste, photos }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
+  const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
   const sys =
     'Sos el consultor de contenido de Posta, un experto argentino en Instagram que vende de verdad. ' +
     'Hablás en español rioplatense con voseo, tono cercano y canchero, sin lenguaje corporativo. ' +
@@ -397,11 +412,24 @@ async function openaiChatIdea({ messages, profile, taste, photos }, apiKey) {
     'siempre se puede vender más. Hacé preguntas cortas cuando te falte contexto (producto, objetivo). ' +
     'Mensajes cortos, como un chat de verdad: máximo 4-5 líneas por respuesta, nada de testamentos. ' +
     'Nunca seas chupamedias: tu valor es decir la posta, no lo que el cliente quiere escuchar. ' +
+    'MODO PEDIDO: muchos clientes no quieren brainstormear, quieren PEDIRTE un posteo concreto ' +
+    '("necesito un posteo de la promo 2x1", "quiero vender mis buzos nuevos", "haceme algo que diga X"). ' +
+    'Cuando detectes un pedido: NO interrogues ni devuelvas preguntas, armá la idea directo con lo que te ' +
+    'dieron y cerrala con el bloque. Si te dictan el texto ("que diga: ..."), copialo TAL CUAL en el campo ' +
+    'caption: jamás reescribas sus palabras con tu estilo. Si nombran una foto ("la del asado", "la segunda"), ' +
+    'identificá su índice en las fotos guardadas que te muestro (0 = la más nueva) y ponelo en photo_index. ' +
+    'Si piden colores ("en rojo", "con azul"), normalizalos a hex en colors (máximo 3). ' +
+    'Cuando cierres la idea de un pedido, tu mensaje visible confirma en 1-2 líneas con onda qué entendiste ' +
+    '(qué se vende, texto, foto, colores) y nada más. ' +
     (cleanPhotos.length
       ? 'El cliente adjuntó fotos de sus productos: MIRALAS con atención y opiná sobre lo que ves en ellas (qué producto conviene mostrar, calidad de la foto, qué ángulo vendería más). Referite a lo concreto que ves, nada de comentarios genéricos. '
       : '') +
+    (libPhotos.length
+      ? `El cliente tiene ${libPhotos.length} fotos guardadas: son las PRIMERAS ${libPhotos.length} imágenes que ves, en orden (índice 0 = la más nueva). Las que vienen después son las que adjuntó recién en este chat. Si te pide usar una guardada ("la del asado", "la segunda"), elegí el índice correcto mirándolas. `
+      : '') +
     'Cuando la idea esté concreta y el cliente la apruebe (o te pida hacerla), cerrá tu mensaje con un bloque ' +
-    'exacto así:\n```idea\n{"titulo": "título corto del post", "angulo": "ángulo en 1-2 líneas"}\n```\n' +
+    'exacto así:\n```idea\n{"titulo": "título corto del post", "angulo": "ángulo en 1-2 líneas", "caption": "texto dictado por el cliente o null", "photo_index": 2, "colors": ["#D63A2F"]}\n```\n' +
+    'caption va null salvo que el cliente te haya dictado el texto. photo_index y colors van null si no los pidió. ' +
     'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.';
   const ctx =
     `Negocio: ${p.business_name || 'no especificado'}\nRubro: ${p.category || 'no especificado'}\n` +
@@ -410,14 +438,19 @@ async function openaiChatIdea({ messages, profile, taste, photos }, apiKey) {
     (taste ? `Lo que le gustó/no le gustó antes: ${taste}\n` : '') +
     'Charlemos la idea del cliente.';
   const omsgs = messages.map(m => ({ role: m.role, content: m.text }));
-  if (cleanPhotos.length) {
+  // Orden: primero las fotos GUARDADAS (índices 0..N-1, 0 = la más nueva), después las adjuntadas en el chat.
+  const visionImgs = [
+    ...libPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
+    ...cleanPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
+  ];
+  if (visionImgs.length) {
     for (let i = omsgs.length - 1; i >= 0; i--) {
       if (omsgs[i].role === 'user') {
         omsgs[i] = {
           role: 'user',
           content: [
             { type: 'text', text: omsgs[i].content },
-            ...cleanPhotos.map(u => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
+            ...visionImgs,
           ],
         };
         break;
@@ -517,11 +550,11 @@ function templateChatIdea({ messages, profile }) {
     ideaBlock(c.titulo, c.angulo);
 }
 
-async function chatIdea({ messages, profile, taste, photos }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos, library }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
@@ -531,17 +564,109 @@ async function chatIdea({ messages, profile, taste, photos }, apiKey) {
     console.log('[chat] motor: plantilla (sin API key)');
     text = templateChatIdea({ messages, profile });
   }
-  // Extrae la propuesta cerrada si la IA la incluyó
+  // Extrae la propuesta cerrada si la IA la incluyó (incluye los campos del MODO PEDIDO)
   let idea = null;
   const m = String(text).match(/```idea\s*([\s\S]*?)```/);
   if (m) {
     try {
       const j = JSON.parse(m[1]);
-      if (j && j.titulo) idea = { titulo: String(j.titulo).slice(0, 120), angulo: String(j.angulo || '').slice(0, 280) };
+      if (j && j.titulo) {
+        idea = { titulo: String(j.titulo).slice(0, 120), angulo: String(j.angulo || '').slice(0, 280) };
+        if (typeof j.caption === 'string' && j.caption.trim()) idea.caption = j.caption.trim().slice(0, 900);
+        if (Number.isInteger(j.photo_index) && j.photo_index >= 0 && j.photo_index < 8) idea.photo_index = j.photo_index;
+        if (Array.isArray(j.colors)) {
+          const hexes = j.colors.map(c => String(c).trim())
+            .filter(c => /^#?[0-9a-fA-F]{6}$/.test(c)).slice(0, 3)
+            .map(c => (c.startsWith('#') ? c : '#' + c).toUpperCase());
+          if (hexes.length) idea.colors = hexes;
+        }
+      }
       text = String(text).replace(m[0], '').trim();
     } catch (e) { /* bloque inválido: se ignora */ }
   }
   return { reply: text, idea };
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, HASHTAGS };
+// ---------- Respuesta sugerida a un comentario de Instagram ----------
+// Tono del negocio, 1-2 líneas, rioplatense. Nunca promete lo que no existe.
+async function suggestReply({ business, category, tone, username, commentText }, apiKey) {
+  const fallback = '¡Gracias por escribirnos! 🙌';
+  if (!apiKey) return fallback;
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: `Sos el community manager de "${business || 'un negocio'}" (${category || 'rubro general'}). Respondé el comentario de Instagram de @${username || 'un seguidor'} con calidez argentina (voseo), en 1-2 líneas como mucho. Tono ${tone || 'canchero'}. Si pregunta precio/stock/horario y no lo sabés, invitalo a escribir por DM sin inventar datos. Respondé SOLO con la respuesta, sin comillas.` },
+          { role: 'user', content: `Comentario: "${String(commentText || '').slice(0, 300)}"` },
+        ],
+        max_tokens: 120,
+        temperature: 0.8,
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return fallback;
+    const data = await res.json();
+    const t = String((data.choices && data.choices[0] && data.choices[0].message.content) || '').trim().replace(/^["“”]+|["“”]+$/g, '');
+    return t.slice(0, 300) || fallback;
+  } catch (e) {
+    console.error('[suggestReply]', e.message);
+    return fallback;
+  }
+}
+
+// ---------- Misión de fotos semanal ----------
+// 3 fotos concretas que el dueño saca con el celular esta semana.
+// La misión es específica (no "sacá fotos"): lo específico se hace, lo vago se pospone.
+async function openaiMission({ business, category, description }, apiKey) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'Sos un director de contenido para Instagram. Escribís en español rioplatense con voseo. Respondé SOLO con un JSON: {"shots": ["...", "...", "..."]}.',
+        },
+        {
+          role: 'user',
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category || 'no indicado'}\nDescripción: ${description || 'no indicada'}\nDame exactamente 3 fotos que el dueño puede sacar con su celular ESTA SEMANA para el Instagram del negocio. Cada una en 1 línea: qué fotografiar (concreto, nada genérico) + un tip corto de cómo sacarla bien. Variadas: producto/servicio, persona/equipo, y local o detrás de escena.`,
+        },
+      ],
+      max_tokens: 400,
+      temperature: 0.8,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices[0].message.content);
+  const shots = Array.isArray(parsed.shots) ? parsed.shots.slice(0, 3) : [];
+  if (shots.length < 3) throw new Error('Sin misión');
+  return shots.map(s => String(s).slice(0, 160));
+}
+function templateMission() {
+  return [
+    'Tu producto o servicio estrella, con buena luz natural 📸 Tip: cerca de una ventana, sin flash.',
+    'Vos o tu equipo trabajando, en plena acción 🙌 Tip: pedile a alguien que te saque la foto.',
+    'Ese detalle de tu local que la gente siempre fotografía 🏠 Tip: el ángulo que aman tus clientes.',
+  ];
+}
+async function generatePhotoMission(input, apiKey) {
+  if (apiKey) {
+    try {
+      return await openaiMission(input, apiKey);
+    } catch (e) {
+      console.error('OpenAI misión falló, usando plantilla:', e.message);
+    }
+  }
+  return templateMission();
+}
+
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, HASHTAGS };

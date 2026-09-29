@@ -71,6 +71,76 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN pexels_key TEXT DEFAULT ''`); } c
 try { db.exec(`ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'trial'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN plan_status TEXT DEFAULT 'trial'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Todo-en-uno v2: métricas, mejor horario, funnel y comentarios
+try { db.exec(`ALTER TABLE posts ADD COLUMN ig_media_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN best_hour INTEGER DEFAULT 19`); } catch (e) { /* ya existe */ }
+db.exec(`CREATE TABLE IF NOT EXISTS post_metrics (
+  post_id INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+  reach INTEGER DEFAULT 0,
+  likes INTEGER DEFAULT 0,
+  comments INTEGER DEFAULT 0,
+  saved INTEGER DEFAULT 0,
+  fetched_at TEXT DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS funnel_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  event TEXT NOT NULL,
+  meta TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_funnel_event ON funnel_events(event, created_at)`);
+db.exec(`CREATE TABLE IF NOT EXISTS comment_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ig_comment_id TEXT NOT NULL UNIQUE,
+  ig_media_id TEXT DEFAULT '',
+  username TEXT DEFAULT '',
+  text TEXT DEFAULT '',
+  suggested TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// Billetera de publicidad + pautas (boost de posteos ganadores)
+db.exec(`CREATE TABLE IF NOT EXISTS ad_wallets (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  balance_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'ARS',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS ad_boosts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id INTEGER,
+  ig_media_id TEXT NOT NULL DEFAULT '',
+  budget_cents INTEGER NOT NULL DEFAULT 0,
+  fee_cents INTEGER NOT NULL DEFAULT 0,
+  spend_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'ARS',
+  status TEXT NOT NULL DEFAULT 'pending',
+  meta_campaign_id TEXT NOT NULL DEFAULT '',
+  meta_adset_id TEXT NOT NULL DEFAULT '',
+  meta_ad_id TEXT NOT NULL DEFAULT '',
+  objective TEXT NOT NULL DEFAULT 'engagement',
+  duration_days INTEGER NOT NULL DEFAULT 7,
+  last_spend_cents INTEGER NOT NULL DEFAULT 0,
+  last_reach INTEGER NOT NULL DEFAULT 0,
+  last_impressions INTEGER NOT NULL DEFAULT 0,
+  stats_updated_at TEXT,
+  error TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  started_at TEXT
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS ad_transactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL DEFAULT 'topup',
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  balance_after INTEGER NOT NULL DEFAULT 0,
+  ref TEXT NOT NULL DEFAULT '',
+  note TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 db.exec(`CREATE TABLE IF NOT EXISTS email_tokens (
   token TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -178,6 +248,16 @@ try { db.exec(`ALTER TABLE users ADD COLUMN pwa_installed INTEGER DEFAULT 0`); }
 try { db.exec(`ALTER TABLE users ADD COLUMN email_opt_out INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Email de MercadoPago del usuario (puede diferir del email de la cuenta)
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_payer_email TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Festejo de primera publicación: 1 = ya se mostró (no repetir)
+try { db.exec(`ALTER TABLE users ADD COLUMN publish_celebrated INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Misión de fotos semanal: 3 fotos concretas por semana (una fila por usuario/semana)
+db.exec(`CREATE TABLE IF NOT EXISTS photo_missions (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  shots TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, week_key)
+);`);
 
 // Trial de 10 días: vencimiento de la prueba gratis (milisegundos epoch)
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e) { /* ya existe */ }

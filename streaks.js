@@ -116,6 +116,7 @@ function publicStreak(db, userId, weekKey, todayYmd) {
     best: s.best || 0,
     level: level ? { emoji: level.emoji, name: level.name } : null,
     nextLevel: next ? { emoji: next.emoji, name: next.name, at: next.min } : null,
+    levels: STREAK_LEVELS.map(l => ({ emoji: l.emoji, name: l.name, min: l.min })),
     weekArmed,
     daysLeft,
     expiresInMs,
