@@ -296,6 +296,110 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Onboarding conversacional ----------
+// La IA entrevista al dueño por chat y extrae el perfil del negocio.
+// El frontend manda el historial; el backend devuelve la próxima intervención.
+const OB_STEPS = [
+  { key: 'nombre', pregunta: '¿Cómo se llama tu negocio? 🏪' },
+  { key: 'vende', pregunta: '¿Qué vendés? Contame con tus palabras, sin vueltas.' },
+  { key: 'cliente', pregunta: '¿A quién le vendés? ¿Quién es tu cliente ideal?' },
+  { key: 'distinto', pregunta: '¿Qué te hace distinto de otros que venden lo mismo?' },
+  { key: 'instagram', pregunta: '¿Cuál es tu Instagram? O pasame el de un competidor que te guste para chusmear el estilo. Si no tenés, decime "saltear".' },
+  { key: 'logo', pregunta: 'Subí tu logo y saco tus colores de ahí 🎨. Si no lo tenés a mano, decime "saltear".' },
+  { key: 'objetivo', pregunta: '¿Cuál es tu objetivo principal con Instagram?' },
+];
+const OB_GOAL_CHIPS = ['Vender más', 'Conseguir seguidores', 'Llenar mi local', 'Contar novedades'];
+const OB_GREETING = '¡Hola! Soy tu community manager 🙌 Te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. Son 7, dale que va:';
+
+app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
+  try {
+    const history = Array.isArray(req.body.history)
+      ? req.body.history.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string').slice(-20)
+      : [];
+    const userCount = history.filter(m => m.role === 'user').length;
+    if (userCount >= OB_STEPS.length) return res.json({ ok: true, done: true, answered: userCount });
+    const step = OB_STEPS[userCount];
+    let reply;
+    if (!history.length) {
+      reply = `${OB_GREETING} ${step.pregunta}`;
+    } else {
+      const lastUser = [...history].reverse().find(m => m.role === 'user') || { text: '' };
+      const apiKey = (getSettings(req.session.userId).openai_key) || process.env.OPENAI_API_KEY || '';
+      if (!apiKey) {
+        reply = `¡Buenísimo! ${step.pregunta}`;
+      } else {
+        try {
+          const r = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Sos el community manager de Posta entrevistando al dueño de un negocio para conocerlo a fondo. Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta.` },
+              ],
+              max_tokens: 220, temperature: 0.8,
+            }),
+            signal: AbortSignal.timeout(20000),
+          });
+          const j = await r.json();
+          const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+          reply = txt.slice(0, 500) || `¡Buenísimo! ${step.pregunta}`;
+        } catch (e) { reply = `¡Buenísimo! ${step.pregunta}`; }
+      }
+    }
+    res.json({
+      ok: true, done: false, reply, answered: userCount,
+      chips: step.key === 'objetivo' ? OB_GOAL_CHIPS : null,
+      awaitLogo: step.key === 'logo',
+    });
+  } catch (e) {
+    console.error('[onboarding/chat]', e.message);
+    res.json({ ok: false, error: 'No pudimos continuar' });
+  }
+});
+
+app.post('/api/onboarding/finish', requireAuth, async (req, res) => {
+  try {
+    const history = Array.isArray(req.body.history) ? req.body.history.filter(m => m && m.role === 'user' && m.text) : [];
+    const apiKey = (getSettings(req.session.userId).openai_key) || process.env.OPENAI_API_KEY || '';
+    const qa = history.map((m, i) => `P${i + 1}: ${m.q || ''}\nR: ${m.text}`).join('\n');
+    let profile = { business_name: '', category: 'otro', description: '', audience: '', differentiator: '', instagram: '', goal: '' };
+    let summary = '';
+    if (apiKey && qa) {
+      try {
+        const r = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            response_format: { type: 'json_object' },
+            messages: [
+              { role: 'system', content: 'Analizás la entrevista a un dueño de negocio y devolvés SOLO JSON: {"business_name":"...","category":"...","description":"...","audience":"...","differentiator":"...","instagram":"...","goal":"...","summary":"..."}. Reglas: category = la más cercana de [ropa, gastronomia, cafeteria, belleza, barberia, fitness, salud, mascotas, servicios, educacion, tecnologia, hogar, inmobiliaria, eventos, viajes, arte, otro]. description = 1-2 frases que resuman qué vende y para quién, con sus palabras. goal = una de [vender, seguidores, local, novedades] según lo que dijo (o vacío). summary = 2-3 líneas cálidas en español rioplatense con voseo, contándole lo que entendiste de su negocio, como un community manager que lo escuchó de verdad. Si un dato no está, dejalo vacío. Nada de texto fuera del JSON.' },
+              { role: 'user', content: qa.slice(0, 3000) },
+            ],
+            max_tokens: 600, temperature: 0.5,
+          }),
+          signal: AbortSignal.timeout(25000),
+        });
+        const j = await r.json();
+        const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
+        const mm = txt.match(/\{[\s\S]*\}/);
+        if (mm) {
+          const p = JSON.parse(mm[0]);
+          for (const k of Object.keys(profile)) if (typeof p[k] === 'string') profile[k] = p[k].slice(0, 600);
+          if (typeof p.summary === 'string') summary = p.summary.slice(0, 600);
+        }
+      } catch (e) { console.error('[onboarding/extract]', e.message); }
+    }
+    if (!profile.business_name && history[0] && history[0].text) profile.business_name = history[0].text.slice(0, 80);
+    if (!summary) summary = profile.business_name ? `¡Listo! Ya conozco a ${profile.business_name} 🙌` : '¡Listo! Ya te conozco un poco más 🙌';
+    res.json({ ok: true, profile, summary });
+  } catch (e) {
+    console.error('[onboarding/finish]', e.message);
+    res.json({ ok: false, error: 'No pudimos cerrar la entrevista' });
+  }
+});
+
 // ---------- PWA instalada ----------
 // El frontend avisa cuando el usuario instala la app en el teléfono.
 // Sirve para no mandarle emails semanales a quien ya la tiene instalada.
@@ -434,6 +538,8 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
     const input = {
       business: profile.business_name,
       category: profile.category,
+      description: profile.description,
+      dna: readDna(req.session.userId),
       tone: profile.tone,
       topic: topic.trim(),
       tipo: tipo || '',
@@ -683,7 +789,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // Edición directa de un borrador pedida por el cliente vía chat
     let editApplied = null;
     if (out.edit && out.edit.draft >= 1 && out.edit.draft <= cleanDrafts.length
-        && (out.edit.caption !== undefined || out.edit.hashtags !== undefined)) {
+        && (out.edit.caption !== undefined || out.edit.hashtags !== undefined || out.edit.photo_index !== undefined)) {
       const target = cleanDrafts[out.edit.draft - 1];
       const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
       if (post && (post.status === 'draft' || post.status === 'scheduled')) {
@@ -692,6 +798,21 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           out.edit.hashtags !== undefined ? out.edit.hashtags : post.hashtags,
           post.id
         );
+        // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
+        if (Number.isInteger(out.edit.photo_index) && out.edit.photo_index >= 0) {
+          const { photoPaths } = req.body || {};
+          let newPath = null;
+          if (Array.isArray(photoPaths) && photoPaths[out.edit.photo_index]) newPath = photoPaths[out.edit.photo_index];
+          else {
+            const rows = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid);
+            if (rows[out.edit.photo_index]) newPath = rows[out.edit.photo_index].file_path;
+          }
+          // Validar que la foto sea del usuario antes de usarla
+          if (newPath && String(newPath).startsWith('/media/')) {
+            const own = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND file_path = ?`).get(uid, String(newPath));
+            if (own) db.prepare(`UPDATE posts SET image_path = ? WHERE id = ?`).run(String(newPath), post.id);
+          }
+        }
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         editApplied = { ok: true, draftId: post.id };
       }
@@ -1078,6 +1199,12 @@ app.post('/api/ideas/chat/log', requireAuth, (req, res) => {
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const profile = getProfile(req.session.userId);
   const settings = getSettings(req.session.userId);
+  const dna = readDna(req.session.userId);
+  // Gate anti-invención: sin datos mínimos del negocio no se genera nada.
+  // Generar con el perfil vacío es lo que produce posteos inventados ("PRODCT XYZ").
+  const descOk = (profile.description || '').trim().length >= 20;
+  const dnaOk = (dna.producto_estrella || '').trim().length >= 3;
+  if (!descOk && !dnaOk) return res.json({ need_profile: true });
   try {
     // Temas publicados recientemente: el generador debe evitar repetirlos
     let recentTopics = '';
@@ -1091,6 +1218,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
         category: profile.category,
         tone: profile.tone,
         description: profile.description,
+        dna,
         competitors: profile.competitors,
         goal: profile.goal,
         taste: tasteProfile(req.session.userId),
@@ -2418,6 +2546,7 @@ app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
       try {
         const out = await generateContent({
           business: profile.business_name, category: profile.category, tone: profile.tone,
+          description: profile.description, dna: readDna(uid),
           topic: `Reescribí este posteo que funcionó muy bien, con texto fresco y otro ángulo. NO lo copies: hacelo nuevo sobre la misma idea. Idea original: "${String(old.caption || '').slice(0, 300)}"`,
           competitors: profile.competitors, goal: profile.goal,
           taste: tasteProfile(uid),

@@ -244,9 +244,33 @@ function captionPasses(caption) {
     if (low.includes(p)) return { ok: false, reason: `contiene la frase quemada "${p}"` };
   }
   if (c.trim().length < 40) return { ok: false, reason: 'es demasiado corto (menos de 40 caracteres)' };
+  if (hasPlaceholders(c)) return { ok: false, reason: 'contiene texto inventado o de ejemplo (tipo "XYZ")' };
   const hasCta = CTA_SIGNALS.some(s => low.includes(s)) || /\bdm\b/.test(low);
   if (!hasCta) return { ok: false, reason: 'le falta un llamado a la acción claro (DM, comentario, guardado…)' };
   return { ok: true, reason: '' };
+}
+
+// ---------- Contexto del negocio + regla anti-invención ----------
+// Se inyecta en TODOS los prompts de generación. Sin datos del negocio, la IA
+// tiende a inventar uno entero (el caso "PRODCT XYZ" / power banks): esta regla lo frena.
+function businessContext({ business, category, description, dna, tone }) {
+  const d = dna || {};
+  const parts = [];
+  if (business) parts.push(`Negocio: ${business}`);
+  if (category) parts.push(`Rubro: ${category}`);
+  if (description) parts.push(`Descripción: ${description}`);
+  if (d.producto_estrella) parts.push(`Producto/servicio estrella: ${d.producto_estrella}`);
+  if (d.cliente_ideal) parts.push(`Cliente ideal: ${d.cliente_ideal}`);
+  if (d.diferencial) parts.push(`Diferencial: ${d.diferencial}`);
+  parts.push(`Tono: ${d.tono || tone || 'cercano'}`);
+  const ctx = parts.length ? parts.join('\n') : '(sin datos del negocio cargados)';
+  return `${ctx}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos.`;
+}
+
+// Placeholders típicos de contenido inventado: si aparecen, el texto se descarta.
+const PLACEHOLDER_RE = /\bxyz\b|lorem ipsum|producto de (ejemplo|prueba)|nombre del producto|tu producto aqu[ií]|\[[^\]]{2,40}\]/i;
+function hasPlaceholders(text) {
+  return PLACEHOLDER_RE.test(String(text || ''));
 }
 
 function pick(arr) {
@@ -322,7 +346,7 @@ function templateGenerate({ business, category, tone, topic, goal }) {
   return { caption, overlay, hashtags: tags.join(' ') };
 }
 
-async function openaiGenerate({ business, category, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -344,7 +368,8 @@ async function openaiGenerate({ business, category, tone, topic, competitors, go
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${tipoLine(tipo)}${taste || ''}` +
+          content: businessContext({ business, category, description, dna, tone }) +
+            `\nTema del post: ${topic}\nCompetidores: ${competitors || 'no indicados'}${goalLine(goal)}${tipoLine(tipo)}${taste || ''}` +
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
             (feedback ? `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}` : '') +
             (voice ? `\n${voice}` : '') +
@@ -389,7 +414,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice }, n, apiKey) {
+async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -404,7 +429,8 @@ async function openaiCaptions({ business, category, tone, topic, feedback, goal,
         {
           role: 'user',
           content:
-            `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nTema del post: ${topic}${goalLine(goal)}${tipoLine(tipo)}` +
+            businessContext({ business, category, description, dna, tone }) +
+            `\nTema del post: ${topic}${goalLine(goal)}${tipoLine(tipo)}` +
             (feedback ? `\nAjuste que pide el usuario (OBEDECELO al regenerar): ${feedback}` : '') +
             (taste ? `\n${taste}` : '') +
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
@@ -542,7 +568,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, tone, description, competitors, taste, recentTopics, ephemeris, performance }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance }, apiKey) {
   const ephLine = ephemeris
     ? `\n⚠️ EFEMÉRIDE CERCA: ${ephemeris.emoji} ${ephemeris.name} es el ${ephemeris.date} (en ${ephemeris.daysLeft} días). La idea N°1 TIENE que ser sobre eso (enfoque: ${ephemeris.angle}). Es una fecha que vende mucho: no la ignores.`
     : '';
@@ -563,7 +589,8 @@ async function openaiIdeas({ business, category, tone, description, competitors,
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category}\nTono: ${tone}\nDescripción: ${description || 'no indicada'}\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}\nGenerá las 6 ideas.`,
+          content: businessContext({ business, category, description, dna, tone }) +
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 900,
@@ -599,6 +626,8 @@ async function generateIdeas(input, apiKey) {
     }
   }
   if (!ideas) ideas = templateIdeas(input);
+  // Filtro anti-invención: fuera ideas con placeholders típicos ("XYZ", "[...]").
+  ideas = ideas.filter(i => !hasPlaceholders(`${i.titulo || ''} ${i.angulo || ''}`));
   // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.
   return fixTipos(ideas);
 }
@@ -671,14 +700,16 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
   const sys =
-    'Sos el consultor de contenido de Posta, un experto argentino en Instagram que vende de verdad. ' +
-    'Hablás en español rioplatense con voseo, tono cercano y canchero, sin lenguaje corporativo. ' +
-    'Tu trabajo: el cliente te cuenta ideas para posteos y vos le das tu opinión HONESTA. ' +
+    `Sos el community manager de "${p.business_name || 'este negocio'}": su mano derecha para Instagram, como un amigo que labura con él todos los días. ` +
+    'Hablás en español rioplatense con voseo, cálido y canchero, como por WhatsApp: mensajes cortos (máximo 4-5 líneas), nada de testamentos ni lenguaje corporativo. ' +
+    'Nunca te presentes como IA ni expliques lo que podés hacer: ya se conocen, actuá en consecuencia. ' +
+    'Si sabés su nombre o el del negocio, usalo de vez en cuando, como haría un amigo. ' +
+    'Tu trabajo: el cliente te cuenta ideas para posteos y vos le das tu opinión HONESTA, como un amigo que quiere que venda. ' +
     'Si la idea es floja, genérica o no va a vender, decilo con buena onda pero sin vueltas, y proponé ' +
     'concretamente cómo mejorarla (ángulo, hook, formato). Si es buena, decilo y pulila igual: ' +
     'siempre se puede vender más. Hacé preguntas cortas cuando te falte contexto (producto, objetivo). ' +
-    'Mensajes cortos, como un chat de verdad: máximo 4-5 líneas por respuesta, nada de testamentos. ' +
-    'Nunca seas chupamedias: tu valor es decir la posta, no lo que el cliente quiere escuchar. ' +
+    'Nunca seas chupamedias: tu valor es decir la posta, como un amigo, no lo que el cliente quiere escuchar. ' +
+    'REGLA CRÍTICA: jamás inventes productos, precios, promociones ni datos del negocio que no te dieron: si no sabés qué vende, preguntá o hablá en general, nunca inventes. ' +
     'MODO PEDIDO: muchos clientes no quieren brainstormear, quieren PEDIRTE un posteo concreto ' +
     '("necesito un posteo de la promo 2x1", "quiero vender mis buzos nuevos", "haceme algo que diga X"). ' +
     'Cuando detectes un pedido: NO interrogues ni devuelvas preguntas, armá la idea directo con lo que te ' +
@@ -711,6 +742,10 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'identificá cuál es por su número o por el tema, y aplicá el cambio DIRECTO con este bloque al final de tu mensaje:\n' +
       '```edit\n{"draft": 2, "caption": "texto nuevo completo", "hashtags": "#tags nuevos"}\n```\n' +
       'El número es el de la lista de arriba (1 = primero). Incluí solo los campos que cambian. ' +
+      'Si te pide cambiar la FOTO ("poné la del local", "usá otra foto", "la del producto"): mirá sus fotos guardadas ' +
+      '(las PRIMERAS imágenes que ves, índice 0 = la más nueva) y elegí la que mejor calce con lo que pide, ' +
+      'devolviendo su índice en el bloque: ```edit\\n{\"draft\": 2, \"photo_index\": 3}\\n``` ' +
+      'Solo cambiá la foto si te lo piden explícito o si la actual no tiene nada que ver con el tema. ' +
       'El cambio se aplica solo al borrador, sin más pasos ni preguntas. Después del bloque, confirmá en 1 línea con onda qué cambiaste. ' +
       'Si no entendés a cuál se refiere, preguntá corto ("¿el primero o el segundo?") en vez de adivinar.'
     : '';
@@ -941,6 +976,7 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
         edit = { draft: j.draft };
         if (typeof j.caption === 'string' && j.caption.trim()) edit.caption = j.caption.trim().slice(0, 900);
         if (typeof j.hashtags === 'string' && j.hashtags.trim()) edit.hashtags = j.hashtags.trim().slice(0, 300);
+        if (Number.isInteger(j.photo_index) && j.photo_index >= 0) edit.photo_index = j.photo_index;
       }
       text = String(text).replace(me[0], '').trim();
     } catch (e) { /* bloque inválido: se ignora */ }
@@ -1050,7 +1086,7 @@ async function openaiMission({ business, category, description }, apiKey) {
         },
         {
           role: 'user',
-          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category || 'no indicado'}\nDescripción: ${description || 'no indicada'}\nDame exactamente 3 fotos que el dueño puede sacar con su celular ESTA SEMANA para el Instagram del negocio. Cada una en 1 línea: qué fotografiar (concreto, nada genérico) + un tip corto de cómo sacarla bien. Variadas: producto/servicio, persona/equipo, y local o detrás de escena.`,
+          content: `Negocio: ${business || 'no especificado'}\nRubro: ${category || 'no indicado'}\nDescripción: ${description || 'no indicada'}\nDame exactamente 3 fotos que el dueño puede sacar con su celular ESTA SEMANA para el Instagram del negocio. Cada una en MÁXIMO 90 caracteres: qué fotografiar (concreto, nada genérico) + tip de 3-5 palabras. Variadas: producto/servicio, persona/equipo, y local o detrás de escena.`,
         },
       ],
       max_tokens: 400,
@@ -1062,13 +1098,13 @@ async function openaiMission({ business, category, description }, apiKey) {
   const parsed = JSON.parse(data.choices[0].message.content);
   const shots = Array.isArray(parsed.shots) ? parsed.shots.slice(0, 3) : [];
   if (shots.length < 3) throw new Error('Sin misión');
-  return shots.map(s => String(s).slice(0, 160));
+  return shots.map(s => String(s).slice(0, 100));
 }
 function templateMission() {
   return [
-    'Tu producto o servicio estrella, con buena luz natural 📸 Tip: cerca de una ventana, sin flash.',
-    'Vos o tu equipo trabajando, en plena acción 🙌 Tip: pedile a alguien que te saque la foto.',
-    'Ese detalle de tu local que la gente siempre fotografía 🏠 Tip: el ángulo que aman tus clientes.',
+    'Tu producto estrella con luz natural 📸 Tip: cerca de una ventana, sin flash.',
+    'Vos o tu equipo en plena acción 🙌 Tip: que te la saque otro.',
+    'El rincón de tu local que todos fotografían 🏠 Tip: el ángulo favorito.',
   ];
 }
 async function generatePhotoMission(input, apiKey) {
