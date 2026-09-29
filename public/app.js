@@ -26,6 +26,7 @@ const api = {
       }
       const err = new Error(data.message || data.error || 'Error');
       err.status = r.status;
+      err.data = data; // el cuerpo (ej. plan_limit) viaja con el error
       throw err;
     }
     return data;
@@ -93,6 +94,7 @@ function bindOffline() {
   if (b) b.onclick = () => render();
 }
 function assetPhotos() { return ASSETS.filter(a => a.kind === 'photo'); }
+function assetVideos() { return ASSETS.filter(a => a.kind === 'video'); }
 function assetLogo() { return ASSETS.find(a => a.kind === 'logo'); }
 
 /* ---------- Zonas horarias ---------- */
@@ -103,17 +105,24 @@ function zonedTimeToUtc(y, mo, d, h, mi, tz) {
   const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second);
   return new Date(guess.getTime() - (asUTC - guess.getTime()));
 }
-// Fecha ISO (UTC) del día (hoy+i+1) a las 19:00 en la zona horaria del negocio
+// Hora de publicación: la de mayor audiencia del negocio (best_hour, medido con
+// Instagram), 19:00 como respaldo. Fecha ISO (UTC) del día (hoy+i+1) a esa hora
+// en la zona horaria del negocio.
+function slotHour() {
+  const h = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.best_hour) || 19;
+  return (h >= 9 && h <= 21) ? h : 19;
+}
 function slotDate19(i, tz) {
+  const HH = slotHour();
   try {
     const now = new Date();
     const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
     const [y, m, d] = ymd.split('-').map(Number);
     const dt = new Date(Date.UTC(y, m - 1, d));
     dt.setUTCDate(dt.getUTCDate() + i + 1);
-    return zonedTimeToUtc(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), 19, 0, tz).toISOString();
+    return zonedTimeToUtc(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate(), HH, 0, tz).toISOString();
   } catch {
-    const d = new Date(); d.setDate(d.getDate() + i + 1); d.setHours(19, 0, 0, 0);
+    const d = new Date(); d.setDate(d.getDate() + i + 1); d.setHours(HH, 0, 0, 0);
     return d.toISOString();
   }
 }
@@ -445,7 +454,43 @@ function authView(mode) {
 /* ---------- Shell ---------- */
 let IDEAS = [];
 let CHAT = [];       // [{role:'user'|'assistant', text}]
-let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo}
+let CHAT_IDEA = null; // propuesta cerrada por el consultor {titulo, angulo, caption?, photo_index?, colors?}
+let CUSTOM_PAL = null; // paleta pedida por el cliente en el chat ("en rojo") — manda sobre la marca
+// Paleta a partir de los colores que pidió el cliente (1-3 hex)
+function orderPalette(hexes) {
+  const c = hexes.slice(0, 3).map(h => h.toUpperCase());
+  while (c.length < 3) c.push(c[c.length - 1]);
+  const n = parseInt(c[0].slice(1), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return { name: 'Tu pedido', c, dark: lum > 0.6, custom: true };
+}
+// Miniaturas de sus fotos guardadas (las más nuevas primero) para que la IA las vea
+async function chatLibThumbs() {
+  const lib = assetPhotos().slice().reverse().slice(0, 6);
+  const out = [];
+  for (const p of lib) {
+    try {
+      const img = await photoImg(p.file_path);
+      const s = Math.min(1, 256 / Math.max(img.width || 1, img.height || 1));
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round((img.width || 1) * s));
+      cv.height = Math.max(1, Math.round((img.height || 1) * s));
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      out.push(cv.toDataURL('image/jpeg', 0.7));
+    } catch (e) { /* foto ilegible: se saltea */ }
+  }
+  return out;
+}
+// Aplica un pedido del cliente: foto elegida + colores (el texto dictado va al textarea)
+function applyChatOrder(idea) {
+  if (!idea) return;
+  if (Number.isInteger(idea.photo_index) && !CHAT_PHOTOS.length) {
+    const lib = assetPhotos().slice().reverse();
+    const pick = lib[idea.photo_index];
+    if (pick) { CHAT_PHOTOS = [{ file_path: pick.file_path }]; CHAT_PHOTO_IDX = 0; renderChatPhotos(); }
+  }
+  if (idea.colors && idea.colors.length) CUSTOM_PAL = orderPalette(idea.colors);
+}
 /* ---------- PWA: instalar la app ---------- */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -472,6 +517,10 @@ function pwaIsInstalled() {
 }
 function pwaIsIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+// La invitación a instalar solo tiene sentido en el teléfono: en la compu no se muestra.
+function pwaIsMobile() {
+  try { return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || ''); } catch (e) { return false; }
 }
 function pwaDismissed() {
   try {
@@ -559,7 +608,7 @@ function setupChecklistHtml() {
   if (!(PROFILE && PROFILE.ig_connected)) {
     rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
   }
-  if (!pwaIsInstalled() && !pwaDismissed()) {
+  if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
     rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">📲</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
   }
   if (!rows.length) return '';
@@ -569,7 +618,7 @@ function setupChecklistHtml() {
 
 function appShell(tab, content) {
   return `
-  <div class="mtop"><a class="logo" href="#/">Posta<span class="dot">.</span></a>
+  <div class="mtop"><a class="logo" href="#/app/semana">Posta<span class="dot">.</span></a>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn btn-ghost btn-sm" data-tab="ajustes" aria-label="Ajustes">⚙️</button>
       <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button>
@@ -577,7 +626,7 @@ function appShell(tab, content) {
   ${setupChecklistHtml()}
   <div class="app-shell">
     <div class="sidebar">
-      <a class="logo" href="#/" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
+      <a class="logo" href="#/app/semana" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
       <div class="grow"></div>
       <div class="side-user">${esc(ME?.email || '')}</div>
       <button class="side-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="ico">⚙️</span>Ajustes</button>
@@ -627,6 +676,8 @@ function getPalettes() {
     const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
     list.unshift({ name: 'Mi marca', c: bc.slice(0, 3), dark: lum > 0.6, brand: true });
   }
+  // El pedido del cliente manda: va primero y el índice 0 lo usa
+  if (CUSTOM_PAL) list.unshift(CUSTOM_PAL);
   return list;
 }
 // La paleta por defecto siempre es "Mi marca" (indice 0 cuando hay colores de marca).
@@ -1141,8 +1192,8 @@ function autopilotCardHTML(tag) {
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Llenamos tu semana en autopilot</h3>
-    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel. Vos los revisás y aprobás — recién ahí se programan.</p>
-    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length ? ` · 🖼️ usamos tus fotos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
+    <p style="color:var(--mut);font-size:15px;line-height:1.6;margin-bottom:6px">Creamos los textos, los diseños y un reel. Vos los revisás y aprobás — recién ahí se programan. ⏱ En 5 minutos tu semana queda lista y se publica sola.</p>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:15px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
@@ -1153,46 +1204,119 @@ function autopilotCardHTML(tag) {
   </div>`;
 }
 
+// 📷 Mis fotos y videos: tira finita arriba de Mi semana, sin tarjeta grande.
+// Un toque para agregar, × para borrar. Las fotos alimentan los posteos automáticamente.
+function mediaCardHTML() {
+  const items = [...assetPhotos().map(a => ({ ...a, isVid: false })), ...assetVideos().map(a => ({ ...a, isVid: true }))].reverse(); // más nuevos primero
+  return `
+  <div id="mediaCard" class="media-stripbar" title="Mis fotos y videos — las usamos en tus posteos">
+    <span class="media-strip-ico">📷</span>
+    <div class="media-strip">${items.map(a => `
+      <div class="media-thumb sm">
+        ${a.isVid
+          ? `<video src="${esc(a.file_path)}" muted playsinline preload="metadata"></video><span class="media-play">▶</span>`
+          : `<img src="${esc(a.file_path)}" alt="Foto del negocio">`}
+        <button class="media-del" data-mediadel="${a.id}" title="Borrar" aria-label="Borrar archivo">×</button>
+      </div>`).join('')}</div>
+    <button class="btn btn-soft btn-sm" id="btnMediaAdd" title="Agregar fotos o videos">＋</button>
+    <input type="file" id="mediaFiles" accept="image/*,video/*" multiple style="display:none">
+  </div>
+  <div id="mediaMsg" style="margin:-8px 0 12px"></div>`;
+}
+function bindMediaCard() {
+  const add = $('#btnMediaAdd'), inp = $('#mediaFiles');
+  if (!add || !inp) return;
+  add.onclick = () => inp.click();
+  inp.onchange = async () => {
+    const files = [...inp.files].filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    if (!files.length) return;
+    const msg = $('#mediaMsg');
+    add.disabled = true;
+    try {
+      let ok = 0;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        msg.innerHTML = `<div class="hint">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
+        const r = await fetch('/api/assets?kind=' + (f.type.startsWith('video/') ? 'video' : 'photo'), {
+          method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+        ok++;
+      }
+      msg.innerHTML = `<div class="okmsg">✅ ${ok === 1 ? 'Agregado' : ok + ' agregados'} — ya los usamos en tus posteos.</div>`;
+      ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+      render();
+    } catch (e) { msg.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; }
+    add.disabled = false; inp.value = '';
+  };
+  $$('#mediaCard [data-mediadel]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Borrar este archivo?')) return;
+    try { await api.delete('/api/assets/' + b.dataset.mediadel); } catch (e) {}
+    ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+    render();
+  });
+}
+
 function reviewCardHTML(drafts, slots) {
   const s = slots || [];
+  const n = drafts.length;
+  // Cabecera estilo Instagram: el borrador se muestra como el posteo que va a ser (WYSIWYG).
+  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  const bizLogo = (typeof assetLogo === 'function' ? assetLogo() : null);
+  const bizColor = (typeof brandColors === 'function' && brandColors()[0]) || '#2793C8';
+  const ava = bizLogo
+    ? `<img src="${esc(bizLogo.file_path)}" alt="" class="igmock-ava">`
+    : `<span class="igmock-ava" style="background:${esc(bizColor)}">${esc((bizName || 'M')[0].toUpperCase())}</span>`;
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 16px">Ya les pusimos día y hora a cada uno — cambialos si querés. Tocá <b>Programar semana</b> y salen solos. Nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 4px">Así se van a ver en tu Instagram. Revisalos — si te gustan, aceptalos y se programan solos. Nada sale sin tu OK.</p>
+    <p style="margin:0 0 14px"><button class="rev-chatlink" id="revChatLink">💬 ¿Cambiar algo? Decilo en el chat 👇</button></p>
     ${drafts.map((d, i) => `
-    <div style="margin-bottom:18px">
-    <div class="post-item" style="align-items:flex-start;margin-bottom:8px">
-      <div style="width:72px;flex-shrink:0">
+    <div class="igmock">
+      <div class="igmock-head">
+        ${ava}
+        <span class="igmock-name">${esc(bizName)}</span>
+        <span class="igmock-count">${i + 1} de ${n}</span>
+      </div>
+      <div class="igmock-media">
         ${d.media_type === 'video'
-          ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#0A1E33;cursor:zoom-in"></video>`
-          : `<img src="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" style="width:72px;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:zoom-in">`}
+          ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1"></video>`
+          : `<img src="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" alt="Diseño del borrador ${i + 1}">`}
+        ${d.media_type === 'video' ? `<span class="igmock-badge">🎬 Reel</span>` : ''}
+        ${d.media_type === 'story' ? `<span class="igmock-badge">📱 Historia</span>` : ''}
       </div>
-      <div class="info" style="flex:1;min-width:0">
-        <div style="margin-bottom:6px"><span class="badge b-draft">Borrador ${i + 1}</span>${d.media_type === 'video' ? ' <span class="badge b-scheduled">🎬 reel</span>' : ''}</div>
-        <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
-        <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="font-size:12px;margin-top:6px;padding:8px 10px">
+      <div class="igmock-body">
+        <div class="rev-preview" data-revpreview="${d.id}">${esc((d.caption || '').trim() || 'Sin texto todavía')}</div>
+        ${d.hashtags ? `<div class="rev-hashprev" data-revhashprev="${d.id}">${esc(d.hashtags)}</div>` : `<div class="rev-hashprev" data-revhashprev="${d.id}" style="display:none"></div>`}
+        <div data-revfields="${d.id}" hidden>
+          <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
+          <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
+        </div>
+        <button class="rev-editbtn" data-revedit="${d.id}">✏️ Editar texto</button>
+        <label class="igmock-when"><span>📅 Sale el</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt"></label>
+        <button class="btn btn-primary btn-block igmock-publish" data-revnow="${d.id}">📤 Publicar ahora</button>
+        <div class="igmock-sec">
+          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}">✨ Nuevo diseño</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}">🎬 Cambiar video</button>` : `<button data-revphoto="${d.id}">🖼️ Cambiar foto</button>`}
+          <button class="danger" data-revdel="${d.id}">🗑️ Borrar</button>
+        </div>
+        <div id="revph-${d.id}"></div>
+        <div id="revnowm-${d.id}"></div>
       </div>
-      <div class="acts" style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-primary btn-sm" data-revnow="${d.id}" title="Publicar ahora en Instagram" style="font-size:16px">🚀</button>
-        <button class="btn btn-ghost btn-sm" data-revregen="${d.id}" title="Regenerar: nuevo diseño y nuevo texto" style="font-size:16px">↻</button>
-        <button class="btn btn-ghost btn-sm" data-revdel="${d.id}" title="Eliminar borrador">🗑️</button>
-      </div>
-    </div>
-    ${d.media_type === 'video' ? '' : `<button class="btn btn-ghost btn-sm" data-revphoto="${d.id}" style="width:100%;margin:0 0 8px">🖼️ Cambiar foto</button><div id="revph-${d.id}"></div>`}
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:14px;flex-shrink:0">📅</span>
-      <input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora sugeridos para el borrador ${i + 1}" style="font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--txt);font-family:inherit;flex:1;min-width:0">
-    </div>
-    <div id="revnowm-${d.id}"></div>
     </div>`).join('')}
-    <div style="margin-top:10px">
-      <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Programar semana</button>
+    <div class="rev-schedule">
+      <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Aceptar y programar mi semana</button>
+      <p class="rev-promise">⏱ En 5 minutos tu semana queda lista y se publica sola.</p>
     </div>
     <div id="revMsg"></div>
   </div>`;
 }
 
 function bindReview() {
+  // "¿Cambiar algo?" → baja al chat consultor, que ahora vive pegado a la revisión
+  const rcl = $('#revChatLink');
+  if (rcl) rcl.onclick = () => { const c = $('#chatCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   // Tap en la miniatura abre el diseño en grande
   $$('#reviewCard [data-lightbox]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();
@@ -1205,13 +1329,35 @@ function bindReview() {
   }));
   // Guardar los hashtags al salir del campo
   $$('[data-revhash]').forEach(inp => inp.addEventListener('change', async () => {
-    try { await api.patch('/api/posts/' + inp.dataset.revhash, { action: 'save-draft', hashtags: inp.value }); }
-    catch (e) { /* se reintenta al programar */ }
+    try { await api.patch('/api/posts/' + inp.dataset.revhash, { action: 'save-draft', hashtags: inp.value }); } catch (e) { /* se reintenta al programar */ }
+    const hp = document.querySelector(`[data-revhashprev="${inp.dataset.revhash}"]`);
+    if (hp) { hp.textContent = inp.value || ''; hp.style.display = inp.value ? '' : 'none'; }
+  }));
+  // Texto colapsado por defecto: "Editar texto" expande los campos
+  $$('[data-revedit]').forEach(b => b.onclick = () => {
+    const id = b.dataset.revedit;
+    const f = document.querySelector(`[data-revfields="${id}"]`);
+    const p = document.querySelector(`[data-revpreview="${id}"]`);
+    const hp = document.querySelector(`[data-revhashprev="${id}"]`);
+    if (!f || !p) return;
+    const open = f.hidden;
+    f.hidden = !open;
+    p.style.display = open ? 'none' : '';
+    if (hp) hp.style.display = open ? 'none' : (hp.textContent ? '' : 'none');
+    b.textContent = open ? '✓ Listo' : '✏️ Editar texto';
+    if (open) { const ta = f.querySelector('textarea'); if (ta) ta.focus({ preventScroll: true }); }
+  });
+  // Al guardar el caption, refrescar el preview
+  $$('[data-revcap]').forEach(ta => ta.addEventListener('change', () => {
+    const p = document.querySelector(`[data-revpreview="${ta.dataset.revcap}"]`);
+    if (p) p.textContent = (ta.value || '').trim() || 'Sin texto todavía';
   }));
   // Regenerar un borrador (↻): nuevo diseño y nuevo texto del mismo tema, en el lugar
   $$('[data-revregen]').forEach(b => b.onclick = () => regenDraft(+b.dataset.revregen, b));
   // Cambiar la foto de un borrador: tira de fotos + subir nueva
   $$('[data-revphoto]').forEach(b => b.onclick = () => togglePhotoPicker(+b.dataset.revphoto, b));
+  // Cambiar el video de un borrador reel: tira de videos + subir nuevo
+  $$('[data-revvideo]').forEach(b => b.onclick = () => toggleVideoPicker(+b.dataset.revvideo, b));
   // Eliminar borrador
   $$('[data-revdel]').forEach(b => b.onclick = async () => {
     if (!confirm('¿Eliminar este borrador?')) return;
@@ -1230,22 +1376,48 @@ function bindReview() {
     await publishNowFlow(id, mount);
     render();
   });
-  // Programar toda la semana: usa el día/hora de cada borrador (ya vienen sugeridos)
+  // Aceptar y programar toda la semana: usa el día/hora de cada borrador (ya vienen sugeridos)
   const sw = $('#btnScheduleWeek');
   if (sw) sw.onclick = async () => {
-    sw.disabled = true;
     const m = $('#revMsg');
+    // Sin Instagram conectado, "sale solo" es mentira: pedir conectar antes de aceptar
+    if (!(PROFILE && PROFILE.ig_connected)) {
+      if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+      const g = $('#revIgGo');
+      if (g) g.onclick = () => igConnectHere();
+      m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    sw.disabled = true;
     try {
       const tas = $$('#reviewCard [data-revcap]');
+      const whens = [];
       for (let i = 0; i < tas.length; i++) {
         const id = tas[i].dataset.revcap;
         const winp = document.querySelector(`#reviewCard [data-revwhen="${id}"]`);
         const when = (winp && winp.value) ? new Date(winp.value).toISOString() : slotDate(i);
+        whens.push(when);
         await api.patch('/api/posts/' + id, {
           scheduled_at: when, caption: tas[i].value,
         });
       }
-      render();
+      // Festejo: aceptar se siente como un logro, no como un trámite
+      const n = tas.length;
+      try { await api.post('/api/funnel', { event: 'week_accepted' }); } catch (e) {}
+      const first = whens.filter(Boolean).sort()[0];
+      streakModalShell(`
+        <div class="big-emoji">🎉</div>
+        <h3 style="margin:12px 0 4px">¡Listo! Tu semana se publica sola</h3>
+        <p style="font-size:16px;margin:0 0 6px"><b>${n} ${n === 1 ? 'posteo programado' : 'posteos programados'}</b> ✅</p>
+        ${first ? `<p class="d">El primero sale ${relDay(first)} — no tenés que hacer nada más.</p>` : ''}
+        <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
+        ${celebRefHTML()}
+        <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
+      const cmo = document.getElementById('streakModal');
+      if (cmo) wireCelebRef(cmo);
+      const cg = $('#celebGo');
+      if (cg) cg.onclick = () => { closeStreakModal(); render(); };
+      else render();
     } catch (e) {
       if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
       sw.disabled = false;
@@ -1255,10 +1427,9 @@ function bindReview() {
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
 let REVIEW_DRAFTS = [];
-// Regenerar UN borrador: nuevo texto del mismo tema + diseño con otro estilo.
-// Si se pasa photoPath, el diseño usa esa foto. Reemplaza en el lugar,
-// conserva el id y el día/hora sugeridos.
-async function regenDraft(id, btn, photoPath) {
+// Regenerar UN borrador: texto nuevo del mismo tema + diseño con otro estilo.
+// Reemplaza en el lugar, conserva el id y el día/hora sugeridos.
+async function regenDraft(id, btn) {
   const d = REVIEW_DRAFTS.find(x => x.id === id);
   if (!d || d.media_type === 'video') return;
   const isBtn = !!(btn && btn.tagName === 'BUTTON');
@@ -1267,11 +1438,12 @@ async function regenDraft(id, btn, photoPath) {
   try {
     const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
     const out = await api.post('/api/generate', { topic });
-    const photos = assetPhotos();
+    // Las fotos más nuevas van primero: las de esta semana protagonizan los posteos.
+    const photos = assetPhotos().slice().reverse();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
     const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
     const title = (d.source_topic || topic).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-    const ph = photoPath ? { file_path: photoPath } : (photos.length ? photos[(idx + 1) % photos.length] : null);
+    const ph = photos.length ? photos[(idx + 1) % photos.length] : null;
     const imagePath = await renderDesignImage({
       tpl: pickTpl(idx + 1, false),
       pal: defaultPal(),
@@ -1293,19 +1465,46 @@ async function regenDraft(id, btn, photoPath) {
     if (isBtn) { btn.disabled = false; btn.innerHTML = old; }
   }
 }
+// Cambiar SOLO la foto de un borrador: re-hace el diseño con esa foto pero
+// conserva texto, hashtags, id y día/hora. (El ↻ Regenerar es lo que pide texto nuevo.)
+async function changeDraftPhoto(id, el, photoPath) {
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  if (!d || d.media_type === 'video' || !photoPath) return;
+  try {
+    el.style.opacity = '0.4'; el.style.pointerEvents = 'none';
+    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+    const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
+    const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
+    const title = topic.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+    const imagePath = await renderDesignImage({
+      tpl: pickTpl(idx + 1, false),
+      pal: defaultPal(),
+      title,
+      subtitle: (d.source_angle || '').split('.')[0].slice(0, 90),
+      handle: (PROFILE || {}).ig_username || '',
+      photoImg: await photoImg(photoPath),
+      logoImg: logo,
+    });
+    await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: imagePath });
+    render();
+  } catch (e) {
+    alert('No se pudo cambiar la foto. Probá de nuevo.');
+    el.style.opacity = ''; el.style.pointerEvents = '';
+  }
+}
 // Selector de foto por borrador: tira horizontal con tus fotos + subir nueva.
-// Elegir una regenera el diseño de ESE borrador con esa foto.
+// Elegir una cambia SOLO la foto de ESE borrador (el texto queda intacto).
 function togglePhotoPicker(id, btn) {
   const mount = document.getElementById('revph-' + id);
   if (!mount) return;
   if (mount.dataset.open === '1') { mount.innerHTML = ''; mount.dataset.open = ''; return; }
   mount.dataset.open = '1';
-  const photos = assetPhotos();
+  const photos = assetPhotos().slice().reverse(); // más nuevas primero
   mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
     ${photos.map(p => `<img src="${esc(p.file_path)}" data-pickphoto="${esc(p.file_path)}" alt="Foto del negocio" style="width:64px;height:64px;flex-shrink:0;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line)">`).join('')}
     <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
   </div>`;
-  mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => regenDraft(id, img, img.dataset.pickphoto));
+  mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => changeDraftPhoto(id, img, img.dataset.pickphoto));
   const up = mount.querySelector('[data-uploadphoto]');
   if (up) up.onchange = async () => {
     const f = up.files[0]; if (!f) return;
@@ -1315,8 +1514,47 @@ function togglePhotoPicker(id, btn) {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'No se pudo subir');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-      await regenDraft(id, up, data.path);
+      await changeDraftPhoto(id, up, data.path);
     } catch (e) { alert('No se pudo subir la foto: ' + e.message); }
+  };
+}
+
+// Cambiar el VIDEO de un borrador reel por otro de la biblioteca del cliente.
+async function changeDraftVideo(id, el, videoPath) {
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  if (!d || d.media_type !== 'video' || !videoPath) return;
+  try {
+    el.style.opacity = '0.4'; el.style.pointerEvents = 'none';
+    await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: videoPath });
+    render();
+  } catch (e) {
+    alert('No se pudo cambiar el video. Probá de nuevo.');
+    el.style.opacity = ''; el.style.pointerEvents = '';
+  }
+}
+// Selector de video por borrador reel: tira horizontal con tus videos + subir nuevo.
+function toggleVideoPicker(id, btn) {
+  const mount = document.getElementById('revph-' + id);
+  if (!mount) return;
+  if (mount.dataset.open === '1') { mount.innerHTML = ''; mount.dataset.open = ''; return; }
+  mount.dataset.open = '1';
+  const vids = assetVideos();
+  mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
+    ${vids.map(v => `<div style="position:relative;flex-shrink:0"><video src="${esc(v.file_path)}" data-pickvideo="${esc(v.file_path)}" muted playsinline preload="metadata" style="width:64px;height:64px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line);background:#0A1E33"></video><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;pointer-events:none">▶</span></div>`).join('')}
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nuevo video">＋<input type="file" accept="video/*" data-uploadvideo style="display:none"></label>
+  </div>`;
+  mount.querySelectorAll('[data-pickvideo]').forEach(v => v.onclick = () => changeDraftVideo(id, v, v.dataset.pickvideo));
+  const up = mount.querySelector('[data-uploadvideo]');
+  if (up) up.onchange = async () => {
+    const f = up.files[0]; if (!f) return;
+    if (!f.type.startsWith('video/')) { alert('Elegí un archivo de video'); return; }
+    try {
+      const r = await fetch('/api/assets?kind=video', { method: 'POST', headers: { 'Content-Type': f.type }, body: f });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+      ASSETS = await api.get('/api/assets').catch(() => ASSETS);
+      await changeDraftVideo(id, up, data.path);
+    } catch (e) { alert('No se pudo subir el video: ' + e.message); }
   };
 }
 
@@ -1334,9 +1572,16 @@ let CHAT_CAP_SEL = 0;
 
 function proposalHTML() {
   if (!CHAT_IDEA) return '';
+  // ¿Es un pedido concreto? Se presenta como tal, con el resumen de lo que entendimos.
+  const isOrder = !!(CHAT_IDEA.caption || Number.isInteger(CHAT_IDEA.photo_index) || (CHAT_IDEA.colors || []).length);
+  const bits = [];
+  if (CHAT_IDEA.caption) bits.push('📝 tu texto tal cual');
+  if (Number.isInteger(CHAT_IDEA.photo_index)) bits.push('📷 la foto que elegiste');
+  if (CHAT_IDEA.colors && CHAT_IDEA.colors.length) bits.push('🎨 en tus colores');
   return `
     <div class="chat-proposal">
-      <div style="font-weight:800;margin-bottom:4px">✨ Idea lista: ${esc(CHAT_IDEA.titulo)}</div>
+      <div style="font-weight:800;margin-bottom:4px">${isOrder ? '🧾 Tu pedido' : '✨ Idea lista'}: ${esc(CHAT_IDEA.titulo)}</div>
+      ${bits.length ? `<div style="font-size:13px;color:var(--mut);margin-bottom:6px">${bits.join(' · ')}</div>` : ''}
       ${CHAT_IDEA.angulo ? `<div style="font-size:14px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
       <div style="font-weight:700;font-size:14px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
       <div class="chat-previews" id="chatPreviews"><div style="font-size:13px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
@@ -1346,7 +1591,7 @@ function proposalHTML() {
       </div>
       <div class="chat-caps" id="chatCaps"></div>
       <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
-      <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="font-size:13px;margin-top:6px">
+      <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
       <details class="chat-board">
         <summary>🎬 Ver cómo sería el reel <span style="color:var(--mut);font-weight:400">(3 escenas)</span></summary>
         <div class="chat-board-row" id="chatBoard"><div style="font-size:13px;color:var(--mut)">⏳ Generando…</div></div>
@@ -1556,7 +1801,10 @@ async function chatLoadHistory() {
     }
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
+      applyChatOrder(r.idea);
       chatRenderProposal();
+      const ta0 = $('#chatCaption');
+      if (ta0 && r.idea.caption) { ta0.value = r.idea.caption; ta0.dataset.touched = '1'; }
       refreshChatCaption();
     }
     chatScroll();
@@ -1589,6 +1837,11 @@ async function draftFromPreview(idea, prev) {
   try {
     await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: 'image' });
   } catch (e) {
+    if (isPlanLimitErr(e)) {
+      const q = await api.get('/api/quota').catch(() => null);
+      quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' });
+      return;
+    }
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
 }
@@ -1598,21 +1851,22 @@ function chatCardHTML() {
     <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
   return `
   <div class="card" id="chatCard">
-    <h3 style="margin:0 0 6px">💬 Tu consultor de contenido</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Preguntanos lo que sea: estrategia, ideas, qué publicar esta semana. Te respondemos con criterio de community manager.</p>
+    <h3 style="margin:0 0 6px">💬 Pedime tu posteo</h3>
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>
     <div class="chat-box" id="chatBox">
-      ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Soy tu consultor de contenido. Contame qué idea tenés para tu Instagram y te digo la posta: si va a vender, qué le cambiaría y cómo la haría. ¿Qué tenés en mente?</div>`}
+      ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Pedime lo que quieras para tu Instagram: qué querés vender, qué tiene que decir, con qué foto y en qué colores. Lo armo acá mismo 👇</div>`}
     </div>
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
+      <button class="btn btn-soft" id="chatMic" title="Pedir con nota de voz">🎙</button>
       <button class="btn btn-soft" id="chatAttach" title="Subir foto">📷</button>
-      <input id="chatInput" class="in" placeholder="Ej: quiero un posteo sobre mis nuevos buzos…" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="Ej: un posteo de la promo 2x1 que diga «este finde todo a mitad de precio»…" maxlength="2000" autocomplete="off">
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
       <input type="file" id="chatFile" accept="image/*" multiple hidden>
     </div>
     <div id="chatMsg"></div>
-    <div style="font-size:12px;color:var(--mut);margin-top:10px">📷 Subí fotos de tu producto: la IA opina sobre ellas y las usa en los ejemplos.</div>
+    <div style="font-size:12px;color:var(--mut);margin-top:10px">📷 Subí fotos de tu producto o pedime usar una que ya tengas: la IA las ve y las usa.</div>
   </div>`;
 }
 
@@ -1691,7 +1945,7 @@ async function chatUploadPhotos(files) {
 
 // Estilos disponibles para los ejemplos (se rotan con "otro estilo")
 function chatStyles() {
-  const p = defaultPal();
+  const p = CUSTOM_PAL ? 0 : defaultPal();
   const n = (typeof getPalettes === 'function' ? getPalettes().length : 5) || 5;
   return [['gradiente', p], ['claro', (p + 1) % n], ['noche', (p + 2) % n], ['promo', (p + 3) % n]];
 }
@@ -1702,6 +1956,18 @@ function chatEditCommand(text) {
   if (!CHAT_IDEA) return false;
   const t = text.trim();
   let m;
+  // — Cambiar los colores (pedido directo: "ponelo en rojo", "de color azul") —
+  // (Si dice "que diga ...", el color es parte del texto: lo maneja el patrón de título)
+  const ORDER_COLORS = { rojo: '#D63A2F', roja: '#D63A2F', rojos: '#D63A2F', rojas: '#D63A2F', azul: '#1F6FEB', azules: '#1F6FEB', celeste: '#2793C8', verde: '#2E9E5B', verdes: '#2E9E5B', amarillo: '#FEC14D', amarillos: '#FEC14D', negro: '#0A1E33', blanco: '#FFFFFF', rosa: '#E85D9E', rosas: '#E85D9E', naranja: '#F07B2D', violeta: '#7B5CD6', dorado: '#C9A227' };
+  if (!/que\s+diga/i.test(t)) {
+    m = t.match(/(?:ponelo|ponela|cambial[oe]|hacelo|hacela|en|de\s+color|con\s+color)\s+(?:color\s+)?(rojo|roja|rojos|rojas|azul|azules|celeste|verde|verdes|amarillo|amarillos|negro|blanco|rosa|rosas|naranja|violeta|dorado)\b/i);
+    if (m && ORDER_COLORS[m[1].toLowerCase()]) {
+      CUSTOM_PAL = orderPalette([ORDER_COLORS[m[1].toLowerCase()]]);
+      chatSay(`✅ Ahora en ${m[1].toLowerCase()} 👇`);
+      renderChatPreviews();
+      return true;
+    }
+  }
   // — Cambiar el título (solo pedidos explícitos) —
   const titlePats = [
     /t[ií]tulo\s*:\s*["“]?(.+?)["”]?\s*$/i,
@@ -1788,18 +2054,29 @@ async function chatSend() {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
     return;
   }
-  CHAT_IDEA = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
+  CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
   chatScroll();
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
   const unsentPhotos = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent).map(p => p.aiUrl);
+  // Sus fotos guardadas (miniaturas): para que pueda usar la que le pidan ("la del asado")
+  let libThumbs = [];
+  try { libThumbs = await chatLibThumbs(); } catch (e) {}
   try {
-    const r = await api.post('/api/ideas/chat', { messages: CHAT, photos: unsentPhotos });
+    const r = await api.post('/api/ideas/chat', { messages: CHAT, photos: unsentPhotos, library: libThumbs });
     const t = $('#chatTyping'); if (t) t.remove();
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
-    if (r.idea) { CHAT_IDEA = r.idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; chatRenderProposal(); refreshChatCaption(); }
+    if (r.idea) {
+      CHAT_IDEA = r.idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+      applyChatOrder(r.idea); // foto elegida + colores del pedido
+      chatRenderProposal();
+      // Texto dictado por el cliente: va tal cual al textarea y se respeta (touched)
+      const ta = $('#chatCaption');
+      if (ta && r.idea.caption) { ta.value = r.idea.caption; ta.dataset.touched = '1'; }
+      refreshChatCaption(); // solo rellena hashtags/opciones; el texto dictado no se toca
+    }
   } catch (e) {
     const t = $('#chatTyping'); if (t) t.remove();
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
@@ -1811,6 +2088,11 @@ async function chatSend() {
 async function chatMakePost(asVideo) {
   const idea = CHAT_IDEA;
   if (!idea) return;
+  // Cupo del plan: chequear antes de crear para no perder la idea armada
+  try {
+    const q = await api.get('/api/quota');
+    if (q.left <= 0) { quotaModal(q); return; }
+  } catch (e) {}
   const m = $('#chatMsg');
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.disabled = true;
@@ -1823,6 +2105,7 @@ async function chatMakePost(asVideo) {
       await draftFromIdea(idea, asVideo, 0, true);
     }
     CHAT_IDEA = null;
+    CUSTOM_PAL = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
     CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
@@ -1841,10 +2124,77 @@ async function chatMakePost(asVideo) {
   }
 }
 
+/* ---------- Nota de voz: pedir el posteo hablando ---------- */
+let VOICE_REC = null, VOICE_CHUNKS = [], VOICE_TIMER = null, VOICE_START = 0, VOICE_MIME = '';
+function voiceTick() {
+  const b = document.getElementById('chatMic');
+  if (b && VOICE_REC) {
+    const s = Math.floor((Date.now() - VOICE_START) / 1000);
+    b.textContent = `⏺ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+}
+async function voiceToggle() {
+  if (VOICE_REC) { voiceStop(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    chatSay('🎙 Tu navegador no soporta notas de voz. Escribime el pedido 👇');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    VOICE_CHUNKS = [];
+    VOICE_MIME = rec.mimeType || '';
+    rec.ondataavailable = e => { if (e.data && e.data.size) VOICE_CHUNKS.push(e.data); };
+    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); voiceSend(); };
+    VOICE_REC = rec;
+    rec.start();
+    VOICE_START = Date.now();
+    const b = document.getElementById('chatMic');
+    if (b) { b.classList.add('btn-rec'); b.textContent = '⏺ 0:00'; }
+    clearInterval(VOICE_TIMER);
+    VOICE_TIMER = setInterval(voiceTick, 500);
+    setTimeout(() => { if (VOICE_REC) voiceStop(); }, 60000); // tope 1 minuto
+  } catch (e) {
+    chatSay('🎙 No pudimos usar el micrófono. Revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇');
+  }
+}
+function voiceStop() {
+  const rec = VOICE_REC;
+  VOICE_REC = null;
+  clearInterval(VOICE_TIMER);
+  const b = document.getElementById('chatMic');
+  if (b) { b.classList.remove('btn-rec'); b.textContent = '🎙'; }
+  if (rec) { try { rec.stop(); } catch (e) { voiceSend(); } }
+}
+async function voiceSend() {
+  const chunks = VOICE_CHUNKS; VOICE_CHUNKS = [];
+  const blob = new Blob(chunks, { type: VOICE_MIME || 'audio/mp4' });
+  if (blob.size < 1500) return; // grabación vacía
+  const inp = document.getElementById('chatInput');
+  const oldPh = inp ? inp.placeholder : '';
+  if (inp) { inp.placeholder = '⏳ Transcribiendo tu nota de voz…'; inp.disabled = true; }
+  try {
+    const fd = new FormData();
+    fd.append('audio', blob, 'nota.' + ((VOICE_MIME || '').includes('webm') ? 'webm' : 'm4a'));
+    const r = await fetch('/api/voice/transcribe', { method: 'POST', body: fd });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'No se pudo transcribir');
+    if (inp) { inp.value = data.text || ''; inp.disabled = false; inp.focus(); }
+  } catch (e) {
+    if (inp) inp.disabled = false;
+    chatSay('🎙 ' + (e.message || 'No pudimos transcribir la nota de voz'));
+  }
+  if (inp) inp.placeholder = oldPh;
+}
+
 function bindChat() {
   const btn = $('#chatSend'), inp = $('#chatInput');
   if (!btn || !inp) return;
   btn.onclick = chatSend;
+  const mic = $('#chatMic');
+  if (mic) mic.onclick = voiceToggle;
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });
   chatScroll();
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
@@ -1876,7 +2226,49 @@ async function renderDesignImage(o) {
 function slotDate(i) {
   return slotDate19(i, (SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires');
 }
-// Horarios sugeridos para N borradores: 19:00 en la zona horaria del negocio,
+
+// ---------- Historias automáticas (1080x1920) ----------
+// Foto a pleno + degradado + título: se ven nativas en el visor de historias.
+function drawStory(canvas, o) {
+  const W = 1080, H = 1920;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const pals = getPalettes();
+  const pal = pals[o.pal] || pals[0];
+  if (o.photoImg) {
+    drawCover(ctx, o.photoImg, 0, 0, W, H);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, pal.c[0]); g.addColorStop(1, pal.c[1] || pal.c[0]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  const dg = ctx.createLinearGradient(0, H * 0.42, 0, H);
+  dg.addColorStop(0, 'rgba(10,30,51,0)');
+  dg.addColorStop(1, 'rgba(10,30,51,.9)');
+  ctx.fillStyle = dg; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#FEC14D';
+  ctx.fillRect(W / 2 - 65, H - 600, 130, 14);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '800 92px -apple-system, Inter, sans-serif';
+  wrapText(ctx, o.title || 'Novedad', W - 160).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, H - 510 + i * 110));
+  ctx.fillStyle = 'rgba(255,255,255,.78)';
+  ctx.font = '400 48px -apple-system, Inter, sans-serif';
+  wrapText(ctx, o.subtitle || '', W - 200).slice(0, 2).forEach((l, i) => ctx.fillText(l, W / 2, H - 260 + i * 62));
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 44px -apple-system, Inter, sans-serif';
+  ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, H - 100);
+}
+async function renderStoryImage(o) {
+  const cv = document.createElement('canvas');
+  drawStory(cv, o);
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'No se pudo subir la historia');
+  return data.path;
+}
+// Horarios sugeridos para N borradores: a la hora de mayor audiencia del negocio,
 // un día cada uno, salteando los días que ya tienen posteos programados.
 function suggestSlots(n, scheduledPosts) {
   const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
@@ -1926,8 +2318,21 @@ function pickTpl(idx, fromChat) {
   if (fromChat) return DESIGN_TPLS[(TPL_ROT++) % DESIGN_TPLS.length];
   return DESIGN_TPLS[idx % DESIGN_TPLS.length];
 }
+// Lunes de esta semana (YYYY-MM-DD): define qué fotos cuentan como "nuevas".
+function mondayKey(d) {
+  const x = d ? new Date(d) : new Date();
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x.toISOString().slice(0, 10);
+}
+// Product shot con IA basado en las fotos reales del cliente (aprende su producto).
+async function aiProductShot(refs, idea) {
+  const r = await api.post('/api/product-shot', { refs, idea: idea.titulo || '', angle: idea.angulo || '' });
+  return r && r.path ? r.path : null;
+}
 async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
-  const photos = assetPhotos();
+  // Las fotos más nuevas van primero: las que sube esta semana (misión)
+  // protagonizan los posteos, no adivinamos.
+  const photos = assetPhotos().slice().reverse();
   const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
   const palIdx = defaultPal();
   const handle = (PROFILE || {}).ig_username || '';
@@ -1940,27 +2345,54 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
   const hashtags = (chatHg && chatHg.value.trim()) || out.hashtags || '';
   let imagePath = null, mediaType = 'image';
   if (asVideo) {
-    try {
-      imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx);
+    // Si el cliente subió sus propios videos, el reel ES su video (con nuestro texto).
+    const vids = assetVideos();
+    if (vids.length) {
+      imagePath = vids[idx % vids.length].file_path;
       mediaType = 'video';
-    } catch (e) { imagePath = null; /* fallback a diseño estático */ }
+    } else {
+      try {
+        imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx);
+        mediaType = 'video';
+      } catch (e) { imagePath = null; /* fallback a diseño estático */ }
+    }
   }
   if (!imagePath) {
     const title = (idea.titulo || 'NOVEDAD').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
-    const ph = photos.length ? photos[idx % photos.length] : null;
-    imagePath = await renderDesignImage({
-      tpl, pal: palIdx,
-      title, subtitle: (idea.angulo || '').split('.')[0].slice(0, 90),
-      handle,
-      photoImg: ph ? await photoImg(ph.file_path) : null,
-      logoImg: logo,
-    });
+    const subtitle = (idea.angulo || '').split('.')[0].slice(0, 90);
+    // Fotos FRESCAS (subidas esta semana): protagonistas. Sin fotos nuevas pero con
+    // historia: la IA genera una variación basada en sus fotos reales (aprende su producto).
+    const wk = mondayKey();
+    const fresh = photos.filter(p => (p.created_at || '').slice(0, 10) >= wk);
+    const ph = fresh.length ? fresh[idx % fresh.length] : null;
+    if (ph) {
+      imagePath = await renderDesignImage({
+        tpl, pal: palIdx, title, subtitle, handle,
+        photoImg: await photoImg(ph.file_path), logoImg: logo,
+      });
+    } else if (photos.length) {
+      try {
+        imagePath = await aiProductShot(photos.slice(0, 2).map(p => p.file_path), idea);
+      } catch (e) { imagePath = null; }
+      if (!imagePath) {
+        // Fallback: diseño con su foto más nueva (nunca se rompe la semana)
+        imagePath = await renderDesignImage({
+          tpl, pal: palIdx, title, subtitle, handle,
+          photoImg: await photoImg(photos[0].file_path), logoImg: logo,
+        });
+      }
+    } else {
+      imagePath = await renderDesignImage({
+        tpl, pal: palIdx, title, subtitle, handle, photoImg: null, logoImg: logo,
+      });
+    }
   }
   try {
     await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType, source_topic: idea.titulo || '', source_angle: idea.angulo || '' });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
+  return { imagePath, mediaType };
 }
 
 async function runAutopilot(n, tag) {
@@ -1969,6 +2401,15 @@ async function runAutopilot(n, tag) {
   const btn = document.querySelector('[data-autopilot="' + t + '"]');
   btn.disabled = true;
   try {
+    // Cupo del plan: chequear ANTES de gastar IA — ofrecer mejorar o armar parcial
+    let quota = null;
+    try { quota = await api.get('/api/quota'); } catch (e) {}
+    if (quota && quota.left < n) {
+      btn.disabled = false;
+      if (quota.left <= 0) { quotaModal(quota); return; }
+      quotaModal(quota, { onPartial: () => runAutopilot(quota.left, t) });
+      return;
+    }
     // Si hay borradores sin revisar de una corrida anterior, preguntar antes de reemplazarlos
     const existing = await api.get('/api/posts');
     const oldDrafts = existing.filter(p => p.status === 'draft');
@@ -1993,14 +2434,73 @@ async function runAutopilot(n, tag) {
     }
     const picks = ideas.slice(0, n);
     if (!picks.length) throw new Error('No hay ideas para programar');
+    // Van saliendo en vivo: cada borrador aparece abajo a medida que se crea,
+    // la espera se siente cero en vez de una barra infinita.
+    const live = [];
+    const liveHTML = () => live.length ? `<div class="live-strip">${live.map(d => `
+      <div class="live-thumb">${d.mediaType === 'video'
+        ? `<video src="${esc(d.imagePath)}" muted playsinline preload="metadata"></video><span class="live-badge">🎬</span>`
+        : `<img src="${esc(d.imagePath)}" alt="Borrador listo">${d.mediaType === 'story' ? '<span class="live-badge">📱</span>' : ''}`}<span class="live-ok">✓</span></div>`).join('')}</div>
+      <div class="hint" style="margin:4px 0 0">${live.length} ${live.length === 1 ? 'listo' : 'listos'} — en un toque los revisás 👇</div>` : '';
     // Brand kit del cliente: fotos rotadas + logo + paleta de marca
+    let quotaStopped = false;
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
       const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
-      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>`;
-      await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
+      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>${liveHTML()}`;
+      let created = null;
+      try {
+        created = await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
+      } catch (e) {
+        // Si el cupo se agotó a mitad de la corrida: cartel de mejora y mostrar lo ya creado
+        if (isPlanLimitErr(e)) {
+          const q2 = await api.get('/api/quota').catch(() => null);
+          quotaModal(q2 || { limit: 3, used: 3, left: 0, plan_name: '' });
+          quotaStopped = true;
+          break;
+        }
+        throw e;
+      }
+      if (created && created.imagePath) live.push(created);
+      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b> ✅</div>${liveHTML()}`;
     }
     prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>`;
+    // Historias automáticas: 2 por semana con las primeras ideas (foto + título).
+    // Se programan junto con la semana: más presencia, cero trabajo extra.
+    // (No consumen cupo del plan; si el cupo frenó la corrida, tampoco se crean.)
+    if (!quotaStopped) try {
+      prog.innerHTML = `<div class="okmsg">⏳ Creando 2 historias automáticas...</div>${liveHTML()}`;
+      const sPhotos = assetPhotos().slice().reverse();
+      const sHandle = (PROFILE || {}).ig_username || '';
+      const sPal = defaultPal();
+      const nStories = Math.min(2, picks.length - 1);
+      for (let si = 0; si < nStories; si++) {
+        const idea = picks[si];
+        const title = (idea.titulo || 'Novedad').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+        const subtitle = (idea.angulo || '').split('.')[0].slice(0, 80);
+        const ph = sPhotos.length ? sPhotos[(si + 1) % sPhotos.length] : null;
+        let sPath = null;
+        try {
+          sPath = await renderStoryImage({
+            pal: sPal, title, subtitle, handle: sHandle,
+            photoImg: ph ? await photoImg(ph.file_path) : null,
+          });
+        } catch (e) { console.error('[historias] diseño:', e.message); }
+        if (sPath) {
+          try {
+            await api.post('/api/posts', {
+              image_path: sPath, caption: title, hashtags: '',
+              media_type: 'story', source_topic: idea.titulo || '',
+            });
+            live.push({ imagePath: sPath, mediaType: 'story' });
+            prog.innerHTML = `<div class="okmsg">⏳ Historia ${si + 1} de ${nStories} ✅</div>${liveHTML()}`;
+          } catch (e) {
+            if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
+          }
+        }
+      }
+      prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
+    } catch (e) { console.error('[historias]', e.message); }
     // Racha: registrar la semana armada (idempotente por semana)
     let sk = null;
     try { sk = await api.post('/api/streak/week-armed', {}); } catch (e) {}
@@ -2190,7 +2690,7 @@ function postItem(p, actions) {
   const thumb = p.media_type === 'video'
     ? `<video class="thumb" src="${esc(p.image_path)}" muted preload="metadata" style="object-fit:cover" data-lightbox="${esc(p.image_path)}" data-video="1"></video>`
     : `<img class="thumb" src="${esc(p.image_path)}" data-lightbox="${esc(p.image_path)}">`;
-  const vtag = p.media_type === 'video' ? `<span class="badge b-scheduled">🎬 video</span>` : '';
+  const vtag = p.media_type === 'video' ? `<span class="badge b-scheduled">🎬 video</span>` : p.media_type === 'story' ? `<span class="badge b-scheduled">📱 historia</span>` : '';
   const capFull = (p.caption || '').trim();
   const capFirst = esc(capFull.split('\n')[0] || '(sin texto)');
   const hasMore = capFull.includes('\n') || (p.hashtags || '').trim();
@@ -2305,6 +2805,33 @@ function fmtDay(d) {
 }
 
 /* ---------- RACHAS 🔥 ---------- */
+// Límite del plan semanal: "mejorá tu paquete para seguir posteando esta semana"
+function isPlanLimitErr(e) { return !!(e && e.status === 403 && e.data && e.data.plan_limit); }
+// Chequeo previo a crear: true = hay cupo; false = se mostró el modal de mejora
+async function checkQuotaOrModal() {
+  try {
+    const q = await api.get('/api/quota');
+    if (q.left <= 0) { quotaModal(q); return false; }
+  } catch (e) { /* si falla el chequeo, no bloquear */ }
+  return true;
+}
+function quotaModal(q, opts = {}) {
+  const left = q.left || 0;
+  streakModalShell(`
+    <div class="big-emoji">🚀</div>
+    <h3 style="margin:12px 0 4px">Llegaste al tope de tu semana</h3>
+    <p style="font-size:16px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b>.</p>
+    <p class="d">Mejorá tu paquete para seguir posteando esta semana — se activa al instante, sin vueltas.</p>
+    ${left > 0 && opts.onPartial ? `<button class="btn btn-soft btn-block" id="qPartial" style="margin-top:10px">Armar solo ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
+    <button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>
+    <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Ahora no</button>`);
+  const up = document.getElementById('qUpgrade');
+  if (up) up.onclick = () => { closeStreakModal(); location.hash = '#/app/ajustes?plan=1'; };
+  const cl = document.getElementById('qClose');
+  if (cl) cl.onclick = closeStreakModal;
+  const pa = document.getElementById('qPartial');
+  if (pa && opts.onPartial) pa.onclick = () => { closeStreakModal(); opts.onPartial(); };
+}
 function closeStreakModal() { const m = document.getElementById('streakModal'); if (m) m.remove(); }
 function streakModalShell(inner) {
   closeStreakModal();
@@ -2336,28 +2863,499 @@ function wireStreakModalBtns(sk) {
   const cl = $('#streakCloseBtn'); if (cl) cl.onclick = closeStreakModal;
 }
 // Celebración al completar la semana (festejo especial si subió de nivel)
+// Bloque de referidos para los picos emocionales (festejos): compacto, un toque para compartir.
+function celebRefHTML() {
+  return `
+  <div class="celeb-ref">
+    <p class="celeb-ref-t">🎁 ¿A quién más le vendría bien esto?</p>
+    <p class="d">Compartí tu link: ellos ahorran 20% todos los meses, y con 2 referidos vos pagás la mitad.</p>
+    <div class="celeb-ref-btns">
+      <button class="btn btn-wa btn-sm" data-cref="wa">WhatsApp</button>
+      <button class="btn btn-ghost btn-sm" data-cref="copy">Copiar link</button>
+    </div>
+    <p class="d celeb-ref-msg"></p>
+  </div>`;
+}
+async function wireCelebRef(root) {
+  let link = '';
+  try { const info = await pzReferral(); if (info && info.ok) link = info.link; } catch (e) {}
+  const msg = root.querySelector('.celeb-ref-msg');
+  const shareMsg = `Mirá lo que hace Posta con el Instagram de mi negocio: arma la semana y la publica sola. Probalo 3 días gratis con mi link: ${link}`;
+  root.querySelectorAll('[data-cref]').forEach(b => {
+    b.onclick = async () => {
+      if (!link) { if (msg) msg.textContent = 'No se pudo cargar tu link todavía.'; return; }
+      if (b.dataset.cref === 'wa') {
+        location.href = 'https://wa.me/?text=' + encodeURIComponent(shareMsg);
+      } else {
+        try { await navigator.clipboard.writeText(link); if (msg) msg.textContent = '✅ Link copiado'; }
+        catch (e) { if (msg) msg.textContent = link; }
+      }
+    };
+  });
+}
+// Festejo de primera publicación: una vez por cuenta, cuando el primer posteo sale.
+// Es el momento donde la confianza se cristaliza ("¿viste? salió solo").
+let _pubCelebChecked = false;
+async function maybeFirstPublishCelebration() {
+  if (_pubCelebChecked) return;
+  _pubCelebChecked = true;
+  let r;
+  try { r = await api.get('/api/publish-celebration'); } catch (e) { return; }
+  if (!r || !r.show || !r.post) return;
+  const p = r.post;
+  const isVideo = p.media_type === 'video';
+  streakModalShell(`
+    <div class="big-emoji">🎉</div>
+    <h3 style="margin:12px 0 4px">¿Viste? Salió solo</h3>
+    <p style="font-size:16px;margin:0 0 6px">Tu primer ${isVideo ? 'reel' : 'posteo'} ya está en Instagram — <b>vos no hiciste nada</b>.</p>
+    ${p.ig_permalink ? `<a class="btn btn-primary btn-block" href="${esc(p.ig_permalink)}" target="_blank" rel="noopener" style="margin:8px 0">Ver en Instagram →</a>` : ''}
+    ${celebRefHTML()}
+    <button class="btn btn-ghost btn-block" id="pubCelebClose" style="margin-top:6px">Seguir →</button>`);
+  const ov = document.getElementById('streakModal');
+  if (ov) wireCelebRef(ov);
+  try { await api.post('/api/publish-celebration/seen', {}); } catch (e) {}
+  const c = document.getElementById('pubCelebClose');
+  if (c) c.onclick = () => closeStreakModal();
+}
+// Misión de fotos de la semana: 3 fotos concretas + progreso de subidas.
+// Vive pegada a la tarjeta de fotos: ven la misión y suben ahí mismo, cero pasos.
+/* ---------- Reporte semanal: tu semana en números ---------- */
+async function loadReportCard() {
+  const el = document.getElementById('reportCard');
+  if (!el) return;
+  let r;
+  try { r = await api.get('/api/weekly-report'); } catch (e) { el.innerHTML = ''; return; }
+  const posts = (r && r.posts) || [];
+  if (!posts.length) { el.innerHTML = ''; return; }
+  const t = (r && r.totals) || { reach: 0, likes: 0, comments: 0 };
+  const best = posts.slice().sort((a, b) => (b.reach || 0) - (a.reach || 0))[0];
+  const bestCap = best ? String(best.caption || '').split('\n')[0].slice(0, 60) : '';
+  const fmt = n => Number(n || 0).toLocaleString('es-AR');
+  el.innerHTML = `
+  <div class="card" style="border:2px solid var(--cel)">
+    <h3 style="margin:0 0 4px">📊 Tu semana en números</h3>
+    <p class="hint" style="margin:0 0 12px">Lo que lograron tus posteos en los últimos 7 días — sin que muevas un dedo.</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:20px;font-weight:800">${fmt(t.reach)}</div><div style="font-size:11px;opacity:.8">alcance</div></div>
+      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:20px;font-weight:800">${fmt(t.likes)}</div><div style="font-size:11px;opacity:.8">likes</div></div>
+      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:20px;font-weight:800">${fmt(t.comments)}</div><div style="font-size:11px;opacity:.8">comentarios</div></div>
+    </div>
+    ${bestCap ? `<p style="font-size:14px;margin:0 0 10px">🏆 Tu mejor posteo: <b>"${esc(bestCap)}"</b> (${fmt(best.reach)} alcance)</p>` : ''}
+    ${posts.slice(0, 5).map(p => `
+      <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #EDF1F5">
+        <img src="${esc(p.image_path)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0" alt="">
+        <div style="flex:1;min-width:0;font-size:13px"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(p.caption || '').split('\n')[0] || (p.media_type === 'story' ? 'Historia' : 'Posteo'))}</div>
+        <div style="color:var(--mut);font-size:12px">👁️ ${fmt(p.reach)} · ❤️ ${fmt(p.likes)} · 💬 ${fmt(p.comments)}</div></div>
+      </div>`).join('')}
+  </div>`;
+}
+
+/* ---------- PUBLICIDAD: billetera + potenciar posteos ganadores ---------- */
+function fmtARSc(cents) { return '$' + Math.round((cents || 0) / 100).toLocaleString('es-AR'); }
+let ADS_CTX = null; // { balance, minTopup } — lo llena semanaView/adsView para pintar los botones sin parpadeo
+
+// Tarjeta de posteo recomendado: pills de presupuesto + botón que se adapta solo.
+// Se usa en Mi semana (a la vista) y en #/app/ads.
+function adsRecCardHTML(r, budgets) {
+  const pills = (budgets || []).map((c, i) =>
+    `<button type="button" class="ads-pill${i === 1 ? ' on' : ''}" data-pill="${c}">${fmtARSc(c)}</button>`).join('');
+  return `
+  <div class="ads-rec" data-rec="${r.post_id}">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+      <img src="${esc(r.image_path)}" style="width:52px;height:52px;object-fit:cover;border-radius:10px;flex-shrink:0" alt="">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.caption || 'Posteo')}</div>
+        <div style="color:var(--mut);font-size:12px">👁️ ${Number(r.reach || 0).toLocaleString('es-AR')} alcance · ⚡ ${r.er_pct}% interacción</div>
+      </div>
+    </div>
+    <p class="d" style="margin:0 0 2px">Rindió por encima de tu promedio — la plata va a un ganador probado.</p>
+    <div class="ads-pills" data-pills>${pills}</div>
+    <button class="btn btn-primary btn-block" data-boost></button>
+    <div data-confirm style="margin-top:8px"></div>
+  </div>`;
+}
+function adsSelectedBudget(card) {
+  const on = card.querySelector('[data-pill].on');
+  return on ? Number(on.dataset.pill) : 0;
+}
+// El botón se adapta solo: con crédito dice "Potenciar", sin crédito "Cargar $X y potenciar"
+function paintAdsBtn(card, balanceCents, minTopupCents) {
+  const btn = card.querySelector('[data-boost]');
+  if (!btn) return;
+  const b = adsSelectedBudget(card);
+  if (!b) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  if ((balanceCents || 0) >= b) {
+    btn.innerHTML = '🚀 Potenciar';
+    btn.dataset.mode = 'boost';
+  } else {
+    const load = Math.max(minTopupCents || 0, b);
+    btn.innerHTML = `💰 Cargar ${fmtARSc(load)} y potenciar`;
+    btn.dataset.mode = 'topup';
+    btn.dataset.load = String(load);
+  }
+}
+function bindAdsRecCards(scope, opts) {
+  // opts: { balance, minTopup, returnTo }
+  if (!scope) return;
+  scope.querySelectorAll('.ads-rec').forEach(card => {
+    paintAdsBtn(card, opts.balance, opts.minTopup);
+    card.querySelectorAll('[data-pill]').forEach(pl => pl.onclick = () => {
+      card.querySelectorAll('[data-pill]').forEach(x => x.classList.remove('on'));
+      pl.classList.add('on');
+      card.querySelector('[data-confirm]').innerHTML = '';
+      paintAdsBtn(card, opts.balance, opts.minTopup);
+    });
+    card.querySelector('[data-boost]').onclick = () => adsRecAction(card, opts);
+  });
+}
+async function adsRecAction(card, opts) {
+  const btn = card.querySelector('[data-boost]');
+  const box = card.querySelector('[data-confirm]');
+  const budget = adsSelectedBudget(card);
+  if (!budget) return;
+  if (btn.dataset.mode === 'topup') {
+    // Un solo toque: guarda la pauta pendiente, cobra por MercadoPago y al volver se activa sola
+    const load = Number(btn.dataset.load) || budget;
+    try { localStorage.setItem('posta_pending_boost', JSON.stringify({ post_id: Number(card.dataset.rec), budget_cents: budget, ts: Date.now() })); } catch (e) {}
+    btn.disabled = true; btn.textContent = '⏳ Abriendo MercadoPago…';
+    try {
+      const r = await api.post('/api/ads/topup', { amount_cents: load, return_to: opts.returnTo });
+      if (r && r.init_point) { location.href = r.init_point; return; }
+      throw new Error('No se pudo generar el pago');
+    } catch (e) {
+      btn.disabled = false; paintAdsBtn(card, opts.balance, opts.minTopup);
+      box.innerHTML = `<div class="err">${esc(e.message || 'No se pudo generar el pago')}</div>`;
+    }
+    return;
+  }
+  // Con crédito: confirmación inline, misma pantalla
+  box.innerHTML = `
+    <div style="background:#FFF7E8;border:1px solid var(--yel);border-radius:12px;padding:10px 12px;font-size:14px">
+      <div style="margin-bottom:8px">Se debitan <b>${fmtARSc(budget)}</b> de tu crédito por 7 días de pauta en Instagram y Facebook.</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" data-ok style="flex:1">Confirmar 🚀</button>
+        <button class="btn btn-ghost btn-sm" data-no style="flex:1">Cancelar</button>
+      </div>
+    </div>`;
+  box.querySelector('[data-no]').onclick = () => { box.innerHTML = ''; };
+  box.querySelector('[data-ok]').onclick = async (ev) => {
+    const okb = ev.currentTarget; okb.disabled = true;
+    try {
+      const r = await api.post('/api/ads/boost', { post_id: Number(card.dataset.rec), budget_cents: budget });
+      box.innerHTML = `<div class="okmsg">🚀 ${esc((r && r.message) || '¡Pauta creada!')}</div>`;
+      try {
+        const cfg = await api.get('/api/ads/config');
+        opts.balance = cfg.balance_cents || 0;
+        paintAdsBtn(card, opts.balance, opts.minTopup);
+      } catch (e) {}
+      setTimeout(() => { const h = location.hash || ''; if (h.startsWith('#/app/ads') || h.startsWith('#/app/semana')) render(); }, 4000);
+    } catch (e) {
+      if (e && (e.status === 402 || /crédito/i.test(String(e.message || '')))) {
+        try { const cfg = await api.get('/api/ads/config'); opts.balance = cfg.balance_cents || 0; } catch (err) {}
+        box.innerHTML = '';
+        paintAdsBtn(card, opts.balance, opts.minTopup); // pasa a modo "cargar y potenciar"
+      } else {
+        box.innerHTML = `<div class="err">${esc(e.message || 'No se pudo crear la pauta')}</div>`;
+        okb.disabled = false;
+      }
+    }
+  };
+}
+
+// Tarjeta "a la vista" para Mi semana: los recomendados sin entrar a otra pantalla
+function adsBoostCardHTML(cfg, recs) {
+  const list = (recs && recs.recommendations) || [];
+  const budgets = (cfg && cfg.budget_options) || [];
+  if (!list.length || !budgets.length) return '';
+  return `
+  <div class="card" id="adsBoostCard" style="border:2px solid var(--cel)">
+    <div id="adsBoostMsg"></div>
+    <h3 style="margin:0 0 4px">🚀 Te recomendamos potenciar</h3>
+    <p class="d" style="margin:0 0 10px">Rindieron más que tu promedio — un toque y llegan a más gente.</p>
+    ${list.slice(0, 2).map(r => adsRecCardHTML(r, budgets)).join('')}
+    <a href="#/app/ads" style="font-size:13px;color:var(--cel);font-weight:700">Ver mi crédito e historial →</a>
+  </div>`;
+}
+
+// Al volver de MercadoPago con una pauta pendiente: se activa sola ("nosotros nos ocupamos")
+async function handlePendingBoost() {
+  const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+  const topupState = q.get('topup');
+  const cleanUrl = () => { try { if (/\?topup=/.test(location.hash)) history.replaceState(null, '', location.pathname + '#/app/semana'); } catch (e) {} };
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem('posta_pending_boost') || 'null'); } catch (e) {}
+  if (!p || (Date.now() - (p.ts || 0) > 24 * 3600 * 1000)) {
+    if (p) { try { localStorage.removeItem('posta_pending_boost'); } catch (e) {} }
+    cleanUrl(); return;
+  }
+  const say = (html) => { const el = document.getElementById('adsBoostMsg'); if (el) el.innerHTML = html; };
+  const tryBoost = async () => {
+    try {
+      const r = await api.post('/api/ads/boost', { post_id: Number(p.post_id), budget_cents: Number(p.budget_cents) });
+      try { localStorage.removeItem('posta_pending_boost'); } catch (e) {}
+      return { ok: true, msg: (r && r.message) || '¡Pauta creada!' };
+    } catch (e) {
+      if (e && (e.status === 402 || /crédito/i.test(String(e.message || '')))) return { ok: false, nocredit: true };
+      try { localStorage.removeItem('posta_pending_boost'); } catch (e2) {}
+      return { ok: false, msg: (e && e.message) || 'No se pudo crear la pauta' };
+    }
+  };
+  const done = async (res) => {
+    if (res.ok) {
+      say(`<div class="okmsg">🚀 ${esc(res.msg)}</div>`);
+      try {
+        const cfg = await api.get('/api/ads/config');
+        if (ADS_CTX) ADS_CTX.balance = cfg.balance_cents || 0;
+        const abc = document.getElementById('adsBoostCard');
+        if (abc) abc.querySelectorAll('.ads-rec').forEach(c => paintAdsBtn(c, cfg.balance_cents || 0, cfg.min_topup_cents || 1000000));
+      } catch (e) {}
+      setTimeout(() => { if ((location.hash || '').startsWith('#/app/semana')) render(); }, 6000);
+    } else if (res.nocredit) {
+      say(`<div class="okmsg">⏳ Tu pago está en proceso. Cuando se acredite, activamos tu pauta sola — no tenés que hacer nada.</div>`);
+    } else {
+      say(`<div class="err">${esc(res.msg)}</div>`);
+    }
+  };
+  if (topupState === 'ok') {
+    say(`<div class="okmsg">⏳ Acreditando tu pago…</div>`);
+    let res = null;
+    for (let i = 0; i < 5; i++) { res = await tryBoost(); if (!res.nocredit) break; await new Promise(r => setTimeout(r, 3000)); }
+    cleanUrl();
+    await done(res);
+  } else if (topupState === 'pending') {
+    cleanUrl();
+    say(`<div class="okmsg">⏳ Tu pago está en proceso. Cuando se acredite, activamos tu pauta sola — no tenés que hacer nada.</div>`);
+  } else if (topupState === 'error') {
+    cleanUrl();
+    try { localStorage.removeItem('posta_pending_boost'); } catch (e) {}
+    say(`<div class="err">No se pudo completar el pago. Probá de nuevo cuando quieras.</div>`);
+  } else {
+    // Visita normal con pauta pendiente: si ya hay crédito, se activa sola
+    try {
+      const cfg = await api.get('/api/ads/config');
+      if (cfg && (cfg.balance_cents || 0) >= Number(p.budget_cents)) await done(await tryBoost());
+    } catch (e) {}
+  }
+}
+
+async function adsView() {
+  const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+  const topupState = q.get('topup'); // ok | pending | error (vuelta de MercadoPago)
+  let cfg = null, recs = null, boosts = null;
+  try { cfg = await api.get('/api/ads/config'); } catch (e) {}
+  try { recs = await api.get('/api/ads/recommendations'); } catch (e) {}
+  try { boosts = await api.get('/api/ads/boosts'); } catch (e) {}
+  ADS_CTX = { balance: cfg ? cfg.balance_cents : 0, minTopup: cfg ? cfg.min_topup_cents : 1000000 };
+  const bal = ADS_CTX.balance;
+
+  const topupBanner = topupState === 'ok'
+    ? `<div class="okmsg" style="margin-bottom:12px">💰 ¡Crédito acreditado! Ya podés potenciar tus posteos.</div>`
+    : topupState === 'pending'
+      ? `<div class="okmsg" style="margin-bottom:12px">⏳ Tu pago está en proceso. El crédito aparece acá cuando se acredite.</div>`
+      : topupState === 'error'
+        ? `<div class="err" style="margin-bottom:12px">No se pudo completar el pago. Probá de nuevo.</div>`
+        : '';
+
+  const topupBtns = cfg && cfg.topup_options
+    ? cfg.topup_options.map(c => `<button class="btn btn-soft" data-topup="${c}" style="flex:1;min-width:90px">${fmtARSc(c)}</button>`).join('')
+    : '';
+
+  const list = (recs && recs.recommendations) || [];
+  const budgets = (cfg && cfg.budget_options) || [];
+  const recCards = list.length && budgets.length
+    ? `<div id="adsRecsCard">${list.map(r => adsRecCardHTML(r, budgets)).join('')}</div>`
+    : `<div class="hint" style="padding:8px 0">Todavía no hay datos suficientes. Cuando tus posteos junten alcance, te decimos acá cuáles conviene potenciar. 👆</div>`;
+
+  const bl = (boosts && boosts.boosts) || [];
+  const statusTxt = (b) => b.status === 'active' ? '🟢 Activa'
+    : b.status === 'pending' ? '⏳ Activándose' : b.status === 'finished' ? '✅ Finalizada' : esc(b.status || '');
+  const boostRows = bl.length ? bl.map(b => `
+    <div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #EDF1F5">
+      <div style="flex:1;min-width:0;font-size:13px">
+        <div style="font-weight:700">${statusTxt(b)} · ${fmtARSc(b.budget_cents)}</div>
+        <div style="color:var(--mut);font-size:12px">${b.last_reach ? `👁️ ${Number(b.last_reach).toLocaleString('es-AR')} alcance · 💸 ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
+      </div>
+    </div>`).join('')
+    : `<p class="d" style="margin:0">Todavía no potenciaste ningún posteo.</p>`;
+
+  return `
+  <div class="card" style="text-align:center">
+    <h2 style="margin:0 0 4px">🚀 Potenciar</h2>
+    <p class="d" style="margin:0">Llevá tus mejores posteos a más gente, sin tocar el administrador de anuncios. Nosotros nos ocupamos.</p>
+  </div>
+  ${topupBanner}
+  <div class="card" style="border:2px solid var(--yel)">
+    <h3 style="margin:0 0 4px">💰 Tu crédito</h3>
+    <div style="font-size:34px;font-weight:800;margin:2px 0 6px">${fmtARSc(bal)}</div>
+    <p class="d" style="margin:0 0 10px">Un solo precio por potenciar tu posteo durante 7 días en Instagram y Facebook. Sin letra chica.</p>
+    ${cfg && cfg.mp_ready ? `
+      <p style="font-weight:700;font-size:14px;margin:0 0 8px">Cargar crédito</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${topupBtns}</div>
+      <div id="adsMsg"></div>
+    ` : `<p class="d">La carga de crédito se habilita en estos días. Escribinos y la activamos para tu cuenta.</p>`}
+  </div>
+  <div class="card">
+    <h3 style="margin:0 0 4px">⭐ Te recomendamos potenciar</h3>
+    <p class="d" style="margin:0 0 10px">Elegidos por rendimiento real, no por corazonada.</p>
+    ${recCards}
+  </div>
+  <div class="card">
+    <h3 style="margin:0 0 6px">📣 Tus pautas</h3>
+    ${boostRows}
+  </div>`;
+}
+
+function bindAds() {
+  // Si vuelve de MP con pauta pendiente, la atiende Mi semana
+  try {
+    const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+    if (q.get('topup') === 'ok' && localStorage.getItem('posta_pending_boost')) {
+      location.hash = '#/app/semana?topup=ok'; return;
+    }
+  } catch (e) {}
+  try {
+    if (/\?topup=/.test(location.hash)) history.replaceState(null, '', location.pathname + '#/app/ads');
+  } catch (e) {}
+  document.querySelectorAll('[data-topup]').forEach(b => b.onclick = async () => {
+    const msg = document.getElementById('adsMsg');
+    b.disabled = true;
+    try {
+      const r = await api.post('/api/ads/topup', { amount_cents: Number(b.dataset.topup), return_to: 'ads' });
+      if (r && r.init_point) location.href = r.init_point; // checkout de MercadoPago
+      else if (msg) msg.innerHTML = `<div class="err">No se pudo generar el pago</div>`;
+    } catch (e) {
+      if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo generar el pago')}</div>`;
+    }
+    b.disabled = false;
+  });
+  const arc = document.getElementById('adsRecsCard');
+  if (arc) bindAdsRecCards(arc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'ads' });
+}
+
+/* ---------- Comentarios de Instagram: responder en un toque ---------- */
+async function loadCommentsCard() {
+  const el = document.getElementById('commentsCard');
+  if (!el) return;
+  let r;
+  try { r = await api.get('/api/comments'); } catch (e) { el.innerHTML = ''; return; }
+  const list = (r && r.comments) || [];
+  if (!list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+  <div class="card" style="border:2px solid var(--yel)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+      <h3 style="margin:0">💬 ${list.length} ${list.length === 1 ? 'comentario' : 'comentarios'} para responder</h3>
+      <button class="btn btn-soft btn-sm" id="cmRefresh">🔄 Revisar</button>
+    </div>
+    <p class="hint" style="margin:0 0 10px">Te dejamos la respuesta lista — la editás si querés y sale en un toque.</p>
+    <div id="cmList">${list.map(cmItemHTML).join('')}</div>
+  </div>`;
+  const rf = document.getElementById('cmRefresh');
+  if (rf) rf.onclick = async () => {
+    rf.disabled = true; rf.textContent = '⏳ Revisando...';
+    try { await api.post('/api/comments/refresh', {}); } catch (e) {}
+    loadCommentsCard().catch(() => {});
+  };
+  bindCommentItems();
+}
+function cmItemHTML(c) {
+  return `
+  <div class="cm-item" data-cm="${c.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
+    <div style="font-size:14px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
+    <textarea class="in" data-cmreply="${c.id}" rows="2" style="font-size:15px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary btn-sm" data-cmdo="reply" data-id="${c.id}">💬 Responder</button>
+      <button class="btn btn-ghost btn-sm" data-cmdo="dismiss" data-id="${c.id}">Descartar</button>
+    </div>
+    <div class="hint" data-cmmsg="${c.id}" style="margin:6px 0 0"></div>
+  </div>`;
+}
+function bindCommentItems() {
+  document.querySelectorAll('#commentsCard [data-cmdo]').forEach(b => {
+    b.onclick = async () => {
+      const id = b.dataset.id, act = b.dataset.cmdo;
+      const msg = document.querySelector(`#commentsCard [data-cmmsg="${id}"]`);
+      b.disabled = true;
+      try {
+        if (act === 'reply') {
+          const ta = document.querySelector(`#commentsCard [data-cmreply="${id}"]`);
+          const message = (ta && ta.value || '').trim();
+          if (!message) throw new Error('La respuesta está vacía');
+          b.textContent = '⏳ Enviando...';
+          await api.post(`/api/comments/${id}/reply`, { message });
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondido en Instagram</span>';
+        } else {
+          await api.post(`/api/comments/${id}/dismiss`, {});
+          if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartado</span>';
+        }
+        setTimeout(() => {
+          const item = document.querySelector(`#commentsCard [data-cm="${id}"]`);
+          if (item) item.style.display = 'none';
+        }, 900);
+      } catch (e) {
+        if (msg) msg.innerHTML = `<span style="color:#D64545">${esc(e.message || 'Error')}</span>`;
+        b.disabled = false;
+        if (act === 'reply') b.textContent = '💬 Responder';
+      }
+    };
+  });
+}
+
+async function loadMissionCard() {  const el = $('#missionCard');
+  if (!el) return;
+  let m;
+  try { m = await api.get('/api/photo-mission'); } catch (e) { el.innerHTML = ''; return; }
+  if (!m || !m.shots || !m.shots.length) { el.innerHTML = ''; return; }
+  const done = Math.min(m.uploaded || 0, m.shots.length);
+  const complete = done >= m.shots.length;
+  el.innerHTML = `
+  <div class="card mission-card">
+    <h3 style="margin:0 0 4px">📸 Misión de fotos de la semana</h3>
+    <p class="hint" style="margin:0 0 10px">Sacá estas fotos con tu celular y subilas — <b>van a protagonizar tus posteos</b>. Si una semana no subís, creamos imágenes nuevas basadas en tus fotos anteriores: cada vez conocemos mejor tu producto.</p>
+    <div class="mission-shots">${m.shots.map((s, i) => `
+      <div class="mission-shot${i < done ? ' done' : ''}"><span class="mission-n">${i < done ? '✓' : (i + 1)}</span><span>${esc(s)}</span></div>`).join('')}</div>
+    <div class="mission-foot">
+      <span class="mission-prog">${complete ? '🎉 ¡Misión cumplida!' : `${done}/${m.shots.length} fotos subidas`}</span>
+      ${complete ? '' : `<button class="btn btn-primary btn-sm" id="missionUpload">＋ Subir fotos</button>`}
+    </div>
+  </div>`;
+  const b = $('#missionUpload');
+  if (b) b.onclick = () => { const mc = $('#mediaCard'); if (mc) mc.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+}
 function showStreakCelebration(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
+  const pts = sk.current * 100;
+  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
   streakModalShell(`
     <div class="big-emoji">${lv.emoji}</div>
-    <h3 style="margin:12px 0 4px">${sk.leveledUp ? '¡Subiste de nivel!' : '¡Racha en marcha!'}</h3>
+    <h3 style="margin:12px 0 4px">${sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!'}</h3>
+    <p style="font-size:18px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
     <p style="font-size:17px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
     ${streakNextTxt(sk)}
     ${streakShareBtns()}`);
   wireStreakModalBtns(sk);
 }
-// Tocar la píldora: detalle de la racha + mejor racha + aviso si se apaga
+// Tocar el HUD de XP: detalle de la racha + escalera de niveles + aviso si se apaga
 function streakPillModal(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
+  const pts = sk.current * 100;
+  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
+  const ladder = (sk.levels || []).map(l => {
+    const isCur = sk.level && l.name === sk.level.name;
+    const done = sk.current >= l.min && !isCur;
+    return `<div class="lvl${isCur ? ' cur' : ''}${done ? ' done' : ''}"><span>${l.emoji}</span><small>${esc(l.name)}</small></div>`;
+  }).join('');
   const warn = sk.expiringSoon
     ? `<p class="warn">⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)} si no sale ningún posteo — programá y seguí sumando.</p>` : '';
   streakModalShell(`
     <div class="big-emoji">${lv.emoji}</div>
-    <h3 style="margin:12px 0 4px">${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</h3>
-    <p class="d" style="margin:0 0 4px">Nivel ${esc(lv.name)} · Mejor racha: ${sk.best} ${sk.best === 1 ? 'semana' : 'semanas'}</p>
-    <p class="d" style="margin:0 0 4px">La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
+    <h3 style="margin:12px 0 4px">🔥 ${biz ? `La racha de ${esc(biz)}` : 'Tu racha'}</h3>
+    <p style="font-size:17px;margin:0 0 2px"><b>⚡ ${pts} pts</b> · Nivel ${esc(lv.name)}</p>
+    <p class="d" style="margin:0 0 4px">${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'} · Mejor racha: ${sk.best} ${sk.best === 1 ? 'semana' : 'semanas'}</p>
+    ${ladder ? `<div class="lvl-row">${ladder}</div>` : ''}
+    <p class="d" style="margin:0 0 4px">Cada semana publicada suma <b>+100 pts</b>. La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
     ${streakNextTxt(sk)}
     ${warn}
     ${streakShareBtns()}`);
@@ -2403,6 +3401,12 @@ async function semanaView() {
   let sk = null, soc = null;
   try { sk = await api.get('/api/streak'); } catch (e) {}
   try { soc = await api.get('/api/streak/social'); } catch (e) {}
+  // Publicidad: recomendados a la vista en Mi semana (si hay datos, si no la tarjeta no aparece)
+  let adsCfg = null, adsRecs = null;
+  try { adsCfg = await api.get('/api/ads/config'); } catch (e) {}
+  try { adsRecs = await api.get('/api/ads/recommendations'); } catch (e) {}
+  ADS_CTX = { balance: adsCfg ? adsCfg.balance_cents : 0, minTopup: adsCfg ? adsCfg.min_topup_cents : 1000000 };
+  const boostCard = adsBoostCardHTML(adsCfg, adsRecs);
   // Borradores y programados viven acá, en Mi semana: se revisan y programan sin salir de la pantalla.
   let allPosts = [];
   try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
@@ -2410,8 +3414,24 @@ async function semanaView() {
   const scheduled = allPosts.filter(p => p.status === 'scheduled').sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const draftN = drafts.length;
   const slots = suggestSlots(draftN, scheduled);
-  const pill = sk && sk.current > 0 && sk.level
-    ? `<button class="streak-pill" id="streakPill" title="Tu racha: se apaga si pasás 72h sin publicar"><span class="sp-top">${esc(sk.level.emoji)} Racha ${sk.current}</span><span class="sp-sub">vence en ${fmtStreakLeft(sk.expiresInMs)}</span></button>` : '';
+  // HUD gamificado de la racha: puntos, nivel, barra de progreso y countdown 72h.
+  // 1 semana publicada = 100 pts. La barra mide el avance hacia el próximo nivel.
+  // Reemplaza a la píldora: todo lo que mostraba ella vive acá, con más juego.
+  const xpStrip = sk && sk.current > 0 && sk.level ? (() => {
+    const pts = sk.current * 100;
+    const nl = sk.nextLevel;
+    const pct = nl ? Math.min(99, Math.round((sk.current / nl.at) * 100)) : 100;
+    return `
+    <button class="xp-strip" id="xpStrip" aria-label="Ver el progreso de tu racha">
+      <span class="xp-row">
+        <span class="xp-pts">⚡ ${pts} pts</span>
+        <span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span>
+        <span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>
+      </span>
+      <span class="xp-bar"><span style="width:${pct}%"></span></span>
+      <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>
+    </button>`;
+  })() : '';
   // Encabezado con la identidad del negocio: tiene que sentirse SUYO, no una app genérica.
   const bizName = (PROFILE && PROFILE.business_name || '').trim();
   const bizLogo = assetLogo();
@@ -2419,9 +3439,11 @@ async function semanaView() {
   const bizIcon = bizLogo
     ? `<img src="${esc(bizLogo.file_path)}" alt="Logo" style="width:46px;height:46px;border-radius:13px;object-fit:cover;border:1px solid var(--line);background:#fff;flex-shrink:0">`
     : `<div style="width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#fff;background:${esc(bizColor)};flex-shrink:0">${esc((bizName || 'M')[0].toUpperCase())}</div>`;
+  const pencil = `<button class="head-pencil" data-opencreator title="Crear un posteo" aria-label="Crear un posteo">✏️ Nuevo</button>`;
+  const headRight = `<div style="margin-left:auto;align-self:center;display:flex;gap:8px;align-items:center">${pencil}</div>`;
   const head = (bizName || bizLogo)
-    ? `<div class="page-head"><div style="display:flex;gap:12px;align-items:center">${bizIcon}<div class="ph-txt"><h1>${esc(bizName || 'Mi negocio')}</h1><p class="sub">Tu semana, armada con un clic.</p></div></div>${pill}</div>`
-    : `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${pill}</div>`;
+    ? `<div class="page-head"><div style="display:flex;gap:12px;align-items:center">${bizIcon}<div class="ph-txt"><h1>${esc(bizName || 'Mi negocio')}</h1><p class="sub">Tu semana, armada con un clic.</p></div></div>${headRight}</div>`
+    : `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${headRight}</div>`;
   const socialBar = soc && soc.shown
     ? `<div class="social-proof">🔥 ${soc.count} negocios llevan 15+ días seguidos armando su semana con Posta</div>` : '';
   const expBanner = sk && sk.expiringSoon ? `
@@ -2431,7 +3453,6 @@ async function semanaView() {
   </div>` : '';
   if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
-  const ws = new Date(w.start + 'T12:00:00'), we = new Date(w.end + 'T12:00:00');
   const pct = w.planned ? Math.min(100, Math.round((w.ready / w.planned) * 100)) : 0;
 
   // Gráfico de ritmo: últimas 8 semanas (posteos por semana — datos propios)
@@ -2445,6 +3466,13 @@ async function semanaView() {
        <p class="d">De ${ap.total} ${ap.total === 1 ? 'posteo que opinaste' : 'posteos que opinaste'}, ${ap.approved} ${ap.approved === 1 ? 'salió' : 'salieron'} sin que toques nada.${ap.edited ? ` Tocaste ${ap.edited} y descartaste ${ap.rejected}.` : ''}</p>`
     : `<p class="d" style="margin:0">Todavía no hay datos. Marcá 👍 o 👎 en tus posteos y Posta aprende lo que te gusta para hacerlo cada vez mejor.</p>`;
 
+  // Próximos posteos: una sola tarjeta (el primero destacado arriba con su día/hora).
+  const upcomingCard = scheduled.length ? `
+  <div class="card" id="upcomingCard"><h3>📅 Próximos posteos</h3>
+    <p class="d" style="margin:-4px 0 12px">El primero sale ${relDay(scheduled[0].scheduled_at)} — sale solo, no tenés que hacer nada.</p>
+    ${scheduled.map(p => postItem(p, `${sigBtns(p)}<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button><button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>`)).join('')}
+  </div>` : '';
+
   // Nudges de calendario comercial
   SEM_NUDGES = upcomingNudges();
   const nudgeBlock = SEM_NUDGES.map((n, i) => `
@@ -2454,15 +3482,12 @@ async function semanaView() {
       <button class="btn btn-primary btn-sm" data-nudge="${i}">Armar idea →</button>
     </div>`).join('');
 
-  const nextUp = scheduled.length ? `
-  <div class="card" style="border:1.5px solid var(--cel);background:#F2F9FD">
-    <div class="nudge-top"><span class="nudge-ico">📍</span><div><h3 style="margin:0">Próximo posteo: ${relDay(scheduled[0].scheduled_at)}</h3>
-    <p style="margin:4px 0 0">Sale solo, no tenés que hacer nada.</p></div></div>
-  </div>` : '';
-  const upcomingCard = scheduled.length ? `
-  <div class="card" id="upcomingCard"><h3>📅 Próximos posteos</h3>
-    ${scheduled.map(p => postItem(p, `${sigBtns(p)}<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button><button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>`)).join('')}
-  </div>` : '';
+  // Progreso de la semana: vive como primera fila de "Tu progreso" (una tarjeta menos en la pantalla).
+  const semStripInner = `
+    <div class="pz-refbar check-bar" style="flex:1;margin:0"><div style="width:${pct}%"></div></div>
+    <span>${w.missing
+      ? (draftN > 0 ? `Tenemos ${draftN} ${draftN === 1 ? 'borrador' : 'borradores'} — programalos arriba 👆` : `Faltan ${w.missing} para completar la semana`)
+      : `✅ ${w.ready}/${w.planned} — semana armada, se publica sola`}</span>`;
 
   // HERO: lo más importante primero. Con borradores → tus posteos esperando tu OK.
   // Sin borradores → el botón mágico: un click y la semana se arma acá mismo.
@@ -2471,9 +3496,9 @@ async function semanaView() {
   const heroCard = draftN > 0 ? reviewCardHTML(drafts, slots)
     : weekDone ? weekDoneCardHTML()
     : autopilotCardHTML('semana');
-  // Rehacer es acción secundaria y sutil: nunca un segundo botón gigante de "armar"
+  // Rehacer es acción secundaria: link de texto sutil al pie de la revisión, nunca un botón.
   const redoMini = draftN > 0
-    ? `<div style="text-align:center;margin:2px 0 18px"><button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button><div id="apProg-semana"></div></div>`
+    ? `<div style="text-align:center;margin:-8px 0 18px"><button class="rev-redo" data-autopilot="semana">↻ empezar de nuevo</button><div id="apProg-semana"></div></div>`
     : '';
   // Historial fusionado en Mi semana: los fallidos piden acción arriba,
   // los publicados con 👍/👎 quedan abajo como "Ya salió".
@@ -2490,51 +3515,47 @@ async function semanaView() {
     <p class="d" style="margin-top:0">Marcá 👍/👎 y cada semana sale más a tu gusto.</p>
     ${published.map(p => postItem(p, `${sigBtns(p)}<button class="btn btn-ghost btn-sm" data-act="dup" data-id="${p.id}">Duplicar</button><button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar">🗑️</button>`)).join('')}
   </div>` : '';
-  // Creador manual plegado dentro de Mi semana: una sola sección, sin salir de la pantalla.
+  // Creador manual plegado dentro de Mi semana: la entrada es el ✏️ del encabezado
+  // (un toque, abre inline y scrollea solo). Sin tarjeta grande ocupando lugar.
   const creatorOpen = CREATOR_OPEN || CREATOR.step !== 1;
-  const creatorCard = creatorOpen
-    ? `<div id="creatorInline" style="scroll-margin-top:70px">${creatorView(true)}</div>`
-    : `<div class="card" style="text-align:center;padding:22px">
-        <h3 style="margin:0 0 6px">✨ Crear un posteo</h3>
-        <p class="d" style="margin:0 0 12px">Uno puntual, a tu medida, sin salir de acá.</p>
-        <button class="btn btn-soft" data-opencreator>✨ Crear posteo</button>
-      </div>`;
+  const creatorCard = `<div id="creatorInline" style="scroll-margin-top:70px">${creatorOpen ? creatorView(true) : ''}</div>`;
+
+  // Orden por importancia: lo que pide tu acción primero.
+  // Con borradores pendientes, la revisión sube al 2º lugar (debajo del HUD de XP):
+  // es el momento de decisión y no puede quedar debajo de fotos y misiones.
+  const topBlock = draftN > 0
+    ? `${xpStrip}\n  ${heroCard}\n  ${redoMini}\n  ${mediaCardHTML()}\n  <div id="missionCard"></div>\n  ${expBanner}`
+    : `${xpStrip}\n  ${mediaCardHTML()}\n  <div id="missionCard"></div>\n  ${expBanner}\n  ${heroCard}`;
+  // Potenciar: a la vista cuando la semana ya está armada (pico emocional, ahí convierte);
+  // con borradores por revisar se queda abajo para no contaminar la decisión.
+  const boostUp = draftN === 0 ? boostCard : '';
+  const boostDown = draftN === 0 ? '' : boostCard;
 
   // Orden por importancia: lo que pide tu acción → lo que viene → crear/cambiar → balance.
   return `${head}
-  ${expBanner}
-  ${heroCard}
-  ${redoMini}
-  ${failedCard}
-  ${nextUp}
-  ${upcomingCard}
+  ${topBlock}
+  ${boostUp}
   ${chatCardHTML()}
-  <div class="card sem-hero">
-    <div class="sem-top"><div><h3>Esta semana</h3><p>${fmtDay(ws)} – ${fmtDay(we)}</p></div><span class="badge ${w.missing ? 'b-scheduled' : 'b-published'}">${w.ready}/${w.planned}</span></div>
-    <div class="pz-refbar check-bar"><div style="width:${pct}%"></div></div>
-    ${w.missing
-      ? (draftN > 0
-        ? `<p class="sem-msg">Tenemos ${draftN} ${draftN === 1 ? 'borrador listo' : 'borradores listos'} — programalos arriba 👆</p>`
-        : `<p class="sem-msg">Nos ${w.missing === 1 ? 'falta 1 posteo' : `faltan ${w.missing} posteos`} para completar la semana.</p>`)
-      : `<p class="sem-msg ok">✅ Tu semana está armada. Se publica sola, no tenés que hacer nada.</p>
-         <button class="btn btn-soft btn-block" data-opencreator style="margin-top:12px">✨ Crear otro posteo</button>`}
-  </div>
+  <div id="commentsCard"></div>
+  ${failedCard}
+  ${upcomingCard}
+  <div id="reportCard"></div>
   ${nudgeBlock}
   ${creatorCard}
   ${socialBar}
-  <div class="row2">
-    <div class="card"><h3>📊 Tu ritmo</h3><p class="d">Posteos por semana (últimas 8)</p><div class="bars">${bars}</div></div>
-    <div class="card"><h3>👍 Aprobados sin cambios</h3>${apBlock}</div>
-  </div>
+  ${boostDown}
   <div class="card month-card">
-    <div class="nudge-top"><span class="nudge-ico">🗓️</span><div><h3>Tu mes con Posta</h3><p>Lo que hicimos por vos este mes</p></div></div>
-    <div class="month-grid">
+    <h3 style="margin:0 0 2px">📈 Tu progreso</h3>
+    <div class="sem-strip" style="margin:2px 0 12px">${semStripInner}</div>
+    <p class="d" style="margin:0 0 4px">Posteos por semana (últimas 8)</p>
+    <div class="bars" style="height:110px;margin:0 0 4px">${bars}</div>
+    <div class="month-grid" style="margin:10px 0">
       <div class="mstat"><b>${mo.published}</b><span>posteos publicados</span></div>
       <div class="mstat"><b>${mo.scheduled}</b><span>programados</span></div>
       <div class="mstat"><b>0</b><span>minutos tuyos</span></div>
       <div class="mstat hl"><b>${mo.hours_saved} h</b><span>ahorradas (estimado)</span></div>
     </div>
-    <p class="d">Hacer esto a mano te llevaría ~1,5 h por posteo entre idea, diseño, texto y publicación. Vos no moviste un dedo.</p>
+    ${apBlock}
   </div>
   ${publishedCard}`;
 }
@@ -2544,6 +3565,21 @@ function bindSemana() {
   bindAutopilot();
   bindChat();
   bindReview();
+  bindMediaCard();
+  // Publicidad: recomendados a la vista + activar la pauta pendiente al volver de MercadoPago
+  const abc = document.getElementById('adsBoostCard');
+  if (abc) {
+    bindAdsRecCards(abc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'semana' });
+    handlePendingBoost();
+  }
+  // Misión de fotos semanal (pegada a la tarjeta de fotos)
+  loadMissionCard().catch(() => {});
+  // Comentarios de Instagram para responder en un toque
+  loadCommentsCard().catch(() => {});
+  // Reporte semanal "tu semana en números"
+  loadReportCard().catch(() => {});
+  // Festejo de primera publicación (una vez por cuenta): se chequea al entrar a Mi semana
+  setTimeout(() => maybeFirstPublishCelebration(), 1200);
   // Abrir el creador manual inline (plegado dentro de Mi semana)
   const openCreatorInline = () => {
     CREATOR_OPEN = true;
@@ -2553,8 +3589,8 @@ function bindSemana() {
   };
   $$('[data-opencreator]').forEach(b => b.onclick = openCreatorInline);
   if (CREATOR_OPEN || CREATOR.step !== 1) bindCreator();
-  const sp = $('#streakPill');
-  if (sp) sp.onclick = async () => {
+  const xs = $('#xpStrip');
+  if (xs) xs.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
   };
   $$('[data-nudge]').forEach(b => b.onclick = () => {
@@ -2580,11 +3616,10 @@ function ajustesView() {
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
-  const photos = assetPhotos();
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
   ${igMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Acá definís tu logo, tus colores y tus fotos: todo lo que generemos sale con tu identidad.</p>
+    <p style="color:var(--mut);font-size:14px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
         <div style="display:flex;gap:10px;align-items:center">
@@ -2596,26 +3631,13 @@ function ajustesView() {
         <div class="hint" style="font-size:12px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
       </div>
     </div>
-    <div class="field"><label>Fotos de tu negocio <span style="color:var(--dim);font-weight:400">(${photos.length}/20)</span></label>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        ${photos.map(a => `
-        <div style="position:relative">
-          <img src="${a.file_path}" data-lightbox="${a.file_path}" style="width:96px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--line);cursor:zoom-in">
-          <button class="btn btn-danger btn-sm foto-del" data-adel="${a.id}">✕</button>
-        </div>`).join('')}
-        ${photos.length < 20 ? `<button class="btn btn-ghost foto-add" id="btnAAdd">＋<br>Agregar</button>` : ''}
-      </div>
-      <input type="file" id="a_files" accept="image/*" multiple style="display:none">
-      <div class="hint">El autopilot usa tus fotos rotando en tus posteos: post 1 → foto 1, post 2 → foto 2, etc. Si no hay fotos, usa los diseños de plantilla.</div>
-      <div id="aMsg"></div>
-    </div>
     <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
       <div style="font-size:12px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
       <div style="display:flex;gap:10px">
         ${[0, 1, 2].map(i => `
         <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
           <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
-          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:76px;text-align:center;font-size:12px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
+          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:88px;text-align:center;font-size:16px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
           <div style="position:relative">
             <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:11px;font-weight:800;color:var(--dim);letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:7px 22px 7px 10px;background:#F2F9FD;max-width:104px;cursor:pointer">
               ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
@@ -2658,7 +3680,7 @@ function ajustesView() {
       </select></div>
     </div>
     <div class="row2">
-      <div class="field"><label>Zona horaria <span style="color:var(--dim);font-weight:400">(para programar a las 19:00 de tu país)</span></label><select id="s_tz">
+      <div class="field"><label>Zona horaria <span style="color:var(--dim);font-weight:400">(para programar a la hora de tu país)</span></label><select id="s_tz">
         ${TIMEZONES.map(([v, l]) => `<option ${s.timezone === v ? 'selected' : ''} value="${v}">${l}</option>`).join('')}
       </select></div>
       <div class="field"><label>Objetivo</label><select id="s_goal">
@@ -3121,6 +4143,7 @@ async function render() {
   else if (tab === 'onboarding') { if (!OB) OB = freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/semana'; return; } // Calendario fusionado en Mi semana
   else if (tab === 'historial') { location.hash = '#/app/semana'; return; } // Historial fusionado en Mi semana
+  else if (tab === 'ads') content = await adsView(); // 🚀 Potenciar: billetera + boost de posteos
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
@@ -3182,6 +4205,7 @@ function bindApp(tab) {
   if (lo2) lo2.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
 
   if (tab === 'semana') bindSemana();
+  if (tab === 'ads') bindAds();
   if (tab === 'onboarding') bindOnboarding();
   if (tab === 'semana') {
     $$('[data-act]').forEach(b => b.onclick = async () => {
@@ -3193,7 +4217,12 @@ function bindApp(tab) {
         render(); return;
       }
       if (act === 'dup') {
-        await api.post(`/api/posts/${id}/duplicate`, {});
+        try {
+          await api.post(`/api/posts/${id}/duplicate`, {});
+        } catch (e) {
+          if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); return; }
+          throw e;
+        }
         location.hash = '#/app/semana'; return;
       }
       if (act === 'sched') {
@@ -3633,6 +4662,7 @@ function bindCreator() {
     $('#btnSchedule').onclick = async () => {
       const when = $('#p_when').value;
       if (!when) { $('#pubMsg').innerHTML = `<div class="err">Elegí fecha y hora</div>`; return; }
+      if (!(await checkQuotaOrModal())) return;
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags, scheduled_at: new Date(when).toISOString() });
@@ -3641,6 +4671,7 @@ function bindCreator() {
     };
     $('#btnNow').onclick = async () => {
       const btn = $('#btnNow');
+      if (!(await checkQuotaOrModal())) return;
       btn.disabled = true; // bloquea el doble tap
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
@@ -3655,16 +4686,23 @@ function bindCreator() {
           done('⏳ Se está publicando… lo ves en Mi semana en un minuto.');
         }
         // si falló, publishNowFlow ya mostró el error con botón Reintentar
-      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
+      } catch (e) {
+        if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
+        $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;
+      }
     };
     $('#btnDraft').onclick = async () => {
       const btn = $('#btnDraft');
+      if (!(await checkQuotaOrModal())) return;
       btn.disabled = true;
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
         await api.post('/api/posts', { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags });
         done('💾 Guardado como borrador. Lo revisás en Mi semana.', '#/app/semana');
-      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false; }
+      } catch (e) {
+        if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
+        $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;
+      }
     };
     $('#btnBack2').onclick = () => { c.step = c.fromOptions ? 'options' : 2; render(); };
   }
@@ -4065,28 +5103,6 @@ function bindSettings() {
   // Marca
   const bBlog = $('#btnBrandLogo');
   if (bBlog) bBlog.onclick = () => $('#s_logofile').click();
-  // Fotos de la marca (librería, antes tab "Mis fotos")
-  const bAAdd = $('#btnAAdd');
-  if (bAAdd) bAAdd.onclick = () => $('#a_files').click();
-  const aFiles = $('#a_files');
-  if (aFiles) aFiles.onchange = async () => {
-    const files = [...aFiles.files].slice(0, 20 - assetPhotos().length);
-    aFiles.value = '';
-    const mEl = $('#aMsg');
-    for (let i = 0; i < files.length; i++) {
-      if (files.length > 1 && mEl) mEl.innerHTML = `<div class="hint" style="margin:0">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
-      try { await uploadAssetFile(files[i], 'photo'); }
-      catch (e) { if (mEl) mEl.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; return; }
-    }
-    if (mEl) mEl.innerHTML = '';
-    render();
-  };
-  $$('[data-adel]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Eliminar esta foto?')) return;
-    await api.del('/api/assets/' + b.dataset.adel);
-    ASSETS = await api.get('/api/assets');
-    render();
-  });
   $$('[data-lightbox]').forEach(el => el.onclick = () => openLightbox(el.dataset.lightbox, el.dataset.video === '1'));
   // Si el creador ya tenía 6 opciones generadas, las regenera con los colores
   // nuevos para que el cambio se vea al instante (cero pasos extra).
