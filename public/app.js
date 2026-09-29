@@ -1272,6 +1272,7 @@ function reviewCardHTML(drafts, slots) {
     <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
     <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 4px">Así se van a ver en tu Instagram. Revisalos — si te gustan, aceptalos y se programan solos. Nada sale sin tu OK.</p>
     <p style="margin:0 0 14px"><button class="rev-chatlink" id="revChatLink">💬 ¿Cambiar algo? Decilo en el chat 👇</button></p>
+    ${chatCardHTML()}
     ${drafts.map((d, i) => `
     <div class="igmock">
       <div class="igmock-head">
@@ -1314,7 +1315,7 @@ function reviewCardHTML(drafts, slots) {
 }
 
 function bindReview() {
-  // "¿Cambiar algo?" → baja al chat consultor, que ahora vive pegado a la revisión
+  // "¿Cambiar algo?" → sube al chat consultor, que ahora vive arriba de la revisión
   const rcl = $('#revChatLink');
   if (rcl) rcl.onclick = () => { const c = $('#chatCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   // Tap en la miniatura abre el diseño en grande
@@ -2109,7 +2110,7 @@ async function chatMakePost(asVideo) {
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
     CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
-    const doneText = '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.';
+    const doneText = '¡Listo! Te lo dejé en revisión acá abajo 👇 Nada se programa hasta que vos lo apruebes.';
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
@@ -3523,6 +3524,10 @@ async function semanaView() {
   // Orden por importancia: lo que pide tu acción primero.
   // Con borradores pendientes, la revisión sube al 2º lugar (debajo del HUD de XP):
   // es el momento de decisión y no puede quedar debajo de fotos y misiones.
+  // El chat vive DENTRO de la revisión, debajo de "¿Cambiar algo?": ahí suben
+  // sus fotos/videos y piden cambios, justo arriba de los posteos.
+  // Sin borradores no hay revisión: el chat queda debajo del héroe como antes.
+  const chatBottom = draftN > 0 ? '' : chatCardHTML();
   const topBlock = draftN > 0
     ? `${xpStrip}\n  ${heroCard}\n  ${redoMini}\n  ${mediaCardHTML()}\n  <div id="missionCard"></div>\n  ${expBanner}`
     : `${xpStrip}\n  ${mediaCardHTML()}\n  <div id="missionCard"></div>\n  ${expBanner}\n  ${heroCard}`;
@@ -3535,7 +3540,7 @@ async function semanaView() {
   return `${head}
   ${topBlock}
   ${boostUp}
-  ${chatCardHTML()}
+  ${chatBottom}
   <div id="commentsCard"></div>
   ${failedCard}
   ${upcomingCard}

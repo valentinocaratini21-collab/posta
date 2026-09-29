@@ -239,7 +239,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .rev-act:active{transform:scale(.96)}
 .rev-act:disabled{opacity:.5}
 /* Borrador como post de Instagram: vista previa real de lo que va a salir */
-.igmock{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-bottom:18px;box-shadow:0 2px 12px rgba(10,30,51,.08)}
+.igmock{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin:0 auto 18px;max-width:470px;box-shadow:0 2px 12px rgba(10,30,51,.08)}
 .igmock-head{display:flex;align-items:center;gap:10px;padding:12px 14px}
 .igmock-ava{width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;color:#fff}
 .igmock-name{font-weight:800;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
