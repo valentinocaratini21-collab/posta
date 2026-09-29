@@ -37,6 +37,14 @@ function escDrawtext(t) {
     .replace(/%/g, '\\%')
     .replace(/\n/g, ' ');
 }
+// Recorta SIN partir palabras a la mitad (el overlay del reel jamás queda cortado).
+function cortarDrawtext(t, max) {
+  const s = String(t || '').trim().replace(/\s+/g, ' ');
+  if (s.length <= max) return s;
+  const c = s.slice(0, max);
+  const i = c.lastIndexOf(' ');
+  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+}
 
 function runFfmpeg(args, timeoutMs = 600000) {
   return new Promise((resolve, reject) => {
@@ -95,7 +103,7 @@ async function renderVideo({ scenes, musicFile, mediaDir }) {
         : `z='max(1.12-0.12*on/${frames},1.0)'`;
       // Texto en archivo temporal para evitar problemas de escape
       const txtFile = path.join(tmpDir, `txt${i}.txt`);
-      fs.writeFileSync(txtFile, escDrawtext(s.text).slice(0, 140));
+      fs.writeFileSync(txtFile, escDrawtext(cortarDrawtext(s.text, 140)));
       const vf =
         `scale=1620:2880:force_original_aspect_ratio=increase,crop=1620:2880,` +
         `zoompan=${zExpr}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${FPS},` +

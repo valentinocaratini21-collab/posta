@@ -15,7 +15,33 @@ function cortar(t, max) {
   if (s.length <= max) return s;
   const c = s.slice(0, max);
   const i = c.lastIndexOf(' ');
-  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+  const cut = (i > max * 0.4 ? c.slice(0, i) : c).trim();
+  return sinColgada(cut.split(' ').filter(Boolean)).join(' ');
+}
+// Palabras en las que un titular JAMÁS debe terminar (se vería cortado a mitad de oración).
+const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','una','unos','unas','y','e','o','u','ni','que','en','con','por','para','sin','sobre','entre','hasta','desde','durante','a','ante','bajo','contra','hacia','tras','mediante','segun','según','como','cómo','pero','mas','más','si','sí','no','tu','tus','su','sus','mi','mis','nuestro','nuestra','esta','este','esto','es','son','hay','se','le','les','lo','me','te']);
+function sinColgada(words) {
+  const w = words.slice();
+  while (w.length > 1 && HEADLINE_DANGLING.has(String(w[w.length - 1]).toLowerCase().replace(/[.,;:!?¿¡()"“”'']/g, ''))) w.pop();
+  return w;
+}
+// Titular COMPLETO para imágenes: nunca cortado a mitad de oración ni terminado
+// en preposición/artículo. Prefiere la primera oración si entra; si no, recorta
+// por palabras y retrocede hasta una palabra "firme".
+function makeHeadline(text, maxWords = 6, maxChars = 70) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const m = s.match(/^[^.!?…]+[.!?…]/);
+  const first = (m ? m[0] : s).trim();
+  const fw = first.split(' ').filter(Boolean);
+  let words = fw.length <= maxWords ? sinColgada(fw) : sinColgada(s.split(' ').filter(Boolean).slice(0, maxWords));
+  let out = words.join(' ');
+  if (out.length > maxChars) {
+    const c = out.slice(0, maxChars);
+    const i = c.lastIndexOf(' ');
+    out = sinColgada((i > maxChars * 0.4 ? c.slice(0, i) : c).trim().split(' ').filter(Boolean)).join(' ');
+  }
+  return out;
 }
 const HOOKS = {
   canchero: [
@@ -464,11 +490,11 @@ function bestHoursLine(db, userId) {
 function templateGenerate({ business, category, tone, topic, goal }) {
   const t = HOOKS[tone] ? tone : 'canchero';
   const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: Math.floor(Math.random() * 1000), goal });
-  const overlay = String(topic).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+  const overlay = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
   const tags = [...(HASHTAGS[category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
-  return { caption, overlay, suboverlay: String(caption).split('\n')[0].slice(0, 140), hashtags: tags.join(' ') };
+  return { caption, overlay, suboverlay: cortar(String(caption).split('\n')[0], 140), hashtags: tags.join(' ') };
 }
 
 async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice }, apiKey) {
@@ -515,7 +541,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
   return {
     caption: parsed.caption || '',
     overlay: parsed.overlay || '',
-    suboverlay: looksLikeBrief(sub) ? '' : sub.slice(0, 140),
+    suboverlay: looksLikeBrief(sub) ? '' : cortar(sub, 140),
     hashtags: parsed.hashtags || '',
   };
 }
@@ -619,7 +645,7 @@ async function generateCaptions(input, n, apiKey) {
   const seedBase = input.seedBase || 0;
   const captions = [];
   const overlays = [];
-  const ovFb = String(input.topic || '').split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD';
+  const ovFb = makeHeadline(input.topic, 5).toUpperCase() || 'NOVEDAD';
   for (let i = 0; i < n; i++) { captions.push(templateCaption({ ...input, seed: seedBase + i })); overlays.push(ovFb); }
   const tags = [...(HASHTAGS[input.category] || HASHTAGS.otro), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
@@ -1066,7 +1092,7 @@ function templateChatIdea({ messages, profile }) {
   const echo = last.length > 90 ? cortar(last, 90) + '…' : last;
   const has = (...ws) => ws.some(w => all.includes(w));
   const yes = /^(dale|hacelo|hacela|hace|si\b|sí|sip|ok|okay|genial|perfecto|me gusta\b|me encanta\b|va\b|de una)/i.test(last);
-  const topicShort = ((yes && first ? first : last).split(' ').slice(0, 6).join(' ').trim() || `Novedades de ${biz}`).slice(0, 80);
+  const topicShort = makeHeadline((yes && first ? first : last) || `Novedades de ${biz}`, 6, 80);
 
   let intent = 'general';
   if (has('sorteo', 'regal', 'ganar', 'concurso')) intent = 'sorteo';

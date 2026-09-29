@@ -50,13 +50,54 @@ function evTrack(userId, name, props = null, sessionId = '') {
   } catch (e) { /* el tracking nunca bloquea */ }
 }
 
-// Corta un texto SIN partir palabras a la mitad (nunca "efecti").
+// Palabras en las que un titular JAMÁS debe terminar: se vería cortado a mitad
+// de oración (ej. "Tip: Cómo organizar tu contenido de"). Se chequea sin
+// puntuación ni mayúsculas.
+const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','una','unos','unas','y','e','o','u','ni','que','en','con','por','para','sin','sobre','entre','hasta','desde','durante','a','ante','bajo','contra','hacia','tras','mediante','segun','según','como','cómo','pero','mas','más','si','sí','no','tu','tus','su','sus','mi','mis','nuestro','nuestra','esta','este','esto','es','son','hay','se','le','les','lo','me','te']);
+// Quita palabras "colgadas" del final (preposiciones, artículos, conjunciones).
+function sinColgada(words) {
+  const w = words.slice();
+  while (w.length > 1 && HEADLINE_DANGLING.has(String(w[w.length - 1]).toLowerCase().replace(/[.,;:!?¿¡()"“”'']/g, ''))) w.pop();
+  return w;
+}
+
+// Corta un texto SIN partir palabras a la mitad (nunca "efecti") y SIN dejarlo
+// terminado en preposición/artículo (nunca "...tu contenido de").
 function cortar(t, max) {
   const s = String(t || '').trim();
   if (s.length <= max) return s;
   const c = s.slice(0, max);
   const i = c.lastIndexOf(' ');
-  return (i > max * 0.4 ? c.slice(0, i) : c).trim();
+  const cut = (i > max * 0.4 ? c.slice(0, i) : c).trim();
+  return sinColgada(cut.split(' ').filter(Boolean)).join(' ');
+}
+
+// Titular COMPLETO para renderizar en imágenes: nunca sale cortado a mitad de
+// oración. Prefiere la primera oración si entra en el límite; si no, recorta por
+// palabras y retrocede hasta una palabra "firme". Tope de caracteres para que el
+// brief (que corta en 80) jamás lo mutile.
+function makeHeadline(text, maxWords = 6, maxChars = 70) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  // 1) Primera oración: si entra en el límite de palabras, va entera.
+  const m = s.match(/^[^.!?…]+[.!?…]/);
+  const first = (m ? m[0] : s).trim();
+  const fw = first.split(' ').filter(Boolean);
+  let words;
+  if (fw.length <= maxWords) {
+    words = sinColgada(fw);
+  } else {
+    // 2) Recorte por palabras + retroceso anti-colgada.
+    words = sinColgada(s.split(' ').filter(Boolean).slice(0, maxWords));
+  }
+  let out = words.join(' ');
+  // 3) Tope de caracteres, cortando por palabra y re-chequeando colgadas.
+  if (out.length > maxChars) {
+    const c = out.slice(0, maxChars);
+    const i = c.lastIndexOf(' ');
+    out = sinColgada((i > maxChars * 0.4 ? c.slice(0, i) : c).trim().split(' ').filter(Boolean)).join(' ');
+  }
+  return out;
 }
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -2039,8 +2080,8 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
       const out = await generateCaptions({ ...baseInput, feedback: angles[i], seedBase: i * 7 + 1 }, 1, key);
       const caption = (out.captions && out.captions[0]) || '';
       if (!caption.trim()) throw new Error('La IA no devolvió texto');
-      // Titular corto para la imagen: primera línea del caption, máx 6 palabras.
-      const headline = String(caption).split('\n')[0].trim().split(/\s+/).filter(Boolean).slice(0, 6).join(' ');
+      // Titular corto y COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
+      const headline = makeHeadline(String(caption).split('\n')[0], 6);
       const imagePath = await conceptShotGenerate({
         uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key,
       });
@@ -2313,8 +2354,9 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
           if (!caption) throw new Error('caption vacío');
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
           if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); continue; }
-          const headline = caption.split('\n')[0].trim().split(/\s+/).filter(Boolean).slice(0, 6).join(' ')
-            || String(idea.titulo || '').split(' ').slice(0, 5).join(' ');
+          // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
+          const headline = makeHeadline(caption.split('\n')[0], 6)
+            || makeHeadline(idea.titulo, 5);
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
           // Sin fallback de canvas en el servidor: si la imagen falla, el borrador
@@ -3098,6 +3140,51 @@ app.post('/api/milestones/seen', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Niveles del avatar posta.: XP por posteo publicado ----------
+// 100 XP por post, 150 por reel. Niveles 1-10 con nombres en rioplatense.
+// El guard "visto una vez por nivel" usa milestones_seen con milestone 900+nivel.
+const POSTA_LEVELS = [
+  { lvl: 1, name: 'Recién llegado', xp: 0 },
+  { lvl: 2, name: 'Aprendiz del feed', xp: 100 },
+  { lvl: 3, name: 'Ritmo agarrado', xp: 300 },
+  { lvl: 4, name: 'Contenido serio', xp: 550 },
+  { lvl: 5, name: 'Máquina de contenido', xp: 850 },
+  { lvl: 6, name: 'Cara visible', xp: 1200 },
+  { lvl: 7, name: 'Referente del rubro', xp: 1600 },
+  { lvl: 8, name: 'Imparable', xp: 2100 },
+  { lvl: 9, name: 'Ídolo local', xp: 2650 },
+  { lvl: 10, name: 'Leyenda del barrio', xp: 3300 },
+];
+function postaLevelFor(xp) {
+  let cur = POSTA_LEVELS[0];
+  for (const l of POSTA_LEVELS) if (xp >= l.xp) cur = l;
+  return cur;
+}
+function postaTier(lvl) { return lvl >= 7 ? 'gold' : lvl >= 5 ? 'silver' : lvl >= 3 ? 'bronze' : 'none'; }
+app.get('/api/avatar-level', requireAuth, (req, res) => {
+  try {
+    const rows = db.prepare(`SELECT media_type, COUNT(*) AS c FROM posts WHERE user_id = ? AND status = 'published' AND media_type != 'story' GROUP BY media_type`).all(req.session.userId);
+    let xp = 0, published = 0;
+    for (const r of rows) { const n = r.c || 0; published += n; xp += n * (r.media_type === 'video' ? 150 : 100); }
+    const cur = postaLevelFor(xp);
+    const idx = POSTA_LEVELS.indexOf(cur);
+    const next = POSTA_LEVELS[idx + 1] || null;
+    const seen = db.prepare('SELECT milestone FROM milestones_seen WHERE user_id = ? AND milestone >= 900').all(req.session.userId).map(r => r.milestone - 900);
+    const unseen = POSTA_LEVELS.filter(l => l.lvl > 1 && l.lvl <= cur.lvl && !seen.includes(l.lvl)).map(l => l.lvl);
+    res.json({ ok: true, xp, level: cur.lvl, levelName: cur.name, tier: postaTier(cur.lvl), published, nextXp: next ? next.xp : null, nextName: next ? next.name : null, unseenLevels: unseen });
+  } catch (e) { res.json({ ok: false }); }
+});
+app.post('/api/avatar-level/seen', requireAuth, (req, res) => {
+  try {
+    const lvls = Array.isArray(req.body && req.body.levels) ? req.body.levels : [];
+    for (const l of lvls) {
+      const n = Number(l);
+      if (n >= 2 && n <= 10) db.prepare('INSERT OR IGNORE INTO milestones_seen (user_id, milestone) VALUES (?, ?)').run(req.session.userId, 900 + n);
+    }
+  } catch (e) {}
+  res.json({ ok: true });
+});
+
 // Sugerencias proactivas del CM: detecta patrones y propone (máx 2).
 app.get('/api/proactive-tips', requireAuth, (req, res) => {
   try {
@@ -3729,7 +3816,7 @@ async function expandArtBrief({ headline, tipo, angle, businessName, category, p
     : '';
   const fam = CONCEPT_FAMILIES[tipo] || 'contenido visual atractivo de alto nivel';
   const textRule = headline
-    ? `Renderizás el titular "${String(headline).slice(0, 80)}" en ESPAÑOL, en negrita, DENTRO de la imagen, exactamente como está escrito. NINGÚN otro texto, letra, número, precio, dirección ni teléfono en la imagen.`
+    ? `Renderizás el titular "${String(headline).slice(0, 80)}" en ESPAÑOL, en negrita, DENTRO de la imagen, exactamente como está escrito. NINGÚN otro texto, letra, número, precio, dirección ni teléfono en la imagen. REGLA DURA DE TITULAR: es una frase COMPLETA — la renderizás ÍNTEGRA, palabra por palabra, sin cortar ni deformar la última palabra y sin terminar en preposición o artículo. Si el espacio no alcanza, achicás la tipografía o la repartís en dos líneas; JAMÁS recortás el texto.`
     : `SIN texto en la imagen: ni letras, ni palabras, ni números, ni precios, ni direcciones, ni teléfonos.`;
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -3747,7 +3834,7 @@ El prompt DEBE exigir:
 - La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
 - Estética publicitaria premium: incluí los marcadores "fotografía comercial profesional" y "high-end advertising".
 - FORMATO VERTICAL 4:5, optimizado para verse en un CELULAR: es una pieza de Instagram, no un banner de web.
-- El titular (si lo hay) GRANDE, en negrita y con alto contraste: tiene que leerse perfecto en una pantalla de teléfono chica.
+- El titular (si lo hay) GRANDE, en negrita y con alto contraste: tiene que leerse perfecto en una pantalla de teléfono chica. El titular es una frase COMPLETA: se renderiza ÍNTEGRO, sin cortar la última palabra ni terminar en preposición o artículo; si no entra, se achica la tipografía o se usa una segunda línea, JAMÁS se trunca.
 - ZONA SEGURA: lo importante (titular, producto, caras) va en el centro de la imagen, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta.
 - Los colores EXACTOS de la paleta del cliente integrados EN la escena (props, vestuario, packaging, detalles del ambiente): ${hexes.join(', ') || 'sin paleta definida, usá colores armónicos del rubro'}. NUNCA como fondo plano de color.
 - "${textRule}"
@@ -3810,8 +3897,9 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"detalle":"..."}
+{"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"detalle":"..."}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. Si la imagen NO lleva texto → true.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
@@ -3832,6 +3920,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
       return { texto_ok: false, colores_ok: true, claims_ok: true, mobile_ok: true, detalle: 'QA: respuesta ilegible (conservador)' };
     return {
       texto_ok: parsed.texto_ok !== false,
+      headline_complete: parsed.headline_complete !== false,
       colores_ok: parsed.colores_ok !== false,
       claims_ok: parsed.claims_ok !== false,
       mobile_ok: parsed.mobile_ok !== false,
@@ -3972,14 +4061,18 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       dnaFacts: qaFactsLine(dna),
     }, key);
   } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  if (qa && (!qa.texto_ok || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok)) {
-    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok}): ${qa.detalle}`);
+  if (qa && (!qa.texto_ok || !qa.headline_complete || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok)) {
+    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} titular_completo=${qa.headline_complete} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok}): ${qa.detalle}`);
     let retryPrompt;
     if (!qa.texto_ok && cleanHeadline) {
       // El texto salió mal → regenerar SIN texto en la imagen.
       try {
         retryPrompt = await expandArtBrief({ ...briefBase, headline: '' }, key);
       } catch (e) { retryPrompt = null; }
+    } else if (!qa.headline_complete && cleanHeadline) {
+      // El titular se ve cortado a mitad de oración → reintentar CON el titular
+      // completo y orden explícita de renderizarlo íntegro.
+      retryPrompt = prompt + `\nIMPORTANT FIX: the image headline "${cleanHeadline}" was CUT OFF mid-sentence in the previous render. Render the FULL headline, every single word, complete — never end on a preposition or article, never cut a word in half. If space is tight, make the type smaller or split it across two lines, NEVER truncate the text.`;
     } else {
       // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
       retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
