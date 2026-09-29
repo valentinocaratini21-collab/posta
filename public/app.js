@@ -1299,8 +1299,6 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
     <p style="color:var(--mut);font-size:14px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
-    ${chatCardHTML(true)}
-    <div id="whyWeek"></div>
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -1965,7 +1963,7 @@ function chatCardHTML(compact) {
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
-  const title = `<div class="cm-head${compact ? ' sm' : ''}"><img class="cm-avatar" src="cm-avatar.webp" alt="Tu community manager"><div class="cm-meta"><div class="cm-name">Tu community manager</div><div class="cm-status"><i></i>en línea</div></div></div>`;
+  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Tu community manager</h3>`;
   const wrap = compact
     ? `<div id="chatCard" style="margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)">`
     : `<div class="card" id="chatCard">`;
@@ -2212,12 +2210,81 @@ async function chatSend() {
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(text)}</div>`);
   inp.value = '';
   chatScroll();
+  // "comentarios" → la IA trae los pendientes de Instagram y deja la respuesta lista, acá en el chat
+  if (/\bcomentarios?\b/i.test(text) && !/sin comentarios/i.test(text)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
+    showCommentsInChat();
+    return;
+  }
   // Si la idea está cerrada y el mensaje es un pedido de edición, se aplica directo
   if (CHAT_IDEA && chatEditCommand(text)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
     return;
   }
   return chatExchange({ text, pushed: true });
+}
+
+// Comentarios de IG dentro del chat: la IA los trae y deja la respuesta lista.
+async function showCommentsInChat() {
+  const box = $('#chatBox');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatCmTyping">⏳ Revisando tus comentarios…</div>`);
+  chatScroll();
+  let list = [];
+  try { const r = await api.get('/api/comments'); list = (r && r.comments) || []; } catch (e) {}
+  if (!list.length) {
+    try { await api.post('/api/comments/refresh', {}); const r2 = await api.get('/api/comments'); list = (r2 && r2.comments) || []; } catch (e) {}
+  }
+  const t = $('#chatCmTyping'); if (t) t.remove();
+  const html = list.length ? `
+    <div class="chat-msg ai" style="max-width:100%">
+      <div style="font-weight:800;margin-bottom:4px">💬 ${list.length} ${list.length === 1 ? 'comentario' : 'comentarios'} para responder</div>
+      <div style="font-size:13px;color:var(--mut);margin-bottom:8px">Te dejé la respuesta lista — la editás si querés y sale en un toque.</div>
+      ${list.map(c => `
+      <div data-chatcm="${c.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:14px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
+        <textarea class="in" data-chatcmreply="${c.id}" rows="2" style="font-size:15px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" data-chatcmdo="reply" data-id="${c.id}">💬 Responder</button>
+          <button class="btn btn-ghost btn-sm" data-chatcmdo="dismiss" data-id="${c.id}">Descartar</button>
+        </div>
+        <div class="hint" data-chatcmmsg="${c.id}" style="margin:6px 0 0"></div>
+      </div>`).join('')}
+    </div>`
+    : `<div class="chat-msg ai">💬 No tenés comentarios pendientes — todo respondido 👌</div>`;
+  box.insertAdjacentHTML('beforeend', html);
+  const say = list.length ? `Te muestro los ${list.length} comentarios para responder 👆` : 'No tenés comentarios pendientes.';
+  CHAT.push({ role: 'assistant', text: say });
+  try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
+  bindChatComments();
+  chatScroll();
+}
+function bindChatComments() {
+  document.querySelectorAll('#chatBox [data-chatcmdo]').forEach(b => {
+    if (b.dataset.bound) return; b.dataset.bound = '1';
+    b.onclick = async () => {
+      const id = b.dataset.id, act = b.dataset.chatcmdo;
+      const msg = document.querySelector(`#chatBox [data-chatcmmsg="${id}"]`);
+      b.disabled = true;
+      try {
+        if (act === 'reply') {
+          const ta = document.querySelector(`#chatBox [data-chatcmreply="${id}"]`);
+          const message = (ta && ta.value || '').trim();
+          if (!message) throw new Error('La respuesta está vacía');
+          b.textContent = '⏳ Enviando...';
+          await api.post(`/api/comments/${id}/reply`, { message });
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondido en Instagram</span>';
+        } else {
+          await api.post(`/api/comments/${id}/dismiss`, {});
+          if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartado</span>';
+        }
+        setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatcm="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
+      } catch (e) {
+        b.disabled = false; b.textContent = act === 'reply' ? '💬 Responder' : 'Descartar';
+        if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
+      }
+    };
+  });
 }
 
 // Intercambio completo con /api/ideas/chat. `extra` agrega campos al JSON
@@ -2696,6 +2763,8 @@ async function runAutopilot(n, tag) {
     setTimeout(() => {
       // Al terminar, caés directo sobre tus borradores (ya no hay que buscarlos)
       render();
+      // La IA pide las fotos POR CHAT, como un amigo — nada de tarjetas.
+      api.post('/api/proactive-shot-ask', {}).then(r => { if (r && r.asked) chatLoadHistory(); }).catch(() => {});
       setTimeout(() => { const rc = $('#reviewCard'); if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
       if (sk && sk.newWeek) setTimeout(() => showStreakCelebration(sk), 600);
     }, 900);
@@ -2709,8 +2778,34 @@ function bindAutopilot() {
   $$('[data-autopilot]').forEach(b => b.onclick = () => {
     const t = b.dataset.autopilot || 'semana';
     const sel = document.getElementById('apCount-' + t);
-    runAutopilot(sel ? +sel.value : ((ME && ME.posts_per_week) || 3), t);
+    runAutopilotSmart(sel ? +sel.value : ((ME && ME.posts_per_week) || 3), t);
   });
+}
+
+// El plan se aplica en silencio: el cliente toca un botón, nosotros nos ocupamos del resto.
+async function runAutopilotSmart(n, t) {
+  let plan = [];
+  try { const r = await api.get('/api/weekly-plan'); plan = (r && r.plan) || []; } catch (e) {}
+  if (!Array.isArray(plan) || !plan.length) return runAutopilot(n, t);
+  try {
+    if (!IDEAS.length) {
+      const r = await api.post('/api/ideas', {});
+      IDEAS = (r && r.ideas) || [];
+    }
+  } catch (e) {}
+  if (IDEAS.length) {
+    const byTipo = {};
+    IDEAS.forEach(idea => { const tt = (idea && idea.tipo) || 'novedad'; (byTipo[tt] = byTipo[tt] || []).push(idea); });
+    const used = new Set(), ordered = [];
+    plan.forEach(p => {
+      const pt = (p && p.serie_tipo) || (p && p.tipo);
+      const cand = (byTipo[pt] || []).find(i => !used.has(i));
+      if (cand) { used.add(cand); ordered.push(cand); }
+    });
+    IDEAS.forEach(i => { if (!used.has(i)) ordered.push(i); });
+    IDEAS = ordered;
+  }
+  runAutopilot(n, t);
 }
 
 
@@ -3168,26 +3263,15 @@ async function loadWeeklyPlan() {
   let r;
   try { r = await api.get('/api/weekly-plan'); } catch (e) { el.innerHTML = ''; return; }
   const plan = (r && r.plan) || [];
-  if (!plan.length) { el.innerHTML = ''; return; }
+  // Sin explicaciones de estrategia: nosotros nos ocupamos. Solo la serie, que sí necesita un sí del cliente.
+  const sug = plan.find(p => p && p.kind === 'suggest-serie');
+  if (!sug) { el.innerHTML = ''; return; }
   el.innerHTML = `
-  <div class="card" style="border:1.5px solid var(--cel);margin-bottom:14px">
-    <h3 style="margin:0 0 4px">📋 Tu plan de la semana</h3>
-    <p class="d" style="margin:0 0 6px">Así te conviene armarla, según tu cuenta:</p>
-    ${plan.map(p => {
-      if (p && p.kind === 'suggest-serie') return `
-        <div class="serie-suggest">
-          <div><b>¿Creamos tu serie? 📺 ${esc(p.nombre_sugerido || 'Tu serie')}</b></div>
-          <div class="d" style="margin:4px 0 8px">${esc(p.texto || 'Una serie fija crea hábito en tu audiencia.')}</div>
-          <button class="btn btn-primary" data-serie-nombre="${esc(p.nombre_sugerido || '')}" data-serie-weekday="${esc(p.weekday ?? '')}" data-serie-tipo="${esc(p.tipo || '')}">Sí, crearla</button>
-        </div>`;
-      if (p && p.tipo === 'serie') return `<div class="cm-tip"><span>📺</span><span><b>${esc(p.nombre || 'Tu serie')}</b> — ${esc(p.por_que || 'tu serie semanal')}</span></div>`;
-      const m = TIPO_META[p.tipo] || ['✨', p.tipo];
-      return `<div class="cm-tip"><span>${m[0]}</span><span><b>${m[1]}</b> — ${esc(p.por_que)}</span></div>`;
-    }).join('')}
-    <button class="btn btn-primary btn-block" id="planBuildBtn" style="margin-top:10px">✨ Armar mi semana con este plan</button>
+  <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:12px">
+    <span style="font-size:30px">📺</span>
+    <div style="flex:1"><b>${esc(sug.nombre_sugerido || 'Tu serie')}</b><div class="d" style="margin-top:2px">Tu serie fija de cada semana.</div></div>
+    <button class="btn btn-primary" data-serie-nombre="${esc(sug.nombre_sugerido || '')}" data-serie-weekday="${esc(sug.weekday ?? '')}" data-serie-tipo="${esc(sug.tipo || '')}">Crear</button>
   </div>`;
-  const b = document.getElementById('planBuildBtn');
-  if (b) b.onclick = () => runAutopilotWithPlan(plan);
   // Crear serie sugerida por el CM
   $$('#weeklyPlan [data-serie-nombre]').forEach(sb => {
     sb.onclick = async () => {
@@ -3204,26 +3288,7 @@ async function loadWeeklyPlan() {
 }
 // Autopilot siguiendo el orden de tipos del plan (reordena las ideas, sin tocar el flujo)
 async function runAutopilotWithPlan(plan) {
-  if (!Array.isArray(plan) || !plan.length) return;
-  try {
-    if (!IDEAS.length) {
-      const r = await api.post('/api/ideas', {});
-      IDEAS = (r && r.ideas) || [];
-    }
-  } catch (e) {}
-  if (IDEAS.length) {
-    const byTipo = {};
-    IDEAS.forEach(idea => { const t = (idea && idea.tipo) || 'novedad'; (byTipo[t] = byTipo[t] || []).push(idea); });
-    const used = new Set(), ordered = [];
-    plan.forEach(p => {
-      const t = (p && p.serie_tipo) || (p && p.tipo);
-      const cand = (byTipo[t] || []).find(i => !used.has(i));
-      if (cand) { used.add(cand); ordered.push(cand); }
-    });
-    IDEAS.forEach(i => { if (!used.has(i)) ordered.push(i); });
-    IDEAS = ordered;
-  }
-  runAutopilot((ME && ME.posts_per_week) || 3, 'semana');
+  return runAutopilotSmart((ME && ME.posts_per_week) || 3, 'semana');
 }
 /* ---------- Fotos de la semana: checklist de la misión ---------- */
 function isoWeekKey(d) {
@@ -3235,34 +3300,6 @@ function isoWeekKey(d) {
   firstThu.setUTCDate(firstThu.getUTCDate() - fday + 3);
   const week = 1 + Math.round((x - firstThu) / (7 * 864e5));
   return `${x.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
-async function loadShotList() {
-  const el = document.getElementById('shotList');
-  if (!el) return;
-  let r;
-  try { r = await api.get('/api/shot-list'); } catch (e) { el.innerHTML = ''; return; }
-  const shots = (r && r.shots) || [];
-  if (!shots.length) { el.innerHTML = ''; return; }
-  const wk = isoWeekKey(new Date());
-  el.innerHTML = `
-  <div class="card" style="border:1.5px solid var(--cel);margin-bottom:14px">
-    <h3 style="margin:0 0 4px">📸 Fotos de esta semana</h3>
-    <p class="d" style="margin:0 0 6px">Sacalas con el celu, la IA hace el resto:</p>
-    ${shots.map((s, i) => {
-      const done = (() => { try { return localStorage.getItem(`shotDone_${i}_${wk}`) === '1'; } catch (e) { return false; } })();
-      return `<label class="shot-row${done ? ' done' : ''}">
-        <input type="checkbox" data-shot="${i}"${done ? ' checked' : ''}>
-        <span class="shot-body"><b>${esc(s.foto)}</b><span class="d">para ${esc(s.para)}</span><span class="shot-tip">💡 ${esc(s.tip)}</span></span>
-      </label>`;
-    }).join('')}
-  </div>`;
-  $$('#shotList [data-shot]').forEach(c => {
-    c.onchange = () => {
-      try { localStorage.setItem(`shotDone_${c.dataset.shot}_${wk}`, c.checked ? '1' : '0'); } catch (e) {}
-      const row = c.closest('.shot-row');
-      if (row) row.classList.toggle('done', c.checked);
-    };
-  });
 }
 /* ---------- Republicar: un posteo que voló, con diseño fresco ---------- */
 let _recycleDismissed = false;
@@ -3305,55 +3342,6 @@ async function loadRecycleSuggest() {
   };
 }
 /* ---------- Loop visible: por qué armé tu semana así ---------- */
-async function loadWhyWeek() {
-  const el = document.getElementById('whyWeek');
-  if (!el) return;
-  const drafts = (typeof REVIEW_DRAFTS !== 'undefined' && Array.isArray(REVIEW_DRAFTS) ? REVIEW_DRAFTS : []).filter(d => d && d.tipo);
-  if (!drafts.length) { el.innerHTML = ''; return; }
-  let tips = [];
-  try { const r = await api.get('/api/proactive-tips'); tips = (r && r.tips) || []; } catch (e) {}
-  const reasons = [];
-  const covered = new Set();
-  const byTipo = {};
-  drafts.forEach(d => { (byTipo[d.tipo] = byTipo[d.tipo] || []).push(d); });
-  // Patrón 1: tip de promo + hay promo en borradores
-  const promoTip = tips.find(t => /promo/i.test(t.text || ''));
-  if (promoTip && byTipo.promo && byTipo.promo.length) {
-    const m = (promoTip.text || '').match(/Hace (\d+) semanas/);
-    reasons.push(`${byTipo.promo.length} ${byTipo.promo.length === 1 ? 'promo' : 'promos'} porque ${m ? `hace ${m[1]} semanas no hacés una` : 'venís sin promos'}`);
-    covered.add('promo');
-  }
-  // Patrón 2: tip de formato que rinde Nx + 2+ borradores de ese formato
-  const fmtTip = tips.find(t => /rinden/i.test(t.text || ''));
-  if (fmtTip) {
-    const txt = fmtTip.text || '';
-    const xm = txt.match(/([\d,]+)x/);
-    let fmt = null, label = '';
-    if (/carrusel/i.test(txt)) { fmt = 'carousel'; label = 'carruseles'; }
-    else if (/reel/i.test(txt)) { fmt = 'video'; label = 'reels'; }
-    else if (/foto/i.test(txt)) { fmt = 'image'; label = 'posteos con foto'; }
-    if (fmt && xm) {
-      const count = drafts.filter(d => d.media_type === fmt).length;
-      if (count >= 2) reasons.push(`${count} ${label} porque rinden ${xm[1]}x más`);
-    }
-  }
-  // Fallback por tipo (máx 3 motivos en total)
-  const fallbacks = {
-    tip: n => `${n} ${n === 1 ? 'tip' : 'tips'} para posicionarte como referente`,
-    social: n => `${n} prueba${n === 1 ? '' : 's'} social${n === 1 ? '' : 'es'} porque la confianza vende`,
-    detras: n => `${n} detrás de escena para humanizar tu marca`,
-    novedad: n => `${n} ${n === 1 ? 'novedad' : 'novedades'} para mantener tu cuenta fresca`,
-    promo: n => `${n} ${n === 1 ? 'promo' : 'promos'} para vender esta semana`,
-  };
-  for (const t of Object.keys(byTipo)) {
-    if (reasons.length >= 3) break;
-    if (covered.has(t) || !fallbacks[t]) continue;
-    reasons.push(fallbacks[t](byTipo[t].length));
-  }
-  const final = reasons.slice(0, 3);
-  if (!final.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="why-week"><div style="font-weight:800;margin-bottom:6px">🧠 Por qué armé tu semana así:</div>${final.map(r => `<div class="why-item">✓ ${esc(r)}</div>`).join('')}</div>`;
-}
 /* ---------- Alerta honesta de rendimiento ---------- */
 let _perfAlertDismissed = false;
 async function loadPerformanceAlert() {
@@ -3722,74 +3710,6 @@ function bindAds() {
   if (arc) bindAdsRecCards(arc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'ads' });
 }
 
-/* ---------- Comentarios de Instagram: responder en un toque ---------- */
-async function loadCommentsCard() {
-  const el = document.getElementById('commentsCard');
-  if (!el) return;
-  let r;
-  try { r = await api.get('/api/comments'); } catch (e) { el.innerHTML = ''; return; }
-  const list = (r && r.comments) || [];
-  if (!list.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-  <div class="card" style="border:2px solid var(--yel)">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
-      <h3 style="margin:0">💬 ${list.length} ${list.length === 1 ? 'comentario' : 'comentarios'} para responder</h3>
-      <button class="btn btn-soft btn-sm" id="cmRefresh">🔄 Revisar</button>
-    </div>
-    <p class="hint" style="margin:0 0 10px">Te dejamos la respuesta lista — la editás si querés y sale en un toque.</p>
-    <div id="cmList">${list.map(cmItemHTML).join('')}</div>
-  </div>`;
-  const rf = document.getElementById('cmRefresh');
-  if (rf) rf.onclick = async () => {
-    rf.disabled = true; rf.textContent = '⏳ Revisando...';
-    try { await api.post('/api/comments/refresh', {}); } catch (e) {}
-    loadCommentsCard().catch(() => {});
-  };
-  bindCommentItems();
-}
-function cmItemHTML(c) {
-  return `
-  <div class="cm-item" data-cm="${c.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
-    <div style="font-size:14px;margin-bottom:6px"><b>@${esc(c.username || '')}</b>: ${esc(c.text || '')}</div>
-    <textarea class="in" data-cmreply="${c.id}" rows="2" style="font-size:15px" aria-label="Respuesta sugerida">${esc(c.suggested || '')}</textarea>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn btn-primary btn-sm" data-cmdo="reply" data-id="${c.id}">💬 Responder</button>
-      <button class="btn btn-ghost btn-sm" data-cmdo="dismiss" data-id="${c.id}">Descartar</button>
-    </div>
-    <div class="hint" data-cmmsg="${c.id}" style="margin:6px 0 0"></div>
-  </div>`;
-}
-function bindCommentItems() {
-  document.querySelectorAll('#commentsCard [data-cmdo]').forEach(b => {
-    b.onclick = async () => {
-      const id = b.dataset.id, act = b.dataset.cmdo;
-      const msg = document.querySelector(`#commentsCard [data-cmmsg="${id}"]`);
-      b.disabled = true;
-      try {
-        if (act === 'reply') {
-          const ta = document.querySelector(`#commentsCard [data-cmreply="${id}"]`);
-          const message = (ta && ta.value || '').trim();
-          if (!message) throw new Error('La respuesta está vacía');
-          b.textContent = '⏳ Enviando...';
-          await api.post(`/api/comments/${id}/reply`, { message });
-          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondido en Instagram</span>';
-        } else {
-          await api.post(`/api/comments/${id}/dismiss`, {});
-          if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartado</span>';
-        }
-        setTimeout(() => {
-          const item = document.querySelector(`#commentsCard [data-cm="${id}"]`);
-          if (item) item.style.display = 'none';
-        }, 900);
-      } catch (e) {
-        if (msg) msg.innerHTML = `<span style="color:#D64545">${esc(e.message || 'Error')}</span>`;
-        b.disabled = false;
-        if (act === 'reply') b.textContent = '💬 Responder';
-      }
-    };
-  });
-}
-
 async function loadMissionCard() {  const el = $('#missionCard');
   if (!el) return;
   let m;
@@ -3905,15 +3825,8 @@ function shareStreakImage(sk) {
 async function semanaView() {
   let st = null;
   try { st = await api.get('/api/stats/summary'); } catch (e) { st = null; }
-  let sk = null, soc = null;
+  let sk = null;
   try { sk = await api.get('/api/streak'); } catch (e) {}
-  try { soc = await api.get('/api/streak/social'); } catch (e) {}
-  // Publicidad: recomendados a la vista en Mi semana (si hay datos, si no la tarjeta no aparece)
-  let adsCfg = null, adsRecs = null;
-  try { adsCfg = await api.get('/api/ads/config'); } catch (e) {}
-  try { adsRecs = await api.get('/api/ads/recommendations'); } catch (e) {}
-  ADS_CTX = { balance: adsCfg ? adsCfg.balance_cents : 0, minTopup: adsCfg ? adsCfg.min_topup_cents : 1000000 };
-  const boostCard = adsBoostCardHTML(adsCfg, adsRecs);
   // Borradores y programados viven acá, en Mi semana: se revisan y programan sin salir de la pantalla.
   let allPosts = [];
   try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
@@ -3939,26 +3852,12 @@ async function semanaView() {
       <span class="xp-sub">${nl ? `${esc(nl.emoji)} ${esc(nl.name)} en ${(nl.at - sk.current) * 100} pts` : `👑 ¡Nivel máximo, leyenda!`}</span>
     </button>`;
   })() : '';
-  // Encabezado con la identidad del negocio: tiene que sentirse SUYO, no una app genérica.
-  const bizName = (PROFILE && PROFILE.business_name || '').trim();
-  const bizLogo = assetLogo();
-  const bizColor = (typeof brandColors === 'function' && brandColors()[0]) || '#2793C8';
-  const bizIcon = bizLogo
-    ? `<img src="${esc(bizLogo.file_path)}" alt="Logo" style="width:46px;height:46px;border-radius:13px;object-fit:cover;border:1px solid var(--line);background:#fff;flex-shrink:0">`
-    : `<div style="width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#fff;background:${esc(bizColor)};flex-shrink:0">${esc((bizName || 'M')[0].toUpperCase())}</div>`;
-  const pencil = `<button class="head-pencil" data-opencreator title="Armar nuevo post" aria-label="Armar nuevo post">✏️ Armar nuevo post</button>`;
-  const headRight = `<div style="margin-left:auto;align-self:center;display:flex;gap:8px;align-items:center">${pencil}</div>`;
-  const head = (bizName || bizLogo)
-    ? `<div class="page-head"><div style="display:flex;gap:12px;align-items:center">${bizIcon}<div class="ph-txt"><h1>${esc(bizName || 'Mi negocio')}</h1><p class="sub">Tu semana, armada con un clic.</p></div></div>${headRight}</div>`
-    : `<div class="page-head"><div class="ph-ico">🏠</div><div class="ph-txt"><h1>Mi semana</h1><p class="sub">Tu semana, armada con un clic.</p></div>${headRight}</div>`;
-  const socialBar = soc && soc.shown
-    ? `<div class="social-proof">🔥 ${soc.count} negocios llevan 15+ días seguidos armando su semana con Posta</div>` : '';
   const expBanner = sk && sk.expiringSoon ? `
   <div class="card" style="border:1.5px solid #FEC14D;background:#FFF9EC">
     <div class="nudge-top"><span class="nudge-ico">⏳</span><div><h3>Tu racha ${esc(sk.level.emoji)} se apaga en ${fmtStreakLeft(sk.expiresInMs)}</h3>
     <p>${draftN > 0 ? 'Programá tus borradores acá arriba 👆 y la racha sigue viva.' : 'Si no sale ningún posteo en ese tiempo, la racha vuelve a cero.'}</p></div></div>
   </div>` : '';
-  if (!st) return head + `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
+  if (!st) return `<div class="empty"><div class="big">⏳</div>No pudimos cargar tu resumen. Probá de nuevo.</div>`;
   const w = st.week, ap = st.approval, mo = st.month;
   const pct = w.planned ? Math.min(100, Math.round((w.ready / w.planned) * 100)) : 0;
 
@@ -3990,21 +3889,6 @@ async function semanaView() {
   : `
     <p class="d" style="margin:0">Cuando salga tu primer posteo, acá vas a ver tus horas ahorradas y tu constancia semana a semana. Cada posteo son ≈1,5 h que no hiciste a mano.</p>`;
 
-  // Próximos posteos: una sola tarjeta (el primero destacado arriba con su día/hora).
-  const upcomingCard = scheduled.length ? `
-  <div class="card" id="upcomingCard"><h3>📅 Próximos posteos</h3>
-    <p class="d" style="margin:-4px 0 12px">El primero sale ${relDay(scheduled[0].scheduled_at)} — sale solo, no tenés que hacer nada.</p>
-    ${scheduled.map(p => postItem(p, `${sigBtns(p)}<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Publicar ahora</button><button class="btn btn-ghost btn-sm" data-act="cancel" data-id="${p.id}">Cancelar</button>`)).join('')}
-  </div>` : '';
-
-  // Nudges de calendario comercial
-  SEM_NUDGES = upcomingNudges();
-  const nudgeBlock = SEM_NUDGES.map((n, i) => `
-    <div class="card nudge-card">
-      <div class="nudge-top"><span class="nudge-ico">📣</span><div><h3>Se acerca ${esc(n.name)}</h3>
-      <p>${fmtDay(n.date)}${n.days === 0 ? ' — ¡es hoy!' : n.days === 1 ? ' — ¡es mañana!' : ` — faltan ${n.days} días`}${n.approx ? ' (fecha aprox.)' : ''}</p></div></div>
-      <button class="btn btn-primary btn-sm" data-nudge="${i}">Armar idea →</button>
-    </div>`).join('');
 
   // Progreso de la semana: vive como primera fila de "Tu progreso" (una tarjeta menos en la pantalla).
   const semStripInner = `
@@ -4033,48 +3917,45 @@ async function semanaView() {
     <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Reintentalos acá, sin ir a otra pantalla.</p>
     ${failed.map(p => postItem(p, `<button class="btn btn-soft btn-sm" data-act="now" data-id="${p.id}">Reintentar</button><button class="btn btn-ghost btn-sm" data-act="del" data-id="${p.id}" title="Borrar">🗑️</button>`)).join('')}
   </div>` : '';
-  // Creador manual plegado dentro de Mi semana: la entrada es el ✏️ del encabezado
-  // (un toque, abre inline y scrollea solo). Sin tarjeta grande ocupando lugar.
-  const creatorOpen = CREATOR_OPEN || CREATOR.step !== 1;
-  const creatorCard = `<div id="creatorInline" style="scroll-margin-top:70px">${creatorOpen ? creatorView(true) : ''}</div>`;
 
-  // Orden por importancia: lo que pide tu acción primero.
-  // Con borradores pendientes, la revisión sube al 2º lugar (debajo del HUD de XP):
-  // es el momento de decisión y no puede quedar debajo de fotos y misiones.
-  // El chat vive DENTRO de la revisión, debajo de "¿Cambiar algo?": ahí suben
-  // sus fotos/videos y piden cambios, justo arriba de los posteos.
-  // Sin borradores no hay revisión: el chat queda debajo del héroe como antes.
-  const chatBottom = draftN > 0 ? '' : chatCardHTML();
-  // Plan semanal sugerido + alerta de alcance: arriba de todo lo accionable (se ocultan si la semana ya está armada)
-  const planSlot = weekDone ? '' : `<div id="perfAlert"></div><div id="weeklyPlan"></div><div id="shotList"></div><div id="recycleCard"></div>`;
-  const topBlock = draftN > 0
-    ? `${xpStrip}\n  ${planSlot}\n  ${heroCard}\n  ${redoMini}\n  ${mediaCardHTML()}\n  <div id="missionCard"></div>\n  ${expBanner}`
-    : `${xpStrip}\n  ${planSlot}\n  ${mediaCardHTML()}\n  <div id="missionCard"></div>\n  ${expBanner}\n  ${heroCard}`;
-  // Potenciar: a la vista cuando la semana ya está armada (pico emocional, ahí convierte);
-  // con borradores por revisar se queda abajo para no contaminar la decisión.
-  const boostUp = draftN === 0 ? boostCard : '';
-  const boostDown = draftN === 0 ? '' : boostCard;
+  // La pantalla son 5 bloques y nada más:
+  // 1. barra de puntos y streaks · 2. AI (chat) · 3. posteos · 4. misión de fotos · 5. tu progreso.
+  // Las alertas transitorias (racha por apagarse, alcance, posteos fallidos) aparecen
+  // solo cuando hay algo que atender, arriba de todo.
+  const chatBlock = chatCardHTML();
+  const planSlot = weekDone ? '' : `<div id="perfAlert"></div><div id="weeklyPlan"></div>`;
+  // Programados: tira compacta dentro del bloque "posteos" — la semana existe y se ve.
+  const fmtShort = (iso) => {
+    try {
+      const s0 = String(iso || '');
+      let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
+      if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+      const d = new Date(s);
+      if (isNaN(d)) return '';
+      const wd = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+      const tm = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      return `${wd} ${tm}`;
+    } catch (e) { return ''; }
+  };
+  const scheduledStrip = scheduled.length ? `
+  <div class="card" style="margin-top:12px">
+    <h3 style="margin:0 0 8px">📅 Programados <span style="font-weight:400;color:var(--mut);font-size:13px">— salen solos</span></h3>
+    <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:2px">
+      ${scheduled.map(p => `
+      <div style="flex:0 0 auto;width:84px">
+        ${p.image_path ? `<img src="${esc(p.image_path)}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:10px;background:#EEF2F6">` : `<div style="width:84px;height:84px;border-radius:10px;background:#EEF2F6"></div>`}
+        <div style="font-size:11.5px;color:var(--mut);margin-top:3px;text-align:center">${esc(fmtShort(p.scheduled_at))}</div>
+      </div>`).join('')}
+    </div>
+  </div>` : '';
+  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${chatBlock}${heroCard}${redoMini}${scheduledStrip}<div id="missionCard"></div>`;
 
-  // Orden por importancia: lo que pide tu acción → lo que viene → crear/cambiar → balance.
-  return `${head}
-  ${topBlock}
-  <div id="proactiveTips"></div>
-  ${boostUp}
-  ${chatBottom}
-  <div id="commentsCard"></div>
-  ${failedCard}
-  ${upcomingCard}
-  <div id="reportCard"></div>
-  ${nudgeBlock}
-  ${creatorCard}
-  ${socialBar}
-  ${boostDown}
+  return `${topBlock}
   <div class="card month-card">
     <h3 style="margin:0 0 2px">📈 Tu progreso</h3>
     <div class="sem-strip" style="margin:2px 0 12px">${semStripInner}</div>
     ${progBody}
-  </div>
-  <div id="pillarsCard"></div>`;
+  </div>`;
 }
 
 function bindSemana() {
@@ -4082,53 +3963,20 @@ function bindSemana() {
   bindAutopilot();
   bindChat();
   bindReview();
-  bindMediaCard();
-  // Publicidad: recomendados a la vista + activar la pauta pendiente al volver de MercadoPago
-  const abc = document.getElementById('adsBoostCard');
-  if (abc) {
-    bindAdsRecCards(abc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'semana' });
-    handlePendingBoost();
-  }
-  // Misión de fotos semanal (pegada a la tarjeta de fotos)
+  // Misión de fotos semanal
   loadMissionCard().catch(() => {});
-  // Comentarios de Instagram para responder en un toque
-  loadCommentsCard().catch(() => {});
-  // Reporte semanal "tu semana en números"
-  loadReportCard().catch(() => {});
-  // Sugerencias proactivas del CM + pilares del mes
-  loadProactiveTips().catch(() => {});
-  loadPillars().catch(() => {});
-  // Plan semanal sugerido + loop visible + alerta honesta de rendimiento
+  // Sugerencia de serie + alerta honesta de rendimiento
   loadWeeklyPlan().catch(() => {});
-  loadWhyWeek().catch(() => {});
   loadPerformanceAlert().catch(() => {});
-  // Fotos de la semana + republicar un posteo que voló
-  loadShotList().catch(() => {});
-  loadRecycleSuggest().catch(() => {});
+  // La IA avisa por chat si hay comentarios sin responder (1 vez por día)
+  api.post('/api/proactive-comments-ask', {}).then(r => { if (r && r.asked) chatLoadHistory(); }).catch(() => {});
   // Festejo de primera publicación (una vez por cuenta): se chequea al entrar a Mi semana
   setTimeout(() => maybeFirstPublishCelebration(), 1200);
   setTimeout(() => maybeMilestoneCelebration(), 2600);
-  // Abrir el creador manual inline (plegado dentro de Mi semana)
-  const openCreatorInline = () => {
-    CREATOR_OPEN = true;
-    const go = () => { const el = $('#creatorInline'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    if ((location.hash || '') === '#/app/semana') { render(); setTimeout(go, 90); }
-    else location.hash = '#/app/semana';
-  };
-  $$('[data-opencreator]').forEach(b => b.onclick = openCreatorInline);
-  if (CREATOR_OPEN || CREATOR.step !== 1) bindCreator();
   const xs = $('#xpStrip');
   if (xs) xs.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
   };
-  $$('[data-nudge]').forEach(b => b.onclick = () => {
-    const n = SEM_NUDGES[+b.dataset.nudge];
-    if (!n) return;
-    CREATOR = { step: 1, topic: n.topic, caption: '', hashtags: '', tpl: 'gradiente', pal: defaultPal(), palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', productPhoto: '', selected: [], cardPhoto: {}, carouselMode: false, carouselPhotos: [], isCarousel: false };
-    CREATOR_OPEN = true;
-    if ((location.hash || '') === '#/app/semana') { render(); setTimeout(() => { const el = $('#creatorInline'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 90); }
-    else location.hash = '#/app/semana';
-  });
 }
 
 
