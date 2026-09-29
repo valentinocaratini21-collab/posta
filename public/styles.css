@@ -1231,3 +1231,76 @@ textarea.in{resize:vertical;min-height:96px}
   .chat-home .chat-input-row{position:sticky;bottom:78px;z-index:5;background:var(--bg);padding:8px 0}
   .chat-home #chatCard{margin:0}
 }
+
+/* ============================================================
+   REFINAMIENTO COMPACTO (2026-09-29): "bajarle el zoom".
+   Densidad elegante estilo Muse en el chat: menos aire dentro
+   de cada tarjeta, más aire entre secciones. Los inputs quedan
+   en 16px+ (regla anti-zoom iOS) y la paleta/avatar intactos.
+   ============================================================ */
+
+/* Burbujas del chat: apenas más chicas y ajustadas */
+.chat-msg{padding:8px 12px;font-size:13.5px;line-height:1.5;border-radius:14px}
+.chat-box{gap:6px}
+.chat-msg.ai{margin-left:34px;max-width:calc(88% - 34px)}
+.chat-msg.ai::before{left:-32px;width:26px;height:26px}
+
+/* Header del chat: más slim */
+.chome-top{gap:8px;margin:0 0 8px}
+.chome-ava{width:36px;height:36px}
+.chome-top b{font-size:15px}
+.chome-top .chome-sub{font-size:11.5px}
+.ava-lvl{min-width:20px;height:20px;font-size:10.5px;right:-4px;bottom:-4px}
+
+/* Chips de sugerencia: más chicos y discretos */
+.chat-quick{padding:8px 2px 4px}
+.chat-quick button{padding:7px 12px;font-size:12.5px;font-weight:600}
+.chat-chips button{font-size:12.5px;padding:7px 12px}
+
+/* Tarjetas de borrador: compactas */
+.chat-drafts{margin:14px 0 8px}
+.chat-drafts-head{margin-bottom:6px}
+.chat-drafts-head b{font-size:14.5px}
+.chat-drafts-head span{font-size:12.5px}
+.chat-draft{margin-bottom:8px;border-radius:14px}
+.chat-draft>img{max-height:220px}
+.chat-draft-body{padding:8px 10px 10px}
+.chat-draft-body .rev-preview{font-size:13.5px}
+.chat-draft-actions{gap:6px;margin-top:8px}
+.chat-draft-actions .btn{padding-top:8px;padding-bottom:8px;font-size:13.5px}
+.chat-drafts #btnScheduleAll{padding:12px 20px;font-size:15px;margin-bottom:8px}
+.rev-more{font-size:12.5px}
+
+/* Tarjeta de misión: compacta */
+.chat-mission{padding:10px 12px;border-radius:14px;margin:4px 0 8px}
+.chat-mission-tag{font-size:10.5px;padding:2px 9px;margin-bottom:6px}
+.chat-mission-intro{font-size:13px;margin:0 0 6px}
+.chat-mission-title{font-size:15.5px;margin:0 0 3px}
+.chat-mission-why{font-size:12.5px;margin:0 0 10px}
+.chat-mission .btn{padding:12px 18px;font-size:15px}
+
+/* Input row: más slim (el campo de texto queda en 16px: anti-zoom iOS) */
+.chat-input-row{gap:6px}
+.chat-input-row .in{padding:10px 14px}
+.chat-input-row .btn{width:48px;height:48px;font-size:18px}
+@media(max-width:480px){
+  .chat-input-row .btn{width:40px;height:40px;font-size:17px}
+  .chat-input-row .in{padding:10px 14px;font-size:16px}
+}
+
+/* ============================================================
+   CHAT-FIRST EN WEBSITE (2026-09-29): logueado en desktop, la
+   vista principal es el chat con posta. — columna centrada
+   (max-width ~720px), estética de app de chat de escritorio.
+   La landing pública para visitantes no logueados no cambia.
+   ============================================================ */
+@media(min-width:761px){
+  .main-chat{max-width:740px;margin:0 auto;width:100%;display:flex;flex-direction:column;min-height:calc(100vh - 72px)}
+  .main-chat .chat-home{flex:1;display:flex;flex-direction:column}
+  .main-chat .chome-top{margin-bottom:10px}
+  .main-chat #chatCard{flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
+  .main-chat .chat-box{flex:1 1 auto;min-height:280px;max-height:calc(100vh - 400px);overflow-y:auto}
+  .main-chat .chat-input-row{position:sticky;bottom:0;background:#fff;padding:10px 0 4px;z-index:5}
+  .main-chat .chat-drafts{margin-top:16px}
+  .main-chat .chat-mission{margin-top:4px}
+}

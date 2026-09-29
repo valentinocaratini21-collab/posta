@@ -641,7 +641,7 @@ function pwaIsInstalled() {
 function pwaIsStandalone() {
   try { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone; } catch (e) { return false; }
 }
-// Chat-first mobile: el celular abre directo en el chat (desktop sin cambios).
+// Helper de layout: true en celular o app instalada (bottom nav en vez de sidebar).
 function isMobileApp() {
   try {
     if (pwaIsStandalone()) return true;
@@ -752,7 +752,7 @@ function setupChecklistHtml() {
 
 function appShell(tab, content) {
   return `
-  <div class="mtop"><a class="logo" href="#/app/semana">Posta<span class="dot">.</span></a>
+  <div class="mtop"><a class="logo" href="#/app/chat">Posta<span class="dot">.</span></a>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn btn-ghost btn-sm" data-tab="ajustes" aria-label="Ajustes">⚙️</button>
       <button class="btn btn-ghost btn-sm" id="btnLogoutM">Salir</button>
@@ -760,13 +760,15 @@ function appShell(tab, content) {
   ${setupChecklistHtml()}
   <div class="app-shell">
     <div class="sidebar">
-      <a class="logo" href="#/app/semana" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
+      <a class="logo" href="#/app/chat" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
       <div class="grow"></div>
       <div class="side-user">${esc(ME?.email || '')}</div>
+      <button class="side-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="ico">💬</span>Chat</button>
+      <button class="side-link ${tab === 'semana' ? 'on' : ''}" data-tab="semana"><span class="ico">📋</span>Mi semana</button>
       <button class="side-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="ico">⚙️</span>Ajustes</button>
       <button class="side-link" id="btnLogout"><span class="ico">🚪</span>Salir</button>
     </div>
-    <div class="main">${content}</div>
+    <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
   <nav class="bnav" aria-label="Navegación">
     <button data-tab="chat" class="${tab === 'chat' ? 'on' : ''}"><span class="bi">💬</span><span>Chat</span></button>
@@ -6039,9 +6041,8 @@ function ajustesView() {
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
-  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al panel.
-  // En el celular el panel es el chat (chat-first); en desktop, Mi semana.
-  const homeTab = isMobileApp() ? '#/app/chat' : '#/app/semana';
+  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al chat con posta. (chat-first).
+  const homeTab = '#/app/chat';
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
     location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
@@ -6509,6 +6510,10 @@ async function render() {
     // App instalada: se comporta como app, no como web. Va directo al chat
     // (o al login si no hay sesión) en vez de la landing de marketing.
     if (pwaIsStandalone()) { location.hash = '#/app/chat'; return; }
+    // Logueado en la web: la vista principal es el chat con posta. (chat-first).
+    // Visitante no logueado: la landing pública no cambia.
+    await refreshSession();
+    if (ME) { location.hash = '#/app/chat'; return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
@@ -6521,11 +6526,9 @@ async function render() {
   if (!ME && NET_OFFLINE) { root.innerHTML = offlineView(); bindOffline(); return; }
   if (!ME) { location.hash = '#/login'; return; }
   const tabRaw = path.split('/')[2] || '';
-  // Chat-first mobile: sin pestaña explícita el celular abre en el chat.
-  // Con pestaña explícita se respeta (el bottom nav lleva a Mi semana).
-  // En desktop #/app/chat no existe: cae a Mi semana (desktop sin cambios).
-  let tab = tabRaw || (isMobileApp() ? 'chat' : 'semana');
-  if (tab === 'chat' && !isMobileApp()) { location.hash = '#/app/semana'; return; }
+  // Chat-first en todas las plataformas: sin pestaña explícita se abre el
+  // chat con posta. Con pestaña explícita se respeta (navegación secundaria).
+  let tab = tabRaw || 'chat';
   let content = '';
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') content = await semanaView();
