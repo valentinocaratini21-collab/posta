@@ -119,7 +119,7 @@ const requireAuth = (req, res, next) => {
 // Si la prueba gratis venció, no se puede generar ni programar: el paywall es "Mi plan"
 function requireTrialValid(req, res, next) {
   try {
-    const u = db.prepare('SELECT plan_status, trial_ends_at, created_at FROM users WHERE id = ?').get(req.session.userId);
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.plan_status === 'trial' && trialEffectiveEnd(u) <= Date.now())
       return res.status(402).json({ error: 'trial_expired', message: 'Tu prueba gratis terminó. Elegí un plan para seguir creando contenido.' });
   } catch (e) { /* ante la duda, dejar pasar */ }
@@ -132,7 +132,11 @@ function trialEffectiveEnd(u) {
   if (!tEnds) return 0;
   const cMs = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
   const policyEnd = cMs ? cMs + TRIAL_DAYS * 86400000 : Infinity;
-  return Math.min(tEnds, policyEnd);
+  const base = Math.min(tEnds, policyEnd);
+  // Extensión manual de soporte: si hay una vigente, manda ella
+  const ext = u.trial_extended_until || 0;
+  if (ext > Date.now()) return Math.max(base, ext);
+  return base;
 }
 
 function getProfile(userId) {
@@ -600,7 +604,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, trial_ends_at, email_verified FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, trial_ends_at, trial_extended_until, email_verified FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const nowMs = Date.now();
@@ -622,6 +626,24 @@ app.get('/api/auth/me', (req, res) => {
       trial_expired: trialExpired,
     },
   });
+});
+
+// ---------- TEMPORAL: reactivación manual de trial (soporte) ----------
+// Se elimina en el próximo build. Solo extiende trials (máx 7 días), nada más.
+const ADMIN_EXTEND_SECRET = 'f501308f76bde28ff6f98cfe0c8ea8b6c7861d3eadb999fa';
+app.post('/api/admin/extend-trial', (req, res) => {
+  try {
+    if (req.headers['x-admin-secret'] !== ADMIN_EXTEND_SECRET) return res.status(404).json({ error: 'not_found' });
+    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+    let days = parseInt((req.body && req.body.days) || '3', 10);
+    if (!email || !email.includes('@')) return res.status(400).json({ error: 'email inválido' });
+    if (!(days >= 1 && days <= 7)) days = 3;
+    const u = db.prepare('SELECT id, email, plan_status FROM users WHERE email = ?').get(email);
+    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
+    const until = Date.now() + days * 86400000;
+    db.prepare('UPDATE users SET trial_extended_until = ? WHERE id = ?').run(until, u.id);
+    res.json({ ok: true, email: u.email, plan_status: u.plan_status, days, extended_until: new Date(until).toISOString() });
+  } catch (e) { res.status(500).json({ error: String((e && e.message) || e) }); }
 });
 
 // ---------- Perfil del negocio ----------
@@ -2920,7 +2942,7 @@ app.get('/api/photo-mission', requireAuth, async (req, res) => {
     res.json({ ok: true, ...(await getOrCreateMission(db, req.session.userId)) });
   } catch (e) {
     console.error('[misión]', e.message);
-    res.json({ ok: true, week_key: '', shots: [], uploaded: 0 });
+    res.json({ ok: true, week_key: '', need: '', uploaded: 0, done: false });
   }
 });
 

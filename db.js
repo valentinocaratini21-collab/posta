@@ -283,6 +283,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS photo_missions (
 
 // Trial de 10 días: vencimiento de la prueba gratis (milisegundos epoch)
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e) { /* ya existe */ }
+// Extensión manual de trial (soporte): si está vigente, manda sobre el clamp de TRIAL_DAYS
+try { db.exec(`ALTER TABLE users ADD COLUMN trial_extended_until INTEGER`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_base_amount INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_mult REAL DEFAULT 1`); } catch (e) { /* ya existe */ }
 
