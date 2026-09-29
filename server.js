@@ -2296,37 +2296,80 @@ async function personalizeShots(shots, profile, apiKey) {
   } catch (e) {}
   return shots;
 }
+async function getShotsForWeek(uid) {
+  const plan = buildWeeklyPlan(uid);
+  const shots = [];
+  const usedTipos = new Set();
+  const take = (t, nombre) => {
+    const tpl = SHOT_TEMPLATES[t] || SHOT_TEMPLATES.novedad;
+    const s = tpl[shots.length % tpl.length];
+    shots.push(t === 'serie'
+      ? { foto: s.foto, para: `tu serie "${nombre || 'semanal'}"`, tip: s.tip }
+      : { foto: s.foto, para: s.para, tip: s.tip });
+    usedTipos.add(t);
+  };
+  for (const it of plan) {
+    if (shots.length >= 3) break;
+    const t = it.tipo;
+    if (t !== 'serie' && !TIPOS_VALIDOS.includes(t)) continue;
+    if (usedTipos.has(t)) continue;
+    take(t, it.nombre);
+  }
+  for (const t of TIPOS_VALIDOS) {
+    if (shots.length >= 3) break;
+    if (!usedTipos.has(t)) take(t);
+  }
+  const key = getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '';
+  return key ? await personalizeShots(shots.slice(0, 3), getProfile(uid), key) : shots.slice(0, 3);
+}
 app.get('/api/shot-list', requireAuth, async (req, res) => {
   try {
-    const uid = req.session.userId;
-    const plan = buildWeeklyPlan(uid);
-    const shots = [];
-    const usedTipos = new Set();
-    const take = (t, nombre) => {
-      const tpl = SHOT_TEMPLATES[t] || SHOT_TEMPLATES.novedad;
-      const s = tpl[shots.length % tpl.length];
-      shots.push(t === 'serie'
-        ? { foto: s.foto, para: `tu serie "${nombre || 'semanal'}"`, tip: s.tip }
-        : { foto: s.foto, para: s.para, tip: s.tip });
-      usedTipos.add(t);
-    };
-    for (const it of plan) {
-      if (shots.length >= 3) break;
-      const t = it.tipo;
-      if (t !== 'serie' && !TIPOS_VALIDOS.includes(t)) continue;
-      if (usedTipos.has(t)) continue;
-      take(t, it.nombre);
-    }
-    for (const t of TIPOS_VALIDOS) {
-      if (shots.length >= 3) break;
-      if (!usedTipos.has(t)) take(t);
-    }
-    const key = getSettings(uid).openai_key || process.env.OPENAI_API_KEY || '';
-    const final = key ? await personalizeShots(shots.slice(0, 3), getProfile(uid), key) : shots.slice(0, 3);
-    res.json({ ok: true, shots: final });
+    res.json({ ok: true, shots: await getShotsForWeek(req.session.userId) });
   } catch (e) {
     console.error('[shot-list]', e.message);
     res.json({ ok: true, shots: [] });
+  }
+});
+// La IA pide las fotos POR CHAT (como un amigo), no con tarjetas. 1 vez cada 7 días.
+app.post('/api/proactive-shot-ask', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const recent = db.prepare(`SELECT 1 FROM proactive_asks WHERE user_id = ? AND kind = 'fotos' AND created_at >= datetime('now', '-7 days')`).get(uid);
+    if (recent) return res.json({ ok: true, asked: false });
+    const shots = await getShotsForWeek(uid);
+    if (!shots.length) return res.json({ ok: true, asked: false });
+    const lines = shots.slice(0, 3).map(s => `📸 ${String(s.foto || '').slice(0, 90)}`);
+    const msg = `¡Tu semana está armada! 🙌\nPara dejarla impecable con fotos reales, ¿me conseguís estas?\n${lines.join('\n')}\nMandamelas por acá cuando las tengas 👇`;
+    db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)`).run(uid, 'assistant', msg);
+    db.prepare(`INSERT OR REPLACE INTO proactive_asks (user_id, kind, created_at) VALUES (?, 'fotos', datetime('now'))`).run(uid);
+    res.json({ ok: true, asked: true });
+  } catch (e) {
+    console.error('[proactive-shot-ask]', e.message);
+    res.json({ ok: true, asked: false });
+  }
+});
+// La IA avisa por chat cuando hay comentarios sin responder (1 vez cada 24 h).
+app.post('/api/proactive-comments-ask', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const recent = db.prepare(`SELECT 1 FROM proactive_asks WHERE user_id = ? AND kind = 'comentarios' AND created_at >= datetime('now', '-1 day')`).get(uid);
+    if (recent) return res.json({ ok: true, asked: false });
+    try {
+      const { syncComments } = require('./insights');
+      const st = getSettings(uid) || {};
+      await syncComments(db, uid, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    } catch (e) {}
+    let n = 0;
+    try { n = db.prepare(`SELECT COUNT(*) AS n FROM comment_queue WHERE user_id = ? AND status = 'pending'`).get(uid).n || 0; }
+    catch (e) {}
+    if (!n) return res.json({ ok: true, asked: false });
+    const msg = `💬 Tenés ${n} ${n === 1 ? 'comentario nuevo' : 'comentarios nuevos'} en Instagram. Escribime "comentarios" y los respondemos juntos 👇`;
+    db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)`).run(uid, 'assistant', msg);
+    db.prepare(`INSERT OR REPLACE INTO proactive_asks (user_id, kind, created_at) VALUES (?, 'comentarios', datetime('now'))`).run(uid);
+    res.json({ ok: true, asked: true });
+  } catch (e) {
+    console.error('[proactive-comments-ask]', e.message);
+    res.json({ ok: true, asked: false });
   }
 });
 
