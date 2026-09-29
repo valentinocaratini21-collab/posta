@@ -752,7 +752,18 @@ function setupChecklistHtml() {
 
 function appShell(tab, content) {
   return `
-  <div class="mtop"><a class="logo" href="#/app/chat">Posta<span class="dot">.</span></a></div>
+  <div class="mtop">
+    <button class="mtop-burger" id="mtopBurger" aria-label="Abrir menú">≡</button>
+    <a class="mtop-pill" href="#/app/semana">Mi semana</a>
+  </div>
+  <div class="drawer-ov" id="drawerOv" hidden></div>
+  <aside class="drawer" id="drawer" aria-label="Menú">
+    <a class="logo" href="#/app/chat" id="drawerLogo">Posta<span class="dot">.</span></a>
+    <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
+    <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
+    <div class="drawer-grow"></div>
+    <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
+  </aside>
   ${setupChecklistHtml()}
   <div class="app-shell">
     <div class="sidebar">
@@ -764,13 +775,12 @@ function appShell(tab, content) {
       <button class="side-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="ico">⚙️</span>Ajustes</button>
     </div>
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
-  </div>
-  <nav class="bnav" aria-label="Navegación">
-    <button data-tab="chat" class="${tab === 'chat' ? 'on' : ''}"><span class="bi">💬</span><span>Chat</span></button>
-    <button data-tab="semana" class="${tab === 'semana' ? 'on' : ''}"><span class="bi">📋</span><span>Semana</span></button>
-    <button data-tab="ajustes" class="${tab === 'ajustes' ? 'on' : ''}"><span class="bi">⚙️</span><span>Ajustes</span></button>
-  </nav>`;
+  </div>`;
 }
+
+/* Drawer mobile: hamburguesa ≡ con todo lo demás (reemplaza la bottom nav) */
+function openDrawer(){ const d = $('#drawer'), o = $('#drawerOv'); if (d) d.classList.add('open'); if (o) o.hidden = false; }
+function closeDrawer(){ const d = $('#drawer'), o = $('#drawerOv'); if (d) d.classList.remove('open'); if (o) o.hidden = true; }
 
 /* ---------- CREAR ---------- */
 let CREATOR_OPEN = false; // el creador manual vive dentro de Mi semana, plegado hasta que se abre
@@ -6632,7 +6642,7 @@ function bindApp(tab) {
       if (t && !e.target.closest('button')) t.classList.toggle('expanded');
     });
   }
-  $$('[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
+  $$('[data-tab]').forEach(b => b.onclick = () => { closeDrawer(); location.hash = '#/app/' + b.dataset.tab; });
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
   const sg = $('#setupIgRow');
   if (sg) sg.onclick = igConnectHere;
@@ -6640,6 +6650,14 @@ function bindApp(tab) {
   if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
   const loA = $('#btnLogoutAj');
   if (loA) loA.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
+  const bg = $('#mtopBurger');
+  if (bg) bg.onclick = openDrawer;
+  const dov = $('#drawerOv');
+  if (dov) dov.onclick = closeDrawer;
+  const dlg = $('#drawerLogo');
+  if (dlg) dlg.onclick = closeDrawer;
+  const dlo = $('#drawerLogout');
+  if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
 
   if (tab === 'semana') bindSemana();
   if (tab === 'ads') bindAds();

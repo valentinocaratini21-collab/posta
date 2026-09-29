@@ -197,7 +197,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .tip-card{border:1.5px dashed var(--yl-line);background:rgba(254,193,77,.07)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 #s_catother_w{grid-column:1/-1}
-@media(max-width:760px){.row2{grid-template-columns:1fr}.sidebar{display:none}.main{padding:26px 16px 120px}.page-head{margin-bottom:22px}.ph-ico{width:46px;height:46px;font-size:19.5px;border-radius:14px}.page-head h1,.main>h1{font-size:21px}}
+@media(max-width:760px){.row2{grid-template-columns:1fr}.sidebar{display:none}.main{padding:26px 16px 36px}.page-head{margin-bottom:22px}.ph-ico{width:46px;height:46px;font-size:19.5px;border-radius:14px}.page-head h1,.main>h1{font-size:21px}}
 
 /* ---------- creator ---------- */
 .steps-bar{display:flex;gap:8px;margin-bottom:28px}
@@ -1188,9 +1188,12 @@ textarea.in{resize:vertical;min-height:96px}
 .rev-more{display:block;margin:2px 0 6px;padding:4px 0;border:none;background:none;color:var(--cel);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation}
 
 /* ---------- Chat-first mobile: el chat es el home del celular ---------- */
-.bnav{display:none}
-.chome-top{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
+/* (bottom nav eliminada 2026-09-29: la reemplaza el drawer del topbar) */
+/* Drawer mobile: oculto por defecto (solo existe en mobile) */
+.drawer,.drawer-ov{display:none}
+.chome-top{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;margin:6px 0 14px}
 .chome-top .chome-sub{font-size:10.5px;color:var(--mut);line-height:1.4}
+.chome-top b{font-size:15px}
 .chat-cta-row{margin:6px 0 2px;align-self:flex-start}
 .chat-drafts{margin:16px 0 8px}
 .chat-drafts-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
@@ -1204,7 +1207,7 @@ textarea.in{resize:vertical;min-height:96px}
 /* Avatar de la IA: burbujas del asistente en todo el chat */
 .chat-msg.ai{position:relative;margin-left:38px;max-width:calc(88% - 38px)}
 .chat-msg.ai::before{content:'';position:absolute;left:-36px;bottom:2px;width:30px;height:30px;border-radius:50%;background:#fff url('ai-avatar.png') center/cover no-repeat;border:1px solid var(--line)}
-.chome-ava{width:44px;height:44px;border-radius:50%;object-fit:cover;border:1.5px solid var(--line);flex-shrink:0}
+.chome-ava{width:60px;height:60px;border-radius:50%;object-fit:cover;border:1.5px solid var(--line);flex-shrink:0}
 /* Avatar de posta.: limpio, sin nivelación (el que sube de nivel es el logo del cliente) */
 .chome-ava-wrap{position:relative;display:inline-block;flex-shrink:0;line-height:0}
 /* Tarjeta de misión de posta. en el chat */
@@ -1228,14 +1231,28 @@ textarea.in{resize:vertical;min-height:96px}
 .xp-biz{font-size:14px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
 .xp-lvlname{font-size:11px;font-weight:700;color:#FEC14D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:760px){
-  /* Bottom nav: Chat · Semana · Ajustes (solo mobile) */
-  .bnav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:70;background:rgba(255,255,255,.97);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));}
-  .bnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;background:none;border:0;font-size:10px;color:var(--mut);font-family:inherit;cursor:pointer;padding:6px 2px;touch-action:manipulation}
-  .bnav button .bi{font-size:19.5px;line-height:1.2}
-  .bnav button.on{color:var(--cel);font-weight:800}
-  /* Chat home: conversación amplia, input pegado arriba del bottom nav */
+  /* Topbar mobile estilo app de referencia: ≡ a la izquierda, píldora "Mi semana" a la derecha */
+  .mtop-burger{width:44px;height:44px;border:none;background:none;font-size:26px;line-height:1;color:var(--txt);cursor:pointer;font-family:inherit;border-radius:12px;touch-action:manipulation;display:flex;align-items:center;justify-content:center;margin-left:-8px}
+  .mtop-burger:active{background:var(--bg2)}
+  .mtop-pill{display:inline-flex;align-items:center;background:var(--yl);color:#0A1E33;font-weight:800;font-size:13px;padding:11px 20px;border-radius:999px;text-decoration:none;font-family:inherit;touch-action:manipulation;box-shadow:0 2px 10px rgba(254,193,77,.4)}
+  .mtop-pill:active{transform:scale(.97)}
+  /* Drawer lateral: overlay + panel */
+  .drawer{display:flex}
+  .drawer-ov{display:block}
+  .drawer-ov[hidden]{display:none}
+  .drawer-ov{position:fixed;inset:0;background:rgba(10,30,51,.45);z-index:90}
+  .drawer{position:fixed;top:0;left:0;bottom:0;width:min(300px,84vw);background:#fff;z-index:91;transform:translateX(-105%);transition:transform .28s ease;display:flex;flex-direction:column;gap:2px;padding:22px 16px calc(22px + env(safe-area-inset-bottom));box-shadow:8px 0 32px rgba(10,30,51,.18)}
+  .drawer.open{transform:none}
+  .drawer .logo{font-size:24px;margin:0 0 18px 4px;text-decoration:none}
+  .drawer-link{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;font-family:inherit;font-size:15px;font-weight:600;color:var(--txt);padding:14px 12px;border-radius:14px;cursor:pointer;touch-action:manipulation;min-height:48px}
+  .drawer-link .di{font-size:20px;width:28px;text-align:center;flex-shrink:0}
+  .drawer-link:active{background:var(--bg2)}
+  .drawer-link.on{color:var(--cel);font-weight:800}
+  .drawer-grow{flex:1}
+  .drawer-logout{color:#d33;font-weight:700}
+  /* Chat home: el input queda pegado abajo (sin bottom nav) */
   .chat-home .chat-box{max-height:56vh;min-height:200px}
-  .chat-home .chat-input-row{position:sticky;bottom:78px;z-index:5;background:var(--bg);padding:8px 0}
+  .chat-home .chat-input-row{position:sticky;bottom:0;z-index:5;background:var(--bg);padding:10px 2px calc(10px + env(safe-area-inset-bottom))}
   .chat-home #chatCard{margin:0}
 }
 
@@ -1252,10 +1269,10 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-msg.ai{margin-left:34px;max-width:calc(88% - 34px)}
 .chat-msg.ai::before{left:-32px;width:26px;height:26px}
 
-/* Header del chat: más slim */
-.chome-top{gap:8px;margin:0 0 8px}
-.chome-ava{width:36px;height:36px}
-.chome-top b{font-size:13px}
+/* Header del chat: Posty protagonista, centrado */
+.chome-top{gap:5px;margin:2px 0 10px}
+.chome-ava{width:52px;height:52px}
+.chome-top b{font-size:14px}
 .chome-top .chome-sub{font-size:10px}
 
 /* Chips de sugerencia: más chicos y discretos */
@@ -1292,6 +1309,28 @@ textarea.in{resize:vertical;min-height:96px}
 @media(max-width:480px){
   .chat-input-row .btn{width:40px;height:40px;font-size:17px}
   .chat-input-row .in{padding:10px 14px;font-size:16px}
+}
+
+/* ============================================================
+   REDISEÑO MOBILE ESTILO APP DE REFERENCIA (2026-09-29, pedido
+   de Valentino): fondo blanco, burbujas grandes muy redondeadas
+   estilo la foto, input en barra píldora. Solo mobile: desktop
+   intacto. Tipografía sin cambios (12px), inputs en 16px+.
+   ============================================================ */
+@media(max-width:760px){
+  /* Burbujas grandes y muy redondeadas */
+  .chat-box{gap:10px}
+  .chat-msg{padding:12px 18px;font-size:12px;line-height:1.55;border-radius:22px;max-width:86%}
+  .chat-msg.ai{background:#fff;border:1px solid var(--line);border-bottom-left-radius:8px;box-shadow:0 1px 4px rgba(10,30,51,.05)}
+  .chat-msg.u{background:#2793C8;color:#fff;border-bottom-right-radius:8px}
+  /* Input en barra píldora unificada (botones intactos: mic, foto, video, enviar) */
+  .chat-home .chat-input-row{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:6px;box-shadow:0 4px 18px rgba(10,30,51,.09);gap:2px;margin-bottom:env(safe-area-inset-bottom)}
+  .chat-home .chat-input-row .in{border:none;box-shadow:none;background:transparent;padding:12px 6px 12px 14px;font-size:16px;min-width:0}
+  .chat-home .chat-input-row .in:focus{border:none;box-shadow:none}
+  .chat-home .chat-input-row .btn{box-shadow:none}
+  .chat-home .chat-input-row .btn-soft{background:transparent;border:none}
+  .chat-home .chat-input-row .btn-soft:active{background:var(--bg2)}
+  .chat-home .chat-input-row #chatSend{margin:2px}
 }
 
 /* ============================================================
