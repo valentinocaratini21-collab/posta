@@ -1257,8 +1257,17 @@ function bindMediaCard() {
   });
 }
 
-function reviewCardHTML(drafts, slots) {
-  const s = slots || [];
+// Fecha linda en español para la tarjeta de revisión ("mié 30 sep · 18:00")
+function fmtWhenTxt(v) {
+  if (!v) return 'Elegir día y hora';
+  const d = new Date(v);
+  if (isNaN(d)) return 'Elegir día y hora';
+  const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const p2 = n => String(n).padStart(2, '0');
+  return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+function reviewCardHTML(drafts, slots) {  const s = slots || [];
   const n = drafts.length;
   // Cabecera estilo Instagram: el borrador se muestra como el posteo que va a ser (WYSIWYG).
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
@@ -1270,8 +1279,9 @@ function reviewCardHTML(drafts, slots) {
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Así se van a ver en tu Instagram. Revisalos — si te gustan, aceptalos y se programan solos. Nada sale sin tu OK. ¿Cambiar algo? Pedilo en el chat 👇</p>
+    <p style="color:var(--mut);font-size:14px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
     ${chatCardHTML(true)}
+    <div class="igmock-track">
     ${drafts.map((d, i) => `
     <div class="igmock">
       <div class="igmock-head">
@@ -1293,18 +1303,19 @@ function reviewCardHTML(drafts, slots) {
           <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
         </div>
-        <button class="rev-editbtn" data-revedit="${d.id}">✏️ Editar texto</button>
-        <label class="igmock-when"><span>📅 Sale el</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt"></label>
-        <button class="btn btn-primary btn-block igmock-publish" data-revnow="${d.id}">📤 Publicar ahora</button>
-        <div class="igmock-sec">
-          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}">✨ Nuevo diseño</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}">🎬 Cambiar video</button>` : `<button data-revphoto="${d.id}">🖼️ Cambiar foto</button>`}
+        <button class="rev-editbtn" data-revedit="${d.id}">✏️ Editar</button>
+        <label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenTxt(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>
+        <div class="igmock-icos">
+          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}">✨ Diseño</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}">🎬 Video</button>` : `<button data-revphoto="${d.id}">🖼️ Foto</button>`}
           <button class="danger" data-revdel="${d.id}">🗑️ Borrar</button>
         </div>
+        <button class="igmock-now" data-revnow="${d.id}">📤 Publicar ahora</button>
         <div id="revph-${d.id}"></div>
         <div id="revnowm-${d.id}"></div>
       </div>
     </div>`).join('')}
+    </div>
     <div class="rev-schedule">
       <button class="btn btn-primary btn-block" id="btnScheduleWeek">✅ Aceptar y programar mi semana</button>
       <p class="rev-promise">⏱ En 5 minutos tu semana queda lista y se publica sola.</p>
@@ -1341,13 +1352,18 @@ function bindReview() {
     f.hidden = !open;
     p.style.display = open ? 'none' : '';
     if (hp) hp.style.display = open ? 'none' : (hp.textContent ? '' : 'none');
-    b.textContent = open ? '✓ Listo' : '✏️ Editar texto';
+    b.textContent = open ? '✓ Listo' : '✏️ Editar';
     if (open) { const ta = f.querySelector('textarea'); if (ta) ta.focus({ preventScroll: true }); }
   });
   // Al guardar el caption, refrescar el preview
   $$('[data-revcap]').forEach(ta => ta.addEventListener('change', () => {
     const p = document.querySelector(`[data-revpreview="${ta.dataset.revcap}"]`);
     if (p) p.textContent = (ta.value || '').trim() || 'Sin texto todavía';
+  }));
+  // La fecha se muestra linda en español; al cambiarla se refresca el texto visible
+  $$('#reviewCard [data-revwhen]').forEach(inp => inp.addEventListener('change', () => {
+    const t = document.querySelector(`#reviewCard [data-revwhentxt="${inp.dataset.revwhen}"]`);
+    if (t) t.textContent = fmtWhenTxt(inp.value);
   }));
   // Regenerar un borrador (↻): nuevo diseño y nuevo texto del mismo tema, en el lugar
   $$('[data-revregen]').forEach(b => b.onclick = () => regenDraft(+b.dataset.revregen, b));
@@ -1849,13 +1865,14 @@ function chatCardHTML(compact) {
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>`;
-  // En la revisión va integrado sin tarjeta anidada: solo un divisor sutil.
+  // En la revisión va integrado: sin título (el saludo ya presenta el chat).
+  const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Pedime tu posteo</h3>`;
   const wrap = compact
-    ? `<div id="chatCard" style="margin:16px 0 4px;padding-top:14px;border-top:1.5px solid var(--line)">`
+    ? `<div id="chatCard" style="margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)">`
     : `<div class="card" id="chatCard">`;
   return `
   ${wrap}
-    <h3 style="margin:0 0 6px">💬 Pedime tu posteo</h3>${desc}
+    ${title}${desc}
     <div class="chat-box" id="chatBox">
       ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Pedime lo que quieras para tu Instagram y lo armo acá mismo 👇</div>`}
     </div>
@@ -1863,8 +1880,7 @@ function chatCardHTML(compact) {
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
       <button class="btn btn-soft" id="chatMic" title="Pedir con nota de voz">🎙</button>
-      <button class="btn btn-soft" id="chatAttach" title="Subir foto">📷</button>
-      <input id="chatInput" class="in" placeholder="Ej: un posteo de la promo 2x1 que diga «este finde todo a mitad de precio»…" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="Ej: promo 2x1 este finde…" maxlength="2000" autocomplete="off">
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
       <input type="file" id="chatFile" accept="image/*" multiple hidden>
     </div>
@@ -2205,11 +2221,8 @@ function bindChat() {
   if (mkR) mkR.onclick = () => chatMakePost(true);
   const mCapsB = $('#chatMoreCaps');
   if (mCapsB) mCapsB.onclick = chatMoreCaptions;
-  const att = $('#chatAttach'), file = $('#chatFile');
-  if (att && file) {
-    att.onclick = () => file.click();
-    file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; };
-  }
+  const file = $('#chatFile');
+  if (file) file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; };
   const ph = $('#chatPhotoHint');
   if (ph && file) ph.onclick = () => file.click();
   renderChatPhotos();
@@ -3341,28 +3354,46 @@ function showStreakCelebration(sk) {
     ${streakShareBtns()}`);
   wireStreakModalBtns(sk);
 }
-// Tocar el HUD de XP: detalle de la racha + escalera de niveles + aviso si se apaga
+// Tocar el HUD de XP: modal PRO de la racha — héroe con progreso, camino de niveles y stats.
 function streakPillModal(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
   const pts = sk.current * 100;
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
-  const ladder = (sk.levels || []).map(l => {
-    const isCur = sk.level && l.name === sk.level.name;
-    const done = sk.current >= l.min && !isCur;
-    return `<div class="lvl${isCur ? ' cur' : ''}${done ? ' done' : ''}"><span>${l.emoji}</span><small>${esc(l.name)}</small></div>`;
+  const levels = sk.levels || [];
+  const curIdx = levels.findIndex(l => sk.level && l.name === sk.level.name);
+  const journey = levels.map((l, i) => {
+    const isCur = i === curIdx;
+    const done = !isCur && sk.current >= l.min;
+    const node = `<div class="stk-node${isCur ? ' cur' : ''}${done ? ' done' : ''}${!isCur && !done ? ' lock' : ''}"><div class="stk-dot">${l.emoji}</div><small>${esc(l.name)}</small></div>`;
+    const link = i < levels.length - 1 ? `<div class="stk-link${done || isCur ? ' on' : ''}"></div>` : '';
+    return node + link;
   }).join('');
+  const nl = sk.nextLevel;
+  const pct = nl ? Math.min(100, Math.round(sk.current / nl.at * 100)) : 100;
+  const falta = nl ? nl.at - sk.current : 0;
+  const nextTxt = nl
+    ? `${sk.current} de ${nl.at} semanas · te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${nl.emoji} ${esc(nl.name)}`
+    : `Nivel máximo alcanzado 👑`;
   const warn = sk.expiringSoon
     ? `<p class="warn">⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)} si no sale ningún posteo — programá y seguí sumando.</p>` : '';
   streakModalShell(`
-    <div class="big-emoji">${lv.emoji}</div>
-    <h3 style="margin:12px 0 4px">🔥 ${biz ? `La racha de ${esc(biz)}` : 'Tu racha'}</h3>
-    <p style="font-size:17px;margin:0 0 2px"><b>⚡ ${pts} pts</b> · Nivel ${esc(lv.name)}</p>
-    <p class="d" style="margin:0 0 4px">${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'} · Mejor racha: ${sk.best} ${sk.best === 1 ? 'semana' : 'semanas'}</p>
-    ${ladder ? `<div class="lvl-row">${ladder}</div>` : ''}
-    <p class="d" style="margin:0 0 4px">Cada semana publicada suma <b>+100 pts</b>. La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
-    ${streakNextTxt(sk)}
+    <div class="stk-hero">
+      <div class="stk-badge">${lv.emoji}</div>
+      <p class="stk-eyebrow">Nivel ${esc(lv.name)}</p>
+      ${biz ? `<p class="stk-biz">La racha de ${esc(biz)}</p>` : ''}
+      <p class="stk-pts"><b>⚡ ${pts}</b> pts</p>
+      <div class="stk-bar"><i style="width:${pct}%"></i></div>
+      <p class="stk-next">${nextTxt}</p>
+    </div>
+    ${journey ? `<div class="stk-journey">${journey}</div>` : ''}
+    <div class="stk-stats">
+      <div class="stk-stat"><b>🔥 ${sk.current}</b><span>${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</span></div>
+      <div class="stk-stat"><b>🏆 ${sk.best}</b><span>mejor racha</span></div>
+      <div class="stk-stat"><b>+100</b><span>pts por semana</span></div>
+    </div>
     ${warn}
+    <p class="stk-rule">La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
     ${streakShareBtns()}`);
   wireStreakModalBtns(sk);
 }
