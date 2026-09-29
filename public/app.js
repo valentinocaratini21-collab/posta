@@ -1349,14 +1349,14 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
           <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
         </div>
-        <button class="rev-editbtn" data-revedit="${d.id}">✏️ Editar</button>
-        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenTxt(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
-        <div class="igmock-icos">
-          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}">✨ Cambiar diseño</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}">🎬 Cambiar video</button>` : `<button data-revphoto="${d.id}">🖼️ Agregar foto</button>`}
-          <button class="danger" data-revdel="${d.id}">🗑️ Borrar</button>
+        <button class="igmock-now" data-revnow="${d.id}" style="margin-top:2px">📤 Publicar ahora</button>
+        <div class="igmock-icos" style="margin-top:8px">
+          <button data-revedit="${d.id}">✏️ Editar</button>
+          ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}">✨ Diseño</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}">🎬 Video</button>` : `<button data-revphoto="${d.id}">🖼️ Foto</button>`}
+          <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
-        <button class="igmock-now" data-revnow="${d.id}">📤 Publicar ahora</button>
+        <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenTxt(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div id="revph-${d.id}"></div>
         <div id="revnowm-${d.id}"></div>
       </div>
@@ -1961,34 +1961,38 @@ function chatCardHTML(compact) {
     <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>`;
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
   // En la revisión va integrado: sin título (el saludo ya presenta el chat).
   const title = compact ? '' : `<h3 style="margin:0 0 6px">💬 Tu community manager</h3>`;
   const wrap = compact
     ? `<div id="chatCard" style="margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)">`
     : `<div class="card" id="chatCard">`;
-  const chips = !msgs ? `
+  const chips = `
     <div class="chat-chips" id="chatChips">
+      ${!msgs ? `
       <button data-chip="Haceme un posteo de promo para esta semana">✨ Haceme un posteo</button>
       <button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>
-      <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>
-    </div>` : '';
+      <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>` : ''}
+      <button class="chip-ico" id="chatPhotoBtn" title="Subir fotos">📷</button>
+      <button class="chip-ico" id="chatVideoBtn" title="Subir videos">🎬</button>
+    </div>`;
+  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name) ? PROFILE.business_name : '';
+  const greet = bizName ? `¡Hola! 👋 ¿Qué preparamos hoy para ${esc(bizName)}?` : `¡Hola! 👋 ¿Qué hacemos hoy?`;
   return `
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
-      ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Soy tu community manager con IA: entiendo qué querés postear, te armo las ideas y edito tus borradores acá mismo 👇</div>`}
+      ${msgs || `<div class="chat-msg ai">${greet}</div>`}
     </div>${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
       <button class="btn btn-soft" id="chatMic" title="Pedir con nota de voz">🎙</button>
-      <input id="chatInput" class="in" placeholder="Ej: promo 2x1… o pedime cambios en tus posteos" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="Escribime como en WhatsApp 💬" maxlength="2000" autocomplete="off">
       <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
-      <input type="file" id="chatFile" accept="image/*" multiple hidden>
+      <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
     </div>
     <div id="chatMsg"></div>
-    <button id="chatPhotoHint" style="background:none;border:0;color:var(--cel);font-size:14px;font-weight:700;margin-top:10px;cursor:pointer;padding:0;font-family:inherit;text-align:left">📷 Subí fotos de tu producto — la IA las ve y las usa</button>
   </div>`;
 }
 
@@ -2034,8 +2038,8 @@ function renderChatPhotos() {
   if (!box) return;
   box.innerHTML = CHAT_PHOTOS.map((p, i) => `
     <div class="chat-photo">
-      <img src="${esc(p.file_path)}">
-      <button data-chatrm="${i}" title="Quitar foto">✕</button>
+      ${p.aiUrl ? `<img src="${esc(p.aiUrl)}">${p.kind === 'video' ? `<span class="vid-badge">▶</span>` : ''}` : (p.kind === 'video' ? `<span class="vid-badge" style="left:50%;top:50%;transform:translate(-50%,-50%);bottom:auto;font-size:20px">🎬</span>` : `<img src="${esc(p.file_path)}">`)}
+      <button data-chatrm="${i}" title="Quitar">✕</button>
     </div>`).join('');
   box.querySelectorAll('[data-chatrm]').forEach(b => b.onclick = () => {
     CHAT_PHOTOS.splice(+b.dataset.chatrm, 1);
@@ -2065,18 +2069,50 @@ function fileToThumb(file, maxSize = 512) {
   });
 }
 
+// Miniatura del primer frame de un video (para que la IA "vea" el video)
+function fileToVideoThumb(file, maxSize = 512) {
+  return new Promise((resolve) => {
+    try {
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      const url = URL.createObjectURL(file);
+      const done = (thumb) => { URL.revokeObjectURL(url); resolve(thumb); };
+      const timer = setTimeout(() => done(null), 6000);
+      v.onloadeddata = () => {
+        try { v.currentTime = Math.min(0.2, (v.duration || 1) / 2); } catch (e) { clearTimeout(timer); done(null); }
+      };
+      v.onseeked = () => {
+        try {
+          const s = Math.min(1, maxSize / Math.max(v.videoWidth || 1, v.videoHeight || 1));
+          const cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round((v.videoWidth || 320) * s));
+          cv.height = Math.max(1, Math.round((v.videoHeight || 240) * s));
+          cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+          clearTimeout(timer); done(cv.toDataURL('image/jpeg', 0.7));
+        } catch (e) { clearTimeout(timer); done(null); }
+      };
+      v.onerror = () => { clearTimeout(timer); done(null); };
+      v.src = url;
+    } catch (e) { resolve(null); }
+  });
+}
 async function chatUploadPhotos(files) {
   const m = $('#chatMsg');
-  const imgs = [...(files || [])].filter(f => f.type && f.type.startsWith('image/')).slice(0, 4);
-  if (!imgs.length) return;
+  const items = [...(files || [])].filter(f => f.type && (f.type.startsWith('image/') || f.type.startsWith('video/'))).slice(0, 4);
+  if (!items.length) return;
   try {
-    if (m) m.innerHTML = `<div class="okmsg">⏳ Subiendo ${imgs.length > 1 ? imgs.length + ' fotos' : 'foto'}…</div>`;
-    for (const f of imgs) {
-      const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+    const nImgs = items.filter(f => f.type.startsWith('image/')).length;
+    const nVids = items.length - nImgs;
+    const what = [nImgs ? (nImgs > 1 ? nImgs + ' fotos' : 'foto') : '', nVids ? (nVids > 1 ? nVids + ' videos' : 'video') : ''].filter(Boolean).join(' y ');
+    if (m) m.innerHTML = `<div class="okmsg">⏳ Subiendo ${what}…</div>`;
+    for (const f of items) {
+      const isVid = f.type.startsWith('video/');
+      const url = isVid ? '/api/assets?kind=video' : '/api/media';
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': f.type || (isVid ? 'video/mp4' : 'image/jpeg') }, body: f });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo subir la foto');
-      const aiUrl = await fileToThumb(f);
-      CHAT_PHOTOS.push({ file_path: data.path, aiUrl, sent: false });
+      if (!res.ok) throw new Error(data.error || 'No se pudo subir el archivo');
+      const aiUrl = isVid ? await fileToVideoThumb(f) : await fileToThumb(f);
+      CHAT_PHOTOS.push({ file_path: data.path, aiUrl, sent: false, kind: isVid ? 'video' : 'photo' });
     }
     if (m) m.innerHTML = '';
     renderChatPhotos();
@@ -2084,9 +2120,9 @@ async function chatUploadPhotos(files) {
       CHAT_PHOTO_IDX = CHAT_PHOTOS.length - 1;
       renderChatPreviews();
       renderChatStoryboard();
-      chatSay('📷 ¡Foto agregada! Actualicé los ejemplos con tu foto 👇');
+      chatSay('📸 ¡Agregado! Actualicé los ejemplos 👇');
     } else {
-      chatSay('📷 ¡Foto agregada! La voy a usar en los ejemplos y la IA también la puede ver 👇');
+      chatSay('📸 ¡Agregado! La IA también lo puede ver 👇');
     }
   } catch (e) {
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
@@ -2452,8 +2488,10 @@ function bindChat() {
   if (mCapsB) mCapsB.onclick = chatMoreCaptions;
   const file = $('#chatFile');
   if (file) file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; };
-  const ph = $('#chatPhotoHint');
-  if (ph && file) ph.onclick = () => file.click();
+  const phb = $('#chatPhotoBtn');
+  if (phb && file) phb.onclick = () => { file.accept = 'image/*'; file.click(); };
+  const vdb = $('#chatVideoBtn');
+  if (vdb && file) vdb.onclick = () => { file.accept = 'video/*'; file.click(); };
   // Chips de ejemplo: un toque y el ejemplo cae en el input (no se envía solo)
   $$('#chatChips [data-chip]').forEach(b => b.onclick = () => {
     const i = $('#chatInput');
@@ -3865,26 +3903,18 @@ async function semanaView() {
   const maxT = Math.max(1, ...st.weekly.map(x => x.total));
   const bars = st.weekly.map(x => `<div class="bar-w"><div class="bar" style="height:${Math.max(4, Math.round((x.total / maxT) * 100))}%"></div><span>${esc(x.label)}</span></div>`).join('');
 
-  // Aprobación sin cambios
-  // 📈 Tu progreso v2: héroe de horas ahorradas (total acumulado) + stats honestos
-  // con etiqueta clara + racha y aprendizaje del gusto. El gráfico solo aparece
-  // con historia real (3+ semanas con posteos); sin publicaciones, mensaje hacia
-  // adelante en vez de ceros.
+  // 📈 Tu progreso v3: solo información positiva y sin duplicados.
+  // Queda: héroe de horas ahorradas + posteos publicados + aprendizaje del gusto.
+  // Afuera: % de aprobados (se lee como castigo), racha (ya está en el bloque 1).
   const weeksWithData = (st.weekly || []).filter(x => x.total > 0).length;
   const tasteN = st.taste_learned || 0;
-  const streakLine = (sk && sk.current > 0)
-    ? `<div class="prog-line">🔥 ${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}${sk.level ? ` · ${esc(sk.level.emoji)} ${esc(sk.level.name)}` : ''}</div>` : '';
   const tasteLine = tasteN >= 3
     ? `<div class="prog-line">🧠 Posta ya aprendió ${tasteN} cosas de tu gusto — cada semana sale más a tu manera.</div>` : '';
   const progBody = mo.published > 0 ? `
     <div class="prog-hero"><b>≈${mo.hours_saved_total}&nbsp;h</b><span>ahorradas con Posta,<br>mientras atendías tu negocio</span></div>
     ${(mo.hours_saved > 0 && mo.hours_saved !== mo.hours_saved_total) ? `<p class="d" style="margin:6px 0 0;text-align:center">Este mes sumaste ≈${mo.hours_saved} h</p>` : ''}
-    <div class="prog-duo">
-      <div class="mstat"><b>${mo.published}</b><span>posteos publicados</span></div>
-      ${ap.total ? `<div class="mstat"><b>${ap.approved_rate}%</b><span>aprobados sin cambios</span></div>` : ''}
-    </div>
-    ${ap.total > 1 ? `<p class="d" style="margin:10px 0 0">De ${ap.total} posteos, ${ap.approved} ${ap.approved === 1 ? 'salió' : 'salieron'} tal cual los armamos.</p>` : ''}
-    ${streakLine}${tasteLine}
+    <div class="prog-line" style="margin-top:10px">📮 ${mo.published} ${mo.published === 1 ? 'posteo publicado' : 'posteos publicados'}</div>
+    ${tasteLine}
     ${weeksWithData >= 3 ? `<p class="d" style="margin:12px 0 4px">Posteos por semana</p><div class="bars" style="height:90px;margin:0">${bars}</div>` : ''}`
   : `
     <p class="d" style="margin:0">Cuando salga tu primer posteo, acá vas a ver tus horas ahorradas y tu constancia semana a semana. Cada posteo son ≈1,5 h que no hiciste a mano.</p>`;
@@ -4253,15 +4283,180 @@ const igSince = (s) => {
 let IG_MODE_WARN = false;  // aviso: modo Real elegido sin cuenta conectada
 function freshOB() {
   return {
-    step: 1,
-    business_name: (PROFILE && PROFILE.business_name) || '',
-    category: (PROFILE && PROFILE.category) || 'ropa',
-    description: (PROFILE && PROFILE.description) || '',
-    competitors: (PROFILE && PROFILE.competitors) || '',
-    goal: (PROFILE && PROFILE.goal) || '',
-    c1: '#8B95A1', c2: '#C3CAD2', c3: '#4A5560',
-    useBrand: false,
+    chat: [],            // [{role:'user'|'assistant', text}]
+    step: 0, total: 7,   // respuestas dadas
+    chips: null, awaitLogo: false,
+    loading: false, done: false, started: false,
+    phase: 'chat',       // 'chat' | 'summary'
+    profile: null, summary: null,
+    colors: [],          // [c1,c2,c3] extraídos del logo
   };
+}
+// ---- Onboarding conversacional ----
+function obScroll() {
+  const b = $('#obBox');
+  if (b) b.scrollTop = b.scrollHeight;
+}
+async function obNext() {
+  const o = OB; if (!o || o.done || o.phase !== 'chat') return;
+  o.loading = true; render();
+  try {
+    const r = await api.post('/api/onboarding/chat', { history: o.chat.map(m => ({ role: m.role, text: m.text })) });
+    if (r && r.done) { o.done = true; obFinish(); return; }
+    if (r && r.reply) {
+      o.chat.push({ role: 'assistant', text: r.reply });
+      o.step = typeof r.answered === 'number' ? r.answered : o.step;
+      o.chips = r.chips || null;
+      o.awaitLogo = !!r.awaitLogo;
+    } else {
+      // Sin respuesta válida: sacar el mensaje del usuario para que reintente
+      const ui = o.chat.map((m, i) => m.role === 'user' ? i : -1).filter(i => i >= 0).pop();
+      if (ui !== undefined) o.chat.splice(ui, 1);
+      o.chat.push({ role: 'assistant', text: 'Se me cortó un segundo 😅 ¿me repetís eso?' });
+    }
+  } catch (e) {
+    o.chat.push({ role: 'assistant', text: 'Tuve un problema de conexión 😅 ¿probamos de nuevo? Escribime tu respuesta.' });
+  }
+  o.loading = false; render(); obScroll();
+}
+async function obSend(text) {
+  const o = OB; if (!o || o.loading || o.done || o.phase !== 'chat') return;
+  o.chat.push({ role: 'user', text: (text || '').trim() });
+  o.chips = null;
+  render(); obScroll();
+  obNext();
+}
+async function obFinish() {
+  const o = OB; if (!o) return;
+  o.loading = true; render();
+  try {
+    const qa = [];
+    let lastQ = '';
+    o.chat.forEach(m => {
+      if (m.role === 'assistant') lastQ = m.text;
+      else if (m.role === 'user') { qa.push({ q: lastQ, text: m.text }); lastQ = ''; }
+    });
+    const r = await api.post('/api/onboarding/finish', { history: qa });
+    if (r && r.ok) { o.profile = r.profile; o.summary = r.summary; o.phase = 'summary'; }
+    else o.chat.push({ role: 'assistant', text: 'No pude cerrar la entrevista 😅 ¿me contás de nuevo en una línea qué vendés?' }), o.done = false, o.phase = 'chat';
+  } catch (e) {
+    o.chat.push({ role: 'assistant', text: 'Tuve un problema cerrando 😅 escribime "listo" y lo intentamos de nuevo.' });
+    o.done = false; o.phase = 'chat';
+  }
+  o.loading = false; render(); obScroll();
+}
+async function obConfirmSave() {
+  const o = OB, p = o.profile || {};
+  const btn = $('#obConfirm'); if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+  try {
+    const cats = ['ropa', 'gastronomia', 'cafeteria', 'belleza', 'barberia', 'fitness', 'salud', 'mascotas', 'servicios', 'educacion', 'tecnologia', 'hogar', 'inmobiliaria', 'eventos', 'viajes', 'arte'];
+    const category = cats.includes(p.category) ? p.category : 'otro';
+    const desc = [p.description, p.audience ? `Cliente ideal: ${p.audience}` : '', p.differentiator ? `Diferencial: ${p.differentiator}` : ''].filter(Boolean).join(' ').slice(0, 600);
+    const igu = String(p.instagram || '').trim().replace(/^@/, '').replace(/\s+/g, '');
+    await api.put('/api/profile', {
+      business_name: p.business_name || 'Mi negocio', category, description: desc,
+      competitors: '', goal: p.goal || 'vender',
+      ig_username: igu,
+      tone: (PROFILE && PROFILE.tone) || 'canchero',
+    });
+    const colors = (o.colors || []).filter((c, i, a) => c && a.indexOf(c) === i);
+    if (colors.length >= 2) await api.put('/api/settings', { brand_colors: colors });
+    SETTINGS = await api.get('/api/settings');
+    await refreshSession();
+    const chosenPlan = localStorage.getItem('posta_chosen_plan');
+    location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/semana';
+  } catch (e) {
+    const m = $('#obMsg'); if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Todo bien, arranquemos'; }
+  }
+}
+function obSummaryHTML() {
+  const o = OB, p = o.profile || {};
+  const rows = [
+    ['🏪', 'Negocio', p.business_name],
+    ['👕', 'Rubro', p.category && p.category !== 'otro' ? p.category : ''],
+    ['🎯', 'Cliente ideal', p.audience],
+    ['✨', 'Diferencial', p.differentiator],
+    ['📸', 'Instagram', p.instagram ? '@' + String(p.instagram).replace(/^@/, '') : ''],
+    ['🚀', 'Objetivo', ({ vender: 'Vender más', seguidores: 'Conseguir seguidores', local: 'Llenar mi local', novedades: 'Contar novedades' })[p.goal] || ''],
+  ].filter(([, , v]) => v);
+  return `<div class="page-head"><div class="ph-ico">🧠</div><div class="ph-txt"><h1>Esto entendí</h1><p class="sub">Revisalo — con esto armo tu contenido.</p></div></div>
+  <div class="card" style="max-width:640px">
+    <p style="font-size:16px;line-height:1.65;margin:0 0 14px">${esc(o.summary || '')}</p>
+    ${rows.map(([ico, k, v]) => `<div class="cm-tip"><span>${ico}</span><span><b>${esc(k)}:</b> ${esc(v)}</span></div>`).join('')}
+    ${o.colors.length >= 2 ? `<div class="cm-tip"><span>🎨</span><span><b>Colores:</b> ${o.colors.map(c => `<span style="display:inline-block;width:18px;height:18px;border-radius:6px;background:${esc(c)};border:1px solid var(--line);vertical-align:-3px;margin-right:4px"></span>`).join('')} <span style="color:var(--mut);font-size:13px">de tu logo</span></span></div>` : ''}
+    <div id="obMsg" style="margin-top:8px"></div>
+    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+      <button class="btn btn-ghost" id="obFix">✏️ Corregir</button>
+      <button class="btn btn-primary" id="obConfirm" style="flex:1">✅ Todo bien, arranquemos</button>
+    </div>
+  </div>`;
+}
+function onboardingView() {
+  const o = OB;
+  if (!o.started) { o.started = true; setTimeout(obNext, 60); }
+  if (o.phase === 'summary' && o.profile) return obSummaryHTML();
+  const msgs = o.chat.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.role === 'user' && !m.text ? '⏭️ Salteado' : m.text)}</div>`).join('');
+  const pct = Math.round((o.step / o.total) * 100);
+  return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Te conozco primero</h1><p class="sub">Una charla rápida — con esto armo todo por vos.</p></div></div>
+  <div class="card" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:13px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
+      ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
+    </div>
+    <div style="height:6px;border-radius:99px;background:var(--line);margin:0 0 14px;overflow:hidden"><div style="height:100%;width:${pct}%;border-radius:99px;background:linear-gradient(90deg,var(--cel),var(--yel));transition:width .4s"></div></div>
+    <div class="chat-box" id="obBox" style="min-height:230px;max-height:48vh">${msgs}${o.loading ? `<div class="chat-msg ai">⏳ …</div>` : ''}</div>
+    ${o.chips && !o.loading ? `<div class="chat-chips" style="margin-top:10px">${o.chips.map(c => `<button data-obchip="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
+    <div class="chat-input-row" style="margin-top:10px">
+      ${o.awaitLogo && !o.loading ? `<button class="btn btn-soft" id="obLogoBtn" title="Subir logo">📤</button><input type="file" id="obLogoFile" accept="image/*,.pdf,.docx" hidden>` : ''}
+      <input id="obInput" class="in" placeholder="Escribí tu respuesta…" maxlength="600" autocomplete="off" ${o.loading ? 'disabled' : ''}>
+      <button class="btn btn-primary" id="obSend" title="Enviar" ${o.loading ? 'disabled' : ''}>➤</button>
+    </div>
+    <div id="obMsg" style="margin-top:8px"></div>
+    <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
+  </div>`;
+}
+
+function bindOnboarding() {
+  const o = OB; if (!o) return;
+  const inp = $('#obInput'), send = $('#obSend');
+  const doSend = () => { if (inp && !inp.disabled) { obSend(inp.value); inp.value = ''; } };
+  if (send) send.onclick = doSend;
+  if (inp) { inp.onkeydown = e => { if (e.key === 'Enter') doSend(); }; if (!inp.disabled) setTimeout(() => { try { inp.focus(); } catch (e) {} }, 150); }
+  const sk = $('#obSkip'); if (sk) sk.onclick = () => obSend('');
+  $$('[data-obchip]').forEach(b => b.onclick = () => obSend(b.dataset.obchip));
+  const lb = $('#obLogoBtn'), lf = $('#obLogoFile');
+  if (lb && lf) {
+    lb.onclick = () => lf.click();
+    lf.onchange = async () => {
+      const orig = lf.files[0]; lf.value = '';
+      if (!orig) return;
+      const msg = $('#obMsg');
+      try {
+        const nm = (orig.name || '').toLowerCase();
+        if (nm.endsWith('.pdf') || nm.endsWith('.docx')) { if (msg) msg.innerHTML = '<div class="hint">⏳ Convirtiendo tu archivo a imagen…</div>'; }
+        const f = await logoFileToImage(orig);
+        await uploadAssetFile(f, 'logo');
+        try {
+          const img = await loadImageFile(f);
+          const cols = extractTopColors(img, 3);
+          o.colors = cols.filter(Boolean).slice(0, 3);
+        } catch (e) { /* mantiene sin colores */ }
+        if (msg) msg.innerHTML = '';
+        obSend('✅ Logo subido');
+      } catch (e) {
+        if (msg) msg.innerHTML = (e && e.cancelled) ? '' : `<div class="err">${esc(e.message)}</div>`;
+      }
+    };
+  }
+  const cf = $('#obConfirm'); if (cf) cf.onclick = obConfirmSave;
+  const fx = $('#obFix');
+  if (fx) fx.onclick = () => {
+    o.phase = 'chat';
+    o.chat.push({ role: 'assistant', text: 'Dale, decime qué tengo que corregir 👇' });
+    render(); obScroll();
+  };
+  obScroll();
 }
 const GOALS = [
   ['vender', '💰', 'Vender más', 'Que cada post traiga clientes y ventas'],
@@ -4327,76 +4522,6 @@ function onboardingView() {
     </div>
     <div style="text-align:center;margin-top:14px"><a href="#/app/semana" style="color:var(--dim);font-size:14px">Saltear por ahora →</a></div>
   </div>`;
-}
-
-function bindOnboarding() {
-  const o = OB;
-  const back = $('#obBack');
-  if (back) back.onclick = () => { o.step--; render(); };
-  const next = $('#obNext');
-  if (next) next.onclick = () => {
-    if (o.step === 1) {
-      o.business_name = $('#ob_biz').value.trim();
-      const obCatOther = $('#ob_catother').value.trim();
-      o.category = ($('#ob_cat').value === 'otro' && obCatOther) ? obCatOther.toLowerCase() : $('#ob_cat').value;
-      o.description = $('#ob_desc').value.trim();
-      if (!o.business_name) { $('#obMsg').innerHTML = `<div class="err">Poné el nombre de tu negocio</div>`; return; }
-    }
-    if (o.step === 2) o.competitors = $('#ob_comp').value.trim();
-    if (o.step === 3) {
-      o.c1 = $('#ob_c1').value; o.c2 = $('#ob_c2').value; o.c3 = $('#ob_c3').value;
-      if (!assetLogo()) { $('#obMsg').innerHTML = `<div class="err">Subí el logo de tu marca para continuar 🙂</div>`; return; }
-    }
-    o.step++; render();
-  };
-  const obCat = $('#ob_cat');
-  if (obCat) obCat.onchange = () => { $('#ob_catother_w').style.display = obCat.value === 'otro' ? '' : 'none'; };
-  $$('[data-goal]').forEach(b => b.onclick = () => { o.goal = b.dataset.goal; render(); });
-  const bl = $('#ob_logo');
-  if (bl) bl.onclick = () => $('#ob_logofile').click();
-  const lf = $('#ob_logofile');
-  if (lf) lf.onchange = async () => {
-    const orig = lf.files[0]; lf.value = '';
-    if (!orig) return;
-    try {
-      const nm = (orig.name || '').toLowerCase();
-      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#obMsg').innerHTML = '<div class="hint">⏳ Convirtiendo tu archivo a imagen…</div>';
-      const f = await logoFileToImage(orig);
-      await uploadAssetFile(f, 'logo');
-      try {
-        const img = await loadImageFile(f);
-        const cols = extractTopColors(img, 3);
-        if (cols[0]) o.c1 = cols[0];
-        if (cols[1]) o.c2 = cols[1];
-        if (cols[2]) o.c3 = cols[2];
-      } catch (e) { /* mantiene los colores actuales */ }
-      render();
-    }
-    catch (e) { $('#obMsg').innerHTML = (e && e.cancelled) ? '' : `<div class="err">${esc(e.message)}</div>`; }
-  };
-  const fin = $('#obFinish');
-  if (fin) fin.onclick = async () => {
-    fin.disabled = true; fin.textContent = '⏳ Guardando...';
-    try {
-      await api.put('/api/profile', {
-        business_name: o.business_name, category: o.category, description: o.description,
-        competitors: o.competitors, goal: o.goal || 'vender',
-        ig_username: (PROFILE && PROFILE.ig_username) || '',
-        tone: (PROFILE && PROFILE.tone) || 'canchero',
-      });
-      // Brand kit
-      const colors = [o.c1, o.c2, o.c3].filter((c, i, a) => a.indexOf(c) === i);
-      if (colors.length >= 2) await api.put('/api/settings', { brand_colors: colors });
-      SETTINGS = await api.get('/api/settings');
-      await refreshSession();
-      // Si viene de /prueba con plan preseleccionado, va directo a elegirlo
-      const chosenPlan = localStorage.getItem('posta_chosen_plan');
-      location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/semana';
-    } catch (e) {
-      $('#obMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-      fin.disabled = false; fin.textContent = '✨ Listo, a crear contenido';
-    }
-  };
 }
 
 /* ---------- ROUTER ---------- */

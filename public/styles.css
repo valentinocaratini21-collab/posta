@@ -871,6 +871,7 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
 .chat-chips button{border:1.5px solid var(--line);background:#F4F8FB;color:var(--txt);font-size:13px;font-weight:700;border-radius:999px;padding:8px 14px;cursor:pointer;font-family:inherit}
 .chat-chips button:active{transform:scale(.96);border-color:var(--cel)}
+.chat-chips .chip-ico{width:38px;height:38px;padding:0;display:flex;align-items:center;justify-content:center;font-size:18px;border-radius:50%}
 .chat-msg{max-width:88%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .chat-msg.ai{align-self:flex-start;background:#F2F9FD;border:1px solid var(--line);border-bottom-left-radius:6px;color:var(--txt)}
 .chat-msg.u{align-self:flex-end;background:var(--cel);color:#fff;border-bottom-right-radius:6px}
@@ -892,6 +893,7 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-photo{position:relative;width:64px;height:64px;border-radius:12px;overflow:hidden;border:2px solid var(--line);flex-shrink:0}
 .chat-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .chat-photo button{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(10,30,51,.72);color:#fff;font-size:11px;cursor:pointer;line-height:1;padding:0}
+.chat-photo .vid-badge{position:absolute;left:4px;bottom:4px;background:rgba(10,30,51,.72);color:#fff;font-size:11px;font-weight:800;border-radius:8px;padding:2px 6px}
 .chat-board{margin:4px 0 12px;border:1px solid var(--line-soft);border-radius:12px;padding:8px 12px;background:var(--bg-soft)}
 .chat-board summary{cursor:pointer;font-size:14px;font-weight:700;list-style:none}
 .chat-board summary::-webkit-details-marker{display:none}
