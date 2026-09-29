@@ -190,6 +190,53 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[learnings] no se pudo programar:', e.message);
   }
+  // Minería de comentarios de Instagram: día 1 de cada mes, 8:00 (Buenos Aires).
+  // Track 1 "Expertos en información": por cada usuario con IG conectado, lee los
+  // últimos ~20 posteos + sus comentarios y gpt-4o-mini extrae preguntas frecuentes,
+  // objeciones y deseos al ADN (fuente '💬 Comentarios IG'). Solo lee, nunca publica.
+  // Respeta el cache de 30 días: saltea a quienes ya analizaron recientemente.
+  try {
+    cron.schedule('0 8 1 * *', () => {
+      refreshIgComments(db).catch((e) => console.error('[ig-comments]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Minería de comentarios de IG: día 1 de cada mes, 8:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[ig-comments] no se pudo programar:', e.message);
+  }
+  // Historias recientes de IG semanal: lunes 8:00 (Buenos Aires).
+  // Track 5 "Expertos en información": por cada usuario con IG conectado, lee
+  // las historias de las últimas 24h y extrae promos/anuncios al ADN
+  // (fuente '📱 Historias'). Solo lee, nunca publica. 1 llamada de visión
+  // (gpt-4o, detail low) por historia con imagen. Saltea a quienes ya se
+  // analizaron en los últimos 6 días.
+  try {
+    cron.schedule('0 8 * * 1', () => {
+      syncStoriesDna(db).catch((e) => console.error('[stories]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Análisis de historias de IG: lunes 8:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[stories] no se pudo programar:', e.message);
+  }
+  // Pipeline perpetuo (Track 4): lunes 7:00 (Buenos Aires), respaldo del trigger
+  // inline de /api/posts/schedule-all. Para cada usuario que cumple los 4 gates
+  // (plan/trial vigente, activo 7 días, sin borradores de la próxima semana,
+  // pipeline vivo 14 días) genera los borradores de la semana que viene.
+  // Solo BORRADORES: nada se programa ni publica sin el tap del usuario.
+  // Require perezoso DENTRO del callback: server.js ya está cargado a esta
+  // altura (es quien requiere este módulo), así que no se re-ejecuta.
+  try {
+    cron.schedule('0 7 * * 1', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.nextWeekSweep === 'function') {
+          srv.nextWeekSweep().catch((e) => console.error('[next-week sweep]', e.message));
+        }
+      } catch (e) { console.error('[next-week sweep] no se pudo cargar el pipeline:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Pipeline perpetuo (borradores semana+1): lunes 7:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[next-week sweep] no se pudo programar:', e.message);
+  }
 }
 
 // Recordatorio semanal por email (lunes 10:00 Buenos Aires).
@@ -446,4 +493,96 @@ async function refreshContentLearnings(db) {
   return { updated };
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings };
+// Track 1 "Expertos en información": minería mensual de comentarios de IG.
+// Por cada usuario con IG conectado corre mineComments (solo lee) y guarda
+// preguntas frecuentes / objeciones / deseos en el ADN con fuente '💬 Comentarios IG'.
+// Respeta el cache de 30 días (dna.comments_analyzed_at). 1 llamada GPT por usuario.
+// Errores nunca rompen el server.
+async function refreshIgComments(db) {
+  if (!process.env.OPENAI_API_KEY) {
+    console.log('[ig-comments] sin OPENAI_API_KEY: se saltea la minería este mes');
+    return { updated: 0 };
+  }
+  const { mineComments, buildDnaPatch } = require('./ig-comments');
+  const FRESH_MS = 30 * 24 * 3600 * 1000;
+  const users = db.prepare(`
+    SELECT u.id FROM users u JOIN settings s ON s.user_id = u.id
+    WHERE s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+      AND s.ig_access_token IS NOT NULL AND s.ig_access_token != ''
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+  `).all();
+  if (!users.length) return { updated: 0 };
+  let updated = 0;
+  for (const u of users) {
+    try {
+      let dna = {};
+      try {
+        const row = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(u.id);
+        if (row && row.dna_json) { const o = JSON.parse(row.dna_json); dna = (o && typeof o === 'object') ? o : {}; }
+      } catch (e) { /* sin ADN: arranca vacío */ }
+      const at = dna.comments_analyzed_at || '';
+      if (at && (Date.now() - Date.parse(at)) < FRESH_MS) continue; // cache 30 días
+      const st = getSettings(db, u.id) || {};
+      const r = await mineComments(st.ig_user_id, st.ig_access_token, process.env.OPENAI_API_KEY);
+      if (r.error) { console.error('[ig-comments] usuario', u.id, r.error); continue; }
+      const patch = buildDnaPatch(dna, r);
+      db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`)
+        .run(u.id, JSON.stringify({ ...dna, ...patch }));
+      updated++;
+    } catch (e) { console.error('[ig-comments] usuario', u.id, e.message); }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (updated) console.log(`[ig-comments] comentarios analizados para ${updated} usuarios`);
+  return { updated };
+}
+
+// Track 5: análisis semanal de historias recientes de IG.
+// Por cada usuario con IG conectado: lee las historias de las últimas 24h y
+// guarda promos/anuncios en el ADN (fuente '📱 Historias'). Se saltea si ya se
+// analizó en los últimos 6 días (evita re-corridas si el cron se retrasa).
+// Errores nunca rompen el server.
+async function syncStoriesDna(db) {
+  const { analyzeStories, storiesDnaPatch } = require('./ig-stories');
+  const users = db.prepare(`
+    SELECT u.id FROM users u JOIN settings s ON s.user_id = u.id
+    WHERE s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+      AND s.ig_access_token IS NOT NULL AND s.ig_access_token != ''
+      AND COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+  `).all();
+  if (!users.length) return { updated: 0 };
+  let updated = 0;
+  for (const u of users) {
+    try {
+      const st = getSettings(db, u.id) || {};
+      const apiKey = st.openai_key || process.env.OPENAI_API_KEY || '';
+      if (!apiKey) continue;
+      const cur = readDnaSync(db, u.id);
+      const analyzedAt = cur.stories_analyzed_at || '';
+      if (analyzedAt && (Date.now() - Date.parse(analyzedAt)) < 6 * 24 * 3600 * 1000) continue;
+      const r = await analyzeStories(st.ig_user_id, st.ig_access_token, apiKey);
+      if (r && r.ok) {
+        writeDnaSync(db, u.id, { ...cur, ...storiesDnaPatch(cur, r) });
+        updated++;
+      }
+    } catch (e) { console.error('[stories] usuario', u.id, e.message); }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (updated) console.log(`[stories] historias analizadas para ${updated} usuarios`);
+  return { updated };
+}
+
+// ADN local del scheduler (server.js tiene sus propios readDna/writeDna).
+function readDnaSync(db, userId) {
+  try {
+    const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(userId);
+    if (r && r.dna_json) { const o = JSON.parse(r.dna_json); return (o && typeof o === 'object') ? o : {}; }
+  } catch (e) {}
+  return {};
+}
+function writeDnaSync(db, userId, obj) {
+  db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
+}
+
+module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna };

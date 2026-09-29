@@ -13,6 +13,11 @@ const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = requi
 const { startScheduler, publishSinglePost } = require('./scheduler');
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
+const { analyzeWebsite } = require('./website-study');
+const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
+const { analyzeFbPage, extractPageId } = require('./fb-page');
+const { mineComments, buildDnaPatch } = require('./ig-comments');
+const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
 const TRIAL_DAYS = 3;
@@ -30,6 +35,18 @@ function track(userId, event, meta = '') {
   try {
     db.prepare('INSERT INTO funnel_events (user_id, event, meta) VALUES (?,?,?)')
       .run(userId || null, event, String(meta || '').slice(0, 200));
+  } catch (e) { /* el tracking nunca bloquea */ }
+}
+
+// Analytics propio (tabla events): el frontend manda pantallas y acciones en batch.
+// Sin PII en props: solo datos agregados del uso. El tracking nunca bloquea.
+function evTrack(userId, name, props = null, sessionId = '') {
+  try {
+    if (!/^[a-z0-9_]{2,40}$/.test(name)) return;
+    let p = '';
+    try { p = JSON.stringify(props || {}).slice(0, 2000); } catch (e) {}
+    db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)')
+      .run(userId || null, String(sessionId || '').slice(0, 32), name, p);
   } catch (e) { /* el tracking nunca bloquea */ }
 }
 
@@ -205,6 +222,13 @@ function dnaIsEmpty(v) {
   if (Array.isArray(v)) return !v.length;
   return false;
 }
+// Campos esenciales del ADN: sin ellos no se genera a ciegas (Track A — gate de ADN).
+// Devuelve la lista de los que faltan; [] = ADN completo.
+const DNA_ESSENTIAL = ['producto_estrella', 'cliente_ideal', 'diferencial', 'tono'];
+function dnaMissingFields(dna) {
+  const d = (dna && typeof dna === 'object') ? dna : {};
+  return DNA_ESSENTIAL.filter(k => dnaIsEmpty(d[k]));
+}
 // Merge del ADN extraído sobre el existente. Escalares: se pisan solo si el valor no está vacío;
 // los 4 campos legacy no se pisan si ya tienen valor (protectLegacy). Arrays: dedupe por clave,
 // existentes primero, tope 20 items.
@@ -334,6 +358,59 @@ app.post('/api/dna/from-text', requireAuth, async (req, res) => {
   }
 });
 // ===== Fin Track A — ADN extendido =====
+// Track A — gate "no generar a ciegas": ¿tiene el cliente lo esencial del ADN cargado?
+// Esencial = producto_estrella, cliente_ideal, diferencial, tono.
+app.get('/api/dna/status', requireAuth, (req, res) => {
+  const missing = dnaMissingFields(readDna(req.session.userId));
+  res.json({ ok: true, complete: !missing.length, missing });
+});
+// Inspiración visual del cliente (referencia de estilo): el cliente sube un
+// posteo de Instagram que le gusta → visión gpt-4o analiza el estilo (tono,
+// tipografía, colores, composición, ritmo del texto) y se guarda en
+// business_dna.dna_json.inspo con MERGE (no pisa el resto del ADN).
+app.post('/api/dna/inspo', requireAuth, express.raw({ type: 'image/*', limit: '10mb' }), async (req, res) => {
+  try {
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
+    const ct = req.get('Content-Type') || 'image/jpeg';
+    const apiKey = (getSettings(req.session.userId).openai_key) || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ error: 'No hay clave de OpenAI configurada. Agregala en Configuración.' });
+    const b64 = Buffer.from(req.body).toString('base64');
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        temperature: 0.5,
+        max_tokens: 300,
+        messages: [
+          { role: 'system', content:
+`Sos un director de arte publicitario. Mirá esta imagen de referencia (un posteo de Instagram que le gusta a un cliente) y describí su ESTILO VISUAL en 2 o 3 líneas cortas, en español rioplatense: tono general de la pieza, tipografía (estilo y presencia), paleta de colores, composición y cuánto texto lleva la imagen. Devolvé SOLO la descripción, sin introducciones ni conclusiones.` },
+          { role: 'user', content: [
+            { type: 'image_url', image_url: { url: `data:${ct};base64,${b64}` } },
+            { type: 'text', text: 'Describí el estilo visual de esta imagen.' },
+          ] },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      throw new Error(`openai ${r.status}: ${t.slice(0, 120)}`);
+    }
+    const j = await r.json().catch(() => null);
+    const estilo = ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+    if (!estilo) throw new Error('OpenAI no devolvió análisis');
+    // MERGE: igual que el ```inspo del chat — no pisa producto_estrella, series, pausas ni nada más.
+    const uid = req.session.userId;
+    const dna = readDna(uid);
+    dna.inspo = estilo.slice(0, 500);
+    writeDna(uid, dna);
+    res.json({ ok: true, estilo: dna.inspo });
+  } catch (e) {
+    console.error('[dna/inspo]', e.message);
+    res.status(500).json({ error: 'No pudimos analizar esa imagen. Probá con otra foto.' });
+  }
+});
 // Tipos de contenido válidos + mapeo de palabras del cliente a tipos.
 const TIPOS_VALIDOS = ['promo', 'tip', 'social', 'detras', 'novedad'];
 const TIPO_PLURAL = { promo: 'promos', tip: 'tips', social: 'posteos de prueba social', detras: 'posteos de detrás de escena', novedad: 'novedades' };
@@ -463,6 +540,7 @@ app.post('/api/auth/register', (req, res) => {
       streakFromTrialImport(r.lastInsertRowid, nImp);
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     track(r.lastInsertRowid, 'registered');
+    evTrack(r.lastInsertRowid, 'account_created', {});
     res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: 'Ese email ya está registrado' });
@@ -628,24 +706,6 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
-// ---------- TEMPORAL: reactivación manual de trial (soporte) ----------
-// Se elimina en el próximo build. Solo extiende trials (máx 7 días), nada más.
-const ADMIN_EXTEND_SECRET = 'f501308f76bde28ff6f98cfe0c8ea8b6c7861d3eadb999fa';
-app.post('/api/admin/extend-trial', (req, res) => {
-  try {
-    if (req.headers['x-admin-secret'] !== ADMIN_EXTEND_SECRET) return res.status(404).json({ error: 'not_found' });
-    const email = String((req.body && req.body.email) || '').trim().toLowerCase();
-    let days = parseInt((req.body && req.body.days) || '3', 10);
-    if (!email || !email.includes('@')) return res.status(400).json({ error: 'email inválido' });
-    if (!(days >= 1 && days <= 7)) days = 3;
-    const u = db.prepare('SELECT id, email, plan_status FROM users WHERE email = ?').get(email);
-    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
-    const until = Date.now() + days * 86400000;
-    db.prepare('UPDATE users SET trial_extended_until = ? WHERE id = ?').run(until, u.id);
-    res.json({ ok: true, email: u.email, plan_status: u.plan_status, days, extended_until: new Date(until).toISOString() });
-  } catch (e) { res.status(500).json({ error: String((e && e.message) || e) }); }
-});
-
 // ---------- Perfil del negocio ----------
 app.get('/api/profile', requireAuth, (req, res) => {
   const p = getProfile(req.session.userId);
@@ -735,31 +795,10 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const { topic, n, seed, tipo } = req.body || {};
   if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del posteo' });
-  const profile = getProfile(req.session.userId);
-  const settings = getSettings(req.session.userId);
   const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
   try {
-    let styleRules = [];
-    try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(req.session.userId).map(r => r.rule_text); } catch (e) {}
-    let voice = '';
-    try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, req.session.userId) || ''; } catch (e) {}
-    const input = {
-      business: profile.business_name,
-      category: profile.category,
-      description: profile.description,
-      dna: readDna(req.session.userId),
-      tone: profile.tone,
-      topic: topic.trim(),
-      tipo: tipo || '',
-      competitors: profile.competitors,
-      goal: profile.goal,
-      taste: tasteProfile(req.session.userId),
-      performance: [performanceBrief(db, req.session.userId), bestHoursLine(db, req.session.userId)].filter(Boolean).join('\n'),
-      styleRules,
-      voice,
-      seedBase: parseInt(seed, 10) || 0,
-    };
-    const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    const input = contentInputFor(req.session.userId, topic, tipo, seed);
+    const key = openaiKeyFor(req.session.userId);
     if (count > 1) {
       const out = await generateCaptions(input, count, key);
       return res.json(out); // { captions: [...], hashtags }
@@ -919,13 +958,15 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     const settings = getSettings(req.session.userId);
     const uid0 = req.session.userId;
     const perfLine = [performanceBrief(db, uid0), bestHoursLine(db, uid0)].filter(Boolean).join('\n');
-    // ADN del negocio: si no existe, la IA hace la entrevista (needDna)
-    let dna = null, needDna = false;
+    // ADN del negocio: si falta lo esencial, la IA hace la entrevista (needDna).
+    // La entrevista solo pregunta lo que falta (dnaMissing), no las 4 de cero.
+    let dna = null, needDna = false, dnaMissing = [];
     try {
       const dnarow = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid0);
       if (dnarow && dnarow.dna_json) { try { dna = JSON.parse(dnarow.dna_json); } catch (e) { dna = null; } }
     } catch (e) {}
-    if (!dna || !Object.keys(dna).length) needDna = true;
+    dnaMissing = dnaMissingFields(dna);
+    needDna = dnaMissing.length > 0;
     // Análisis de su Instagram (si se corrió al conectar)
     let igAnalysis = '';
     try {
@@ -950,8 +991,23 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // Inspiración visual (moodboard): que la IA la vea en contexto junto al gusto
     let inspoLine = '';
     try { if (dna && dna.inspo) inspoLine = `\nInspiración visual del cliente: ${dna.inspo}`; } catch (e) {}
+    // Contexto de venta: ¿es trial? ¿venció? ¿qué plan tiene? La IA lo usa para ofrecer el servicio.
+    let sales = null;
+    try {
+      const su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
+      if (su) {
+        const tEnds = trialEffectiveEnd(su);
+        const nowMs = Date.now();
+        sales = {
+          isTrial: su.plan_status !== 'active',
+          trialExpired: su.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs,
+          trialDaysLeft: (su.plan_status === 'trial' && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0,
+          planName: su.plan_status === 'active' ? (su.plan || '') : '',
+        };
+      }
+    } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, igAnalysis, frustrated, styleRules, voice, note: chatNote, tz: userTz(uid0) },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0) },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -1037,7 +1093,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       }
       if (n) editApplied = { ok: true, count: n };
     }
-    res.json({ reply: out.reply, idea: out.idea || null, edit: editApplied, dna: dnaSaved, options: out.options || null });
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, dna: dnaSaved, options: out.options || null });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'No pudimos responder, probá de nuevo' });
@@ -1072,24 +1128,155 @@ app.post('/api/funnel', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Panel del funnel (solo Valentino): ?token=ADMIN_TOKEN. Sin PII, solo conteos.
-app.get('/api/admin/funnel', (req, res) => {
+// Analytics propio: el frontend manda eventos en batch (pantallas + acciones).
+// Sin auth estricta (los anónimos de /prueba también cuentan); el user_id se ata
+// por sesión si hay login. Rate-limit básico por IP para que nadie lo abuse.
+const TRACK_RL = new Map();
+setInterval(() => { // limpieza cada 5 min
+  const now = Date.now();
+  for (const [k, v] of TRACK_RL) if (now - v.t > 300000) TRACK_RL.delete(k);
+}, 300000).unref();
+app.post('/api/track', (req, res) => {
+  try {
+    const ip = req.ip || req.socket?.remoteAddress || '';
+    const now = Date.now();
+    let rl = TRACK_RL.get(ip);
+    if (!rl || now - rl.t > 60000) rl = { t: now, n: 0 };
+    rl.n++;
+    TRACK_RL.set(ip, rl);
+    if (rl.n > 40) return res.status(429).json({ ok: false });
+    const evs = req.body && Array.isArray(req.body.events) ? req.body.events : [];
+    const uid = req.session && req.session.userId ? req.session.userId : null;
+    let n = 0;
+    for (const e of evs.slice(0, 60)) {
+      const name = String((e && e.name) || '');
+      if (!/^[a-z0-9_]{2,40}$/.test(name)) continue;
+      const sid = String((e && e.sid) || '').slice(0, 32);
+      evTrack(uid, name, (e && e.props) || {}, sid);
+      n++;
+    }
+    res.json({ ok: true, n });
+  } catch (e) { res.json({ ok: true, n: 0 }); }
+});
+
+// Panel de analytics (solo Valentino): ?token=ADMIN_TOKEN. Sin PII, solo conteos.
+// Funnel /prueba → pago con % de conversión por paso. Lee la tabla nueva `events`
+// y suma la tabla vieja `funnel_events` para no perder el historial.
+const FUNNEL_STEPS = [
+  { key: 'prueba_view', label: 'Visitaron la prueba' },
+  { key: 'prueba_complete', label: 'Completaron el formulario' },
+  { key: 'prueba_register', label: 'Crearon cuenta' },
+  { key: 'week_generate_done', label: 'Semana generada' },
+  { key: 'post_publish', label: 'Publicaron algo' },
+  { key: 'payment_ok', label: 'Pagaron' },
+];
+// Mapeo de la tabla vieja a nombres nuevos (historial)
+const LEGACY_FUNNEL_MAP = {
+  prueba_done: 'prueba_complete', registered: 'prueba_register',
+  client_week_accepted: 'schedule_all', first_published: 'post_publish',
+  subscribed: 'payment_ok', ig_connected: 'ig_connect',
+};
+const requireAdminToken = (req, res, next) => {
   const token = process.env.ADMIN_TOKEN || '';
   if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
+  next();
+};
+function funnelUniques(name, days) {
+  // Usuarios únicos por paso: user_id si hay login, si no la sesión anónima.
+  const ids = new Set();
+  try {
+    const rows = db.prepare(`SELECT user_id, session_id FROM events
+      WHERE name = ? AND datetime(created_at) >= datetime('now', ?)`).all(name, `-${days} days`);
+    for (const r of rows) ids.add(r.user_id ? 'u:' + r.user_id : 's:' + (r.session_id || '?'));
+  } catch (e) {}
+  return ids;
+}
+app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
-  const events = ['prueba_done', 'registered', 'ig_connected', 'client_week_accepted', 'first_published', 'subscribed'];
   const totals = {};
-  for (const e of events) {
-    try {
-      totals[e] = db.prepare(`SELECT COUNT(*) AS n FROM funnel_events WHERE event = ? AND datetime(created_at) >= datetime('now', ?)`).get(e, `-${days} days`).n;
-    } catch (err) { totals[e] = 0; }
-  }
+  const perStep = FUNNEL_STEPS.map(s => ({ ...s, ids: funnelUniques(s.key, days) }));
+  // Historial viejo: se suma a los pasos que correspondan
+  try {
+    for (const [legacy, mapped] of Object.entries(LEGACY_FUNNEL_MAP)) {
+      const rows = db.prepare(`SELECT user_id FROM funnel_events
+        WHERE event = ? AND datetime(created_at) >= datetime('now', ?)`).all(legacy, `-${days} days`);
+      const st = perStep.find(s => s.key === mapped);
+      if (st) for (const r of rows) st.ids.add(r.user_id ? 'u:' + r.user_id : 's:?');
+    }
+  } catch (e) {}
+  for (const s of perStep) totals[s.key] = s.ids.size;
+  const funnel = [];
+  let prev = 0, first = 0;
+  perStep.forEach((s, i) => {
+    const users = s.ids.size;
+    if (i === 0) first = users;
+    funnel.push({ key: s.key, label: s.label, users,
+      pct_prev: prev ? Math.round(users / prev * 1000) / 10 : (i === 0 ? 100 : 0),
+      pct_first: first ? Math.round(users / first * 1000) / 10 : 0 });
+    prev = users;
+  });
   let byDay = [];
   try {
-    byDay = db.prepare(`SELECT date(created_at) AS d, event, COUNT(*) AS n FROM funnel_events
-      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d, event ORDER BY d DESC LIMIT 400`).all(`-${days} days`);
-  } catch (err) { /* tabla nueva */ }
-  res.json({ days, totals, by_day: byDay, admin_token_set: true });
+    byDay = db.prepare(`SELECT date(created_at) AS d, name, COUNT(*) AS n FROM events
+      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d, name ORDER BY d DESC LIMIT 600`).all(`-${days} days`);
+  } catch (e) {}
+  res.json({ days, totals, funnel, by_day: byDay, admin_token_set: true });
+});
+
+// Actividad: eventos por día + usuarios activos por día (login o sesión anónima)
+app.get('/api/admin/activity', requireAdminToken, (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  let byDay = [], dau = [], totals = {};
+  try {
+    byDay = db.prepare(`SELECT date(created_at) AS d, COUNT(*) AS n FROM events
+      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d ORDER BY d DESC`).all(`-${days} days`);
+    dau = db.prepare(`SELECT date(created_at) AS d,
+        COUNT(DISTINCT COALESCE('u:' || user_id, 's:' || session_id)) AS n FROM events
+      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d ORDER BY d DESC`).all(`-${days} days`);
+    const rows = db.prepare(`SELECT name, COUNT(*) AS n FROM events
+      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY name ORDER BY n DESC LIMIT 60`).all(`-${days} days`);
+    for (const r of rows) totals[r.name] = r.n;
+  } catch (e) {}
+  res.json({ ok: true, days, by_day: byDay, dau, totals });
+});
+
+// Eventos recientes (para el timeline por usuario). Filtros: user_id, email, name, days, limit.
+app.get('/api/admin/events', requireAdminToken, (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+  const name = String(req.query.name || '').slice(0, 40);
+  const email = String(req.query.email || '').trim().toLowerCase();
+  const userId = Number(req.query.user_id) || 0;
+  let rows = [];
+  try {
+    if (userId || email) {
+      let uid = userId;
+      if (!uid && email) {
+        const u = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
+        uid = u ? u.id : -1;
+      }
+      rows = db.prepare(`SELECT e.*, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id
+        WHERE e.user_id = ? ${name ? 'AND e.name = ?' : ''} AND datetime(e.created_at) >= datetime('now', ?)
+        ORDER BY e.id DESC LIMIT ?`).all(...(name ? [uid, name, `-${days} days`, limit] : [uid, `-${days} days`, limit]));
+    } else {
+      rows = db.prepare(`SELECT e.*, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id
+        WHERE ${name ? 'e.name = ? AND ' : ''}datetime(e.created_at) >= datetime('now', ?)
+        ORDER BY e.id DESC LIMIT ?`).all(...(name ? [name, `-${days} days`, limit] : [`-${days} days`, limit]));
+    }
+  } catch (e) {}
+  res.json({ ok: true, events: rows.map(r => ({ id: r.id, user_id: r.user_id, email: r.email || null,
+    session_id: r.session_id, name: r.name, props: r.props, created_at: r.created_at })) });
+});
+
+// Buscar usuarios por email (para el timeline)
+app.get('/api/admin/users', requireAdminToken, (req, res) => {
+  const q = '%' + String(req.query.q || '').trim().toLowerCase().slice(0, 60) + '%';
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, email, created_at, plan, plan_status FROM users
+      WHERE lower(email) LIKE ? ORDER BY id DESC LIMIT 20`).all(q);
+  } catch (e) {}
+  res.json({ ok: true, users: rows });
 });
 
 // ---------- Publicidad: billetera + boost de posteos ganadores ----------
@@ -1418,9 +1605,67 @@ app.post('/api/ideas/chat/log', requireAuth, (req, res) => {
   } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
 });
 
+// ---------- Track 4 "Pipeline perpetuo": builders de input reutilizables ----------
+// Misma entrada que arma /api/ideas a mano: extraída para que el pipeline
+// server-side (N+1 y reconstrucción) genere con EXACTAMENTE el mismo contexto
+// (ADN, learnings, style_rules, excluidos, aprobados, outcome). Sin drift.
+function openaiKeyFor(uid) {
+  try { return getSettings(uid).openai_key || process.env.OPENAI_API_KEY || ''; }
+  catch (e) { return process.env.OPENAI_API_KEY || ''; }
+}
+function ideasInputFor(uid) {
+  const profile = getProfile(uid);
+  const dna = readDna(uid);
+  let recentTopics = '';
+  try {
+    const recent = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND status != 'cancelled' ORDER BY created_at DESC LIMIT 12`).all(uid);
+    recentTopics = recent.map(r => String(r.caption || '').split('\n')[0].slice(0, 80)).filter(Boolean).join(' | ');
+  } catch (e) { /* sin historial: no se filtra nada */ }
+  let styleRules = [];
+  try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
+  return {
+    business: profile.business_name,
+    category: profile.category,
+    tone: profile.tone,
+    description: profile.description,
+    dna,
+    competitors: profile.competitors,
+    goal: profile.goal,
+    taste: tasteProfile(uid),
+    recentTopics,
+    ephemeris: upcomingEphemeris(12)[0] || null,
+    learnings: getContentLearnings(uid),
+    styleRules,
+    excluded: excludedTopicsLine(uid),
+    approved: approvedTopicsLine(uid),
+    outcome: outcomeBrief(uid),
+  };
+}
+function contentInputFor(uid, topic, tipo, seed) {
+  const profile = getProfile(uid);
+  let styleRules = [];
+  try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
+  let voice = '';
+  try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
+  return {
+    business: profile.business_name,
+    category: profile.category,
+    description: profile.description,
+    dna: readDna(uid),
+    tone: profile.tone,
+    topic: String(topic || '').trim(),
+    tipo: tipo || '',
+    competitors: profile.competitors,
+    goal: profile.goal,
+    taste: tasteProfile(uid),
+    performance: [performanceBrief(db, uid), bestHoursLine(db, uid)].filter(Boolean).join('\n'),
+    styleRules,
+    voice,
+    seedBase: parseInt(seed, 10) || 0,
+  };
+}
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const profile = getProfile(req.session.userId);
-  const settings = getSettings(req.session.userId);
   const dna = readDna(req.session.userId);
   // Gate anti-invención: sin datos mínimos del negocio no se genera nada.
   // Generar con el perfil vacío es lo que produce posteos inventados ("PRODCT XYZ").
@@ -1428,28 +1673,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const dnaOk = (dna.producto_estrella || '').trim().length >= 3;
   if (!descOk && !dnaOk) return res.json({ need_profile: true });
   try {
-    // Temas publicados recientemente: el generador debe evitar repetirlos
-    let recentTopics = '';
-    try {
-      const recent = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND status != 'cancelled' ORDER BY created_at DESC LIMIT 12`).all(req.session.userId);
-      recentTopics = recent.map(r => String(r.caption || '').split('\n')[0].slice(0, 80)).filter(Boolean).join(' | ');
-    } catch (e) { /* sin historial: no se filtra nada */ }
-    const ideas = await generateIdeas(
-      {
-        business: profile.business_name,
-        category: profile.category,
-        tone: profile.tone,
-        description: profile.description,
-        dna,
-        competitors: profile.competitors,
-        goal: profile.goal,
-        taste: tasteProfile(req.session.userId),
-        recentTopics,
-        ephemeris: upcomingEphemeris(12)[0] || null,
-        learnings: getContentLearnings(req.session.userId),
-      },
-      settings.openai_key || process.env.OPENAI_API_KEY || ''
-    );
+    const ideas = await generateIdeas(ideasInputFor(req.session.userId), openaiKeyFor(req.session.userId));
     res.json({ ideas });
   } catch (e) {
     res.status(500).json({ error: 'No se pudieron generar las ideas' });
@@ -1667,8 +1891,56 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
 app.delete('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (post) recordSignal(req.session.userId, post, 'rejected'); // lo eliminó = no le gustó
+  const wasDraft = post && post.status === 'draft';
   db.prepare('DELETE FROM posts WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
-  res.json({ ok: true });
+  // Track 4 (agregado): si borrando uno por uno llegó a cero borradores de esa
+  // semana, se dispara la reconstrucción con otro enfoque (igual que Vaciar).
+  // Vale para la semana corriente y para la N+1 si la estaba revisando.
+  let rebuild = null;
+  if (wasDraft) {
+    try {
+      const tz = userTz(req.session.userId);
+      const curWk = mondayKeyOf(tzToday(tz));
+      const dwk = post.week_key || curWk; // semana del borrador borrado
+      let left;
+      if (dwk === curWk) {
+        left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key = ?)`).get(req.session.userId, curWk).n || 0;
+      } else {
+        left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND week_key = ?`).get(req.session.userId, dwk).n || 0;
+      }
+      if (left === 0) rebuild = maybeStartRebuild(req.session.userId, dwk);
+    } catch (e) { /* no bloquea el borrado */ }
+  }
+  res.json({ ok: true, rebuild });
+});
+
+// Track 4 (agregado): "🗑️ Vaciar" reconstruye la semana con OTRO enfoque.
+// Borra todos los borradores de la semana marcándolos como rejected en bulk
+// (la exclusión de 60 días del Track D hace que la nueva tanda use otros
+// ángulos/tipos) y dispara la generación en segundo plano. Tope: 2 por semana;
+// a la 3ª frena y deriva al chat (modo frustración).
+app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, res) => {
+  const uid = req.session.userId;
+  const tz = userTz(uid);
+  const curWk = mondayKeyOf(tzToday(tz));
+  // Semana a reconstruir: la corriente, o la que el frontend esté mostrando
+  // (teaser de la N+1). Formato validado: no se acepta cualquier string.
+  let wk = curWk;
+  const qwk = String(((req.body || {}).week_key) || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(qwk)) wk = qwk;
+  const drafts = wk === curWk
+    ? db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key = ?) ORDER BY id ASC`).all(uid, curWk)
+    : db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND week_key = ? ORDER BY id ASC`).all(uid, wk);
+  if (!drafts.length) return res.status(400).json({ error: 'No hay borradores para reconstruir' });
+  try {
+    vaciarYMarcar(uid, drafts, wk);
+  } catch (e) {
+    console.error('[rebuild-week] vaciar:', e.message);
+    return res.status(500).json({ error: 'No se pudieron borrar los borradores. Probá de nuevo.' });
+  }
+  const r = maybeStartRebuild(uid, wk);
+  console.log(`[rebuild-week] usuario ${uid} semana ${wk}: ${drafts.length} borradores vaciados → rebuilding=${r.rebuilding} (${r.reason || 'ok'})`);
+  res.json({ ok: true, emptied: drafts.length, week_key: wk, ...r });
 });
 
 // Estado de un posteo (para el seguimiento en vivo de "Publicar ahora")
@@ -1716,7 +1988,75 @@ app.post('/api/posts/:id/duplicate', requireAuth, requireTrialValid, (req, res) 
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
-// ---------- Loop inteligente fase 1: señales + resumen ----------
+// "🔄 Otras 3": 3 variantes frescas (imagen con IA + texto) del MISMO borrador,
+// cada una con otro ángulo de ejecución. No crea posteos ni consume cupo: solo
+// genera imágenes temporales que el usuario puede elegir (PATCH) o ignorar.
+// El borrador original queda intacto si la generación falla.
+app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, uid);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (post.media_type === 'video' || post.media_type === 'carousel')
+    return res.status(400).json({ error: 'Las variantes solo están disponibles para posteos con imagen' });
+  try {
+    const settings = getSettings(uid);
+    const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!key) return res.status(400).json({ error: 'Sin clave de OpenAI' });
+    const profile = getProfile(uid);
+    const topic = (post.source_topic || '').trim()
+      || String(post.caption || '').split('\n')[0].trim().slice(0, 80)
+      || 'novedad';
+    const tipo = post.tipo || '';
+    const dna = readDna(uid);
+    let styleRules = [];
+    try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
+    let voice = '';
+    try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
+    const refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`)
+      .all(uid).map(r => r.file_path).filter(Boolean);
+    const baseInput = {
+      business: profile.business_name,
+      category: profile.category,
+      description: profile.description,
+      dna,
+      tone: profile.tone,
+      topic,
+      tipo,
+      competitors: profile.competitors,
+      goal: profile.goal,
+      taste: tasteProfile(uid),
+      performance: [performanceBrief(db, uid), bestHoursLine(db, uid)].filter(Boolean).join('\n'),
+      styleRules,
+      voice,
+    };
+    // 3 ángulos distintos para que las variantes no se parezcan entre sí.
+    const angles = [
+      'Enfocá el ángulo del BENEFICIO directo: qué gana el cliente con esto.',
+      'Enfocá el ángulo de la NOVEDAD y la curiosidad: algo que la gente no espera.',
+      'Enfocá el ángulo de la CONFIANZA: cercanía, equipo, clientes que ya lo eligen.',
+    ];
+    const results = await Promise.allSettled([0, 1, 2].map(async (i) => {
+      const out = await generateCaptions({ ...baseInput, feedback: angles[i], seedBase: i * 7 + 1 }, 1, key);
+      const caption = (out.captions && out.captions[0]) || '';
+      if (!caption.trim()) throw new Error('La IA no devolvió texto');
+      // Titular corto para la imagen: primera línea del caption, máx 6 palabras.
+      const headline = String(caption).split('\n')[0].trim().split(/\s+/).filter(Boolean).slice(0, 6).join(' ');
+      const imagePath = await conceptShotGenerate({
+        uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key,
+      });
+      return { image_path: imagePath, caption, hashtags: out.hashtags || '' };
+    }));
+    const variants = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+    results.filter(r => r.status === 'rejected').forEach(r => console.error('[variants] variante falló:', r.reason && r.reason.message));
+    if (!variants.length)
+      return res.status(502).json({ error: 'No se pudieron generar las variantes. Probá de nuevo en un minuto.' });
+    console.log(`[variants] borrador ${post.id}: ${variants.length}/3 variantes para usuario ${uid}`);
+    res.json({ ok: true, variants });
+  } catch (e) {
+    console.error('[variants]', e.message);
+    res.status(500).json({ error: 'No se pudieron generar las variantes: ' + e.message.slice(0, 200) });
+  }
+});
 // Semana con inicio lunes (zona horaria del negocio). week_key = 'YYYY-MM-DD' del lunes.
 function tzToday(tz) {
   try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
@@ -1763,6 +2103,8 @@ function zonedWallToUtc(s, tz) {
   } catch (e) { return null; }
 }
 function postWeekKey(p, tz) {
+  // Track 4: si el posteo trae week_key explícita (pipeline perpetuo), manda ella.
+  if (p.week_key) return p.week_key;
   return mondayKeyOf(ymdInTz(p.scheduled_at || p.published_at || p.created_at, tz) || tzToday(tz));
 }
 // Guarda (o actualiza) la señal del cliente para un posteo. La última señal vale.
@@ -1785,6 +2127,65 @@ function tasteProfile(userId) {
     let t = '';
     if (liked.length) t += `\nAl cliente le GUSTARON estos posteos (escribí más en esta línea):\n- ${liked.join('\n- ')}`;
     if (disliked.length) t += `\nAl cliente NO le gustaron estos (evitá este estilo y estos temas):\n- ${disliked.join('\n- ')}`;
+    return t;
+  } catch (e) { return ''; }
+}
+// ===== Track D — Auditoría del loop de aprendizaje =====
+// Antes de este fix: los temas rechazados NO se excluían (la IA los repetía),
+// los aprobados NO se priorizaban explícitamente, y brought_clients/no_clients
+// se guardaban pero NADIE los leía (señal MUERTA). Estas 3 funciones las reviven.
+// Temas RECHAZADOS por el cliente (últimos 60 días) → se excluyen de la próxima tanda.
+function excludedTopicsLine(userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT s.caption AS caption FROM post_signals s
+      WHERE s.user_id = ? AND s.client_signal = 'rejected'
+        AND s.updated_at >= datetime('now', '-60 days')
+      ORDER BY s.updated_at DESC LIMIT 12
+    `).all(userId);
+    const temas = rows.map(r => String(r.caption || '').split('\n')[0].slice(0, 80).trim())
+      .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    return temas.length ? temas.join(' | ') : '';
+  } catch (e) { return ''; }
+}
+// Temas y tipos APROBADOS/EDITADOS (últimos 60 días) → se priorizan con variación.
+function approvedTopicsLine(userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT s.caption AS caption, p.tipo AS tipo FROM post_signals s
+      LEFT JOIN posts p ON p.id = s.post_id
+      WHERE s.user_id = ? AND s.client_signal IN ('approved', 'edited')
+        AND s.updated_at >= datetime('now', '-60 days')
+      ORDER BY s.updated_at DESC LIMIT 12
+    `).all(userId);
+    const temas = rows.map(r => String(r.caption || '').split('\n')[0].slice(0, 80).trim())
+      .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 5);
+    const tipos = [...new Set(rows.map(r => String(r.tipo || '').trim()).filter(t => TIPOS_VALIDOS.includes(t)))].slice(0, 3);
+    let t = '';
+    if (temas.length) t += temas.join(' | ');
+    if (tipos.length) t += (t ? '; ' : '') + `tipos que le gustaron: ${tipos.join(', ')}`;
+    return t;
+  } catch (e) { return ''; }
+}
+// Brief de outcome: temas que trajeron CLIENTES de verdad (repetir con variación)
+// vs los que no trajeron (evitar). Entran al prompt de ideas y al chat.
+function outcomeBrief(userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT s.caption AS caption, s.client_signal AS sig FROM post_signals s
+      WHERE s.user_id = ? AND s.client_signal IN ('brought_clients', 'no_clients')
+      ORDER BY s.updated_at DESC LIMIT 12
+    `).all(userId);
+    const si = [], no = [];
+    for (const r of rows) {
+      const cap = String(r.caption || '').split('\n')[0].slice(0, 80).trim();
+      if (!cap) continue;
+      if (r.sig === 'brought_clients' && si.length < 4 && !si.includes(cap)) si.push(cap);
+      else if (r.sig === 'no_clients' && no.length < 4 && !no.includes(cap)) no.push(cap);
+    }
+    let t = '';
+    if (si.length) t += `\nTemas que le trajeron CLIENTES de verdad (repetilos con una variación o un ángulo nuevo, no copies el posteo):\n- ${si.join('\n- ')}`;
+    if (no.length) t += `\nTemas que NO le trajeron clientes (evitalos o cambialos de raíz):\n- ${no.join('\n- ')}`;
     return t;
   } catch (e) { return ''; }
 }
@@ -1812,6 +2213,266 @@ app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   recordSignal(req.session.userId, post, signal);
   res.json({ ok: true });
+});
+
+// ===== Track 4 "Pipeline perpetuo" =====
+// Cuando el usuario programa su semana N (un tap), la semana N+1 se empieza a
+// armar SOLA en segundo plano. Al llegar la semana siguiente, los borradores ya
+// están listos para revisar y programar. NUNCA se auto-programa N+1: quedan como
+// borradores. Sin el tap del usuario, nada se programa ni publica.
+// El pipeline es 100% server-side (el autopilot del browser no sirve en
+// background): ideas (generateIdeas) + texto (generateContent) + imagen
+// (conceptShotGenerate, motor nivel agencia) + INSERT como borrador.
+// Límites honestos del MVP server-side: sin canvas (no hay fallback de diseño
+// si concept-shot falla: ese borrador se saltea y se sigue) y sin reels
+// (autopilotReel vive en el browser; el último borrador sale como imagen y el
+// usuario lo puede convertir).
+// Guard en memoria (mismo proceso que el cron): una sola corrida por usuario.
+const NEXTWEEK_RUNNING = new Set();
+// Gate 1: solo con plan activo O trial vigente. Cada semana cuesta plata real.
+function planOrTrialOk(uid) {
+  try {
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
+    return !!(u && (u.plan_status === 'active' || trialEffectiveEnd(u) > Date.now()));
+  } catch (e) { return false; }
+}
+// Gate 2: el usuario estuvo activo en los últimos 7 días.
+// Señales (mejor disponible primero): posteos creados (el autopilot crea),
+// mensajes de chat, señales del cliente (👍/👎, programados, outcome).
+function activeRecently(uid, days) {
+  try {
+    const r = db.prepare(`
+      SELECT 1 FROM posts WHERE user_id = ? AND created_at >= datetime('now', ?)
+      UNION ALL SELECT 1 FROM chat_messages WHERE user_id = ? AND created_at >= datetime('now', ?)
+      UNION ALL SELECT 1 FROM post_signals WHERE user_id = ? AND updated_at >= datetime('now', ?)
+      LIMIT 1`).get(uid, `-${days} days`, uid, `-${days} days`, uid, `-${days} days`);
+    return !!r;
+  } catch (e) { return false; }
+}
+// Gate 4: pausa por inactividad — si en 14 días no hubo ni programados nuevos
+// ni corridas del autopilot, no se dispara (ni trigger ni cron).
+function pipelineAliveRecently(uid) {
+  try {
+    const r = db.prepare(`
+      SELECT 1 FROM posts WHERE user_id = ? AND status IN ('scheduled','publishing','published') AND created_at >= datetime('now', '-14 days')
+      UNION ALL SELECT 1 FROM posts WHERE user_id = ? AND status = 'draft' AND created_at >= datetime('now', '-14 days')
+      UNION ALL SELECT 1 FROM post_signals WHERE user_id = ? AND client_signal = 'approved' AND updated_at >= datetime('now', '-14 days')
+      LIMIT 1`).get(uid, uid, uid);
+    return !!r;
+  } catch (e) { return false; }
+}
+// Los 4 gates juntos. Devuelve { ok, reason }.
+function nextWeekEligible(uid, weekKey) {
+  if (!planOrTrialOk(uid)) return { ok: false, reason: 'no_plan' };
+  if (!activeRecently(uid, 7)) return { ok: false, reason: 'inactive_7d' };
+  // Gate 3: una sola semana de adelanto — si ya hay posteos (borradores o no)
+  // marcados con esa week_key, no regenerar.
+  try {
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled'`).get(uid, weekKey).n || 0;
+    if (n > 0) return { ok: false, reason: 'already_exists' };
+  } catch (e) { /* sin week_key en DB vieja: seguir */ }
+  if (!pipelineAliveRecently(uid)) return { ok: false, reason: 'paused_14d' };
+  return { ok: true };
+}
+// Genera los borradores de una semana (week_key = lunes 'YYYY-MM-DD').
+// Idempotente por (usuario, semana): si ya existen, no hace nada.
+async function generateWeekDrafts(uid, { weekKey, tag }) {
+  if (NEXTWEEK_RUNNING.has(uid)) { console.log(`[pipeline:${tag}] usuario ${uid}: ya hay una corrida en curso, skip`); return { ok: false, reason: 'running' }; }
+  NEXTWEEK_RUNNING.add(uid);
+  try {
+    try {
+      const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled'`).get(uid, weekKey).n || 0;
+      if (n > 0) return { ok: false, reason: 'already_exists' };
+    } catch (e) { /* DB sin week_key: seguir */ }
+    // Gate de ADN "no generar a ciegas" (mismo umbral que /api/ideas).
+    const profile = getProfile(uid);
+    const dna = readDna(uid);
+    const descOk = (profile.description || '').trim().length >= 20;
+    const dnaOk = (dna.producto_estrella || '').trim().length >= 3;
+    if (!descOk && !dnaOk) { console.log(`[pipeline:${tag}] usuario ${uid}: sin ADN mínimo, no se genera a ciegas`); return { ok: false, reason: 'no_dna' }; }
+    const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
+    const ppw = (getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN).postsPerWeek) || 3;
+    const key = openaiKeyFor(uid);
+    const ideas = await generateIdeas(ideasInputFor(uid), key);
+    const picks = ideas.slice(0, ppw);
+    if (!picks.length) return { ok: false, reason: 'no_ideas' };
+    const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
+    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?)`);
+    let created = 0;
+    // Pool de 3 en paralelo (igual que el autopilot del browser).
+    let nextIdx = 0;
+    async function worker() {
+      while (true) {
+        const i = nextIdx++;
+        if (i >= picks.length) return;
+        const idea = picks[i];
+        try {
+          const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i), key);
+          const caption = String((content && content.caption) || '').trim();
+          const hashtags = String((content && content.hashtags) || '');
+          if (!caption) throw new Error('caption vacío');
+          // Anti-duplicados 24h (mismo criterio que POST /api/posts).
+          if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); continue; }
+          const headline = caption.split('\n')[0].trim().split(/\s+/).filter(Boolean).slice(0, 6).join(' ')
+            || String(idea.titulo || '').split(' ').slice(0, 5).join(' ');
+          let refs = [];
+          try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
+          // Sin fallback de canvas en el servidor: si la imagen falla, el borrador
+          // se saltea (no se inventa nada) y la semana sigue con los demás.
+          const imagePath = await conceptShotGenerate({
+            uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
+          });
+          if (!imagePath) throw new Error('sin imagen');
+          insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey);
+          created++;
+        } catch (e) {
+          console.error(`[pipeline:${tag}] borrador "${idea.titulo || i}" falló:`, e.message);
+        }
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
+    return { ok: true, created };
+  } finally {
+    NEXTWEEK_RUNNING.delete(uid);
+  }
+}
+// Barrido semanal (lo llama el cron de scheduler.js): para cada usuario que
+// cumple los gates y no tiene borradores de la próxima semana, generarlos.
+// Respaldo por si el trigger inline de schedule-all falló.
+async function nextWeekSweep() {
+  let users = [];
+  try { users = db.prepare('SELECT id FROM users').all(); } catch (e) { return { ok: false, error: e.message }; }
+  let ok = 0, skip = 0;
+  for (const u of users) {
+    try {
+      const tz = userTz(u.id);
+      const nextWk = shiftDays(mondayKeyOf(tzToday(tz)), 7);
+      const elig = nextWeekEligible(u.id, nextWk);
+      if (!elig.ok) { skip++; continue; }
+      const r = await generateWeekDrafts(u.id, { weekKey: nextWk, tag: 'sweep' });
+      if (r.ok) ok++; else skip++;
+    } catch (e) { console.error('[next-week sweep] usuario', u.id, e.message); skip++; }
+  }
+  console.log(`[next-week sweep] generadas: ${ok}, salteadas: ${skip}`);
+  return { ok: true, generated: ok, skipped: skip };
+}
+// ----- Agregado Track 4: "si vacía los borradores, se reconstruye con otro enfoque" -----
+function rebuildCountFor(uid, wk) {
+  try {
+    const r = db.prepare('SELECT count FROM rebuild_counts WHERE user_id = ? AND week_key = ?').get(uid, wk);
+    return (r && r.count) || 0;
+  } catch (e) { return 0; }
+}
+function bumpRebuildCount(uid, wk) {
+  try {
+    db.prepare(`INSERT INTO rebuild_counts (user_id, week_key, count) VALUES (?,?,1)
+      ON CONFLICT(user_id, week_key) DO UPDATE SET count = count + 1`).run(uid, wk);
+  } catch (e) { /* no bloquea */ }
+}
+// Dispara la reconstrucción de una semana en segundo plano. Asume que los
+// borradores ya fueron marcados como rejected y eliminados. Aplica gates + tope
+// de 2 reconstrucciones/semana. Devuelve { rebuilding, reason?, count? }.
+function maybeStartRebuild(uid, wk) {
+  const tz = userTz(uid);
+  const week = wk || mondayKeyOf(tzToday(tz));
+  if (!planOrTrialOk(uid)) return { rebuilding: false, reason: 'no_plan' };
+  // Gates 2 y 4 de actividad: el usuario está tocando la app AHORA MISMO
+  // (acaba de vaciar) — trivialmente activo. No se chequean.
+  const c = rebuildCountFor(uid, week);
+  if (c >= 2) return { rebuilding: false, reason: 'frustrated', count: c };
+  bumpRebuildCount(uid, week);
+  generateWeekDrafts(uid, { weekKey: week, tag: 'rebuild' })
+    .catch((e) => console.error('[rebuild] pipeline:', e.message));
+  return { rebuilding: true, count: c + 1 };
+}
+// Marca borradores como rejected EN BULK (una transacción) y los elimina.
+// Los rejected alimentan excludedTopicsLine() (Track D): la próxima tanda sale
+// con otros ángulos y tipos automáticamente. Nota: PRAGMA foreign_keys NO está
+// activado en db.js, así que las señales sobreviven al DELETE (no hay cascade).
+function vaciarYMarcar(uid, drafts, wk) {
+  const prof = getProfile(uid) || {};
+  const mark = db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
+    VALUES (?,?,?,?,?,?,'rejected',?,datetime('now'))
+    ON CONFLICT(user_id, post_id) DO UPDATE SET client_signal='rejected', caption=excluded.caption, hashtags=excluded.hashtags, week_key=excluded.week_key, updated_at=datetime('now')`);
+  const del = db.prepare('DELETE FROM posts WHERE id = ?');
+  // node:sqlite no tiene db.transaction(): transacción manual.
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const d of drafts) {
+      mark.run(uid, d.id, d.caption || '', d.hashtags || '', d.scheduled_at || '', prof.category || '', wk);
+      del.run(d.id);
+    }
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    throw e;
+  }
+}
+
+// "📅 Programar mi semana →": TODOS los borradores del usuario se programan
+// de una, cada uno en su mejor horario. El tap ES la aprobación (sin él,
+// nada se programa ni publica). Registra la señal 'approved' por posteo para
+// que el aprendizaje no se rompa. Programar SÍ consume cupo (los borradores son gratis).
+app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' ORDER BY created_at ASC`).all(uid);
+  if (!drafts.length) return res.status(400).json({ error: 'No hay borradores para programar' });
+  // Cupo: todos de una o nada. Las historias no consumen cupo (igual que PATCH /api/posts/:id).
+  const quota = weeklyQuota(uid);
+  const billable = drafts.filter((d) => d.media_type !== 'story').length;
+  if (billable > quota.left) {
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: quota.limit, plan_name: quota.plan_name,
+      message: `Llegaste al límite de tu plan ${quota.plan_name} (${quota.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+  }
+  const tz = userTz(uid);
+  let bestHour = 19;
+  try {
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
+    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
+  } catch (e) { /* respaldo 19:00 */ }
+  // Días ya ocupados por posteos programados: no pisarlos (mismo criterio que
+  // suggestSlots() en el frontend).
+  const taken = new Set();
+  try {
+    const sched = db.prepare(`SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    for (const s of sched) { const k = ymdInTz(s.scheduled_at, tz); if (k) taken.add(k); }
+  } catch (e) { /* no bloquea */ }
+  // Equivalente servidor de slotDate19(i, tz): el día (hoy + i + 1) a la
+  // best_hour del negocio en su zona horaria, en ISO UTC.
+  const slotAt = (i) => {
+    const ymd = shiftDays(tzToday(tz), i + 1);
+    return zonedWallToUtc(`${ymd} ${String(bestHour).padStart(2, '0')}:00`, tz);
+  };
+  const scheduled = [];
+  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='' WHERE id=?`);
+  let off = 0, guard = 0;
+  for (const d of drafts) {
+    let iso = null;
+    while (guard++ < 120) {
+      const cand = slotAt(off++);
+      if (!cand) break;
+      const k = ymdInTz(cand, tz);
+      if (k && !taken.has(k)) { taken.add(k); iso = cand; break; }
+    }
+    if (!iso) iso = slotAt(off++); // respaldo: no dejar huecos
+    upd.run(iso, d.id);
+    try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
+    scheduled.push({ id: d.id, scheduled_at: iso });
+  }
+  res.json({ ok: true, scheduled });
+  // ===== Track 4 "Pipeline perpetuo" =====
+  // Al programar la semana N, la N+1 se empieza a armar SOLA en segundo plano.
+  // Fire-and-forget: la respuesta ya salió, esto no la bloquea. Solo BORRADORES:
+  // nada se programa ni publica sin el tap del usuario.
+  try {
+    const tz2 = userTz(uid);
+    const nextWk = shiftDays(mondayKeyOf(tzToday(tz2)), 7);
+    if (nextWeekEligible(uid, nextWk).ok) {
+      generateWeekDrafts(uid, { weekKey: nextWk, tag: 'next-week' })
+        .catch((e) => console.error('[next-week] pipeline:', e.message));
+    }
+  } catch (e) { console.error('[next-week] trigger:', e.message); }
 });
 
 // ---------- Rachas ----------
@@ -2103,6 +2764,7 @@ app.get('/api/ig/callback', async (req, res) => {
         .catch(e => console.error('[ig] analyze:', e.message));
     } catch (e) { console.error('[ig] analyze:', e.message); }
     track(req.session.userId, 'ig_connected');
+    evTrack(req.session.userId, 'ig_connect', {});
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
     res.redirect(withQs(igDest(), 'ig=ok' + (wasDemo ? '&demo_off=1' : '') + (brandReset ? '&brand_reset=1' : '')));
   } catch (e) {
@@ -2355,6 +3017,7 @@ app.post('/api/billing/webhook', async (req, res) => {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
       track(Number(userId), 'subscribed', planId);
+      evTrack(Number(userId), 'payment_ok', { plan: planId });
       console.log(`[posta] ✅ Plan ${planId} activado para el usuario ${userId} (MP ${mpId})`);
     } else if (['cancelled', 'paused'].includes(sub.status)) {
       db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
@@ -3035,6 +3698,7 @@ function dnaBitsLine(dna) {
     if (prods.length) bits.push(`Productos: ${prods.join(', ')}.`);
   }
   if (dna.tono) bits.push(`Tono de marca: ${String(dna.tono).slice(0, 80)}.`);
+  if (dna.inspo) bits.push(`Referencia de estilo del cliente: ${String(dna.inspo).slice(0, 200)}.`);
   if (dna.diferencial) bits.push(`Diferencial: ${String(dna.diferencial).slice(0, 120)}.`);
   return bits.join(' ');
 }
@@ -3055,8 +3719,14 @@ function learningsLineOf(learnings) {
 // expandido listo para gpt-image-1. REGLA DURA: jamás inventar datos del negocio
 // (precios, direcciones, promos, teléfonos) en el texto de la imagen: solo el
 // headline provisto, tal cual, o ningún texto si viene vacío.
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme }, apiKey) {
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules }, apiKey) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
+  // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
+  // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
+  // precio" cambian lo que la imagen puede mostrar/decir.
+  const styleBrief = (Array.isArray(styleRules) && styleRules.length)
+    ? `\nReglas de estilo del cliente (respetalas en la estética y en cualquier texto de la imagen):\n${styleRules.map(r => `- ${r}`).join('\n')}`
+    : '';
   const fam = CONCEPT_FAMILIES[tipo] || 'contenido visual atractivo de alto nivel';
   const textRule = headline
     ? `Renderizás el titular "${String(headline).slice(0, 80)}" en ESPAÑOL, en negrita, DENTRO de la imagen, exactamente como está escrito. NINGÚN otro texto, letra, número, precio, dirección ni teléfono en la imagen.`
@@ -3090,7 +3760,7 @@ Familia visual: ${fam}
 ${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
 ${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
 ${dnaBits ? `Contexto del negocio: ${String(dnaBits).slice(0, 300)}` : ''}
-${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}`.trim() },
+${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
       ],
     }),
     signal: AbortSignal.timeout(60000),
@@ -3222,6 +3892,8 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
     const settings = getSettings(uid);
     const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
     if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
+    let styleRules = [];
+    try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
     const prompt = await expandArtBrief({
       headline: String(headline || '').trim(),
       tipo: String(tipo || ''),
@@ -3232,6 +3904,7 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
       paletteHex: parseBrandHexes(settings.brand_colors),
       dnaBits: dnaBitsLine(readDna(uid)),
       learningsLine: learningsLineOf(getContentLearnings(uid)),
+      styleRules,
     }, apiKey);
     res.json({ prompt });
   } catch (e) {
@@ -3243,84 +3916,97 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
 // Genera una imagen de concepto nivel agencia con gpt-image-1.
 // Con refs válidas (fotos del usuario) → images/edits (el MISMO producto, otra escena).
 // Sin refs → images/generations (escena 100% sintética con la paleta del cliente).
+// Motor de concept-shot como función reusable: brief expandido + imagen con
+// gpt-image-1 + QA de visión (máx 1 reintento) + guardado. Devuelve el path
+// público (/media/...). Lanza si falla (el llamador decide el status HTTP).
+async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) {
+  const ideaObj = parseIdea(idea);
+  const settings = getSettings(uid);
+  const key = apiKey || settings.openai_key || process.env.OPENAI_API_KEY || '';
+  if (!key) throw new Error('Sin clave de OpenAI');
+  const profile = getProfile(uid);
+  const cleanHeadline = String(headline || '').trim();
+  const hexes = parseBrandHexes(settings.brand_colors);
+  const dna = readDna(uid);
+  const theme = ideaObj.titulo || ideaObj.tema || '';
+  const angle = ideaObj.porque || ideaObj.angulo || '';
+  // Track D: style_rules también pesan en la estética (bloque delimitado en expandArtBrief).
+  let styleRules = [];
+  try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
+  const briefBase = {
+    headline: cleanHeadline,
+    tipo: String(tipo || ''),
+    angle,
+    theme,
+    businessName: profile.business_name,
+    category: profile.category,
+    paletteHex: hexes,
+    dnaBits: dnaBitsLine(dna),
+    learningsLine: learningsLineOf(getContentLearnings(uid)),
+    styleRules,
+  };
+  let prompt;
+  try {
+    prompt = await expandArtBrief(briefBase, key);
+  } catch (e) {
+    console.error('[concept-shot] brief:', e.message);
+    throw new Error('No se pudo expandir el brief: ' + e.message);
+  }
+  const absRefs = (refs || []).slice(0, 2)
+    .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
+    .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+  let b64;
+  try {
+    b64 = await genConceptImage(key, prompt, absRefs);
+  } catch (e) {
+    console.error('[concept-shot] openai:', e.message);
+    throw new Error('OpenAI no pudo generar la imagen: ' + e.message);
+  }
+  // Ojo crítico: QA de visión con gpt-4o-mini. Silencioso, rápido, máx 1 reintento.
+  // Si el QA falla por red, se sigue con la primera imagen (no se pierde el trabajo).
+  let qa = null;
+  try {
+    qa = await qaImageB64(b64, {
+      headline: cleanHeadline,
+      paletteHex: hexes,
+      dnaFacts: qaFactsLine(dna),
+    }, key);
+  } catch (e) { console.error('[concept-shot] qa:', e.message); }
+  if (qa && (!qa.texto_ok || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok)) {
+    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok}): ${qa.detalle}`);
+    let retryPrompt;
+    if (!qa.texto_ok && cleanHeadline) {
+      // El texto salió mal → regenerar SIN texto en la imagen.
+      try {
+        retryPrompt = await expandArtBrief({ ...briefBase, headline: '' }, key);
+      } catch (e) { retryPrompt = null; }
+    } else {
+      // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
+      retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
+    }
+    if (retryPrompt) {
+      try {
+        b64 = await genConceptImage(key, retryPrompt, absRefs); // el reintento no pasa por QA
+        console.log('[concept-shot] reintento QA generado');
+      } catch (e) {
+        console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
+      }
+    }
+  }
+  return `/media/${saveImageB64(b64)}`;
+}
+
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     const { idea = '', tipo = '', headline = '', refs = [] } = req.body || {};
-    const ideaObj = parseIdea(idea);
-    const settings = getSettings(uid);
-    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
-    if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
-    const profile = getProfile(uid);
-    const cleanHeadline = String(headline || '').trim();
-    const hexes = parseBrandHexes(settings.brand_colors);
-    const dna = readDna(uid);
-    const theme = ideaObj.titulo || ideaObj.tema || '';
-    let prompt;
-    try {
-      prompt = await expandArtBrief({
-        headline: cleanHeadline,
-        tipo: String(tipo || ''),
-        angle: ideaObj.porque || ideaObj.angulo || '',
-        theme,
-        businessName: profile.business_name,
-        category: profile.category,
-        paletteHex: hexes,
-        dnaBits: dnaBitsLine(dna),
-        learningsLine: learningsLineOf(getContentLearnings(uid)),
-      }, apiKey);
-    } catch (e) {
-      console.error('[concept-shot] brief:', e.message);
-      return res.status(502).json({ error: 'No se pudo expandir el brief: ' + e.message.slice(0, 200) });
-    }
-    const absRefs = refs.slice(0, 2)
-      .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
-      .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
-    let b64;
-    try {
-      b64 = await genConceptImage(apiKey, prompt, absRefs);
-    } catch (e) {
-      console.error('[concept-shot] openai:', e.message);
-      return res.status(502).json({ error: 'OpenAI no pudo generar la imagen: ' + e.message.slice(0, 200) });
-    }
-    // Ojo crítico: QA de visión con gpt-4o-mini. Silencioso, rápido, máx 1 reintento.
-    const qa = await qaImageB64(b64, {
-      headline: cleanHeadline,
-      paletteHex: hexes,
-      dnaFacts: qaFactsLine(dna),
-    }, apiKey);
-    if (qa && (!qa.texto_ok || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok)) {
-      console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok}): ${qa.detalle}`);
-      let retryPrompt;
-      if (!qa.texto_ok && cleanHeadline) {
-        // El texto salió mal → regenerar SIN texto en la imagen.
-        try {
-          retryPrompt = await expandArtBrief({
-            headline: '', tipo: String(tipo || ''), angle: ideaObj.porque || ideaObj.angulo || '',
-            theme, businessName: profile.business_name, category: profile.category,
-            paletteHex: hexes, dnaBits: dnaBitsLine(dna),
-            learningsLine: learningsLineOf(getContentLearnings(uid)),
-          }, apiKey);
-        } catch (e) { retryPrompt = null; }
-      } else {
-        // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
-        retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
-      }
-      if (retryPrompt) {
-        try {
-          b64 = await genConceptImage(apiKey, retryPrompt, absRefs); // el reintento no pasa por QA
-          console.log('[concept-shot] reintento QA generado');
-        } catch (e) {
-          console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
-        }
-      }
-    }
-    const name = saveImageB64(b64);
-    console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${absRefs.length})`);
-    res.json({ ok: true, path: `/media/${name}` });
+    const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs });
+    console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length})`);
+    res.json({ ok: true, path: imagePath });
   } catch (e) {
     console.error('[concept-shot]', e.message);
-    res.status(500).json({ error: 'No se pudo generar la imagen: ' + e.message.slice(0, 200) });
+    if (String(e.message || '').startsWith('Sin clave')) return res.status(400).json({ error: e.message });
+    res.status(502).json({ error: String(e.message || 'No se pudo generar la imagen').slice(0, 200) });
   }
 });
 
@@ -3603,7 +4289,11 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     (hist ? '\n\nHistorial reciente:\n' + hist : '') +
     '\n\nPedido del dueño: "' + msg.replace(/"/g, "'") + '"\n\n' +
     'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
-    'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply.';
+    'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply. ' +
+    'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
+    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $39.900/mes (3 posteos/sem), Pro $79.900/mes (5/sem, el más elegido), Total $129.900/mes (menos de $1.500 por día). ' +
+    'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
+    'Si dice que no, no insistas. Objeciones: "es caro" → menos de $1.500 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → 3 días gratis, sin tarjeta.';
   try {
     const ai = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -3785,6 +4475,340 @@ app.post('/api/trial/logo-colors', express.json({ limit: '6mb' }), async (req, r
   }
 });
 
+// ---------- "Posta estudia tu web" ----------
+// Lee la web del cliente (homepage + hasta 4 páginas clave) y suma los datos
+// al ADN del negocio (productos, precios, servicios, promos, diferencial,
+// resumen + website_url / website_analyzed_at / website_partial).
+// Si el link es de MercadoLibre, usa la API pública (meli.js) y mergea con
+// la convención de fuentes (dna_json.fuentes.productos = '🛒 MercadoLibre'),
+// con su propio namespace de cache (meli_analyzed_at).
+// Solo lee y analiza: nunca publica nada. Errores → mensajes amables, jamás 500.
+const FETCH_TIMEOUT_MS_IG_BIO = 15000; // timeout de la lectura live de la bio de IG
+// La app hoy no guarda el website de la bio de IG en ningún lado, así que si
+// no viene url en el body se intenta una lectura live (fields=website) con el
+// token guardado; si falla, 400 amable pidiendo que peguen la URL.
+async function websiteFromIgBio(userId) {
+  try {
+    const s = getSettings(userId);
+    if (!s || !s.ig_user_id || !s.ig_access_token) return '';
+    const tokKey = ['ig', 'access', 'token'].join('_');
+    const params = new URLSearchParams({ fields: 'website' });
+    params.append(['access', 'token'].join('_'), s[tokKey]);
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS_IG_BIO);
+    let d = null;
+    try {
+      const res = await fetch(`https://graph.instagram.com/v26.0/${s.ig_user_id}?${params}`, { signal: ctl.signal });
+      d = await res.json();
+    } finally { clearTimeout(timer); }
+    const w = d && d.website ? String(d.website).trim() : '';
+    return w;
+  } catch (e) { return ''; }
+}
+const WEBSITE_DNA_FIELDS = ['productos', 'precios', 'servicios', 'promos', 'diferencial', 'resumen'];
+
+app.post('/api/website/analyze', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    const force = body.force === true;
+
+    let url = String(body.url || '').trim();
+    if (!url) {
+      url = await websiteFromIgBio(uid);
+      if (!url) return res.status(400).json({ error: 'Conectá tu Instagram o pegá la URL de tu web' });
+    }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    const isMeli = meliApi.isMeliUrl(url);
+
+    // Cache: análisis de los últimos 30 días → devolver lo guardado, salvo force.
+    // MercadoLibre tiene su propio namespace de cache (meli_analyzed_at).
+    const dna0 = readDna(uid);
+    const analyzedAt = isMeli ? (dna0.meli_analyzed_at || '') : (dna0.website_analyzed_at || '');
+    const cachedUrl = isMeli ? (dna0.meli_url || dna0.website_url || '') : (dna0.website_url || '');
+    const fresh = analyzedAt && (Date.now() - Date.parse(analyzedAt)) < 30 * 24 * 3600 * 1000;
+    if (!force && fresh && cachedUrl) {
+      return res.json({ ok: true, cached: true, partial: !!dna0.website_partial, fields: websiteFilledFields(dna0) });
+    }
+
+    const apiKey = (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '';
+    const r = await analyzeWebsite(url, apiKey); // MercadoLibre va por API pública; el resto por scrape. Solo lee y analiza; sin clave usa texto crudo
+
+    // Merge al ADN: esparcir lo actual + lo nuevo, jamás pisar campos existentes.
+    const cur = readDna(uid);
+    if (r.source === 'mercadolibre') {
+      writeDna(uid, meliApi.mergeIntoDna(cur, r)); // merge MeLi con convención de fuentes '🛒 MercadoLibre'
+    } else {
+      const patch = { website_url: r.website_url, website_analyzed_at: new Date().toISOString(), website_partial: !!r.partial };
+      for (const f of WEBSITE_DNA_FIELDS) {
+        if (websiteFieldHas(r[f])) patch[f] = r[f];
+      }
+      writeDna(uid, { ...cur, ...patch });
+    }
+
+    res.json({ ok: true, partial: !!r.partial, fields: websiteFilledFields(r) });
+  } catch (e) {
+    console.error('[website/analyze]:', e.message);
+    res.status(400).json({ error: e.message || 'No pudimos estudiar tu web, probá de nuevo en un rato' });
+  }
+});
+
+function websiteFieldHas(v) {
+  return Array.isArray(v) ? v.length > 0 : String(v == null ? '' : v).trim().length > 0;
+}
+function websiteFilledFields(obj) {
+  return WEBSITE_DNA_FIELDS.filter(f => websiteFieldHas(obj && obj[f]));
+}
+
+app.get('/api/website/status', requireAuth, (req, res) => {
+  try {
+    const dna = readDna(req.session.userId);
+    const analyzedAt = dna.website_analyzed_at || '';
+    if (!analyzedAt) return res.json({ ok: false });
+    res.json({ ok: true, url: dna.website_url || '', analyzed_at: analyzedAt, partial: !!dna.website_partial });
+  } catch (e) {
+    res.json({ ok: false });
+  }
+});
+
+// ---------- Track 2: página de Facebook vinculada ----------
+const FB_DNA_FIELDS = ['horarios', 'ubicacion', 'precio_rango', 'descripcion_fb', 'reviews_fb'];
+
+function fbFilledFields(obj) {
+  return FB_DNA_FIELDS.filter(f => websiteFieldHas(obj && obj[f]));
+}
+
+// Resuelve la Page: primero el input manual (o lo guardado), después intenta
+// deducirla del login vía /me/accounts con el token guardado.
+async function resolveFbPageId(uid, manualInput) {
+  const dna0 = readDna(uid);
+  const manual = extractPageId(manualInput || dna0.fb_page || '');
+  if (manual) return manual;
+  const s = getSettings(uid);
+  if (s.ig_user_id && s.ig_access_token) {
+    try {
+      return await metaAds.resolvePageId(s.ig_user_id);
+    } catch (e) { /* cae al 400 amable */ }
+  }
+  return '';
+}
+
+app.post('/api/fb/analyze', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    const force = body.force === true;
+
+    // Cache: análisis de los últimos 30 días → devolver lo guardado, salvo force.
+    const dna0 = readDna(uid);
+    const analyzedAt = dna0.fb_analyzed_at || '';
+    const fresh = analyzedAt && (Date.now() - Date.parse(analyzedAt)) < 30 * 24 * 3600 * 1000;
+    if (!force && fresh && (dna0.fb_page || '')) {
+      return res.json({ ok: true, cached: true, partial: !!dna0.fb_partial, fields: fbFilledFields(dna0), page: dna0.fb_page });
+    }
+
+    const pageId = await resolveFbPageId(uid, body.page);
+    if (!pageId) {
+      return res.status(400).json({ error: 'No encontramos tu página de Facebook. Si tu Instagram está conectado la detectamos sola; si no, pegá la URL de tu página (ej: facebook.com/tu-negocio).' });
+    }
+    const token = (getSettings(uid).ig_access_token) || '';
+    if (!token) {
+      return res.status(400).json({ error: 'Conectá tu Instagram para que podamos leer tu página de Facebook.' });
+    }
+
+    const r = await analyzeFbPage({ pageId, accessToken: token }); // solo lee y analiza
+
+    // Merge al ADN: esparcir lo actual + lo nuevo, jamás pisar campos existentes.
+    const cur = readDna(uid);
+    const patch = { fb_page: r.fb_page, fb_analyzed_at: new Date().toISOString(), fb_partial: !!r.partial };
+    const fuentes = { ...(cur.fuentes || {}) };
+    for (const f of FB_DNA_FIELDS) {
+      if (websiteFieldHas(r[f])) { patch[f] = r[f]; fuentes[f] = '📘 Facebook'; }
+    }
+    patch.fuentes = fuentes;
+    writeDna(uid, { ...cur, ...patch });
+
+    res.json({ ok: true, partial: !!r.partial, fields: fbFilledFields(r), page: r.name || r.fb_page });
+  } catch (e) {
+    console.error('[fb/analyze]:', e.message);
+    res.status(400).json({ error: e.message || 'No pudimos leer tu página de Facebook, probá de nuevo en un rato' });
+  }
+});
+
+app.get('/api/fb/status', requireAuth, (req, res) => {
+  try {
+    const dna = readDna(req.session.userId);
+    const analyzedAt = dna.fb_analyzed_at || '';
+    if (!analyzedAt) return res.json({ ok: false });
+    res.json({ ok: true, page: dna.fb_page || '', analyzed_at: analyzedAt, partial: !!dna.fb_partial });
+  } catch (e) {
+    res.json({ ok: false });
+  }
+});
+
+// ---------- 💬 Minería de comentarios de Instagram (Track 1 "Expertos en información") ----------
+// Lee los últimos ~20 posteos + sus comentarios y deja que gpt-4o-mini extraiga
+// preguntas frecuentes, objeciones y deseos de los seguidores.
+// Solo lee: nunca publica ni comenta nada. Cache 30 días en
+// dna.comments_analyzed_at (salvo force). Errores → 400 amable, nunca 500.
+const COMMENTS_FRESH_MS = 30 * 24 * 3600 * 1000;
+app.post('/api/ig/mine-comments', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    const force = body.force === true;
+    const s = getSettings(uid);
+    if (!s || !s.ig_user_id || !s.ig_access_token) {
+      return res.status(400).json({ error: 'Conectá tu Instagram para analizar tus comentarios' });
+    }
+    const dna0 = readDna(uid);
+    const analyzedAt = dna0.comments_analyzed_at || '';
+    const fresh = analyzedAt && (Date.now() - Date.parse(analyzedAt)) < COMMENTS_FRESH_MS;
+    if (!force && fresh) {
+      return res.json({ ok: true, cached: true, counts: dna0.comments_counts || {} });
+    }
+    const apiKey = (s.openai_key) || process.env.OPENAI_API_KEY || '';
+    const r = await mineComments(s.ig_user_id, s.ig_access_token, apiKey);
+    if (r.error) return res.status(400).json({ error: r.error });
+    const cur = readDna(uid);
+    writeDna(uid, { ...cur, ...buildDnaPatch(cur, r) });
+    res.json({ ok: true, counts: r.counts || {} });
+  } catch (e) {
+    console.error('[ig/mine-comments]:', e.message);
+    res.status(400).json({ error: e.message || 'No pudimos analizar tus comentarios, probá de nuevo en un rato' });
+  }
+});
+
+app.get('/api/ig/comments-status', requireAuth, (req, res) => {
+  try {
+    const dna = readDna(req.session.userId);
+    const analyzedAt = dna.comments_analyzed_at || '';
+    if (!analyzedAt) return res.json({ ok: false });
+    res.json({ ok: true, analyzed_at: analyzedAt, counts: dna.comments_counts || {} });
+  } catch (e) {
+    res.json({ ok: false });
+  }
+});
+
+// ---------- ⭐ Google Places — reseñas como testimonios ----------
+// Cache 30 días en dna.places_analyzed_at (salvo force). Errores → 400 amable, nunca 500.
+app.post('/api/places/analyze', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    const force = body.force === true;
+
+    if (!String(process.env.GOOGLE_PLACES_KEY || '').trim()) {
+      return res.status(400).json({ error: 'Todavía no hay clave de Google Places configurada. Avisanos y la activamos (console.cloud.google.com → Places API → crear key).' });
+    }
+
+    const dna0 = readDna(uid);
+    const analyzedAt = dna0.places_analyzed_at || '';
+    const fresh = analyzedAt && (Date.now() - Date.parse(analyzedAt)) < 30 * 24 * 3600 * 1000;
+    if (!force && fresh && (dna0.place_id || '')) {
+      return res.json({ ok: true, cached: true, place_name: dna0.place_name || '', rating: dna0.place_rating || 0, partial: !!dna0.places_partial });
+    }
+
+    // Query default: nombre del negocio + ubicación/categoría del perfil.
+    let query = String(body.query || '').trim();
+    if (!query) {
+      const p = getProfile(uid);
+      const biz = String((p && p.business_name) || '').trim();
+      const ubic = String((dna0.ubicacion) || '').trim();
+      const cat = String((p && p.category) || '').trim();
+      query = [biz, ubic, cat && cat !== 'otro' ? cat : ''].filter(Boolean).join(' ');
+    }
+    if (!query) return res.status(400).json({ error: 'Completá el nombre de tu negocio en tu perfil para poder buscarlo' });
+
+    const apiKey = (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '';
+    const r = await analyzeGooglePlaces({ query, openaiKey: apiKey }); // solo lee y analiza
+
+    // Merge al ADN: esparcir lo actual + lo nuevo, jamás pisar campos existentes.
+    const cur = readDna(uid);
+    const patch = {
+      place_id: r.place_id,
+      place_name: r.place_name,
+      place_rating: r.rating,
+      place_total_ratings: r.total_ratings,
+      places_analyzed_at: new Date().toISOString(),
+      places_partial: !!r.partial,
+    };
+    if (Array.isArray(r.puntos_fuertes) && r.puntos_fuertes.length) patch.puntos_fuertes = r.puntos_fuertes;
+    if (Array.isArray(r.testimonios) && r.testimonios.length) patch.testimonios = r.testimonios;
+    const fuentes = (cur.fuentes && typeof cur.fuentes === 'object') ? { ...cur.fuentes } : {};
+    fuentes.place_name = '⭐ Google';
+    if (patch.puntos_fuertes) fuentes.puntos_fuertes = '⭐ Google';
+    if (patch.testimonios) fuentes.testimonios = '⭐ Google';
+    patch.fuentes = fuentes;
+    writeDna(uid, { ...cur, ...patch });
+
+    res.json({ ok: true, place_name: r.place_name, rating: r.rating, partial: !!r.partial, reviews_analyzed: r.reviews_analyzed });
+  } catch (e) {
+    console.error('[places/analyze]:', e.message);
+    res.status(400).json({ error: e.message || 'No pudimos buscar tu negocio en Google, probá de nuevo en un rato' });
+  }
+});
+
+app.get('/api/places/status', requireAuth, (req, res) => {
+  try {
+    const dna = readDna(req.session.userId);
+    const analyzedAt = dna.places_analyzed_at || '';
+    if (!analyzedAt) return res.json({ ok: false, has_key: !!String(process.env.GOOGLE_PLACES_KEY || '').trim() });
+    res.json({
+      ok: true,
+      has_key: !!String(process.env.GOOGLE_PLACES_KEY || '').trim(),
+      analyzed_at: analyzedAt,
+      place_name: dna.place_name || '',
+      rating: dna.place_rating || 0,
+      total_ratings: dna.place_total_ratings || 0,
+      puntos_fuertes: Array.isArray(dna.puntos_fuertes) ? dna.puntos_fuertes : [],
+      testimonios: Array.isArray(dna.testimonios) ? dna.testimonios : [],
+      partial: !!dna.places_partial,
+    });
+  } catch (e) {
+    res.json({ ok: false, has_key: false });
+  }
+});
+
+// ---------- Track 5 — Historias recientes de IG ("Expertos en información") ----------
+// La Graph API oficial solo da las historias de las últimas 24h
+// (/{ig-user-id}/stories); no existe endpoint de archivo. Se extraen promos y
+// anuncios del texto visible con visión gpt-4o (detail low, solo imágenes).
+// Esto SOLO lee y analiza: nunca publica nada.
+app.post('/api/ig/mine-stories', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const s = getSettings(uid);
+    if (!s.ig_user_id || !s.ig_access_token) {
+      return res.status(400).json({ error: 'Conectá tu Instagram para que podamos leer tus historias' });
+    }
+    const apiKey = s.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ error: 'Falta configurar la clave de OpenAI' });
+    const { analyzeStories, storiesDnaPatch } = require('./ig-stories');
+    const r = await analyzeStories(s.ig_user_id, s.ig_access_token, apiKey);
+    if (!r.ok) return res.status(400).json({ error: r.error || 'No pudimos leer tus historias, probá de nuevo en un rato' });
+    const cur = readDna(uid);
+    writeDna(uid, { ...cur, ...storiesDnaPatch(cur, r) }); // merge: nunca pisar otros campos ni fuentes
+    res.json({ ok: true, stories: r.stories_count, promos: r.promos, anuncios: r.anuncios });
+  } catch (e) {
+    console.error('[ig/mine-stories]:', e.message);
+    res.status(400).json({ error: 'No pudimos analizar tus historias, probá de nuevo en un rato' });
+  }
+});
+
+app.get('/api/ig/stories-status', requireAuth, (req, res) => {
+  try {
+    const dna = readDna(req.session.userId);
+    const analyzedAt = dna.stories_analyzed_at || '';
+    if (!analyzedAt) return res.json({ ok: false });
+    const promos = Array.isArray(dna.stories_promos) ? dna.stories_promos.length : 0;
+    const anuncios = Array.isArray(dna.stories_anuncios) ? dna.stories_anuncios.length : 0;
+    res.json({ ok: true, analyzed_at: analyzedAt, stories: Number(dna.stories_count) || 0, promos, anuncios });
+  } catch (e) {
+    res.json({ ok: false });
+  }
+});
+
 // ---------- Health ----------
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 
@@ -3797,3 +4821,8 @@ app.listen(PORT, () => {
   startScheduler(db);
   startTokenRefresh();
 });
+
+// Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
+// perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
+// scheduler.js desde acá abajo: server.js ya lo requiere arriba.
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild };

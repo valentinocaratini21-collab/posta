@@ -292,6 +292,36 @@ function dnaList(v) {
   const out = Array.isArray(v) ? v.map(one).filter(Boolean).join(' | ') : one(v);
   return out.slice(0, 600);
 }
+// Preguntas frecuentes: [{pregunta, respuesta}] o strings.
+function dnaFaqList(v) {
+  if (!Array.isArray(v)) return '';
+  return v.map(q => {
+    if (!q) return '';
+    if (typeof q === 'string') return q.trim();
+    const pr = String(q.pregunta || '').trim();
+    const rp = String(q.respuesta || '').trim();
+    return pr ? (pr + (rp ? ` → ${rp}` : '')) : '';
+  }).filter(Boolean).join(' | ').slice(0, 600);
+}
+// Datos de la web del cliente (los escribe website-study.js en el ADN):
+// website_url, website_analyzed_at, website_partial, productos, precios,
+// servicios, promos, diferencial, resumen. Defensivo: solo incluye lo que
+// exista; productos/servicios/diferencial de la web usan los mismos nombres
+// que el ADN, así que ya salen en sus líneas de arriba (no se duplican).
+function websiteLines(d) {
+  const url = String(d.website_url || '').trim();
+  if (!url) return [];
+  const lines = [`Web del negocio: ${url.slice(0, 120)}`];
+  lines.push('Los datos de la web son REALES: podés citar productos, precios y promos tal cual aparecen acá.');
+  const res = String(d.resumen || '').trim().slice(0, 220);
+  if (res) lines.push(`Resumen de la web: ${res}`);
+  const precios = String(d.precios || '').trim().slice(0, 220);
+  if (precios) lines.push(`Precios reales (web): ${precios}`);
+  const promos = dnaList(d.promos);
+  if (promos) lines.push(`Promos vigentes (web): ${promos}`);
+  if (d.website_partial) lines.push('(datos parciales: la web no dejó extraer todo)');
+  return lines;
+}
 // Línea de learnings: lo que rinde en el Instagram de ESTE cliente.
 function learningsLine(l) {
   try {
@@ -326,17 +356,40 @@ function businessContext({ business, category, description, dna, tone, learnings
   if (servs) parts.push(`Servicios: ${servs}`);
   const promos = dnaList(d.promos_activas);
   if (promos) parts.push(`Promos activas: ${promos}`);
+  // Datos reales de la web del cliente (website-study): citas literales permitidas.
+  for (const wl of websiteLines(d)) parts.push(wl);
   const voz = dnaList(d.tono_ejemplos);
   if (voz) parts.push(`Así habla el dueño: ${voz}`);
   if (d.horarios) parts.push(`Horarios: ${String(d.horarios).slice(0, 120)}`);
   if (d.ubicacion) parts.push(`Ubicación: ${String(d.ubicacion).slice(0, 120)}`);
+  // Fuentes Expertos en información (tracks en paralelo): comentarios IG, Facebook, Google,
+  // MercadoLibre, historias. Todo defensivo: si el campo no existe o está vacío, no aparece.
+  const faqs = dnaFaqList(d.preguntas_frecuentes);
+  if (faqs) parts.push(`Preguntas frecuentes de los clientes: ${faqs}`);
+  const objs = dnaList(d.objeciones);
+  if (objs) parts.push(`Objeciones que frenan la compra: ${objs}`);
+  const deseos = dnaList(d.deseos);
+  if (deseos) parts.push(`Lo que más desean los clientes: ${deseos}`);
+  const testi = dnaList(d.testimonios);
+  if (testi) parts.push(`Testimonios reales de clientes (podés citarlos): ${testi}`);
+  const pfs = dnaList(d.puntos_fuertes);
+  if (pfs) parts.push(`Puntos fuertes del negocio: ${pfs}`);
+  const promos2 = dnaList(d.promos);
+  if (promos2) parts.push(`Promos: ${promos2}`);
+  if (d.precio_rango) parts.push(`Rango de precios: ${String(d.precio_rango).slice(0, 120)}`);
+  if (d.descripcion_fb) parts.push(`Descripción del negocio en Facebook: ${String(d.descripcion_fb).slice(0, 300)}`);
+  const revs = dnaList(d.reviews_fb);
+  if (revs) parts.push(`Reviews de Facebook (citas reales): ${revs}`);
+  const anun = dnaList(d.anuncios);
+  if (anun) parts.push(`Anuncios/textos que ya usó: ${anun}`);
+  if (d.inspo) parts.push(`Referencia de estilo del cliente: ${String(d.inspo).slice(0, 200)}`);
   const hasData = parts.length > 0;
   parts.push(`Tono: ${d.tono || tone || 'cercano'}`);
   const ctx = hasData
     ? parts.join('\n')
     : '(sin datos del negocio cargados)\nFALTAN DATOS: pedile al cliente el audio de 2 minutos contando de su negocio; no adivines.';
   const learn = learningsLine(learnings);
-  return `${ctx}${learn ? '\n' + learn : ''}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos. PROHIBIDO: posteos motivacionales genéricos o frases inspiracionales desconectadas del negocio ("empezá la semana con todo", "nunca te rindas", "emprendé tus sueños"): cada idea tiene que vender algo concreto del negocio o hablarle a su cliente ideal sobre algo real de este negocio.`;
+  return `${ctx}${learn ? '\n' + learn : ''}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. Los datos de la web del negocio (si figuran) son REALES y podés citarlos tal cual: productos, precios y promos de la web se copian literales, nunca se "suavizan" ni se redondean. Lo que NO aparezca ni en el ADN ni en la web no se inventa jamás (ni precios, ni promos, ni productos, ni testimonios de clientes). JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos. PROHIBIDO: posteos motivacionales genéricos o frases inspiracionales desconectadas del negocio ("empezá la semana con todo", "nunca te rindas", "emprendé tus sueños"): cada idea tiene que vender algo concreto del negocio o hablarle a su cliente ideal sobre algo real de este negocio.`;
 }
 
 // Placeholders típicos de contenido inventado: si aparecen, el texto se descarta.
@@ -611,7 +664,7 @@ function sigWords(s) {
     .split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !TOPIC_STOP.has(w));
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris }) {
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna }) {
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
@@ -627,13 +680,33 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     { formato: 'Comunidad', tipo: 'social', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
     { formato: 'Reel/Video', tipo: 'novedad', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
   ];
+  // Ángulo "web" (solo si el negocio tiene web estudiada): una idea de la
+  // semana lleva tráfico a la web con algo concreto + CTA "link en bio".
+  // Entra en el slot 5 y se mantiene el total en 7 (~1 de cada 7 ideas).
+  if (dna && dna.website_url) {
+    all.splice(4, 0, {
+      formato: 'Web',
+      tipo: 'novedad',
+      titulo: 'todo el detalle está en la web',
+      angulo: 'Posteo que lleva tráfico a la web: presentá algo CONCRETO de la web (un producto con su precio real, una promo vigente) y cerrá con "link en bio" / "mirá todos los detalles en la web".' + ga,
+    });
+    all.length = 7;
+  }
+  // Temas RECHAZADOS por el cliente (Track D): se filtran con el mismo mecanismo
+  // que los ya publicados (2+ palabras significativas en común).
+  let pool = all;
+  if (excluded) {
+    const bw = new Set(sigWords(excluded));
+    const fresh = pool.filter(id => sigWords(id.titulo).filter(x => bw.has(x)).length < 2);
+    if (fresh.length >= 4) pool = fresh;
+  }
   // Si un tema ya se posteó, se saca de la lista (2+ palabras significativas en común)
   if (recentTopics) {
     const rw = new Set(sigWords(recentTopics));
-    const fresh = all.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
-    if (fresh.length >= 4) return withEphemeris(fresh);
+    const fresh = pool.filter(id => sigWords(id.titulo).filter(x => rw.has(x)).length < 2);
+    if (fresh.length >= 4) pool = fresh;
   }
-  return withEphemeris(all);
+  return withEphemeris(pool);
   // La efeméride va primera y marcada, también en el fallback sin IA
   function withEphemeris(list) {
     if (ephemeris && list.length) {
@@ -644,9 +717,26 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance, learnings }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance, learnings, styleRules, excluded, approved, outcome }, apiKey) {
   const ephLine = ephemeris
     ? `\n⚠️ EFEMÉRIDE CERCA: ${ephemeris.emoji} ${ephemeris.name} es el ${ephemeris.date} (en ${ephemeris.daysLeft} días). La idea N°1 TIENE que ser sobre eso (enfoque: ${ephemeris.angle}). Es una fecha que vende mucho: no la ignores.`
+    : '';
+  // ===== Track D — señales de aprendizaje: lo rechazado se excluye, lo aprobado
+  // se prioriza, las style_rules son ley, y el outcome (trajo clientes o no) pesa.
+  const excludedLine = excluded
+    ? `\nTemas RECHAZADOS por el cliente recientemente (PROHIBIDO proponerlos, ni con otra vuelta de tuerca): ${excluded}`
+    : '';
+  const approvedLine = approved
+    ? `\nTemas y tipos que el cliente APROBÓ y le gustaron (priorizalos con variación y ángulos nuevos): ${approved}`
+    : '';
+  const rulesLine = (Array.isArray(styleRules) && styleRules.length)
+    ? `\nReglas de estilo del cliente (OBEDECELAS siempre, también en el titular y el ángulo):\n${styleRules.map(r => `- ${r}`).join('\n')}`
+    : '';
+  // Ángulo "web": si el negocio tiene web estudiada, el generador puede proponer
+  // (CON CRITERIO: orientativo ~1 de cada 6-8 ideas, no siempre) posteos que
+  // lleven tráfico a la web con CTA "link en bio" / "mirá todos los detalles en la web".
+  const webAngleLine = (dna && dna.website_url)
+    ? `\nEl negocio tiene web (${String(dna.website_url).slice(0, 80)}): CON CRITERIO (orientativo: como máximo 1 de cada 6-8 ideas, nunca siempre), una de las ideas puede ser un posteo que lleve tráfico a la web. Tiene que presentar algo CONCRETO de la web (un producto con su precio real, el catálogo, una promo vigente) y cerrar con CTA "link en bio" o "mirá todos los detalles en la web". Solo cuando el tema calce de verdad; prohibido el posteo vago tipo "visitá nuestra web" sin nada concreto.`
     : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -666,7 +756,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}\nGenerá las 6 ideas.`,
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${rulesLine}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 1200,
@@ -775,7 +865,7 @@ async function generatePillars({ business, category, description, performance },
 // Modelo del chat consultor: el cerebro de la conversación con el cliente.
 // gpt-4o (no mini): el chat es la cara del producto y necesita el modelo más capaz.
 const CHAT_MODEL = 'gpt-4o';
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note, tz }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note, tz, sales, outcome }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -790,6 +880,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'siempre se puede vender más. Hacé preguntas cortas cuando te falte contexto (producto, objetivo). ' +
     'Nunca seas chupamedias: tu valor es decir la posta, como un amigo, no lo que el cliente quiere escuchar. ' +
     'REGLA CRÍTICA: jamás inventes productos, precios, promociones ni datos del negocio que no te dieron: si no sabés qué vende, preguntá o hablá en general, nunca inventes. ' +
+    'Los datos de la web del negocio (si aparecen en el contexto) son REALES: citalos tal cual, precios y promos incluidos. ' +
     'MODO PEDIDO: muchos clientes no quieren brainstormear, quieren PEDIRTE un posteo concreto ' +
     '("necesito un posteo de la promo 2x1", "quiero vender mis buzos nuevos", "haceme algo que diga X"). ' +
     'Cuando detectes un pedido: NO interrogues ni devuelvas preguntas, armá la idea directo con lo que te ' +
@@ -836,12 +927,17 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'El cambio se aplica solo al borrador, sin más pasos ni preguntas. Después del bloque, confirmá en 1 línea con onda qué cambiaste. ' +
       'Si no entendés a cuál se refiere, preguntá corto ("¿el primero o el segundo?") en vez de adivinar.'
     : '';
-  // ADN del negocio: entrevista breve si falta, contexto si ya está.
-  const dnaGuide = (needDna && !dna)
-    ? 'El cliente aún no tiene su ADN cargado. Conducí una entrevista breve y cálida, UNA pregunta por mensaje: ' +
-      '1) ¿cuál es tu producto o servicio estrella? 2) ¿quién es tu cliente ideal? 3) ¿qué te diferencia de la competencia? 4) ¿cómo querés sonar? ' +
+  // ADN del negocio: entrevista breve por lo que FALTA (las 4 si no hay nada, solo lo pendiente si es parcial).
+  const DNA_MISSING_LABELS = { producto_estrella: 'cuál es su producto o servicio estrella', cliente_ideal: 'quién es su cliente ideal', diferencial: 'qué lo diferencia de la competencia', tono: 'cómo quiere sonar' };
+  const dnaMissingList = Array.isArray(dnaMissing) ? dnaMissing.filter(k => DNA_MISSING_LABELS[k]) : [];
+  const dnaGuide = needDna
+    ? (dnaMissingList.length >= 4 || !dnaMissingList.length
+      ? 'El cliente aún no tiene su ADN cargado. Conducí una entrevista breve y cálida, UNA pregunta por mensaje: ' +
+        '1) ¿cuál es tu producto o servicio estrella? 2) ¿quién es tu cliente ideal? 3) ¿qué te diferencia de la competencia? 4) ¿cómo querés sonar? '
+      : 'Del ADN del negocio solo falta: ' + dnaMissingList.map(k => DNA_MISSING_LABELS[k]).join('; ') + '. ' +
+        'Preguntalo con calidez, de a UNA pregunta por mensaje. Lo demás ya lo sabés por contexto, no lo preguntes de nuevo. ') +
       'Si el cliente quiere otra cosa (un posteo), atendelo primero y retomá la entrevista después con naturalidad. ' +
-      'Cuando tengas las 4 respuestas, cerrá con el bloque exacto:\n```dna\n{"producto_estrella": "...", "cliente_ideal": "...", "diferencial": "...", "tono": "..."}\n```'
+      'Cuando tengas las respuestas, cerrá con el bloque exacto (incluí los 4 campos, completando con lo que ya sabías por contexto):\n```dna\n{"producto_estrella": "...", "cliente_ideal": "...", "diferencial": "...", "tono": "..."}\n```'
     : '';
   // Modo frustración: el cliente ya probó varias variantes o lo dijo.
   const frustGuide = frustrated
@@ -878,17 +974,17 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     ? 'El cliente acaba de CONFIRMAR tu propuesta con un "dale"/"sí"/"ok": NO hagas preguntas, NO digas que no podés ayudar, cerrá la idea AHORA MISMO con el bloque ```idea. ' +
       'Si tu propuesta anterior no tenía todos los datos del bloque, cerrala igual con lo que tengas (título + ángulo como mínimo). Confirmar es avanzar, nunca frenar.'
     : '';
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide;
-  // ADN ya cargado: solo los campos presentes.
-  const dnaCtx = (() => {
-    if (!dna || typeof dna !== 'object') return '';
-    const parts = [];
-    if (dna.producto_estrella) parts.push(`producto estrella: ${dna.producto_estrella}`);
-    if (dna.cliente_ideal) parts.push(`cliente ideal: ${dna.cliente_ideal}`);
-    if (dna.diferencial) parts.push(`diferencial: ${dna.diferencial}`);
-    if (dna.tono) parts.push(`tono: ${dna.tono}`);
-    return parts.length ? `ADN del negocio: ${parts.join('; ')}.\n` : '';
-  })();
+  // MODO OPCIONES: el cliente quiere ideas en general, no un posteo puntual.
+  // Distinto del MODO PEDIDO (pedido concreto: "necesito un posteo de X" → UNA sola idea).
+  const multiIdeaGuide =
+    'MODO OPCIONES: si el cliente pide ideas u opciones en general ("dame ideas", "haceme más posteos", "qué publico", "tirame opciones") ' +
+    'y NO es un pedido concreto de un posteo puntual, devolvé 3 ideas DISTINTAS (ángulos o formatos diferentes: por ejemplo una promo, un detrás de escena y un tip útil), ' +
+    'cada una en su PROPIO bloque ```idea con el formato exacto de siempre. Tu mensaje visible las presenta en 1 línea cada una (título + gancho) para que elija tocando. ' +
+    'El MODO PEDIDO (pedido concreto: "necesito un posteo de X", "haceme algo que diga Y") sigue con UNA sola idea.';
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + salesGuide;
+  // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
+  // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
+  const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
   const rulesCtx = (Array.isArray(styleRules) && styleRules.length)
     ? `Reglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}\n`
     : '';
@@ -908,6 +1004,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     `Competidores: ${p.competitors || 'no indicados'}\nObjetivo: ${p.goal || 'vender más'}\n` +
     dnaCtx +
     (taste ? `Lo que le gustó/no le gustó antes: ${taste}\n` : '') +
+    (outcome ? `Resultado real de sus posteos:${outcome}\n` : '') +
     (performance ? `Rendimiento real de tu cuenta:\n${performance}\n` : '') +
     (igAnalysis ? `Análisis de tu Instagram actual:\n${igAnalysis}\n` : '') +
     (voice ? `${voice}\n` : '') +
@@ -1083,11 +1180,11 @@ async function repairIdeaJson(brokenRaw, apiKey) {
   return idea;
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note, tz }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note, tz, sales, outcome }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, igAnalysis, frustrated, styleRules, voice, note, tz }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note, tz, sales, outcome }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
@@ -1100,16 +1197,24 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
   // Extrae la propuesta cerrada si la IA la incluyó (incluye los campos del MODO PEDIDO).
   // Si el bloque existe pero el JSON está roto, un intento de reparación: la idea confirmada
   // por el cliente jamás se pierde en silencio por un error de formato.
-  let idea = null;
-  const m = String(text).match(/```idea\s*([\s\S]*?)```/);
-  if (m) {
-    let parsed = false;
-    try { idea = parseIdeaJson(m[1]); parsed = true; } catch (e) {}
-    if (!parsed && apiKey) {
-      try { idea = await repairIdeaJson(m[1], apiKey); parsed = true; } catch (e) {}
+  // Multi-idea (MODO OPCIONES): el cliente elige entre varias ideas. Se parsean TODOS los bloques
+  // ```idea con matchAll (máximo 3); cada uno se valida por separado con parseIdeaJson — el que
+  // falle se saltea sin perder el resto. `idea` = la primera (compatibilidad con MODO PEDIDO
+  // y con el flujo actual de una sola idea). La reparación de JSON roto solo se intenta
+  // para la primera.
+  const ideas = [];
+  for (const m of String(text).matchAll(/```idea\s*([\s\S]*?)```/g)) {
+    if (ideas.length < 3) {
+      let parsed = null;
+      try { parsed = parseIdeaJson(m[1]); } catch (e) {}
+      if (!parsed && apiKey && ideas.length === 0) {
+        try { parsed = await repairIdeaJson(m[1], apiKey); } catch (e) {}
+      }
+      if (parsed) ideas.push(parsed);
     }
-    if (parsed) text = String(text).replace(m[0], '').trim();
+    text = String(text).replace(m[0], '').trim();
   }
+  const idea = ideas.length ? ideas[0] : null;
   // Extrae los pedidos de edición directa sobre borradores (```edit).
   // Pueden ser VARIOS bloques (uno por borrador) cuando el cliente pide cambiar varios a la vez.
   let edits = [];
@@ -1179,7 +1284,7 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
       text = String(text).replace(mi[0], '').trim();
     } catch (e) { /* bloque inválido: se ignora */ }
   }
-  return { reply: text, idea, edits, dna: dnaOut, options, rule, inspo };
+  return { reply: text, idea, ideas, edits, dna: dnaOut, options, rule, inspo };
 }
 
 // ---------- Respuesta sugerida a un comentario de Instagram ----------

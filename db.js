@@ -77,6 +77,18 @@ try { db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`); 
 try { db.exec(`ALTER TABLE posts ADD COLUMN ig_media_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN carousel_paths TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN tipo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Track 4 "Pipeline perpetuo": a qué semana (lunes, 'YYYY-MM-DD') pertenece cada
+// posteo. '' = semana corriente / legado (sin filtrar, como antes).
+try { db.exec(`ALTER TABLE posts ADD COLUMN week_key TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_week ON posts(user_id, week_key, status)`); } catch (e) { /* ya existe */ }
+// Track 4 (agregado "reconstruir con otro enfoque"): tope de 2 reconstrucciones
+// por semana y usuario. Persistido en DB (no solo memoria) para que sobreviva reinicios.
+db.exec(`CREATE TABLE IF NOT EXISTS rebuild_counts (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, week_key)
+);`);
 try { db.exec(`ALTER TABLE post_signals ADD COLUMN caption TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN best_hour INTEGER DEFAULT 19`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS post_metrics (
@@ -95,6 +107,19 @@ db.exec(`CREATE TABLE IF NOT EXISTS funnel_events (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_funnel_event ON funnel_events(event, created_at)`);
+// Analytics propio: eventos del frontend (pantallas y acciones). user_id puede ser
+// NULL (visitantes anónimos de /prueba); session_id los agrupa por sesión.
+db.exec(`CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT DEFAULT '',
+  name TEXT NOT NULL,
+  props TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_events_name ON events(name, created_at)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id, created_at)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_events_sid ON events(session_id, created_at)`);
 db.exec(`CREATE TABLE IF NOT EXISTS comment_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
