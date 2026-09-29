@@ -48,6 +48,69 @@ const api = {
   del: (u) => api.req('DELETE', u),
 };
 
+// ---------- Analytics propio: mide el uso para mejorar el producto ----------
+// Fire-and-forget: encola eventos y los manda en batch. JAMÁS rompe ni frena la UI.
+const AN_Q = [];
+function anSid() {
+  try {
+    let s = localStorage.getItem('posta_sid');
+    if (!s) { s = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('posta_sid', s); }
+    return s;
+  } catch (e) { return 'nosid'; }
+}
+function track(name, props) {
+  try {
+    if (!/^[a-z0-9_]{2,40}$/.test(name || '')) return;
+    AN_Q.push({ name, props: props || {}, sid: anSid() });
+    if (AN_Q.length > 200) AN_Q.splice(0, AN_Q.length - 200); // tope de memoria
+  } catch (e) {}
+}
+let AN_SENDING = false;
+async function flushTrack() {
+  if (AN_SENDING || !AN_Q.length) return;
+  AN_SENDING = true;
+  const batch = AN_Q.splice(0, 60);
+  try {
+    await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: batch }), keepalive: true });
+  } catch (e) { /* se pierde el batch: no pasa nada */ }
+  AN_SENDING = false;
+  if (AN_Q.length) setTimeout(flushTrack, 2000);
+}
+function trackBeacon() { // envío sincrónico para pagehide y salidas inmediatas (checkout)
+  try {
+    if (!AN_Q.length || !navigator.sendBeacon) return;
+    navigator.sendBeacon('/api/track', new Blob([JSON.stringify({ events: AN_Q.splice(0, 60) })], { type: 'application/json' }));
+  } catch (e) {}
+}
+setInterval(flushTrack, 10000);
+try {
+  window.addEventListener('pagehide', () => { trackBeacon(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') trackBeacon(); });
+} catch (e) {}
+// screen_view automático: cada cambio de ruta
+let AN_LAST_PATH = '';
+function trackScreen() {
+  try {
+    const h = location.hash || '#/';
+    const p = '/#' + h.split('?')[0].replace(/^#/, '');
+    if (p === AN_LAST_PATH) return;
+    AN_LAST_PATH = p;
+    track('screen_view', { path: p });
+  } catch (e) {}
+}
+try { window.addEventListener('hashchange', () => setTimeout(trackScreen, 60)); } catch (e) {}
+// Una sola vez por pantalla (evita duplicar en cada render)
+function trackOnce(key, name, props) {
+  try {
+    const p = (location.hash || '#/').split('?')[0];
+    const k = '__an_' + key + '_' + p;
+    if (window[k]) return;
+    window[k] = true;
+    track(name, props);
+  } catch (e) {}
+}
+
 // Sube un archivo a /api/assets (logo, photo, video). El endpoint recibe el binario
 // crudo con Content-Type de imagen/video. Devuelve {ok, id, path, kind}.
 async function uploadAssetFile(file, kind) {
@@ -87,6 +150,8 @@ async function pzReferral() {
 // true cuando el último refreshSession falló por red (no por sesión cerrada).
 // En ese caso NO mandamos al login: la sesión sigue válida, solo falta internet.
 let NET_OFFLINE = false;
+// Callback que re-pinta la tarjeta "🌐 La web de tu negocio" (lo registra bindSettings cuando renderiza Ajustes)
+let PZ_WEB_REFRESH = null;
 async function refreshSession() {
   let lastErr = null;
   for (let i = 0; i < 3; i++) {
@@ -1226,6 +1291,7 @@ function weekDoneCardHTML() {
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <a class="btn btn-soft btn-sm" data-opencreator style="cursor:pointer">✨ Sumar otro posteo</a>
       <button class="btn btn-ghost btn-sm" data-autopilot="semana">↻ Rehacer la semana</button>
+      <button class="btn btn-ghost btn-sm" id="btnVaciarDrafts">🗑️ Vaciar</button>
     </div>
     <div id="apProg-semana"></div>
   </div>`;
@@ -1333,7 +1399,7 @@ function tipoBadge(t) {
   if (!map[t]) return '';
   return `<span class="tipo-badge">${map[t][0]} ${map[t][1]}</span>`;
 }
-function reviewCardHTML(drafts, slots) {  const s = slots || [];
+function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   const n = drafts.length;
   // Cabecera estilo Instagram: el borrador se muestra como el posteo que va a ser (WYSIWYG).
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
@@ -1344,8 +1410,9 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
     : `<span class="igmock-ava" style="background:${esc(bizColor)}">${esc((bizName || 'M')[0].toUpperCase())}</span>`;
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
-    <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
+    <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
     <p style="color:var(--mut);font-size:14px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
+    ${n ? `<button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin:6px 0 10px">📅 Programar mi semana →</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -1392,6 +1459,7 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
       <div class="igmock-body">
         <div class="rev-preview" data-revpreview="${d.id}">${esc((d.caption || '').trim() || 'Sin texto todavía')}</div>
         ${d.hashtags ? `<div class="rev-hashprev" data-revhashprev="${d.id}">${esc(d.hashtags)}</div>` : `<div class="rev-hashprev" data-revhashprev="${d.id}" style="display:none"></div>`}
+        ${((d.caption || '').length > 120 || (d.hashtags || '').length > 80) ? `<button class="rev-more" data-revmore="${d.id}">ver más ▾</button>` : ''}
         <div data-revfields="${d.id}" hidden>
           <textarea class="in" data-revcap="${d.id}" rows="3" placeholder="Texto del posteo...">${esc(d.caption || '')}</textarea>
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
@@ -1401,6 +1469,7 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
         <div class="igmock-icos" style="margin-top:8px">
           <button data-revedit="${d.id}">✏️ Editar</button>
           ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">✨ Otro diseño</button>`}
+          ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">🔄 Otras 3</button>`}
           ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
@@ -1423,6 +1492,7 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
           <div class="aiedit-msg" id="aiphoto-msg-${d.id}"></div>
         </div>
         <div id="revph-${d.id}"></div>
+        <div id="revvar-${d.id}"></div>
         <div id="revnowm-${d.id}"></div>
       </div>
     </div>`).join('')}
@@ -1641,6 +1711,7 @@ function bindReview() {
     const panel = document.getElementById(`aiedit-${id}`);
     if (!panel) return;
     panel.hidden = !panel.hidden;
+    if (!panel.hidden) track('draft_edit', { id });
     if (!panel.hidden) { const i = document.getElementById(`aiedit-inp-${id}`); if (i) i.focus({ preventScroll: true }); }
   });
   $$('#reviewCard [id^="aiedit-manual-"]').forEach(b => b.onclick = () => {
@@ -1683,6 +1754,8 @@ function bindReview() {
   }));
   // Regenerar un borrador (↻): nuevo diseño y nuevo texto del mismo tema, en el lugar
   $$('[data-revregen]').forEach(b => b.onclick = () => regenDraft(+b.dataset.revregen, b));
+  // "🔄 Otras 3": 3 variantes nuevas (imagen + texto) para elegir, sin tocar el borrador
+  $$('[data-revvars]').forEach(b => b.onclick = () => draftVariants(+b.dataset.revvars, b));
   // Cambiar la foto de un borrador: tira de fotos + subir nueva
   $$('[data-revphoto]').forEach(b => b.onclick = () => {
     const id = String(b.dataset.revphoto);
@@ -1694,11 +1767,18 @@ function bindReview() {
   // Cambiar el video de un borrador reel: tira de videos + subir nuevo
   $$('[data-revvideo]').forEach(b => b.onclick = () => toggleVideoPicker(+b.dataset.revvideo, b));
   // Eliminar borrador (señal honesta: lo borró = no le gustó; va antes del DELETE)
+  // Track 4 (agregado): si era el último borrador de la semana, el servidor
+  // dispara la reconstrucción con otro enfoque y lo avisa en la respuesta.
   $$('[data-revdel]').forEach(b => b.onclick = async () => {
     if (!confirm('¿Eliminar este borrador?')) return;
     try { await api.post(`/api/posts/${b.dataset.revdel}/signal`, { signal: 'rejected' }); } catch (e) {}
-    try { await api.delete('/api/posts/' + b.dataset.revdel); } catch (e) {}
-    render();
+    let delRes = null;
+    try { delRes = await api.delete('/api/posts/' + b.dataset.revdel); } catch (e) {}
+    track('draft_delete', { id: b.dataset.revdel });
+    await render(); // el DOM se escribe tras los awaits: la barrita va después
+    const rb = delRes && delRes.rebuild;
+    if (rb && rb.rebuilding) rebuildWatchStart();
+    else if (rb && rb.reason === 'frustrated') rebuildFrustrated();
   });
   // Publicar un borrador AHORA (sin esperar la programación)
   $$('[data-revnow]').forEach(b => b.onclick = async () => {
@@ -1732,6 +1812,7 @@ function bindReview() {
       await api.patch('/api/posts/' + id, { scheduled_at: when, caption: ta ? ta.value : undefined });
       try { await api.post(`/api/posts/${id}/signal`, { signal: 'approved' }); } catch (e) {}
       try { await api.post('/api/funnel', { event: 'week_accepted' }); } catch (e) {}
+      track('draft_accept', { id });
       const last = REVIEW_DRAFTS.filter(d => d.id !== id).length === 0;
       if (last) {
         // Festejo: aceptar se siente como un logro, no como un trámite
@@ -1756,8 +1837,63 @@ function bindReview() {
   });
 }
 
+// "📅 Programar mi semana →": un tap programa TODOS los borradores a sus
+// mejores horarios. El tap ES la aprobación (sin él, nada se programa ni publica).
+function bindScheduleAll() {
+  const b = document.getElementById('btnScheduleAll');
+  if (!b) return;
+  b.onclick = async () => {
+    const m = $('#revMsg');
+    // Sin Instagram conectado, "sale solo" es mentira: mismo gate que el accept individual.
+    if (!(PROFILE && PROFILE.ig_connected)) {
+      if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+      const g = $('#revIgGo');
+      if (g) g.onclick = () => igConnectHere();
+      if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    b.disabled = true;
+    const old = b.innerHTML;
+    b.innerHTML = '⏳ Programando tu semana…';
+    try {
+      const r = await api.post('/api/posts/schedule-all', {});
+      if (r && r.ok) {
+        // Festejo + handoff a la agenda "Lo que se viene" con la semana programada.
+        const n = (r.scheduled || []).length;
+        track('schedule_all', { count: n });
+        streakModalShell(`
+          <div class="big-emoji">📅</div>
+          <h3 style="margin:12px 0 4px">✅ Tu semana está programada</h3>
+          <p style="font-size:16px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+          <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
+          ${celebRefHTML()}
+          <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
+        const cmo = document.getElementById('streakModal');
+        if (cmo) wireCelebRef(cmo);
+        const cg = $('#celebGoSa');
+        if (cg) cg.onclick = () => {
+          closeStreakModal();
+          render().then(() => {
+            const sc = document.querySelector('.sched-card');
+            if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        };
+        else render();
+      }
+    } catch (e) {
+      if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+      else if (m) { m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      b.disabled = false;
+      b.innerHTML = old;
+    }
+  };
+}
+
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
 let REVIEW_DRAFTS = [];
+// Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen
+// borradores de la N+1, el teaser permite verlos como semana corriente.
+let NEXTWEEK_VIEW = false;
 let WEEKLY_BARS_HTML = ''; // gráfico de constancia: vive en el modal de racha (la tarjeta "Tu progreso" se eliminó)
 // Regenerar UN borrador: texto nuevo del mismo tema + diseño con otro estilo.
 // Reemplaza en el lugar, conserva el id y el día/hora sugeridos.
@@ -1799,6 +1935,62 @@ async function regenDraft(id, btn) {
     alert('No se pudo regenerar. Probá de nuevo.');
     if (isBtn) { btn.disabled = false; btn.innerHTML = old; }
   }
+}
+// "🔄 Otras 3": pide 3 variantes frescas del borrador (imagen con IA + texto,
+// cada una con otro ángulo) y muestra un picker con miniaturas tocables.
+// Al elegir una se reemplazan imagen, texto y hashtags del borrador.
+// El original queda intacto hasta que el usuario elige (y si falla, también).
+async function draftVariants(id, btn) {
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  const mount = document.getElementById('revvar-' + id);
+  if (!d || !mount) return;
+  if (d.media_type === 'video' || d.media_type === 'carousel') return;
+  if (mount.dataset.open === '1') { mount.innerHTML = ''; mount.dataset.open = ''; return; }
+  mount.dataset.open = '1';
+  const old = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Generando 3 opciones…'; }
+  try {
+    track('draft_variants', { id });
+    const out = await api.post(`/api/posts/${id}/variants`, {}, { timeout: 240000 });
+    const variants = (out && out.variants) || [];
+    if (!variants.length) throw new Error('no_variants');
+    mount.innerHTML = `<div style="margin-top:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <b style="font-size:15px">🔄 Elegí tu favorita</b>
+        <button class="btn btn-ghost btn-sm" data-varclose="${id}">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        ${variants.map((v, i) => `
+        <button data-varpick="${id}" data-vari="${i}" style="border:2px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg2);padding:0;cursor:pointer;text-align:left;font-family:inherit;min-height:44px">
+          <img src="${esc(v.image_path)}" alt="Opción ${i + 1}" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block">
+          <div style="padding:8px 10px;font-size:12px;color:var(--mut);line-height:1.4;max-height:78px;overflow:hidden">${esc(String(v.caption || '').split('\n')[0].slice(0, 90) || 'Opción ' + (i + 1))}</div>
+        </button>`).join('')}
+      </div>
+      <p style="font-size:12.5px;color:var(--dim);margin:8px 0 0">Tocá una para reemplazar la imagen y el texto del borrador.</p>
+    </div>`;
+    mount.querySelector('[data-varclose]').onclick = () => { mount.innerHTML = ''; mount.dataset.open = ''; };
+    mount.querySelectorAll('[data-varpick]').forEach(p => p.onclick = async () => {
+      const v = variants[+p.dataset.vari];
+      if (!v) return;
+      p.disabled = true; p.style.opacity = '0.5';
+      try {
+        await api.patch('/api/posts/' + id, {
+          action: 'save-draft', image_path: v.image_path, caption: v.caption, hashtags: v.hashtags,
+        });
+        render();
+      } catch (e) {
+        p.disabled = false; p.style.opacity = '';
+        alert('No se pudo aplicar la variante. Probá de nuevo.');
+      }
+    });
+  } catch (e) {
+    const msg = e.message === 'no_variants'
+      ? 'No se pudieron generar las variantes. Probá de nuevo en un minuto.'
+      : (e.message || 'No se pudo generar. Probá de nuevo.');
+    mount.innerHTML = `<div class="err" style="margin-top:10px">⚠️ ${esc(msg)}</div>`;
+    mount.dataset.open = ''; // el error no deja el picker trabado: se puede reintentar
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = old; }
 }
 // Cambiar SOLO la foto de un borrador: re-hace el diseño con esa foto pero
 // conserva texto, hashtags, id y día/hora. (El ↻ Regenerar es lo que pide texto nuevo.)
@@ -1850,6 +2042,7 @@ function togglePhotoPicker(id, btn) {
       if (!r.ok) throw new Error(data.error || 'No se pudo subir');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       await changeDraftPhoto(id, up, data.path);
+      track('photo_upload', { kind: 'draft' });
     } catch (e) { alert('No se pudo subir la foto: ' + e.message); }
   };
 }
@@ -2464,8 +2657,8 @@ function chatRenderProposal() {
   p.innerHTML = proposalHTML();
   if (!CHAT_IDEA) return;
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
-  if (mkP) mkP.onclick = () => chatMakePost(false);
-  if (mkR) mkR.onclick = () => chatMakePost(true);
+  if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
+  if (mkR) mkR.onclick = () => { track('chat_idea_accepted', { reel: true }); chatMakePost(true); };
   const mCaps0 = $('#chatMoreCaps');
   if (mCaps0) mCaps0.onclick = chatMoreCaptions;
   renderChatPreviews();
@@ -2493,7 +2686,9 @@ async function chatSend() {
   const box = $('#chatBox');
   // Las opciones tocables se usan una sola vez: al responder se descartan
   const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
+  const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
   CHAT.push({ role: 'user', text: sendText });
+  track('chat_message', { len: sendText.length });
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(sendText)}</div>`);
   inp.value = '';
   chatScroll();
@@ -2574,12 +2769,62 @@ function bindChatComments() {
   });
 }
 
+// Acepta la idea elegida: es el flujo EXACTO del de una sola idea (no se duplica lógica).
+function chatAcceptIdea(idea) {
+  CHAT_IDEA = idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  applyChatOrder(idea); // foto elegida + colores del pedido
+  chatRenderProposal();
+  // Texto dictado por el cliente: va tal cual al textarea y se respeta (touched)
+  const ta = $('#chatCaption');
+  if (ta && idea.caption) { ta.value = idea.caption; ta.dataset.touched = '1'; }
+  refreshChatCaption(); // solo rellena hashtags/opciones; el texto dictado no se toca
+}
+
+// MODO OPCIONES: tarjetas compactas tocables con las ideas propuestas; el cliente elige una.
+function renderChatIdeaOptions(ideas) {
+  const box = $('#chatBox');
+  if (!box || !Array.isArray(ideas) || ideas.length < 2) return;
+  const old = $('#chatIdeaOptions'); if (old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg ai';
+  wrap.id = 'chatIdeaOptions';
+  wrap.style.maxWidth = '100%';
+  wrap.style.whiteSpace = 'normal';
+  const head = document.createElement('div');
+  head.style.cssText = 'font-weight:800;margin-bottom:8px';
+  head.textContent = '✨ Elegí la idea que más te guste 👇';
+  wrap.appendChild(head);
+  ideas.slice(0, 3).forEach((idea, i) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'chat-idea-card';
+    card.innerHTML = `
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px">✨ ${esc(String(idea.titulo || ('Idea ' + (i + 1))))}</div>
+      ${idea.angulo ? `<div style="font-size:13px;color:var(--mut)">${esc(String(idea.angulo))}</div>` : ''}`;
+    card.onclick = () => {
+      // La elegida queda marcada como elegida; las otras se descartan visualmente
+      wrap.querySelectorAll('.chat-idea-card').forEach(el => el.classList.add('chat-idea-off'));
+      card.classList.remove('chat-idea-off');
+      card.classList.add('chat-idea-picked');
+      const badge = document.createElement('div');
+      badge.className = 'chat-idea-pick';
+      badge.textContent = '✅ La elegiste';
+      card.appendChild(badge);
+      chatAcceptIdea(idea);
+    };
+    wrap.appendChild(card);
+  });
+  box.appendChild(wrap);
+  chatScroll();
+}
+
 // Intercambio completo con /api/ideas/chat. `extra` agrega campos al JSON
 // (ej: { audio: "data:audio/webm;base64,..." } para notas de voz).
 async function chatExchange({ text, display, extra, pushed }) {
   const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatSend');
   if (!pushed) {
     const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
+    const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
     CHAT.push({ role: 'user', text });
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(display || text)}</div>`);
     chatScroll();
@@ -2600,18 +2845,18 @@ async function chatExchange({ text, display, extra, pushed }) {
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
+    // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
+    // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
+    if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
     // Opciones tocables que propone la IA (ej: "¿vender o alcance?")
     if (r.options && Array.isArray(r.options) && r.options.length) renderChatOptions(r.options);
     // La IA editó un borrador directo → refrescar la revisión para ver el cambio
     if (r.edit && r.edit.ok) { try { render(); } catch (e) {} }
-    if (r.idea) {
-      CHAT_IDEA = r.idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
-      applyChatOrder(r.idea); // foto elegida + colores del pedido
-      chatRenderProposal();
-      // Texto dictado por el cliente: va tal cual al textarea y se respeta (touched)
-      const ta = $('#chatCaption');
-      if (ta && r.idea.caption) { ta.value = r.idea.caption; ta.dataset.touched = '1'; }
-      refreshChatCaption(); // solo rellena hashtags/opciones; el texto dictado no se toca
+    if (Array.isArray(r.ideas) && r.ideas.length > 1) {
+      // MODO OPCIONES: el cliente elige entre varias ideas tocando su tarjeta
+      renderChatIdeaOptions(r.ideas);
+    } else if (r.idea) {
+      chatAcceptIdea(r.idea);
     }
   } catch (e) {
     const t = $('#chatTyping'); if (t) t.remove();
@@ -2727,14 +2972,15 @@ async function voiceSend() {
 function bindChat() {
   const btn = $('#chatSend'), inp = $('#chatInput');
   if (!btn || !inp) return;
+  if (!window.__chatOpenT) { window.__chatOpenT = true; track('chat_open'); }
   btn.onclick = chatSend;
   const mic = $('#chatMic');
   if (mic) mic.onclick = voiceToggle;
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });
   chatScroll();
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
-  if (mkP) mkP.onclick = () => chatMakePost(false);
-  if (mkR) mkR.onclick = () => chatMakePost(true);
+  if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
+  if (mkR) mkR.onclick = () => { track('chat_idea_accepted', { reel: true }); chatMakePost(true); };
   const mCapsB = $('#chatMoreCaps');
   if (mCapsB) mCapsB.onclick = chatMoreCaptions;
   const file = $('#chatFile');
@@ -2996,21 +3242,50 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false, onProg
   return { imagePath, mediaType };
 }
 
+let AUTOPILOT_RUNNING = false;
+
 async function runAutopilot(n, tag) {
   const t = tag || 'semana';
+  // Anti-duplicación: una sola corrida a la vez (dos botones distintos usan el mismo data-autopilot)
+  if (AUTOPILOT_RUNNING) return;
+  AUTOPILOT_RUNNING = true;
+  const apT0 = Date.now();
+  track('autopilot_start', { n, tag: t }); track('week_generate_start', { n, tag: t });
   const prog = document.getElementById('apProg-' + t);
-  const btn = document.querySelector('[data-autopilot="' + t + '"]');
-  btn.disabled = true;
+  $$('[data-autopilot]').forEach(b => b.disabled = true);
   try {
     // Cupo del plan: chequear ANTES de gastar IA — ofrecer mejorar o armar parcial
     let quota = null;
     try { quota = await api.get('/api/quota'); } catch (e) {}
     if (quota && quota.left < n) {
-      btn.disabled = false;
       // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
       if (ME && ME.trial_expired) { showExpiredModal(); return; }
       if (quota.left <= 0) { quotaModal(quota); return; }
       quotaModal(quota, { onPartial: () => runAutopilot(quota.left, t) });
+      return;
+    }
+    // Gate de ADN "no generar a ciegas": sin lo esencial del negocio (producto estrella,
+    // cliente ideal, diferencial, tono) no generamos — saldrían posteos flojos o inventados.
+    // El chat arranca solo la mini-entrevista (el backend la guía con needDna).
+    let dnaGate = null;
+    try { dnaGate = await api.get('/api/dna/status'); } catch (e) {}
+    if (dnaGate && !dnaGate.complete) {
+      const postsNow = await api.get('/api/posts').catch(() => []);
+      const hasDrafts = postsNow.some(p => p.status === 'draft');
+      prog.innerHTML = `<div class="okmsg">👋 Para que tu semana salga buena de verdad, charlemos 2 minutos de tu negocio 👇` +
+        (hasDrafts ? `<br><button class="btn btn-ghost btn-sm" id="dnaGateLater-${t}" style="margin-top:10px">Hacerlo después →</button>` : '') +
+        `</div>`;
+      const laterBtn = document.getElementById('dnaGateLater-' + t);
+      if (laterBtn) laterBtn.onclick = () => { prog.innerHTML = ''; };
+      // Scrollear a la tarjeta del chat y mandar el primer mensaje con el flujo normal:
+      // con el ADN vacío/parcial el needDna del backend arranca la entrevista solo.
+      setTimeout(() => {
+        const card = document.getElementById('autopilotCard-' + t) || document.getElementById('chatCard');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+      setTimeout(() => {
+        if (document.getElementById('chatBox')) chatExchange({ text: '¡Dale, charlemos de mi negocio! 👇' });
+      }, 800);
       return;
     }
     // Si hay borradores sin revisar de una corrida anterior, preguntar antes de reemplazarlos
@@ -3018,14 +3293,20 @@ async function runAutopilot(n, tag) {
     const oldDrafts = existing.filter(p => p.status === 'draft');
     if (oldDrafts.length) {
       const ok = confirm(`Hay ${oldDrafts.length} ${oldDrafts.length === 1 ? 'borrador sin revisar' : 'borradores sin revisar'}. ¿Los reemplazamos por una semana nueva?`);
-      if (!ok) { btn.disabled = false; return; }
+      if (!ok) return;
       for (const d of oldDrafts) { try { await api.delete('/api/posts/' + d.id); } catch (e) {} }
+      // Verificar que el borrado funcionó: si quedaron borradores, abortar y no crear nada encima
+      const afterDelete = await api.get('/api/posts').catch(() => []);
+      if (afterDelete.some(p => p.status === 'draft')) {
+        prog.innerHTML = `<div class="err">⚠️ No se pudieron borrar los borradores anteriores. Probá de nuevo o usá 🗑️ Vaciar.</div>`;
+        return;
+      }
     } else {
       // Sin borradores pero con semana programada: no duplicar por accidente
       const scheduled = existing.filter(p => p.status === 'scheduled');
       if (scheduled.length) {
         const ok = confirm(`Ya tenés ${scheduled.length} ${scheduled.length === 1 ? 'posteo programado' : 'posteos programados'} esta semana. ¿Sumamos una tanda nueva de borradores para revisar?`);
-        if (!ok) { btn.disabled = false; return; }
+        if (!ok) return;
       }
     }
     let ideas = IDEAS;
@@ -3035,7 +3316,6 @@ async function runAutopilot(n, tag) {
       // Sin datos del negocio no generamos nada: primero el onboarding conversacional.
       // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
       if (r.need_profile) {
-        btn.disabled = false;
         prog.innerHTML = `<div class="okmsg">👋 Para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/semana" style="color:var(--cel);font-weight:700">hacelo después →</a></div>`;
         return;
       }
@@ -3053,33 +3333,50 @@ async function runAutopilot(n, tag) {
         : `<img src="${esc(d.imagePath)}" alt="Borrador listo">${d.mediaType === 'story' ? '<span class="live-badge">📱</span>' : ''}`}<span class="live-ok">✓</span></div>`).join('')}</div>
       <div class="hint" style="margin:4px 0 0">${live.length} ${live.length === 1 ? 'listo' : 'listos'} — en un toque los revisás 👇</div>` : '';
     // Brand kit del cliente: fotos rotadas + logo + paleta de marca
-    let quotaStopped = false;
-    for (let i = 0; i < picks.length; i++) {
-      const idea = picks[i];
-      const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
-      const baseMsg = `⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...`;
-      prog.innerHTML = `<div class="okmsg">${baseMsg}</div>${liveHTML()}`;
-      let created = null;
-      try {
-        // onProgress: estado amable mientras el motor de imágenes trabaja ("🎨 Creando la imagen…")
-        created = await draftFromIdea(idea, isReel, i, false, (phase) => {
-          const el = prog.querySelector('.okmsg');
-          if (el) el.innerHTML = phase === 'image' ? '🎨 Creando la imagen…' : phase === 'reel' ? '🎬 Creando las escenas del reel…' : baseMsg;
-        }); // borrador: el cliente revisa antes de programar
-      } catch (e) {
-        // Si el cupo se agotó a mitad de la corrida: cartel de mejora y mostrar lo ya creado
-        if (isPlanLimitErr(e)) {
-          const q2 = await api.get('/api/quota').catch(() => null);
-          quotaModal(q2 || { limit: 3, used: 3, left: 0, plan_name: '' });
-          quotaStopped = true;
-          break;
+    // Generación en paralelo: pool de hasta 3 borradores a la vez (el reel entra
+    // al mismo pool, no al final en serie). La semana sale en ~90s en vez de 5-10 min.
+    const POOL_SIZE = 3;
+    let quotaStopped = false, nextIdx = 0, doneCount = 0, firstErr = null;
+    const poolRender = () => {
+      // Mensaje de completitud desordenada: importa cuántos están listos, no cuál.
+      prog.innerHTML = `<div class="okmsg">⏳ Creando… ${doneCount} de ${picks.length} listos</div>${liveHTML()}`;
+    };
+    async function apWorker() {
+      while (!quotaStopped) {
+        // Cancelación del auto-arranque (Track 3): si el usuario tocó Cancelar, no tomar más picks
+        if (window.__autoWeekCancel) return;
+        const i = nextIdx++; // sincrónico: ningún otro worker toma el mismo índice
+        if (i >= picks.length) return;
+        const idea = picks[i];
+        const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
+        try {
+          // onProgress: estado amable mientras el motor de imágenes trabaja ("🎨 Creando la imagen…")
+          const created = await draftFromIdea(idea, isReel, i, false, (phase) => {
+            const el = prog.querySelector('.okmsg');
+            if (el) el.innerHTML = phase === 'image' ? '🎨 Creando la imagen…' : phase === 'reel' ? '🎬 Creando las escenas del reel…' : '⏳ Creando…';
+          }); // borrador: el cliente revisa antes de programar
+          if (created && created.imagePath) live.push(created);
+        } catch (e) {
+          // Si el cupo se agotó a mitad de la corrida: cartel de mejora y frenar el pool
+          if (isPlanLimitErr(e)) {
+            const q2 = await api.get('/api/quota').catch(() => null);
+            quotaModal(q2 || { limit: 3, used: 3, left: 0, plan_name: '' });
+            quotaStopped = true;
+            return;
+          }
+          // Error de un borrador solo: se registra y la semana sigue con los demás
+          if (!firstErr) firstErr = e;
+          console.error('[autopilot] no se pudo crear el borrador "' + (idea.titulo || i) + '":', (e && e.message) || e);
         }
-        throw e;
+        doneCount++;
+        poolRender();
       }
-      if (created && created.imagePath) live.push(created);
-      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b> ✅</div>${liveHTML()}`;
     }
-    prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>`;
+    poolRender();
+    await Promise.all(Array.from({ length: Math.min(POOL_SIZE, picks.length) }, apWorker));
+    // Si no salió NINGÚN borrador, algo está roto: mostrar el error en vez de un festejo vacío
+    if (firstErr && !live.length) throw firstErr;
+    prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
     // Historias automáticas: 2 por semana con las primeras ideas (foto + título).
     // Se programan junto con la semana: más presencia, cero trabajo extra.
     // (No consumen cupo del plan; si el cupo frenó la corrida, tampoco se crean.)
@@ -3116,6 +3413,7 @@ async function runAutopilot(n, tag) {
       }
       prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
     } catch (e) { console.error('[historias]', e.message); }
+    track('week_generate_done', { count: live.length, ms: Date.now() - apT0, tag: t });
     // Racha: registrar la semana armada (idempotente por semana)
     let sk = null;
     try { sk = await api.post('/api/streak/week-armed', {}); } catch (e) {}
@@ -3129,8 +3427,89 @@ async function runAutopilot(n, tag) {
     }, 900);
   } catch (e) {
     prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
-    btn.disabled = false;
+  } finally {
+    // Cubrir todos los returns tempranos: la corrida terminó (o abortó)
+    AUTOPILOT_RUNNING = false;
+    $$('[data-autopilot]').forEach(b => b.disabled = false);
   }
+}
+
+function bindVaciarDrafts() {
+  const b = document.getElementById('btnVaciarDrafts');
+  if (!b) return;
+  b.onclick = async () => {
+    const ok = confirm('¿Borrar TODOS los borradores y armarlos de nuevo con otro enfoque?');
+    if (!ok) return;
+    b.disabled = true;
+    b.textContent = '⏳ Vaciando…';
+    // Track 4 (agregado): Vaciar ya no solo borra — reconstruye la semana con
+    // OTRO enfoque (los borradores se marcan como rejected en el servidor y la
+    // exclusión de 60 días hace que la nueva tanda use otros ángulos/tipos).
+    let r = null;
+    try {
+      // Si está revisando la N+1 (teaser), el Vaciar reconstruye esa semana.
+      const shownWk = (typeof NEXTWEEK_VIEW !== 'undefined' && NEXTWEEK_VIEW && REVIEW_DRAFTS.length && REVIEW_DRAFTS[0].week_key)
+        ? REVIEW_DRAFTS[0].week_key : null;
+      r = await api.post('/api/posts/rebuild-week', shownWk ? { week_key: shownWk } : {});
+    }
+    catch (e) { alert('⚠️ ' + (e.message || 'No se pudo vaciar. Probá de nuevo.')); render(); return; }
+    track('drafts_emptied', { count: (typeof REVIEW_DRAFTS !== 'undefined' ? REVIEW_DRAFTS.length : 0) });
+    await render(); // el DOM se escribe tras los awaits: la barrita va después
+    if (r && r.rebuilding) rebuildWatchStart();
+    else if (r && r.reason === 'frustrated') rebuildFrustrated();
+  };
+}
+
+// Track 4 (agregado): barrita sutil de "reconstruyendo" (mismo patrón visual
+// que autoWeekBar del Track 3). La generación corre en el servidor; acá se
+// muestra el progreso y se espera a que aparezcan los borradores nuevos.
+let __rebuildPoll = null;
+function rebuildWatchStart() {
+  if (document.getElementById('rebuildBar')) return;
+  const main = document.querySelector('.main');
+  if (!main) return;
+  const bar = document.createElement('div');
+  bar.id = 'rebuildBar';
+  bar.setAttribute('role', 'status');
+  bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:14px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
+  bar.innerHTML = '<span style="font-size:18px">🔄</span>' +
+    '<span style="flex:1;min-width:0"><b>Armando de nuevo con otro enfoque…</b><br><span style="color:var(--mut);font-size:13px">Tus borradores aparecen acá abajo cuando estén listos 👇</span></span>';
+  main.prepend(bar);
+  if (__rebuildPoll) clearInterval(__rebuildPoll);
+  let waited = 0;
+  __rebuildPoll = setInterval(async () => {
+    waited += 5000;
+    let drafts = [];
+    try { drafts = await api.get('/api/posts?status=draft'); } catch (e) {}
+    if (drafts.length) {
+      clearInterval(__rebuildPoll); __rebuildPoll = null;
+      const b2 = document.getElementById('rebuildBar'); if (b2) b2.remove();
+      render();
+      return;
+    }
+    if (waited >= 6 * 60 * 1000) {
+      clearInterval(__rebuildPoll); __rebuildPoll = null;
+      const b3 = document.getElementById('rebuildBar');
+      if (b3) b3.innerHTML = '<span style="font-size:18px">⏳</span><span style="flex:1;min-width:0">Está tardando más de lo normal — si en unos minutos no aparecen, contame en el chat 👇</span>';
+    }
+  }, 5000);
+}
+// Track 4 (agregado): tope de 2 reconstrucciones/semana alcanzado. Se frena y
+// se deriva al chat preguntando qué no cierra. Los rejected que se marcaron al
+// vaciar alimentan la detección de frustración del chat (3+ rejected), así que
+// el próximo mensaje del usuario ya entra en modo frustración solo.
+function rebuildFrustrated() {
+  const main = document.querySelector('.main');
+  if (main && !document.getElementById('rebuildFrust')) {
+    const d = document.createElement('div');
+    d.id = 'rebuildFrust';
+    d.className = 'card';
+    d.setAttribute('style', 'border:1.5px solid #FEC14D;background:#FFF9EC;margin:0 0 12px');
+    d.innerHTML = '<h3 style="margin:0 0 4px">🛑 Frenemos un toque</h3>' +
+      '<p style="margin:0;color:var(--mut);font-size:14px">Ya armamos tu semana 2 veces y la vaciaste de nuevo — regenerar a ciegas sería quemar tu tiempo y tu plata. Contame acá abajo en el chat <b>qué no te cierra</b> y lo resolvemos juntos 👇</p>';
+    main.prepend(d);
+  }
+  setTimeout(() => { const c = document.getElementById('chatCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 400);
 }
 
 function bindAutopilot() {
@@ -3381,6 +3760,7 @@ async function publishNowFlow(postId, mount) {
     try { st = (await api.get(`/api/posts/${postId}`)).post; }
     catch (e) { continue; }
     if (st.status === 'published') {
+      track('post_publish', { id: postId });
       mount.innerHTML = `<div class="okmsg">✅ ¡Publicado en Instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ↗</a>` : ''}</div>`;
       return { ok: true, permalink: st.ig_permalink };
     }
@@ -3625,6 +4005,7 @@ async function checkQuotaOrModal() {
 }
 function quotaModal(q, opts = {}) {
   const left = q.left || 0;
+  track('paywall_view', { plan: (q && q.plan_name) || '', limit: (q && q.limit) || 0 });
   streakModalShell(`
     <div class="big-emoji">🚀</div>
     <h3 style="margin:12px 0 4px">Llegaste al tope de tu semana</h3>
@@ -4022,6 +4403,7 @@ async function adsRecAction(card, opts) {
     btn.disabled = true; btn.textContent = '⏳ Abriendo MercadoPago…';
     try {
       const r = await api.post('/api/ads/topup', { amount_cents: load, return_to: opts.returnTo });
+      track('checkout_start', { kind: 'ads_topup' }); trackBeacon();
       if (r && r.init_point) { location.href = r.init_point; return; }
       throw new Error('No se pudo generar el pago');
     } catch (e) {
@@ -4223,6 +4605,7 @@ function bindAds() {
     b.disabled = true;
     try {
       const r = await api.post('/api/ads/topup', { amount_cents: Number(b.dataset.topup), return_to: 'ads' });
+      track('checkout_start', { kind: 'ads_topup' }); trackBeacon();
       if (r && r.init_point) location.href = r.init_point; // checkout de MercadoPago
       else if (msg) msg.innerHTML = `<div class="err">No se pudo generar el pago</div>`;
     } catch (e) {
@@ -4271,6 +4654,62 @@ async function loadMissionCard() {  const el = $('#missionCard');
         if (!r.ok) throw new Error('No se pudo subir la foto');
         ASSETS = await api.get('/api/assets').catch(() => ASSETS);
         loadMissionCard(); // re-render → estado hecho
+      } catch (e) {
+        b.disabled = false;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
+      }
+      inp.value = '';
+    };
+  }
+}
+
+/* ---------- 🎨 Referencia visual (inspo): un posteo que te gusta → dirección de arte ---------- */
+// Tarjeta prominente en Mi semana. El cliente sube un posteo de Instagram que
+// le gusta → POST /api/dna/inspo lo analiza con visión (gpt-4o) y guarda el
+// estilo en business_dna.dna_json.inspo. El generador lo lee solo:
+// dnaBitsLine (concept-shot / image-brief) y businessContext (captions).
+async function loadInspoCard() {
+  const el = document.getElementById('inspoCard');
+  if (!el) return;
+  let inspo = '';
+  try { const r = await api.get('/api/dna'); inspo = (r && r.dna && String(r.dna.inspo || '').trim()) || ''; } catch (e) { el.innerHTML = ''; return; }
+  if (inspo) {
+    el.innerHTML = `
+    <div class="card" style="opacity:.85">
+      <h3 style="margin:0 0 4px">🎨 Tu estilo de referencia</h3>
+      <p style="margin:0;color:var(--mut);font-size:14px">✅ Ya tenemos tu estilo de referencia: lo usamos para diseñar tus posteos.</p>
+      <p style="margin:8px 0 0;font-size:13.5px;color:var(--dim);font-style:italic">“${esc(inspo.slice(0, 160))}”</p>
+      <div style="text-align:right;margin-top:4px"><button class="btn btn-ghost btn-sm" id="inspoChange">cambiar</button></div>
+    </div>`;
+    const ch = document.getElementById('inspoChange');
+    if (ch) ch.onclick = () => inspoIdleHTML(el);
+    return;
+  }
+  inspoIdleHTML(el);
+}
+function inspoIdleHTML(el) {
+  el.innerHTML = `
+  <div class="card" style="border:2px solid var(--cel)">
+    <h3 style="margin:0 0 4px">🎨 ¿Te gusta algún estilo?</h3>
+    <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Subí un posteo de Instagram que te guste y lo usamos de referencia para tus diseños.</p>
+    <div style="text-align:center"><button class="btn btn-primary btn-sm" id="inspoUpload">🎨 Subir referencia</button></div>
+    <input type="file" id="inspoFile" accept="image/*" style="display:none">
+    <div id="inspoMsg" style="margin-top:8px;text-align:center"></div>
+  </div>`;
+  const b = document.getElementById('inspoUpload'), inp = document.getElementById('inspoFile');
+  if (b && inp) {
+    b.onclick = () => inp.click();
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      if (!f || !f.type.startsWith('image/')) return;
+      const msg = document.getElementById('inspoMsg');
+      b.disabled = true;
+      if (msg) msg.innerHTML = `<div class="hint">⏳ Mirando el estilo…</div>`;
+      try {
+        const r = await fetch('/api/dna/inspo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo analizar la imagen');
+        loadInspoCard(); // re-render → estado hecho
       } catch (e) {
         b.disabled = false;
         if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
@@ -4563,7 +5002,15 @@ async function semanaView() {
   // Borradores y programados viven acá, en Mi semana: se revisan y programan sin salir de la pantalla.
   let allPosts = [];
   try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
-  const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
+  // Track 4 "Pipeline perpetuo": los borradores se filtran por semana.
+  // week_key '' = semana corriente / legado (como antes, sin filtrar).
+  // Los de la próxima semana viven aparte hasta que les toca.
+  const thisMon = mondayKey(new Date());
+  let drafts = allPosts.filter(p => p.status === 'draft' && (!p.week_key || p.week_key === thisMon)).sort((a, b) => a.id - b.id);
+  const nextDrafts = allPosts.filter(p => p.status === 'draft' && p.week_key && p.week_key !== thisMon).sort((a, b) => a.id - b.id);
+  if (!nextDrafts.length) NEXTWEEK_VIEW = false;
+  const viewingNext = NEXTWEEK_VIEW && nextDrafts.length > 0;
+  if (viewingNext) drafts = nextDrafts;
   const scheduled = allPosts.filter(p => p.status === 'scheduled').sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const draftN = drafts.length;
   const slots = suggestSlots(draftN, scheduled);
@@ -4622,9 +5069,19 @@ async function semanaView() {
   const ftCandidates = drafts.slice().sort((a, b) => b.id - a.id).filter(p => p.image_path).slice(0, 3);
   const showFastTrack = publishedCount === 0 && ftCandidates.length > 0;
   const heroCard = showFastTrack && typeof fastTrackCardHTML === 'function' ? fastTrackCardHTML(ftCandidates)
-    : draftN > 0 ? reviewCardHTML(drafts, slots)
+    : draftN > 0 ? reviewCardHTML(drafts, slots, viewingNext ? '📋 Tu próxima semana' : null)
     : weekDone ? weekDoneCardHTML()
     : autopilotCardHTML('semana');
+  // Track 4 "Pipeline perpetuo": teaser sutil cuando la semana N está lista y
+  // la N+1 ya se armó sola en segundo plano. Toca → la revisa como corriente.
+  const nextTeaser = (!viewingNext && draftN === 0 && nextDrafts.length > 0 && weekDone) ? `
+  <button class="card" id="nextWeekTeaser" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1.5px solid rgba(39,147,200,.35);background:#F4FAFE;cursor:pointer;margin:0 0 12px">
+    <span style="font-size:20px">✨</span>
+    <span style="flex:1;min-width:0"><b>Tu próxima semana ya está lista</b><br><span style="color:var(--mut);font-size:13px">La armamos mientras programabas — tocala para revisarla</span></span>
+    <span style="font-size:20px;color:var(--cel)">›</span>
+  </button>` : '';
+  const nextBack = viewingNext ? `
+  <div style="margin:-4px 0 10px"><button class="rev-nowsub" id="nextWeekBack" style="padding:0">‹ volver a esta semana</button></div>` : '';
   // Rehacer es acción secundaria: link de texto sutil al pie de la revisión, nunca un botón.
   const redoMini = draftN > 0
     ? `<div style="text-align:center;margin:-8px 0 18px"><button class="rev-redo" data-autopilot="semana">↻ empezar de nuevo</button><div id="apProg-semana"></div></div>`
@@ -4705,7 +5162,7 @@ async function semanaView() {
     .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
   const salioCard = publishedList.length ? salioCardHTML(publishedList) : '';
   // Tarjeta "Contame de tu negocio" (nota de voz → ADN): vive pegada a la misión de fotos.
-  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${heroCard}${redoMini}${scheduledStrip}${chatBlock}${mediaStrip}<div id="missionCard"></div><div id="dnaVoiceCard"></div>${salioCard}`;
+  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${nextTeaser}${nextBack}${heroCard}${redoMini}${scheduledStrip}<div id="inspoCard"></div>${chatBlock}${mediaStrip}<div id="missionCard"></div><div id="dnaVoiceCard"></div>${salioCard}`;
 
   return topBlock;
 }
@@ -4735,8 +5192,15 @@ function bindSemana() {
   bindSignalBtns();
   bindOutcomeBtns(); // loop liviano: ¿este posteo te trajo clientes?
   bindAutopilot();
+  bindVaciarDrafts();
   bindChat();
   bindReview();
+  bindScheduleAll(); // "📅 Programar mi semana →": la semana entera en un tap
+  // Track 4 "Pipeline perpetuo": teaser de la próxima semana ya armada.
+  const tw = document.getElementById('nextWeekTeaser');
+  if (tw) tw.onclick = () => { NEXTWEEK_VIEW = true; render(); };
+  const bw = document.getElementById('nextWeekBack');
+  if (bw) bw.onclick = () => { NEXTWEEK_VIEW = false; render(); };
   // Fast-track "Tu primer posteo" (Track A): su tarjeta es la hero cuando aplica.
   // Defensivo: si la tarjeta de Track A aún no está definida, queda el flujo normal.
   if (typeof bindFastTrack === 'function') { window.__ftHookedByTrackC = true; bindFastTrack(); }
@@ -4753,6 +5217,8 @@ function bindSemana() {
   bindMediaCard(); // tira "Mis fotos": borrar desde acá
   // Misión de fotos semanal
   loadMissionCard().catch(() => {});
+  // 🎨 Referencia visual del cliente (inspo): tarjeta prominente, estado hecho si ya hay
+  loadInspoCard().catch(() => {});
   // 🎙️ Contame de tu negocio: nota de voz → ADN (pegada a la misión de fotos)
   loadDnaVoiceCard();
   // Sugerencia de serie + alerta honesta de rendimiento
@@ -4771,6 +5237,130 @@ function bindSemana() {
   if (xs) xs.onclick = async () => {
     try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
   };
+  // Track 3 · "La semana esperándote al entrar": si la semana está vacía y ya
+  // tenemos los datos del negocio, se arma sola en segundo plano. No bloquea el binding.
+  // Si el usuario toca "⚡ Armemos tu semana" a mano mientras el auto corre, el flag
+  // AUTOPILOT_RUNNING ya ignora el tap; acá solo ocultamos el aviso para no confundir.
+  if (!window.__autoWeekTapBound) {
+    window.__autoWeekTapBound = true;
+    document.addEventListener('click', (e) => {
+      const b = e.target && e.target.closest && e.target.closest('[data-autopilot]');
+      if (b && window.__autoWeekRunning) { window.__autoWeekRunning = false; autoWeekHideBar(); }
+    });
+  }
+  maybeAutoStartWeek();
+}
+
+
+/* ---------- TRACK 3 · "LA SEMANA ESPERÁNDOTE AL ENTRAR" ---------- */
+// Visión: si ya tenemos los datos del negocio, la semana se arma SOLA en segundo
+// plano al entrar a Mi semana, sin tocar "⚡ Armemos tu semana".
+// Solo crea borradores: nada se programa ni se publica solo.
+let __autoWeekPoll = null;
+function autoWeekKey() {
+  // Una sola vez por semana: lunes (misma convención que weekStartMonday).
+  const m = weekStartMonday(new Date());
+  const p2 = (v) => String(v).padStart(2, '0');
+  return 'posta_autoweek_' + m.getFullYear() + '-' + p2(m.getMonth() + 1) + '-' + p2(m.getDate());
+}
+function autoWeekShowBar() {
+  if (document.getElementById('autoWeekBar')) return;
+  const main = document.querySelector('.main');
+  if (!main) return;
+  const bar = document.createElement('div');
+  bar.id = 'autoWeekBar';
+  bar.setAttribute('role', 'status');
+  bar.setAttribute('style', 'display:flex;align-items:center;gap:10px;background:#ffffff;border:1.5px solid rgba(39,147,200,.4);border-radius:14px;padding:10px 12px;margin:0 0 12px;font-size:14px;line-height:1.4;box-shadow:0 2px 12px rgba(39,147,200,.10)');
+  bar.innerHTML = '<span style="font-size:18px">✨</span>' +
+    '<span style="flex:1;min-width:0">Armando tu semana en segundo plano…</span>' +
+    '<button class="btn btn-ghost btn-sm" id="autoWeekCancelBtn" type="button">Cancelar</button>';
+  main.prepend(bar);
+  const c = document.getElementById('autoWeekCancelBtn');
+  if (c) c.addEventListener('click', (e) => { e.preventDefault(); autoWeekCancel(); });
+}
+function autoWeekHideBar() {
+  const b = document.getElementById('autoWeekBar');
+  if (b) b.remove();
+  if (__autoWeekPoll) { clearInterval(__autoWeekPoll); __autoWeekPoll = null; }
+}
+function autoWeekCancel() {
+  // Convención de cancelación para el pool del autopilot: mientras sea truthy, el
+  // pool la respeta entre items (la chequea antes de encolar cada uno). Si el pool
+  // no la honra, el fallback defensivo igual vale: el aviso desaparece y esta
+  // semana no se vuelve a armar sola. Se guarda con el weekkey para no bloquear
+  // semanas futuras en la misma sesión.
+  window.__autoWeekCancel = autoWeekKey();
+  window.__autoWeekRunning = false;
+  autoWeekHideBar();
+}
+// Vigila la corrida automática y oculta el aviso cuando termina (éxito, gate de
+// ADN, error o cancelación). El autopilot ya hace render() + scroll al terminar.
+function autoWeekWatch() {
+  if (__autoWeekPoll) clearInterval(__autoWeekPoll);
+  let seen = AUTOPILOT_RUNNING, waited = 0;
+  __autoWeekPoll = setInterval(() => {
+    waited += 1500;
+    if (AUTOPILOT_RUNNING) seen = true;
+    else if (seen || waited >= 45000 || window.__autoWeekCancel === autoWeekKey()) {
+      window.__autoWeekRunning = false;
+      if (__autoWeekPoll) { clearInterval(__autoWeekPoll); __autoWeekPoll = null; }
+      autoWeekHideBar();
+    }
+  }, 1500);
+}
+async function autoWeekDataReady() {
+  // 1) ADN completo → listo para generar.
+  try { const ds = await api.get('/api/dna/status'); if (ds && ds.complete) return true; } catch (e) {}
+  // 2) Datos de trial: /prueba pre-carga el perfil con lo que contó el cliente.
+  //    Mismo umbral que el backend usa para decidir si puede generar sin inventar.
+  const p = PROFILE || {};
+  const name = String(p.business_name || '').trim();
+  const desc = String(p.description || '').trim();
+  return !!(name && desc.length >= 20);
+}
+async function maybeAutoStartWeek() {
+  try {
+    const wk = autoWeekKey();
+    // Re-entrada a mitad de una corrida automática: mostrar el aviso de nuevo, sin relanzar.
+    // (Va primero: el flag de localStorage ya quedó marcado al arrancar.)
+    if (window.__autoWeekRunning && AUTOPILOT_RUNNING) { autoWeekShowBar(); autoWeekWatch(); return; }
+    // Una sola vez por semana: entrar y salir no re-arma.
+    let done = null;
+    try { done = localStorage.getItem(wk); } catch (e) {}
+    if (done) return;
+    if (window.__autoWeekCancel === wk) return; // se canceló a mano (fallback sin localStorage)
+    if (AUTOPILOT_RUNNING) return; // corrida manual en curso: no interferir
+    // Mismos datos que calcula semanaView: borradores, programados y publicados.
+    const all = await api.get('/api/posts').catch(() => []);
+    const drafts = all.filter(p => p.status === 'draft');
+    const scheduled = all.filter(p => p.status === 'scheduled');
+    if (drafts.length || scheduled.length) return; // hay trabajo en curso: no pisar nada
+    // Fast-track: cuenta nueva (0 publicados) con candidatos → su camino es la
+    // tarjeta "Tu primer posteo", no el armado automático.
+    const publishedCount = all.filter(p => p.status === 'published').length;
+    const ftCandidates = drafts.slice().sort((a, b) => b.id - a.id).filter(p => p.image_path).slice(0, 3);
+    if (publishedCount === 0 && ftCandidates.length > 0) return;
+    const n = (ME && ME.posts_per_week) || 3;
+    // Sin cupo para la semana completa no arrancamos en segundo plano:
+    // el usuario elige a mano (el autopilot le ofrece la versión parcial).
+    try {
+      const quota = await api.get('/api/quota').catch(() => null);
+      if (quota && quota.left < n) return;
+    } catch (e) {}
+    // Sin lo esencial del negocio no arrancamos: el gate de ADN del autopilot
+    // ya maneja ese caso cuando el usuario toca el botón manual.
+    if (!(await autoWeekDataReady())) return;
+    // Todo OK: marcar la semana ANTES de arrancar y lanzar el autopilot de siempre.
+    try { localStorage.setItem(wk, '1'); } catch (e) {}
+    window.__autoWeekCancel = false;
+    window.__autoWeekRunning = true;
+    autoWeekShowBar();
+    // runAutopilotSmart es la misma entrada del botón manual: aplica el plan
+    // semanal si existe y cae a runAutopilot si no. Escribe su progreso en
+    // #apProg-semana; la barrita de arriba es solo aviso + cancelar.
+    runAutopilotSmart(n, 'semana');
+    autoWeekWatch();
+  } catch (e) { /* silencioso: el botón manual sigue intacto */ }
 }
 
 
@@ -4867,17 +5457,19 @@ function ajustesView() {
     <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
       <label style="font-size:15px">🧬 Lo que la IA sabe de tu negocio</label>
       <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
-      <div class="field"><label>Productos <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
+      <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
         <textarea id="s_dna_productos" rows="3" placeholder="Remera oversize — $25.000&#10;Zapatillas retro — $89.900"></textarea></div>
-      <div class="field"><label>Promos activas <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
+      <div class="field"><label>Promos activas <span id="dnaChip_promos_activas"></span> <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
         <textarea id="s_dna_promos" rows="2" placeholder="2x1 en remeras esta semana"></textarea></div>
       <div class="row2">
-        <div class="field"><label>Horarios</label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
-        <div class="field"><label>Ubicación</label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
+        <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
+        <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-soft" id="btnSaveDna">💾 Guardar datos del negocio</button> <span id="dnaMsg"></span>
       </div>
+      <div id="webDnaZone"></div>
+      <div id="dnaFuentesZone"></div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
@@ -4885,6 +5477,21 @@ function ajustesView() {
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
+  </div></div>
+  <div class="card ajsec${openSec==='web' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 La web de tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="webZone"><p style="color:var(--dim)">Cargando…</p></div>
+  </div></div>
+  <div id="srcStoriesCard" class="card ajsec${openSec==='stories' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📱 Tus historias recientes</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="storiesZone"><p style="color:var(--dim)">Cargando…</p></div>
+  </div></div>
+  <div id="srcFbCard" class="card ajsec${openSec==='fb' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📘 Tu página de Facebook</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="fbZone"><p style="color:var(--dim)">Cargando…</p></div>
+  </div></div>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>💬 Lo que preguntan tus seguidores</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="srcCommentsCard"><p style="color:var(--dim)">Cargando…</p></div>
+  </div></div>
+  <div id="srcPlacesCard" class="card ajsec${openSec==='places' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>⭐ Lo que dicen tus clientes</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="placesZone"><p style="color:var(--dim)">Cargando…</p></div>
   </div></div>
   <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="igBanner"></div>
@@ -5043,6 +5650,19 @@ function handleIgResult() {
   try { history.replaceState(null, '', location.pathname + location.hash.split('?')[0]); } catch (e) {}
   if (r === 'ok') {
     toast('✅ <b>¡Instagram conectado!</b>' + (hq.get('demo_off') ? '<br>El modo demo se apagó solo — ahora publicás de verdad.' : '') + (hq.get('brand_reset') ? '<br>Conectaste otra cuenta: reiniciamos tu marca y borramos los posteos pendientes del negocio anterior.' : ''));
+    // 🌐 Posta estudia tu web: si nunca se analizó, la analizamos en background
+    // (magia, cero pasos). El backend resuelve la web de la bio en vivo si no
+    // le pasamos URL. Silencio total si falla: no puede romper ni demorar
+    // el flujo de conexión.
+    try {
+      api.get('/api/website/status').then(st => {
+        if (!st || st.ok !== false) return; // ya analizada (o en análisis): no molestar
+        const cand = String((st && st.url) || (PROFILE && (PROFILE.ig_website || PROFILE.website)) || (SETTINGS && (SETTINGS.ig_website || SETTINGS.website)) || '').trim();
+        api.post('/api/website/analyze', cand ? { url: cand } : {})
+          .then(() => { try { if (typeof PZ_WEB_REFRESH !== 'undefined' && PZ_WEB_REFRESH) PZ_WEB_REFRESH(); } catch (e) {} })
+          .catch(() => {});
+      }).catch(() => {});
+    } catch (e) {}
   } else if (r === 'personal') {
     toast('⚠️ <b>Tu cuenta de Instagram es personal.</b><br>Para publicar necesitás una cuenta profesional (Business o Creator).');
   } else if (r === 'error') {
@@ -5125,6 +5745,7 @@ async function obNext() {
 }
 async function obSend(text) {
   const o = OB; if (!o || o.loading || o.done || o.phase !== 'chat') return;
+  track('onboarding_step', { step: o.step, total: o.total });
   o.chat.push({ role: 'user', text: (text || '').trim() });
   o.chips = null;
   saveOB();
@@ -5431,6 +6052,7 @@ async function render() {
   else if (tab === 'calendario') { location.hash = '#/app/semana'; return; } // Calendario fusionado en Mi semana
   else if (tab === 'historial') { location.hash = '#/app/semana'; return; } // Historial fusionado en Mi semana
   else if (tab === 'ads') content = await adsView(); // 🚀 Potenciar: billetera + boost de posteos
+  else if (tab === 'admin') content = await adminView(); // 📊 Analytics (solo equipo)
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
@@ -5457,6 +6079,7 @@ async function render() {
 /* ---------- Modal agresivo: trial vencido ---------- */
 async function showExpiredModal() {
   if (document.getElementById('pzExpOverlay')) return;
+  trackOnce('expmodal', 'trial_expired_view');
   let plans = [];
   try { const d = await api.get('/api/billing/plans'); plans = d.plans || []; } catch (e) {}
   const perDay = (p) => '\u2248 $' + Math.round(p.price / 30).toLocaleString('es-AR') + ' por d\u00eda';
@@ -5489,7 +6112,27 @@ async function showExpiredModal() {
 }
 
 function bindApp(tab) {
+  if (tab === 'ajustes') trackOnce('settings', 'settings_open');
+  if (tab === 'admin') bindAdmin();
   pwaWire();
+  // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
+  if (!window.__revMoreWired) {
+    window.__revMoreWired = true;
+    document.addEventListener('click', e => {
+      const m = e.target.closest('[data-revmore]');
+      if (m) {
+        const id = m.dataset.revmore;
+        const cap = document.querySelector(`[data-revpreview="${id}"]`);
+        const tag = document.querySelector(`[data-revhashprev="${id}"]`);
+        const open = !!(cap && cap.classList.toggle('expanded'));
+        if (tag) tag.classList.toggle('expanded', open);
+        m.textContent = open ? 'ver menos ▴' : 'ver más ▾';
+        return;
+      }
+      const t = e.target.closest('.rev-preview,.opt-caption');
+      if (t && !e.target.closest('button')) t.classList.toggle('expanded');
+    });
+  }
   $$('[data-tab]').forEach(b => b.onclick = () => location.hash = '#/app/' + b.dataset.tab);
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
   const sg = $('#setupIgRow');
@@ -6178,9 +6821,114 @@ function bindSettings() {
     if (dnaEls.promos) dnaEls.promos.value = (Array.isArray(d.promos_activas) ? d.promos_activas : []).map(dnaArrLine).filter(Boolean).join('\n');
     if (dnaEls.horarios) dnaEls.horarios.value = d.horarios || '';
     if (dnaEls.ubicacion) dnaEls.ubicacion.value = d.ubicacion || '';
+    paintSrcChips(d);
+  };
+  // --- chips de fuente por bloque (Expertos en información): dna.fuentes = { campo: 'etiqueta' } ---
+  // Si un campo no tiene fuente registrada, se muestra sin chip (defensivo).
+  const DNA_SRC_STYLE = 'font-size:11px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap';
+  const dnaSrcChip = (fuentes, field) => {
+    const t = (fuentes && typeof fuentes === 'object' && fuentes[field]) || '';
+    return t ? `<span style="${DNA_SRC_STYLE}">${esc(String(t))}</span>` : '';
+  };
+  const paintSrcChips = (dna) => {
+    const d = dna || {};
+    for (const f of ['productos', 'promos_activas', 'horarios', 'ubicacion']) {
+      const el = document.getElementById('dnaChip_' + f);
+      if (el) el.innerHTML = dnaSrcChip(d.fuentes, f);
+    }
+  };
+  // --- datos de la web dentro del ADN: read-only, con etiqueta "de tu web" ---
+  const webDnaZone = $('#webDnaZone');
+  const webArrOf = (v) => {
+    if (v == null) return [];
+    if (Array.isArray(v)) return v.filter(x => x && String(typeof x === 'string' ? x : (x.nombre || x.titulo || '')).trim());
+    return [v];
+  };
+  const paintWebDna = (dna) => {
+    if (!webDnaZone) return;
+    const d = dna || {};
+    const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
+    const w = isObj(d.website) ? d.website : (isObj(d.web_data) ? d.web_data : {});
+    const prods = webArrOf(w.productos || d.website_productos || d.web_productos);
+    const precios = webArrOf(w.precios || d.website_precios || d.web_precios);
+    const promos = webArrOf(w.promos || d.website_promos || d.web_promos);
+    const groups = [['🛍️ Productos', prods], ['💲 Precios', precios], ['🎉 Promos', promos]].filter(([, a]) => a.length);
+    if (!groups.length) { webDnaZone.innerHTML = ''; return; }
+    const tag = '<span style="font-size:11px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">🌐 de tu web</span>';
+    webDnaZone.innerHTML = `
+      <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
+        <div style="font-weight:800;font-size:14px;margin-bottom:10px">🌐 Lo que encontramos en tu web</div>
+        ${groups.map(([t, arr]) => `
+          <div class="field" style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${t} ${tag}</label>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${arr.map(it => `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`).join('')}</div>
+          </div>`).join('')}
+        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "🌐 La web de tu negocio".</div>
+      </div>`;
+  };
+  const refreshWebDna = () => { api.get('/api/dna').then(r => paintWebDna(r && r.dna)).catch(() => {}); };
+  // --- 📚 Datos de otras fuentes: bloques de solo lectura con su chip de fuente ---
+  // Cada track (comentarios IG, Facebook, Google, MercadoLibre, historias) guarda sus campos
+  // en el ADN con su etiqueta en dna.fuentes. Campos nuevos de otros tracks que todavía no
+  // existan se cablean defensivo (título generado desde el nombre del campo).
+  const DNA_INFO_BLOCKS = [
+    ['producto_estrella', '⭐ Producto estrella'], ['cliente_ideal', '🎯 Cliente ideal'],
+    ['diferencial', '✨ Diferencial'], ['servicios', '🛠️ Servicios'], ['promos', '🎉 Promos'],
+    ['precio_rango', '💲 Rango de precios'], ['preguntas_frecuentes', '❓ Preguntas frecuentes'],
+    ['objeciones', '🚧 Objeciones'], ['deseos', '💭 Deseos de tus clientes'],
+    ['testimonios', '💬 Testimonios'], ['puntos_fuertes', '💪 Puntos fuertes'],
+    ['descripcion_fb', '📘 Descripción de Facebook'], ['reviews_fb', '📘 Reviews de Facebook'],
+    ['anuncios', '📣 Anuncios'], ['tono_ejemplos', '🗣️ Frases del dueño'],
+  ];
+  // Campos que ya tienen UI propia en esta tarjeta o no son mostrables.
+  const DNA_INFO_SKIP = new Set(['fuentes', 'productos', 'promos_activas', 'horarios', 'ubicacion',
+    'website', 'web_data', 'inspo', 'tono', 'series', 'paused_tipos', 'paused_series',
+    'website_url', 'website_analyzed_at', 'website_partial', 'resumen']);
+  const dnaHas = (v) => {
+    if (v == null) return false;
+    if (typeof v === 'string') return !!v.trim();
+    if (Array.isArray(v)) return v.some(x => x && (typeof x === 'string' ? x.trim() : String(x.nombre || x.titulo || x.pregunta || x.texto || '').trim()));
+    return true;
+  };
+  const dnaInfoLine = (it) => {
+    if (it && typeof it === 'object') {
+      const q = String(it.pregunta || '').trim();
+      const a = String(it.respuesta || '').trim();
+      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:14px">❓ ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:13px">💬 ${esc(a)}</div>` : ''}</div>`;
+    }
+    return `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`;
+  };
+  const paintFuentesDna = (dna) => {
+    const zone = $('#dnaFuentesZone');
+    if (!zone) return;
+    const d = dna || {};
+    const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
+    const fuentes = isObj(d.fuentes) ? d.fuentes : {};
+    const known = new Set(DNA_INFO_BLOCKS.map(([f]) => f));
+    const blocks = [];
+    for (const [field, title] of DNA_INFO_BLOCKS) {
+      if (dnaHas(d[field])) blocks.push([field, title, d[field]]);
+    }
+    for (const field of Object.keys(fuentes)) {
+      if (known.has(field) || DNA_INFO_SKIP.has(field) || !dnaHas(d[field])) continue;
+      const title = '🧩 ' + field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      blocks.push([field, title, d[field]]);
+    }
+    if (!blocks.length) { zone.innerHTML = ''; return; }
+    zone.innerHTML = `
+      <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
+        <div style="font-weight:800;font-size:14px;margin-bottom:10px">📚 Datos de otras fuentes</div>
+        ${blocks.map(([field, title, v]) => `
+          <div class="field" style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)} ${dnaSrcChip(fuentes, field)}</label>
+            <div style="margin-top:6px">${Array.isArray(v)
+              ? v.slice(0, 6).map(dnaInfoLine).join('') + (v.length > 6 ? `<div class="hint">…y ${v.length - 6} más</div>` : '')
+              : `<div style="font-size:14px">${esc(String(v))}</div>`}</div>
+          </div>`).join('')}
+        <div class="hint">La IA usa estos datos para crear posteos que venden de verdad.</div>
+      </div>`;
   };
   if (dnaEls.productos) {
-    api.get('/api/dna').then(r => paintDna(r && r.dna)).catch(() => {});
+    api.get('/api/dna').then(r => { paintDna(r && r.dna); paintWebDna(r && r.dna); paintFuentesDna(r && r.dna); }).catch(() => {});
     const bDna = $('#btnSaveDna');
     if (bDna) bDna.onclick = async () => {
       const msg = $('#dnaMsg');
@@ -6198,6 +6946,288 @@ function bindSettings() {
         if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:14px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
       }
     };
+  }
+  // --- 🌐 La web de tu negocio (GET /api/website/status · POST /api/website/analyze) ---
+  let webStatus = null;
+  const webZone = $('#webZone');
+  const fmtWebAt = (at) => {
+    try {
+      let s = String(at || '').trim().replace(' ', 'T');
+      if (!s) return '';
+      if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'; // datetimes de SQLite vienen en UTC
+      const d = new Date(s);
+      if (isNaN(d)) return String(at);
+      return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return String(at || ''); }
+  };
+  const normWebUrl = (u) => {
+    let s = String(u || '').trim();
+    if (!s) return '';
+    if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+    return s;
+  };
+  const paintWebZone = (st, errMsg) => {
+    if (st) webStatus = st;
+    if (!webZone) return;
+    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
+    if (!webStatus) { webZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tu web. Probá recargar la página.</div>'; return; }
+    if (webStatus.ok) {
+      webZone.innerHTML = `
+        <div class="okmsg">✅ <b>${esc(webStatus.url || 'Tu web')}</b><br>Analizada el ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' <b>(parcial:</b> no pudimos leer todas las páginas)' : ''}</div>
+        <p style="color:var(--mut);font-size:14px;margin:10px 0 14px">Sacamos de tu web productos, precios y promos para que la IA cree posteos que venden.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-soft btn-sm" id="btnWebRe">🔄 Analizar de nuevo</button> <span id="webMsg"></span>
+        </div>${err}`;
+      const b = $('#btnWebRe');
+      if (b) b.onclick = () => runWebAnalyze({ force: true });
+    } else {
+      const det = String(webStatus.url || '').trim();
+      webZone.innerHTML = `
+        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">${det ? `Detectamos esta web en tu bio de Instagram 👇` : '¿Tenés web? La estudiamos y sacamos productos, precios y promos para que la IA cree posteos que venden.'}</p>
+        <div class="field" style="margin-bottom:10px"><label>URL de tu web o publicación</label>
+          <input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnWebGo">🔍 Analizar mi web</button> <span id="webMsg"></span>
+        </div>
+        <p class="hint" style="margin-top:10px">🛒 <b>¿Vendés en MercadoLibre?</b> Pegá el link de tu publicación (articulo.mercadolibre.com…) y sacamos título, precio y descripción para tus posteos.</p>${err}`;
+      const b = $('#btnWebGo');
+      if (b) b.onclick = () => {
+        const u = normWebUrl(($('#s_weburl') || {}).value);
+        if (!u) { const m = $('#webMsg'); if (m) m.innerHTML = '<span style="color:#B3402E;font-size:14px">Pegá la URL de tu web</span>'; return; }
+        runWebAnalyze({ url: u });
+      };
+    }
+  };
+  const runWebAnalyze = async (body) => {
+    if (!webZone) return;
+    webZone.innerHTML = '<div class="hint">⏳ Analizando tu web… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    try {
+      await api.post('/api/website/analyze', body, { timeout: 240000 });
+      try { webStatus = await api.get('/api/website/status'); } catch (e) { /* queda el anterior */ }
+      paintWebZone(webStatus);
+      refreshWebDna();
+      toast('✅ <b>Ya estudiamos tu web.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
+    } catch (e) {
+      paintWebZone(webStatus, (e && e.message) || 'No se pudo analizar tu web');
+    }
+  };
+  if (webZone) {
+    api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => paintWebZone(null));
+    // refresco invocable desde el auto-análisis post-OAuth (?ig=ok)
+    PZ_WEB_REFRESH = () => {
+      api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => {});
+      refreshWebDna();
+    };
+  }
+  // --- 📱 Tus historias recientes (GET /api/ig/stories-status · POST /api/ig/mine-stories) ---
+  // Lee las historias de las últimas 24h y la IA saca promos y anuncios del texto visible.
+  // Solo lee: nunca publica nada. Ojo: Instagram no da el archivo, solo las últimas 24h.
+  let storiesStatus = null;
+  const storiesZone = $('#storiesZone');
+  const paintStoriesZone = (st, errMsg) => {
+    if (st) storiesStatus = st;
+    if (!storiesZone) return;
+    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
+    if (!storiesStatus) { storiesZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tus historias. Probá recargar la página.</div>'; return; }
+    if (storiesStatus.ok) {
+      const n = (storiesStatus.promos || 0) + (storiesStatus.anuncios || 0);
+      storiesZone.innerHTML = `
+        <div class="okmsg">✅ <b>Historias analizadas el ${esc(fmtWebAt(storiesStatus.analyzed_at))}</b><br>${n ? `Sacamos ${n} dato${n === 1 ? '' : 's'} de tus historias (promos y anuncios): la IA los usa para crear posteos al día.` : 'No encontramos texto en tus historias recientes: si publicás una promo o un anuncio, volvé a analizarlas.'}</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+          <button class="btn btn-soft btn-sm" id="btnStoriesGo">🔄 Analizar de nuevo</button> <span id="storiesMsg"></span>
+        </div>${err}`;
+      const b = $('#btnStoriesGo');
+      if (b) b.onclick = runStoriesAnalyze;
+    } else {
+      storiesZone.innerHTML = `
+        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">Leemos tus historias de las últimas 24h y sacamos las promos y anuncios que publicaste, para que la IA cree posteos al día. <b>Ojo:</b> Instagram solo nos deja ver las de las últimas 24 horas, no el archivo.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnStoriesGo">📱 Analizar historias</button> <span id="storiesMsg"></span>
+        </div>${err}`;
+      const b = $('#btnStoriesGo');
+      if (b) b.onclick = runStoriesAnalyze;
+    }
+  };
+  const runStoriesAnalyze = async () => {
+    if (!storiesZone) return;
+    storiesZone.innerHTML = '<div class="hint">⏳ Leyendo tus historias de las últimas 24h… las analizamos una por una, puede tardar un ratito.</div>';
+    try {
+      await api.post('/api/ig/mine-stories', {}, { timeout: 240000 });
+      try { storiesStatus = await api.get('/api/ig/stories-status'); } catch (e) { /* queda el anterior */ }
+      paintStoriesZone(storiesStatus);
+      refreshWebDna();
+      toast('✅ <b>Ya leímos tus historias.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
+    } catch (e) {
+      paintStoriesZone(storiesStatus, (e && e.message) || 'No se pudieron analizar tus historias');
+    }
+  };
+  if (storiesZone) {
+    api.get('/api/ig/stories-status').then(st => paintStoriesZone(st)).catch(() => paintStoriesZone(null));
+  }
+  // --- 💬 Lo que preguntan tus seguidores (GET /api/ig/comments-status · POST /api/ig/mine-comments) ---
+  // Lee los últimos ~20 posteos + comentarios y la IA saca preguntas frecuentes, objeciones y deseos.
+  // Solo lee: nunca publica ni comenta nada. Conectá IG para usarlo.
+  let srcCommentsStatus = null;
+  const srcCommentsCard = $('#srcCommentsCard');
+  const fmtSrcAt = (at) => {
+    try {
+      let s = String(at || '').trim().replace(' ', 'T');
+      if (!s) return '';
+      if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+      const d = new Date(s);
+      if (isNaN(d)) return String(at);
+      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (e) { return String(at || ''); }
+  };
+  const paintSrcComments = (st, errMsg) => {
+    if (st) srcCommentsStatus = st;
+    if (!srcCommentsCard) return;
+    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
+    if (!srcCommentsStatus) { srcCommentsCard.innerHTML = '<div class="err">❌ No pudimos cargar el estado de los comentarios. Probá recargar la página.</div>'; return; }
+    if (srcCommentsStatus.ok) {
+      const c = srcCommentsStatus.counts || {};
+      const n = Number(c.comments || 0);
+      srcCommentsCard.innerHTML = `
+        <div class="okmsg">✅ <b>${n} comentarios</b> analizados${c.posts ? ` de ${c.posts} posteos` : ''}<br><span style="color:var(--dim);font-size:13px">Último análisis: ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}</span></div>
+        <p style="color:var(--mut);font-size:14px;margin:10px 0 14px">La IA leyó lo que te preguntan tus seguidores y lo usa para crear posteos que responden antes de que pregunten.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-soft btn-sm" id="btnSrcCommentsRe">🔄 Analizar de nuevo</button> <span id="srcCommentsMsg"></span>
+        </div>${err}`;
+      const b = $('#btnSrcCommentsRe');
+      if (b) b.onclick = () => runCommentsMine({ force: true });
+    } else {
+      srcCommentsCard.innerHTML = `
+        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">Leemos los comentarios de tus últimos posteos y la IA saca <b>qué te preguntan</b>, <b>qué objeciones tienen</b> y <b>qué desean</b> — sin pedirte nada más. Esos datos entrenan a la IA para vender mejor.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">💬 Analizar comentarios</button> <span id="srcCommentsMsg"></span>
+        </div>${err}`;
+      const b = $('#btnSrcCommentsGo');
+      if (b) b.onclick = () => runCommentsMine({});
+    }
+  };
+  const runCommentsMine = async (body) => {
+    if (!srcCommentsCard) return;
+    srcCommentsCard.innerHTML = '<div class="hint">⏳ Analizando comentarios… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    try {
+      await api.post('/api/ig/mine-comments', body, { timeout: 240000 });
+      try { srcCommentsStatus = await api.get('/api/ig/comments-status'); } catch (e) { /* queda el anterior */ }
+      paintSrcComments(srcCommentsStatus);
+      toast('✅ <b>Ya analizamos tus comentarios.</b><br>La IA ahora sabe qué te preguntan tus seguidores.');
+    } catch (e) {
+      paintSrcComments(srcCommentsStatus, (e && e.message) || 'No se pudieron analizar los comentarios');
+    }
+  };
+  if (srcCommentsCard) {
+    api.get('/api/ig/comments-status').then(st => paintSrcComments(st)).catch(() => paintSrcComments(null));
+  }
+  // --- ⭐ Lo que dicen tus clientes (GET /api/places/status · POST /api/places/analyze) ---
+  let placesStatus = null;
+  const placesZone = $('#placesZone');
+  const paintPlacesZone = (st, errMsg) => {
+    if (st) placesStatus = st;
+    if (!placesZone) return;
+    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
+    if (!placesStatus) { placesZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado. Probá recargar la página.</div>'; return; }
+    // Sin key: explicación + cómo conseguirla.
+    if (!placesStatus.has_key) {
+      placesZone.innerHTML = `
+        <div class="hint" style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;font-size:14px">
+          🔑 <b>Todavía no conectamos Google.</b><br>
+          Para leer las reseñas de tu negocio necesitás una clave de Google Places API: entrás a
+          <b>console.cloud.google.com</b> → activás la API <b>"Places API"</b> → creás una API key.
+          Pasanos la key y la activamos por vos.
+        </div>
+        <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Con eso sacamos lo que repiten tus clientes (atención, precios, calidad) y testimonios reales que la IA puede usar en los posteos.</p>${err}`;
+      return;
+    }
+    if (placesStatus.ok) {
+      const chips = (placesStatus.puntos_fuertes || []).map(x => `<span style="display:inline-block;background:#FFF6E3;border:1px solid #F5D98B;color:#8a6d1a;border-radius:999px;padding:4px 12px;margin:0 6px 6px 0;font-size:13px;font-weight:700">${esc(x)}</span>`).join('');
+      const tests = (placesStatus.testimonios || []).map(t => `<div style="border-left:3px solid #2793C8;padding:6px 12px;margin:0 0 10px;font-size:14px;color:var(--txt)">"${esc(t.cita || '')}"${t.autor ? ` <b style="color:var(--dim)">— ${esc(t.autor)}</b>` : ''}</div>`).join('');
+      placesZone.innerHTML = `
+        <div class="okmsg">✅ <b>${esc(placesStatus.place_name || 'Tu negocio')}</b>${placesStatus.rating ? ` <span style="color:#f5a623">★</span> ${esc(String(placesStatus.rating))}` : ''}${placesStatus.total_ratings ? ` <span style="color:var(--dim);font-weight:400">(${esc(String(placesStatus.total_ratings))} reseñas)</span>` : ''}<br><span style="font-size:13px;color:var(--mut)">Analizado el ${esc(fmtWebAt(placesStatus.analyzed_at))}${placesStatus.partial ? ' (parcial)' : ''}</span></div>
+        ${chips ? `<div style="font-weight:800;margin:12px 0 6px;font-size:14px">Lo que más repiten tus clientes</div><div>${chips}</div>` : ''}
+        ${tests ? `<div style="font-weight:800;margin:12px 0 6px;font-size:14px">Testimonios reales</div><div>${tests}</div>` : '<p style="color:var(--mut);font-size:14px;margin:12px 0 0">Todavía no encontramos reseñas para citar.</p>'}
+        <p style="color:var(--mut);font-size:13px;margin:12px 0">Los puntos fuertes y testimonios quedan en "🧬 Lo que la IA sabe" para que la IA los use.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-soft btn-sm" id="btnPlacesRe">🔄 Buscar de nuevo</button> <span id="placesMsg"></span>
+        </div>${err}`;
+      const b = $('#btnPlacesRe');
+      if (b) b.onclick = () => runPlacesAnalyze({ force: true });
+    } else {
+      placesZone.innerHTML = `
+        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">Buscamos tu negocio en Google, leemos las reseñas y sacamos lo que más repiten tus clientes + testimonios reales que la IA usa para vender.</p>
+        <div class="field" style="margin-bottom:10px"><label>Nombre de tu negocio en Google <span style="color:var(--dim);font-weight:400">(opcional: si lo dejás vacío usamos tu perfil)</span></label>
+          <input id="s_placesq" style="font-size:16px" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnPlacesGo">⭐ Buscar mi negocio</button> <span id="placesMsg"></span>
+        </div>${err}`;
+      const b = $('#btnPlacesGo');
+      if (b) b.onclick = () => runPlacesAnalyze({ query: (($('#s_placesq') || {}).value || '').trim() });
+    }
+  };
+  const runPlacesAnalyze = async (body) => {
+    if (!placesZone) return;
+    placesZone.innerHTML = '<div class="hint">⏳ Buscando tu negocio en Google… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    try {
+      await api.post('/api/places/analyze', body, { timeout: 240000 });
+      try { placesStatus = await api.get('/api/places/status'); } catch (e) { /* queda el anterior */ }
+      paintPlacesZone(placesStatus);
+      toast('✅ <b>Ya leímos tus reseñas.</b><br>Los testimonios quedaron en "🧬 Lo que la IA sabe".');
+    } catch (e) {
+      paintPlacesZone(placesStatus, (e && e.message) || 'No se pudo buscar tu negocio');
+    }
+  };
+  if (placesZone) {
+    api.get('/api/places/status').then(st => paintPlacesZone(st)).catch(() => paintPlacesZone(null));
+  }
+  // --- 📘 Tu página de Facebook (GET /api/fb/status · POST /api/fb/analyze) ---
+  let fbStatus = null;
+  const fbZone = $('#fbZone');
+  const paintFbZone = (st, errMsg) => {
+    if (st) fbStatus = st;
+    if (!fbZone) return;
+    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
+    if (!fbStatus) { fbZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tu página. Probá recargar la página.</div>'; return; }
+    if (fbStatus.ok) {
+      fbZone.innerHTML = `
+        <div class="okmsg">✅ <b>${esc(fbStatus.page || 'Tu página')}</b><br>Analizada el ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' <b>(parcial:</b> tu página tiene poquitos datos)' : ''}</div>
+        <p style="color:var(--mut);font-size:14px;margin:10px 0 14px">Sacamos de tu página horarios, ubicación, descripción y lo que dicen tus clientes para que la IA hable de tu negocio con datos reales.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-soft btn-sm" id="btnFbRe">🔄 Analizar de nuevo</button> <span id="fbMsg"></span>
+        </div>${err}`;
+      const b = $('#btnFbRe');
+      if (b) b.onclick = () => runFbAnalyze({ force: true });
+    } else {
+      fbZone.innerHTML = `
+        <p style="color:var(--mut);font-size:14px;margin-bottom:12px">¿Tenés página de Facebook? La estudiamos: horarios, ubicación, descripción y opiniones de tus clientes. Si tu Instagram está conectado la detectamos sola 👇</p>
+        <div class="field" style="margin-bottom:6px"><label>URL o ID de tu página de Facebook</label>
+          <input id="s_fbpage" placeholder="https://www.facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="hint" style="margin-bottom:14px">Cómo pegarla: abrí tu página en Facebook y copiá lo que dice la barra de direcciones (ej: facebook.com/tu-negocio). Podés dejarlo vacío si tu Instagram está conectado.</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnFbGo">📘 Analizar mi página</button> <span id="fbMsg"></span>
+        </div>${err}`;
+      const b = $('#btnFbGo');
+      if (b) b.onclick = () => runFbAnalyze({ page: (($('#s_fbpage') || {}).value || '').trim() });
+    }
+  };
+  const runFbAnalyze = async (body) => {
+    if (!fbZone) return;
+    fbZone.innerHTML = '<div class="hint">⏳ Analizando tu página de Facebook… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    try {
+      await api.post('/api/fb/analyze', body, { timeout: 120000 });
+      try { fbStatus = await api.get('/api/fb/status'); } catch (e) { /* queda el anterior */ }
+      paintFbZone(fbStatus);
+      refreshWebDna();
+      toast('✅ <b>Ya estudiamos tu página de Facebook.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
+    } catch (e) {
+      paintFbZone(fbStatus, (e && e.message) || 'No se pudo analizar tu página');
+    }
+  };
+  if (fbZone) {
+    api.get('/api/fb/status').then(st => paintFbZone(st)).catch(() => paintFbZone(null));
   }
   const bOnb = $('#btnOnb');
   if (bOnb) bOnb.onclick = () => { OB = loadOB() || freshOB(); location.hash = '#/app/onboarding'; };
@@ -6288,6 +7318,7 @@ function bindSettings() {
           </div>`;
       const bindSub = () => {
         $$('#planList [data-sub]').forEach(b => b.onclick = () => {
+          track('plan_select', { plan: b.dataset.sub });
           if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía.</div>`; return; }
           // Paso 1: pedir el email de la cuenta de MercadoPago (debe coincidir con la que paga)
           const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
@@ -6318,6 +7349,7 @@ function bindSettings() {
             btn.disabled = true; btn.textContent = '⏳ Redirigiendo a MercadoPago...';
             try {
               const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em });
+              track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
               location.href = init_point;
             } catch (e) {
               $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
@@ -6681,6 +7713,7 @@ function bindSettings() {
   if (bd) bd.onclick = async () => {
     const u = (PROFILE && PROFILE.ig_username) ? '@' + PROFILE.ig_username : 'tu cuenta';
     if (!confirm(`¿Desconectar ${u} de Posta?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
+    track('ig_disconnect'); trackBeacon();
     await api.post('/api/ig/disconnect'); render();
   };
   const stampVerified = () => {
@@ -6743,5 +7776,121 @@ function bindSettings() {
   }
 }
 
+/* ---------- 📊 Panel de analytics (solo equipo Posta) ---------- */
+// Ruta oculta #/app/admin. Gate: token de admin (el mismo ADMIN_TOKEN del servidor).
+function adminToken() { try { return localStorage.getItem('posta_admin_token') || ''; } catch (e) { return ''; } }
+function adminApi(path) {
+  const t = adminToken();
+  return api.get('/api/admin/' + path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t));
+}
+async function adminView() {
+  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posta — solo equipo</p></div></div>
+  <div class="card" id="adminCard"><div class="d">⏳ Cargando…</div></div>`;
+}
+async function bindAdmin() {
+  const card = $('#adminCard'); if (!card) return;
+  if (!adminToken()) {
+    card.innerHTML = `<h3 style="margin:0 0 8px">🔒 Acceso restringido</h3>
+      <p class="d">Pegá el token de admin del servidor (ADMIN_TOKEN).</p>
+      <div class="field"><input id="adTok" type="password" placeholder="token" style="width:100%;font-size:16px"></div>
+      <button class="btn btn-primary" id="adTokGo">Entrar</button>
+      <div id="adTokMsg" style="margin-top:8px"></div>`;
+    $('#adTokGo').onclick = async () => {
+      const v = ($('#adTok').value || '').trim();
+      if (!v) return;
+      try { localStorage.setItem('posta_admin_token', v); } catch (e) {}
+      try { await adminApi('funnel?days=7'); bindAdmin(); }
+      catch (e) {
+        try { localStorage.removeItem('posta_admin_token'); } catch (ee) {}
+        $('#adTokMsg').innerHTML = `<div class="err">Token inválido.</div>`;
+      }
+    };
+    return;
+  }
+  card.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
+      <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
+      <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
+      <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
+        <option value="7">7 días</option><option value="30" selected>30 días</option>
+      </select>
+    </div>
+    <div id="adBody"><div class="d">⏳ Cargando…</div></div>`;
+  const body = $('#adBody');
+  const days = () => ($('#adDays') && $('#adDays').value) || '30';
+  const bar = (pct) => `<div style="height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.max(1, Math.min(100, pct))}%;background:var(--cel);border-radius:99px"></div></div>`;
+  async function showFunnel() {
+    body.innerHTML = `<div class="d">⏳ Cargando funnel…</div>`;
+    let r;
+    try { r = await adminApi('funnel?days=' + days()); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar. Revisá el token.</div>`; return; }
+    const f = r.funnel || [];
+    body.innerHTML = f.map((s, i) => `
+      <div style="padding:12px 0;border-bottom:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <b>${i + 1}. ${esc(s.label)}</b>
+          <span style="font-size:20px;font-weight:800">${s.users}</span>
+        </div>
+        ${bar(s.pct_first)}
+        <div style="font-size:13px;color:var(--mut);margin-top:4px">${s.pct_prev}% del paso anterior · ${s.pct_first}% del inicio</div>
+      </div>`).join('') || `<div class="d">Todavía no hay datos.</div>`;
+  }
+  async function showActivity() {
+    body.innerHTML = `<div class="d">⏳ Cargando actividad…</div>`;
+    let r;
+    try { r = await adminApi('activity?days=' + days()); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const dau = (r.dau || []).slice(0, 14).reverse();
+    const maxD = Math.max(1, ...dau.map(x => x.n));
+    const tops = Object.entries(r.totals || {}).slice(0, 20);
+    body.innerHTML = `
+      <h4 style="margin:0 0 8px">Usuarios activos por día</h4>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:90px;margin-bottom:16px">
+        ${dau.map(x => `<div title="${esc(x.d)}: ${x.n}" style="flex:1;background:var(--cel);border-radius:4px 4px 0 0;height:${Math.max(3, x.n / maxD * 88)}px;min-width:8px"></div>`).join('')}
+      </div>
+      <h4 style="margin:0 0 8px">Eventos más comunes</h4>
+      ${tops.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-family:monospace;font-size:13px">${esc(k)}</span><b>${v}</b></div>`).join('') || '<div class="d">Sin datos.</div>'}`;
+  }
+  async function showUsers() {
+    body.innerHTML = `
+      <div class="field" style="display:flex;gap:8px"><input id="adQ" placeholder="email del usuario…" style="flex:1;font-size:16px"><button class="btn btn-primary btn-sm" id="adQGo">Buscar</button></div>
+      <div id="adUsers"></div><div id="adTimeline" style="margin-top:12px"></div>`;
+    const go = async () => {
+      const q = ($('#adQ').value || '').trim();
+      if (!q) return;
+      $('#adUsers').innerHTML = `<div class="d">⏳ Buscando…</div>`;
+      let r;
+      try { r = await adminApi('users?q=' + encodeURIComponent(q)); }
+      catch (e) { $('#adUsers').innerHTML = `<div class="err">Error.</div>`; return; }
+      $('#adUsers').innerHTML = (r.users || []).map(u => `
+        <button class="btn btn-ghost btn-block" data-uid="${u.id}" style="text-align:left;margin-bottom:6px">
+          <b>${esc(u.email)}</b><br><span style="font-size:12px;color:var(--mut)">${esc(u.plan || '')} · ${esc(u.plan_status || '')} · desde ${esc((u.created_at || '').slice(0, 10))}</span>
+        </button>`).join('') || `<div class="d">Sin resultados.</div>`;
+      $$('#adUsers [data-uid]').forEach(b => b.onclick = async () => {
+        $('#adTimeline').innerHTML = `<div class="d">⏳ Cargando línea de tiempo…</div>`;
+        let t;
+        try { t = await adminApi('events?user_id=' + b.dataset.uid + '&days=' + days() + '&limit=200'); }
+        catch (e) { $('#adTimeline').innerHTML = `<div class="err">Error.</div>`; return; }
+        $('#adTimeline').innerHTML = `<h4 style="margin:0 0 8px">Línea de tiempo</h4>` + ((t.events || []).map(e => {
+          let pr = '';
+          try { const o = JSON.parse(e.props || '{}'); const ks = Object.keys(o).slice(0, 4); if (ks.length) pr = ' <span style="color:var(--mut)">(' + ks.map(k => k + ': ' + String(o[k]).slice(0, 24)).join(', ') + ')</span>'; } catch (ee) {}
+          return `<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:14px"><span style="color:var(--mut);font-size:12px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:13px">${esc(e.name)}</b>${pr}</div>`;
+        }).join('') || `<div class="d">Sin eventos.</div>`);
+      });
+    };
+    $('#adQGo').onclick = go;
+    $('#adQ').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  }
+  $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
+    $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
+    b.classList.add('btn-primary');
+    ({ funnel: showFunnel, activity: showActivity, users: showUsers })[b.dataset.atab]();
+  });
+  const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
+  const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
+}
+
 window.addEventListener('hashchange', render);
 render();
+setTimeout(trackScreen, 800); // primer screen_view de la carga (hashchange no dispara al entrar)

@@ -493,6 +493,13 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Analytics propio: mide el uso para mejorar el producto. Fire-and-forget: jamás frena la página.
+const _TQ = [];
+function _tsid() { try { let s = localStorage.getItem('posta_sid'); if (!s) { s = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('posta_sid', s); } return s; } catch (e) { return 'nosid'; } }
+function trk(name, props) { try { if (!/^[a-z0-9_]{2,40}$/.test(name)) return; _TQ.push({ name, props: props || {}, sid: _tsid() }); if (_TQ.length > 200) _TQ.splice(0, _TQ.length - 200); } catch (e) {} }
+async function _tflush() { if (!_TQ.length) return; const b = _TQ.splice(0, 60); try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: b }), keepalive: true }); } catch (e) {} }
+setInterval(_tflush, 10000);
+try { window.addEventListener('pagehide', () => { try { if (_TQ.length && navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([JSON.stringify({ events: _TQ.splice(0, 60) })], { type: 'application/json' })); } catch (e) {} }); } catch (e) {}
 
 const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Restaurante","cafeteria":"Cafetería","bar":"Bar / Cervecería","belleza":"Belleza / Estética","barberia":"Barbería / Peluquería","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","deco":"Muebles / Decoración","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","tecnologia":"Tecnología / Celulares","turismo":"Turismo / Hotelería","viajes":"Agencia de viajes","eventos":"Eventos / Fiestas","fotografia":"Fotografía","arte":"Arte / Diseño","joyeria":"Joyería / Accesorios","flores":"Florería / Vivero","profesionales":"Servicios profesionales","servicios":"Servicios","otro":"Otro"};
 
@@ -564,6 +571,7 @@ function show(id) {
 
 // ---------- init ----------
 (async function init() {
+  trk('prueba_view');
  try {
   $('#f_cat').innerHTML = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('#btnGo').onclick = startTrial;
@@ -655,6 +663,7 @@ async function startTrial() {
   err.style.display = 'none';
   TRIAL_BIZ = biz;
   TRIAL_DESC = gv;
+  trk('prueba_step', { step: 'formulario' });
   showQuestions();
 }
 
@@ -705,6 +714,7 @@ function renderQ() {
   $('#qSkip').onclick = () => qAnswer('');
 }
 function qAnswer(value) {
+  trk('prueba_step', { step: 'pregunta_' + (qIdx + 1), key: ACTIVE_QS[qIdx].key });
   TRIAL_ANS[ACTIVE_QS[qIdx].key] = value;
   qIdx++;
   if (qIdx >= ACTIVE_QS.length) beginGeneration();
@@ -797,6 +807,7 @@ async function beginGeneration() {
 // ---------- resultados ----------
 function renderResults() {
   const t = TRIAL;
+  trk('prueba_complete', { cached: !!(t && t.cached) });
   const rb = $('#rBiz');
   if (rb) rb.textContent = t.business;
   if (t.cached) {
@@ -1218,6 +1229,7 @@ async function sendTrialChat(text) {
 let regSeen = false; // el modal ya se mostró (abierto por CTA o por auto-apertura)
 function openRegTrial() {
   regSeen = true;
+  trk('prueba_register');
   $('#rgSub').innerHTML = `Tus 5 posteos quedan <b>guardados en tu cuenta</b>, listos para revisar.<br>3 días de prueba, sin tarjeta.`;
   $('#rgErr').style.display = 'none';
   $('#ovReg').classList.add('open');
