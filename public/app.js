@@ -1404,6 +1404,7 @@ function reviewCardHTML(drafts, slots) {  const s = slots || [];
           ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
+        ${d.strategy_why ? `<div style="font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:8px">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
         <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
         <div class="aiedit" id="aiedit-${d.id}" hidden>
           <div class="aiedit-row">
@@ -1748,7 +1749,8 @@ function bindReview() {
         else render();
       } else render();
     } catch (e) {
-      if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
+      if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+      else if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
       b.disabled = false;
     }
   });
@@ -2167,7 +2169,22 @@ async function draftFromPreview(idea, prev) {
     hashtags = out.hashtags || hashtags;
   }
   let imagePath;
-  if (prev && prev.kind === 'photo' && prev.path) {
+  // Motor de imágenes nivel agencia: primero intenta un concept shot con IA
+  // usando las fotos que mandó en el chat (si mandó). Si falla, sigue como siempre.
+  const cm = $('#chatMsg');
+  const cmPrev = cm ? cm.innerHTML : null;
+  if (cm) cm.innerHTML = `<div class="okmsg">🎨 Creando la imagen…</div>`;
+  const chatRefs = CHAT_PHOTOS.filter(p => p && p.kind !== 'video' && p.file_path).slice(0, 2).map(p => p.file_path);
+  const csPath = await aiConceptShot({
+    idea,
+    tipo: idea.tipo || tipoFromText(idea.titulo),
+    headline: pickHeadline(idea, caption),
+    refs: chatRefs,
+  });
+  if (cm && cmPrev !== null) cm.innerHTML = cmPrev;
+  if (csPath) {
+    imagePath = csPath;
+  } else if (prev && prev.kind === 'photo' && prev.path) {
     imagePath = prev.path;
   } else {
     const cv = prev && prev.cv ? prev.cv : prev;
@@ -2178,7 +2195,7 @@ async function draftFromPreview(idea, prev) {
     imagePath = data.path;
   }
   try {
-    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: 'image' });
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: 'image', strategy_why: idea.porque || '' });
   } catch (e) {
     if (isPlanLimitErr(e)) {
       const q = await api.get('/api/quota').catch(() => null);
@@ -2469,26 +2486,29 @@ function chatDraftsCtx() {
 async function chatSend() {
   const inp = $('#chatInput');
   const text = (inp.value || '').trim();
-  if (!text) return;
+  // Las fotos se pueden mandar solas, sin texto: antes el botón no hacía nada en ese caso.
+  const unsent = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent);
+  if (!text && !unsent.length) return;
+  const sendText = text || (unsent.length === 1 ? '📷 Te mando una foto' : `📷 Te mando ${unsent.length} fotos`);
   const box = $('#chatBox');
   // Las opciones tocables se usan una sola vez: al responder se descartan
   const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
-  CHAT.push({ role: 'user', text });
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(text)}</div>`);
+  CHAT.push({ role: 'user', text: sendText });
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(sendText)}</div>`);
   inp.value = '';
   chatScroll();
   // "comentarios" → la IA trae los pendientes de Instagram y deja la respuesta lista, acá en el chat
-  if (/\bcomentarios?\b/i.test(text) && !/sin comentarios/i.test(text)) {
-    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
+  if (/\bcomentarios?\b/i.test(sendText) && !/sin comentarios/i.test(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     showCommentsInChat();
     return;
   }
   // Si la idea está cerrada y el mensaje es un pedido de edición, se aplica directo
-  if (CHAT_IDEA && chatEditCommand(text)) {
-    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text }] }).catch(() => {}); } catch (e) {}
+  if (CHAT_IDEA && chatEditCommand(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
     return;
   }
-  return chatExchange({ text, pushed: true });
+  return chatExchange({ text: sendText, pushed: true });
 }
 
 // Comentarios de IG dentro del chat: la IA los trae y deja la respuesta lista.
@@ -2806,25 +2826,37 @@ function suggestSlots(n, scheduledPosts) {
 }
 // El último post de la semana del autopilot es un reel: 3 escenas con fotos
 // del cliente (o diseños generados si no tiene) + textos de la idea.
-async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub) {
+async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub, onProgress) {
   const title = (idea.titulo || 'NOVEDAD').toUpperCase();
   const angle = String(sub || '').trim() || cortar(String(idea.titulo || ''), 90);
-  const usePhotos = photos.length > 0;
-  const sceneImg = async (text, k) => {
+  const tipo = (idea && idea.tipo) || (typeof tipoFromText === 'function' ? tipoFromText(String(idea.titulo || '') + ' ' + String(idea.angulo || '')) : '');
+  const refs = (photos || []).slice(0, 2).map(p => p.file_path).filter(Boolean);
+  const usePhotos = (photos || []).length > 0;
+  if (onProgress) onProgress('reel');
+  const sceneImg = async (headline, text, k) => {
+    // Nivel agencia: escena generada por el motor de conceptos (el titular ya va en la imagen,
+    // por eso no se superpone texto). Con refs del usuario: mismo producto, otra escena.
+    try {
+      const cp = await aiConceptShot({ idea, tipo, headline, refs });
+      if (cp) return { image_path: cp, text: '', duration: 3 };
+    } catch (e) {}
+    // Fallback: como antes (foto del usuario o canvas)
     if (usePhotos) return { image_path: photos[(idx + k) % photos.length].file_path, text, duration: 3 };
     // Sin fotos: generamos el diseño y lo usamos como escena (ya trae texto, no duplicamos)
     const image_path = await renderDesignImage({
       tpl: DESIGN_TPLS[(idx + k) % DESIGN_TPLS.length], pal: palIdx,
-      title: text.split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD',
+      title: String(headline || text).split(' ').slice(0, 5).join(' ').toUpperCase() || 'NOVEDAD',
       subtitle: angle, handle, photoImg: null, logoImg,
     });
     return { image_path, text: '', duration: 3 };
   };
-  const scenes = [
-    await sceneImg(title, 0),
-    await sceneImg(angle || title, 1),
-    await sceneImg(handle ? '@' + handle : 'SEGUINOS 👇', 2),
-  ];
+  // Escenas 1 y 2 en paralelo (cada una es una llamada al motor); la 3 es cierre de marca.
+  const [s1, s2] = await Promise.all([sceneImg(title, title, 0), sceneImg(angle, angle, 1)]);
+  const ctaText = handle ? '@' + handle : 'SEGUINOS 👇';
+  const s3 = usePhotos
+    ? { image_path: photos[(idx + 2) % photos.length].file_path, text: ctaText, duration: 3 }
+    : { image_path: await renderDesignImage({ tpl: DESIGN_TPLS[(idx + 2) % DESIGN_TPLS.length], pal: palIdx, title: ctaText, subtitle: '', handle, photoImg: null, logoImg }), text: '', duration: 3 };
+  const scenes = [s1, s2, s3];
   const r = await api.post('/api/videos', { scenes });
   return r.url;
 }
@@ -2852,7 +2884,37 @@ async function aiProductShot(refs, idea) {
   const r = await api.post('/api/product-shot', { refs, idea: idea.titulo || '', angle: idea.angulo || '' });
   return r && r.path ? r.path : null;
 }
-async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
+// Infiere el tipo de contenido desde el texto (el motor de imágenes lo necesita;
+// las ideas del chat y el creador manual no siempre traen tipo).
+function tipoFromText(t) {
+  const s = String(t || '').toLowerCase();
+  if (/promo|off|%|2x1|descuento|sale|oferta|liquidaci|cuotas|precio/i.test(s)) return 'promo';
+  if (/tip|consejo|c[oó]mo|gu[ií]a|aprende|aprend[eé]|truco|error/i.test(s)) return 'tip';
+  if (/detr[aá]s|bastidores|cocina|taller|equipo|proceso/i.test(s)) return 'detras';
+  if (/cliente|testimonio|rese[nñ]a|opini[oó]n|comunidad|gracias/i.test(s)) return 'social';
+  return 'novedad';
+}
+// Titular corto para la imagen: el título de la idea (máx 6 palabras) o la
+// primera línea del caption. Si no hay nada usable, '' (el backend genera sin texto).
+function pickHeadline(idea, caption = '') {
+  const tw = String((idea && idea.titulo) || '').trim().split(/\s+/).filter(Boolean);
+  if (tw.length) return tw.slice(0, 6).join(' ');
+  const cw = String(caption || '').split('\n')[0].trim().split(/\s+/).filter(Boolean);
+  return cw.length ? cw.slice(0, 6).join(' ') : '';
+}
+// Motor de imágenes nivel agencia: concept shot generado con IA a partir de la
+// idea y las fotos reales del cliente. Devuelve el path o null si falla
+// (el llamador cae al flujo clásico sin romper nada).
+async function aiConceptShot({ idea, tipo, headline, refs }) {
+  try {
+    const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [] }, { timeout: 120000 });
+    return r && r.path ? r.path : null;
+  } catch (e) {
+    console.warn('[concept-shot] no disponible, sigo con el flujo clásico:', (e && e.message) || e);
+    return null;
+  }
+}
+async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false, onProgress = null) {
   // Las fotos más nuevas van primero: las que sube esta semana (misión)
   // protagonizan los posteos, no adivinamos.
   const photos = assetPhotos().slice().reverse();
@@ -2875,10 +2937,23 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
       mediaType = 'video';
     } else {
       try {
-        imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx, out.suboverlay);
+        imagePath = await autopilotReel(idea, photos, logo, palIdx, handle, idx, out.suboverlay, onProgress);
         mediaType = 'video';
       } catch (e) { imagePath = null; /* fallback a diseño estático */ }
     }
+  }
+  if (!imagePath) {
+    // Motor de imágenes nivel agencia: primero intenta un concept shot con IA
+    // basado en las fotos reales del cliente (máx 2). Si falla, cae al flujo de siempre.
+    if (onProgress) onProgress('image');
+    const csPath = await aiConceptShot({
+      idea,
+      tipo: idea.tipo || tipoFromText(idea.titulo),
+      headline: pickHeadline(idea),
+      refs: photos.slice(0, 2).map(p => p.file_path),
+    });
+    if (onProgress) onProgress('base');
+    if (csPath) imagePath = csPath;
   }
   if (!imagePath) {
     // Titular sobre la imagen: lo escribe la IA (con punch); fallback al tema truncado.
@@ -2914,7 +2989,7 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false) {
     }
   }
   try {
-    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType, source_topic: idea.titulo || '', source_angle: idea.angulo || '', tipo: idea.tipo || '' });
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType, source_topic: idea.titulo || '', source_angle: idea.angulo || '', tipo: idea.tipo || '', strategy_why: idea.porque || '' });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
@@ -2981,10 +3056,15 @@ async function runAutopilot(n, tag) {
     for (let i = 0; i < picks.length; i++) {
       const idea = picks[i];
       const isReel = i === picks.length - 1; // el último post de la semana es un reel 🎬
-      prog.innerHTML = `<div class="okmsg">⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...</div>${liveHTML()}`;
+      const baseMsg = `⏳ Creando ${isReel ? 'reel' : 'posteo'} ${i + 1} de ${picks.length}: <b>${esc(idea.titulo)}</b>${isReel ? ' (puede tardar 1-2 min)' : ''}...`;
+      prog.innerHTML = `<div class="okmsg">${baseMsg}</div>${liveHTML()}`;
       let created = null;
       try {
-        created = await draftFromIdea(idea, isReel, i); // borrador: el cliente revisa antes de programar
+        // onProgress: estado amable mientras el motor de imágenes trabaja ("🎨 Creando la imagen…")
+        created = await draftFromIdea(idea, isReel, i, false, (phase) => {
+          const el = prog.querySelector('.okmsg');
+          if (el) el.innerHTML = phase === 'image' ? '🎨 Creando la imagen…' : phase === 'reel' ? '🎬 Creando las escenas del reel…' : baseMsg;
+        }); // borrador: el cliente revisa antes de programar
       } catch (e) {
         // Si el cupo se agotó a mitad de la corrida: cartel de mejora y mostrar lo ya creado
         if (isPlanLimitErr(e)) {
@@ -4009,6 +4089,190 @@ async function loadMissionCard() {  const el = $('#missionCard');
   const b = $('#missionUpload');
   if (b) b.onclick = () => { const cc = $('#chatCard'); if (cc) cc.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
 }
+
+/* ---------- "Ya salió": historial de publicados con outcome loop liviano ---------- */
+// Para posteos published de hace +24h sin señal de outcome se pregunta
+// "¿Este posteo te trajo clientes? 👍/👎" → señales brought_clients/no_clients.
+// p.signal viene del JOIN con post_signals: solo se saltea si ya es de outcome
+// (approved/rejected de la revisión no cuentan).
+function salioCardHTML(publishedList) {
+  const DAY = 24 * 3600 * 1000;
+  const now = Date.now();
+  const pubMs = (s) => {
+    try {
+      const t = String(s || '').trim().replace(' ', 'T');
+      const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(t) ? t : t + 'Z');
+      return isNaN(d) ? 0 : d.getTime();
+    } catch (e) { return 0; }
+  };
+  const items = publishedList.slice(0, 8).map(p => {
+    const old = pubMs(p.published_at) > 0 && (now - pubMs(p.published_at) > DAY);
+    const sig = p.signal || '';
+    const hasOutcome = sig === 'brought_clients' || sig === 'no_clients';
+    const media = p.media_type === 'video'
+      ? `<video src="${esc(p.image_path || '')}" muted preload="metadata" playsinline></video>`
+      : (p.image_path ? `<img src="${esc(p.image_path)}" alt="" loading="lazy">` : `<div style="width:120px;height:150px;border-radius:12px;background:#EEF2F6"></div>`);
+    let foot = '';
+    if (old && !hasOutcome) {
+      foot = `<div style="margin-top:6px">
+        <div style="font-size:11.5px;color:var(--mut);line-height:1.4;margin-bottom:4px">¿Este posteo te trajo clientes?</div>
+        <div class="pub-rate"><button class="sig-btn" data-oc-sig="brought_clients" data-id="${p.id}" title="Sí, me trajo clientes">👍</button><button class="sig-btn" data-oc-sig="no_clients" data-id="${p.id}" title="No">👎</button></div>
+      </div>`;
+    } else if (hasOutcome) {
+      foot = `<div style="font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.4">${sig === 'brought_clients' ? '✅ Te trajo clientes' : '📭 Sin clientes todavía'}</div>`;
+    }
+    return `<div class="pub-thumb">${media}${foot}</div>`;
+  }).join('');
+  return `
+  <div class="card" style="margin-top:12px">
+    <h3 style="margin:0 0 4px">✅ Ya salió</h3>
+    <p style="color:var(--mut);font-size:13px;margin:0 0 10px">Contanos cómo rindió cada posteo: así la IA aprende qué te trae clientes de verdad.</p>
+    <div class="pub-strip">${items}</div>
+  </div>`;
+}
+function bindOutcomeBtns() {
+  $$('[data-oc-sig]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try { await api.post(`/api/posts/${b.dataset.id}/signal`, { signal: b.dataset.ocSig }); }
+    catch (e) { b.disabled = false; return; }
+    render();
+  });
+}
+
+/* ---------- 🎙️ Contame de tu negocio: nota de voz → ADN ---------- */
+// Tarjeta pegada a la misión de fotos en Mi semana. El cliente habla ~2 minutos
+// de su negocio, se transcribe con Whisper y la IA extrae el ADN (productos,
+// promos, horarios, ubicación) vía POST /api/dna/from-audio.
+let DNAV_REC = null, DNAV_CHUNKS = [], DNAV_MIME = '', DNAV_TIMER = null, DNAV_START = 0;
+const DNA_LABELS = {
+  producto_estrella: '⭐ Tu producto estrella', cliente_ideal: '🎯 Tu cliente ideal',
+  diferencial: '✨ Lo que te diferencia', tono: '🗣️ Tono',
+  productos: '🛍️ Productos', servicios: '🛠️ Servicios', promos_activas: '🏷️ Promos activas',
+  horarios: '🕒 Horarios', ubicacion: '📍 Ubicación',
+};
+function dnaVoiceIdleHTML() {
+  return `
+  <div class="card" style="border:2px solid var(--cel)">
+    <h3 style="margin:0 0 4px">🎙️ Contame de tu negocio</h3>
+    <p style="color:var(--mut);font-size:14px;margin:0 0 12px">Hablame 2 minutos de tu negocio y la IA aprende cómo se ve lo que hacés.</p>
+    <div style="text-align:center"><button class="rev-voice-btn" id="dnaVoiceBtn">🎙️ Grabar nota de voz</button></div>
+    <div class="rev-voice-msg" id="dnaVoiceMsg" style="text-align:center"></div>
+  </div>`;
+}
+function loadDnaVoiceCard() {
+  const el = document.getElementById('dnaVoiceCard');
+  if (!el) return;
+  el.innerHTML = dnaVoiceIdleHTML();
+  const b = document.getElementById('dnaVoiceBtn');
+  if (b) b.onclick = dnaVoiceToggle;
+}
+function dnaVoiceMsg(html) { const m = document.getElementById('dnaVoiceMsg'); if (m) m.innerHTML = html; }
+function dnaVoiceTick() {
+  if (!DNAV_REC) return;
+  const b = document.getElementById('dnaVoiceBtn');
+  const s = Math.floor((Date.now() - DNAV_START) / 1000);
+  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  if (b) b.innerHTML = `🔴 ${t} — tocá para enviar`;
+}
+async function dnaVoiceToggle() {
+  if (DNAV_REC) { dnaVoiceStop(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 Tu navegador no soporta notas de voz.</span>');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    DNAV_CHUNKS = [];
+    DNAV_MIME = rec.mimeType || '';
+    rec.ondataavailable = e => { if (e.data && e.data.size) DNAV_CHUNKS.push(e.data); };
+    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); dnaVoiceSend(); };
+    DNAV_REC = rec;
+    rec.start();
+    DNAV_START = Date.now();
+    const b = document.getElementById('dnaVoiceBtn');
+    if (b) b.classList.add('btn-rec');
+    clearInterval(DNAV_TIMER);
+    DNAV_TIMER = setInterval(dnaVoiceTick, 500);
+    dnaVoiceTick();
+    dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">🔴 Grabando… contame qué vendés, tus precios y tus promos</span>');
+    setTimeout(() => { if (DNAV_REC) dnaVoiceStop(); }, 180000);
+  } catch (e) {
+    dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">🎙 No pudimos usar el micrófono. Revisá el permiso en tu navegador y probá de nuevo.</span>');
+  }
+}
+function dnaVoiceStop() {
+  const rec = DNAV_REC;
+  DNAV_REC = null;
+  clearInterval(DNAV_TIMER);
+  const b = document.getElementById('dnaVoiceBtn');
+  if (b) { b.classList.remove('btn-rec'); b.innerHTML = '🎙️ Grabar nota de voz'; }
+  if (rec) { try { rec.stop(); } catch (e) { dnaVoiceSend(); } }
+}
+async function dnaVoiceSend() {
+  const chunks = DNAV_CHUNKS; DNAV_CHUNKS = [];
+  const blob = new Blob(chunks, { type: DNAV_MIME || 'audio/mp4' });
+  if (blob.size < 1500) { dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">Parece que no se grabó nada. Probá de nuevo.</span>'); return; }
+  const dataUrl = await new Promise((res) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result || ''));
+    fr.onerror = () => res('');
+    fr.readAsDataURL(blob);
+  });
+  if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
+    dnaVoiceMsg('<span style="color:#B3402E;font-size:13px">No pudimos procesar la nota. Probá de nuevo.</span>');
+    return;
+  }
+  dnaVoiceMsg('<span style="color:var(--mut);font-size:13px">⏳ Escuchando y aprendiendo de tu negocio…</span>');
+  try {
+    const r = await api.post('/api/dna/from-audio', { audioDataUrl: dataUrl }, { timeout: 120000 });
+    const el = document.getElementById('dnaVoiceCard');
+    if (el) el.innerHTML = `
+    <div class="card" style="border:2px solid var(--cel)">
+      <h3 style="margin:0 0 4px">🧬 La IA ya te conoce mejor</h3>
+      ${dnaExtractedSummaryHTML(r.extracted)}
+      ${r.transcript ? `<details style="margin-top:10px"><summary style="font-size:13px;color:var(--dim);cursor:pointer">Ver lo que dijiste</summary><p style="font-size:13.5px;color:var(--mut);font-style:italic;margin:8px 0 0">“${esc(r.transcript)}”</p></details>` : ''}
+      <p style="font-size:13px;color:var(--mut);margin:12px 0 0">Lo guardamos en <b>Ajustes → Tu negocio</b>, donde podés verlo y corregirlo cuando quieras.</p>
+      <div style="text-align:center;margin-top:10px"><button class="rev-voice-btn" id="dnaVoiceAgain">🎙️ Contar más</button></div>
+      <div class="rev-voice-msg" id="dnaVoiceMsg" style="text-align:center"></div>
+    </div>`;
+    const ag = document.getElementById('dnaVoiceAgain');
+    if (ag) ag.onclick = () => { loadDnaVoiceCard(); dnaVoiceToggle(); };
+  } catch (e) {
+    dnaVoiceMsg(`<span style="color:#B3402E;font-size:13px">${esc((e && e.message) || 'No pudimos procesar la nota. Probá de nuevo.')}</span>`);
+  }
+}
+function dnaExtractedSummaryHTML(extracted) {
+  const x = extracted || {};
+  const rows = [];
+  const fmtItem = (it) => {
+    if (typeof it === 'string') return it.trim();
+    if (it && typeof it === 'object') {
+      const a = (it.nombre || it.titulo || it.pregunta || '').trim();
+      const b2 = (it.precio || it.detalle || it.respuesta || '').trim();
+      return b2 ? `${a} — ${b2}` : a;
+    }
+    return '';
+  };
+  for (const k of Object.keys(DNA_LABELS)) {
+    const v = x[k];
+    if (v === undefined || v === null) continue;
+    let txt = '';
+    if (Array.isArray(v)) {
+      const items = v.map(fmtItem).filter(Boolean);
+      if (!items.length) continue;
+      txt = items.slice(0, 6).join(' · ');
+    } else if (String(v).trim()) {
+      txt = String(v).trim();
+    }
+    if (!txt) continue;
+    rows.push(`<div style="font-size:14px;margin:6px 0"><b>${DNA_LABELS[k]}:</b> ${esc(txt)}</div>`);
+  }
+  if (!rows.length) return `<p style="font-size:14px;color:var(--mut);margin:8px 0">Te escuché perfecto, pero no detecté datos nuevos del negocio. Probá contando tus productos, precios o promos.</p>`;
+  return `<div style="margin-top:8px">${rows.join('')}</div>`;
+}
 function showStreakCelebration(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
@@ -4143,6 +4407,7 @@ async function semanaView() {
     ? `<span>⏱ ≈${mo.hours_saved_total} h ahorradas</span><span>📮 ${mo.published} ${mo.published === 1 ? 'publicado' : 'publicados'}</span>`
     : `<span>⏱ Cada posteo te ahorra ≈1,5 h</span>`;
   const stripInner = `
+    <span class="xp-title">Tu progreso</span>
     <span class="xp-row">${hasStreak
       ? `<span class="xp-lvl">${esc(sk.level.emoji)} ${esc(sk.level.name)}</span><span class="xp-pts">⚡ ${sk.current * 100} pts</span><span class="xp-timer">⏳ ${fmtStreakLeft(sk.expiresInMs)}</span>`
       : `<span class="xp-lvl">🔥 Publicá esta semana y empezá tu racha</span>`}</span>
@@ -4185,43 +4450,79 @@ async function semanaView() {
   // 📷 Mis fotos: tira finita arriba de todo (solo si hay fotos/videos). Desde acá se borran.
   const mediaStrip = (assetPhotos().length || assetVideos().length) ? mediaCardHTML() : '';
   const planSlot = weekDone ? '' : `<div id="perfAlert"></div><div id="weeklyPlan"></div>`;
-  // Programados: tira compacta dentro del bloque "posteos" — la semana existe y se ve.
-  const fmtShort = (iso) => {
-    try {
-      const s0 = String(iso || '');
-      let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
-      if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
-      const d = new Date(s);
-      if (isNaN(d)) return '';
-      const wd = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
-      const tm = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-      return `${wd} ${tm}`;
-    } catch (e) { return ''; }
+  // Programados: agenda agrupada por día (Hoy / Mañana / día de semana) — qué se viene y cuándo sale.
+  const schedTz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const schedDayKey = (d) => { try { return d.toLocaleDateString('en-CA', { timeZone: schedTz }); } catch (e) { return ''; } };
+  const schedParse = (iso) => {
+    const s0 = String(iso || '');
+    let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
+    if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+    return new Date(s);
   };
-  const scheduledStrip = scheduled.length ? `
-  <div class="card" style="margin-top:12px">
-    <h3 style="margin:0 0 8px">📅 Programados <span style="font-weight:400;color:var(--mut);font-size:13px">— salen solos</span></h3>
-    <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:2px">
-      ${scheduled.map(p => `
-      <div style="flex:0 0 auto;width:84px">
-        ${p.image_path ? `<img src="${esc(p.image_path)}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:10px;background:#EEF2F6">` : `<div style="width:84px;height:84px;border-radius:10px;background:#EEF2F6"></div>`}
-        <div style="font-size:11.5px;color:var(--mut);margin-top:3px;text-align:center">${esc(fmtShort(p.scheduled_at))}</div>
+  const schedTitle = (p) => {
+    const t = String(p.source_topic || '').trim();
+    if (t) return t;
+    const c = String(p.caption || '').split('\n')[0].trim();
+    return c ? cortar(c, 60) : 'Posteo';
+  };
+  const schedGroups = [];
+  {
+    const todayK = schedDayKey(new Date());
+    const tomorrowK = schedDayKey(new Date(Date.now() + 86400000));
+    scheduled.forEach(p => {
+      const d = schedParse(p.scheduled_at);
+      if (isNaN(d)) return;
+      const k = schedDayKey(d);
+      let g = schedGroups.find(g => g.k === k);
+      if (!g) {
+        let label;
+        if (k === todayK) label = 'Hoy';
+        else if (k === tomorrowK) label = 'Mañana';
+        else { try { label = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: schedTz }); } catch (e) { label = k || ''; } }
+        g = { k, label, items: [] };
+        schedGroups.push(g);
+      }
+      g.items.push({ p, d });
+    });
+  }
+  const scheduledStrip = schedGroups.length ? `
+  <div class="card sched-card">
+    <h3 style="margin:0">📅 Lo que se viene <span style="font-weight:400;color:var(--mut);font-size:13px">— sale solo</span></h3>
+    ${schedGroups.map(g => `
+    <div class="sched-day">
+      <div class="sched-daylabel">${esc(g.label)}</div>
+      ${g.items.map(({ p, d }) => `
+      <div class="sched-item">
+        ${p.image_path ? `<img class="sched-thumb" src="${esc(p.image_path)}" alt="">` : `<div class="sched-thumb"></div>`}
+        <div style="min-width:0">
+          <div class="sched-time">${esc(d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: schedTz }))}</div>
+          <div class="sched-title">${esc(schedTitle(p))}</div>
+        </div>
       </div>`).join('')}
-    </div>
+    </div>`).join('')}
   </div>` : '';
-  const topBlock = `${mediaStrip}${xpStrip}${expBanner}${planSlot}${failedCard}${heroCard}${redoMini}${scheduledStrip}${chatBlock}<div id="missionCard"></div>`;
+  // Historial "Ya salió": publicados con loop de outcome liviano (punto 4).
+  const publishedList = allPosts
+    .filter(p => p.status === 'published' && p.published_at)
+    .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  const salioCard = publishedList.length ? salioCardHTML(publishedList) : '';
+  // Tarjeta "Contame de tu negocio" (nota de voz → ADN): vive pegada a la misión de fotos.
+  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${heroCard}${redoMini}${scheduledStrip}${chatBlock}${mediaStrip}<div id="missionCard"></div><div id="dnaVoiceCard"></div>${salioCard}`;
 
   return topBlock;
 }
 
 function bindSemana() {
   bindSignalBtns();
+  bindOutcomeBtns(); // loop liviano: ¿este posteo te trajo clientes?
   bindAutopilot();
   bindChat();
   bindReview();
   bindMediaCard(); // tira "Mis fotos": borrar desde acá
   // Misión de fotos semanal
   loadMissionCard().catch(() => {});
+  // 🎙️ Contame de tu negocio: nota de voz → ADN (pegada a la misión de fotos)
+  loadDnaVoiceCard();
   // Sugerencia de serie + alerta honesta de rendimiento
   loadWeeklyPlan().catch(() => {});
   loadPerformanceAlert().catch(() => {});
@@ -4327,6 +4628,21 @@ function ajustesView() {
       <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
       <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
       <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
+    <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
+      <label style="font-size:15px">🧬 Lo que la IA sabe de tu negocio</label>
+      <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
+      <div class="field"><label>Productos <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
+        <textarea id="s_dna_productos" rows="3" placeholder="Remera oversize — $25.000&#10;Zapatillas retro — $89.900"></textarea></div>
+      <div class="field"><label>Promos activas <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
+        <textarea id="s_dna_promos" rows="2" placeholder="2x1 en remeras esta semana"></textarea></div>
+      <div class="row2">
+        <div class="field"><label>Horarios</label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
+        <div class="field"><label>Ubicación</label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-soft" id="btnSaveDna">💾 Guardar datos del negocio</button> <span id="dnaMsg"></span>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
       <span id="profDirty" style="display:none;color:var(--yel);font-size:13px;font-weight:700">● Tenemos cambios sin guardar</span>
@@ -5419,6 +5735,21 @@ function bindCreator() {
       try {
         const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
         if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
+        // Motor de imágenes nivel agencia: intenta primero un concept shot por opción
+        // con la foto del producto y las de la librería (máx 2). Si alguna falla,
+        // esa opción queda con su imagen canvas de siempre — nada se rompe.
+        const libRefs = (c.productPhoto ? [c.productPhoto] : [])
+          .concat(assetPhotos().slice(0, 2).map(a => a.file_path)).slice(0, 2);
+        const csTipo = tipoFromText(c.topic);
+        await Promise.all(out.options.map(async (o) => {
+          const p = await aiConceptShot({
+            idea: c.topic || o.title || '',
+            tipo: csTipo,
+            headline: pickHeadline({ titulo: o.title }, o.caption),
+            refs: libRefs,
+          });
+          if (p) o.image = p;
+        }));
         applyOptions(out);
       } catch (e) {
         $('#optErr').innerHTML = `<div class="err">${esc(e.message)}</div>`;
@@ -5492,7 +5823,7 @@ function bindCreator() {
     };
     $('#btnDraft').onclick = async () => {
       const btn = $('#btnDraft');
-      if (!(await checkQuotaOrModal())) return;
+      // Guardar borrador no consume cupo: el plan limita las publicaciones, no la creación.
       btn.disabled = true;
       c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
       try {
@@ -5611,6 +5942,46 @@ function bindSettings() {
     PROFILE = await api.get('/api/profile');
     SETTINGS = await api.get('/api/settings');
   };
+  // --- ADN del negocio (GET/PUT /api/dna): listas simples, sin fricción ---
+  const dnaEls = { productos: $('#s_dna_productos'), promos: $('#s_dna_promos'), horarios: $('#s_dna_horarios'), ubicacion: $('#s_dna_ubicacion') };
+  const splitNamePrice = (line) => {
+    const m = String(line || '').match(/^(.*?)\s+[—–-]\s+(.*)$/);
+    if (!m) return { nombre: String(line || '').trim(), precio: '' };
+    return { nombre: m[1].trim(), precio: m[2].trim() };
+  };
+  const dnaArrLine = (it) => {
+    if (typeof it === 'string') return it;
+    const a = (it.nombre || it.titulo || '').trim();
+    const b = (it.precio || it.detalle || '').trim();
+    return b ? `${a} — ${b}` : a;
+  };
+  const paintDna = (dna) => {
+    const d = dna || {};
+    if (dnaEls.productos) dnaEls.productos.value = (Array.isArray(d.productos) ? d.productos : []).map(dnaArrLine).filter(Boolean).join('\n');
+    if (dnaEls.promos) dnaEls.promos.value = (Array.isArray(d.promos_activas) ? d.promos_activas : []).map(dnaArrLine).filter(Boolean).join('\n');
+    if (dnaEls.horarios) dnaEls.horarios.value = d.horarios || '';
+    if (dnaEls.ubicacion) dnaEls.ubicacion.value = d.ubicacion || '';
+  };
+  if (dnaEls.productos) {
+    api.get('/api/dna').then(r => paintDna(r && r.dna)).catch(() => {});
+    const bDna = $('#btnSaveDna');
+    if (bDna) bDna.onclick = async () => {
+      const msg = $('#dnaMsg');
+      try {
+        const productos = dnaEls.productos.value.split('\n').map(splitNamePrice).filter(p => p.nombre).map(p => ({ nombre: p.nombre, precio: p.precio }));
+        const promos_activas = dnaEls.promos.value.split('\n').map(l => { const s = splitNamePrice(l); return s.nombre ? { titulo: s.nombre, detalle: s.precio } : null; }).filter(Boolean);
+        const r = await api.put('/api/dna', {
+          productos, promos_activas,
+          horarios: dnaEls.horarios.value.trim(),
+          ubicacion: dnaEls.ubicacion.value.trim(),
+        });
+        paintDna(r && r.dna);
+        if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:14px">✅ Guardado</span>';
+      } catch (e) {
+        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:14px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
+      }
+    };
+  }
   const bOnb = $('#btnOnb');
   if (bOnb) bOnb.onclick = () => { OB = freshOB(); location.hash = '#/app/onboarding'; };
   const bPrev = $('#btnPreview');
