@@ -259,8 +259,8 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .igmock-sec button.danger{color:#C0392B}
 .rev-when{display:flex;align-items:center;gap:8px}
 .rev-dt{font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--txt);font-family:inherit;flex:1;min-width:0}
-.rev-chatlink{background:none;border:0;color:var(--cel);font-size:14px;font-weight:700;cursor:pointer;padding:0;font-family:inherit}
 .rev-promise{text-align:center;font-size:13px;color:var(--dim);margin:8px 0 0}
+.rev-schedule{position:sticky;bottom:12px;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:8px;border-radius:18px;box-shadow:0 4px 22px rgba(10,30,51,.14);margin-top:12px}
 /* Borradores en vivo durante la generación */
 .live-strip{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .live-thumb{position:relative;width:56px;height:70px;flex-shrink:0}
@@ -290,7 +290,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .media-del{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;background:#fff;border:1.5px solid var(--line);color:#C0392B;font-size:16px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.18);padding:0}
 @media(max-width:760px){
   .rev-media{width:104px;height:144px}
-  .rev-schedule{position:sticky;bottom:12px;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:8px;border-radius:18px;box-shadow:0 4px 22px rgba(10,30,51,.14);margin-top:12px}
 }
 .empty{text-align:center;color:var(--dim);padding:56px 24px;font-size:15.5px;border:2px dashed var(--line);border-radius:20px;background:#FBFDFF;line-height:1.6}
 .empty .big{font-size:52px;margin-bottom:14px}

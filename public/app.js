@@ -1270,9 +1270,8 @@ function reviewCardHTML(drafts, slots) {
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">📋 Tus posteos de la semana</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 4px">Así se van a ver en tu Instagram. Revisalos — si te gustan, aceptalos y se programan solos. Nada sale sin tu OK.</p>
-    <p style="margin:0 0 14px"><button class="rev-chatlink" id="revChatLink">💬 ¿Cambiar algo? Decilo en el chat 👇</button></p>
-    ${chatCardHTML()}
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Así se van a ver en tu Instagram. Revisalos — si te gustan, aceptalos y se programan solos. Nada sale sin tu OK. ¿Cambiar algo? Pedilo en el chat 👇</p>
+    ${chatCardHTML(true)}
     ${drafts.map((d, i) => `
     <div class="igmock">
       <div class="igmock-head">
@@ -1315,9 +1314,6 @@ function reviewCardHTML(drafts, slots) {
 }
 
 function bindReview() {
-  // "¿Cambiar algo?" → sube al chat consultor, que ahora vive arriba de la revisión
-  const rcl = $('#revChatLink');
-  if (rcl) rcl.onclick = () => { const c = $('#chatCard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   // Tap en la miniatura abre el diseño en grande
   $$('#reviewCard [data-lightbox]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();
@@ -1847,15 +1843,21 @@ async function draftFromPreview(idea, prev) {
   }
 }
 
-function chatCardHTML() {
+function chatCardHTML(compact) {
   const msgs = CHAT.map(m => `
     <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+  // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
+  const desc = compact ? '' : `
+    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>`;
+  // En la revisión va integrado sin tarjeta anidada: solo un divisor sutil.
+  const wrap = compact
+    ? `<div id="chatCard" style="margin:16px 0 4px;padding-top:14px;border-top:1.5px solid var(--line)">`
+    : `<div class="card" id="chatCard">`;
   return `
-  <div class="card" id="chatCard">
-    <h3 style="margin:0 0 6px">💬 Pedime tu posteo</h3>
-    <p style="color:var(--mut);font-size:14px;line-height:1.6;margin:0 0 12px">Decime qué querés vender y cómo lo querés —con qué foto, qué tiene que decir, en qué colores— y te lo armo en el acto. Lo revisás antes de que salga.</p>
+  ${wrap}
+    <h3 style="margin:0 0 6px">💬 Pedime tu posteo</h3>${desc}
     <div class="chat-box" id="chatBox">
-      ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Pedime lo que quieras para tu Instagram: qué querés vender, qué tiene que decir, con qué foto y en qué colores. Lo armo acá mismo 👇</div>`}
+      ${msgs || `<div class="chat-msg ai">👋 ¡Hola! Pedime lo que quieras para tu Instagram y lo armo acá mismo 👇</div>`}
     </div>
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
@@ -1867,7 +1869,7 @@ function chatCardHTML() {
       <input type="file" id="chatFile" accept="image/*" multiple hidden>
     </div>
     <div id="chatMsg"></div>
-    <div style="font-size:12px;color:var(--mut);margin-top:10px">📷 Subí fotos de tu producto o pedime usar una que ya tengas: la IA las ve y las usa.</div>
+    <button id="chatPhotoHint" style="background:none;border:0;color:var(--cel);font-size:14px;font-weight:700;margin-top:10px;cursor:pointer;padding:0;font-family:inherit;text-align:left">📷 Subí fotos de tu producto — la IA las ve y las usa</button>
   </div>`;
 }
 
@@ -2208,6 +2210,8 @@ function bindChat() {
     att.onclick = () => file.click();
     file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; };
   }
+  const ph = $('#chatPhotoHint');
+  if (ph && file) ph.onclick = () => file.click();
   renderChatPhotos();
   renderChatPreviews();
   renderChatStoryboard();
