@@ -168,15 +168,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
    APP LOGUEADA
    ============================================================ */
 .app-shell{display:flex;min-height:100vh;background:var(--bg2)}
-/* sidebar */
-.sidebar{width:256px;flex:none;border-right:1px solid var(--line);padding:24px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;background:#FFFFFF}
-.side-link{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;color:var(--mut);font-size:13px;font-weight:600;cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit;transition:background .14s,color .14s}
-.side-link:hover{background:var(--bg2);color:var(--txt)}
-.side-link.on{background:var(--cel-soft);color:var(--txt);font-weight:700;box-shadow:inset 3px 0 0 var(--cel)}
-.side-link.on .ico{color:var(--cel)}
-.side-link .ico{font-size:16.5px;width:24px;text-align:center;flex:none}
-.sidebar .grow{flex:1}
-.side-user{margin:0 4px 8px;padding:10px 14px;font-size:11.5px;color:var(--mut);background:var(--bg2);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 /* main */
 .main{flex:1;min-width:0;padding:36px 32px 64px;max-width:1060px;background:transparent;animation:fadeUp .22s ease}
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -197,7 +188,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .tip-card{border:1.5px dashed var(--yl-line);background:rgba(254,193,77,.07)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 #s_catother_w{grid-column:1/-1}
-@media(max-width:760px){.row2{grid-template-columns:1fr}.sidebar{display:none}.main{padding:26px 16px 36px}.page-head{margin-bottom:22px}.ph-ico{width:46px;height:46px;font-size:19.5px;border-radius:14px}.page-head h1,.main>h1{font-size:21px}}
+@media(max-width:760px){.row2{grid-template-columns:1fr}.main{padding:26px 16px 36px}.page-head{margin-bottom:22px}.ph-ico{width:46px;height:46px;font-size:19.5px;border-radius:14px}.page-head h1,.main>h1{font-size:21px}}
 
 /* ---------- creator ---------- */
 .steps-bar{display:flex;gap:8px;margin-bottom:28px}
@@ -1195,28 +1186,12 @@ textarea.in{resize:vertical;min-height:96px}
 .chome-top .chome-sub{font-size:10.5px;color:var(--mut);line-height:1.4}
 .chome-top b{font-size:15px}
 .chat-cta-row{margin:6px 0 2px;align-self:flex-start}
-.chat-drafts{margin:16px 0 8px}
-.chat-drafts-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-.chat-drafts-head span{font-size:11.5px;color:var(--mut)}
-.chat-draft{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:10px;background:#fff;box-shadow:var(--shadow)}
-.chat-draft>img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;background:var(--bg2)}
-.chat-draft .igmock-badge{position:absolute;top:8px;right:8px}
-.chat-draft-body{padding:10px 12px 12px}
-.chat-draft-actions{display:flex;gap:8px;margin-top:10px}
-.chat-draft-actions .btn{flex:1}
 /* Avatar de la IA: burbujas del asistente en todo el chat */
 .chat-msg.ai{position:relative;margin-left:38px;max-width:calc(88% - 38px)}
 .chat-msg.ai::before{content:'';position:absolute;left:-36px;bottom:2px;width:30px;height:30px;border-radius:50%;background:#fff url('ai-avatar.png') center/cover no-repeat;border:1px solid var(--line)}
 .chome-ava{width:60px;height:60px;border-radius:50%;object-fit:cover;border:1.5px solid var(--line);flex-shrink:0}
 /* Avatar de posta.: limpio, sin nivelación (el que sube de nivel es el logo del cliente) */
 .chome-ava-wrap{position:relative;display:inline-block;flex-shrink:0;line-height:0}
-/* Tarjeta de misión de posta. en el chat */
-.chat-mission{max-width:100%;margin:4px 0 10px;background:#FFFDF6;border:1.5px dashed #FEC14D;border-radius:18px;padding:14px 16px}
-.chat-mission-tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#0A1E33;background:#FEC14D;border-radius:999px;padding:3px 10px;margin-bottom:8px}
-.chat-mission-intro{font-size:12.5px;color:var(--txt);margin:0 0 8px;line-height:1.5}
-.chat-mission-title{font-size:15px;font-weight:800;color:#0A1E33;margin:0 0 4px}
-.chat-mission-why{font-size:12px;color:var(--mut);margin:0 0 12px;line-height:1.5}
-.chat-mission .btn{font-size:14px}
 /* Nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con marco por tier + badge */
 .xp-brand{display:flex;align-items:center;gap:12px;margin-bottom:10px;min-width:0}
 .xp-logo-wrap{position:relative;width:48px;height:48px;flex:none;border-radius:50%;border:2px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;overflow:visible;background:rgba(255,255,255,.08)}
@@ -1280,28 +1255,6 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-quick button{padding:7px 12px;font-size:11px;font-weight:600}
 .chat-chips button{font-size:11px;padding:7px 12px}
 
-/* Tarjetas de borrador: compactas */
-.chat-drafts{margin:14px 0 8px}
-.chat-drafts-head{margin-bottom:6px}
-.chat-drafts-head b{font-size:13px}
-.chat-drafts-head span{font-size:11px}
-.chat-draft{margin-bottom:8px;border-radius:14px}
-.chat-draft>img{max-height:220px}
-.chat-draft-body{padding:8px 10px 10px}
-.chat-draft-body .rev-preview{font-size:12px}
-.chat-draft-actions{gap:6px;margin-top:8px}
-.chat-draft-actions .btn{padding-top:8px;padding-bottom:8px;font-size:12px}
-.chat-drafts #btnScheduleAll{padding:12px 20px;font-size:13px;margin-bottom:8px}
-.rev-more{font-size:11px}
-
-/* Tarjeta de misión: compacta */
-.chat-mission{padding:10px 12px;border-radius:14px;margin:4px 0 8px}
-.chat-mission-tag{font-size:10.5px;padding:2px 9px;margin-bottom:6px}
-.chat-mission-intro{font-size:11.5px;margin:0 0 6px}
-.chat-mission-title{font-size:13.5px;margin:0 0 3px}
-.chat-mission-why{font-size:11px;margin:0 0 10px}
-.chat-mission .btn{padding:12px 18px;font-size:13px}
-
 /* Input row: más slim (el campo de texto queda en 16px: anti-zoom iOS) */
 .chat-input-row{gap:6px}
 .chat-input-row .in{padding:10px 14px}
@@ -1346,6 +1299,80 @@ textarea.in{resize:vertical;min-height:96px}
   .main-chat #chatCard{flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
   .main-chat .chat-box{flex:1 1 auto;min-height:280px;max-height:calc(100vh - 400px);overflow-y:auto}
   .main-chat .chat-input-row{position:sticky;bottom:0;background:#fff;padding:10px 0 4px;z-index:5}
-  .main-chat .chat-drafts{margin-top:16px}
-  .main-chat .chat-mission{margin-top:4px}
+}
+
+/* ============================================================
+   DESKTOP SIN SIDEBAR (2026-09-29, pedido de Valentino): la app
+   logueada muestra únicamente el chat a pantalla completa. La
+   navegación vive en el topbar (≡ + píldora "Mi semana") y en el
+   drawer, igual que en mobile. Solo desktop: mobile intacto.
+   ============================================================ */
+@media(min-width:761px){
+  /* Topbar visible también en desktop */
+  .mtop{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.94);z-index:40;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .mtop-burger{width:44px;height:44px;border:none;background:none;font-size:26px;line-height:1;color:var(--txt);cursor:pointer;font-family:inherit;border-radius:12px;display:flex;align-items:center;justify-content:center}
+  .mtop-burger:hover{background:var(--bg2)}
+  .mtop-pill{display:inline-flex;align-items:center;background:var(--yl);color:#0A1E33;font-weight:800;font-size:13px;padding:11px 20px;border-radius:999px;text-decoration:none;font-family:inherit;white-space:nowrap;box-shadow:0 2px 10px rgba(254,193,77,.4)}
+  .mtop-pill:hover{filter:brightness(.97)}
+  /* Drawer con el mismo comportamiento que en mobile */
+  .drawer{display:flex;position:fixed;top:0;left:0;bottom:0;width:min(320px,84vw);background:#fff;z-index:91;transform:translateX(-105%);transition:transform .28s ease;flex-direction:column;gap:2px;padding:22px 16px;box-shadow:8px 0 32px rgba(10,30,51,.18)}
+  .drawer.open{transform:none}
+  .drawer-ov{display:block;position:fixed;inset:0;background:rgba(10,30,51,.45);z-index:90}
+  .drawer-ov[hidden]{display:none}
+  .drawer-link{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;font-family:inherit;font-size:15px;font-weight:600;color:var(--txt);padding:14px 12px;border-radius:14px;cursor:pointer;min-height:48px}
+  .drawer-link .di{font-size:20px;width:28px;text-align:center;flex-shrink:0}
+  .drawer-link:hover{background:var(--bg2)}
+  .drawer-link.on{color:var(--cel);font-weight:800}
+  .drawer-grow{flex:1}
+  .drawer-logout{color:#d33;font-weight:700}
+  .drawer-ident{display:flex;align-items:center;gap:12px;padding:2px 4px 16px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)}
+  .drawer-ident-logo{width:48px;height:48px;flex:none;border-radius:50%;overflow:hidden;background:var(--bg2);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center}
+  .drawer-ident-logo img{width:100%;height:100%;object-fit:cover;display:block}
+  .drawer-ident-fb{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#fff}
+  .drawer-ident-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .drawer-ident-txt b{font-size:14.5px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+  .drawer-ident-txt small{font-size:11.5px;font-weight:700;color:var(--cel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drawer-plan{flex:none;font-size:12px;font-weight:800;color:#0A1E33;background:var(--yl);padding:10px 14px;border-radius:999px;text-decoration:none;white-space:nowrap;min-height:40px;display:inline-flex;align-items:center;font-family:inherit}
+  .drawer-plan:hover{filter:brightness(.97)}
+  /* Layout: sin sidebar el chat ocupa todo el viewport */
+  .app-shell{min-height:calc(100vh - 69px)}
+  .main{margin:0 auto}
+  .main-chat{margin:0}
+  .main-chat .chat-box{max-height:calc(100vh - 470px)}
+}
+@media(prefers-reduced-motion:reduce){.drawer{transition:none}}
+
+/* ============================================================
+   MEJORAS 2026-09-29 (noche): unificación visual mobile,
+   drawer con identidad, badge en "Mi semana", animación de envío.
+   ============================================================ */
+
+/* 4. Animación sutil al enviar un mensaje (fade + slide-up ~200ms, CSS puro) */
+@keyframes msgIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.chat-msg.msg-in{animation:msgIn .2s ease-out}
+@media(prefers-reduced-motion:reduce){.chat-msg.msg-in{animation:none}}
+
+@media(max-width:760px){
+  /* 2. Drawer con identidad: logo + nombre del negocio + nivel + Mi plan */
+  .drawer-ident{display:flex;align-items:center;gap:12px;padding:2px 4px 16px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)}
+  .drawer-ident-logo{width:48px;height:48px;flex:none;border-radius:50%;overflow:hidden;background:var(--bg2);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center}
+  .drawer-ident-logo img{width:100%;height:100%;object-fit:cover;display:block}
+  .drawer-ident-fb{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#fff}
+  .drawer-ident-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .drawer-ident-txt b{font-size:14.5px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+  .drawer-ident-txt small{font-size:11.5px;font-weight:700;color:var(--cel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drawer-plan{flex:none;font-size:12px;font-weight:800;color:#0A1E33;background:var(--yl);padding:10px 14px;border-radius:999px;text-decoration:none;white-space:nowrap;touch-action:manipulation;min-height:40px;display:inline-flex;align-items:center;font-family:inherit}
+  .drawer-plan:active{transform:scale(.96)}
+  /* 3. La píldora no se parte en dos líneas cuando lleva el conteo */
+  .mtop-pill{white-space:nowrap}
+  /* 1. Unificación con el lenguaje del chat: radios generosos, aire, misma paleta */
+  .card{border-radius:22px;padding:22px 18px}
+  .post-item{border-radius:20px}
+  .igmock{border-radius:22px}
+  .setup-card{border-radius:20px}
+  .setup-row{border-radius:14px}
+  .rev-act{border-radius:16px}
+  .igmock-accept,.igmock-now{border-radius:16px}
+  .xp-strip{border-radius:22px}
+  .field input,.field select,.field textarea{border-radius:16px}
 }

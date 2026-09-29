@@ -641,14 +641,6 @@ function pwaIsInstalled() {
 function pwaIsStandalone() {
   try { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone; } catch (e) { return false; }
 }
-// Helper de layout: true en celular o app instalada (bottom nav en vez de sidebar).
-function isMobileApp() {
-  try {
-    if (pwaIsStandalone()) return true;
-    if (window.matchMedia && matchMedia('(max-width:760px)').matches) return true;
-    return false;
-  } catch (e) { return false; }
-}
 function pwaIsIos() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
 }
@@ -754,11 +746,11 @@ function appShell(tab, content) {
   return `
   <div class="mtop">
     <button class="mtop-burger" id="mtopBurger" aria-label="Abrir menú">≡</button>
-    <a class="mtop-pill" href="#/app/semana">Mi semana</a>
+    <a class="mtop-pill" id="weekPill" href="#/app/semana">${weekPillLabel()}</a>
   </div>
   <div class="drawer-ov" id="drawerOv" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Menú">
-    <a class="logo" href="#/app/chat" id="drawerLogo">Posta<span class="dot">.</span></a>
+    <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -766,14 +758,6 @@ function appShell(tab, content) {
   </aside>
   ${setupChecklistHtml()}
   <div class="app-shell">
-    <div class="sidebar">
-      <a class="logo" href="#/app/chat" style="padding:6px 16px 20px">Posta<span class="dot">.</span></a>
-      <div class="grow"></div>
-      <div class="side-user">${esc(ME?.email || '')}</div>
-      <button class="side-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="ico">💬</span>Chat</button>
-      <button class="side-link ${tab === 'semana' ? 'on' : ''}" data-tab="semana"><span class="ico">📋</span>Mi semana</button>
-      <button class="side-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="ico">⚙️</span>Ajustes</button>
-    </div>
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>`;
 }
@@ -1885,58 +1869,98 @@ function bindReview() {
 
 // "📅 Programar mi semana →": un tap programa TODOS los borradores a sus
 // mejores horarios. El tap ES la aprobación (sin él, nada se programa ni publica).
+// Núcleo de "Programar mi semana": lo usan #btnScheduleAll (Mi semana) y el
+// chip del chat. Sin salir de la pantalla: programa todo y festeja en modal.
+async function doScheduleAll(btn) {
+  const b = btn || document.getElementById('btnScheduleAll');
+  const m = $('#revMsg');
+  // Sin Instagram conectado, "sale solo" es mentira: mismo gate que el accept individual.
+  if (!(PROFILE && PROFILE.ig_connected)) {
+    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+    const g = $('#revIgGo');
+    if (g) g.onclick = () => igConnectHere();
+    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (b) b.disabled = true;
+  const old = b ? b.innerHTML : '';
+  if (b) b.innerHTML = '⏳ Programando tu semana…';
+  try {
+    const r = await api.post('/api/posts/schedule-all', {});
+    if (r && r.ok) {
+      // Festejo + handoff a la agenda "Lo que se viene" con la semana programada.
+      const n = (r.scheduled || []).length;
+      track('schedule_all', { count: n });
+      // Ya no hay borradores: la píldora y los chips se actualizan en el acto.
+      try { REVIEW_DRAFTS = []; } catch (e) {}
+      try { paintWeekPill(); } catch (e) {}
+      try { renderQuickChips([], r.scheduled || [], false); } catch (e) {}
+      streakModalShell(`
+        <div class="big-emoji">📅</div>
+        <h3 style="margin:12px 0 4px">✅ Tu semana está programada</h3>
+        <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+        <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
+        ${celebRefHTML()}
+        <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
+      const cmo = document.getElementById('streakModal');
+      if (cmo) wireCelebRef(cmo);
+      const cg = $('#celebGoSa');
+      if (cg) cg.onclick = () => {
+        closeStreakModal();
+        render().then(() => {
+          const sc = document.querySelector('.sched-card');
+          if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      };
+      else render();
+    }
+  } catch (e) {
+    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    else if (m) { m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (b) { b.disabled = false; b.innerHTML = old; }
+  }
+}
 function bindScheduleAll() {
   const b = document.getElementById('btnScheduleAll');
   if (!b) return;
-  b.onclick = async () => {
-    const m = $('#revMsg');
-    // Sin Instagram conectado, "sale solo" es mentira: mismo gate que el accept individual.
-    if (!(PROFILE && PROFILE.ig_connected)) {
-      if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
-      const g = $('#revIgGo');
-      if (g) g.onclick = () => igConnectHere();
-      if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    b.disabled = true;
-    const old = b.innerHTML;
-    b.innerHTML = '⏳ Programando tu semana…';
-    try {
-      const r = await api.post('/api/posts/schedule-all', {});
-      if (r && r.ok) {
-        // Festejo + handoff a la agenda "Lo que se viene" con la semana programada.
-        const n = (r.scheduled || []).length;
-        track('schedule_all', { count: n });
-        streakModalShell(`
-          <div class="big-emoji">📅</div>
-          <h3 style="margin:12px 0 4px">✅ Tu semana está programada</h3>
-          <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
-          <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
-          ${celebRefHTML()}
-          <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
-        const cmo = document.getElementById('streakModal');
-        if (cmo) wireCelebRef(cmo);
-        const cg = $('#celebGoSa');
-        if (cg) cg.onclick = () => {
-          closeStreakModal();
-          render().then(() => {
-            const sc = document.querySelector('.sched-card');
-            if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          });
-        };
-        else render();
-      }
-    } catch (e) {
-      if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
-      else if (m) { m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-      b.disabled = false;
-      b.innerHTML = old;
-    }
-  };
+  b.onclick = () => doScheduleAll(b);
 }
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
 let REVIEW_DRAFTS = [];
+// Píldora "Mi semana" del topbar: muestra cuántos borradores pendientes hay.
+// Lee REVIEW_DRAFTS (borradores de la semana actual pendientes de acción del cliente).
+function weekPillLabel() {
+  const n = (typeof REVIEW_DRAFTS !== 'undefined' && Array.isArray(REVIEW_DRAFTS)) ? REVIEW_DRAFTS.length : 0;
+  return n > 0 ? `Mi semana · ${n}` : 'Mi semana';
+}
+function paintWeekPill() {
+  try { const p = document.getElementById('weekPill'); if (p) p.textContent = weekPillLabel(); } catch (e) {}
+}
+// Bloque de identidad del drawer mobile: logo + nombre del negocio + nivel de la marca + Mi plan.
+let __drawerLvl = null, __drawerLvlAt = 0;
+async function paintDrawerIdent() {
+  const mount = document.getElementById('drawerIdent');
+  if (!mount) return;
+  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  let logo = (typeof assetLogo === 'function') ? assetLogo() : null;
+  if (!logo) { try { const a = await api.get('/api/assets'); if (Array.isArray(a)) logo = a.find(x => x.kind === 'logo'); } catch (e) {} }
+  if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
+    try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
+  }
+  const lv = (__drawerLvl && __drawerLvl.level) || 1;
+  const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
+  const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
+  const fbBg = bc[0] || '#2793C8';
+  const initial = (biz.trim()[0] || 'M').toUpperCase();
+  const logoHtml = (logo && logo.file_path)
+    ? `<img src="${esc(logo.file_path)}" alt="logo de ${esc(biz)}">`
+    : `<span class="drawer-ident-fb" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
+  mount.innerHTML = `
+    <span class="drawer-ident-logo">${logoHtml}</span>
+    <span class="drawer-ident-txt"><b>${esc(biz)}</b><small>Nivel ${lv} · ${esc(lvName)}</small></span>
+    <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>`;
+}
 // Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen
 // borradores de la N+1, el teaser permite verlos como semana corriente.
 let NEXTWEEK_VIEW = false;
@@ -2735,7 +2759,7 @@ async function chatSend() {
   const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
   CHAT.push({ role: 'user', text: sendText });
   track('chat_message', { len: sendText.length });
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(sendText)}</div>`);
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
   inp.value = '';
   chatScroll();
   // "Armame la semana" (chip) → dispara el autopilot directo, como el CTA.
@@ -2891,7 +2915,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
     const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
     CHAT.push({ role: 'user', text });
-    box.insertAdjacentHTML('beforeend', `<div class="chat-msg u">${esc(display || text)}</div>`);
+    box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(display || text)}</div>`);
     chatScroll();
   }
   btn.disabled = true;
@@ -3078,8 +3102,6 @@ async function chatView() {
     ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
     <div id="apProg-semana"></div>
-    <div id="chatDraftCards"></div>
-    <div id="chatMissionMount"></div>
   </div>`;
 }
 
@@ -3105,7 +3127,8 @@ function chatSayLocal(text) {
 }
 
 // Saludo proactivo con el estado REAL (una sola burbuja, una vez por sesión).
-// La IA "recibe": sabe si la semana está lista, armándose, programada o vacía.
+// El chat es 100% conversacional: Posty AVISA con texto + chips/link, nunca con
+// tarjetas pesadas. La gestión semanal vive en Mi semana.
 async function chatGreet() {
   let greeted = false;
   try { greeted = sessionStorage.getItem('posta_chat_greet') === '1'; } catch (e) {}
@@ -3116,15 +3139,33 @@ async function chatGreet() {
   const drafts = all.filter(p => p.status === 'draft' && (!p.week_key || p.week_key === thisMon)).sort((a, b) => a.id - b.id);
   const scheduled = all.filter(p => p.status === 'scheduled');
   try { REVIEW_DRAFTS = drafts; } catch (e) {}
-  renderChatDraftCards(drafts);
+  try { paintWeekPill(); } catch (e) {}
+  const running = (typeof AUTOPILOT_RUNNING !== 'undefined' && AUTOPILOT_RUNNING) || window.__autoWeekRunning;
   // Chips de quick-reply contextuales (van siempre, el saludo solo una vez por sesión).
-  try { renderQuickChips(drafts, scheduled, (typeof AUTOPILOT_RUNNING !== 'undefined' && AUTOPILOT_RUNNING) || window.__autoWeekRunning); } catch (e) {}
-  // Nivel del avatar + misiones: siempre se actualizan (no son el saludo).
+  try { renderQuickChips(drafts, scheduled, running); } catch (e) {}
+  // Nivel del avatar: siempre se actualiza (no es el saludo).
   try { chatAvatarLevel(); } catch (e) {}
-  try { chatMissions(all); } catch (e) {}
+  // Misiones sin tarjeta en el chat: festejo si se cumplió alguna + dato de la
+  // activa para el aviso de una línea.
+  let missionActive = null;
+  try {
+    const mi = await chatActiveMission(all);
+    if (mi && mi.newly && mi.newly.length && !greeted) {
+      const cm = POSTA_MISSION_DEFS.find(x => x.id === mi.newly[0]);
+      if (cm) chatSayLocal(`¡Misión cumplida! 🎉 ${cm.title} — seguimos.`);
+    }
+    if (mi && !mi.active && mi.nowDone.length && !greeted) {
+      let allOk = false;
+      try { allOk = localStorage.getItem('posta_missions_all') === '1'; } catch (e) {}
+      if (!allOk) {
+        try { localStorage.setItem('posta_missions_all', '1'); } catch (e) {}
+        chatSayLocal('Tu Instagram está perfecto 🌟 Misión cumplida — yo me ocupo de que siga así.');
+      }
+    }
+    missionActive = mi && mi.active;
+  } catch (e) {}
   if (greeted) return;
   try { sessionStorage.setItem('posta_chat_greet', '1'); } catch (e) {}
-  const running = (typeof AUTOPILOT_RUNNING !== 'undefined' && AUTOPILOT_RUNNING) || window.__autoWeekRunning;
   // "Rueditas": si la primera semana está en revisión, el cliente ve el estado
   // lindo y no el CTA de armar semana (reemplaza el saludo, no se suma).
   let inReview = 0;
@@ -3135,11 +3176,20 @@ async function chatGreet() {
   } else if (inReview > 0) {
     text = 'Tu primera semana está en el horno ✨ La estamos dejando perfecta — te aviso acá cuando puedas revisarla.';
   } else if (drafts.length > 0) {
-    text = `Tu semana está lista ✅ ¿La revisamos? Te la dejé acá abajo 👇`;
+    const n = drafts.length;
+    text = `Dejé ${n} ${n === 1 ? 'borrador listo' : 'borradores listos'} en Mi semana 👇`;
   } else if (scheduled.length > 0) {
     // Resumen proactivo (hoy / mañana a la noche): reemplaza el saludo
     // genérico, no se suma — una sola burbuja por apertura.
     text = chatSchedSummary(scheduled) || 'Tu semana sale sola 📅 La próxima ya se está armando.';
+  } else if (missionActive) {
+    const mTitle = String(missionActive.title || '').toLowerCase();
+    if (missionActive.act === 'comments') {
+      text = 'Tenés comentarios sin responder 💬 Escribime "comentarios" y los vemos juntos.';
+    } else {
+      const dest = missionActive.go === '#/app/ajustes' ? 'Ajustes' : 'Mi semana';
+      text = `Falta una cosa para que tu Instagram quede perfecto: ${mTitle} 👇 Lo resolvés en un toque desde ${dest}.`;
+    }
   } else {
     text = '¿Te armo tu semana? 👇';
     cta = `<div class="chat-cta-row"><button class="btn btn-primary" data-autopilot="semana">⚡ Armar mi semana</button></div>`;
@@ -3158,53 +3208,23 @@ async function chatGreet() {
 // Tarjetas de borrador dentro del chat: reusan las acciones de la revisión
 // (data-revaccept / data-revvars vía bindReview, #btnScheduleAll vía bindScheduleAll).
 // Nada se publica sin el tap: el ✅ programa ese borrador, el 📅 programa toda la semana.
-async function renderChatDraftCards(drafts) {
-  const mount = document.getElementById('chatDraftCards');
-  if (!mount) return;
-  let list = drafts;
-  if (!Array.isArray(list)) {
-    try {
-      const all = await api.get('/api/posts');
-      const thisMon = mondayKey(new Date());
-      list = all.filter(p => p.status === 'draft' && (!p.week_key || p.week_key === thisMon)).sort((a, b) => a.id - b.id);
-    } catch (e) { list = []; }
-  }
-  try { REVIEW_DRAFTS = list; } catch (e) {}
-  if (!list.length) { mount.innerHTML = ''; return; }
-  const n = list.length;
-  mount.innerHTML = `
-  <div class="chat-drafts">
-    <div class="chat-drafts-head"><b>📋 Tu semana</b><span>${n} ${n === 1 ? 'borrador' : 'borradores'}</span></div>
-    <button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin-bottom:10px">📅 Programar mi semana →</button>
-    ${list.map((d, i) => `
-    <div class="chat-draft">
-      ${d.image_path ? `<img src="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" alt="Borrador ${i + 1}" loading="lazy">` : ''}
-      ${d.media_type === 'video' ? `<span class="igmock-badge">🎬 Reel</span>` : ''}
-      ${d.media_type === 'story' ? `<span class="igmock-badge">📱 Historia</span>` : ''}
-      <div class="chat-draft-body">
-        <div class="rev-preview" data-revpreview="${d.id}">${esc((d.caption || '').trim() || 'Sin texto todavía')}</div>
-        ${((d.caption || '').length > 120) ? `<button class="rev-more" data-revmore="${d.id}">ver más ▾</button>` : ''}
-        <div class="chat-draft-actions">
-          <button class="btn btn-primary btn-sm" data-revaccept="${d.id}">✅ Programar</button>
-          <button class="btn btn-soft btn-sm" data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">🔄 Otras 3</button>
-        </div>
-        <div id="revvar-${d.id}"></div>
-      </div>
-    </div>`).join('')}
-  </div>`;
-  if (typeof bindReview === 'function') bindReview();
-  if (typeof bindScheduleAll === 'function') bindScheduleAll();
-  // Lightbox en las tarjetas del chat (bindReview lo scopea a #reviewCard).
-  $$('#chatDraftCards [data-lightbox]').forEach(el => el.onclick = (e) => {
-    e.stopPropagation();
-    if (typeof openLightbox === 'function') openLightbox(el.dataset.lightbox, el.dataset.video === '1');
-  });
+// La píldora "Mi semana · N" se alimenta sin tarjetas: refresca el conteo de
+// borradores de la semana actual (misma fuente que usaba el bloque del chat).
+async function refreshWeekPill() {
+  try {
+    const all = await api.get('/api/posts');
+    const thisMon = mondayKey(new Date());
+    REVIEW_DRAFTS = all.filter(p => p.status === 'draft' && (!p.week_key || p.week_key === thisMon)).sort((a, b) => a.id - b.id);
+  } catch (e) { try { REVIEW_DRAFTS = []; } catch (e2) {} }
+  try { paintWeekPill(); } catch (e) {}
 }
 
 
 /* ---------- CAPA PROACTIVA DEL CHAT ---------- */
 // Chips de quick-reply contextuales sobre el input: un tap manda el mensaje.
 // El estado ya lo trae chatGreet (no fetchea de más).
+// Chips de quick-reply contextuales sobre el input. Aceptan texto (manda el
+// mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
   const card = document.getElementById('chatCard');
   const inputRow = card ? card.querySelector('.chat-input-row') : null;
@@ -3220,16 +3240,26 @@ function renderQuickChips(drafts, scheduled, running) {
   let chips;
   if (running) {
     chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬'];
-  } else if (dN > 0 || sN > 0) {
+  } else if (dN > 0) {
+    chips = [
+      { t: 'Ver Mi semana 👇', go: '#/app/semana' },
+      { t: '📅 Programar mi semana', do: 'schedule' },
+      '¿Qué sale esta semana? 📅',
+    ];
+  } else if (sN > 0) {
     chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬', '💡 Dame una idea para vender'];
   } else {
     chips = ['⚡ Armame la semana', '💡 Dame una idea para vender'];
   }
-  mount.innerHTML = chips.map(c => `<button type="button" data-qchip="${esc(c)}">${esc(c)}</button>`).join('');
+  mount.innerHTML = chips.map((c, i) => `<button type="button" data-qchip="${i}">${esc(typeof c === 'string' ? c : c.t)}</button>`).join('');
   mount.querySelectorAll('[data-qchip]').forEach(b => b.onclick = () => {
+    const c = chips[+b.dataset.qchip];
+    if (c && typeof c !== 'string' && c.go) { location.hash = c.go; return; }
+    if (c && typeof c !== 'string' && c.do === 'schedule') { doScheduleAll(b); return; }
+    const t = typeof c === 'string' ? c : (c && c.t);
     const i = document.getElementById('chatInput');
-    if (!i) return;
-    i.value = b.dataset.qchip;
+    if (!i || !t) return;
+    i.value = t;
     chatSend();
   });
 }
@@ -3301,7 +3331,7 @@ async function showWeekInChat() {
     .filter(x => !isNaN(x.d)).sort((a, b) => a.d - b.d);
   if (!items.length) { chatSayLocal('Todavía no tenés nada programado. ¿Te armo la semana? 👇'); return; }
   const todayK = K.dayKey(new Date()), tomorrowK = K.dayKey(new Date(Date.now() + 864e5));
-  const lines = ['📅 Tu semana:'];
+  const lines = ['📅 Mi semana:'];
   items.slice(0, 10).forEach(x => lines.push(`• ${K.dayLabel(x.d, todayK, tomorrowK)} ${K.hour(x.d)} — ${K.title(x.p)}`));
   chatSayLocal(lines.join('\n'));
   try { track('chat_week_summary'); } catch (e) {}
@@ -3420,9 +3450,9 @@ const POSTA_MISSION_DEFS = [
   { id: 'comments', title: 'Respondé tus comentarios', why: 'Responder rápido trae clientes.', cta: 'Ver comentarios', act: 'comments' },
 ];
 
-async function chatMissions(all) {
-  const mount = document.getElementById('chatMissionMount');
-  if (!mount) return;
+// Misión activa SIN tarjeta: solo el dato (para el aviso de una línea del saludo).
+// Devuelve {active, newly, nowDone}. El festejo lo hace el llamador con chatSayLocal.
+async function chatActiveMission(all) {
   const posts = Array.isArray(all) ? all : [];
   const published = posts.filter(p => p.status === 'published');
   const scheduled = posts.filter(p => p.status === 'scheduled');
@@ -3450,54 +3480,9 @@ async function chatMissions(all) {
   try { seen = JSON.parse(localStorage.getItem('posta_missions_done') || '[]'); } catch (e) { seen = []; }
   const nowDone = POSTA_MISSION_DEFS.filter(m => done[m.id]).map(m => m.id);
   const newly = nowDone.filter(id => !seen.includes(id));
-  if (newly.length) {
-    const m = POSTA_MISSION_DEFS.find(x => x.id === newly[0]);
-    if (m) chatSayLocal(`¡Misión cumplida! 🎉 ${m.title} — seguimos.`);
-    try { localStorage.setItem('posta_missions_done', JSON.stringify(Array.from(new Set(seen.concat(nowDone))))); } catch (e) {}
-  }
-  const active = POSTA_MISSION_DEFS.find(m => !done[m.id]);
-  if (!active) {
-    mount.innerHTML = '';
-    // Todo hecho: felicitar una sola vez, sin spamear.
-    let ok = false;
-    try { ok = localStorage.getItem('posta_missions_all') === '1'; } catch (e) {}
-    if (!ok && nowDone.length) {
-      try { localStorage.setItem('posta_missions_all', '1'); } catch (e) {}
-      chatSayLocal('Tu Instagram está perfecto 🌟 Misión cumplida — yo me ocupo de que siga así.');
-    }
-    return;
-  }
-  mount.innerHTML = `
-  <div class="chat-mission">
-    <div class="chat-mission-tag">🎯 Misión</div>
-    <p class="chat-mission-intro">Para que tu Instagram quede perfecto, empecemos por esto 👇</p>
-    <p class="chat-mission-title">${esc(active.title)}</p>
-    <p class="chat-mission-why">${esc(active.why)}</p>
-    <button class="btn btn-primary btn-block" data-mcta="${esc(active.id)}">${esc(active.cta)}</button>
-  </div>`;
-  const b = mount.querySelector('[data-mcta]');
-  if (b) b.onclick = () => {
-    try { track('chat_mission_cta', { mission: active.id }); } catch (e) {}
-    if (active.go) { location.hash = active.go; return; }
-    if (active.act === 'drafts') {
-      const el = document.getElementById('chatDraftCards');
-      if (el && el.innerHTML.trim()) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-      const i = document.getElementById('chatInput');
-      if (i) { i.value = '⚡ Armame la semana'; chatSend(); }
-      return;
-    }
-    if (active.act === 'schedule') {
-      const s = document.getElementById('btnScheduleAll');
-      if (s) { s.click(); return; }
-      chatSayLocal('Todavía no hay borradores para programar — armemos tu semana primero 👇');
-      return;
-    }
-    if (active.act === 'comments') {
-      const i = document.getElementById('chatInput');
-      if (i) { i.value = 'comentarios'; chatSend(); }
-      return;
-    }
-  };
+  try { localStorage.setItem('posta_missions_done', JSON.stringify(Array.from(new Set(seen.concat(nowDone))))); } catch (e) {}
+  const active = POSTA_MISSION_DEFS.find(m => !done[m.id]) || null;
+  return { active, newly, nowDone };
 }
 
 async function renderDesignImage(o) {
@@ -3876,11 +3861,14 @@ async function runAutopilot(n, tag) {
     if (firstErr && !live.length) throw firstErr;
     prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
     // Chat-first: si el usuario está en el chat, la promesa "te aviso acá mismo"
-    // se cumple acá — el aviso cae como mensaje de la IA y se muestran las tarjetas.
+    // se cumple acá — el aviso cae como mensaje de la IA (sin tarjetas: la
+    // gestión vive en Mi semana) y se refrescan píldora + chips.
     try {
       if ((location.hash || '').startsWith('#/app/chat') && document.getElementById('chatBox')) {
-        chatSayLocal('¡Tu semana está lista! 📋 ¿La revisamos? 👇');
-        if (typeof renderChatDraftCards === 'function') renderChatDraftCards();
+        chatSayLocal('¡Tu semana está lista! 📋 La dejé en Mi semana para que la revises 👇');
+        if (typeof refreshWeekPill === 'function') refreshWeekPill().then(() => {
+          try { renderQuickChips(REVIEW_DRAFTS, [], false); } catch (e) {}
+        });
       }
     } catch (e) {}
     // Historias automáticas: 2 por semana con las primeras ideas (foto + título).
@@ -6654,8 +6642,8 @@ function bindApp(tab) {
   if (bg) bg.onclick = openDrawer;
   const dov = $('#drawerOv');
   if (dov) dov.onclick = closeDrawer;
-  const dlg = $('#drawerLogo');
-  if (dlg) dlg.onclick = closeDrawer;
+  try { paintDrawerIdent(); } catch (e) {}
+  $$('.drawer-plan').forEach(a => { a.onclick = () => closeDrawer(); });
   const dlo = $('#drawerLogout');
   if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
 
