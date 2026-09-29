@@ -426,4 +426,22 @@ CREATE TABLE IF NOT EXISTS content_learnings (
 // ("por qué este posteo vende para este negocio"), generada junto con la idea.
 try { db.exec(`ALTER TABLE posts ADD COLUMN strategy_why TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
+// "Primera semana con rueditas" (2026-09-29): los primeros borradores de cada
+// cliente pasan por revisión (humana o por agente) antes de ser visibles.
+// needs_review=1 => el borrador existe pero el cliente no lo ve todavía.
+try { db.exec(`ALTER TABLE posts ADD COLUMN needs_review INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN training_wheels INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+
+// Golden examples: posteos APROBADOS en revisión (tal cual quedaron tras la
+// edición). El generador los usa como few-shot para "seguir haciéndolos así".
+db.exec(`CREATE TABLE IF NOT EXISTS golden_examples (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id INTEGER DEFAULT 0,
+  caption TEXT NOT NULL DEFAULT '',
+  visual_brief TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_golden_user ON golden_examples(user_id, created_at)`); } catch (e) { /* ya existe */ }
+
 module.exports = db;

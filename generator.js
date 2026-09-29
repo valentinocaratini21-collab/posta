@@ -497,7 +497,18 @@ function templateGenerate({ business, category, tone, topic, goal }) {
   return { caption, overlay, suboverlay: cortar(String(caption).split('\n')[0], 140), hashtags: tags.join(' ') };
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice }, apiKey) {
+// "Primera semana con rueditas": posteos APROBADOS en revisión como few-shot
+// ("así o parecido"). goldens: [{caption, visual_brief}]. Máx 3.
+function goldenLine(golden) {
+  if (!Array.isArray(golden) || !golden.length) return '';
+  const ex = golden.filter(g => g && g.caption).slice(0, 3).map((g, i) => {
+    const b = g.visual_brief ? ` (imagen: ${g.visual_brief})` : '';
+    return `Ejemplo ${i + 1}${b}:\n${String(g.caption).slice(0, 500)}`;
+  }).join('\n\n');
+  return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
+}
+
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -527,6 +538,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             (feedback ? `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}` : '') +
             (voice ? `\n${voice}` : '') +
             (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '') +
+            goldenLine(golden) +
             `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
       ],
@@ -569,7 +581,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice }, n, apiKey) {
+async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -591,6 +603,7 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
             (voice ? `\n${voice}` : '') +
             (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '') +
+            goldenLine(golden) +
             `\nGenerá los ${n} captions y los hashtags.`,
         },
       ],
@@ -891,12 +904,12 @@ async function generatePillars({ business, category, description, performance },
 // Modelo del chat consultor: el cerebro de la conversación con el cliente.
 // gpt-4o (no mini): el chat es la cara del producto y necesita el modelo más capaz.
 const CHAT_MODEL = 'gpt-4o';
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note, tz, sales, outcome }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
   const sys =
-    `Sos el community manager de "${p.business_name || 'este negocio'}": su mano derecha para Instagram, como un amigo que labura con él todos los días. ` +
+    `Te llamás Posty. Sos el community manager de "${p.business_name || 'este negocio'}": su mano derecha para Instagram, como un amigo que labura con él todos los días. ` +
     'Hablás en español rioplatense con voseo, cálido y canchero, como por WhatsApp: mensajes cortos (máximo 4-5 líneas), nada de testamentos ni lenguaje corporativo. ' +
     'Nunca te presentes como IA ni expliques lo que podés hacer: ya se conocen, actuá en consecuencia. ' +
     'Si sabés su nombre o el del negocio, usalo de vez en cuando, como haría un amigo. ' +
@@ -1035,6 +1048,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     (igAnalysis ? `Análisis de tu Instagram actual:\n${igAnalysis}\n` : '') +
     (voice ? `${voice}\n` : '') +
     rulesCtx +
+    (goldenLine(golden) ? `\n${goldenLine(golden)}\n` : '') +
     (note ? `\n${note}\n` : '') +
     'Charlemos la idea del cliente.';
   const omsgs = messages.map(m => ({ role: m.role, content: m.text }));

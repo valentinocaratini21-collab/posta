@@ -21,6 +21,48 @@ const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
 const TRIAL_DAYS = 3;
+// "Primera semana con rueditas": los primeros borradores de cada cliente pasan
+// por revisión (humana o por agente) antes de ser visibles. TRAINING_WHEELS=0 lo
+// apaga globalmente (default: prendido).
+const TRAINING_WHEELS_ON = process.env.TRAINING_WHEELS !== '0';
+const GOLDEN_TARGET = 5; // posteos aprobados para "graduarse" (sacar las rueditas)
+// ¿Este usuario todavía necesita revisión en sus borradores? Usuarios con 5+
+// publicados o 5+ aprobados ya se graduaron (no molesta a cuentas existentes).
+function trainingWheelsActive(uid) {
+  if (!TRAINING_WHEELS_ON) return false;
+  try {
+    const u = db.prepare('SELECT training_wheels FROM users WHERE id = ?').get(uid);
+    if (u && u.training_wheels === 0) return false;
+    const pub = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'`).get(uid).n || 0;
+    if (pub >= GOLDEN_TARGET) return false;
+    const gold = db.prepare(`SELECT COUNT(*) AS n FROM golden_examples WHERE user_id = ?`).get(uid).n || 0;
+    if (gold >= GOLDEN_TARGET) return false;
+    return true;
+  } catch (e) { return false; }
+}
+// Golden examples para few-shot: hasta 3 posteos aprobados (caption + brief visual).
+function goldenExamples(uid) {
+  try {
+    return db.prepare(`SELECT caption, visual_brief FROM golden_examples WHERE user_id = ? ORDER BY created_at DESC LIMIT 3`).all(uid)
+      .map(r => ({ caption: String(r.caption || '').slice(0, 600), visual_brief: String(r.visual_brief || '').slice(0, 300) }))
+      .filter(g => g.caption);
+  } catch (e) { return []; }
+}
+// Guarda un golden example tras aprobar (caption final + brief visual final).
+function saveGoldenExample(uid, postId, caption, visualBrief) {
+  try {
+    db.prepare(`INSERT INTO golden_examples (user_id, post_id, caption, visual_brief) VALUES (?,?,?,?)`)
+      .run(uid, postId || 0, String(caption || '').slice(0, 2000), String(visualBrief || '').slice(0, 500));
+  } catch (e) { console.error('[golden] save:', e.message); }
+}
+// Graduación: con 5+ aprobados se apaga training_wheels para ese usuario.
+function maybeGraduate(uid) {
+  try {
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM golden_examples WHERE user_id = ?`).get(uid).n || 0;
+    if (n >= GOLDEN_TARGET) db.prepare(`UPDATE users SET training_wheels = 0 WHERE id = ?`).run(uid);
+    return n;
+  } catch (e) { return 0; }
+}
 const mp = require('./mercadopago');
 const demo = require('./demo');
 const { sendEmail } = require('./email');
@@ -540,8 +582,8 @@ function importTrialWeek(userId, igRaw) {
       const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
       fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
       db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type) VALUES (?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image');
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', trainingWheelsActive(userId) ? 1 : 0);
       n++;
     } catch (e) { /* un posteo fallido no frena los demás */ }
   }
@@ -643,7 +685,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
             body: JSON.stringify({
               model: 'gpt-4o-mini',
               messages: [
-                { role: 'system', content: `Sos el community manager de Posta entrevistando al dueño de un negocio para conocerlo a fondo. Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta.` },
+                { role: 'system', content: `Sos Posty, el community manager de Posta, entrevistando al dueño de un negocio para conocerlo a fondo. Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta.` },
               ],
               max_tokens: 220, temperature: 0.8,
             }),
@@ -1048,7 +1090,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       }
     } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0) },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0) },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -1318,6 +1360,143 @@ app.get('/api/admin/users', requireAdminToken, (req, res) => {
       WHERE lower(email) LIKE ? ORDER BY id DESC LIMIT 20`).all(q);
   } catch (e) {}
   res.json({ ok: true, users: rows });
+});
+
+// ---------- "Primera semana con rueditas": cola de revisión ----------
+// Los borradores con needs_review=1 los revisa el equipo (o un agente) antes de
+// que el cliente los vea. API JSON para consumo por máquina, con ADMIN_TOKEN.
+
+// URL de imagen para el revisor. Best-effort absoluta: usa IMAGE_BASE_URL o
+// settings.image_base_url; si no hay base, devuelve la ruta relativa.
+function absImageUrl(uid, imagePath) {
+  const p = String(imagePath || '');
+  if (!p) return '';
+  if (/^https?:\/\//i.test(p)) return p;
+  try {
+    const st = (typeof getSettings === 'function' && getSettings(uid)) || {};
+    const base = String(process.env.IMAGE_BASE_URL || st.image_base_url || '').replace(/\/$/, '');
+    if (base) return base + (p.startsWith('/') ? p : '/' + p);
+  } catch (e) {}
+  return p;
+}
+
+// GET /api/admin/review-queue?token=ADMIN_TOKEN
+// Cola de borradores pendientes de revisión (los más viejos primero).
+app.get('/api/admin/review-queue', requireAdminToken, (req, res) => {
+  let rows = [];
+  try {
+    rows = db.prepare(`
+      SELECT p.id, p.user_id, u.email, pr.business_name, p.image_path, p.caption, p.hashtags,
+             p.media_type, p.tipo, p.source_topic, p.strategy_why, p.created_at
+      FROM posts p
+      JOIN users u ON u.id = p.user_id
+      LEFT JOIN profiles pr ON pr.user_id = p.user_id
+      WHERE p.status = 'draft' AND COALESCE(p.needs_review, 0) = 1
+      ORDER BY p.created_at ASC LIMIT 100`).all();
+  } catch (e) { return res.status(500).json({ ok: false, error: 'db' }); }
+  res.json({ ok: true, count: rows.length, queue: rows.map(r => ({
+    id: r.id, user_id: r.user_id, email: r.email || '',
+    business_name: r.business_name || '',
+    image_url: absImageUrl(r.user_id, r.image_path),
+    caption: r.caption || '', hashtags: r.hashtags || '',
+    media_type: r.media_type || 'image', tipo: r.tipo || '',
+    source_topic: r.source_topic || '', strategy_why: r.strategy_why || '',
+    created_at: r.created_at,
+  })) });
+});
+
+// POST /api/admin/review/:id/approve?token=ADMIN_TOKEN
+// Aprueba: el borrador queda visible para el cliente + se guarda golden example.
+app.post('/api/admin/review/:id/approve', requireAdminToken, (req, res) => {
+  const post = db.prepare(`SELECT * FROM posts WHERE id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(req.params.id);
+  if (!post) return res.status(404).json({ ok: false, error: 'not_found' });
+  db.prepare(`UPDATE posts SET needs_review = 0 WHERE id = ?`).run(post.id);
+  saveGoldenExample(post.user_id, post.id, post.caption, [post.strategy_why, post.tipo].filter(Boolean).join(' · '));
+  const approved = maybeGraduate(post.user_id);
+  console.log(`[review] aprobado borrador ${post.id} (usuario ${post.user_id}), golden #${approved}`);
+  res.json({ ok: true, id: post.id, approved_count: approved, graduated: approved >= GOLDEN_TARGET });
+});
+
+// POST /api/admin/review/:id/edit?token=ADMIN_TOKEN  body {caption?, hashtags?, image_brief?}
+// Aplica los cambios, aprueba y guarda el golden example con lo FINAL.
+app.post('/api/admin/review/:id/edit', requireAdminToken, (req, res) => {
+  const post = db.prepare(`SELECT * FROM posts WHERE id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(req.params.id);
+  if (!post) return res.status(404).json({ ok: false, error: 'not_found' });
+  const { caption, hashtags, image_brief } = req.body || {};
+  const finalCaption = caption !== undefined ? String(caption) : (post.caption || '');
+  const finalTags = hashtags !== undefined ? String(hashtags) : (post.hashtags || '');
+  db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, needs_review = 0 WHERE id = ?`).run(finalCaption, finalTags, post.id);
+  const brief = image_brief !== undefined ? String(image_brief) : [post.strategy_why, post.tipo].filter(Boolean).join(' · ');
+  saveGoldenExample(post.user_id, post.id, finalCaption, brief);
+  const approved = maybeGraduate(post.user_id);
+  console.log(`[review] editado+aprobado borrador ${post.id} (usuario ${post.user_id}), golden #${approved}`);
+  res.json({ ok: true, id: post.id, approved_count: approved, graduated: approved >= GOLDEN_TARGET });
+});
+
+// POST /api/admin/review/:id/reject?token=ADMIN_TOKEN  body {note}
+// Rechaza con nota: alimenta el aprendizaje (señal + style_rule), borra el
+// borrador y regenera uno con otro enfoque en segundo plano.
+app.post('/api/admin/review/:id/reject', requireAdminToken, (req, res) => {
+  const post = db.prepare(`SELECT * FROM posts WHERE id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(req.params.id);
+  if (!post) return res.status(404).json({ ok: false, error: 'not_found' });
+  const note = String(((req.body || {}).note) || '').slice(0, 500);
+  const uid = post.user_id;
+  try {
+    const prof = (typeof getProfile === 'function' && getProfile(uid)) || {};
+    db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
+      VALUES (?,?,?,?,?,?,'rejected',?,datetime('now'))
+      ON CONFLICT(user_id, post_id) DO UPDATE SET client_signal='rejected', caption=excluded.caption, updated_at=datetime('now')`)
+      .run(uid, post.id, post.caption || '', post.hashtags || '', '', prof.category || '', post.week_key || '');
+    if (note) {
+      db.prepare(`INSERT INTO style_rules (user_id, rule_key, rule_text, hits, active) VALUES (?, ?, ?, 1, 1)
+        ON CONFLICT(user_id, rule_key) DO UPDATE SET rule_text=excluded.rule_text, active=1, hits=hits+1`)
+        .run(uid, 'review-' + post.id, 'Revisión: ' + note);
+    }
+    db.prepare(`DELETE FROM posts WHERE id = ?`).run(post.id);
+  } catch (e) { return res.status(500).json({ ok: false, error: 'db' }); }
+  regenerateOneDraft(uid, post.week_key || '', post.source_topic || '')
+    .catch(e => console.error('[review] regen:', e.message));
+  console.log(`[review] rechazado borrador ${post.id} (usuario ${uid}), regenerando`);
+  res.json({ ok: true, id: post.id, regenerating: true });
+});
+
+// Regenera UN borrador para reemplazar uno rechazado en revisión. El rechazo ya
+// alimenta excludedTopicsLine() vía post_signals, así que la idea sale con otro
+// enfoque automáticamente. El nuevo borrador nace con rueditas si corresponde.
+async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
+  const key = openaiKeyFor(uid);
+  if (!key) return { ok: false, reason: 'no_key' };
+  const ideas = await generateIdeas(ideasInputFor(uid), key);
+  const rej = String(rejectedTopic || '').toLowerCase().slice(0, 24);
+  const idea = ((ideas || []).find(i => !rej || !String(i.titulo || '').toLowerCase().includes(rej)) || (ideas || [])[0]);
+  if (!idea) return { ok: false, reason: 'no_ideas' };
+  const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, 0), key);
+  const caption = String((content && content.caption) || '').trim();
+  if (!caption) return { ok: false, reason: 'no_caption' };
+  const hashtags = String((content && content.hashtags) || '');
+  const headline = makeHeadline(caption.split('\n')[0], 6) || makeHeadline(idea.titulo, 5);
+  let refs = [];
+  try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
+  const imagePath = await conceptShotGenerate({
+    uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
+    tipo: idea.tipo, headline, refs, apiKey: key,
+  });
+  if (!imagePath) return { ok: false, reason: 'no_image' };
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?)`)
+    .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
+      String(idea.porque || '').slice(0, 500), weekKey || '', trainingWheelsActive(uid) ? 1 : 0);
+  console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
+  return { ok: true, id: r.lastInsertRowid };
+}
+
+// Estado de revisión para el cliente: ¿tiene borradores en el horno?
+app.get('/api/review-status', requireAuth, (req, res) => {
+  let pending = 0;
+  try {
+    pending = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(req.session.userId).n || 0;
+  } catch (e) {}
+  res.json({ ok: true, training_wheels: trainingWheelsActive(req.session.userId), pending });
 });
 
 // ---------- Publicidad: billetera + boost de posteos ganadores ----------
@@ -1703,6 +1882,7 @@ function contentInputFor(uid, topic, tipo, seed) {
     styleRules,
     voice,
     seedBase: parseInt(seed, 10) || 0,
+    golden: goldenExamples(uid), // "rueditas": posteos aprobados como few-shot ("así o parecido")
   };
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
@@ -1837,11 +2017,12 @@ app.post('/api/videos', requireAuth, async (req, res) => {
 app.get('/api/posts', requireAuth, (req, res) => {
   const { status } = req.query;
   const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id';
+  const vis = `AND COALESCE(p.needs_review, 0) = 0`; // "rueditas": en revisión no se muestra
   let rows;
   if (status) {
-    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? AND p.status = ? ORDER BY p.scheduled_at ASC, p.created_at DESC`).all(req.session.userId, status);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? AND p.status = ? ${vis} ORDER BY p.scheduled_at ASC, p.created_at DESC`).all(req.session.userId, status);
   } else {
-    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
+    rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? ${vis} ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
   }
   res.json(rows);
 });
@@ -1886,8 +2067,8 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
     cpaths = JSON.stringify(carousel_paths.filter(Boolean).slice(0, 10));
   }
   const r = db.prepare(
-    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500));
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500), status === 'draft' && trainingWheelsActive(req.session.userId) ? 1 : 0);
   ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
@@ -1896,6 +2077,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   const { scheduled_at, caption, hashtags, image_path, action } = req.body || {};
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
@@ -1945,9 +2127,9 @@ app.delete('/api/posts/:id', requireAuth, (req, res) => {
       const dwk = post.week_key || curWk; // semana del borrador borrado
       let left;
       if (dwk === curWk) {
-        left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key = ?)`).get(req.session.userId, curWk).n || 0;
+        left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND (week_key = '' OR week_key = ?)`).get(req.session.userId, curWk).n || 0;
       } else {
-        left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND week_key = ?`).get(req.session.userId, dwk).n || 0;
+        left = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND week_key = ?`).get(req.session.userId, dwk).n || 0;
       }
       if (left === 0) rebuild = maybeStartRebuild(req.session.userId, dwk);
     } catch (e) { /* no bloquea el borrado */ }
@@ -1970,8 +2152,8 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
   const qwk = String(((req.body || {}).week_key) || '');
   if (/^\d{4}-\d{2}-\d{2}$/.test(qwk)) wk = qwk;
   const drafts = wk === curWk
-    ? db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key = ?) ORDER BY id ASC`).all(uid, curWk)
-    : db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND week_key = ? ORDER BY id ASC`).all(uid, wk);
+    ? db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND (week_key = '' OR week_key = ?) ORDER BY id ASC`).all(uid, curWk)
+    : db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND week_key = ? ORDER BY id ASC`).all(uid, wk);
   if (!drafts.length) return res.status(400).json({ error: 'No hay borradores para reconstruir' });
   try {
     vaciarYMarcar(uid, drafts, wk);
@@ -1987,7 +2169,7 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
 // Estado de un posteo (para el seguimiento en vivo de "Publicar ahora")
 app.get('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare(
-    'SELECT id, status, error, ig_permalink, published_at, scheduled_at FROM posts WHERE id = ? AND user_id = ?'
+    "SELECT id, status, error, ig_permalink, published_at, scheduled_at FROM posts WHERE id = ? AND user_id = ? AND COALESCE(needs_review,0)=0"
   ).get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   res.json({ ok: true, post });
@@ -2003,6 +2185,7 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
   if (!['draft', 'scheduled', 'failed'].includes(post.status)) {
     return res.status(400).json({ error: 'Este posteo no se puede publicar ahora' });
   }
+  if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
   // Publicar ahora SÍ consume cupo (salvo que ya estuviera programado: ya se descontó).
   if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
     const q = weeklyQuota(req.session.userId);
@@ -2024,8 +2207,8 @@ app.post('/api/posts/:id/duplicate', requireAuth, requireTrialValid, (req, res) 
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   // Duplicar crea un borrador: los borradores no consumen cupo (se descuenta al programar/publicar).
   const r = db.prepare(
-    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type) VALUES (?,?,?,?,?,?,?)'
-  ).run(req.session.userId, post.image_path, post.caption, post.hashtags, null, 'draft', post.media_type || 'image');
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, post.image_path, post.caption, post.hashtags, null, 'draft', post.media_type || 'image', trainingWheelsActive(req.session.userId) ? 1 : 0);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
@@ -2069,6 +2252,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
       performance: [performanceBrief(db, uid), bestHoursLine(db, uid)].filter(Boolean).join('\n'),
       styleRules,
       voice,
+      golden: goldenExamples(uid), // "rueditas": posteos aprobados como few-shot
     };
     // 3 ángulos distintos para que las variantes no se parezcan entre sí.
     const angles = [
@@ -2338,7 +2522,8 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
     const picks = ideas.slice(0, ppw);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
-    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?)`);
+    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?)`);
+    const needRev = trainingWheelsActive(uid) ? 1 : 0;
     let created = 0;
     // Pool de 3 en paralelo (igual que el autopilot del browser).
     let nextIdx = 0;
@@ -2365,7 +2550,7 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
             uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
           });
           if (!imagePath) throw new Error('sin imagen');
-          insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey);
+          insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev);
           created++;
         } catch (e) {
           console.error(`[pipeline:${tag}] borrador "${idea.titulo || i}" falló:`, e.message);
@@ -2458,8 +2643,13 @@ function vaciarYMarcar(uid, drafts, wk) {
 // que el aprendizaje no se rompa. Programar SÍ consume cupo (los borradores son gratis).
 app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
   const uid = req.session.userId;
-  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' ORDER BY created_at ASC`).all(uid);
-  if (!drafts.length) return res.status(400).json({ error: 'No hay borradores para programar' });
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
+  if (!drafts.length) {
+    let pending = 0;
+    try { pending = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(uid).n || 0; } catch (e) {}
+    if (pending > 0) return res.status(400).json({ error: 'in_review', message: 'Tus primeros posteos están en el horno ✨ Te aviso cuando estén listos para programar.' });
+    return res.status(400).json({ error: 'No hay borradores para programar' });
+  }
   // Cupo: todos de una o nada. Las historias no consumen cupo (igual que PATCH /api/posts/:id).
   const quota = weeklyQuota(uid);
   const billable = drafts.filter((d) => d.media_type !== 'story').length;
@@ -3140,7 +3330,7 @@ app.post('/api/milestones/seen', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- Niveles del avatar posta.: XP por posteo publicado ----------
+// ---------- Niveles (los sube la marca del cliente; endpoint legacy /api/avatar-level): XP por posteo publicado ----------
 // 100 XP por post, 150 por reel. Niveles 1-10 con nombres en rioplatense.
 // El guard "visto una vez por nivel" usa milestones_seen con milestone 900+nivel.
 const POSTA_LEVELS = [
@@ -3592,8 +3782,8 @@ app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
       } catch (e) { console.error('[recycle] generate:', e.message); }
     }
     if (!String(caption).trim()) caption = String(old.caption || '').slice(0, 500);
-    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, tipo) VALUES (?,?,?,?,?,?,?,?)`)
-      .run(uid, '', caption, hashtags, 'draft', 'image', 'reciclado', TIPOS_VALIDOS.includes(old.tipo) ? old.tipo : '');
+    const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, tipo, needs_review) VALUES (?,?,?,?,?,?,?,?,?)`)
+      .run(uid, '', caption, hashtags, 'draft', 'image', 'reciclado', TIPOS_VALIDOS.includes(old.tipo) ? old.tipo : '', trainingWheelsActive(uid) ? 1 : 0);
     const newId = r.lastInsertRowid;
     db.prepare('INSERT INTO recycled_posts (post_id, new_post_id, created_at) VALUES (?,?,?)').run(postId, newId, Date.now());
     try { recordSignal(uid, { id: newId, caption, hashtags, scheduled_at: '' }, 'recycled'); } catch (e) {}
