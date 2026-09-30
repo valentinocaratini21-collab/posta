@@ -61,7 +61,7 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
   const html = `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
   <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">Posta<span style="color:#FEC14D">.</span></div>
+    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
   </div>
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
@@ -89,7 +89,7 @@ function emailShell(inner) {
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
   <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
-    <div style="font-size:22px;font-weight:800;color:#fff">Posta<span style="color:#FEC14D">.</span></div>
+    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
   </div>
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}

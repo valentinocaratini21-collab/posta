@@ -668,7 +668,65 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- Onboarding conversacional ----------
+// ---------- Recuperar contraseña ----------
+try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at INTEGER NOT NULL,
+  used INTEGER DEFAULT 0
+)`); } catch (e) {}
+
+// Siempre responde OK para no revelar si el email existe.
+app.post('/api/auth/forgot', async (req, res) => {
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  try {
+    const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
+    if (user && process.env.RESEND_API_KEY) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
+      db.prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?,?,?)')
+        .run(user.id, tokenHash, Date.now() + 3600 * 1000);
+      const host = (req.get('host') || 'postyhacetodo.com').split(':')[0];
+      const link = `https://${host}/#/reset?token=${token}`;
+      await sendEmail({
+        to: user.email,
+        subject: 'Recuperá tu contraseña 🔑',
+        html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+          <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
+            <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
+          </div>
+          <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+            <p style="font-size:16px;line-height:1.6">¡Hola! Soy Posty 🤖 Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:</p>
+            <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">Cambiar mi contraseña</a></p>
+            <p style="font-size:13px;line-height:1.6;color:#47617A">El link vence en 1 hora. Si no fuiste vos, ignorá este mail 😊</p>
+          </div></div>`,
+      });
+    }
+  } catch (e) { console.error('[posta] forgot:', e.message); }
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/reset', (req, res) => {
+  const token = String((req.body && req.body.token) || '');
+  const password = String((req.body && req.body.password) || '');
+  if (!token || password.length < 6)
+    return res.status(400).json({ error: 'Necesito el link válido y una contraseña de 6 caracteres como mínimo 🔑' });
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const row = db.prepare('SELECT * FROM password_resets WHERE token_hash = ? AND used = 0').get(tokenHash);
+    if (!row || row.expires_at < Date.now())
+      return res.status(400).json({ error: 'Ese link venció o ya se usó 😅 Pedí uno nuevo' });
+    const hash = bcrypt.hashSync(password, 10);
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, row.user_id);
+    db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(row.id);
+    req.session.userId = row.user_id;
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: 'No pude cambiarla 😅 Probá de nuevo' });
+  }
+});
 // La IA entrevista al dueño por chat y extrae el perfil del negocio.
 // El frontend manda el historial; el backend devuelve la próxima intervención.
 const OB_STEPS = [
