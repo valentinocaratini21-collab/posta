@@ -780,7 +780,8 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .xp-bar>span{display:block;height:100%;background:linear-gradient(90deg,#FEC14D,#FFD97A);border-radius:999px;transition:width .5s}
 .xp-sub{display:block;font-size:11px;color:rgba(255,255,255,.92);margin-top:6px;font-weight:700}
 .xp-exp{display:none;font-size:12.5px;font-weight:800;color:#0A1E33;background:#FEC14D;border-radius:999px;padding:6px 12px;margin-top:8px;width:fit-content}
-.xp-exp.on{display:inline-block;animation:xpExpPulse 1.6s ease-in-out infinite}
+.xp-exp.show{display:inline-block}
+.xp-exp.on{animation:xpExpPulse 1.6s ease-in-out infinite}
 @keyframes xpExpPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
 .xp-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .xp-stats>span{font-size:11px;color:#fff;font-weight:700;background:rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;white-space:nowrap}
@@ -794,8 +795,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .stk-biz{font-size:11.5px;color:rgba(255,255,255,.7);margin:0 0 8px;font-weight:600}
 .stk-pts{font-size:13px;color:rgba(255,255,255,.85);margin:0 0 14px}
 .stk-pts b{font-size:28px;color:#fff;font-weight:800}
-.stk-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden;margin:0 0 8px}
-.stk-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#2793C8,#FEC14D);transition:width .6s ease}
 .stk-next{font-size:11.5px;color:rgba(255,255,255,.88);margin:0;font-weight:600}
 .stk-journey{display:flex;align-items:flex-start;margin:18px 2px 6px}
 .stk-node{display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0}
@@ -814,6 +813,31 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .stk-stat b{display:block;font-size:14px;margin-bottom:2px}
 .stk-stat span{font-size:10px;color:var(--mut,#667);font-weight:600}
 .stk-rule{font-size:10.5px;color:var(--mut,#667);text-align:center;margin:10px 0 0;line-height:1.5}
+/* --- Countdown de urgencia: lo primero que se ve (loss aversion) --- */
+.stk-count{font-size:14px;font-weight:700;color:#0A1E33;background:#FFF3D6;border:1.5px solid #FEC14D;border-radius:12px;padding:10px 14px;text-align:center;margin:0 0 12px}
+.stk-count b{font-weight:800}
+.stk-count.danger{background:#FDECEA;border-color:#E2574C;color:#8f1d16;animation:stkDangerPulse 1.4s ease-in-out infinite}
+.stk-count.danger b{color:#c22}
+@keyframes stkDangerPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(226,87,76,.35)}50%{transform:scale(1.02);box-shadow:0 0 0 7px rgba(226,87,76,0)}}
+/* --- Héroe premium: anillo de progreso animado alrededor del badge --- */
+.stk-ring{position:relative;width:128px;height:128px;margin:2px auto 10px}
+.stk-ring svg{display:block}
+.stk-ring-bg{fill:none;stroke:rgba(255,255,255,.15);stroke-width:9}
+.stk-ring-fg{fill:none;stroke:#FEC14D;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset 1s ease;filter:drop-shadow(0 0 6px rgba(254,193,77,.7))}
+.stk-ring .stk-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin:0}
+/* --- CTA de acción concreta --- */
+.stk-cta{background:rgba(39,147,200,.1);border:1.5px solid #2793C8;border-radius:14px;padding:12px 14px;margin:0 0 4px;text-align:center}
+.stk-cta p{font-size:13px;font-weight:700;color:var(--txt);margin:0 0 10px}
+/* --- Récord a batir --- */
+.stk-beat{font-size:12px;font-weight:800;color:#FEC14D;margin:6px 0 0}
+/* --- Próximo nivel aspiracional --- */
+.stk-node.next .stk-dot{background:#FFF7E0;border-color:#FEC14D;animation:stkNextPulse 2.4s ease-in-out infinite}
+.stk-node.next small{color:var(--txt);font-weight:800}
+@keyframes stkNextPulse{0%,100%{box-shadow:0 0 0 3px rgba(254,193,77,.18)}50%{box-shadow:0 0 0 7px rgba(254,193,77,.32),0 0 16px rgba(254,193,77,.5)}}
+/* --- Growth: compartir la racha --- */
+.stk-share-t{font-size:12.5px;font-weight:700;color:var(--txt);text-align:center;margin:14px 0 2px}
+.stk-smart{margin:14px 0 0;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,#F2F9FD,#FFF8E8);border:1px solid var(--line);font-size:13.5px;line-height:1.55;color:var(--txt)}
+.stk-smart b{display:block;margin-bottom:4px;font-size:14px}
 .sp-sub{font-size:10.5px;font-weight:700;opacity:.65}
 .social-proof{margin:-6px 0 18px;padding:12px 16px;border-radius:12px;background:#F2F9FD;border:1px solid var(--line);color:var(--mut);font-size:12.5px;text-align:center;line-height:1.5}
 .streak-celeb{text-align:center;padding:6px 4px}
@@ -1243,8 +1267,9 @@ textarea.in{resize:vertical;min-height:96px}
 /* Posty vivo: movimiento humano sutil (respira, no flota). Solo la imagen se mueve; el círculo queda quieto. */
 .chome-ava{animation:posty-idle 6s ease-in-out infinite}
 @keyframes posty-idle{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}22%{transform:translateY(-1.5px) rotate(.8deg) scale(1.008)}47%{transform:translateY(.5px) rotate(-.5deg) scale(1)}71%{transform:translateY(-1px) rotate(.3deg) scale(1.005)}}
-/* Posty trabajando: hace malabares con 3 pelotitas amarillas 🤹 */
-.chome-ava-wrap.working .chome-ava{animation:posty-juggle .8s ease-in-out infinite}
+/* Posty trabajando: video de malabares con 3 pelotitas amarillas 🤹 */
+.chome-ava-vid{width:118%;height:118%;object-fit:cover;display:block;margin:-9%}
+.chome-ava-wrap.working .chome-ava{animation:none}
 @keyframes posty-juggle{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-3px) rotate(2deg)}}
 .chome-top .pdot{color:#FEC14D}
 /* Nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con marco por tier + badge */

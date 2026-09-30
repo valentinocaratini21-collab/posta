@@ -2116,7 +2116,7 @@ async function paintDrawerIdent() {
     : `<span class="drawer-ident-fb" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
   mount.innerHTML = `
     <span class="drawer-ident-logo">${logoHtml}</span>
-    <span class="drawer-ident-txt"><b>${esc(biz)}</b><small>Nivel ${lv} · ${esc(lvName)}</small></span>
+    <span class="drawer-ident-txt"><b>${esc(biz)}</b><small>Nivel ${lv}</small></span>
     <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>`;
 }
 // Identidad de Posty para el sidebar fijo de escritorio (≥1024px).
@@ -2128,7 +2128,7 @@ async function paintSidePosty() {
   }
   const lv = (__drawerLvl && __drawerLvl.level) || 1;
   const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
-  el.textContent = `Nivel ${lv} · ${lvName}`;
+  el.textContent = `Nivel ${lv}`;
 }
 // Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen
 // borradores de la N+1, el teaser permite verlos como semana corriente.
@@ -3185,14 +3185,48 @@ async function chatExchange({ text, display, extra, pushed }) {
   chatScroll();
 }
 
-// Posty trabajando: cambia el avatar al de malabares 🤹 mientras genera.
-// Cuando termina, vuelve al avatar normal.
+// Posty parpadea como un humano: cada 3.5-6.5s cierra los ojos 140ms.
+// Solo cuando está tranqui (no haciendo malabares).
+(function postyBlinkLoop() {
+  try { const p = new Image(); p.src = 'ai-avatar-blink.png'; } catch (e) {}
+  const blink = () => {
+    try {
+      const w = document.querySelector('.chome-ava-wrap');
+      const img = w && w.querySelector('.chome-ava');
+      if (w && img && !w.classList.contains('working') && img.src.includes('ai-avatar.png') && !img.src.includes('blink')) {
+        const orig = img.src;
+        img.src = 'ai-avatar-blink.png';
+        setTimeout(() => { try { if (img.src.includes('blink')) img.src = orig; } catch (e) {} }, 140);
+      }
+    } catch (e) {}
+    setTimeout(blink, 3500 + Math.random() * 3000);
+  };
+  setTimeout(blink, 2500);
+})();
+
+// Posty trabajando: cambia el avatar al VIDEO de malabares 🤹 mientras genera.
+// Cuando termina, vuelve a la imagen normal.
 function postyWorking(on) {
   try {
     document.querySelectorAll('.chome-ava-wrap').forEach(w => {
       w.classList.toggle('working', !!on);
       const img = w.querySelector('.chome-ava');
-      if (img) img.src = on ? 'ai-avatar-working.png' : 'ai-avatar.png';
+      let vid = w.querySelector('.chome-ava-vid');
+      if (on) {
+        if (img) img.style.display = 'none';
+        if (!vid) {
+          vid = document.createElement('video');
+          vid.className = 'chome-ava-vid';
+          vid.src = 'ai-avatar-working.mp4';
+          vid.muted = true; vid.loop = true; vid.autoplay = true; vid.playsInline = true;
+          vid.setAttribute('muted', ''); vid.setAttribute('playsinline', '');
+          w.appendChild(vid);
+        }
+        const pr = vid.play(); if (pr && pr.catch) pr.catch(() => {});
+      } else {
+        if (img) img.style.display = '';
+        if (vid) { try { vid.pause(); } catch (e) {} vid.remove(); }
+      }
     });
   } catch (e) {}
 }
@@ -3847,14 +3881,15 @@ async function paintBrandStrip() {
     try {
       const sk = await api.get('/api/streak');
       if (sk && sk.current > 0) streakTxt = `<span>🔥 ${sk.current} ${sk.current === 1 ? 'semana' : 'semanas'}</span>`;
-      // Vencimiento de la racha: MUY claro, en la barrita misma.
+      // Vencimiento de la racha: SIEMPRE visible, muy claro. Pulso solo si se apaga pronto.
       const expEl = document.getElementById('xpBrandExp');
       if (expEl) {
-        if (sk && sk.expiringSoon) {
+        if (sk && sk.current > 0 && sk.expiresInMs > 0) {
           expEl.textContent = `⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)}`;
-          expEl.classList.add('on');
+          expEl.classList.add('show');
+          expEl.classList.toggle('on', !!sk.expiringSoon);
         } else {
-          expEl.classList.remove('on');
+          expEl.classList.remove('show', 'on');
           expEl.textContent = '';
         }
       }
@@ -5587,49 +5622,65 @@ function showStreakCelebration(sk) {
     ${streakShareBtns()}`);
   wireStreakModalBtns(sk);
 }
-// Tocar el HUD de XP: modal PRO de la racha — héroe con progreso, camino de niveles y stats.
+// Tocar el HUD de XP: modal PRO de la racha — urgencia primero (loss aversion),
+// héroe premium con anillo de progreso animado, acción concreta para mantenerla,
+// camino de niveles aspiracional y stats con punch.
 function streakPillModal(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
   const pts = sk.current * 100;
-  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
   const levels = sk.levels || [];
   const curIdx = levels.findIndex(l => sk.level && l.name === sk.level.name);
-  const journey = levels.map((l, i) => {
-    const isCur = i === curIdx;
-    const done = !isCur && sk.current >= l.min;
-    const node = `<div class="stk-node${isCur ? ' cur' : ''}${done ? ' done' : ''}${!isCur && !done ? ' lock' : ''}"><div class="stk-dot">${l.emoji}</div><small>${esc(l.name)}</small></div>`;
-    const link = i < levels.length - 1 ? `<div class="stk-link${done || isCur ? ' on' : ''}"></div>` : '';
-    return node + link;
-  }).join('');
   const nl = sk.nextLevel;
   const pct = nl ? Math.min(100, Math.round(sk.current / nl.at * 100)) : 100;
   const falta = nl ? nl.at - sk.current : 0;
   const nextTxt = nl
     ? `${sk.current} de ${nl.at} semanas · te ${falta === 1 ? 'falta 1 semana' : `faltan ${falta} semanas`} para ${nl.emoji} ${esc(nl.name)}`
     : `Nivel máximo alcanzado 👑`;
-  const warn = sk.expiringSoon
-    ? `<p class="warn">⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)} si no sale ningún posteo — programá y seguí sumando.</p>` : '';
+  // Anillo de progreso animado alrededor del badge (en vez de barrita plana)
+  const R = 56, C = 2 * Math.PI * R;
+  const ring = `<div class="stk-ring"><svg viewBox="0 0 128 128" width="128" height="128"><circle cx="64" cy="64" r="${R}" class="stk-ring-bg"/><circle cx="64" cy="64" r="${R}" class="stk-ring-fg" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - pct / 100)).toFixed(1)}" transform="rotate(-90 64 64)"/></svg><div class="stk-badge">${lv.emoji}</div></div>`;
+  // Urgencia = retención: el countdown es LO PRIMERO que se ve.
+  const left = fmtStreakLeft(sk.expiresInMs);
+  const countdown = sk.expiringSoon
+    ? `<div class="stk-count danger">⏳ Tu racha se apaga en <b>${left}</b></div>`
+    : `<div class="stk-count">🔥 Racha viva · le quedan <b>${left}</b></div>`;
+  // Acción concreta: exacto qué hacer + botón que lo lleva ahí.
+  const cta = `<div class="stk-cta"><p>Programá 1 posteo y la racha sigue viva.</p><button class="btn btn-primary btn-block" id="stkGoSched">📅 Programar mi semana</button></div>`;
+  const journey = levels.map((l, i) => {
+    const isCur = i === curIdx;
+    const done = !isCur && sk.current >= l.min;
+    const isNext = !!(nl && l.name === nl.name);
+    const node = `<div class="stk-node${isCur ? ' cur' : ''}${done ? ' done' : ''}${isNext ? ' next' : ''}${!isCur && !done && !isNext ? ' lock' : ''}"><div class="stk-dot">${l.emoji}</div><small>${esc(l.name)}</small></div>`;
+    const link = i < levels.length - 1 ? `<div class="stk-link${done || isCur ? ' on' : ''}"></div>` : '';
+    return node + link;
+  }).join('');
+  // Récord a batir (solo si el best supera la racha actual)
+  const beatTxt = sk.best > sk.current ? `<p class="stk-beat">🏆 Tu récord: ${sk.best} — te faltan ${sk.best - sk.current}</p>` : '';
   streakModalShell(`
+    ${countdown}
     <div class="stk-hero">
-      <div class="stk-badge">${lv.emoji}</div>
+      ${ring}
       <p class="stk-eyebrow">Nivel ${esc(lv.name)}</p>
-      ${biz ? `<p class="stk-biz">La racha de ${esc(biz)}</p>` : ''}
       <p class="stk-pts"><b>⚡ ${pts}</b> pts</p>
-      <div class="stk-bar"><i style="width:${pct}%"></i></div>
       <p class="stk-next">${nextTxt}</p>
+      ${beatTxt}
     </div>
+    ${cta}
     ${journey ? `<div class="stk-journey">${journey}</div>` : ''}
+    <div class="stk-smart"><b>🧠 Cuanto más subís, mejor trabajo para vos</b>Cada semana entiendo más tu producto: qué vende, qué le gusta a tu gente. Mejores posteos → más clientes en tu Instagram → más ventas. El tiempo con Posty se nota 💰</div>
     <div class="stk-stats">
       <div class="stk-stat"><b>🔥 ${sk.current}</b><span>${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</span></div>
       <div class="stk-stat"><b>🏆 ${sk.best}</b><span>mejor racha</span></div>
       <div class="stk-stat"><b>+100</b><span>pts por semana</span></div>
     </div>
     ${WEEKLY_BARS_HTML ? `<p class="d" style="margin:14px 0 6px;text-align:center">Posteos por semana</p><div class="bars" style="height:90px;margin:0 0 4px">${WEEKLY_BARS_HTML}</div>` : ''}
-    ${warn}
     <p class="stk-rule">La racha sigue viva mientras salga al menos un posteo cada 72 horas.</p>
+    <p class="stk-share-t">🎁 Tu constancia también vende — compartila</p>
     ${streakShareBtns()}`);
   wireStreakModalBtns(sk);
+  const go = document.getElementById('stkGoSched');
+  if (go) go.onclick = () => { closeStreakModal(); location.hash = '#/app/schedule'; };
 }
 // Insignia opt-in para compartir: imagen "🔥 N semanas con Posta" (tamaño historia)
 function shareStreakImage(sk) {
@@ -7967,8 +8018,23 @@ function bindSettings() {
   (async () => {
     const z = $('#planZone');
     if (!z) return;
+    // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
+    const loadPlans = async () => {
+      let lastErr = null;
+      for (let i = 0; i < 2; i++) {
+        try { return await api.get('/api/billing/plans'); }
+        catch (e) { lastErr = e; console.error('[planes] intento ' + (i + 1) + ':', e.message); }
+      }
+      throw lastErr;
+    };
+    const showPlansError = () => {
+      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">🔄 Reintentar</button></div>`;
+      const rb = document.getElementById('plansRetry');
+      if (rb) rb.onclick = () => { z.innerHTML = '<p style="color:var(--dim)">Cargando...</p>'; run(); };
+    };
+    const run = async () => {
     try {
-      const { plans, mp_configured } = await api.get('/api/billing/plans');
+      const { plans, mp_configured } = await loadPlans();
       const cur = (ME && ME.plan) || 'esencial';
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
       const pcm = document.getElementById('planConfirmMsg');
@@ -8122,7 +8188,12 @@ function bindSettings() {
           if (btn && !btn.disabled) btn.click();
         }
       }
-    } catch (e) { z.innerHTML = `<div class="err">No se pudieron cargar los planes</div>`; }
+    } catch (e) {
+      console.error('[planes] error final:', e);
+      showPlansError();
+    }
+    };
+    run();
   })();
   // 🎁 Referidos
   (async () => {
