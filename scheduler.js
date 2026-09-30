@@ -203,6 +203,19 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[best-hour] no se pudo programar:', e.message);
   }
+  // Nudges proactivos de Posty: chequeo DIARIO (Buenos Aires). Cada día, por cada
+  // usuario al que le falta algo (foto > voz > estilo), si pasaron entre 6 y 9 días
+  // (umbral aleatorio por ciclo) desde su último nudge, crea uno nuevo. Resultado:
+  // ~1 pregunta por semana, en momentos distintos cada vez. El cliente lo ve como
+  // mensaje de Posty en el chat la próxima vez que entra.
+  try {
+    cron.schedule('0 11 * * *', () => {
+      postyNudgesDaily(db).catch((e) => console.error('[nudges]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Nudges proactivos de Posty: chequeo diario 11:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[nudges] no se pudo programar:', e.message);
+  }
   // Análisis profundo de Instagram semanal: lunes 9:00 (Buenos Aires).
   // Track B "Conocer al cliente a fondo": aprende qué rinde en cada cuenta con IG
   // conectado y guarda los learnings en content_learnings (1 llamada GPT por usuario).
@@ -260,6 +273,48 @@ function startScheduler(db) {
     console.log('[posta] Pipeline perpetuo (borradores semana+1): lunes 7:00 (Buenos Aires)');
   } catch (e) {
     console.error('[next-week sweep] no se pudo programar:', e.message);
+  }
+}
+
+// Nudges proactivos de Posty (chequeo diario). Posty pide por chat lo que
+// le falta para hacer mejores posteos: foto del producto > nota de voz >
+// referencia de estilo. Nunca repite un kind ya completado. El umbral de
+// 6-9 días es aleatorio por ciclo: cada pregunta llega en un momento distinto.
+function nudgeMissingFor(db, uid) {
+  try {
+    const done = new Set(db.prepare(`SELECT kind FROM posty_nudges WHERE user_id = ? AND done_at > 0`).all(uid).map(r => r.kind));
+    const photo = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND kind = 'photo' LIMIT 1`).get(uid);
+    if (!photo && !done.has('photo')) return 'photo';
+    let j = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); j = JSON.parse((r && r.dna_json) || '{}'); } catch (e) {}
+    const hasDesc = String(j.descripcion || j.description || j.negocio || j.business_description || '').trim().length > 20;
+    if (!hasDesc && !done.has('voice')) return 'voice';
+    if (!String(j.inspo || '').trim() && !done.has('inspo')) return 'inspo';
+  } catch (e) {}
+  return null;
+}
+
+async function postyNudgesDaily(db) {
+  try { db.exec(`CREATE TABLE IF NOT EXISTS posty_nudges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, kind TEXT NOT NULL,
+    created_at INTEGER DEFAULT (strftime('%s','now')*1000), shown_at INTEGER DEFAULT 0, done_at INTEGER DEFAULT 0
+  )`); } catch (e) {}
+  let users = [];
+  try { users = db.prepare(`SELECT id FROM users`).all(); } catch (e) { return; }
+  const now = Date.now(), DAY = 864e5;
+  for (const u of users) {
+    try {
+      const last = db.prepare(`SELECT MAX(MAX(shown_at, done_at), created_at) AS t FROM posty_nudges WHERE user_id = ?`).get(u.id);
+      const lastT = (last && last.t) || 0;
+      const gapDays = 6 + Math.random() * 3; // 6-9 días, distinto cada vez
+      if (now - lastT < gapDays * DAY) continue;
+      const pending = db.prepare(`SELECT id FROM posty_nudges WHERE user_id = ? AND shown_at = 0 AND done_at = 0 LIMIT 1`).get(u.id);
+      if (pending) continue;
+      const kind = nudgeMissingFor(db, u.id);
+      if (!kind) continue;
+      db.prepare(`INSERT INTO posty_nudges (user_id, kind) VALUES (?,?)`).run(u.id, kind);
+      console.log(`[nudges] nudge "${kind}" creado para usuario ${u.id}`);
+    } catch (e) {}
   }
 }
 
@@ -609,4 +664,4 @@ function writeDnaSync(db, userId, obj) {
     ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna };
+module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily };

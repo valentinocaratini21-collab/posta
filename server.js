@@ -727,6 +727,56 @@ app.post('/api/auth/reset', (req, res) => {
     res.status(400).json({ error: 'No pude cambiarla 😅 Probá de nuevo' });
   }
 });
+
+// ---------- Nudges proactivos de Posty (pide por chat, ~1/semana) ----------
+// Posty pregunta en el chat lo que le falta: foto del producto, nota de voz, referencia de estilo.
+try { db.exec(`CREATE TABLE IF NOT EXISTS posty_nudges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  created_at INTEGER DEFAULT (strftime('%s','now')*1000),
+  shown_at INTEGER DEFAULT 0,
+  done_at INTEGER DEFAULT 0
+)`); } catch (e) {}
+
+function nudgeMissing(uid) {
+  // Kind más prioritario que le falta al usuario (foto > voz > estilo), o null.
+  try {
+    const done = new Set(db.prepare(`SELECT kind FROM posty_nudges WHERE user_id = ? AND done_at > 0`).all(uid).map(r => r.kind));
+    const photo = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND kind = 'photo' LIMIT 1`).get(uid);
+    if (!photo && !done.has('photo')) return 'photo';
+    let j = {};
+    try { const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); j = JSON.parse((r && r.dna_json) || '{}'); } catch (e) {}
+    const hasDesc = String(j.descripcion || j.description || j.negocio || j.business_description || '').trim().length > 20;
+    if (!hasDesc && !done.has('voice')) return 'voice';
+    if (!String(j.inspo || '').trim() && !done.has('inspo')) return 'inspo';
+  } catch (e) {}
+  return null;
+}
+
+app.get('/api/nudges/pending', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const n = db.prepare(`SELECT * FROM posty_nudges WHERE user_id = ? AND shown_at = 0 AND done_at = 0 ORDER BY id ASC LIMIT 1`).get(uid);
+    if (!n) return res.json({ nudge: null });
+    // Re-validar: si ya lo resolvió por otro lado, marcar hecho y no mostrar.
+    const stillMissing = nudgeMissing(uid);
+    if (stillMissing !== n.kind) {
+      db.prepare(`UPDATE posty_nudges SET done_at = ? WHERE id = ?`).run(Date.now(), n.id);
+      return res.json({ nudge: null });
+    }
+    db.prepare(`UPDATE posty_nudges SET shown_at = ? WHERE id = ?`).run(Date.now(), n.id);
+    res.json({ nudge: { id: n.id, kind: n.kind } });
+  } catch (e) { res.json({ nudge: null }); }
+});
+
+app.post('/api/nudges/done', requireAuth, (req, res) => {
+  try {
+    const kind = String((req.body && req.body.kind) || '');
+    if (kind) db.prepare(`UPDATE posty_nudges SET done_at = ? WHERE user_id = ? AND kind = ? AND done_at = 0`).run(Date.now(), req.session.userId, kind);
+  } catch (e) {}
+  res.json({ ok: true });
+});
 // La IA entrevista al dueño por chat y extrae el perfil del negocio.
 // El frontend manda el historial; el backend devuelve la próxima intervención.
 const OB_STEPS = [
@@ -1330,6 +1380,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       const lastUserMsg = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
       const textOnlyEdit = /cambi[aá]\s+(el\s+)?(caption|texto|copy|palabras)|cambiame\s+(el\s+)?(texto|caption)|solo\s+(el\s+)?texto/i.test(lastUserMsg);
       let n = 0, imgRegen = 0;
+      const editedIds = [];
       for (const ed of out.edits) {
         if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
         if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined) continue;
@@ -1391,8 +1442,19 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         }
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         n++;
+        editedIds.push(post.id);
       }
-      if (n) editApplied = { ok: true, count: n, imageRegen: imgRegen };
+      if (n) {
+        // Devolver las imágenes de los borradores editados para mostrarlas en el chat.
+        let imgs = [];
+        try {
+          imgs = editedIds.map(id => {
+            const p = db.prepare('SELECT image_path FROM posts WHERE id = ?').get(id);
+            return p ? absImageUrl(uid, p.image_path) : '';
+          }).filter(Boolean);
+        } catch (e) {}
+        editApplied = { ok: true, count: n, imageRegen: imgRegen, images: imgs };
+      }
     }
     // Publicación inmediata pedida en el chat: "publicalo ya" / "dale, subilo" ES la
     // aprobación explícita. Mismos resguardos que publish-now (revisión, cupo, estado).
@@ -1647,7 +1709,8 @@ app.get('/api/admin/users', requireAdminToken, (req, res) => {
 function absImageUrl(uid, imagePath) {
   const p = String(imagePath || '');
   if (!p) return '';
-  if (/^https?:\/\//i.test(p)) return p;
+  // Migración de dominio: URLs absolutas viejas se reescriben al dominio nuevo.
+  if (/^https?:\/\//i.test(p)) return p.replace(/https?:\/\/(www\.)?postahacetodo\.com/i, 'https://postyhacetodo.com');
   try {
     const st = (typeof getSettings === 'function' && getSettings(uid)) || {};
     const base = String(process.env.IMAGE_BASE_URL || st.image_base_url || '').replace(/\/$/, '');
@@ -2340,13 +2403,18 @@ app.get('/api/posts', requireAuth, (req, res) => {
 function ensureImageBaseUrl(db, userId, req) {
   try {
     if (process.env.IMAGE_BASE_URL) return;
-    const s = db.prepare('SELECT image_base_url FROM settings WHERE user_id = ?').get(userId);
-    if (s && s.image_base_url) return;
     const rawHost = req.get('host') || '';
     if (!rawHost) return;
     const proto = /localhost|127\.0\.0\.1/.test(rawHost.split(':')[0]) ? 'http' : 'https';
-    db.prepare(`UPDATE settings SET image_base_url = ?, updated_at = datetime('now') WHERE user_id = ?`)
-      .run(`${proto}://${rawHost}`, userId);
+    const cur = `${proto}://${rawHost}`;
+    const s = db.prepare('SELECT image_base_url FROM settings WHERE user_id = ?').get(userId);
+    // Migración de dominio: si la base guardada apunta al dominio viejo, actualizarla.
+    if (s && s.image_base_url && /postahacetodo\.com/i.test(s.image_base_url) && s.image_base_url !== cur) {
+      db.prepare(`UPDATE settings SET image_base_url = ?, updated_at = datetime('now') WHERE user_id = ?`).run(cur, userId);
+      return;
+    }
+    if (s && s.image_base_url) return;
+    db.prepare(`UPDATE settings SET image_base_url = ?, updated_at = datetime('now') WHERE user_id = ?`).run(cur, userId);
   } catch (e) { /* no bloquea la creación del post */ }
 }
 
