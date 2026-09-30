@@ -79,7 +79,7 @@ async function publishSinglePost(db, post) {
         const u = db.prepare('SELECT email, name, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (u && u.email && !u.oo) {
           const { publishedEmail } = require('./email');
-          const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+          const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
           await publishedEmail(u, post, base, result.permalink || '', isFirstPost);
         }
       }
@@ -273,7 +273,7 @@ async function sendWeeklyReminders(db) {
     console.log('[email semanal] sin RESEND_API_KEY: no se envía nada esta semana');
     return { sent: 0, skipped: 0, failed: 0, unconfigured: true };
   }
-  const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
   const users = db.prepare(`
     SELECT id, email FROM users
     WHERE email IS NOT NULL AND email != ''
@@ -322,7 +322,7 @@ async function sendContentNudges(db) {
 console.log('[nudges] sin RESEND_API_KEY: <redacted>');
     return { sent: 0, skipped: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
   const users = db.prepare(`
     SELECT u.id, u.email, p.business_name FROM users u
     LEFT JOIN profiles p ON p.user_id = u.id
@@ -384,7 +384,7 @@ async function sendWeeklyReports(db) {
     console.log('[reporte semanal] sin RESEND_API_KEY: <redacted>');
     return { sent: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
   const users = db.prepare(`
     SELECT DISTINCT u.id, u.email, u.name FROM users u
     JOIN posts p ON p.user_id = u.id

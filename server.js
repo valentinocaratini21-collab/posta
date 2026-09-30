@@ -165,6 +165,17 @@ if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
 app.use(express.json({ limit: '15mb' }));
 
+// Mudanza de dominio: postahacetodo.com -> postyhacetodo.com (301).
+// No toca /api/* (webhooks de MP, OAuth) ni /.well-known/* (assetlinks).
+app.use((req, res, next) => {
+  const host = (req.get('host') || '').split(':')[0].toLowerCase();
+  if ((host === 'postahacetodo.com' || host === 'www.postahacetodo.com') &&
+      !req.path.startsWith('/api/') && !req.path.startsWith('/.well-known/')) {
+    return res.redirect(301, 'https://postyhacetodo.com' + req.originalUrl);
+  }
+  next();
+});
+
 // Sesiones persistentes en SQLite: cada deploy reinicia el servidor y la memoria
 // se pierde; sin este store cada deploy deslogueaba a todos los usuarios.
 class SqliteSessionStore extends session.Store {
@@ -2074,6 +2085,7 @@ function ideasInputFor(uid) {
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
   return {
     business: profile.business_name,
+    ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
     category: profile.category,
     tone: profile.tone,
     description: profile.description,
@@ -2098,6 +2110,7 @@ function contentInputFor(uid, topic, tipo, seed) {
   try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
   return {
     business: profile.business_name,
+    ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
     category: profile.category,
     description: profile.description,
     dna: readDna(uid),
@@ -4281,6 +4294,8 @@ El prompt DEBE exigir:
 - "${textRule}"
 - "sin marca de agua".
 - Si el brief trae un ángulo estratégico, la escena tiene que EXPRESARLO visualmente (no describirlo con texto).
+- IDENTIDAD PROPIA (draft 76, revisión 2026-09-29): la estética es del RUBRO del cliente con SU paleta — NUNCA imites el estilo visual de marcas famosas (nada de estética "Netflix"/streaming, Spotify, McDonald's, Apple...). Prohibido el fondo negro-rojo cinematográfico genérico y cualquier look que parezca otra marca.
+- Si la escena incluye pantallas, carteles, vidrieras, interfaces o celulares (draft 75): TODO texto visible tiene que ser LEGIBLE y tener SENTIDO — palabras reales del negocio, nunca lorem ipsum, palabras garbled, truncadas ni texto inventado.
 REGLA DURA: JAMÁS inventes datos del negocio (precios, direcciones, promos, teléfonos, nombres de producto que no se provean). Solo el titular provisto, tal cual.` },
         { role: 'user', content:
 `Negocio: ${businessName || 'sin nombre'}${category ? ` (${category})` : ''}
@@ -4339,13 +4354,13 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"detalle":"..."}
+{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"detalle":"..."}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
 - headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. Si la imagen NO lleva texto → true.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
-- detalle: una línea explicando qué viste (máx 120 caracteres).` },
+- brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena).` },
           { role: 'user', content: [
             { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
@@ -4364,6 +4379,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
     return {
       texto_ok: parsed.texto_ok !== false,
       headline_complete: parsed.headline_complete !== false,
+      brand_ok: parsed.brand_ok !== false, // draft 76: la imagen parecía Netflix (estilo de marca ajena)
       colores_ok: parsed.colores_ok !== false,
       claims_ok: parsed.claims_ok !== false,
       mobile_ok: parsed.mobile_ok !== false,
@@ -4508,8 +4524,8 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       dnaFacts: qaFactsLine(dna),
     }, key);
   } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  if (qa && (!qa.texto_ok || !qa.headline_complete || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok)) {
-    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} titular_completo=${qa.headline_complete} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok}): ${qa.detalle}`);
+  if (qa && (!qa.texto_ok || !qa.headline_complete || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok || !qa.brand_ok)) {
+    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} titular_completo=${qa.headline_complete} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok} marca=${qa.brand_ok}): ${qa.detalle}`);
     let retryPrompt;
     if (!qa.texto_ok && cleanHeadline) {
       // El texto salió mal → regenerar SIN texto en la imagen.
@@ -4522,7 +4538,7 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       retryPrompt = prompt + `\nIMPORTANT FIX: the image headline "${cleanHeadline}" was CUT OFF mid-sentence in the previous render. Render the FULL headline, every single word, complete — never end on a preposition or article, never cut a word in half. If space is tight, make the type smaller or split it across two lines, NEVER truncate the text.`;
     } else {
       // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
-      retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
+      retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, no famous-brand lookalike (never a Netflix/streaming-style red-on-black cinematic look — the design must have its OWN visual identity for this business category), and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
     }
     if (retryPrompt) {
       try {

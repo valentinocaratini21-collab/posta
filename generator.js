@@ -324,6 +324,29 @@ const BANNED_PHRASES = [
 // 'dm' se chequea aparte con word boundary para no matchear "admirar", etc.
 const CTA_SIGNALS = ['comenta', 'guarda', 'escribinos', 'pasa por', 'link', 'turno', 'pedilo', 'reserva'];
 
+// Números que figuran como promo/precio REAL (promos activas, productos/servicios,
+// datos de la web): un % en el caption solo vale si su número está en este set.
+// Draft 76 (revisión 2026-09-29): la promo "20%" inventada pasaba porque el número
+// aparecía en cualquier campo del ADN. Ahora el % exige contexto de promo/precio.
+function promoNumbers(dna) {
+  const d = dna || {};
+  const fields = [dnaList(d.promos_activas), dnaList(d.promos), dnaList(d.productos), dnaList(d.servicios)];
+  if (Array.isArray(d.website_datos)) fields.push(d.website_datos.join(' | '));
+  const out = new Set();
+  for (const f of fields) for (const m of String(f || '').matchAll(/\d+[\d.]*/g)) out.add(m[0].replace(/\./g, ''));
+  return out;
+}
+
+// Números de resultados reales medidos (performance/learnings): un "N veces más" solo
+// vale si el número viene de acá. Sin datos medidos, el set queda vacío y todo
+// multiplicador se rechaza (draft 77, revisión 2026-09-29).
+function perfNumbers(input) {
+  const t = String((input && (input.performance || input.learnings)) || '');
+  const out = new Set();
+  for (const m of t.matchAll(/\d+[\d.]*/g)) out.add(m[0].replace(/\./g, ''));
+  return out;
+}
+
 // Puerta de calidad automática: el cliente nunca ve un caption mediocre.
 // Devuelve { ok, reason }.
 // `input` (opcional) aporta { dna, business } para el chequeo de grounding:
@@ -339,15 +362,32 @@ function captionPasses(caption, input) {
   if (hasPlaceholders(c)) return { ok: false, reason: 'contiene texto inventado o de ejemplo (tipo "XYZ")' };
   const hasCta = CTA_SIGNALS.some(s => low.includes(s)) || /\bdm\b/.test(low);
   if (!hasCta) return { ok: false, reason: 'le falta un llamado a la acción claro (DM, comentario, guardado…)' };
-  // Métricas inventadas: % o multiplicadores con números que NO figuran en el ADN.
-  // Regla permanente (2026-09-29): si no hay dato, no hay número.
+  // Menciones @ inventadas (hallazgo revisión 2026-09-29, draft 74: "@clientefeliz"
+  // como testimonio falso). Un @handle que no es la cuenta del negocio ni figura en
+  // sus datos reales es un testimonio/mención inventada.
   const dna = (input && input.dna) || null;
-  const dnaNums = dnaNumbers(dna);
+  const dnaText = ((input && input.business) || '') + ' ' + dnaList(dna && dna.testimonios) + ' ' + (Array.isArray(dna && dna.website_datos) ? dna.website_datos.join(' ') : '');
+  const knownHandles = new Set([...String(dnaText).matchAll(/@([a-z0-9._]{2,30})/gi)].map(m => m[1].toLowerCase()));
+  const ownHandle = String((input && (input.ig_username || input.ig_handle)) || '').replace(/^@/, '').toLowerCase();
+  if (ownHandle) knownHandles.add(ownHandle);
+  for (const m of c.matchAll(/@([a-z0-9._]{2,30})/gi)) {
+    const h = m[1].toLowerCase();
+    if (!knownHandles.has(h)) {
+      return { ok: false, reason: `mención inventada: @${h} no es la cuenta del negocio ni figura en sus datos reales` };
+    }
+  }
+  // Métricas inventadas: % o multiplicadores con números que NO figuran en los datos reales.
+  // Regla permanente (2026-09-29): si no hay dato, no hay número.
+  // - Un % solo vale si el número figura como PROMO/precio real (draft 76: "20%" inventado).
+  // - Un "N veces más" solo vale si el número viene de resultados reales medidos (draft 77).
   const capNums = [...c.matchAll(/\d+[\d.]*/g)].map(m => m[0].replace(/\./g, ''));
   const hasPct = /\d+\s*%/.test(c);
   const hasMult = /\b\d+\s*(veces|x)\s*mas\b/.test(low);
-  if ((hasPct || hasMult) && capNums.length && !capNums.some(n => dnaNums.has(n))) {
-    return { ok: false, reason: 'métrica inventada: usa un número/porcentaje que no figura en los datos reales del negocio' };
+  if (hasPct && capNums.length && !capNums.some(n => promoNumbers(dna).has(n))) {
+    return { ok: false, reason: 'promoción inventada: usa un porcentaje que no figura en las promos/precios reales del negocio' };
+  }
+  if (hasMult && capNums.length && !capNums.some(n => perfNumbers(input).has(n))) {
+    return { ok: false, reason: 'multiplicador inventado: "N veces más" solo vale con resultados reales medidos' };
   }
   // Grounding en el ADN: con ADN rico, el caption tiene que tocar algo real.
   const kws = dnaKeywords(dna);
@@ -518,7 +558,7 @@ function businessContext({ business, category, description, dna, tone, learnings
     ? parts.join('\n')
     : '(sin datos del negocio cargados)\nFALTAN DATOS: pedile al cliente el audio de 2 minutos contando de su negocio; no adivines.';
   const learn = learningsLine(learnings);
-  return `${ctx}${learn ? '\n' + learn : ''}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. Los datos de la web del negocio (si figuran) son REALES y podés citarlos tal cual: productos, precios y promos de la web se copian literales, nunca se "suavizan" ni se redondean. Lo que NO aparezca ni en el ADN ni en la web no se inventa jamás (ni precios, ni promos, ni productos, ni testimonios de clientes). JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos. PROHIBIDO INVENTAR MÉTRICAS: nunca escribas porcentajes, multiplicadores ni resultados ("5 veces más personas", "duplicá tus ventas", "20% más clientes") salvo que el número figure literal en el ADN, la web o los learnings de arriba. Si no hay dato, no hay número. PROHIBIDO INVENTAR TESTIMONIOS: nada de "un cliente multiplicó su visibilidad", "nuestros clientes ya...", "casos de éxito" vagos: solo testimonios reales con nombre o captura. PROHIBIDO: posteos motivacionales genéricos o frases inspiracionales desconectadas del negocio ("empezá la semana con todo", "nunca te rindas", "emprendé tus sueños"): cada idea tiene que vender algo concreto del negocio o hablarle a su cliente ideal sobre algo real de este negocio.`;
+  return `${ctx}${learn ? '\n' + learn : ''}\nREGLA CRÍTICA: solo podés mencionar productos, servicios, precios, promociones y datos que aparezcan acá arriba. Los datos de la web del negocio (si figuran) son REALES y podés citarlos tal cual: productos, precios y promos de la web se copian literales, nunca se "suavizan" ni se redondean. Lo que NO aparezca ni en el ADN ni en la web no se inventa jamás (ni precios, ni promos, ni productos, ni testimonios de clientes). JAMÁS inventes productos, precios ni nombres (nada de "XYZ", "producto X", ni rubros que no te dieron). Si faltan datos, hablá del negocio en general —su propuesta, su atención, su comunidad— sin inventar datos concretos. PROHIBIDO INVENTAR MÉTRICAS: nunca escribas porcentajes, multiplicadores ni resultados ("5 veces más personas", "duplicá tus ventas", "20% más clientes") salvo que el número figure literal en el ADN, la web o los learnings de arriba. Si no hay dato, no hay número. PROHIBIDO INVENTAR TESTIMONIOS: nada de "un cliente multiplicó su visibilidad", "nuestros clientes ya...", "casos de éxito" vagos ni @cuentas de clientes que no te pasé (nada de "@clientefeliz le encantó"): solo testimonios reales con nombre o captura que figuren acá arriba. PROHIBIDO INVENTAR PROMOCIONES: un descuento o promo solo existe si figura en el ADN o la web; nunca escribas "%", "2x1", "descuento" ni "off" con números que no te pasaron. PROHIBIDO: posteos motivacionales genéricos o frases inspiracionales desconectadas del negocio ("empezá la semana con todo", "nunca te rindas", "emprendé tus sueños"): cada idea tiene que vender algo concreto del negocio o hablarle a su cliente ideal sobre algo real de este negocio.`;
 }
 
 // Placeholders típicos de contenido inventado: si aparecen, el texto se descarta.
