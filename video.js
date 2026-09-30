@@ -13,7 +13,23 @@ const H = 1920;
 const FPS = 30;
 const MAX_TOTAL_SEC = 60;
 const MAX_SCENES = 5;
-const FONT = path.join(__dirname, 'assets', 'fonts', 'Montserrat-Bold.ttf');
+// Fuente para drawtext: bundle primero, respaldo a fuentes del sistema
+// (el bundle no siempre viaja en el deploy; en Docker solo hay fuentes del sistema).
+function resolveFont() {
+  const cands = [
+    path.join(__dirname, 'assets', 'fonts', 'Montserrat-Bold.ttf'),
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+  ];
+  for (const c of cands) { try { if (fs.existsSync(c)) return c; } catch (e) {} }
+  try {
+    const out = require('child_process').execFileSync('fc-list', [':style=Bold', 'file'], { timeout: 5000 }).toString();
+    const m = out.split('\n').map(l => l.trim().replace(/^file:\s*/i, '').replace(/:.*$/, '').trim()).find(f => f.endsWith('.ttf') || f.endsWith('.otf'));
+    if (m && fs.existsSync(m)) return m;
+  } catch (e) {}
+  return cands[0]; // último recurso: ffmpeg dirá el error real
+}
+const FONT = resolveFont();
 
 let _ffmpegOk = null;
 function ffmpegAvailable() {
@@ -103,7 +119,9 @@ async function renderVideo({ scenes, musicFile, mediaDir }) {
         : `z='max(1.12-0.12*on/${frames},1.0)'`;
       // Texto en archivo temporal para evitar problemas de escape
       const txtFile = path.join(tmpDir, `txt${i}.txt`);
-      fs.writeFileSync(txtFile, escDrawtext(cortarDrawtext(s.text, 140)));
+      const txtClean = escDrawtext(cortarDrawtext(s.text, 140))
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '');
+      fs.writeFileSync(txtFile, txtClean);
       const vf =
         `scale=1620:2880:force_original_aspect_ratio=increase,crop=1620:2880,` +
         `zoompan=${zExpr}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${W}x${H}:fps=${FPS},` +
@@ -138,4 +156,4 @@ async function renderVideo({ scenes, musicFile, mediaDir }) {
   }
 }
 
-module.exports = { renderVideo, ffmpegAvailable, MAX_TOTAL_SEC, MAX_SCENES };
+module.exports = { renderVideo, ffmpegAvailable, resolveFont, MAX_TOTAL_SEC, MAX_SCENES };

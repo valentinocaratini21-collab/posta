@@ -1470,7 +1470,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         if (!['draft', 'scheduled', 'failed'].includes(post.status)) { pub.failed.push(target.id); continue; }
         if (post.needs_review) { pub.inReview.push(target.id); continue; }
         if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
-          const q = weeklyQuota(uid);
+          const q = quotaFor(uid, post.media_type);
           if (q.left <= 0) { pub.failed.push(target.id); continue; }
         }
         db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
@@ -1512,31 +1512,66 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         } catch (e) { console.error('[chat] preview opción:', e.message); }
       }));
     }
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null });
+    // El cliente pidió VER sus posteos (```show_drafts): devolver los borradores
+    // reales con imagen para que el chat los muestre. Nunca texto sin imágenes.
+    let showDrafts = null;
+    if (out.showDrafts) {
+      try {
+        const rows = db.prepare(`SELECT id, caption, image_path, media_type, scheduled_for, status
+          FROM posts WHERE user_id = ? AND status IN ('draft','scheduled')
+          ORDER BY COALESCE(scheduled_for, created_at) ASC LIMIT 10`).all(uid) || [];
+        showDrafts = rows.map(r => ({
+          id: r.id,
+          caption: String(r.caption || '').slice(0, 200),
+          image_url: r.image_path ? absImageUrl(uid, r.image_path) : null,
+          media_type: r.media_type || 'image',
+          when: r.scheduled_for || null,
+          status: r.status,
+        })).filter(d => d.image_url);
+      } catch (e) { console.error('[chat] show_drafts:', e.message); }
+    }
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
   } catch (e) {
     console.error('[chat]', e.message);
     res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
   }
 });
 
-// Cupo semanal por plan: posteos (feed + reels) creados de lunes a domingo.
-// Las historias son un bonus de la casa y no consumen cupo.
-function weeklyQuota(userId) {
+// Cupo semanal por plan: posteos de feed vs postsPerWeek, reels vs reelsPerWeek,
+// historias no consumen cupo (bonus de la casa).
+// weeklyQuota(uid) = cupo de FEED (compatibilidad con el frontend).
+// quotaFor(uid, mediaType) = cupo para 'image' | 'video' | 'carousel' | 'story'.
+function quotaCounts(userId, monday) {
+  const rows = db.prepare(`SELECT media_type, COUNT(*) AS n FROM posts
+    WHERE user_id = ? AND status IN ('scheduled','publishing','published')
+    AND date(created_at) >= date(?) GROUP BY media_type`).all(userId, monday) || [];
+  const m = {};
+  for (const r of rows) m[r.media_type || 'image'] = r.n;
+  return m;
+}
+function quotaFor(userId, mediaType) {
   const user = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(userId) || {};
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
-  const limit = plan.postsPerWeek || 3;
   const st = getSettings(userId) || {};
   const tz = st.timezone || 'America/Argentina/Buenos_Aires';
   const monday = streaks.mondayKeyOf(streaks.tzToday(tz));
-  let used = 0;
-  try {
-    // El cupo lo consumen las PUBLICACIONES (programados, publicándose, publicados).
-    // Los borradores son gratis: crear y probar no gasta el plan.
-    used = db.prepare(`SELECT COUNT(*) AS n FROM posts
-      WHERE user_id = ? AND status IN ('scheduled','publishing','published') AND media_type != 'story'
-      AND date(created_at) >= date(?)`).get(userId, monday).n || 0;
-  } catch (e) { /* no bloquea */ }
+  const counts = quotaCounts(userId, monday);
+  const mt = mediaType === 'video' ? 'video' : mediaType === 'carousel' ? 'carousel' : 'image';
+  if (mediaType === 'story') return { limit: Infinity, used: 0, left: Infinity, plan: plan.id, plan_name: plan.name, free: true };
+  // Reels: cupo propio si el plan los incluye; si no, comparten el de feed
+  // (compatibilidad con el autopilotReel manual existente).
+  const reelPool = (plan.reelsPerWeek || 0) > 0 ? (plan.reelsPerWeek || 0) : (plan.postsPerWeek || 3);
+  const limit = mt === 'video' ? reelPool : (plan.postsPerWeek || 3);
+  const used = mt === 'video'
+    ? ((plan.reelsPerWeek || 0) > 0 ? (counts.video || 0) : ((counts.image || 0) + (counts.carousel || 0) + (counts.video || 0)))
+    : ((counts.image || 0) + (counts.carousel || 0));
   return { limit, used, left: Math.max(0, limit - used), plan: plan.id, plan_name: plan.name };
+}
+function weeklyQuota(userId) {
+  // Compatibilidad: el cupo "principal" es el de feed; se agregan reels e historias.
+  const q = quotaFor(userId, 'image');
+  const qr = quotaFor(userId, 'video');
+  return { ...q, reels: { limit: qr.limit, used: qr.used, left: qr.left }, stories: { free: true } };
 }
 app.get('/api/quota', requireAuth, (req, res) => res.json(weeklyQuota(req.session.userId)));
 // El frontend avisa hitos que solo él conoce (ej: semana aceptada).
@@ -2443,10 +2478,10 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   // Cupo del plan: solo las publicaciones consumen cupo (los borradores son gratis).
   // Las historias no consumen cupo (bonus de la casa). El carrusel cuenta como 1 posteo.
   if (status === 'scheduled' && mt !== 'story') {
-    const q = weeklyQuota(req.session.userId);
+    const q = quotaFor(req.session.userId, mt);
     if (q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${mt === 'video' ? 'reels' : 'posteos'} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
     }
   }
   let cpaths = '';
@@ -2484,10 +2519,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     // Programar SÍ consume cupo (las publicaciones son el límite del plan). Si el posteo
     // ya estaba programado/publicado, no se descuenta de nuevo.
     if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
-      const q = weeklyQuota(req.session.userId);
+      const q = quotaFor(req.session.userId, post.media_type);
       if (q.left <= 0) {
         return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${post.media_type === 'video' ? 'reels' : 'posteos'} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
       }
     }
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
@@ -2575,10 +2610,10 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
   if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
   // Publicar ahora SÍ consume cupo (salvo que ya estuviera programado: ya se descontó).
   if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
-    const q = weeklyQuota(req.session.userId);
+    const q = quotaFor(req.session.userId, post.media_type);
     if (q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${post.media_type === 'video' ? 'reels' : 'posteos'} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
     }
   }
   db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
@@ -2955,6 +2990,13 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
       try { push.sendPush(uid, { title: 'Tu semana está lista ✨', body: 'Posty armó tus posteos: revisalos y aprobá 👇', url: '/#/app/semana' }).catch(() => {}); }
       catch (e) { /* el push nunca bloquea */ }
     }
+    // Historias + reels del plan: reusan las imágenes recién generadas.
+    // Va en try/catch propio: si falla, el autopilot de feed queda intacto.
+    try {
+      const { generateWeekExtras } = require('./story-reel');
+      const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'draft' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, weekKey);
+      await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
+    } catch (e) { console.error(`[pipeline:${tag}] extras historias/reels:`, e.message); }
     return { ok: true, created };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
@@ -3047,11 +3089,15 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'No hay borradores para programar' });
   }
   // Cupo: todos de una o nada. Las historias no consumen cupo (igual que PATCH /api/posts/:id).
-  const quota = weeklyQuota(uid);
-  const billable = drafts.filter((d) => d.media_type !== 'story').length;
-  if (billable > quota.left) {
-    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: quota.limit, plan_name: quota.plan_name,
-      message: `Llegaste al límite de tu plan ${quota.plan_name} (${quota.limit} posteos por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+  // Feed/carrusel vs postsPerWeek, reels vs reelsPerWeek.
+  const qf = quotaFor(uid, 'image');
+  const qr = quotaFor(uid, 'video');
+  const feedBillable = drafts.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
+  const reelBillable = drafts.filter((d) => d.media_type === 'video').length;
+  if (feedBillable > qf.left || reelBillable > qr.left) {
+    const over = reelBillable > qr.left ? `${qr.limit} reels` : `${qf.limit} posteos`;
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: reelBillable > qr.left ? qr.limit : qf.limit, plan_name: qf.plan_name,
+      message: `Llegaste al límite de tu plan ${qf.plan_name} (${over} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
   }
   const tz = userTz(uid);
   let bestHour = 19;
@@ -3060,30 +3106,41 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
   } catch (e) { /* respaldo 19:00 */ }
   // Días ya ocupados por posteos programados: no pisarlos (mismo criterio que
-  // suggestSlots() en el frontend).
+  // suggestSlots() en el frontend). Las historias salen al mediodía (13:00) y
+  // PUEDEN compartir día con un posteo de feed (no compiten); entre ellas, 1/día.
+  const { STORY_HOUR } = require('./story-reel');
   const taken = new Set();
+  const takenStory = new Set();
   try {
-    const sched = db.prepare(`SELECT scheduled_at FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
-    for (const s of sched) { const k = ymdInTz(s.scheduled_at, tz); if (k) taken.add(k); }
+    const sched = db.prepare(`SELECT scheduled_at, media_type FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    for (const s of sched) {
+      const k = ymdInTz(s.scheduled_at, tz); if (!k) continue;
+      if (s.media_type === 'story') takenStory.add(k); else taken.add(k);
+    }
   } catch (e) { /* no bloquea */ }
   // Equivalente servidor de slotDate19(i, tz): el día (hoy + i + 1) a la
-  // best_hour del negocio en su zona horaria, en ISO UTC.
-  const slotAt = (i) => {
+  // best_hour del negocio en su zona horaria, en ISO UTC. Historias: 13:00.
+  const slotAt = (i, hour) => {
     const ymd = shiftDays(tzToday(tz), i + 1);
-    return zonedWallToUtc(`${ymd} ${String(bestHour).padStart(2, '0')}:00`, tz);
+    return zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
   };
   const scheduled = [];
   const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='' WHERE id=?`);
-  let off = 0, guard = 0;
+  let off = 0, offStory = 0, guard = 0;
   for (const d of drafts) {
+    const isStory = d.media_type === 'story';
+    const hour = isStory ? STORY_HOUR : bestHour;
+    const tset = isStory ? takenStory : taken;
+    let o = isStory ? offStory : off;
     let iso = null;
-    while (guard++ < 120) {
-      const cand = slotAt(off++);
+    while (guard++ < 160) {
+      const cand = slotAt(o++, hour);
       if (!cand) break;
       const k = ymdInTz(cand, tz);
-      if (k && !taken.has(k)) { taken.add(k); iso = cand; break; }
+      if (k && !tset.has(k)) { tset.add(k); iso = cand; break; }
     }
-    if (!iso) iso = slotAt(off++); // respaldo: no dejar huecos
+    if (isStory) offStory = o; else off = o;
+    if (!iso) iso = slotAt(o++, hour); // respaldo: no dejar huecos
     upd.run(iso, d.id);
     try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
     scheduled.push({ id: d.id, scheduled_at: iso });
@@ -3101,6 +3158,31 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
         .catch((e) => console.error('[next-week] pipeline:', e.message));
     }
   } catch (e) { console.error('[next-week] trigger:', e.message); }
+});
+
+// Historias + reels del plan para el autopilot manual del browser.
+// Corre en segundo plano (los reels tardan ~1 min en ffmpeg): responde al toque
+// y los borradores aparecen en "Revisá tu semana" al refrescar.
+app.post('/api/posts/generate-extras', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  res.json({ ok: true, started: true });
+  (async () => {
+    try {
+      const { generateWeekExtras } = require('./story-reel');
+      const tz = userTz(uid);
+      const weekKey = mondayKeyOf(tzToday(tz));
+      // Borradores de feed recientes (el browser no setea week_key: van con '').
+      const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND media_type = 'image'
+        AND status IN ('draft','scheduled') AND (week_key = ? OR week_key = '')
+        AND created_at > datetime('now', '-3 days') ORDER BY created_at ASC`).all(uid, weekKey);
+      if (!feedDrafts.length) return;
+      // Idempotencia: si ya hay historias/reels recientes, no duplicar.
+      const existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND media_type IN ('story','video')
+        AND status != 'cancelled' AND created_at > datetime('now', '-3 days')`).get(uid).n || 0;
+      if (existing > 0) { console.log(`[extras:manual] usuario ${uid}: ya existen, skip`); return; }
+      await generateWeekExtras({ db, uid, weekKey, tag: 'manual', mediaDir: MEDIA_DIR, feedDrafts, needsReview: trainingWheelsActive(uid) });
+    } catch (e) { console.error('[extras:manual]:', e.message); }
+  })();
 });
 
 // ---------- Rachas ----------

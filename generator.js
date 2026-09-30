@@ -1184,6 +1184,18 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'Tu mensaje visible las presenta en 1 línea cada una (título + gancho) para que elija tocando. ' +
     'El MODO PEDIDO (pedido concreto: "necesito un posteo de X", "haceme algo que diga Y") sigue con UNA sola idea. ' +
     'FORMATO DEL CHAT: texto plano siempre. PROHIBIDO markdown (**negrita**, #títulos, listas con -): el chat no lo renderiza y se ve crudo.';
+  // MOSTRAR BORRADORES: si el cliente quiere VER sus posteos ya armados
+  // ("mostrame los posteos que armaste", "mostrame mis posteos", "qué posteos tengo",
+  // "mostrame los borradores", "quiero ver las imágenes"), emití el bloque ```show_drafts
+  // en su propia línea y acompañalo con UNA línea corta ("acá van 👇").
+  // PROHIBIDO describirlos en texto, listarlos o decir que no podés mostrar imágenes:
+  // las imágenes existen y el sistema las muestra solo. Si no hay borradores, decilo
+  // honesto en 1 línea ("todavía no armé nada — ¿la armamos? 🚀").
+  const showDraftsGuide =
+    'MOSTRAR BORRADORES: si el cliente pide VER sus posteos/borradores ya armados ("mostrame los posteos que armaste", "mostrame mis posteos", "qué posteos tengo", "mostrame los borradores", "quiero ver las imágenes"), ' +
+    'respondé con UNA línea corta ("acá van 👇") + el bloque ```show_drafts en su propia línea. ' +
+    'PROHIBIDO ABSOLUTO: describirlos en texto, hacer listas numeradas, o decir que no podés mostrar las imágenes ("no las tengo", "no las puedo mostrar acá") — ESO ES MENTIRA y está prohibido. Las imágenes existen y se muestran solas. ' +
+    'Si el contexto no trae borradores, decilo honesto en 1 línea ("todavía no armé nada — ¿la armamos? 🚀").';
   // Contexto comercial: estado de prueba/plan + planes y precios de memoria.
   // Precios fuente: config/plans.js (AR). No inventar otros.
   const salesGuide = (() => {
@@ -1250,7 +1262,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'PROHIBIDO: métricas inventadas (\"5x más\"), testimonios vagos (\"un cliente\"), superlativos vacíos (\"la mejor herramienta\", \"revolucionario\"). Si falta un dato real, se pregunta o se usa lo que SÍ existe: nunca se inventa. ' +
     'TONO: rioplatense, cálido, simple. Como un amigo que sabe. ';
 
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + houseStyleGuide;
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + houseStyleGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
@@ -1581,7 +1593,14 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     } catch (e) { /* bloque inválido: se ignora */ }
     text = String(text).replace(mr2[0], '').trim();
   }
-  return { reply: stripMdAsterisks(text), idea, ideas, edits, publishes, reverts, dna: dnaOut, options, rule, inspo };
+  // Mostrar borradores existentes en el chat (```show_drafts): el servidor los
+  // resuelve a las imágenes reales. Nunca describirlos en texto ni mentir.
+  let showDrafts = false;
+  for (const msd of String(text).matchAll(/```show_drafts\s*(?:\{[\s\S]*?\})?\s*```/g)) {
+    showDrafts = true;
+    text = String(text).replace(msd[0], '').trim();
+  }
+  return { reply: stripMdAsterisks(text), idea, ideas, edits, publishes, reverts, showDrafts, dna: dnaOut, options, rule, inspo };
 }
 
 // Posty humano: el chat muestra texto plano. Si al modelo se le escapa markdown
