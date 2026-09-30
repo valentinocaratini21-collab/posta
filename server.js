@@ -6,6 +6,10 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
+const costs = require('./costs');
+costs.initCosts(db); // medición de gasto de IA (api_costs) + kill-switch diario
+const push = require('./push');
+push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
 const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples } = require('./generator');
 const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
@@ -221,7 +225,7 @@ function requireTrialValid(req, res, next) {
   try {
     const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.plan_status === 'trial' && trialEffectiveEnd(u) <= Date.now())
-      return res.status(402).json({ error: 'trial_expired', message: 'Tu prueba gratis terminó. Elegí un plan para seguir creando contenido.' });
+      return res.status(402).json({ error: 'trial_expired', message: '¡Ey! Se terminó tu prueba gratis 😢 Elegí tu plan y seguimos publicando juntos — Posty te extraña.' });
   } catch (e) { /* ante la duda, dejar pasar */ }
   next();
 }
@@ -369,6 +373,7 @@ async function extractDnaFromText(text, apiKey) {
   });
   if (!r.ok) throw new Error('openai ' + r.status);
   const j = await r.json();
+  costs.trackUsage({ feature: 'dna', model: 'gpt-4o-mini', json: j });
   const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
   const parsed = parseLooseJson(content);
   if (!parsed || typeof parsed !== 'object') throw new Error('json inválido');
@@ -392,7 +397,7 @@ app.put('/api/dna', requireAuth, (req, res) => {
     res.json({ dna });
   } catch (e) {
     console.error('[dna] PUT:', e.message);
-    res.status(500).json({ error: 'No se pudo guardar el ADN. Probá de nuevo.' });
+    res.status(500).json({ error: 'No pude guardar eso 😅 Probá de nuevo que lo reintento con más ganas' });
   }
 });
 
@@ -407,7 +412,7 @@ app.post('/api/dna/from-audio', requireAuth, async (req, res) => {
   try { transcript = await transcribeAudio(audioDataUrl, apiKey); }
   catch (e) {
     console.error('[dna] whisper:', e.message);
-    return res.status(400).json({ error: 'No se pudo transcribir el audio. Probá de nuevo.' });
+    return res.status(400).json({ error: 'No te escuché bien 😅 ¿Me lo mandás de nuevo?' });
   }
   if (!transcript)
     return res.status(400).json({ error: 'No se entendió el audio. Probá de nuevo.' });
@@ -419,7 +424,7 @@ app.post('/api/dna/from-audio', requireAuth, async (req, res) => {
     res.json({ transcript, extracted, dna });
   } catch (e) {
     console.error('[dna] extracción:', e.message);
-    res.status(400).json({ error: 'No se pudo procesar el audio. Probá de nuevo.' });
+    res.status(400).json({ error: 'Ese audio me vino fallado 😅 Probá mandarlo de nuevo' });
   }
 });
 
@@ -437,7 +442,7 @@ app.post('/api/dna/from-text', requireAuth, async (req, res) => {
     res.json({ extracted, dna });
   } catch (e) {
     console.error('[dna] extracción:', e.message);
-    res.status(400).json({ error: 'No se pudo procesar el texto. Probá de nuevo.' });
+    res.status(400).json({ error: 'Me mareé con ese texto 😅 Probá de nuevo' });
   }
 });
 // ===== Fin Track A — ADN extendido =====
@@ -481,6 +486,7 @@ app.post('/api/dna/inspo', requireAuth, express.raw({ type: 'image/*', limit: '1
       throw new Error(`openai ${r.status}: ${t.slice(0, 120)}`);
     }
     const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'dna', userId: req.session.userId, model: 'gpt-4o', json: j });
     const estilo = ((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
     if (!estilo) throw new Error('OpenAI no devolvió análisis');
     // MERGE: igual que el ```inspo del chat — no pisa producto_estrella, series, pausas ni nada más.
@@ -545,6 +551,12 @@ async function transcribeAudio(dataUrl, apiKey) {
   });
   if (!r.ok) throw new Error(`whisper ${r.status}`);
   const j = await r.json();
+  // Medición: whisper se cobra por minuto; estimamos duración del audio de forma
+  // aproximada (asumiendo ~64kbps). Es solo para medir el quemado, no facturación.
+  try {
+    const minutes = Math.max(0.05, (buf.length * 8 / 64000) / 60);
+    costs.logApiCost({ userId: null, feature: 'whisper', model: 'whisper-1', minutes });
+  } catch (e) {}
   return String((j && j.text) || '').trim();
 }
 function maskSettings(s) {
@@ -603,7 +615,7 @@ function streakFromTrialImport(userId, nImp) {
 app.post('/api/auth/register', (req, res) => {
   const { email, password, ref, trial_ig } = req.body || {};
   if (!email || !password || password.length < 6)
-    return res.status(400).json({ error: 'Email y contraseña (mínimo 6 caracteres)' });
+    return res.status(400).json({ error: 'Necesito tu email y una contraseña de 6 caracteres como mínimo 🔑' });
   try {
     const hash = bcrypt.hashSync(password, 10);
     const code = newReferralCode();
@@ -626,7 +638,7 @@ app.post('/api/auth/register', (req, res) => {
     evTrack(r.lastInsertRowid, 'account_created', {});
     res.json({ ok: true });
   } catch (e) {
-    res.status(400).json({ error: 'Ese email ya está registrado' });
+    res.status(400).json({ error: 'Ese email ya tiene cuenta 😄 Probá entrando directamente' });
   }
 });
 
@@ -634,7 +646,7 @@ app.post('/api/auth/login', (req, res) => {
   const { email, password, trial_ig } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get((email || '').trim().toLowerCase());
   if (!user || !bcrypt.compareSync(password || '', user.password_hash))
-    return res.status(401).json({ error: 'Email o contraseña incorrectos' });
+    return res.status(401).json({ error: 'Mmm, ese email o contraseña no me cierran 🤔 Probá de nuevo' });
   req.session.userId = user.id;
   // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
   try {
@@ -659,7 +671,7 @@ const OB_STEPS = [
   { key: 'fotos', pregunta: '📸 Última: subí hasta 5 fotos de tu negocio — tu local, tus productos, vos laburando. Con esas fotos la IA aprende cómo se ve lo que hacés y te genera contenido nuevo cada semana, sin que tengas que pensar en fotos. Sacalas con luz de día si podés ☀️ Si preferís, escribí "saltear".' },
 ];
 const OB_GOAL_CHIPS = ['Vender más', 'Conseguir seguidores', 'Llenar mi local', 'Contar novedades'];
-const OB_GREETING = '¡Hola! Soy tu community manager 🙌 Te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. Son 8, dale que va:';
+const OB_GREETING = '¡Hola! Soy Posty, tu community manager 🙌 Te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. Son 8, dale que va:';
 
 app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
   try {
@@ -692,6 +704,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
             signal: AbortSignal.timeout(20000),
           });
           const j = await r.json();
+          costs.trackUsage({ feature: 'onboarding', userId: req.session.userId, model: 'gpt-4o-mini', json: j });
           const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
           reply = cortar(txt, 500) || `¡Buenísimo! ${step.pregunta}`;
         } catch (e) { reply = `¡Buenísimo! ${step.pregunta}`; }
@@ -733,6 +746,7 @@ app.post('/api/onboarding/finish', requireAuth, async (req, res) => {
           signal: AbortSignal.timeout(25000),
         });
         const j = await r.json();
+        costs.trackUsage({ feature: 'onboarding', userId: req.session.userId, model: 'gpt-4o-mini', json: j });
         const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
         const mm = txt.match(/\{[\s\S]*\}/);
         if (mm) {
@@ -757,6 +771,61 @@ app.post('/api/onboarding/finish', requireAuth, async (req, res) => {
 app.post('/api/pwa-installed', requireAuth, (req, res) => {
   db.prepare(`UPDATE users SET pwa_installed = 1 WHERE id = ?`).run(req.session.userId);
   res.json({ ok: true });
+});
+
+// ---------- Push notifications (Web Push / VAPID) ----------
+// Clave pública VAPID para que el frontend pueda suscribirse.
+app.get('/api/push/vapid-key', (req, res) => {
+  res.json({ key: push.vapidPublicKey() });
+});
+// Guardar/actualizar la suscripción push de este dispositivo.
+app.post('/api/push/subscribe', requireAuth, (req, res) => {
+  try {
+    const { endpoint, keys } = req.body || {};
+    if (!endpoint || typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
+      return res.status(400).json({ error: 'Suscripción inválida' });
+    }
+    const keysJson = JSON.stringify(keys && typeof keys === 'object' ? keys : {});
+    db.prepare(`INSERT INTO push_subscriptions (user_id, endpoint, keys_json)
+      VALUES (?,?,?)
+      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys_json = excluded.keys_json`).run(req.session.userId, endpoint, keysJson);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo guardar la suscripción' });
+  }
+});
+// Dar de baja este dispositivo.
+app.post('/api/push/unsubscribe', requireAuth, (req, res) => {
+  try {
+    const { endpoint } = req.body || {};
+    if (endpoint) db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(req.session.userId, endpoint);
+    res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: true });
+  }
+});
+
+// ---------- Play Store (TWA): Digital Asset Links ----------
+// Valida que la app Android es dueña de postahacetodo.com. El SHA-256 sale de
+// Play App Signing cuando Valentino cree la app (ver STORES.md). Se puede pegar
+// el JSON completo en la env ASSETLINKS_JSON; si no, se sirve el placeholder.
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const fromEnv = (process.env.ASSETLINKS_JSON || '').trim();
+  if (fromEnv) {
+    try {
+      res.type('application/json').send(JSON.parse(fromEnv));
+      return;
+    } catch (e) { console.error('[assetlinks] ASSETLINKS_JSON inválido:', e.message); }
+  }
+  res.type('application/json').send([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: 'com.postahacetodo.app',
+      sha256_cert_fingerprints: ['PEGAR_SHA256_DE_PLAY_APP_SIGNING'],
+    },
+    _nota: 'Placeholder: reemplazar el fingerprint con el de Play App Signing (ver STORES.md). Sin el fingerprint real, la TWA abre en pestaña de Chrome en vez de pantalla completa.',
+  }]);
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -806,7 +875,7 @@ app.get('/api/profile', requireAuth, (req, res) => {
 
 app.put('/api/profile', requireAuth, (req, res) => {
   const { business_name, category, tone, description, ig_username, competitors, goal } = req.body || {};
-  if (!(business_name || '').trim()) return res.status(400).json({ error: 'El nombre del negocio es obligatorio' });
+  if (!(business_name || '').trim()) return res.status(400).json({ error: '¿Cómo se llama tu negocio? Lo necesito para arrancar 🏪' });
   getProfile(req.session.userId);
   db.prepare(
     `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, updated_at=datetime('now') WHERE user_id=?`
@@ -877,7 +946,7 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const { topic, n, seed, tipo } = req.body || {};
-  if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contanos el tema del posteo' });
+  if (!topic || !topic.trim()) return res.status(400).json({ error: 'Contame de qué es el posteo y lo armamos juntos ✍️' });
   const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
   try {
     const input = contentInputFor(req.session.userId, topic, tipo, seed);
@@ -889,14 +958,14 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
     const out = await generateContent(input, key);
     res.json(out);
   } catch (e) {
-    res.status(500).json({ error: 'No se pudo generar el contenido' });
+    res.status(500).json({ error: 'Se me trabó la creatividad 😅 Probá de nuevo que esta sale' });
   }
 });
 
 // ---------- Creador v2: 6 opciones con foto, colores y energía ----------
 app.post('/api/creator/options', requireAuth, async (req, res) => {
   const { topic, feedback, productPhoto } = req.body || {};
-  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'Contanos la idea del posteo' });
+  if (!topic || !String(topic).trim()) return res.status(400).json({ error: 'Tirame tu idea y la hacemos realidad 💡' });
   try {
     const settings = getSettings(req.session.userId);
     // Foto del producto (opcional, paso 1): si existe en /media, es LA foto de las 6.
@@ -922,7 +991,7 @@ app.post('/api/creator/options', requireAuth, async (req, res) => {
     res.json(out);
   } catch (e) {
     console.error('[creator]', e.message);
-    res.status(500).json({ error: e.message || 'No se pudieron armar las opciones' });
+    res.status(500).json({ error: e.message || 'No pude armar las opciones 😅 Probá de nuevo' });
   }
 });
 
@@ -941,7 +1010,7 @@ app.post('/api/creator/rerender', requireAuth, async (req, res) => {
 app.post('/api/creator/schedule', requireAuth, (req, res) => {
   const { items } = req.body || {};
   if (!Array.isArray(items) || !items.length || items.length > 6) {
-    return res.status(400).json({ error: 'Elegí al menos un diseño' });
+    return res.status(400).json({ error: 'Elegí al menos un diseño para seguir 👆' });
   }
   try {
     // Validar todo antes de insertar (nada a medias).
@@ -979,6 +1048,12 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 // Hasta que la idea no queda exactamente como quiere el cliente, no se manda nada.
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
   const { messages, photos, library, drafts, audio } = req.body || {};
+  const uidChat = req.session.userId;
+  // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
+  try { costs.assertAiOk(uidChat); }
+  catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ reply: e.message, idea: null }); throw e; }
+  // Rate limit: 150 mensajes/día por usuario (generoso, anti-abuso).
+  if (!costs.checkRate(uidChat, 'chat', 150).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
   if (!Array.isArray(messages) || !messages.length) {
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
@@ -1001,6 +1076,47 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     chatNote = 'El cliente mandó una NOTA DE VOZ transcripta: convertí lo que pide en un posteo concreto, sin pedirle más datos salvo que sea imposible.';
   }
   if (!clean.length) return res.status(400).json({ error: 'Contanos tu idea' });
+  // Saludo puro ("hola", "qué onda posty"): Posty responde al instante, sin gastar una llamada al modelo.
+  {
+    const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+    const greetRe = /^(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches|qu[ée] tal|qu[ée] onda|c[óo]mo (va|and[aá]s)|saludos|holis?)[ ,!.…?]*((posty|genio|capo|master|che|querido)[ ,!.…?]*)*$/i;
+    if (greetRe.test(lastUserText.trim())) {
+      const reply = '¡Hola! 😄 ¿Con qué te ayudo hoy?';
+      try {
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
+      } catch (e) {}
+      return res.json({ reply, idea: null });
+    }
+  }
+  // Nombre del cliente: "me llamo X" / "llamame X" / respuesta pelada a "¿cómo te llamo?" → se guarda y se usa.
+  {
+    const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+    const urow = db.prepare('SELECT client_name FROM users WHERE id = ?').get(uidChat) || {};
+    if (!((urow.client_name || '').trim())) {
+      let cname = null;
+      const m1 = lastUserText.match(/(?:me llamo|mi nombre es|llamame|ll\u00E1mame|decime)\s+([a-z\u00E1\u00E9\u00ED\u00F3\u00FA\u00F1\u00FC]{2,20}(?:\s+[a-z\u00E1\u00E9\u00ED\u00F3\u00FA\u00F1\u00FC]{2,20})?)/i);
+      if (m1) cname = m1[1];
+      else {
+        try {
+          const n = (db.prepare('SELECT COUNT(*) AS c FROM chat_messages WHERE user_id = ?').get(uidChat) || {}).c || 0;
+          const bare = lastUserText.trim().replace(/[!.\u2026?]+$/, '');
+          const common = /^(dale|ok|okay|s[\u00EDi]|no|gracias|bueno|listo|perfecto|genial|jaja+|hola|buenas|promo|posteo|post|reel|historia|semana|idea|precio|plan|prueba|gratis|ayuda|foto|video|instagram|horario|turno|descuento|oferta)$/i;
+          if (n <= 2 && /^[a-z\u00E1\u00E9\u00ED\u00F3\u00FA\u00F1\u00FC]{2,20}(?:\s+[a-z\u00E1\u00E9\u00ED\u00F3\u00FA\u00F1\u00FC]{2,20})?$/i.test(bare) && !common.test(bare)) cname = bare;
+        } catch (e) {}
+      }
+      if (cname) {
+        cname = cname.trim().toLowerCase().replace(/(?:^|\s)\S/g, c => c.toUpperCase());
+        db.prepare('UPDATE users SET client_name = ? WHERE id = ?').run(cname, uidChat);
+        const reply = `\u00A1Dale, ${cname}! \uD83D\uDE04 Ya me lo anoto.`;
+        try {
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
+          db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
+        } catch (e) {}
+        return res.json({ reply, idea: null });
+      }
+    }
+  }
   // "no me propongas más promos" / "volvé a proponerme promos" → pausa directa, sin IA.
   {
     const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
@@ -1023,12 +1139,13 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       }
     }
   }
-  const cleanPhotos = Array.isArray(photos)
-    ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4)
-    : [];
-  const cleanLibrary = Array.isArray(library)
-    ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6)
-    : [];
+  // Dedup anti-quemado: no reenviar al modelo fotos que ya vio hace poco.
+  // Se reenvían solas si pasaron >20h, para que el modelo tenga contexto visual.
+  const freshPhotos = (arr) => (Array.isArray(arr) ? arr : [])
+    .filter(u => typeof u === 'string' && u.startsWith('data:image/'))
+    .filter(u => !costs.photoRecentlySent(uidChat, costs.photoHash(u)));
+  const cleanPhotos = freshPhotos(photos).slice(0, 4);
+  const cleanLibrary = freshPhotos(library).slice(0, 6);
   // Borradores en revisión: la IA los ve y puede editarlos directo (bloque ```edit)
   const cleanDrafts = Array.isArray(drafts)
     ? drafts.map(d => ({
@@ -1050,11 +1167,11 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     } catch (e) {}
     dnaMissing = dnaMissingFields(dna);
     needDna = dnaMissing.length > 0;
-    // Análisis de su Instagram (si se corrió al conectar)
+    // Análisis de su Instagram (si se corrió al conectar). Tope duro anti-quemado.
     let igAnalysis = '';
     try {
       const iar = db.prepare('SELECT summary FROM ig_analysis WHERE user_id = ?').get(uid0);
-      if (iar && iar.summary) igAnalysis = iar.summary;
+      if (iar && iar.summary) igAnalysis = String(iar.summary).slice(0, 800);
     } catch (e) {}
     // Reglas de estilo que el cliente dictó o que aprendimos de sus ediciones
     let styleRules = [];
@@ -1076,8 +1193,9 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     try { if (dna && dna.inspo) inspoLine = `\nInspiración visual del cliente: ${dna.inspo}`; } catch (e) {}
     // Contexto de venta: ¿es trial? ¿venció? ¿qué plan tiene? La IA lo usa para ofrecer el servicio.
     let sales = null;
+    let su = null;
     try {
-      const su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
+      su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at, client_name FROM users WHERE id = ?').get(req.session.userId);
       if (su) {
         const tEnds = trialEffectiveEnd(su);
         const nowMs = Date.now();
@@ -1090,7 +1208,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       }
     } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0) },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '' },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -1137,19 +1255,35 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // La IA puede mandar VARIOS bloques ```edit (uno por borrador) y reprogramar con "when".
     let editApplied = null;
     if (Array.isArray(out.edits) && out.edits.length) {
-      let n = 0;
+      // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
+      // regenera vía concept-shot para acompañar. Solo se salta si el usuario pidió
+      // cambio explícito de texto ("cambiá el caption", "cambiá el texto").
+      const lastUserMsg = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
+      const textOnlyEdit = /cambi[aá]\s+(el\s+)?(caption|texto|copy|palabras)|cambiame\s+(el\s+)?(texto|caption)|solo\s+(el\s+)?texto/i.test(lastUserMsg);
+      let n = 0, imgRegen = 0;
       for (const ed of out.edits) {
         if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
         if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined) continue;
         const target = cleanDrafts[ed.draft - 1];
         const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
         if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) continue;
+        // Historial de versiones: si este edit cambia algo, guardar la anterior
+        // para que el cliente pueda "volver atrás" ("el anterior estaba mejor").
+        if (ed.caption !== undefined || ed.hashtags !== undefined || Number.isInteger(ed.photo_index)) {
+          try {
+            db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
+              .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''));
+          } catch (e) { console.error('[chat-edit] version save:', e.message); }
+        }
+        const newCaption = ed.caption !== undefined ? ed.caption : post.caption;
+        const captionChanged = ed.caption !== undefined && String(ed.caption).trim() !== String(post.caption || '').trim();
         db.prepare('UPDATE posts SET caption = ?, hashtags = ? WHERE id = ?').run(
-          ed.caption !== undefined ? ed.caption : post.caption,
+          newCaption,
           ed.hashtags !== undefined ? ed.hashtags : post.hashtags,
           post.id
         );
         // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
+        let pickedOwnPhoto = false;
         if (Number.isInteger(ed.photo_index) && ed.photo_index >= 0) {
           const { photoPaths } = req.body || {};
           let newPath = null;
@@ -1161,7 +1295,22 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           // Validar que la foto sea del usuario antes de usarla
           if (newPath && String(newPath).startsWith('/media/')) {
             const own = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND file_path = ?`).get(uid, String(newPath));
-            if (own) db.prepare(`UPDATE posts SET image_path = ? WHERE id = ?`).run(String(newPath), post.id);
+            if (own) { db.prepare(`UPDATE posts SET image_path = ? WHERE id = ?`).run(String(newPath), post.id); pickedOwnPhoto = true; }
+          }
+        }
+        // Palanca 7: cambió el concepto → regenerar la imagen para que acompañe.
+        // (Si el usuario eligió su propia foto, o pidió solo texto, se respeta.)
+        if (captionChanged && !textOnlyEdit && !pickedOwnPhoto) {
+          try {
+            const headline = makeHeadline(String(newCaption).split('\n')[0], 6) || makeHeadline(String(newCaption), 5);
+            const newPath = await conceptShotGenerate({ uid, idea: String(newCaption), tipo: post.tipo || '', headline, refs: [] });
+            if (newPath) {
+              db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id);
+              imgRegen++;
+            }
+          } catch (e) {
+            // Si falla (incluido kill-switch), se mantiene la imagen vieja: nunca se rompe el flujo.
+            console.error('[chat-edit] regen imagen:', e.message);
           }
         }
         // Reprogramar: "AAAA-MM-DD HH:MM" en hora local del cliente → UTC. Solo futuro.
@@ -1174,12 +1323,57 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         n++;
       }
-      if (n) editApplied = { ok: true, count: n };
+      if (n) editApplied = { ok: true, count: n, imageRegen: imgRegen };
     }
-    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, dna: dnaSaved, options: out.options || null });
+    // Publicación inmediata pedida en el chat: "publicalo ya" / "dale, subilo" ES la
+    // aprobación explícita. Mismos resguardos que publish-now (revisión, cupo, estado).
+    let publishApplied = null;
+    if (Array.isArray(out.publishes) && out.publishes.length) {
+      const pub = { ok: [], inReview: [], failed: [] };
+      for (const pb of out.publishes) {
+        if (!(pb.draft >= 1 && pb.draft <= cleanDrafts.length)) continue;
+        const target = cleanDrafts[pb.draft - 1];
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+        if (!post) { continue; }
+        if (post.status === 'publishing' || post.status === 'published') { pub.ok.push(target.id); continue; }
+        if (!['draft', 'scheduled', 'failed'].includes(post.status)) { pub.failed.push(target.id); continue; }
+        if (post.needs_review) { pub.inReview.push(target.id); continue; }
+        if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
+          const q = weeklyQuota(uid);
+          if (q.left <= 0) { pub.failed.push(target.id); continue; }
+        }
+        db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
+        try { ensureImageBaseUrl(db, uid, req); } catch (e) {}
+        publishSinglePost(db, { ...post, status: 'publishing' }).catch((e) => console.error('[chat-publish]:', e.message));
+        try { recordSignal(uid, post, 'approved'); } catch (e) {}
+        pub.ok.push(target.id);
+      }
+      if (pub.ok.length || pub.inReview.length || pub.failed.length) publishApplied = pub;
+    }
+    // Volver a la versión anterior de un borrador ("el anterior estaba mejor").
+    // Restaura la última guardada y la consume: otro "volvé" retrocede una más.
+    let revertApplied = null;
+    if (Array.isArray(out.reverts) && out.reverts.length) {
+      let n = 0;
+      for (const rv of out.reverts) {
+        if (!(rv.draft >= 1 && rv.draft <= cleanDrafts.length)) continue;
+        const target = cleanDrafts[rv.draft - 1];
+        const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(target.id, uid);
+        if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) continue;
+        const prev = db.prepare(`SELECT * FROM post_versions WHERE post_id = ? ORDER BY id DESC LIMIT 1`).get(post.id);
+        if (!prev) continue;
+        db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, image_path = ? WHERE id = ?`)
+          .run(prev.caption, prev.hashtags, prev.image_path, post.id);
+        db.prepare(`DELETE FROM post_versions WHERE id = ?`).run(prev.id);
+        try { recordSignal(uid, post, 'rejected'); } catch (e) {}
+        n++;
+      }
+      if (n) revertApplied = { ok: true, count: n };
+    }
+    res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null });
   } catch (e) {
     console.error('[chat]', e.message);
-    res.status(500).json({ error: 'No pudimos responder, probá de nuevo' });
+    res.status(500).json({ error: 'Uh, me trabé un segundo 😅 Dame otro intento que esta sale' });
   }
 });
 
@@ -1321,6 +1515,19 @@ app.get('/api/admin/activity', requireAdminToken, (req, res) => {
     for (const r of rows) totals[r.name] = r.n;
   } catch (e) {}
   res.json({ ok: true, days, by_day: byDay, dau, totals });
+});
+
+// Gasto de IA por función (anti-quemado). ?token=ADMIN_TOKEN&days=1
+// Muestra el breakdown que responde "quién quema": feature × modelo,
+// con llamadas, tokens y USD estimados. El gasto de hoy alimenta el kill-switch.
+app.get('/api/admin/ai-costs', requireAdminToken, (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 1, 1), 90);
+  res.json({
+    ok: true, days,
+    daily_cap_usd: costs.DAILY_CAP_USD,
+    today_spend_usd: Math.round(costs.daySpendUsd() * 10000) / 10000,
+    breakdown: costs.costBreakdown(days),
+  });
 });
 
 // Eventos recientes (para el timeline por usuario). Filtros: user_id, email, name, days, limit.
@@ -1655,7 +1862,7 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
   }
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, req.session.userId);
   if (!post || !post.ig_media_id) {
-    return res.status(400).json({ error: 'Ese posteo no se puede potenciar: tiene que estar publicado en Instagram' });
+    return res.status(400).json({ error: 'Primero publiquemos ese posteo en Instagram, después lo potenciamos 🚀' });
   }
   const { fee_cents, spend_cents } = adSplit(budgetCents);
   const w = getAdWallet(req.session.userId);
@@ -1777,16 +1984,16 @@ app.post('/api/comments/refresh', requireAuth, requireTrialValid, async (req, re
     const n = await syncComments(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
     res.json({ ok: true, fresh: n });
   } catch (e) {
-    res.status(500).json({ error: 'No pudimos revisar los comentarios' });
+    res.status(500).json({ error: 'No pude revisar los comentarios 😅 Probá de nuevo' });
   }
 });
 app.post('/api/comments/:id/reply', requireAuth, async (req, res) => {
   try {
     const { replyComment } = require('./insights');
     const c = db.prepare('SELECT * FROM comment_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
-    if (!c || c.status !== 'pending') return res.status(404).json({ error: 'Comentario no encontrado' });
+    if (!c || c.status !== 'pending') return res.status(404).json({ error: 'Ese comentario se me perdió 😅 Actualizá y probá de nuevo' });
     const message = String((req.body && req.body.message) || c.suggested || '').slice(0, 1000);
-    if (!message.trim()) return res.status(400).json({ error: 'La respuesta está vacía' });
+    if (!message.trim()) return res.status(400).json({ error: 'Escribí la respuesta primero ✍️' });
     await replyComment(db, req.session.userId, c.ig_comment_id, message);
     res.json({ ok: true });
   } catch (e) {
@@ -1805,7 +2012,29 @@ app.get('/api/ideas/chat', requireAuth, (req, res) => {
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
-  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null });
+  // Bienvenida proactiva: SOLO el primer ingreso. Posty se presenta y cuenta qué
+  // está haciendo AHORA por sus posteos (solo cosas reales según su estado).
+  let welcome = null;
+  try {
+    const w = db.prepare('SELECT posty_welcomed, client_name FROM users WHERE id = ?').get(uid) || {};
+    if (!w.posty_welcomed) {
+      const bits = [];
+      try { if ((db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE user_id = ? AND kind = 'photo'`).get(uid) || {}).n > 0) bits.push('mirando tus fotos \uD83D\uDCF8'); } catch (e) {}
+      try { const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (dr && dr.dna_json) bits.push('conociendo tu negocio'); } catch (e) {}
+      try { const pf = db.prepare('SELECT ig_connected FROM profiles WHERE user_id = ?').get(uid); if (pf && pf.ig_connected) bits.push('analizando tu Instagram'); } catch (e) {}
+      bits.push('buscando los mejores horarios para publicar \u23F0');
+      const haciendo = bits.length > 1 ? bits.slice(0, -1).join(', ') + ' y ' + bits[bits.length - 1] : bits[0];
+      const _cn = ((w.client_name || '').trim().split(/\s+/)[0]) || '';
+      welcome = (_cn ? `\u00A1Hola ${_cn}! Soy Posty, tu community manager \uD83C\uDF89\n`
+                      : '\u00A1Hola! Soy Posty, tu community manager \uD83C\uDF89\n') +
+        `Ya estoy laburando en tus posteos: ${haciendo}.\n` +
+        'Yo armo los dise\u00F1os, textos y horarios \u2014 vos solo aprob\u00E1s \uD83D\uDC4C\n' +
+        'Te aviso cuando tu semana est\u00E9 lista \u2728' +
+        (_cn ? '' : '\n\u00BFC\u00F3mo te llamo? \uD83D\uDE04');
+      db.prepare('UPDATE users SET posty_welcomed = 1 WHERE id = ?').run(uid);
+    }
+  } catch (e) { console.error('[chat] welcome:', e.message); }
+  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome });
 });
 
 // Log de eventos locales del chat (confirmaciones de edición, fotos) y limpieza de la idea
@@ -1822,7 +2051,7 @@ app.post('/api/ideas/chat/log', requireAuth, (req, res) => {
       }
     }
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: 'No se pudo guardar' }); }
+  } catch (e) { res.status(500).json({ error: 'No pude guardarlo 😅 Probá de nuevo' }); }
 });
 
 // ---------- Track 4 "Pipeline perpetuo": builders de input reutilizables ----------
@@ -1886,6 +2115,14 @@ function contentInputFor(uid, topic, tipo, seed) {
   };
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
+  const uidIdeas = req.session.userId;
+  // Kill-switch de gasto diario.
+  try { costs.assertAiOk(uidIdeas); }
+  catch (e) { if (e && e.name === 'AiCapExceeded') return res.status(429).json({ error: e.message }); throw e; }
+  // Rate limits: semana/autopilot máx 3/día, ideas máx 20/día (anti-abuso).
+  // 429 para que el frontend muestre el mensaje amable tal cual (sin prefijo "Error:").
+  if (!costs.checkRate(uidIdeas, 'week', 3).ok) return res.status(429).json({ error: costs.MSG_WEEK_RATE });
+  if (!costs.checkRate(uidIdeas, 'ideas', 20).ok) return res.status(429).json({ error: costs.MSG_IDEAS_RATE });
   const profile = getProfile(req.session.userId);
   const dna = readDna(req.session.userId);
   // Gate anti-invención: sin datos mínimos del negocio no se genera nada.
@@ -1897,7 +2134,7 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
     const ideas = await generateIdeas(ideasInputFor(req.session.userId), openaiKeyFor(req.session.userId));
     res.json({ ideas });
   } catch (e) {
-    res.status(500).json({ error: 'No se pudieron generar las ideas' });
+    res.status(500).json({ error: 'Hoy las ideas no me salen 😅 Dame otro intento' });
   }
 });
 
@@ -1922,11 +2159,11 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
   const qk = req.query.kind;
   const kind = qk === 'logo' ? 'logo' : qk === 'video' ? 'video' : 'photo';
   const ct = req.get('Content-Type') || '';
-  if (kind === 'video' && !ct.startsWith('video/')) return res.status(400).json({ error: 'Tiene que ser un video' });
-  if (kind !== 'video' && !ct.startsWith('image/')) return res.status(400).json({ error: 'Tiene que ser una imagen' });
+  if (kind === 'video' && !ct.startsWith('video/')) return res.status(400).json({ error: 'Eso no es un video 😅 Probá con un MP4' });
+  if (kind !== 'video' && !ct.startsWith('image/')) return res.status(400).json({ error: 'Eso no es una imagen 😅 Probá con un JPG o PNG' });
   if (kind === 'photo') {
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'photo'`).get(req.session.userId).c;
-    if (n >= 20) return res.status(400).json({ error: 'Llegaste al máximo de 20 fotos' });
+    if (n >= 20) return res.status(400).json({ error: '¡20 fotos! Con esas me alcanza y sobra 📸' });
   }
   if (kind === 'video') {
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'video'`).get(req.session.userId).c;
@@ -2221,7 +2458,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, uid);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   if (post.media_type === 'video' || post.media_type === 'carousel')
-    return res.status(400).json({ error: 'Las variantes solo están disponibles para posteos con imagen' });
+    return res.status(400).json({ error: 'Las variantes van solo en posteos con imagen 🖼️' });
   try {
     const settings = getSettings(uid);
     const key = settings.openai_key || process.env.OPENAI_API_KEY || '';
@@ -2274,7 +2511,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
     const variants = results.filter(r => r.status === 'fulfilled').map(r => r.value);
     results.filter(r => r.status === 'rejected').forEach(r => console.error('[variants] variante falló:', r.reason && r.reason.message));
     if (!variants.length)
-      return res.status(502).json({ error: 'No se pudieron generar las variantes. Probá de nuevo en un minuto.' });
+      return res.status(502).json({ error: 'Las variantes no me salieron 😅 Probá de nuevo en un minuto' });
     console.log(`[variants] borrador ${post.id}: ${variants.length}/3 variantes para usuario ${uid}`);
     res.json({ ok: true, variants });
   } catch (e) {
@@ -2502,6 +2739,10 @@ function nextWeekEligible(uid, weekKey) {
 // Genera los borradores de una semana (week_key = lunes 'YYYY-MM-DD').
 // Idempotente por (usuario, semana): si ya existen, no hace nada.
 async function generateWeekDrafts(uid, { weekKey, tag }) {
+  // Kill-switch diario también para el pipeline en segundo plano: se aborta en
+  // silencio (el usuario lo reintenta mañana; nada se rompe).
+  try { costs.assertAiOk(uid); }
+  catch (e) { console.error(`[pipeline:${tag}] kill-switch, skip usuario ${uid}`); return { ok: false, reason: 'ai_cap' }; }
   if (NEXTWEEK_RUNNING.has(uid)) { console.log(`[pipeline:${tag}] usuario ${uid}: ya hay una corrida en curso, skip`); return { ok: false, reason: 'running' }; }
   NEXTWEEK_RUNNING.add(uid);
   try {
@@ -2559,6 +2800,11 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
     }
     await Promise.all([worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
+    // Push "tu semana está lista": avisar en el celu para que la revise.
+    if (created > 0) {
+      try { push.sendPush(uid, { title: 'Tu semana está lista ✨', body: 'Posty armó tus posteos: revisalos y aprobá 👇', url: '/#/app/semana' }).catch(() => {}); }
+      catch (e) { /* el push nunca bloquea */ }
+    }
     return { ok: true, created };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
@@ -3271,7 +3517,7 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
       await mp.cancelSubscription(user.mp_preapproval_id);
     } catch (e) {
       console.error('[posta] No se pudo cancelar en MP:', e.message);
-      return res.status(500).json({ error: 'No pudimos cancelar tu suscripción en Mercado Pago. Probá de nuevo en unos minutos.' });
+      return res.status(500).json({ error: 'No pude cancelar en Mercado Pago 😅 Probá de nuevo en unos minutos — si sigue fallando, escribinos' });
     }
   }
   db.prepare(`UPDATE users SET plan_status='cancelled', mp_preapproval_id=NULL WHERE id=?`).run(req.session.userId);
@@ -3634,6 +3880,7 @@ async function personalizeShots(shots, profile, apiKey) {
       }),
     });
     const j = await r.json();
+    costs.trackUsage({ feature: 'concept-shot', model: 'gpt-4o-mini', json: j });
     const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');
     const mm = txt.match(/\{[\s\S]*\}/);
     if (mm) {
@@ -3816,7 +4063,7 @@ app.post('/api/series', requireAuth, (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('[series]', e.message);
-    res.status(500).json({ error: 'No se pudo guardar' });
+    res.status(500).json({ error: 'No pude guardarlo 😅 Probá de nuevo' });
   }
 });
 
@@ -3829,7 +4076,7 @@ app.post('/api/pause-tipo', requireAuth, (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('[pause-tipo]', e.message);
-    res.status(500).json({ error: 'No se pudo guardar' });
+    res.status(500).json({ error: 'No pude guardarlo 😅 Probá de nuevo' });
   }
 });
 
@@ -3891,6 +4138,8 @@ app.get('/api/photo-mission', requireAuth, async (req, res) => {
 // Así el sistema "aprende" cómo se ve su producto y no repite las mismas fotos.
 app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
+    try { costs.assertAiOk(req.session.userId); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
     const { refs = [], idea = '', angle = '' } = req.body || {};
     const profile = getProfile(req.session.userId);
     const settings = getSettings(req.session.userId);
@@ -3928,6 +4177,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       throw new Error(`OpenAI ${r.status}: ${t.slice(0, 200)}`);
     }
     const data = await r.json();
+    costs.trackUsage({ feature: 'concept-shot', userId: req.session.userId, model: 'gpt-image-1', images: 1, json: data });
     const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
     if (!b64) throw new Error('OpenAI no devolvió imagen');
     const name = saveImageB64(b64);
@@ -3935,6 +4185,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
     res.json({ ok: true, path: `/media/${name}` });
   } catch (e) {
     console.error('[product-shot]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, error: e.message });
     res.status(500).json({ error: 'No se pudo generar la imagen' });
   }
 });
@@ -4047,6 +4298,7 @@ ${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 
     throw new Error(`brief ${r.status}: ${t.slice(0, 160)}`);
   }
   const j = await r.json().catch(() => null);
+  costs.trackUsage({ feature: 'concept-shot', model: 'gpt-4o-mini', json: j });
   const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
   if (!content.trim()) throw new Error('brief vacío de OpenAI');
   return content.trim();
@@ -4104,6 +4356,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
     });
     if (!r.ok) return null;
     const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'vision-qa', model: 'gpt-4o-mini', json: j });
     const raw = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
     const parsed = parseLooseJson(raw);
     if (!parsed || typeof parsed !== 'object')
@@ -4154,6 +4407,7 @@ async function genConceptImage(apiKey, prompt, absRefs) {
     throw new Error(`OpenAI ${r.status}: ${t.slice(0, 160)}`);
   }
   const data = await r.json();
+  costs.trackUsage({ feature: 'concept-shot', userId: uid, model: 'gpt-image-1', images: 1, json: data });
   const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
   if (!b64) throw new Error('OpenAI no devolvió imagen');
   return b64;
@@ -4163,6 +4417,8 @@ async function genConceptImage(apiKey, prompt, absRefs) {
 app.post('/api/image-brief', requireAuth, async (req, res) => {
   try {
     const uid = req.session.userId;
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ error: e.message }); throw e; }
     const { idea = '', tipo = '', headline = '', business_name = '', category = '' } = req.body || {};
     const ideaObj = parseIdea(idea);
     if (!String(headline || '').trim() && !String(ideaObj.titulo || '').trim())
@@ -4199,6 +4455,7 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
 // gpt-image-1 + QA de visión (máx 1 reintento) + guardado. Devuelve el path
 // público (/media/...). Lanza si falla (el llamador decide el status HTTP).
 async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) {
+  costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
   const key = apiKey || settings.openai_key || process.env.OPENAI_API_KEY || '';
@@ -4282,12 +4539,15 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
     const { idea = '', tipo = '', headline = '', refs = [] } = req.body || {};
     const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs });
     console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length})`);
     res.json({ ok: true, path: imagePath });
   } catch (e) {
     console.error('[concept-shot]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
     if (String(e.message || '').startsWith('Sin clave')) return res.status(400).json({ error: e.message });
     res.status(502).json({ error: String(e.message || 'No se pudo generar la imagen').slice(0, 200) });
   }
@@ -4348,7 +4608,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
     res.json({ ok: true, posts, remaining: rl.remaining });
   } catch (e) {
     console.error('[posta] Error en demo pública:', e.message);
-    res.status(500).json({ error: 'No pudimos generar tu demo ahora. Probá de nuevo en unos minutos.' });
+    res.status(500).json({ error: 'Me trabé armando tu demo 😅 Probá de nuevo en unos minutos' });
   } finally {
     if (photoPath) {
       try { fs.unlinkSync(photoPath); } catch (_) {}
@@ -4591,6 +4851,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     });
     if (!ai.ok) throw new Error('OpenAI ' + ai.status);
     const data = await ai.json();
+    costs.trackUsage({ feature: 'chat-trial', model: 'gpt-4o-mini', json: data });
     let parsed;
     try { parsed = JSON.parse(data.choices[0].message.content); } catch (e) { throw new Error('respuesta IA inválida'); }
     const edits = (parsed.edits || [])

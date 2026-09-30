@@ -68,8 +68,9 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
     ${streakLine}
     ${missionLine}
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Nueva semana, nuevos posteos. Entrá a Posta y armá los de tu negocio en 1 minuto:
-      nosotros los diseñamos y los publicamos por vos.
+      Nueva semana, nuevos posteos. Entrá y armá los de tu negocio en 1 minuto:
+      yo los diseño y los publico por vos.<br>
+      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
     </p>
     <p style="text-align:center;margin:0 0 20px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Armar mi semana</a>
@@ -110,8 +111,9 @@ function draftsNudgeEmail(user, baseUrl) {
   const html = emailShell(`
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      Ya los armamos con tu marca y tu estilo. Entrá y programalos con un clic —
-      o editá lo que quieras antes de que salgan.
+      Ya los armé con tu marca y tu estilo. Entrá y programalos con un clic —
+      o editá lo que quieras antes de que salgan. Te espero 😄<br>
+      <span style="font-size:13px"><b>Posty</b> 🤖</span>
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Programar mis posteos</a>
@@ -129,7 +131,9 @@ function emptyWeekEmail(user, baseUrl) {
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
     <p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#47617A">
       Esta semana tus posteos pueden estar listos sin que pienses en nada: tocá el
-      botón y los armamos por vos — textos, diseños y reel con tu marca y tu estilo.
+      botón y los armo por vos — textos, diseños y reel con tu marca y tu estilo.
+      Dale, que la rompemos juntos 💪<br>
+      <span style="font-size:13px"><b>Posty</b> 🤖</span>
     </p>
     <p style="text-align:center;margin:0 0 8px">
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">⚡ Armemos tu semana</a>
@@ -139,15 +143,17 @@ function emptyWeekEmail(user, baseUrl) {
 
 // Aviso "ya salió": cada vez que un posteo se publica, el cliente recibe la prueba
 // de que Posta cumple "se publica solo". Corto, con link al posteo.
-function publishedEmail(user, post, baseUrl, permalink) {
+function publishedEmail(user, post, baseUrl, permalink, isFirst) {
   const name = (user.name || '').trim();
   const isVideo = post.media_type === 'video';
   const subject = `✅ Tu ${isVideo ? 'reel' : 'posteo'} ya salió en Instagram`;
   const html = emailShell(`
     <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
     <p style="font-size:17px;line-height:1.6;margin:0 0 8px;color:#0A1E33"><b>Tu ${isVideo ? 'reel' : 'posteo'} ya está publicado en Instagram. ✅</b></p>
+    ${isFirst ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">🎉 <b>¡Es tu primer posteo conmigo!</b> El primero de muchísimos — yo me ocupo de que cada semana salga mejor.</p>` : ''}
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
-      No tuviste que hacer nada — nosotros nos ocupamos de todo.
+      No tuviste que hacer nada — nosotros nos ocupamos de todo.<br>
+      <span style="font-size:13px">Con cariño, <b>Posty</b> 🤖</span>
     </p>
     ${permalink ? `<p style="text-align:center;margin:0 0 8px">
       <a href="${permalink}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver en Instagram</a>
@@ -186,7 +192,8 @@ function weeklyReportEmail(user, baseUrl, rows) {
     ${bestCap ? `<p style="font-size:15px;margin:0 0 12px;color:#0A1E33">🏆 Tu mejor posteo: <b>"${bestCap.replace(/</g, '&lt;')}"</b></p>` : ''}
     ${cards}
     <p style="font-size:15px;line-height:1.6;margin:16px 0 20px;color:#47617A">
-      Todo esto, mientras vos atendías tu negocio. La semana que viene, más. 🚀
+      Todo esto, mientras vos atendías tu negocio. La semana que viene, más. 🚀<br>
+      <span style="font-size:13px">Tu community manager, <b>Posty</b> 🤖</span>
     </p>
     <p style="text-align:center;margin:0">
       <a href="${baseUrl}/" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi semana →</a>

@@ -68,16 +68,40 @@ async function publishSinglePost(db, post) {
     } catch (e) { console.error('[posta] signal auto:', e.message); }
     console.log(`[posta] Post #${post.id} publicado${result.demo ? ' (demo)' : ''}`);
     // Aviso "ya salió": la prueba de que se publica solo (respeta opt-out, no en demo)
+    // El primer posteo se celebra como un hito en email y push.
+    let isFirstPost = false;
+    try {
+      const c = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'").get(post.user_id);
+      isFirstPost = (c && c.n <= 1);
+    } catch (e) {}
     try {
       if (!result.demo) {
         const u = db.prepare('SELECT email, name, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (u && u.email && !u.oo) {
           const { publishedEmail } = require('./email');
           const base = (process.env.BASE_URL || 'https://www.postahacetodo.com').replace(/\/$/, '');
-          await publishedEmail(u, post, base, result.permalink || '');
+          await publishedEmail(u, post, base, result.permalink || '', isFirstPost);
         }
       }
     } catch (e) { console.error('[email ya-salió]', e.message); }
+    // Push "¡tu posteo ya salió!": avisa en el celu (respeta opt-out como el email, no en demo)
+    try {
+      if (!result.demo) {
+        const { sendPush } = require('./push');
+        const oo = db.prepare('SELECT COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
+        if (!oo || !oo.oo) {
+          await sendPush(post.user_id, isFirstPost ? {
+            title: '🎉 ¡Tu primer posteo ya salió!',
+            body: 'Posty lo publicó en tu Instagram. El primero de muchísimos 😍',
+            url: '/#/app/semana',
+          } : {
+            title: '\u00A1Tu posteo ya sali\u00F3! \uD83D\uDCF2',
+            body: 'Posty lo public\u00F3 en tu Instagram \uD83D\uDC4F',
+            url: '/#/app/semana',
+          });
+        }
+      }
+    } catch (e) { console.error('[push ya-salió]', e.message); }
     return { ok: true, permalink: result.permalink || '' };
   } catch (e) {
     const msg = String(e.message).slice(0, 500);

@@ -58,6 +58,19 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_posts_due ON posts(status, scheduled_at);
+`);
+// Historial de versiones de borradores: cada edición por chat guarda la versión
+// anterior para poder "volver atrás" cuando el cliente lo pide.
+db.exec(`
+CREATE TABLE IF NOT EXISTS post_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  caption TEXT NOT NULL DEFAULT '',
+  hashtags TEXT NOT NULL DEFAULT '',
+  image_path TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_post_versions_post ON post_versions(post_id, id);
 CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at);
 `);
 
@@ -363,6 +376,37 @@ CREATE TABLE IF NOT EXISTS ig_analysis (
   summary TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Medición de gasto de IA por función (palanca anti-quemado): cada llamada a
+-- OpenAI loguea tokens reales (usage.*), modelo y feature. Sirve para saber
+-- mañana el culpable exacto; no es facturación.
+CREATE TABLE IF NOT EXISTS api_costs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL DEFAULT (datetime('now')),
+  user_id INTEGER,
+  feature TEXT NOT NULL DEFAULT '',
+  model TEXT NOT NULL DEFAULT '',
+  in_tokens INTEGER NOT NULL DEFAULT 0,
+  out_tokens INTEGER NOT NULL DEFAULT 0,
+  images INTEGER NOT NULL DEFAULT 0,
+  est_cost_usd REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_api_costs_ts ON api_costs(ts);
+CREATE INDEX IF NOT EXISTS idx_api_costs_feature ON api_costs(feature, ts);
+-- Rate limits por usuario/día (server-side, persistente).
+CREATE TABLE IF NOT EXISTS ai_rate (
+  user_id INTEGER NOT NULL,
+  feature TEXT NOT NULL,
+  day TEXT NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, feature, day)
+);
+-- Fotos que el modelo ya vio (para no reenviar el contenido pesado en cada mensaje).
+CREATE TABLE IF NOT EXISTS chat_seen_photos (
+  user_id INTEGER NOT NULL,
+  photo_hash TEXT NOT NULL,
+  last_sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, photo_hash)
+);
 `);
 try {
   db.exec(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id)
@@ -431,6 +475,17 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN strategy_why TEXT DEFAULT ''`); } ca
 // needs_review=1 => el borrador existe pero el cliente no lo ve todavía.
 try { db.exec(`ALTER TABLE posts ADD COLUMN needs_review INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN training_wheels INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN posty_welcomed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN client_name TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Push notifications (Web Push / VAPID): suscripciones por dispositivo.
+db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  keys_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT DEFAULT (datetime('now'))
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)`); } catch (e) { /* ya existe */ }
 
 // Golden examples: posteos APROBADOS en revisión (tal cual quedaron tras la
 // edición). El generador los usa como few-shot para "seguir haciéndolos así".
