@@ -1,0 +1,33 @@
+POSTA — TODO lo del 30/09/2026 en un solo zip
+==============================================
+Subir cada archivo a su carpeta. Esperar ~3 min el deploy de Railway.
+
+RAÍZ del repo (12 archivos):
+  approval.js      (NUEVO - notificaciones de aprobación)
+  notify-push.js   (NUEVO)
+  notify-email.js  (NUEVO)
+  wins.js          (NUEVO - festejo de wins)
+  stats.js         (NUEVO - tus números)
+  db.js
+  push.js
+  scheduler.js
+  server.js
+  generator.js     (Posty: 100 casos)
+  email.js
+  insights.js
+
+public/ (6 archivos):
+  app.js
+  styles.css
+  index.html
+  sw.js
+  manifest.json
+  prueba.html
+
+Incluye: aprobación por notificación (Fase 1), tiendas sin ventas (Fase 2),
+referidos↔plan, fuentes simplificadas, notificaciones obligatorias, wins,
+nudge referidos, aceptar todos, 100 casos Posty, prueba mejorada, retención,
+paywall (7), magic link, chat ancho y hasta abajo.
+
+OJO iPhone: verificar que el nombre del archivo sea EXACTO al del repo
+(sin " 2", " 3", etc.) antes de subir cada uno.

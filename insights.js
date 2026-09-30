@@ -120,4 +120,18 @@ async function replyComment(db, userId, igCommentId, message) {
   return true;
 }
 
-module.exports = { getCreds, fetchMediaInsights, fetchBestHour, syncComments, replyComment };
+// Seguidores del perfil de IG: un solo llamado liviano, se cachea en users.ig_followers.
+// Devuelve null si la API falla (nunca inventa números).
+async function fetchFollowers(igUserId, accessToken) {
+  try {
+    const data = await igGet(`/${igUserId}?fields=followers_count`, accessToken).catch(() => null)
+      || await igGet('/me?fields=followers_count', accessToken);
+    const n = Number(data && data.followers_count);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+  } catch (e) {
+    console.error('[insights] followers:', e.message);
+    return null;
+  }
+}
+
+module.exports = { getCreds, fetchMediaInsights, fetchBestHour, syncComments, replyComment, fetchFollowers };

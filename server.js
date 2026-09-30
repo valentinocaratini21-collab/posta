@@ -15,6 +15,7 @@ const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
+const approval = require('./approval'); // "Posty te avisa": firmas y avisos de aprobación
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
@@ -69,7 +70,7 @@ function maybeGraduate(uid) {
 }
 const mp = require('./mercadopago');
 const demo = require('./demo');
-const { sendEmail } = require('./email');
+const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
 const streaks = require('./streaks');
 const metaAds = require('./meta_ads');
@@ -658,7 +659,7 @@ app.post('/api/auth/register', (req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const { email, password, trial_ig } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get((email || '').trim().toLowerCase());
-  if (!user || !bcrypt.compareSync(password || '', user.password_hash))
+  if (!user || !user.password_hash || !bcrypt.compareSync(password || '', user.password_hash))
     return res.status(401).json({ error: 'Mmm, ese email o contraseña no me cierran 🤔 Probá de nuevo' });
   req.session.userId = user.id;
   // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
@@ -668,6 +669,126 @@ app.post('/api/auth/login', (req, res) => {
     streakFromTrialImport(user.id, nImp);
   } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
   res.json({ ok: true });
+});
+
+// ---------- Magic link (entrar sin contraseña) ----------
+// Aplica el perfil de la prueba a un usuario NUEVO, espejando lo que hoy hace
+// el cliente de prueba.html tras /api/auth/register (mismo catMap, mismos
+// topes, mismos defaults). La data viaja dentro del token (15 min de vida),
+// así que siempre es fresca: no necesita el chequeo de 24h del localStorage.
+function applyTrialProfile(userId, tp) {
+  if (!tp || typeof tp !== 'object') return;
+  try {
+    const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+    const businessName = String(tp.business_name || '').slice(0, 80);
+    if (businessName) {
+      getProfile(userId);
+      db.prepare(
+        `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, updated_at=datetime('now') WHERE user_id=?`
+      ).run(
+        businessName,
+        catMap[tp.category] || 'otro',
+        tp.tone === 'tu' ? 'profesional' : 'canchero',
+        String(tp.description || '').slice(0, 600),
+        String(tp.ig_username || '').slice(0, 40),
+        String(tp.competitors || '').slice(0, 200),
+        'vender',
+        userId
+      );
+    }
+    // brand_colors: mismo formato que /api/settings (JSON de hex válidos, >= 2)
+    const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+    if (bc.length >= 2) {
+      getSettings(userId);
+      db.prepare(`UPDATE settings SET brand_colors=?, updated_at=datetime('now') WHERE user_id=?`)
+        .run(JSON.stringify(bc.slice(0, 3)), userId);
+    }
+  } catch (e) { console.error('[magic] trial_profile:', e.message); }
+}
+
+// Siempre responde {ok:true} para no revelar si el email existe.
+app.post('/api/auth/magic-request', async (req, res) => {
+  const { email, trial_ig, ref, utm, trial_profile } = req.body || {};
+  const em = String(email || '').trim().toLowerCase();
+  try {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return res.json({ ok: true });
+    // Rate limit: máx 5 tokens por hora por email
+    const hourAgo = Date.now() - 3600 * 1000;
+    const n = db.prepare('SELECT COUNT(*) AS c FROM magic_tokens WHERE email = ? AND created_at >= ?').get(em, hourAgo).c;
+    if (n >= 5) return res.json({ ok: true });
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const payload = JSON.stringify({
+      trial_ig: trial_ig || null,
+      ref: ref || null,
+      utm: utm || null,
+      trial_profile: trial_profile || null,
+    });
+    db.prepare('INSERT INTO magic_tokens (token_hash, email, payload, created_at, expires_at, used) VALUES (?,?,?,?,?,0)')
+      .run(tokenHash, em, payload, Date.now(), Date.now() + 15 * 60 * 1000);
+    if (process.env.RESEND_API_KEY) {
+      const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+      const link = `${base}/api/auth/magic?token=${token}`;
+      try { await magicLinkEmail(em, link); }
+      catch (e) { console.error('[magic] email:', e.message); }
+    }
+  } catch (e) { console.error('[magic] request:', e.message); }
+  res.json({ ok: true });
+});
+
+// Canjea el magic link: token de un solo uso, 15 min de vida.
+// Usuario nuevo → se crea espejando /api/auth/register (sin contraseña:
+// password_hash queda vacío y el login con contraseña da 401, nunca 500).
+// Usuario existente → solo entra (+ importa la semana de /prueba si hay).
+app.get('/api/auth/magic', (req, res) => {
+  const token = String((req.query && req.query.token) || '');
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const row = db.prepare('SELECT * FROM magic_tokens WHERE token_hash = ? AND used = 0').get(tokenHash);
+    if (!row || row.expires_at < Date.now())
+      return res.status(400).send('Ese link venció o ya se usó 😅 Pedí uno nuevo desde la app');
+    db.prepare('UPDATE magic_tokens SET used = 1 WHERE token_hash = ?').run(tokenHash);
+    let payload = {};
+    try { payload = JSON.parse(row.payload || '{}'); } catch (e) {}
+    const email = row.email;
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      const code = newReferralCode();
+      let referredBy = null;
+      const refCode = String(payload.ref || '').trim().toLowerCase().slice(0, 16);
+      if (/^[a-z0-9]{4,16}$/.test(refCode)) {
+        const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(refCode);
+        if (referrer && referrer.id) referredBy = referrer.id;
+      }
+      const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
+      const utm = (payload.utm && typeof payload.utm === 'object') ? payload.utm : {};
+      const utmS = String(utm.source || '').slice(0, 40);
+      const utmC = String(utm.campaign || '').slice(0, 80);
+      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign) VALUES (?, '', ?, ?, ?, ?, ?)")
+        .run(email, code, referredBy, trialEnds, utmS, utmC);
+      const userId = r.lastInsertRowid;
+      try {
+        const nImp = importTrialWeek(userId, payload.trial_ig);
+        if (nImp) console.log(`[posta] semana de prueba importada (magic): ${nImp} borradores → usuario ${userId}`);
+        streakFromTrialImport(userId, nImp);
+      } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
+      applyTrialProfile(userId, payload.trial_profile);
+      track(userId, 'registered');
+      evTrack(userId, 'account_created', {});
+      req.session.userId = userId;
+    } else {
+      req.session.userId = user.id;
+      try {
+        const nImp = importTrialWeek(user.id, payload.trial_ig);
+        if (nImp) console.log(`[posta] semana de prueba importada (magic, login): ${nImp} borradores → usuario ${user.id}`);
+        streakFromTrialImport(user.id, nImp);
+      } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
+    }
+    return res.redirect('/#/app/semana');
+  } catch (e) {
+    console.error('[magic] redeem:', e.message);
+    return res.status(400).send('Ese link no me cierra 😅 Pedí uno nuevo desde la app');
+  }
 });
 
 // ---------- Recuperar contraseña ----------
@@ -900,16 +1021,29 @@ app.get('/api/push/vapid-key', (req, res) => {
   res.json({ key: push.vapidPublicKey() });
 });
 // Guardar/actualizar la suscripción push de este dispositivo.
+// Fase 2 Tiendas: acepta transport ('webpush'|'fcm'|'apns') y token.
+// webpush (default): endpoint https:// + keys → flujo original, intacto.
+// fcm/apns: se guarda endpoint=token, keys_json='{}' (contrato en push.js).
 app.post('/api/push/subscribe', requireAuth, (req, res) => {
   try {
-    const { endpoint, keys } = req.body || {};
+    const { endpoint, keys, transport, token } = req.body || {};
+    const t = (transport === 'fcm' || transport === 'apns') ? transport : 'webpush';
+    push.ensureTransportColumn(db);
+    if (t !== 'webpush') {
+      const tok = (typeof token === 'string' && token.trim()) || (typeof endpoint === 'string' && endpoint.trim()) || '';
+      if (!tok) return res.status(400).json({ error: 'Suscripción inválida' });
+      db.prepare(`INSERT INTO push_subscriptions (user_id, endpoint, keys_json, transport)
+        VALUES (?,?,?,?)
+        ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys_json = excluded.keys_json, transport = excluded.transport`).run(req.session.userId, tok, '{}', t);
+      return res.json({ ok: true, transport: t });
+    }
     if (!endpoint || typeof endpoint !== 'string' || !endpoint.startsWith('https://')) {
       return res.status(400).json({ error: 'Suscripción inválida' });
     }
     const keysJson = JSON.stringify(keys && typeof keys === 'object' ? keys : {});
-    db.prepare(`INSERT INTO push_subscriptions (user_id, endpoint, keys_json)
-      VALUES (?,?,?)
-      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys_json = excluded.keys_json`).run(req.session.userId, endpoint, keysJson);
+    db.prepare(`INSERT INTO push_subscriptions (user_id, endpoint, keys_json, transport)
+      VALUES (?,?,?,?)
+      ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys_json = excluded.keys_json, transport = excluded.transport`).run(req.session.userId, endpoint, keysJson, t);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: 'No se pudo guardar la suscripción' });
@@ -927,7 +1061,7 @@ app.post('/api/push/unsubscribe', requireAuth, (req, res) => {
 });
 
 // ---------- Play Store (TWA): Digital Asset Links ----------
-// Valida que la app Android es dueña de postahacetodo.com. El SHA-256 sale de
+// Valida que la app Android es dueña de postyhacetodo.com. El SHA-256 sale de
 // Play App Signing cuando Valentino cree la app (ver STORES.md). Se puede pegar
 // el JSON completo en la env ASSETLINKS_JSON; si no, se sirve el placeholder.
 app.get('/.well-known/assetlinks.json', (req, res) => {
@@ -942,11 +1076,21 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
     relation: ['delegate_permission/common.handle_all_urls'],
     target: {
       namespace: 'android_app',
-      package_name: 'com.postahacetodo.app',
-      sha256_cert_fingerprints: ['PEGAR_SHA256_DE_PLAY_APP_SIGNING'],
+      package_name: 'com.postyhacetodo.app',
+      sha256_cert_fingerprints: ['REEMPLAZAR_CON_SHA256_PLAY'],
     },
     _nota: 'Placeholder: reemplazar el fingerprint con el de Play App Signing (ver STORES.md). Sin el fingerprint real, la TWA abre en pestaña de Chrome en vez de pantalla completa.',
   }]);
+});
+
+// ---------- Apple (Universal Links): apple-app-site-association ----------
+// Sin redirects y con content-type application/json (Apple lo exige).
+// appID = Team ID de Valentino (V86JY9BJR3) + bundle ID iOS.
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+  res.type('application/json').send({
+    applinks: { apps: [], details: [{ appID: 'V86JY9BJR3.com.postyhacetodo.app', paths: ['*'] }] },
+    webcredentials: { apps: ['V86JY9BJR3.com.postyhacetodo.app'] },
+  });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -1942,7 +2086,7 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
     const freq = {};
     for (const m of (msgs || [])) {
       const words = String(m.text || '').toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .match(/[a-z]{4,}/g) || [];
       for (const w of words) { if (!stop.has(w)) freq[w] = (freq[w] || 0) + 1; }
     }
@@ -2200,6 +2344,28 @@ app.get('/api/review-status', requireAuth, (req, res) => {
     pending = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(req.session.userId).n || 0;
   } catch (e) {}
   res.json({ ok: true, training_wheels: trainingWheelsActive(req.session.userId), pending });
+});
+
+// ---------- 📊 Tus números: métricas reales de Instagram del cliente ----------
+// OJO: /api/stats/summary YA existe (dashboard "Mi semana": actividad de posteos,
+// NUNCA métricas de IG). Este endpoint va en /api/stats/ig para no pisarlo.
+const statsMod = require('./stats');
+app.get('/api/stats/ig', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    let s = statsMod.buildSummary(db, uid);
+    const empty = !s.reach_7d && !s.reach_30d && !s.interactions_30d && !s.best_post;
+    if (empty) {
+      // Sin caché: intentar traer frescas de la API de IG antes de devolver ceros.
+      await statsMod.refreshMetrics(db, uid);
+      s = statsMod.buildSummary(db, uid);
+    }
+    s.followers = await statsMod.refreshFollowers(db, uid);
+    res.json(s);
+  } catch (e) {
+    console.error('[stats/ig]', e.message);
+    res.json({ reach_7d: 0, reach_30d: 0, interactions_30d: 0, followers: 0, best_post: null });
+  }
 });
 
 // ---------- Publicidad: billetera + boost de posteos ganadores ----------
@@ -2859,8 +3025,14 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
           message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
       }
     }
-    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
-      scheduled_at || post.scheduled_at, caption ?? post.caption, hashtags ?? post.hashtags, post.id
+    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=? WHERE id=?`).run(
+      scheduled_at || post.scheduled_at, caption ?? post.caption, hashtags ?? post.hashtags,
+      // "Posty te avisa": si cambió la hora programada, se re-arma el aviso de
+      // aprobación (3h antes). Si el posteo estaba rechazado y el usuario lo
+      // vuelve a programar a mano, es una intención nueva: vuelve a 'pending'.
+      (scheduled_at || post.scheduled_at) !== post.scheduled_at ? 0 : (post.notified || 0),
+      post.approval === 'rejected' ? 'pending' : (post.approval || 'pending'),
+      post.id
     );
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto antes de que salga
   }
@@ -2955,6 +3127,154 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
   // La publicación corre en segundo plano; el frontend consulta GET /api/posts/:id
   publishSinglePost(db, { ...post, status: 'publishing' }).catch((e) => console.error('[posta] publish-now:', e.message));
   res.json({ ok: true, status: 'publishing' });
+});
+
+// ---------- "Posty te avisa": aprobación de posteos por notificación ----------
+// Mini-página HTML para los enlaces de aprobar/rechazar (se abren desde la
+// notificación o el email, sin necesidad de sesión).
+function approvalPage(title, message) {
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    `<title>${esc(title)} · Posty</title></head>` +
+    '<body style="font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#fff;color:#111">' +
+    '<main style="text-align:center;padding:24px;max-width:420px">' +
+    `<h1 style="font-size:24px;margin:0 0 12px">${esc(title)}</h1>` +
+    `<p style="font-size:17px;color:#444;margin:0">${esc(message)}</p>` +
+    '</main></body></html>';
+}
+
+// Auth de aprobación: sesión (el post debe pertenecer al usuario de la sesión)
+// O firma válida (?sig=&exp=, verifyAction). Con firma válida, el user_id del
+// post manda y no hace falta sesión. Sin ninguna de las dos → 403.
+function approvalAuth(action) {
+  return (req, res, next) => {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+    const deny = (title, msg) => req.method === 'GET'
+      ? res.status(403).send(approvalPage(title, msg))
+      : res.status(403).json({ error: 'forbidden', message: msg });
+    if (!post) {
+      return req.method === 'GET'
+        ? res.status(404).send(approvalPage('Posteo no encontrado', 'Este enlace no corresponde a ningún posteo.'))
+        : res.status(404).json({ error: 'Post no encontrado' });
+    }
+    const sessionUid = req.session && req.session.userId;
+    if (sessionUid) {
+      if (post.user_id !== sessionUid) return deny('Sin permiso', 'Este posteo no es de tu cuenta.');
+      req.approvalPost = post;
+      return next();
+    }
+    const { sig, exp } = req.query || {};
+    if (sig && exp && approval.verifyAction(post.id, action, sig, exp)) {
+      req.approvalPost = post;
+      return next();
+    }
+    return deny('Enlace vencido', 'Este enlace de aprobación venció o no es válido. Entrá a Posty para ver tu posteo.');
+  };
+}
+
+app.post('/api/posts/:id/approve', approvalAuth('approve'), (req, res) => {
+  const post = req.approvalPost;
+  if (post.approval === 'rejected') {
+    return res.status(409).json({ error: 'rejected', message: 'Este posteo fue rechazado: ya no se puede aprobar.' });
+  }
+  if (post.approval === 'approved' || post.approval === 'auto') {
+    return res.json({ ok: true, approval: post.approval }); // idempotente
+  }
+  db.prepare(`UPDATE posts SET approval = 'approved', approved_at = datetime('now') WHERE id = ?`).run(post.id);
+  res.json({ ok: true, approval: 'approved' });
+});
+
+app.get('/api/posts/:id/approve', approvalAuth('approve'), (req, res) => {
+  const post = req.approvalPost;
+  if (post.approval === 'rejected') {
+    return res.status(409).send(approvalPage('Ya fue rechazado', 'Este posteo fue cancelado: ya no se puede aprobar.'));
+  }
+  if (post.approval !== 'approved' && post.approval !== 'auto') {
+    db.prepare(`UPDATE posts SET approval = 'approved', approved_at = datetime('now') WHERE id = ?`).run(post.id);
+  }
+  const label = approval.userHourLabel(db, post.user_id, post.scheduled_at);
+  res.send(approvalPage('✅ ¡Aprobado!', `Tu posteo sale a las ${label || 'la hora programada'}.`));
+});
+
+// POST /api/posts/accept-all — "✅ Aceptar todos" (tarjeta "Revisá tu semana").
+// Todos los borradores pendientes del usuario pasan a aprobados + programados en
+// la hora indicada (la que muestra la tarjeta de revisión). Respeta rechazados:
+// no los toca. El tap ES la confirmación (sin diálogo redundante).
+app.post('/api/posts/accept-all', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const items = Array.isArray((req.body || {}).items) ? req.body.items : [];
+  const ids = [...new Set(items.map((it) => Number(it && it.id)).filter((n) => n > 0))];
+  if (!ids.length) return res.status(400).json({ error: 'Sin posteos para aceptar' });
+  const whenById = {};
+  for (const it of items) {
+    const n = Number(it && it.id);
+    if (n > 0 && it.scheduled_at) {
+      const d = new Date(String(it.scheduled_at));
+      if (!isNaN(d)) whenById[n] = d.toISOString().slice(0, 19).replace('T', ' ');
+    }
+  }
+  const ph = ids.map(() => '?').join(',');
+  const drafts = db.prepare(
+    `SELECT * FROM posts WHERE id IN (${ph}) AND user_id = ? AND status = 'draft' AND COALESCE(needs_review, 0) = 0`
+  ).all(...ids, uid);
+  // Solo pendientes: respeta rechazados (no se tocan) y omite los ya aprobados.
+  const pending = drafts.filter((d) => (d.approval || 'pending') === 'pending');
+  if (!pending.length) return res.status(400).json({ error: 'No hay borradores pendientes' });
+  // Cupo: todos de una o nada (mismo criterio que /api/posts/schedule-all).
+  const qf = quotaFor(uid, 'image');
+  const qr = quotaFor(uid, 'video');
+  const qs = quotaFor(uid, 'story');
+  const feedBillable = pending.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
+  const reelBillable = pending.filter((d) => d.media_type === 'video').length;
+  const storyBillable = pending.filter((d) => d.media_type === 'story').length;
+  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left) {
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qf.limit, plan_name: qf.plan_name,
+      message: `Llegaste al límite de tu plan ${qf.plan_name}. Mejorá tu paquete para seguir posteando esta semana.` });
+  }
+  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, error='' WHERE id=?`);
+  let n = 0;
+  for (const d of pending) {
+    const when = whenById[d.id] || (d.scheduled_at ? String(d.scheduled_at).slice(0, 19).replace('T', ' ') : null);
+    if (!when) continue; // sin hora no se puede programar: se saltea
+    upd.run(when, d.id);
+    try { recordSignal(uid, d, 'approved'); } catch (e) {}
+    n++;
+  }
+  try { track(uid, 'accept_all', String(n)); } catch (e) {}
+  res.json({ ok: true, accepted: n });
+});
+
+app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
+  const post = req.approvalPost;
+  if (post.approval === 'rejected' || post.status === 'cancelled') {
+    return res.json({ ok: true, approval: 'rejected' }); // idempotente
+  }
+  if (post.status === 'published') {
+    return res.status(409).json({ error: 'already_published', message: 'Este posteo ya salió: no se puede cancelar.' });
+  }
+  if (!['pending', 'approved'].includes(post.approval || 'pending') || post.status !== 'scheduled') {
+    return res.status(409).json({ error: 'not_rejectable', message: 'Este posteo ya no se puede cancelar.' });
+  }
+  db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
+  res.json({ ok: true, approval: 'rejected' });
+});
+
+app.get('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
+  const post = req.approvalPost;
+  if (post.approval === 'rejected' || post.status === 'cancelled') {
+    return res.send(approvalPage('Ya estaba cancelado', 'Este posteo ya estaba cancelado: no se va a publicar.'));
+  }
+  if (post.status === 'published') {
+    return res.status(409).send(approvalPage('Ya salió', 'Este posteo ya se publicó: no se puede cancelar.'));
+  }
+  if (!['pending', 'approved'].includes(post.approval || 'pending') || post.status !== 'scheduled') {
+    return res.status(409).send(approvalPage('No se puede cancelar', 'Este posteo ya no está programado.'));
+  }
+  db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
+  res.send(approvalPage('Posteo cancelado', 'Listo: este posteo no se va a publicar.'));
 });
 
 // Duplicar un posteo como borrador (para re-publicarlo sin armarlo de cero)
@@ -3462,7 +3782,7 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     return zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
   };
   const scheduled = [];
-  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='' WHERE id=?`);
+  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='', notified=0 WHERE id=?`);
   let off = 0, offStory = 0, guard = 0;
   for (const d of drafts) {
     const isStory = d.media_type === 'story';
@@ -3958,6 +4278,103 @@ function referralStats(userId) {
   return { code: me ? me.referral_code : '', referred_count, needed: REFERRALS_NEEDED, discount_active: referred_count >= REFERRALS_NEEDED };
 }
 
+const fmtPesos = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('es-AR');
+
+// Revalida el 50% off por referidos de un usuario con suscripción activa.
+// >= 2 referidos activos → 50% del precio base; < 2 → 100%.
+// Idempotente: solo llama a MP si el estado cambió (columna referral_discount).
+// Si MP rechaza, NO se toca la DB y el próximo evento reintenta.
+async function revalidateReferralDiscount(referrerId) {
+  try {
+    const u = db.prepare(`SELECT id, email, plan, plan_status, mp_preapproval_id, mp_base_amount, referral_discount FROM users WHERE id = ?`).get(referrerId);
+    if (!u) return { ok: false, reason: 'no-user' };
+    if (u.plan_status !== 'active' || !u.mp_preapproval_id) return { ok: false, reason: 'no-preapproval' };
+    const st = referralStats(u.id);
+    const want = st.referred_count >= REFERRALS_NEEDED ? 1 : 0;
+    const cur = u.referral_discount ? 1 : 0;
+    if (want === cur) return { ok: true, changed: false, discount: want, count: st.referred_count };
+    const base = Number(u.mp_base_amount) > 0 ? Number(u.mp_base_amount) : Number((PLANS[u.plan] || {}).price || 0);
+    if (!base) { console.log(`[referral-discount] user=${u.id} sin precio base, no hago nada`); return { ok: false, reason: 'no-base' }; }
+    const newAmount = want ? Math.round(base * REFERRAL_DISCOUNT) : Math.round(base);
+    await mp.updateSubscriptionAmount(u.mp_preapproval_id, newAmount);
+    db.prepare(`UPDATE users SET referral_discount = ?, mp_mult = ? WHERE id = ?`).run(want, want ? REFERRAL_DISCOUNT : 1, u.id);
+    console.log(`[referral-discount] user=${u.id} count=${st.referred_count} discount=${cur}->${want} old=${fmtPesos(base)} new=${fmtPesos(newAmount)} ok=true`);
+    try {
+      if (u.email) {
+        const priceFull = fmtPesos(base), priceHalf = fmtPesos(base * REFERRAL_DISCOUNT);
+        await sendEmail({
+          to: u.email,
+          subject: want ? '¡Tus 2 referidos ya están adentro! 🎉' : 'Uno de tus referidos canceló 😅',
+          html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+            <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
+              <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
+            </div>
+            <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+              ${want
+                ? `<p style="font-size:16px;line-height:1.6">¡Tus 2 referidos ya están adentro! 🎉 Desde este mes pagás la mitad: <b>${priceHalf}</b> en vez de ${priceFull}.</p>
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">Mientras tus 2 referidos sigan suscriptos, el descuento sigue 😊</p>`
+                : `<p style="font-size:16px;line-height:1.6">Che, uno de tus referidos canceló 😅 Volvés al precio normal de tu plan (${priceFull}).</p>
+                   <p style="font-size:13px;line-height:1.6;color:#47617A">Traé a otro y recuperás el 50% off 💪</p>`}
+            </div></div>`,
+        });
+      }
+    } catch (e) { console.error('[referral-discount] email:', e.message); }
+    return { ok: true, changed: true, discount: want, count: st.referred_count };
+  } catch (e) {
+    console.error(`[referral-discount] user=${referrerId} ERROR: ${e.message} (DB intacta, reintenta en el próximo evento)`);
+    return { ok: false, reason: 'mp-error' };
+  }
+}
+
+// Nudge "te falta 1": cuando el conteo de referidos activos de un usuario llega
+// a 1 (viniendo de 0), se le avisa UNA vez por push + email con su link.
+// Idempotente vía users.referral_nudge_sent. No depende de tener suscripción:
+// vale también en trial (el descuento se aplica al suscribirse).
+async function maybeReferralNudge(referrerId, baseUrl) {
+  try {
+    const u = db.prepare('SELECT id, email, referral_code, referral_nudge_sent, COALESCE(email_opt_out,0) AS email_opt_out FROM users WHERE id = ?').get(referrerId);
+    if (!u) return { ok: false, reason: 'no-user' };
+    if (u.referral_nudge_sent) return { ok: false, reason: 'already' };
+    const st = referralStats(u.id);
+    if (st.referred_count !== 1) return { ok: false, reason: 'count!=' + st.referred_count };
+    const link = `${String(baseUrl || '').replace(/\/$/, '')}/?ref=${u.referral_code || ''}`;
+    // Flag ANTES de enviar: si el webhook reintenta, no se duplica.
+    db.prepare('UPDATE users SET referral_nudge_sent = 1 WHERE id = ?').run(u.id);
+    console.log(`[referral-nudge] user=${u.id} llegó a 1 referido: avisando`);
+    const title = '🎁 Te falta 1 para pagar la mitad';
+    const body = 'Cuando otro amigo se suscriba con tu link, pagás la mitad todos los meses.';
+    try {
+      await push.sendPush(u.id, {
+        title, body, url: '/#/app/ajustes?plan=1',
+        data: { url: '/#/app/ajustes?plan=1' },
+      });
+    } catch (e) { console.error('[referral-nudge] push:', e.message); }
+    if (u.email && !u.email_opt_out) {
+      try {
+        await sendEmail({
+          to: u.email,
+          subject: title,
+          html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+            <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
+              <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
+            </div>
+            <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+              <p style="font-size:16px;line-height:1.6;margin:0 0 8px"><b>🎁 Te falta 1 para pagar la mitad.</b></p>
+              <p style="font-size:15px;line-height:1.6;margin:0 0 16px">Ya tenés 1 referido suscripto. Cuando otro amigo se suscriba con tu link, <b>pagás la mitad todos los meses</b> 💪</p>
+              <p style="font-size:13px;color:#47617A;margin:0 0 8px">Tu link:</p>
+              <p style="font-size:14px;margin:0 0 16px"><a href="${link}" style="color:#2793C8;font-weight:700">${link}</a></p>
+              <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;padding:12px 22px;border-radius:10px;text-decoration:none">Compartir mi link →</a>
+            </div></div>`,
+        });
+      } catch (e) { console.error('[referral-nudge] email:', e.message); }
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error(`[referral-nudge] user=${referrerId} ERROR:`, e.message);
+    return { ok: false, reason: 'error' };
+  }
+}
+
 // ---------- Facturación (Mercado Pago) ----------
 app.get('/api/billing/plans', (req, res) => {
   const country = req.query.country === 'UY' ? 'UY' : 'AR';
@@ -4066,10 +4483,26 @@ app.post('/api/billing/webhook', async (req, res) => {
       track(Number(userId), 'subscribed', planId);
       evTrack(Number(userId), 'payment_ok', { plan: planId });
       console.log(`[posta] ✅ Plan ${planId} activado para el usuario ${userId} (MP ${mpId})`);
+      // Referidos: si este usuario vino por referido, revalidar el descuento del referidor
+      // y mandar el nudge "te falta 1" si corresponde (una sola vez).
+      try {
+        const ru = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(Number(userId));
+        if (ru && ru.referred_by) {
+          revalidateReferralDiscount(ru.referred_by).catch(() => {});
+          const whost = req.get('host') || '';
+          const wbase = `${whost.startsWith('localhost') ? 'http' : 'https'}://${whost}`;
+          maybeReferralNudge(ru.referred_by, wbase).catch(() => {});
+        }
+      } catch (e) { console.error('[referral-discount] hook webhook authorized:', e.message); }
     } else if (['cancelled', 'paused'].includes(sub.status)) {
       db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
         .run(Number(userId), String(mpId));
       console.log(`[posta] Plan cancelado para el usuario ${userId} (MP ${mpId}, estado ${sub.status})`);
+      // Referidos: si este usuario vino por referido, revalidar el descuento del referidor
+      try {
+        const ru = db.prepare('SELECT referred_by FROM users WHERE id = ?').get(Number(userId));
+        if (ru && ru.referred_by) revalidateReferralDiscount(ru.referred_by).catch(() => {});
+      } catch (e) { console.error('[referral-discount] hook webhook cancelled:', e.message); }
     }
     res.status(200).json({ ok: true });
   } catch (e) {
@@ -4079,7 +4512,7 @@ app.post('/api/billing/webhook', async (req, res) => {
 });
 
 app.post('/api/billing/cancel', requireAuth, async (req, res) => {
-  const user = db.prepare('SELECT plan, mp_preapproval_id FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT plan, mp_preapproval_id, referred_by FROM users WHERE id = ?').get(req.session.userId);
   if (user && user.plan === 'free') return res.status(400).json({ error: 'Esta cuenta es de cortesía y no necesita cancelación.' });
   if (user && user.mp_preapproval_id && mp.mpConfigured()) {
     try {
@@ -4091,6 +4524,8 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
   }
   db.prepare(`UPDATE users SET plan_status='cancelled', mp_preapproval_id=NULL, cancel_reason=? WHERE id=?`)
     .run(String((req.body && req.body.reason) || '').slice(0, 60), req.session.userId);
+  // Referidos: si este usuario vino por referido, revalidar el descuento del referidor
+  try { if (user && user.referred_by) revalidateReferralDiscount(user.referred_by).catch(() => {}); } catch (e) { console.error('[referral-discount] hook cancel:', e.message); }
   res.json({ ok: true });
 });
 
@@ -4852,6 +5287,8 @@ El prompt DEBE exigir:
 - "sin marca de agua".
 - Si el brief trae un ángulo estratégico, la escena tiene que EXPRESARLO visualmente (no describirlo con texto).
 - IDENTIDAD PROPIA (draft 76, revisión 2026-09-29): la estética es del RUBRO del cliente con SU paleta — NUNCA imites el estilo visual de marcas famosas (nada de estética "Netflix"/streaming, Spotify, McDonald's, Apple...). Prohibido el fondo negro-rojo cinematográfico genérico y cualquier look que parezca otra marca.
+- Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
+- Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
 - Si la escena incluye pantallas, carteles, vidrieras, interfaces o celulares (draft 75): TODO texto visible tiene que ser LEGIBLE y tener SENTIDO — palabras reales del negocio, nunca lorem ipsum, palabras garbled, truncadas ni texto inventado.
 REGLA DURA: JAMÁS inventes datos del negocio (precios, direcciones, promos, teléfonos, nombres de producto que no se provean). Solo el titular provisto, tal cual.` },
         { role: 'user', content:
@@ -4911,13 +5348,14 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"detalle":"..."}
+{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"detalle":"...","anatomia_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
 - headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. Si la imagen NO lleva texto → true.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
-- brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena).` },
+- brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena).
+- anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).` },
           { role: 'user', content: [
             { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
@@ -4940,11 +5378,58 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
       colores_ok: parsed.colores_ok !== false,
       claims_ok: parsed.claims_ok !== false,
       mobile_ok: parsed.mobile_ok !== false,
+      anatomia_ok: parsed.anatomia_ok !== false, // manos/caras deformadas = pieza descartada
       detalle: String(parsed.detalle || '').slice(0, 140),
     };
   } catch (e) {
     return null; // QA silencioso: no bloquea la entrega de la imagen
   }
+}
+// ---------- QA visual extendido (tanda D, casos 83-91) ----------
+// Reglas duras del director/QA que aplican a toda pieza antes de mostrarse:
+// - resolución mínima para feed: si la imagen no la cumple, se avisa en 1
+//   línea y se ofrece alternativa (re-fotografiar o regenerar).
+// - el formato pedido es contrato: chequeo automático de aspect ratio antes
+//   de mostrar la pieza (si se pidió vertical 4:5, se entrega vertical 4:5).
+// - anti-duplicado visual: comparación visual contra los posteos de los
+//   últimos 7 días; similitud alta = cambiar la propuesta.
+const QA_MIN_W = 1024, QA_MIN_H = 1280; // resolución mínima para feed
+const QA_ASPECT_45 = 4 / 5; // el formato pedido es contrato: vertical 4:5
+// Lee ancho×alto de un PNG desde su base64 (solo los primeros bytes, sin
+// decodificar la imagen entera). Devuelve null si no es PNG legible.
+function pngDimsB64(b64) {
+  try {
+    const buf = Buffer.from(String(b64 || '').slice(0, 100), 'base64');
+    if (buf.length < 33 || buf[0] !== 0x89 || buf[1] !== 0x50) return null;
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  } catch (e) { return null; }
+}
+function qaResolutionOk(b64) {
+  const d = pngDimsB64(b64);
+  if (!d) return true; // no se pudo leer: no bloquea la entrega
+  return d.w >= QA_MIN_W && d.h >= QA_MIN_H;
+}
+// Chequeo automático de aspect ratio antes de mostrar la pieza (tolerancia 5%).
+function qaAspectOk(b64, expectedRatio) {
+  const d = pngDimsB64(b64);
+  if (!d || !d.h || !expectedRatio) return true;
+  return Math.abs((d.w / d.h) - expectedRatio) / expectedRatio <= 0.05;
+}
+// Anti-duplicado visual: comparación visual (titular/tema) contra los posteos
+// de los últimos 7 días; similitud alta = cambiar la propuesta.
+function qaDedupe7d(uid, headline) {
+  try {
+    const words = new Set(String(headline || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 4));
+    if (!words.size || uid == null) return { ok: true };
+    const rows = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND status != 'cancelled' AND created_at >= datetime('now', '-7 days')`).all(uid);
+    for (const r of rows) {
+      const cw = String(r.caption || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+      if (!cw.length) continue;
+      const hit = [...words].filter(w => cw.includes(w)).length;
+      if (hit / words.size >= 0.6) return { ok: false, caption: String(r.caption || '').slice(0, 80) };
+    }
+    return { ok: true };
+  } catch (e) { return { ok: true }; } // ante cualquier duda, no bloquea
 }
 // Llama a gpt-image-1 con refs (edits) o sin refs (generations). Devuelve el b64.
 // Lanza Error con el mensaje de OpenAI recortado si falla.
@@ -5081,8 +5566,8 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       dnaFacts: qaFactsLine(dna),
     }, key);
   } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  if (qa && (!qa.texto_ok || !qa.headline_complete || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok || !qa.brand_ok)) {
-    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} titular_completo=${qa.headline_complete} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok} marca=${qa.brand_ok}): ${qa.detalle}`);
+  if (qa && (!qa.texto_ok || !qa.headline_complete || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok || !qa.brand_ok || !qa.anatomia_ok)) {
+    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} titular_completo=${qa.headline_complete} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok} marca=${qa.brand_ok} anatomia=${qa.anatomia_ok}): ${qa.detalle}`);
     let retryPrompt;
     if (!qa.texto_ok && cleanHeadline) {
       // El texto salió mal → regenerar SIN texto en la imagen.
@@ -5093,6 +5578,9 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       // El titular se ve cortado a mitad de oración → reintentar CON el titular
       // completo y orden explícita de renderizarlo íntegro.
       retryPrompt = prompt + `\nIMPORTANT FIX: the image headline "${cleanHeadline}" was CUT OFF mid-sentence in the previous render. Render the FULL headline, every single word, complete — never end on a preposition or article, never cut a word in half. If space is tight, make the type smaller or split it across two lines, NEVER truncate the text.`;
+    } else if (!qa.anatomia_ok) {
+      // Artefacto de anatomía (manos/caras deformadas) = pieza descartada: se regenera.
+      retryPrompt = prompt + `\nIMPORTANT FIX: the previous render had deformed anatomy (hands, faces, fingers, proportions). Regenerate with natural, correct human anatomy — realistic hands, natural faces and proportions. Never deliver a render with deformed anatomy.`;
     } else {
       // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
       retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, no famous-brand lookalike (never a Netflix/streaming-style red-on-black cinematic look — the design must have its OWN visual identity for this business category), and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
@@ -5105,6 +5593,22 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
         console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
       }
     }
+  }
+  // QA visual extendido (tanda D): resolución mínima, aspect ratio = contrato y
+  // anti-duplicado visual de 7 días. Se avisa en el log y se regenera una vez;
+  // si la regeneración falla, se entrega la última imagen (no se pierde el trabajo).
+  if (!qaResolutionOk(b64)) {
+    console.log('[concept-shot] resolución bajo el mínimo: aviso en 1 línea y ofrezco alternativa (regenerar)');
+    try { b64 = await genConceptImage(key, prompt, absRefs); } catch (e) { console.error('[concept-shot] regen resolución:', e.message); }
+  }
+  if (!qaAspectOk(b64, QA_ASPECT_45)) {
+    console.log('[concept-shot] aspect ratio distinto al formato pedido (4:5): regenero');
+    try { b64 = await genConceptImage(key, prompt + '\nIMPORTANT: strict vertical 4:5 aspect ratio.', absRefs); } catch (e) { console.error('[concept-shot] regen aspecto:', e.message); }
+  }
+  const dedupe = qaDedupe7d(uid, cleanHeadline || theme);
+  if (!dedupe.ok) {
+    console.log(`[concept-shot] comparación visual: posible duplicado de los últimos 7 días ("${dedupe.caption}"), cambio la propuesta`);
+    try { b64 = await genConceptImage(key, prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`, absRefs); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
   }
   return `/media/${saveImageB64(b64)}`;
 }
@@ -5335,7 +5839,8 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       try {
         const payload = JSON.stringify(out);
         if (payload.length < 12 * 1024 * 1024) {
-          db.prepare('INSERT OR REPLACE INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)').run(igKey, payload, Date.now());
+          db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+            ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`).run(igKey, payload, Date.now());
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
@@ -5562,6 +6067,43 @@ app.get('/api/trial/photo-options', (req, res) => {
     .filter((p) => typeof p === 'string')
     .map((p) => p.split('/').pop().replace(/\.webp$/i, ''));
   res.json({ ok: true, options: demo.trialPhotoOptions(out.category, out.business, used, 8) });
+});
+
+// Semana cacheada por @ (link persistente del email "tu semana te está esperando").
+// Devuelve la semana si sigue guardada (<72h); si venció o no existe, 404.
+// No regenera nada: es solo lectura del trial_cache.
+app.get('/api/trial/week', (req, res) => {
+  const igKey = String(req.query.ig || '').trim().replace(/^@/, '').toLowerCase();
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
+  if (!hit || Date.now() - hit.created_at >= 72 * 3600 * 1000) {
+    if (hit) { try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey); } catch (e) {} }
+    return res.status(404).json({ error: 'Tu semana ya no está guardada 😅 Generá una nueva en /prueba' });
+  }
+  let out;
+  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'Error' }); }
+  out.cached = true;
+  out.spots_left = spotsLeft();
+  out.week = buildTrialWeek((out.posts || []).length);
+  res.json(out);
+});
+
+// Email del lead de la prueba (abandono de trial): el visitante deja su email
+// en la pantalla de resultados de /prueba para que le avisemos que su semana
+// sigue guardada. Opcional, sin fricción: si no se registra en ~24h, el cron
+// diario le manda UN solo aviso. Sin email, no hay aviso.
+const LEAD_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+app.post('/api/trial/lead-email', express.json({ limit: '16kb' }), (req, res) => {
+  const igKey = String((req.body && req.body.ig) || '').trim().replace(/^@/, '').toLowerCase();
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  if (!LEAD_EMAIL_RE.test(email) || email.length > 120)
+    return res.status(400).json({ error: 'Ese email no parece válido 😅' });
+  const hit = db.prepare('SELECT ig FROM trial_cache WHERE ig = ?').get(igKey);
+  if (!hit) return res.status(404).json({ error: 'No encontramos tu semana' });
+  db.prepare('UPDATE trial_cache SET email = ? WHERE ig = ?').run(email, igKey);
+  console.log(`[posta] lead-email guardado para @${igKey}`);
+  res.json({ ok: true });
 });
 
 // Colores exactos desde el logo del cliente: sube la foto de su logo y
@@ -5942,4 +6484,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge };

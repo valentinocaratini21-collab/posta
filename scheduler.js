@@ -3,6 +3,7 @@ const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
 const { publishPost, publishVideo, publishStory, publishCarousel } = require('./instagram');
+const approval = require('./approval');
 
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   const file = path.basename(imagePath);
@@ -44,6 +45,12 @@ async function publishSinglePost(db, post) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
+    // "Posty te avisa": la primera publicación del usuario marca el inicio de
+    // su primera semana (durante esos 7 días los posteos requieren aprobación
+    // explícita). Vale para cualquier vía de publicación (scheduler o "ahora").
+    try {
+      db.prepare(`UPDATE users SET first_post_at = datetime('now') WHERE id = ? AND (first_post_at IS NULL OR first_post_at = '')`).run(post.user_id);
+    } catch (e) { /* no bloquea */ }
     // Funnel: primera publicación del usuario
     try {
       const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'`).get(post.user_id).n;
@@ -67,15 +74,19 @@ async function publishSinglePost(db, post) {
       }
     } catch (e) { console.error('[posta] signal auto:', e.message); }
     console.log(`[posta] Post #${post.id} publicado${result.demo ? ' (demo)' : ''}`);
-    // Aviso "ya salió": la prueba de que se publica solo (respeta opt-out, no en demo)
+    // Aviso "ya salió": solo cuando importa — primer posteo (hito) o publicación
+    // automática (el usuario no respondió al aviso de aprobación). Si lo aprobó
+    // él hace 3 horas, ya lo sabe: no molestar. (respeta opt-out, no en demo)
     // El primer posteo se celebra como un hito en email y push.
     let isFirstPost = false;
     try {
       const c = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'").get(post.user_id);
       isFirstPost = (c && c.n <= 1);
     } catch (e) {}
+    const wasAuto = post.approval !== 'approved'; // 'pending'→auto o 'auto' ya marcado
+    const notifyPublished = (isFirstPost || wasAuto) && !result.demo;
     try {
-      if (!result.demo) {
+      if (notifyPublished) {
         const u = db.prepare('SELECT email, name, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (u && u.email && !u.oo) {
           const { publishedEmail } = require('./email');
@@ -84,9 +95,9 @@ async function publishSinglePost(db, post) {
         }
       }
     } catch (e) { console.error('[email ya-salió]', e.message); }
-    // Push "¡tu posteo ya salió!": avisa en el celu (respeta opt-out como el email, no en demo)
+    // Push "¡tu posteo ya salió!": solo primer posteo o publicación automática.
     try {
-      if (!result.demo) {
+      if (notifyPublished) {
         const { sendPush } = require('./push');
         const oo = db.prepare('SELECT COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (!oo || !oo.oo) {
@@ -127,16 +138,78 @@ async function processDuePosts(db) {
     .all(now);
 
   for (const post of due) {
+    const ap = post.approval || 'pending';
+    if (ap === 'rejected') {
+      // Candado: el cliente lo rechazó → cancelado, nunca se publica.
+      db.prepare(`UPDATE posts SET status='cancelled', error='' WHERE id = ?`).run(post.id);
+      console.log(`[posta] Post #${post.id} cancelado (rechazado por el cliente)`);
+      continue;
+    }
+    if (ap === 'pending') {
+      if (approval.isFirstWeek(db, post.user_id)) {
+        // Primera semana: sin aprobación explícita NO sale. Queda como fallido
+        // y se avisa ("no se publicó porque no lo aprobaste").
+        db.prepare(`UPDATE posts SET status='failed', error='sin aprobación' WHERE id = ?`).run(post.id);
+        console.log(`[posta] Post #${post.id} no publicado: sin aprobación (primera semana)`);
+        try { await approval.notifyMissed(db, post, 'first_week'); } catch (e) { console.error('[notif] missed:', e.message); }
+        continue;
+      }
+      // Fuera de la primera semana: sale solo; si se publica, queda 'auto'.
+      await publishSinglePost(db, post);
+      try {
+        const st = db.prepare(`SELECT status FROM posts WHERE id = ?`).get(post.id);
+        if (st && st.status === 'published') {
+          db.prepare(`UPDATE posts SET approval='auto' WHERE id = ?`).run(post.id);
+        }
+      } catch (e) { /* el publish ya informó su propio error */ }
+      continue;
+    }
+    // 'approved' (o 'auto' ya marcado): publicar normal.
     await publishSinglePost(db, post);
   }
 }
 
+// "Posty te avisa": cada minuto, avisa los posteos programados para dentro de
+// 3 horas que todavía no fueron notificados ni aprobados/rechazados.
+async function processApprovalNotifications(db) {
+  let rows = [];
+  try {
+    rows = db.prepare(`
+      SELECT * FROM posts
+      WHERE status = 'scheduled'
+        AND COALESCE(approval, 'pending') = 'pending'
+        AND COALESCE(notified, 0) = 0
+        AND scheduled_at IS NOT NULL AND scheduled_at != ''
+        AND datetime(scheduled_at, '-3 hours') <= datetime('now')
+        AND scheduled_at > datetime('now')
+    `).all();
+  } catch (e) { return { sent: 0 }; } // tabla vieja: no bloquea el tick
+  let sent = 0;
+  for (const post of rows) {
+    try {
+      await approval.notifyApproval(db, post);
+      db.prepare(`UPDATE posts SET notified = 1, notify_at = datetime('now') WHERE id = ?`).run(post.id);
+      sent++;
+    } catch (e) {
+      console.error('[notif] post', post.id, e.message);
+    }
+  }
+  if (sent) console.log(`[notif] avisos de aprobación enviados: ${sent}`);
+  return { sent };
+}
+
 function startScheduler(db) {
-  // Cada minuto
-  cron.schedule('* * * * *', () => processDuePosts(db));
+  // Cada minuto: publicar vencidos + avisar aprobaciones pendientes (mismo tick)
+  cron.schedule('* * * * *', () => {
+    processDuePosts(db);
+    processApprovalNotifications(db).catch((e) => console.error('[notif]', e.message));
+  });
   console.log('[posta] Scheduler activo (cada 1 minuto)');
   // Chequeo inicial a los 10 segundos
-  setTimeout(() => processDuePosts(db), 10000);
+  setTimeout(() => {
+    processDuePosts(db);
+    processApprovalNotifications(db).catch((e) => console.error('[notif]', e.message));
+  }, 10000);
   // Recordatorio semanal por email: lunes 10:00 (Buenos Aires).
   // Solo a quienes tienen cuenta y NO instalaron la app en el teléfono.
   try {
@@ -146,6 +219,28 @@ function startScheduler(db) {
     console.log('[posta] Recordatorio semanal por email: lunes 10:00 (Buenos Aires)');
   } catch (e) {
     console.error('[email semanal] no se pudo programar:', e.message);
+  }
+  // Email "tu semana te está esperando" (abandono de trial): todos los días
+  // 10:00 (Buenos Aires). Solo leads NO registrados con email, 24-30h después
+  // de generar su semana. Un solo email por lead (abandon_sent).
+  try {
+    cron.schedule('0 10 * * *', () => {
+      sendTrialAbandonEmails(db).catch((e) => console.error('[abandono]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Email de abandono de trial: todos los días 10:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[abandono] no se pudo programar:', e.message);
+  }
+  // Email "mañana se termina tu prueba" (paywall): todos los días 10:00
+  // (Buenos Aires). Solo a usuarios en trial cuyo fin efectivo cae en 20-28h.
+  // Un solo email por cuenta (trial_expiry_email_sent, se setea antes de enviar).
+  try {
+    cron.schedule('0 10 * * *', () => {
+      sendTrialExpiryEmails(db).catch((e) => console.error('[vence-mañana]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Email "vence mañana" (paywall): todos los días 10:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[vence-mañana] no se pudo programar:', e.message);
   }
   // Nudge "ya tenemos tus posteos listos": todos los días 10:30 (Buenos Aires).
   // Solo a usuarios con borradores sin revisar o semana vacía, con topes anti-spam.
@@ -179,6 +274,18 @@ function startScheduler(db) {
     console.log('[posta] Reporte semanal de resultados: domingo 19:30 (Buenos Aires)');
   } catch (e) {
     console.error('[reporte semanal] no se pudo programar:', e.message);
+  }
+  // "Posty festeja tus wins": todos los días 11:00 (Buenos Aires).
+  // Si un posteo publicado en las últimas 48h rinde >= 2x tu promedio,
+  // Posty te lo festeja por push + email. Máximo 1 festejo por día.
+  try {
+    const { celebrateWins } = require('./wins');
+    cron.schedule('0 11 * * *', () => {
+      celebrateWins(db).catch((e) => console.error('[wins]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Festejo de wins: todos los días 11:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[wins] no se pudo programar:', e.message);
   }
   // Comentarios de Instagram: 9:00 y 17:00 (Buenos Aires).
   // Baja comentarios nuevos y deja la respuesta sugerida lista en la cola.
@@ -429,6 +536,118 @@ console.log('[nudges] sin RESEND_API_KEY: <redacted>');
   return { sent, skipped };
 }
 
+// Email "tu semana te está esperando" (abandono de trial, 2026-09-30).
+// Candidatos: trial_cache con email, sin aviso enviado, generado hace 24-30h
+// (created_at en MILISEGUNDOS unix), y cuyo email NO exista en users
+// (si se registró, no se molesta). UN solo email por lead: abandon_sent = 1
+// se setea ANTES de enviar (idempotencia ante doble corrida del cron).
+async function sendTrialAbandonEmails(db) {
+  const { emailConfigured, trialAbandonEmail } = require('./email');
+  if (!emailConfigured()) {
+    console.log('[abandono] sin RESEND_API_KEY: no se envía nada');
+    return { sent: 0, skipped: 0 };
+  }
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const now = Date.now();
+  const lo = now - 30 * 3600 * 1000, hi = now - 24 * 3600 * 1000;
+  let leads = [];
+  try {
+    leads = db.prepare(`
+      SELECT ig, email, payload FROM trial_cache
+      WHERE email IS NOT NULL AND email != ''
+        AND COALESCE(abandon_sent, 0) = 0
+        AND created_at >= ? AND created_at <= ?
+    `).all(lo, hi);
+  } catch (e) { console.error('[abandono] candidatos:', e.message); return { sent: 0, skipped: 0 }; }
+  let sent = 0, skipped = 0;
+  for (const l of leads) {
+    try {
+      const email = String(l.email || '').trim().toLowerCase();
+      // Se registró con ese email → no molestar (y no reintentar mañana)
+      const inUsers = db.prepare('SELECT id FROM users WHERE email = ? LIMIT 1').get(email);
+      if (inUsers) {
+        db.prepare('UPDATE trial_cache SET abandon_sent = 1 WHERE ig = ?').run(l.ig);
+        skipped++;
+        continue;
+      }
+      let biz = '';
+      try { biz = String(JSON.parse(l.payload || '{}').business || '').trim(); } catch (e) {}
+      const link = `${base}/prueba?ig=${encodeURIComponent(l.ig)}`;
+      // Idempotencia: marcar ANTES de enviar (si el envío falla, no se reintenta:
+      // es un único aviso, no una notificación crítica).
+      db.prepare('UPDATE trial_cache SET abandon_sent = 1 WHERE ig = ?').run(l.ig);
+      const r = await trialAbandonEmail({ email }, base, biz, link);
+      if (r && r.ok) sent++;
+      else console.error('[abandono] no se pudo enviar a', email);
+    } catch (e) {
+      console.error('[abandono] lead', l.ig, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400)); // no saturar el proveedor
+  }
+  if (sent || skipped || leads.length) console.log(`[abandono] enviados: ${sent}, omitidos (ya registrados): ${skipped}, candidatos: ${leads.length}`);
+  return { sent, skipped };
+}
+
+// Fin efectivo de la prueba (réplica de trialEffectiveEnd en server.js):
+// respeta la política vigente (TRIAL_DAYS desde la creación), aunque la cuenta
+// se haya creado cuando la prueba duraba más; si hay extensión manual de
+// soporte vigente, manda ella.
+const TRIAL_DAYS_LOCAL = 3;
+function trialExpiryEffectiveEnd(u, now) {
+  const tEnds = u.trial_ends_at || 0;
+  if (!tEnds) return 0;
+  const cMs = Date.parse(String(u.created_at || '').replace(' ', 'T') + 'Z');
+  const policyEnd = cMs ? cMs + TRIAL_DAYS_LOCAL * 86400000 : Infinity;
+  const base = Math.min(tEnds, policyEnd);
+  const ext = u.trial_extended_until || 0;
+  if (ext > now) return Math.max(base, ext);
+  return base;
+}
+
+// Email "mañana se termina tu prueba" (paywall, 2026-09-30).
+// Candidatos: plan trial, con email, sin opt-out, sin aviso previo y con
+// trial_ends_at. Se envía solo si el fin efectivo cae en [now+20h, now+28h].
+// trial_expiry_email_sent = 1 se setea ANTES de enviar (un solo intento,
+// idempotencia ante doble corrida del cron).
+async function sendTrialExpiryEmails(db) {
+  const { emailConfigured, trialExpiryEmail } = require('./email');
+  if (!emailConfigured()) {
+    console.log('[vence-mañana] sin RESEND_API_KEY: no se envía nada');
+    return { sent: 0, skipped: 0 };
+  }
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const now = Date.now();
+  const lo = now + 20 * 3600 * 1000, hi = now + 28 * 3600 * 1000;
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT id, email, trial_ends_at, trial_extended_until, created_at
+      FROM users
+      WHERE COALESCE(plan_status, 'trial') = 'trial'
+        AND email IS NOT NULL AND email != ''
+        AND COALESCE(email_opt_out, 0) = 0
+        AND COALESCE(trial_expiry_email_sent, 0) = 0
+        AND trial_ends_at IS NOT NULL
+    `).all();
+  } catch (e) { console.error('[vence-mañana] candidatos:', e.message); return { sent: 0, skipped: 0 }; }
+  let sent = 0, skipped = 0;
+  for (const u of users) {
+    try {
+      const end = trialExpiryEffectiveEnd(u, now);
+      if (!end || end < lo || end > hi) { skipped++; continue; }
+      db.prepare('UPDATE users SET trial_expiry_email_sent = 1 WHERE id = ?').run(u.id);
+      const r = await trialExpiryEmail({ email: u.email }, base);
+      if (r && r.ok) { sent++; console.log(`[vence-mañana] email enviado a ${u.email}`); }
+      else console.error('[vence-mañana] no se pudo enviar a', u.email);
+    } catch (e) {
+      console.error('[vence-mañana] usuario', u.id, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400)); // no saturar el proveedor
+  }
+  if (sent || skipped || users.length) console.log(`[vence-mañana] enviados: ${sent}, omitidos (fuera de ventana): ${skipped}, candidatos: ${users.length}`);
+  return { sent, skipped };
+}
+
 // Reporte semanal de resultados (domingo 19:30 Buenos Aires).
 // A cada usuario con posteos publicados en los últimos 7 días: alcance, likes
 // y mejor posteo. La prueba visible de que Posta funciona.
@@ -441,7 +660,7 @@ async function sendWeeklyReports(db) {
   }
   const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
   const users = db.prepare(`
-    SELECT DISTINCT u.id, u.email, u.name FROM users u
+    SELECT DISTINCT u.id, u.email, u.client_name AS name FROM users u
     JOIN posts p ON p.user_id = u.id
     WHERE p.status = 'published'
       AND datetime(p.published_at) >= datetime('now', '-7 days')
@@ -664,4 +883,4 @@ function writeDnaSync(db, userId, obj) {
     ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
 }
 
-module.exports = { startScheduler, processDuePosts, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily };
+module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily };

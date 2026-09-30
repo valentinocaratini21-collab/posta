@@ -121,6 +121,42 @@ function draftsNudgeEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html });
 }
 
+// Nudge "tu semana te está esperando" (abandono de trial, 2026-09-30).
+// Segmento: leads NO registrados que generaron su semana en /prueba, dejaron
+// su email en la pantalla de resultados y no volvieron en ~24h. UN solo email
+// por lead (trial_cache.abandon_sent). Si se registraron, no se manda.
+// NO se solapa con los otros emails de este archivo: weeklyReminderEmail,
+// draftsNudgeEmail, emptyWeekEmail, publishedEmail y weeklyReportEmail apuntan
+// a users registrados (con cuenta); este apunta a trial_cache (sin cuenta).
+// El email es único y transaccional; el opt-out es responder/escribir a hola@.
+function trialAbandonEmail(lead, baseUrl, bizName, link) {
+  const biz = String(bizName || 'tu negocio').replace(/</g, '&lt;').slice(0, 80);
+  const subject = 'Tu semana sigue guardada 👀';
+  const html = `
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
+  <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
+    <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
+  </div>
+  <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
+    <p style="font-size:16px;margin:0 0 12px">Che 👋</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tu semana sigue guardada 👀 La armé para <b>${biz}</b> y está buenísima.
+      Mirala acá antes de que se borre:<br>
+      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 20px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver mi semana 👀</a>
+    </p>
+    <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
+      Este es el único aviso que te mando: tu semana se borra sola en 72 horas.
+      Dejaste tu email en la prueba gratuita de Posty.<br>
+      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postahacetodo.com" style="color:#2793C8">hola@postahacetodo.com</a>.
+    </p>
+  </div>
+</div>`;
+  return sendEmail({ to: lead.email, subject, html });
+}
+
 // Nudge "semana vacía": no hay borradores ni nada programado. Tono positivo y
 // honesto: no promete posteos que no existen, vende lo fácil que es tenerlos.
 function emptyWeekEmail(user, baseUrl) {
@@ -201,4 +237,35 @@ function weeklyReportEmail(user, baseUrl, rows) {
   return sendEmail({ to: user.email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail };
+// Aviso "mañana se termina tu prueba" (paywall, 2026-09-30).
+// Solo a usuarios en trial cuyo fin efectivo cae en 20-28h. Un solo email por
+// cuenta (users.trial_expiry_email_sent se setea ANTES de enviar).
+function trialExpiryEmail(user, baseUrl) {
+  const cta = `${baseUrl}/#/app/ajustes`;
+  const subject = 'Mañana se termina tu prueba 🥹';
+  const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Che, soy Posty. Mañana se termina tu prueba gratis — y no quiero que tus posteos frenen.
+      Elegí tu plan y el lunes tu semana está lista como siempre: vos aprobás, yo publico. 💛
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver planes →</a>
+    </p>`);
+  return sendEmail({ to: user.email, subject, html });
+}
+
+// Magic link: entrar sin contraseña (vale 15 minutos, un solo uso).
+function magicLinkEmail(email, link) {
+  const subject = 'Entrá a Posty sin contraseña ✨';
+  const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tocalo y entrás directo, sin contraseña 👇 (vale 15 minutos)<br>
+      <span style="font-size:13px">Te lo manda <b>Posty</b> 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Entrar a Posty ✨</a>
+    </p>`);
+  return sendEmail({ to: email, subject, html });
+}
+
+module.exports = { emailConfigured, sendEmail, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail };

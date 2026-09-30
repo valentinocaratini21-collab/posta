@@ -236,6 +236,11 @@ CREATE TABLE IF NOT EXISTS trial_cache (
   created_at INTEGER NOT NULL
 );
 `);
+// Email del lead de la prueba (abandono de trial, 2026-09-30): el visitante
+// puede dejar su email en la pantalla de resultados; si no se registra en
+// ~24h, recibe UN solo aviso de que su semana sigue guardada.
+try { db.exec(`ALTER TABLE trial_cache ADD COLUMN email TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE trial_cache ADD COLUMN abandon_sent INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 
 // Eliminación de datos (requerido por Meta): solicitudes vía signed_request
 db.exec(`
@@ -303,6 +308,12 @@ CREATE TABLE IF NOT EXISTS recycled_posts (
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN referred_by INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+// 50% off por referidos aplicado en MP (1 = la preapproval está al 50%). Idempotencia de revalidateReferralDiscount.
+try { db.exec(`ALTER TABLE users ADD COLUMN referral_discount INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Nudge "te falta 1": 1 = ya se avisó (se envía una sola vez, idempotente).
+try { db.exec(`ALTER TABLE users ADD COLUMN referral_nudge_sent INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// "Posty festeja tus wins": fecha (YYYY-MM-DD) del último festejo. Tope: 1 por día por usuario.
+try { db.exec(`ALTER TABLE users ADD COLUMN last_win_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // PWA instalada en el teléfono (1 = instalada) y opt-out de emails semanales
 try { db.exec(`ALTER TABLE users ADD COLUMN pwa_installed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN email_opt_out INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
@@ -511,5 +522,36 @@ db.exec(`CREATE TABLE IF NOT EXISTS golden_examples (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_golden_user ON golden_examples(user_id, created_at)`); } catch (e) { /* ya existe */ }
+
+// "Posty te avisa" (2026-09-30): aprobación de posteos por notificación.
+// notify_at/notified = aviso de aprobación enviado 3h antes de la hora programada.
+// approval = pending (esperando) | approved (el cliente lo aprobó) |
+//            auto (salió solo, fuera de la primera semana) | rejected (el cliente lo canceló).
+try { db.exec(`ALTER TABLE posts ADD COLUMN notify_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN notified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN approval TEXT DEFAULT 'pending'`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN approved_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// "Posty festeja tus wins" (2026-09-30): 1 = este posteo ya fue festejado (no repetir).
+try { db.exec(`ALTER TABLE posts ADD COLUMN celebrated INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// 📊 Tus números (2026-09-30): último conteo de seguidores traído de IG
+// (si la API falla, se muestra este caché en vez de un cero mentiroso).
+try { db.exec(`ALTER TABLE users ADD COLUMN ig_followers INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Primera publicación del usuario: marca el inicio de su "primera semana"
+// (durante esos 7 días los posteos requieren aprobación explícita).
+try { db.exec(`ALTER TABLE users ADD COLUMN first_post_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Paywall (2026-09-30): email "mañana se termina tu prueba" — 1 = ya enviado
+// (un solo intento; el cron lo setea ANTES de enviar, anti-spam).
+try { db.exec(`ALTER TABLE users ADD COLUMN trial_expiry_email_sent INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Magic link (login sin contraseña, 2026-09-30): tokens de un solo uso,
+// 15 minutos de vida. payload = JSON con trial_ig, ref, utm y trial_profile.
+db.exec(`CREATE TABLE IF NOT EXISTS magic_tokens (
+  token_hash TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER,
+  expires_at INTEGER,
+  used INTEGER DEFAULT 0
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_magic_tokens_email ON magic_tokens(email, created_at)`); } catch (e) { /* ya existe */ }
 
 module.exports = db;
