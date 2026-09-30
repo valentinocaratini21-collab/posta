@@ -891,14 +891,13 @@ function appShell(tab, content) {
   return `
   <div class="mtop">
     <button class="mtop-burger" id="mtopBurger" aria-label="Abrir menú">≡</button>
-    <a class="mtop-pill" id="weekPill" href="#/app/schedule">${weekPillLabel()}</a>
   </div>
   <div class="drawer-ov" id="drawerOv" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Menú">
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
     <div class="side-posty" id="sidePosty" aria-label="Posty">
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
-      <span class="side-posty-txt"><b>posty<span class="pdot">.</span></b><small id="sidePostyLvl">…</small></span>
+      <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b><small id="sidePostyLvl">…</small></span>
       <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
@@ -907,7 +906,7 @@ function appShell(tab, content) {
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
   </aside>
-  ${setupChecklistHtml()}
+  ${tab === 'chat' ? '' : setupChecklistHtml()}
   <div class="app-shell">
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>`;
@@ -1655,6 +1654,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
         ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
+        ${d.media_type === 'video' && d.script ? `<div style="font-size:11px;color:var(--dim);line-height:1.6;margin-top:8px;overflow-wrap:anywhere">🎬 <b>Guion:</b><br>${(() => { try { return JSON.parse(d.script).map((sc, k) => `${k + 1}. <b>${esc(sc.seg || '')}</b> ${esc(sc.texto || sc.visual || '')}`).join('<br>'); } catch (e) { return ''; } })()}</div>` : ''}
         <button class="rev-nowsub" data-revnow="${d.id}">o publicalo ahora →</button>
         <div class="aiedit" id="aiedit-${d.id}" hidden>
           <div class="aiedit-row">
@@ -2079,11 +2079,8 @@ function bindScheduleAll() {
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
 let REVIEW_DRAFTS = [];
-// Píldora del topbar: solo dice "Schedule" (el conteo vive en el sidebar).
 // Badge del sidebar: muestra cuántos borradores pendientes hay.
-function weekPillLabel() { return 'Schedule'; }
 function paintWeekPill() {
-  try { const p = document.getElementById('weekPill'); if (p) p.textContent = 'Schedule'; } catch (e) {}
   paintSchedCount();
 }
 function paintSchedCount() {
@@ -2123,6 +2120,12 @@ async function paintDrawerIdent() {
 async function paintSidePosty() {
   const el = document.getElementById('sidePostyLvl');
   if (!el) return;
+  // El nombre se muestra TAL CUAL lo escribió el cliente (si pone mayúscula, va mayúscula)
+  try {
+    const nm = document.getElementById('sidePostyName');
+    const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
+    if (nm && biz) nm.textContent = biz;
+  } catch (e) {}
   if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
     try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
   }
@@ -2356,7 +2359,10 @@ function proposalHTML() {
         ${CHAT_IDEA.script.slice(0, 6).map(s => `
           <div class="script-row"><span class="script-seg">${esc(String((s && s.seg) || ''))}</span><span>${esc(String((s && s.visual) || ''))}</span><span style="color:var(--mut)">${esc(String((s && s.texto) || ''))}</span></div>`).join('')}
       </div>` : ''}
-      <div style="font-weight:700;font-size:12.5px;margin:10px 0 6px">👇 Así se vería — tocá el que más te guste:</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px">
+        <div style="font-weight:700;font-size:12.5px">👇 Así se vería — tocá el que más te guste:</div>
+        <button class="btn btn-soft btn-sm" id="chatMoreImg" type="button" title="Generar otra imagen">🔄 Otra imagen</button>
+      </div>
       <div class="chat-previews" id="chatPreviews"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px">
         <div style="font-weight:700;font-size:12.5px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span></div>
@@ -2421,6 +2427,29 @@ async function chatMoreCaptions() {
   if (b2) { b2.disabled = false; b2.textContent = '🔄 Otras'; }
 }
 
+// "🔄 Otra imagen": regenera los ejemplos visuales. Sin foto: genera una imagen nueva
+// con IA. Con foto: rota al siguiente par de estilos. Se puede tocar todas las veces
+// que quiera — cada tap da opciones nuevas.
+async function chatMoreImage() {
+  if (!CHAT_IDEA) return;
+  const idea = CHAT_IDEA;
+  const b = $('#chatMoreImg');
+  if (b) { b.disabled = true; b.textContent = '⏳…'; }
+  try {
+    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
+    if (lib.length) {
+      const n = Math.max(2, chatStyles().length);
+      CHAT_STYLE_IDX = (CHAT_STYLE_IDX + 2) % n;
+    }
+    await renderChatPreviews();
+    if (CHAT_IDEA !== idea) return;
+    renderChatStoryboard();
+  } finally {
+    const b2 = $('#chatMoreImg');
+    if (b2 && CHAT_IDEA === idea) { b2.disabled = false; b2.textContent = '🔄 Otra imagen'; }
+  }
+}
+
 // 3 opciones de texto tocables: elegir una la carga en el campo editable
 function renderChatCaps() {
   const box = $('#chatCaps');
@@ -2471,7 +2500,17 @@ async function renderChatStoryboard() {
     const title = makeHeadline(idea.titulo || 'NOVEDAD', 5).toUpperCase() || 'NOVEDAD';
     const angle = (idea.angulo || '').split('.')[0].slice(0, 90);
     const texts = [title, angle || title, handle ? '@' + handle : 'SEGUINOS 👇'];
-    const ph = lib.length ? await photoImg(lib[CHAT_PHOTO_IDX % lib.length].file_path) : null;
+    let ph = lib.length ? await photoImg(lib[CHAT_PHOTO_IDX % lib.length].file_path) : null;
+    if (!ph) {
+      // Sin foto: usar la imagen real generada para el preview (nunca bloques planos)
+      const gen = (CHAT_PREVIEWS || []).find(p => p && p.kind === 'generated' && p.path);
+      if (gen) { try { ph = await photoImg(gen.path); } catch (e) { ph = null; } }
+    }
+    if (CHAT_IDEA !== idea) return;
+    if (!ph) {
+      box.innerHTML = '<div style="font-size:11.5px;color:var(--mut)">🎨 Generando…</div>';
+      return;
+    }
     box.innerHTML = '';
     for (const tx of texts) {
       const cv = document.createElement('canvas');
@@ -2485,9 +2524,6 @@ async function renderChatStoryboard() {
         g.addColorStop(0, 'rgba(10,30,51,0)');
         g.addColorStop(1, 'rgba(10,30,51,.88)');
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, cv.width, cv.height);
-      } else {
-        ctx.fillStyle = '#0A1E33';
         ctx.fillRect(0, 0, cv.width, cv.height);
       }
       ctx.fillStyle = '#fff';
@@ -2524,18 +2560,51 @@ async function renderChatPreviews() {
     const pair = [styles[CHAT_STYLE_IDX % styles.length], styles[(CHAT_STYLE_IDX + 1) % styles.length]];
     const phEntry = lib.length ? lib[CHAT_PHOTO_IDX % lib.length] : null;
     const ph = phEntry ? await photoImg(phEntry.file_path) : null;
-    const mk = (tpl, pal) => {
-      const cv = document.createElement('canvas');
-      drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
-      return cv;
-    };
-    CHAT_PREVIEWS = pair.map(([tpl, pal]) => ({ kind: 'design', cv: mk(tpl, pal) }));
+    if (CHAT_IDEA !== idea) return;
     if (ph && phEntry) {
+      const mk = (tpl, pal) => {
+        const cv = document.createElement('canvas');
+        drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
+        return cv;
+      };
+      CHAT_PREVIEWS = pair.map(([tpl, pal]) => ({ kind: 'design', cv: mk(tpl, pal) }));
       // Tercera opción: la foto sola, sin diseño encima (cuando la foto vende sola)
       const cv = document.createElement('canvas');
       cv.width = 1080; cv.height = 1350;
       drawCover(cv.getContext('2d'), ph, 0, 0, 1080, 1350);
       CHAT_PREVIEWS.push({ kind: 'photo', cv, path: phEntry.file_path });
+    } else {
+      // SIN FOTO: PROHIBIDO el bloque de color plano (se ve malísimo). Se genera la
+      // imagen REAL con IA — es exactamente la que va a salir al crear el posteo.
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">🎨 Generando tu imagen…</div>';
+      let genPath = null;
+      try {
+        genPath = await aiConceptShot({
+          idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
+          tipo: idea.tipo || tipoFromText(idea.titulo),
+          headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
+          refs: [],
+        });
+      } catch (e) {
+        if (isAiCapErr(e)) {
+          box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
+          CHAT_PREVIEWS = [];
+          return;
+        }
+      }
+      if (CHAT_IDEA !== idea) return;
+      if (!genPath) {
+        box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora, pero tocá ✨ Hacerlo posteo y la creo en el momento 👇</div>';
+        CHAT_PREVIEWS = [];
+        return;
+      }
+      const gImg = await photoImg(genPath);
+      if (CHAT_IDEA !== idea) return;
+      const cv = document.createElement('canvas');
+      cv.width = 1080; cv.height = 1350;
+      drawCover(cv.getContext('2d'), gImg, 0, 0, 1080, 1350);
+      CHAT_PREVIEWS = [{ kind: 'generated', cv, path: genPath }];
+      renderChatStoryboard();
     }
     CHAT_PREV_SEL = 0;
     box.innerHTML = '';
@@ -2607,13 +2676,16 @@ async function draftFromPreview(idea, prev) {
     hashtags = out.hashtags || hashtags;
   }
   let imagePath;
+  // Si el preview ya es una imagen generada por IA, se reutiliza directo: es la final,
+  // no se gasta otra generación.
+  const reuseGen = prev && prev.kind === 'generated' && prev.path ? prev.path : null;
   // Motor de imágenes nivel agencia: primero intenta un concept shot con IA
   // usando las fotos que mandó en el chat (si mandó). Si falla, sigue como siempre.
   const cm = $('#chatMsg');
   const cmPrev = cm ? cm.innerHTML : null;
-  if (cm) cm.innerHTML = `<div class="okmsg">🎨 Creando la imagen…</div>`;
+  if (!reuseGen && cm) cm.innerHTML = `<div class="okmsg">🎨 Creando la imagen…</div>`;
   const chatRefs = CHAT_PHOTOS.filter(p => p && p.kind !== 'video' && p.file_path).slice(0, 2).map(p => p.file_path);
-  const csPath = await aiConceptShot({
+  const csPath = reuseGen || await aiConceptShot({
     idea,
     tipo: idea.tipo || tipoFromText(idea.titulo),
     headline: pickHeadline(idea, caption),
@@ -2947,6 +3019,8 @@ function chatRenderProposal() {
   if (mkR) mkR.onclick = () => { track('chat_idea_accepted', { reel: true }); chatMakePost(true); };
   const mCaps0 = $('#chatMoreCaps');
   if (mCaps0) mCaps0.onclick = chatMoreCaptions;
+  const mImg0 = $('#chatMoreImg');
+  if (mImg0) mImg0.onclick = chatMoreImage;
   renderChatPreviews();
   renderChatStoryboard();
   chatScroll();
@@ -3374,6 +3448,8 @@ function bindChat() {
   if (mkR) mkR.onclick = () => { track('chat_idea_accepted', { reel: true }); chatMakePost(true); };
   const mCapsB = $('#chatMoreCaps');
   if (mCapsB) mCapsB.onclick = chatMoreCaptions;
+  const mImgB = $('#chatMoreImg');
+  if (mImgB) mImgB.onclick = chatMoreImage;
   const file = $('#chatFile');
   if (file) file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; chatUpdateSendBtn(); };
   chatUpdateSendBtn();
@@ -3398,6 +3474,7 @@ async function chatView() {
       <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
       <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza. Vos vendé. Yo posteo.</div></div>
     </div>
+    ${setupChecklistHtml()}
     ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
     <div id="apProg-semana"></div>
@@ -3667,6 +3744,30 @@ async function refreshWeekPill() {
 // Chips de quick-reply contextuales sobre el input: un tap manda el mensaje.
 // El estado ya lo trae chatGreet (no fetchea de más).
 // Chips de quick-reply contextuales sobre el input. Aceptan texto (manda el
+// Línea de cupo sobre los chips del chat: cuántos posteos/reels quedan esta semana.
+// El cliente lo ve sin preguntar; si se agota, Posty ya lo sabe por el contexto del chat.
+async function paintChatQuota(mount) {
+  if (!mount || !mount.isConnected) return;
+  let q = null;
+  try { q = await api.get('/api/quota'); } catch (e) { return; }
+  if (!q || typeof q.left !== 'number' || !mount.isConnected) return;
+  const r = q.reels || {};
+  const st = q.stories || {};
+  let t;
+  if (q.left > 0) t = `Te quedan ${q.left} ${q.left === 1 ? 'posteo' : 'posteos'}`;
+  else t = `Usaste tus ${q.limit} posteos`;
+  if (r && typeof r.left === 'number' && (r.limit || 0) > 0) {
+    t += r.left > 0 ? ` · ${r.left} ${r.left === 1 ? 'reel' : 'reels'}` : ' · sin reels';
+  }
+  if (st && typeof st.left === 'number' && (st.limit || 0) > 0) {
+    t += st.left > 0 ? ` · ${st.left} ${st.left === 1 ? 'historia' : 'historias'}` : ' · sin historias';
+  }
+  t += ' esta semana';
+  if (!mount.isConnected) return;
+  const old = mount.querySelector('.chat-quota');
+  if (old) old.remove();
+  mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
+}
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
   const card = document.getElementById('chatCard');
@@ -3684,10 +3785,10 @@ function renderQuickChips(drafts, scheduled, running) {
   if (running) {
     chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬'];
   } else if (dN > 0) {
+    // Solo el botón que importa: el tap de aprobación. "Ver Schedule" duplica el
+    // sidebar y "¿Qué sale esta semana?" la puede tipear (menos es más).
     chips = [
-      { t: 'Ver Schedule 👇', go: '#/app/schedule' },
       { t: '📅 Programar mi semana', do: 'schedule' },
-      '¿Qué sale esta semana? 📅',
     ];
   } else if (sN > 0) {
     chips = ['¿Qué sale esta semana? 📅', '¿Qué preguntan en mis comentarios? 💬', '💡 Dame una idea para vender'];
@@ -3705,6 +3806,7 @@ function renderQuickChips(drafts, scheduled, running) {
     i.value = t;
     chatSend();
   });
+  paintChatQuota(mount);
 }
 
 // Utilidades de agenda con la zona horaria del usuario (misma convención que "Lo que se viene").
@@ -4186,7 +4288,7 @@ async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false, onProg
     }
   }
   try {
-    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType, source_topic: idea.titulo || '', source_angle: idea.angulo || '', tipo: idea.tipo || '', strategy_why: idea.porque || '' });
+    await api.post('/api/posts', { image_path: imagePath, caption, hashtags, media_type: mediaType, source_topic: idea.titulo || '', source_angle: idea.angulo || '', tipo: idea.tipo || '', strategy_why: idea.porque || '', script: Array.isArray(idea.script) ? idea.script.slice(0, 6) : undefined });
   } catch (e) {
     if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
   }
@@ -6686,8 +6788,9 @@ function failedCardHTML(failed) {
     <div class="hint" data-failed-msg style="margin-top:4px"></div>
   </div>`;
 }
-// "Ya salió": outcome loop liviano — publicados de hace +24h sin señal de outcome
-// preguntan "¿te trajo clientes?" 👍/👎 (data-sig, lo cablea bindSignalBtns).
+// "Ya salió": outcome loop liviano — publicados de hace +24h sin rating.
+// Pregunta positiva "¿del 1 al 5 qué tanto te gustaron?" con estrellitas (data-sig rating_N,
+// lo cablea bindSignalBtns). 1-2 = señal negativa (no repetir), 4-5 = positiva (priorizar).
 function salioCardHTML(publishedList) {
   const DAY = 864e5, now = Date.now();
   const list = (Array.isArray(publishedList) ? publishedList : [])
@@ -6695,7 +6798,7 @@ function salioCardHTML(publishedList) {
       const pub = new Date(String(p.published_at || '').replace(' ', 'T')).getTime();
       if (!pub || now - pub < DAY) return false;
       const sig = String(p.signal || '');
-      return sig !== 'brought_clients' && sig !== 'no_clients';
+      return !(sig.startsWith('rating') || sig === 'brought_clients' || sig === 'no_clients');
     })
     .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))
     .slice(0, 5);
@@ -6703,13 +6806,16 @@ function salioCardHTML(publishedList) {
   return `
   <div class="card" id="salioCard">
     <h3 style="margin:0 0 4px">📮 Ya salió</h3>
-    <p class="hint" style="margin:0 0 10px">¿Estos posteos te trajeron clientes?</p>
+    <p class="hint" style="margin:0 0 10px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos 🙂</p>
     ${list.map(p => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      ${p.image_path ? `<img src="${esc(p.image_path)}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none" alt="">` : ''}
-      <div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 60))}</div>
-      <button class="btn btn-soft btn-sm" data-sig="brought_clients" data-id="${p.id}" aria-label="Me trajo clientes">👍</button>
-      <button class="btn btn-soft btn-sm" data-sig="no_clients" data-id="${p.id}" aria-label="No me trajo clientes">👎</button>
+    <div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        ${p.image_path ? `<img src="${esc(p.image_path)}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none" alt="">` : ''}
+        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(p.caption || p.source_topic || 'Posteo').split('\\n')[0].slice(0, 60))}</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-left:54px">
+        ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">★</button>`).join('')}
+      </div>
     </div>`).join('')}
   </div>`;
 }
@@ -8027,8 +8133,9 @@ function bindSettings() {
       }
       throw lastErr;
     };
-    const showPlansError = () => {
-      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">🔄 Reintentar</button></div>`;
+    const showPlansError = (err) => {
+      const detail = err && err.message ? `<br><small style="opacity:.65;font-size:11px">Motivo: ${esc(String(err.message)).slice(0, 160)}</small>` : '';
+      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.${detail}<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">🔄 Reintentar</button></div>`;
       const rb = document.getElementById('plansRetry');
       if (rb) rb.onclick = () => { z.innerHTML = '<p style="color:var(--dim)">Cargando...</p>'; run(); };
     };
@@ -8190,7 +8297,7 @@ function bindSettings() {
       }
     } catch (e) {
       console.error('[planes] error final:', e);
-      showPlansError();
+      showPlansError(e);
     }
     };
     run();
