@@ -902,7 +902,7 @@ function appShell(tab, content) {
       <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
-    <button class="drawer-link side-only ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule</button>
+    <button class="drawer-link side-only ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
@@ -2079,14 +2079,21 @@ function bindScheduleAll() {
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
 let REVIEW_DRAFTS = [];
-// Píldora "Mi semana" del topbar: muestra cuántos borradores pendientes hay.
-// Lee REVIEW_DRAFTS (borradores de la semana actual pendientes de acción del cliente).
-function weekPillLabel() {
-  const n = (typeof REVIEW_DRAFTS !== 'undefined' && Array.isArray(REVIEW_DRAFTS)) ? REVIEW_DRAFTS.length : 0;
-  return n > 0 ? `Schedule · ${n}` : 'Schedule';
-}
+// Píldora del topbar: solo dice "Schedule" (el conteo vive en el sidebar).
+// Badge del sidebar: muestra cuántos borradores pendientes hay.
+function weekPillLabel() { return 'Schedule'; }
 function paintWeekPill() {
-  try { const p = document.getElementById('weekPill'); if (p) p.textContent = weekPillLabel(); } catch (e) {}
+  try { const p = document.getElementById('weekPill'); if (p) p.textContent = 'Schedule'; } catch (e) {}
+  paintSchedCount();
+}
+function paintSchedCount() {
+  try {
+    const n = (typeof REVIEW_DRAFTS !== 'undefined' && Array.isArray(REVIEW_DRAFTS)) ? REVIEW_DRAFTS.length : 0;
+    const b = document.getElementById('schedCount');
+    if (!b) return;
+    b.textContent = n > 0 ? n : '';
+    b.style.display = n > 0 ? '' : 'none';
+  } catch (e) {}
 }
 // Bloque de identidad del drawer mobile: logo + nombre del negocio + nivel de la marca + Mi plan.
 let __drawerLvl = null, __drawerLvlAt = 0;
@@ -2714,6 +2721,44 @@ function renderChatOptions(options) {
   chatScroll();
 }
 
+// El cliente pidió ver sus posteos: tarjetas con la imagen real de cada borrador.
+// Nunca una lista en texto.
+function renderChatShowDrafts(drafts) {
+  const box = $('#chatBox');
+  if (!box || !Array.isArray(drafts) || !drafts.length) return;
+  const old = $('#chatShowDrafts'); if (old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg ai';
+  wrap.id = 'chatShowDrafts';
+  wrap.style.maxWidth = '100%';
+  wrap.style.whiteSpace = 'normal';
+  const head = document.createElement('div');
+  head.style.cssText = 'font-weight:800;margin-bottom:8px';
+  head.textContent = '🖼️ Tus posteos 👇';
+  wrap.appendChild(head);
+  drafts.forEach((d, i) => {
+    const card = document.createElement('div');
+    card.className = 'chat-idea-card';
+    card.style.cursor = 'default';
+    const badge = d.media_type === 'video' ? '🎬 Reel' : d.media_type === 'story' ? '📸 Historia' : d.media_type === 'carousel' ? '🖼️ Carrusel' : '📝 Post';
+    const st = d.status === 'scheduled' && d.when ? ` · ⏰ ${esc(String(d.when).slice(0, 16).replace('T', ' '))}` : ' · 📝 borrador';
+    card.innerHTML = `
+      ${d.image_url ? `<img src="${esc(String(d.image_url))}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" loading="lazy" alt="">` : ''}
+      <div style="font-size:12.5px;color:var(--mut)">${badge}${st}</div>
+      ${d.caption ? `<div style="font-size:12.5px;margin-top:4px">${esc(String(d.caption).slice(0, 120))}</div>` : ''}`;
+    wrap.appendChild(card);
+  });
+  const foot = document.createElement('button');
+  foot.type = 'button';
+  foot.className = 'btn btn-soft btn-sm';
+  foot.style.marginTop = '8px';
+  foot.textContent = '📅 Ver en Schedule';
+  foot.onclick = () => { location.hash = '#/app/schedule'; };
+  wrap.appendChild(foot);
+  box.appendChild(wrap);
+  chatScroll();
+}
+
 function renderChatPhotos() {
   const box = $('#chatPhotos');
   if (!box) return;
@@ -3095,6 +3140,7 @@ async function chatExchange({ text, display, extra, pushed }) {
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
   chatScroll();
+  postyWorking(true);
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
   const unsentPhotos = CHAT_PHOTOS.filter(p => p.aiUrl && !p.sent).map(p => p.aiUrl);
   // Sus fotos guardadas (miniaturas): para que pueda usar la que le pidan ("la del asado")
@@ -3127,12 +3173,28 @@ async function chatExchange({ text, display, extra, pushed }) {
     } else if (r.idea) {
       chatAcceptIdea(r.idea);
     }
+    // El cliente pidió VER sus posteos: mostrar los borradores reales con imagen.
+    // Nunca texto sin imágenes.
+    if (Array.isArray(r.showDrafts) && r.showDrafts.length) renderChatShowDrafts(r.showDrafts);
   } catch (e) {
     const t = $('#chatTyping'); if (t) t.remove();
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
   }
+  postyWorking(false);
   if (btn) { btn.disabled = false; chatUpdateSendBtn(); }
   chatScroll();
+}
+
+// Posty trabajando: cambia el avatar al de malabares 🤹 mientras genera.
+// Cuando termina, vuelve al avatar normal.
+function postyWorking(on) {
+  try {
+    document.querySelectorAll('.chome-ava-wrap').forEach(w => {
+      w.classList.toggle('working', !!on);
+      const img = w.querySelector('.chome-ava');
+      if (img) img.src = on ? 'ai-avatar-working.png' : 'ai-avatar.png';
+    });
+  } catch (e) {}
 }
 
 async function chatMakePost(asVideo) {
@@ -4103,6 +4165,7 @@ async function runAutopilot(n, tag) {
   // Anti-duplicación: una sola corrida a la vez (dos botones distintos usan el mismo data-autopilot)
   if (AUTOPILOT_RUNNING) return;
   AUTOPILOT_RUNNING = true;
+  postyWorking(true);
   const apT0 = Date.now();
   track('autopilot_start', { n, tag: t }); track('week_generate_start', { n, tag: t });
   const prog = document.getElementById('apProg-' + t);
@@ -4249,42 +4312,15 @@ async function runAutopilot(n, tag) {
         });
       }
     } catch (e) {}
-    // Historias automáticas: 2 por semana con las primeras ideas (foto + título).
-    // Se programan junto con la semana: más presencia, cero trabajo extra.
-    // (No consumen cupo del plan; si el cupo frenó la corrida, tampoco se crean.)
+    // Historias + reels del plan: los genera el servidor (ffmpeg) en segundo plano
+    // con las imágenes recién creadas. Se programan junto con la semana:
+    // más presencia, cero trabajo extra. Caen en "Revisá tu semana" al refrescar.
+    // (Las historias no consumen cupo; si el cupo frenó la corrida, tampoco se crean.)
     if (!quotaStopped) try {
-      prog.innerHTML = `<div class="okmsg">⏳ Creando 2 historias automáticas...</div>${liveHTML()}`;
-      const sPhotos = assetPhotos().slice().reverse();
-      const sHandle = (PROFILE || {}).ig_username || '';
-      const sPal = defaultPal();
-      const nStories = Math.min(2, picks.length - 1);
-      for (let si = 0; si < nStories; si++) {
-        const idea = picks[si];
-        const title = makeHeadline(idea.titulo || 'Novedad', 5).toUpperCase() || 'NOVEDAD';
-        const subtitle = makeHeadline((idea.angulo || '').split('.')[0], 12, 80);
-        const ph = sPhotos.length ? sPhotos[(si + 1) % sPhotos.length] : null;
-        let sPath = null;
-        try {
-          sPath = await renderStoryImage({
-            pal: sPal, title, subtitle, handle: sHandle,
-            photoImg: ph ? await photoImg(ph.file_path) : null,
-          });
-        } catch (e) { console.error('[historias] diseño:', e.message); }
-        if (sPath) {
-          try {
-            await api.post('/api/posts', {
-              image_path: sPath, caption: title, hashtags: '',
-              media_type: 'story', source_topic: idea.titulo || '',
-            });
-            live.push({ imagePath: sPath, mediaType: 'story' });
-            prog.innerHTML = `<div class="okmsg">⏳ Historia ${si + 1} de ${nStories} ✅</div>${liveHTML()}`;
-          } catch (e) {
-            if (!String(e.message || '').includes('Ya creaste este posteo')) throw e;
-          }
-        }
-      }
+      prog.innerHTML = `<div class="okmsg">⏳ Creando tus historias y reels ✨...</div>${liveHTML()}`;
+      api.post('/api/posts/generate-extras', {}).catch((e) => console.error('[extras]', e.message));
       prog.innerHTML = `<div class="okmsg">🎉 ¡Tu semana está lista! La armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
-    } catch (e) { console.error('[historias]', e.message); }
+    } catch (e) { console.error('[extras]', e.message); }
     track('week_generate_done', { count: live.length, ms: Date.now() - apT0, tag: t });
     // Racha: registrar la semana armada (idempotente por semana)
     let sk = null;
@@ -4304,6 +4340,7 @@ async function runAutopilot(n, tag) {
   } finally {
     // Cubrir todos los returns tempranos: la corrida terminó (o abortó)
     AUTOPILOT_RUNNING = false;
+    postyWorking(false);
     $$('[data-autopilot]').forEach(b => b.disabled = false);
   }
 }

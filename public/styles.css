@@ -1236,12 +1236,16 @@ textarea.in{resize:vertical;min-height:96px}
 /* Avatar de la IA: burbujas del asistente en todo el chat */
 .chat-msg.ai{position:relative;margin-left:38px;max-width:calc(88% - 38px)}
 .chat-msg.ai::before{content:'';position:absolute;left:-36px;bottom:2px;width:30px;height:30px;border-radius:50%;background:#fff url('ai-avatar.png') center/cover no-repeat;border:1px solid var(--line)}
-.chome-ava{width:60px;height:60px;border-radius:50%;object-fit:cover;border:1.5px solid var(--line);flex-shrink:0}
 /* Avatar de posta.: limpio, sin nivelación (el que sube de nivel es el logo del cliente) */
-.chome-ava-wrap{position:relative;display:inline-block;flex-shrink:0;line-height:0}
-/* Posty vivo: flotación suave del avatar */
-.chome-ava{animation:posty-float 3.2s ease-in-out infinite}
-@keyframes posty-float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-4px) rotate(1.5deg)}}
+/* El CÍRCULO queda quieto; solo la imagen del avatar flota adentro (más grande que el marco para no mostrar bordes) */
+.chome-ava-wrap{position:relative;display:inline-block;flex-shrink:0;line-height:0;width:60px;height:60px;border-radius:50%;overflow:hidden;border:1.5px solid var(--line);background:#fff}
+.chome-ava{width:118%;height:118%;object-fit:cover;display:block;margin:-9%;border-radius:0;border:0}
+/* Posty vivo: movimiento humano sutil (respira, no flota). Solo la imagen se mueve; el círculo queda quieto. */
+.chome-ava{animation:posty-idle 6s ease-in-out infinite}
+@keyframes posty-idle{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}22%{transform:translateY(-1.5px) rotate(.8deg) scale(1.008)}47%{transform:translateY(.5px) rotate(-.5deg) scale(1)}71%{transform:translateY(-1px) rotate(.3deg) scale(1.005)}}
+/* Posty trabajando: hace malabares con 3 pelotitas amarillas 🤹 */
+.chome-ava-wrap.working .chome-ava{animation:posty-juggle .8s ease-in-out infinite}
+@keyframes posty-juggle{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-3px) rotate(2deg)}}
 .chome-top .pdot{color:#FEC14D}
 /* Nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con marco por tier + badge */
 .xp-brand{display:flex;align-items:center;gap:12px;margin-bottom:10px;min-width:0}
@@ -1274,6 +1278,7 @@ textarea.in{resize:vertical;min-height:96px}
   .drawer-link .di{font-size:20px;width:28px;text-align:center;flex-shrink:0}
   .drawer-link:active{background:var(--bg2)}
   .drawer-link.on{color:var(--cel);font-weight:800}
+  .sched-count{margin-left:auto;background:var(--cel);color:#fff;font-size:11.5px;font-weight:800;min-width:22px;height:22px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
   .drawer-grow{flex:1}
   .drawer-logout{color:#d33;font-weight:700}
   /* Chat home: el input queda pegado abajo (sin bottom nav) */
@@ -1297,7 +1302,7 @@ textarea.in{resize:vertical;min-height:96px}
 
 /* Header del chat: Posty protagonista, centrado */
 .chome-top{gap:5px;margin:2px 0 10px}
-.chome-ava{width:52px;height:52px}
+.chome-top .chome-ava-wrap{width:52px;height:52px}
 .chome-top b{font-size:14px}
 .chome-top .chome-sub{font-size:10px}
 
