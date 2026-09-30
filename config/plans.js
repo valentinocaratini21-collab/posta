@@ -1,6 +1,7 @@
 // Planes de Posta — UN SOLO LUGAR para cambiar precios.
 // AR: precios en ARS (pesos argentinos). UY: precios en UYU (pesos uruguayos).
 // postsPerWeek = posts que arma el autopilot por semana.
+// reelsPerWeek / storiesPerWeek = reels e historias semanales (pipeline en construcción).
 //
 // ⚠️ PRECIOS UY PROPUESTOS — a confirmar por el usuario antes de cobrar en Uruguay.
 
@@ -10,10 +11,12 @@ const PLANS_AR = {
     name: 'Esencial',
     price: 39900,
     currency: 'ARS',
-    postsPerWeek: 3,
-    tagline: 'Para empezar a estar presente',
+    postsPerWeek: 5,
+    reelsPerWeek: 0,
+    storiesPerWeek: 0,
+    tagline: 'Para estar presente toda la semana',
     features: [
-      '3 posts por semana, armados con un clic',
+      '5 posts por semana, armados con un clic',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -24,10 +27,13 @@ const PLANS_AR = {
     name: 'Pro',
     price: 79900,
     currency: 'ARS',
-    postsPerWeek: 5,
+    postsPerWeek: 7,
+    reelsPerWeek: 0,
+    storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
     features: [
-      '5 posts por semana, armados con un clic',
+      '7 posts por semana, armados con un clic',
+      '3 historias por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -41,9 +47,13 @@ const PLANS_AR = {
     price: 129900,
     currency: 'ARS',
     postsPerWeek: 7,
+    reelsPerWeek: 5,
+    storiesPerWeek: 7,
     tagline: 'Presencia total, todos los días',
     features: [
       '7 posts por semana, armados con un clic',
+      '5 reels por semana',
+      'Historias todos los días',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -60,10 +70,12 @@ const PLANS_UY = {
     name: 'Esencial',
     price: 890,
     currency: 'UYU',
-    postsPerWeek: 3,
-    tagline: 'Para empezar a estar presente',
+    postsPerWeek: 5,
+    reelsPerWeek: 0,
+    storiesPerWeek: 0,
+    tagline: 'Para estar presente toda la semana',
     features: [
-      '3 posts por semana, armados con un clic',
+      '5 posts por semana, armados con un clic',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -74,10 +86,13 @@ const PLANS_UY = {
     name: 'Pro',
     price: 1790,
     currency: 'UYU',
-    postsPerWeek: 5,
+    postsPerWeek: 7,
+    reelsPerWeek: 0,
+    storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
     features: [
-      '5 posts por semana, armados con un clic',
+      '7 posts por semana, armados con un clic',
+      '3 historias por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -91,9 +106,13 @@ const PLANS_UY = {
     price: 2990,
     currency: 'UYU',
     postsPerWeek: 7,
+    reelsPerWeek: 5,
+    storiesPerWeek: 7,
     tagline: 'Presencia total, todos los días',
     features: [
       '7 posts por semana, armados con un clic',
+      '5 reels por semana',
+      'Historias todos los días',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
