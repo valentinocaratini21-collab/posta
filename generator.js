@@ -1097,7 +1097,8 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'caption va null salvo que el cliente te haya dictado el texto. photo_index y colors van null si no los pidió. ' +
     'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.' +
     'Si un mensaje del cliente no te cierra, preguntá corto en voseo qué quiso decir. ' +
-    'PROHIBIDO responder "no puedo ayudarte con eso" o cualquier rechazo genérico: siempre hay algo útil para hacer o proponer.';
+    'PROHIBIDO responder "no puedo ayudarte con eso" o cualquier rechazo genérico: siempre hay algo útil para hacer o proponer. ' +
+    'FORMATO: el chat muestra texto plano. PROHIBIDO markdown (**negrita**, #títulos, listas con guiones): se ve crudo, escribí natural.';
   // Borradores que el cliente está mirando AHORA: puede pedirte cambios sobre ellos.
   const draftList = (Array.isArray(drafts) ? drafts : [])
     .map((d, i) => `${i + 1}. [${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
@@ -1172,10 +1173,12 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // MODO OPCIONES: el cliente quiere ideas en general, no un posteo puntual.
   // Distinto del MODO PEDIDO (pedido concreto: "necesito un posteo de X" → UNA sola idea).
   const multiIdeaGuide =
-    'MODO OPCIONES: si el cliente pide ideas u opciones en general ("dame ideas", "haceme más posteos", "qué publico", "tirame opciones") ' +
+    'MODO OPCIONES: si el cliente pide ideas u opciones en general ("dame ideas", "haceme más posteos", "qué publico", "tirame opciones", "mostrame posteos", "qué tenés en mente") ' +
     'y NO es un pedido concreto de un posteo puntual, devolvé 3 ideas DISTINTAS (ángulos o formatos diferentes: por ejemplo una promo, un detrás de escena y un tip útil), ' +
-    'cada una en su PROPIO bloque ```idea con el formato exacto de siempre. Tu mensaje visible las presenta en 1 línea cada una (título + gancho) para que elija tocando. ' +
-    'El MODO PEDIDO (pedido concreto: "necesito un posteo de X", "haceme algo que diga Y") sigue con UNA sola idea.';
+    'cada una en su PROPIO bloque ```idea con el formato exacto de siempre. PROHIBIDO presentarlas como lista numerada en prosa: si no hay bloques ```idea, el cliente no las ve. ' +
+    'Tu mensaje visible las presenta en 1 línea cada una (título + gancho) para que elija tocando. ' +
+    'El MODO PEDIDO (pedido concreto: "necesito un posteo de X", "haceme algo que diga Y") sigue con UNA sola idea. ' +
+    'FORMATO DEL CHAT: texto plano siempre. PROHIBIDO markdown (**negrita**, #títulos, listas con -): el chat no lo renderiza y se ve crudo.';
   // Contexto comercial: estado de prueba/plan + planes y precios de memoria.
   // Precios fuente: config/plans.js (AR). No inventar otros.
   const salesGuide = (() => {

@@ -1501,6 +1501,17 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       }
       if (n) revertApplied = { ok: true, count: n };
     }
+    // MODO OPCIONES con vista previa: generar la imagen de cada idea en paralelo
+    // para que el cliente las VEA en el chat, no solo las lea.
+    if (out.ideas && out.ideas.length > 1) {
+      await Promise.all(out.ideas.slice(0, 3).map(async (idea) => {
+        try {
+          const headline = makeHeadline(String(idea.titulo || idea.caption || idea.tema || ''), 6);
+          const p = await conceptShotGenerate({ uid, idea: JSON.stringify(idea), tipo: idea.tipo || '', headline, refs: [] });
+          if (p) idea.image_url = absImageUrl(uid, p);
+        } catch (e) { console.error('[chat] preview opción:', e.message); }
+      }));
+    }
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null });
   } catch (e) {
     console.error('[chat]', e.message);
