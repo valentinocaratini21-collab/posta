@@ -896,7 +896,14 @@ function appShell(tab, content) {
   <div class="drawer-ov" id="drawerOv" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Menú">
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
+    <div class="side-posty" id="sidePosty" aria-label="Posty">
+      <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
+      <span class="side-posty-txt"><b>posty<span class="pdot">.</span></b><small id="sidePostyLvl">…</small></span>
+      <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
+    </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
+    <button class="drawer-link side-only ${tab === 'semana' ? 'on' : ''}" data-tab="semana"><span class="di">📋</span>Mi semana</button>
+    <button class="drawer-link side-only ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
@@ -2106,6 +2113,17 @@ async function paintDrawerIdent() {
     <span class="drawer-ident-txt"><b>${esc(biz)}</b><small>Nivel ${lv} · ${esc(lvName)}</small></span>
     <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>`;
 }
+// Identidad de Posty para el sidebar fijo de escritorio (≥1024px).
+async function paintSidePosty() {
+  const el = document.getElementById('sidePostyLvl');
+  if (!el) return;
+  if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
+    try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
+  }
+  const lv = (__drawerLvl && __drawerLvl.level) || 1;
+  const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
+  el.textContent = `Nivel ${lv} · ${lvName}`;
+}
 // Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen
 // borradores de la N+1, el teaser permite verlos como semana corriente.
 let NEXTWEEK_VIEW = false;
@@ -3043,6 +3061,7 @@ function renderChatIdeaOptions(ideas) {
     card.type = 'button';
     card.className = 'chat-idea-card';
     card.innerHTML = `
+      ${idea.image_url ? `<img src="${esc(String(idea.image_url))}" style="width:100%;border-radius:10px;margin-bottom:6px;display:block" loading="lazy" alt="">` : ''}
       <div style="font-weight:800;font-size:13px;margin-bottom:4px">✨ ${esc(String(idea.titulo || ('Idea ' + (i + 1))))}</div>
       ${idea.angulo ? `<div style="font-size:11.5px;color:var(--mut)">${esc(String(idea.angulo))}</div>` : ''}`;
     card.onclick = () => {
@@ -3094,8 +3113,15 @@ async function chatExchange({ text, display, extra, pushed }) {
     if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
     // Opciones tocables que propone la IA (ej: "¿vender o alcance?")
     if (r.options && Array.isArray(r.options) && r.options.length) renderChatOptions(r.options);
-    // La IA editó un borrador directo → refrescar la revisión para ver el cambio
-    if (r.edit && r.edit.ok) { try { render(); } catch (e) {} }
+    // La IA editó un borrador directo → refrescar la revisión y mostrar la imagen en el chat
+    if (r.edit && r.edit.ok) {
+      try { render(); } catch (e) {}
+      if (Array.isArray(r.edit.images) && r.edit.images.length) {
+        box.insertAdjacentHTML('beforeend', r.edit.images.map(u =>
+          `<div class="chat-msg ai" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
+        ).join(''));
+      }
+    }
     if (Array.isArray(r.ideas) && r.ideas.length > 1) {
       // MODO OPCIONES: el cliente elige entre varias ideas tocando su tarjeta
       renderChatIdeaOptions(r.ideas);
@@ -3274,8 +3300,8 @@ async function chatView() {
   return `
   <div class="chat-home">
     <div class="chome-top">
-      <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
-      <div><b>Posty</b><div class="chome-sub">tu community manager: te arma la semana y la publica por vos</div></div>
+      <span class="chome-ava-wrap posty-live"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
+      <div><b>posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza. Vos vendé. Yo posteo. 🚀</div></div>
     </div>
     ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
@@ -3294,6 +3320,150 @@ async function bindChatView() {
   // si ya cargó antes, no hay nada que esperar.
   try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
   try { await chatGreet(); } catch (e) {}
+  // Nudge forzado (ej: botón "Contame de tu negocio" del festejo) o pendiente semanal.
+  let forced = null;
+  try { forced = sessionStorage.getItem('posty-force-nudge'); sessionStorage.removeItem('posty-force-nudge'); } catch (e) {}
+  try { await maybePostyNudge(forced || undefined); } catch (e) {}
+}
+
+// Nudge proactivo de Posty (~1/semana, en momentos distintos): pide por chat lo
+// que le falta — foto del producto, nota de voz o referencia de estilo — con acción inline.
+async function maybePostyNudge(forceKind) {
+  let kind = forceKind || null;
+  if (!kind) {
+    try { const r = await api.get('/api/nudges/pending'); kind = r && r.nudge && r.nudge.kind; } catch (e) { return; }
+  }
+  if (!kind) return;
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  const id = 'pn' + Date.now();
+  const kinds = {
+    photo: {
+      head: '📷 ¿Me pasás una foto de tu producto?',
+      text: 'Con fotos reales tus posteos venden más — son 30 segundos con tu celular y la usamos esta misma semana.',
+      btn: '📷 Subir foto', upload: '/api/assets?kind=photo', inspo: false,
+    },
+    inspo: {
+      head: '🎨 ¿Te gusta algún estilo?',
+      text: 'Pasame un posteo de Instagram que te encante y lo uso de referencia para tus diseños.',
+      btn: '🎨 Subir referencia', upload: '/api/dna/inspo', inspo: true,
+    },
+    voice: {
+      head: '🎙️ Contame de tu negocio',
+      text: 'Hablame 2 minutos en un audio y aprendo cómo se ve lo que hacés.',
+      btn: '🎙️ Grabar nota de voz', upload: null, inspo: false,
+    },
+  };
+  const k = kinds[kind];
+  if (!k) return;
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" style="max-width:100%">
+    <div style="font-weight:800;margin-bottom:4px">${k.head}</div>
+    <div style="font-size:13px;color:var(--mut);margin-bottom:10px">${k.text}</div>
+    <button class="btn btn-primary btn-sm" id="${id}Btn">${k.btn}</button>
+    <input type="file" id="${id}File" accept="image/*" style="display:none">
+    <div id="${id}Msg" style="margin-top:8px"></div>
+  </div>`);
+  if (typeof chatScroll === 'function') chatScroll();
+  const btn = document.getElementById(id + 'Btn'), inp = document.getElementById(id + 'File'), msg = document.getElementById(id + 'Msg');
+  const done = async () => {
+    try { await api.post('/api/nudges/done', { kind }); } catch (e) {}
+  };
+  // Voz: grabador inline en el chat (el botón alterna grabar/enviar).
+  if (kind === 'voice') {
+    if (btn) btn.onclick = () => pnVoiceToggle(id, done);
+    return;
+  }
+  if (btn && inp) {
+    btn.onclick = () => inp.click();
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      if (!f || !f.type.startsWith('image/')) return;
+      btn.disabled = true;
+      if (msg) msg.innerHTML = `<div class="hint">⏳ ${k.inspo ? 'Mirando el estilo…' : 'Subiendo…'}</div>`;
+      try {
+        const r = await fetch(k.upload, { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.ok === false) throw new Error(j.error || 'No se pudo subir');
+        await done();
+        if (msg) msg.innerHTML = `<div class="hint">✅ ¡Genial! Ya lo estoy usando 😍</div>`;
+        btn.style.display = 'none';
+      } catch (e) {
+        btn.disabled = false;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
+      }
+      inp.value = '';
+    };
+  }
+}
+
+// Grabador de voz inline para el nudge de Posty en el chat.
+let PN_REC = null, PN_CHUNKS = [], PN_MIME = '', PN_TIMER = null, PN_START = 0;
+function pnVoiceMsg(id, html) { const m = document.getElementById(id + 'Msg'); if (m) m.innerHTML = html; }
+function pnVoiceTick(id) {
+  if (!PN_REC) return;
+  const b = document.getElementById(id + 'Btn');
+  const s = Math.floor((Date.now() - PN_START) / 1000);
+  if (b) b.innerHTML = `🔴 ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} — tocá para enviar`;
+}
+async function pnVoiceToggle(id, done) {
+  if (PN_REC) { pnVoiceStop(id, done); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    PN_CHUNKS = [];
+    PN_MIME = rec.mimeType || '';
+    rec.ondataavailable = e => { if (e.data && e.data.size) PN_CHUNKS.push(e.data); };
+    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); pnVoiceSend(id, done); };
+    PN_REC = rec;
+    rec.start();
+    PN_START = Date.now();
+    clearInterval(PN_TIMER);
+    PN_TIMER = setInterval(() => pnVoiceTick(id), 500);
+    pnVoiceTick(id);
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué vendés, tus precios y tus promos</span>');
+    setTimeout(() => { if (PN_REC) pnVoiceStop(id, done); }, 180000);
+  } catch (e) {
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso y probá de nuevo.</span>');
+  }
+}
+function pnVoiceStop(id, done) {
+  const rec = PN_REC;
+  PN_REC = null;
+  clearInterval(PN_TIMER);
+  const b = document.getElementById(id + 'Btn');
+  if (b) b.innerHTML = '🎙️ Grabar nota de voz';
+  if (rec) { try { rec.stop(); } catch (e) { pnVoiceSend(id, done); } }
+}
+async function pnVoiceSend(id, done) {
+  const chunks = PN_CHUNKS; PN_CHUNKS = [];
+  const blob = new Blob(chunks, { type: PN_MIME || 'audio/mp4' });
+  if (blob.size < 1500) { pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">Parece que no se grabó nada. Probá de nuevo.</span>'); return; }
+  const dataUrl = await new Promise((res) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result || ''));
+    fr.onerror = () => res('');
+    fr.readAsDataURL(blob);
+  });
+  if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
+    pnVoiceMsg(id, '<span style="color:#B3402E;font-size:11.5px">No pudimos procesar la nota. Probá de nuevo.</span>');
+    return;
+  }
+  pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">⏳ Escuchando y aprendiendo de tu negocio…</span>');
+  try {
+    await api.post('/api/dna/from-audio', { audioDataUrl: dataUrl }, { timeout: 120000 });
+    await done();
+    pnVoiceMsg(id, '<span style="color:var(--mut);font-size:11.5px">✅ ¡Ya te conozco mejor! Lo guardé en tu negocio 😍</span>');
+    const b = document.getElementById(id + 'Btn');
+    if (b) b.style.display = 'none';
+  } catch (e) {
+    pnVoiceMsg(id, `<span style="color:#B3402E;font-size:11.5px">${esc((e && e.message) || 'No pudimos procesar la nota. Probá de nuevo.')}</span>`);
+  }
 }
 
 // Mensaje del asistente solo local: no se loguea al servidor (no ensucia el contexto de la IA).
@@ -4657,8 +4827,7 @@ function bindFastTrack() {
       const vb = document.getElementById('ftCelebVoice');
       if (vb) vb.onclick = () => {
         closeStreakModal();
-        const vc = document.getElementById('dnaVoiceCard');
-        if (vc) vc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        postyAskInChat('voice');
       };
       const cb = document.getElementById('ftCelebClose');
       if (cb) cb.onclick = closeStreakModal;
@@ -5352,291 +5521,6 @@ function bindAds() {
   if (arc) bindAdsRecCards(arc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'ads' });
 }
 
-async function loadMissionCard() {  const el = $('#missionCard');
-  if (!el) return;
-  let m;
-  try { m = await api.get('/api/photo-mission'); } catch (e) { el.innerHTML = ''; return; }
-  if (!m || !m.need) { el.innerHTML = ''; return; }
-  // Una sola foto pedida, concreta y de SU negocio. El botón SUBE la foto directo (sin vueltas).
-  if (m.done) {
-    el.innerHTML = `
-    <div class="card mission-card">
-      <h3 style="margin:0 0 4px">📷 Tus posteos</h3>
-      <p style="margin:0;color:var(--mut);font-size:12.5px">✅ ¡Listo! Ya tenemos tu foto — la estamos usando en tus posteos de esta semana.</p>
-    </div>`;
-    return;
-  }
-  el.innerHTML = `
-  <div class="card mission-card">
-    <h3 style="margin:0 0 4px">📋 Tareas para seguir mejorando tus posteos</h3>
-    <p style="margin:0 0 6px;font-size:13px">Nos falta <b>${esc(m.need)}</b> — 30 segundos con tu celular.</p>
-    <p class="hint" style="margin:0 0 10px">La usamos en tus posteos de esta semana: con tus fotos reales, venden más.</p>
-    <button class="btn btn-primary btn-sm" id="missionUpload">📷 Subir la foto</button>
-    <input type="file" id="missionFile" accept="image/*" style="display:none">
-    <div id="missionMsg" style="margin-top:8px"></div>
-  </div>`;
-  const b = $('#missionUpload'), inp = $('#missionFile');
-  if (b && inp) {
-    b.onclick = () => inp.click();
-    inp.onchange = async () => {
-      const f = inp.files && inp.files[0];
-      if (!f || !f.type.startsWith('image/')) return;
-      const msg = $('#missionMsg');
-      b.disabled = true;
-      if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo…</div>`;
-      try {
-        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
-        if (!r.ok) throw new Error('No se pudo subir la foto');
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-        loadMissionCard(); // re-render → estado hecho
-      } catch (e) {
-        b.disabled = false;
-        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
-      }
-      inp.value = '';
-    };
-  }
-}
-
-/* ---------- 🎨 Referencia visual (inspo): un posteo que te gusta → dirección de arte ---------- */
-// Tarjeta prominente en Mi semana. El cliente sube un posteo de Instagram que
-// le gusta → POST /api/dna/inspo lo analiza con visión (gpt-4o) y guarda el
-// estilo en business_dna.dna_json.inspo. El generador lo lee solo:
-// dnaBitsLine (concept-shot / image-brief) y businessContext (captions).
-async function loadInspoCard() {
-  const el = document.getElementById('inspoCard');
-  if (!el) return;
-  let inspo = '';
-  try { const r = await api.get('/api/dna'); inspo = (r && r.dna && String(r.dna.inspo || '').trim()) || ''; } catch (e) { el.innerHTML = ''; return; }
-  if (inspo) {
-    el.innerHTML = `
-    <div class="card" style="opacity:.85">
-      <h3 style="margin:0 0 4px">🎨 Tu estilo de referencia</h3>
-      <p style="margin:0;color:var(--mut);font-size:12.5px">✅ Ya tenemos tu estilo de referencia: lo usamos para diseñar tus posteos.</p>
-      <p style="margin:8px 0 0;font-size:12px;color:var(--dim);font-style:italic">“${esc(inspo.slice(0, 160))}”</p>
-      <div style="text-align:right;margin-top:4px"><button class="btn btn-ghost btn-sm" id="inspoChange">cambiar</button></div>
-    </div>`;
-    const ch = document.getElementById('inspoChange');
-    if (ch) ch.onclick = () => inspoIdleHTML(el);
-    return;
-  }
-  inspoIdleHTML(el);
-}
-function inspoIdleHTML(el) {
-  el.innerHTML = `
-  <div class="card" style="border:2px solid var(--cel)">
-    <h3 style="margin:0 0 4px">🎨 ¿Te gusta algún estilo?</h3>
-    <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Subí un posteo de Instagram que te guste y lo usamos de referencia para tus diseños.</p>
-    <div style="text-align:center"><button class="btn btn-primary btn-sm" id="inspoUpload">🎨 Subir referencia</button></div>
-    <input type="file" id="inspoFile" accept="image/*" style="display:none">
-    <div id="inspoMsg" style="margin-top:8px;text-align:center"></div>
-  </div>`;
-  const b = document.getElementById('inspoUpload'), inp = document.getElementById('inspoFile');
-  if (b && inp) {
-    b.onclick = () => inp.click();
-    inp.onchange = async () => {
-      const f = inp.files && inp.files[0];
-      if (!f || !f.type.startsWith('image/')) return;
-      const msg = document.getElementById('inspoMsg');
-      b.disabled = true;
-      if (msg) msg.innerHTML = `<div class="hint">⏳ Mirando el estilo…</div>`;
-      try {
-        const r = await fetch('/api/dna/inspo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo analizar la imagen');
-        loadInspoCard(); // re-render → estado hecho
-      } catch (e) {
-        b.disabled = false;
-        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
-      }
-      inp.value = '';
-    };
-  }
-}
-
-/* ---------- "Ya salió": historial de publicados con outcome loop liviano ---------- */
-// Para posteos published de hace +24h sin señal de outcome se pregunta
-// "¿Este posteo te trajo clientes? 👍/👎" → señales brought_clients/no_clients.
-// p.signal viene del JOIN con post_signals: solo se saltea si ya es de outcome
-// (approved/rejected de la revisión no cuentan).
-function salioCardHTML(publishedList) {
-  const DAY = 24 * 3600 * 1000;
-  const now = Date.now();
-  const pubMs = (s) => {
-    try {
-      const t = String(s || '').trim().replace(' ', 'T');
-      const d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(t) ? t : t + 'Z');
-      return isNaN(d) ? 0 : d.getTime();
-    } catch (e) { return 0; }
-  };
-  const items = publishedList.slice(0, 8).map(p => {
-    const old = pubMs(p.published_at) > 0 && (now - pubMs(p.published_at) > DAY);
-    const sig = p.signal || '';
-    const hasOutcome = sig === 'brought_clients' || sig === 'no_clients';
-    const media = p.media_type === 'video'
-      ? `<video src="${esc(p.image_path || '')}" muted preload="metadata" playsinline></video>`
-      : (p.image_path ? `<img src="${esc(p.image_path)}" alt="" loading="lazy">` : `<div style="width:120px;height:150px;border-radius:12px;background:#EEF2F6"></div>`);
-    let foot = '';
-    if (old && !hasOutcome) {
-      foot = `<div style="margin-top:6px">
-        <div style="font-size:10px;color:var(--mut);line-height:1.4;margin-bottom:4px">¿Este posteo te trajo clientes?</div>
-        <div class="pub-rate"><button class="sig-btn" data-oc-sig="brought_clients" data-id="${p.id}" title="Sí, me trajo clientes">👍</button><button class="sig-btn" data-oc-sig="no_clients" data-id="${p.id}" title="No">👎</button></div>
-      </div>`;
-    } else if (hasOutcome) {
-      foot = `<div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.4">${sig === 'brought_clients' ? '✅ Te trajo clientes' : '📭 Sin clientes todavía'}</div>`;
-    }
-    return `<div class="pub-thumb">${media}${foot}</div>`;
-  }).join('');
-  return `
-  <div class="card" style="margin-top:12px">
-    <h3 style="margin:0 0 4px">✅ Ya salió</h3>
-    <p style="color:var(--mut);font-size:11.5px;margin:0 0 10px">Contanos cómo rindió cada posteo: así la IA aprende qué te trae clientes de verdad.</p>
-    <div class="pub-strip">${items}</div>
-  </div>`;
-}
-function bindOutcomeBtns() {
-  $$('[data-oc-sig]').forEach(b => b.onclick = async () => {
-    b.disabled = true;
-    try { await api.post(`/api/posts/${b.dataset.id}/signal`, { signal: b.dataset.ocSig }); }
-    catch (e) { b.disabled = false; return; }
-    render();
-  });
-}
-
-/* ---------- 🎙️ Contame de tu negocio: nota de voz → ADN ---------- */
-// Tarjeta pegada a la misión de fotos en Mi semana. El cliente habla ~2 minutos
-// de su negocio, se transcribe con Whisper y la IA extrae el ADN (productos,
-// promos, horarios, ubicación) vía POST /api/dna/from-audio.
-let DNAV_REC = null, DNAV_CHUNKS = [], DNAV_MIME = '', DNAV_TIMER = null, DNAV_START = 0;
-const DNA_LABELS = {
-  producto_estrella: '⭐ Tu producto estrella', cliente_ideal: '🎯 Tu cliente ideal',
-  diferencial: '✨ Lo que te diferencia', tono: '🗣️ Tono',
-  productos: '🛍️ Productos', servicios: '🛠️ Servicios', promos_activas: '🏷️ Promos activas',
-  horarios: '🕒 Horarios', ubicacion: '📍 Ubicación',
-};
-function dnaVoiceIdleHTML() {
-  return `
-  <div class="card" style="border:2px solid var(--cel)">
-    <h3 style="margin:0 0 4px">🎙️ Contame de tu negocio</h3>
-    <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Hablame 2 minutos de tu negocio y la IA aprende cómo se ve lo que hacés.</p>
-    <div style="text-align:center"><button class="rev-voice-btn" id="dnaVoiceBtn">🎙️ Grabar nota de voz</button></div>
-    <div class="rev-voice-msg" id="dnaVoiceMsg" style="text-align:center"></div>
-  </div>`;
-}
-function loadDnaVoiceCard() {
-  const el = document.getElementById('dnaVoiceCard');
-  if (!el) return;
-  el.innerHTML = dnaVoiceIdleHTML();
-  const b = document.getElementById('dnaVoiceBtn');
-  if (b) b.onclick = dnaVoiceToggle;
-}
-function dnaVoiceMsg(html) { const m = document.getElementById('dnaVoiceMsg'); if (m) m.innerHTML = html; }
-function dnaVoiceTick() {
-  if (!DNAV_REC) return;
-  const b = document.getElementById('dnaVoiceBtn');
-  const s = Math.floor((Date.now() - DNAV_START) / 1000);
-  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  if (b) b.innerHTML = `🔴 ${t} — tocá para enviar`;
-}
-async function dnaVoiceToggle() {
-  if (DNAV_REC) { dnaVoiceStop(); return; }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    DNAV_CHUNKS = [];
-    DNAV_MIME = rec.mimeType || '';
-    rec.ondataavailable = e => { if (e.data && e.data.size) DNAV_CHUNKS.push(e.data); };
-    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); dnaVoiceSend(); };
-    DNAV_REC = rec;
-    rec.start();
-    DNAV_START = Date.now();
-    const b = document.getElementById('dnaVoiceBtn');
-    if (b) b.classList.add('btn-rec');
-    clearInterval(DNAV_TIMER);
-    DNAV_TIMER = setInterval(dnaVoiceTick, 500);
-    dnaVoiceTick();
-    dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué vendés, tus precios y tus promos</span>');
-    setTimeout(() => { if (DNAV_REC) dnaVoiceStop(); }, 180000);
-  } catch (e) {
-    dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso en tu navegador y probá de nuevo.</span>');
-  }
-}
-function dnaVoiceStop() {
-  const rec = DNAV_REC;
-  DNAV_REC = null;
-  clearInterval(DNAV_TIMER);
-  const b = document.getElementById('dnaVoiceBtn');
-  if (b) { b.classList.remove('btn-rec'); b.innerHTML = '🎙️ Grabar nota de voz'; }
-  if (rec) { try { rec.stop(); } catch (e) { dnaVoiceSend(); } }
-}
-async function dnaVoiceSend() {
-  const chunks = DNAV_CHUNKS; DNAV_CHUNKS = [];
-  const blob = new Blob(chunks, { type: DNAV_MIME || 'audio/mp4' });
-  if (blob.size < 1500) { dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">Parece que no se grabó nada. Probá de nuevo.</span>'); return; }
-  const dataUrl = await new Promise((res) => {
-    const fr = new FileReader();
-    fr.onload = () => res(String(fr.result || ''));
-    fr.onerror = () => res('');
-    fr.readAsDataURL(blob);
-  });
-  if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
-    dnaVoiceMsg('<span style="color:#B3402E;font-size:11.5px">No pudimos procesar la nota. Probá de nuevo.</span>');
-    return;
-  }
-  dnaVoiceMsg('<span style="color:var(--mut);font-size:11.5px">⏳ Escuchando y aprendiendo de tu negocio…</span>');
-  try {
-    const r = await api.post('/api/dna/from-audio', { audioDataUrl: dataUrl }, { timeout: 120000 });
-    const el = document.getElementById('dnaVoiceCard');
-    if (el) el.innerHTML = `
-    <div class="card" style="border:2px solid var(--cel)">
-      <h3 style="margin:0 0 4px">🧬 La IA ya te conoce mejor</h3>
-      ${dnaExtractedSummaryHTML(r.extracted)}
-      ${r.transcript ? `<details style="margin-top:10px"><summary style="font-size:11.5px;color:var(--dim);cursor:pointer">Ver lo que dijiste</summary><p style="font-size:12px;color:var(--mut);font-style:italic;margin:8px 0 0">“${esc(r.transcript)}”</p></details>` : ''}
-      <p style="font-size:11.5px;color:var(--mut);margin:12px 0 0">Lo guardamos en <b>Ajustes → Tu negocio</b>, donde podés verlo y corregirlo cuando quieras.</p>
-      <div style="text-align:center;margin-top:10px"><button class="rev-voice-btn" id="dnaVoiceAgain">🎙️ Contar más</button></div>
-      <div class="rev-voice-msg" id="dnaVoiceMsg" style="text-align:center"></div>
-    </div>`;
-    const ag = document.getElementById('dnaVoiceAgain');
-    if (ag) ag.onclick = () => { loadDnaVoiceCard(); dnaVoiceToggle(); };
-  } catch (e) {
-    dnaVoiceMsg(`<span style="color:#B3402E;font-size:11.5px">${esc((e && e.message) || 'No pudimos procesar la nota. Probá de nuevo.')}</span>`);
-  }
-}
-function dnaExtractedSummaryHTML(extracted) {
-  const x = extracted || {};
-  const rows = [];
-  const fmtItem = (it) => {
-    if (typeof it === 'string') return it.trim();
-    if (it && typeof it === 'object') {
-      const a = (it.nombre || it.titulo || it.pregunta || '').trim();
-      const b2 = (it.precio || it.detalle || it.respuesta || '').trim();
-      return b2 ? `${a} — ${b2}` : a;
-    }
-    return '';
-  };
-  for (const k of Object.keys(DNA_LABELS)) {
-    const v = x[k];
-    if (v === undefined || v === null) continue;
-    let txt = '';
-    if (Array.isArray(v)) {
-      const items = v.map(fmtItem).filter(Boolean);
-      if (!items.length) continue;
-      txt = items.slice(0, 6).join(' · ');
-    } else if (String(v).trim()) {
-      txt = String(v).trim();
-    }
-    if (!txt) continue;
-    rows.push(`<div style="font-size:12.5px;margin:6px 0"><b>${DNA_LABELS[k]}:</b> ${esc(txt)}</div>`);
-  }
-  if (!rows.length) return `<p style="font-size:12.5px;color:var(--mut);margin:8px 0">Te escuché perfecto, pero no detecté datos nuevos del negocio. Probá contando tus productos, precios o promos.</p>`;
-  return `<div style="margin-top:8px">${rows.join('')}</div>`;
-}
 function showStreakCelebration(sk) {
   if (!sk || !sk.current) return;
   const lv = sk.level || { emoji: '🔥', name: '' };
@@ -5890,25 +5774,29 @@ async function semanaView() {
     .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
   const salioCard = publishedList.length ? salioCardHTML(publishedList) : '';
   // Tarjeta "Contame de tu negocio" (nota de voz → ADN): vive pegada a la misión de fotos.
-  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${nextTeaser}${nextBack}${heroCard}${redoMini}${scheduledStrip}<div id="inspoCard"></div>${mediaStrip}<div id="missionCard"></div><div id="dnaVoiceCard"></div>${salioCard}`;
+  const topBlock = `${xpStrip}${expBanner}${planSlot}${failedCard}${nextTeaser}${nextBack}${heroCard}${redoMini}${scheduledStrip}${mediaStrip}${salioCard}`;
 
   return topBlock;
 }
 
 /* ---------- FAST-TRACK "TU PRIMER POSTEO" — integración (Track C) ---------- */
 // La tarjeta y el festejo los construye Track A; acá vive el handoff post-publish
-// a la nota de voz: cierra el modal de festejo (el que esté abierto) y scrollea
-// a la tarjeta "Contame de tu negocio", que ya existe en topBlock (#dnaVoiceCard).
+// a la nota de voz: cierra el modal de festejo y lleva al chat, donde Posty pide
+// la nota con grabador inline (postyAskInChat).
 // El festejo NO se duplica acá: esto solo responde al botón del modal.
 function fastTrackCloseModals() {
   document.querySelectorAll('.modal-ov').forEach(ov => {
     if (ov.style.display !== 'none') ov.remove();
   });
 }
+// "Contame de tu negocio" ahora vive en el chat: Posty lo pide ahí con grabador inline.
+function postyAskInChat(kind) {
+  try { sessionStorage.setItem('posty-force-nudge', kind); } catch (e) {}
+  location.hash = '#/app/chat';
+}
 function fastTrackGoToVoice() {
   fastTrackCloseModals();
-  const el = document.getElementById('dnaVoiceCard');
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  postyAskInChat('voice');
 }
 // Botón de handoff en voseo para el modal de festejo. Si Track A ya lo incluyó
 // en su modal, este HTML no hace falta — el binding delegado igual lo atiende.
@@ -5942,12 +5830,6 @@ function bindSemana() {
     });
   }
   bindMediaCard(); // tira "Mis fotos": borrar desde acá
-  // Misión de fotos semanal
-  loadMissionCard().catch(() => {});
-  // 🎨 Referencia visual del cliente (inspo): tarjeta prominente, estado hecho si ya hay
-  loadInspoCard().catch(() => {});
-  // 🎙️ Contame de tu negocio: nota de voz → ADN (pegada a la misión de fotos)
-  loadDnaVoiceCard();
   // Sugerencia de serie + alerta honesta de rendimiento
   loadWeeklyPlan().catch(() => {});
   loadPerformanceAlert().catch(() => {});
@@ -6818,6 +6700,7 @@ async function render() {
   let content = '';
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') content = await semanaView();
+  else if (tab === 'schedule') content = await scheduleView();
   else if (tab === 'crear') { location.hash = '#/app/semana'; return; } // Creador manual fusionado en Mi semana
   else if (tab === 'ideas') { location.hash = '#/app/semana'; return; } // Ideas se fusionó en Mi semana
   else if (tab === 'video') { location.hash = '#/app/semana'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
@@ -6885,10 +6768,94 @@ async function showExpiredModal() {
   ov.querySelectorAll('[data-exp-plan]').forEach(b => b.onclick = () => goPlan(b.dataset.expPlan));
 }
 
+/* ---------- SCHEDULE: calendario de posteos programados ---------- */
+let SCHED_WEEK_OFFSET = 0; // 0 = semana actual; no se permite ir al pasado
+async function scheduleView() {
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  let allPosts = [];
+  try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
+  const parse = (iso) => {
+    const s0 = String(iso || '');
+    let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
+    if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+    return new Date(s);
+  };
+  const dayKey = (d) => { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } };
+  const scheduled = allPosts
+    .filter(p => p.status === 'scheduled' && p.scheduled_at)
+    .map(p => ({ p, d: parse(p.scheduled_at) }))
+    .filter(x => !isNaN(x.d))
+    .sort((a, b) => a.d - b.d);
+  // Lunes de la semana visible (offset en semanas desde la actual)
+  const now = new Date();
+  const mon = new Date(now);
+  mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7) + SCHED_WEEK_OFFSET * 7);
+  mon.setHours(12, 0, 0, 0);
+  const days = [];
+  for (let i = 0; i < 7; i++) days.push(new Date(mon.getTime() + i * 86400000));
+  const fmtDay = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
+  const fmtHour = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz }); } catch (e) { return ''; } };
+  const todayK = dayKey(new Date());
+  const weekLabel = (() => {
+    try {
+      const a = days[0].toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: tz });
+      const b = days[6].toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: tz });
+      return `${a} – ${b}`;
+    } catch (e) { return ''; }
+  })();
+  const cap1 = (p) => esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 70) || 'Posteo');
+  const cells = days.map(d => {
+    const k = dayKey(d);
+    const items = scheduled.filter(x => dayKey(x.d) === k);
+    const isToday = k === todayK;
+    return `<div class="sched-col${isToday ? ' today' : ''}">
+      <div class="sched-colhead">${esc(fmtDay(d))}${isToday ? ' <span class="sched-today">hoy</span>' : ''}</div>
+      <div class="sched-colbody">
+        ${items.length ? items.map(({ p, d: dt }) => `
+        <button class="sched-card" data-lightbox="${esc(p.image_path || '')}" ${p.media_type === 'video' ? 'data-video="1"' : ''}>
+          ${p.image_path
+            ? (p.media_type === 'video'
+              ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+              : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`)
+            : `<div class="sched-nothumb">📝</div>`}
+          <div class="sched-cardtxt"><b>${esc(fmtHour(dt))}</b><span>${cap1(p)}</span></div>
+        </button>`).join('') : `<div class="sched-vacio">—</div>`}
+      </div>
+    </div>`;
+  }).join('');
+  const empty = !scheduled.length && SCHED_WEEK_OFFSET === 0;
+  return `<div id="schedView" class="sched-wrap">
+    <div class="sched-top">
+      <div><h2 style="margin:0">📅 Schedule</h2>
+      <p class="sub" style="margin:4px 0 0">Todo lo que sale solo, día por día.</p></div>
+      <div class="sched-nav">
+        <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_WEEK_OFFSET <= 0 ? 'disabled' : ''} aria-label="Semana anterior">‹</button>
+        <button class="btn btn-ghost btn-sm" id="schedToday">Esta semana</button>
+        <button class="btn btn-ghost btn-sm" id="schedNext" aria-label="Semana siguiente">›</button>
+      </div>
+    </div>
+    <div class="sched-weeklabel">${esc(weekLabel)}</div>
+    ${empty
+      ? `<div class="empty"><div class="big">📅</div><b>Todavía no hay nada programado por acá.</b><p>Cuando programes tus borradores, los vas a ver en este calendario, día por día, con su hora. Yo me ocupo de que salgan solos 🤖</p><a class="btn btn-primary" href="#/app/semana">Armar mi semana</a></div>`
+      : `<div class="sched-grid">${cells}</div>
+         <p class="hint" style="margin-top:10px">Tocá un posteo para verlo en grande 🔍</p>`}
+  </div>`;
+}
+function bindSchedule() {
+  const pv = $('#schedPrev'), nx = $('#schedNext'), td = $('#schedToday');
+  if (pv) pv.onclick = () => { if (SCHED_WEEK_OFFSET > 0) { SCHED_WEEK_OFFSET--; render(); } };
+  if (nx) nx.onclick = () => { SCHED_WEEK_OFFSET++; render(); };
+  if (td) td.onclick = () => { SCHED_WEEK_OFFSET = 0; render(); };
+  $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
+    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1');
+  });
+}
+
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin') bindAdmin();
   if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
+  if (tab === 'schedule') bindSchedule();
   pwaWire();
   // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
   if (!window.__revMoreWired) {
@@ -6921,6 +6888,7 @@ function bindApp(tab) {
   const dov = $('#drawerOv');
   if (dov) dov.onclick = closeDrawer;
   try { paintDrawerIdent(); } catch (e) {}
+  try { paintSidePosty(); } catch (e) {}
   $$('.drawer-plan').forEach(a => { a.onclick = () => closeDrawer(); });
   const dlo = $('#drawerLogout');
   if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
