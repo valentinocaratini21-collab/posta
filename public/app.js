@@ -8656,11 +8656,21 @@ function bindSettings() {
 /* ---------- 📊 Panel de analytics (solo equipo Posta) ---------- */
 // Ruta oculta #/app/admin. Gate: token de admin (el mismo ADMIN_TOKEN del servidor).
 function adminToken() { try { return localStorage.getItem('posta_admin_token') || ''; } catch (e) { return ''; } }
-function adminApi(path, method, data) {
+async function adminApi(path, method, data) {
   const t = adminToken();
   const url = '/api/admin/' + path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t);
-  if (method === 'POST') return api.post(url, data || {});
-  return api.get(url);
+  try {
+    if (method === 'POST') return await api.post(url, data || {});
+    return await api.get(url);
+  } catch (e) {
+    if (e && (e.status === 403 || e.status === 401)) {
+      try { localStorage.removeItem('posta_admin_token'); } catch (ee) {}
+      try { sessionStorage.setItem('posta_admin_msg', 'El token guardado no funcionó. Pegá el token actual (variable ADMIN_TOKEN en Railway).'); } catch (ee2) {}
+      location.reload();
+      const err = new Error('admin_auth'); err.adminAuthFailed = true; throw err;
+    }
+    throw e;
+  }
 }
 async function adminView() {
   return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posta — solo equipo</p></div></div>
@@ -8669,7 +8679,10 @@ async function adminView() {
 async function bindAdmin() {
   const card = $('#adminCard'); if (!card) return;
   if (!adminToken()) {
+    let gateMsg = '';
+    try { gateMsg = sessionStorage.getItem('posta_admin_msg') || ''; sessionStorage.removeItem('posta_admin_msg'); } catch (e) {}
     card.innerHTML = `<h3 style="margin:0 0 8px">🔒 Acceso restringido</h3>
+      ${gateMsg ? `<div class="err" style="margin-bottom:10px">${gateMsg}</div>` : ''}
       <p class="d">Pegá el token de admin del servidor (ADMIN_TOKEN).</p>
       <div class="field"><input id="adTok" type="password" placeholder="token" style="width:100%;font-size:16px"></div>
       <button class="btn btn-primary" id="adTokGo">Entrar</button>
@@ -8680,6 +8693,7 @@ async function bindAdmin() {
       try { localStorage.setItem('posta_admin_token', v); } catch (e) {}
       try { await adminApi('funnel?days=7'); bindAdmin(); }
       catch (e) {
+        if (e && e.adminAuthFailed) return;
         try { localStorage.removeItem('posta_admin_token'); } catch (ee) {}
         $('#adTokMsg').innerHTML = `<div class="err">Token inválido.</div>`;
       }
@@ -8692,11 +8706,14 @@ async function bindAdmin() {
       <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
       <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
       <button class="btn btn-soft btn-sm" data-atab="review">✨ Revisión</button>
+      <button class="btn btn-soft btn-sm" id="adLogout">🔑 Cambiar token</button>
       <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
         <option value="7">7 días</option><option value="30" selected>30 días</option>
       </select>
     </div>
     <div id="adBody"><div class="d">⏳ Cargando…</div></div>`;
+  const lo = $('#adLogout');
+  if (lo) lo.onclick = () => { try { localStorage.removeItem('posta_admin_token'); } catch (e) {} location.reload(); };
   const body = $('#adBody');
   const days = () => ($('#adDays') && $('#adDays').value) || '30';
   const bar = (pct) => `<div style="height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.max(1, Math.min(100, pct))}%;background:var(--cel);border-radius:99px"></div></div>`;
