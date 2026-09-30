@@ -1164,8 +1164,13 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // Se maneja con instrucción explícita porque es el momento donde el modelo más se equivoca:
   // confirmar es AVANZAR (cerrar con ```idea), nunca preguntar ni rechazar.
   const lastUserMsg = (messages[messages.length - 1] || {}).text || '';
-  const isConfirm = lastUserMsg.trim().length < 25 &&
-    /^(dale|sí|si|sip|ok|okay|de una|hacelo|hacela|genial|perfecto|joya|buenísimo|buenisimo|listo|va|me gusta|me encanta)[.!…\s]*$/i.test(lastUserMsg.trim());
+  // Confirmaciones peladas: palabra sola O combinación natural ("sí, dale", "ok dale", "bueno dale").
+  // Principio: mensaje corto donde todo es afirmativo — 1-2 tokens de acuerdo, opcionalmente con suavizante.
+  const confirmNorm = lastUserMsg.trim().toLowerCase().replace(/[.!…?¿,;]+/g, '').replace(/\s+/g, ' ').trim();
+  const STRONG = '(dale|sí|si|sip|ok|okay|genial|perfecto|joya|buenísimo|buenisimo|listo|va|me gusta|me encanta|de una|hacelo|hacela)';
+  const SOFT = '(bueno|sí|si|ok)';
+  const isConfirm = confirmNorm.length > 0 && confirmNorm.length < 25 &&
+    new RegExp(`^(${SOFT} )?${STRONG}( ${STRONG})?$`).test(confirmNorm);
   const confirmGuide = isConfirm
     ? 'El cliente acaba de CONFIRMAR tu propuesta con un "dale"/"sí"/"ok": NO hagas preguntas, NO digas que no podés ayudar, cerrá la idea AHORA MISMO con el bloque ```idea. ' +
       'Si tu propuesta anterior no tenía todos los datos del bloque, cerrala igual con lo que tengas (título + ángulo como mínimo). Confirmar es avanzar, nunca frenar.'
@@ -1576,7 +1581,18 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     } catch (e) { /* bloque inválido: se ignora */ }
     text = String(text).replace(mr2[0], '').trim();
   }
-  return { reply: text, idea, ideas, edits, publishes, reverts, dna: dnaOut, options, rule, inspo };
+  return { reply: stripMdAsterisks(text), idea, ideas, edits, publishes, reverts, dna: dnaOut, options, rule, inspo };
+}
+
+// Posty humano: el chat muestra texto plano. Si al modelo se le escapa markdown
+// con asteriscos, se limpia acá como red de seguridad (el prompt ya lo prohíbe).
+// Un humano no escribe **negritas** en el chat.
+function stripMdAsterisks(t) {
+  let s = String(t || '');
+  s = s.replace(/\*\*([^*]+?)\*\*/g, '$1'); // **negrita** → negrita
+  s = s.replace(/^\s*\*\s+/gm, '');          // * viñeta → quitar marcador
+  s = s.replace(/\*([^*\s][^*]*?[^*\s])\*/g, '$1'); // *cursiva* → cursiva
+  return s;
 }
 
 // ---------- Respuesta sugerida a un comentario de Instagram ----------
