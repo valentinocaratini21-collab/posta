@@ -1407,3 +1407,58 @@ textarea.in{resize:vertical;min-height:96px}
   .xp-strip{border-radius:22px}
   .field input,.field select,.field textarea{border-radius:16px}
 }
+
+/* ============================================================
+   SIDEBAR FIJO ESCRITORIO (≥1024px) + vista Schedule
+   Pedido de Valentino 2026-09-29: el drawer pasa a ser sidebar
+   fijo en desktop; mobile (<1024px) sin cambios.
+   ============================================================ */
+/* Base: identidad Posty y links desktop-only ocultos en mobile */
+.side-posty{display:none}
+.drawer-link.side-only{display:none}
+@media(min-width:1024px){
+  /* El drawer deja de ser overlay: sidebar fijo siempre visible */
+  .mtop-burger{display:none !important}
+  .drawer-ov{display:none !important}
+  .drawer{display:flex;position:fixed;top:0;left:0;bottom:0;width:280px;background:#fff;z-index:91;transform:none;flex-direction:column;gap:2px;padding:22px 16px;box-shadow:8px 0 32px rgba(10,30,51,.10)}
+  .drawer-ident{display:none}
+  /* Identidad de Posty */
+  .side-posty{display:flex;align-items:center;gap:12px;padding:2px 4px 16px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)}
+  .side-posty-ava{width:48px;height:48px;flex:none;border-radius:50%;object-fit:cover;border:1.5px solid var(--line);box-shadow:0 3px 10px rgba(39,147,200,.35)}
+  .side-posty-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .side-posty-txt b{font-size:20px;font-weight:900;color:var(--txt);line-height:1.2}
+  .side-posty-txt b .pdot{color:#FEC14D}
+  .side-posty-txt small{font-size:11.5px;font-weight:700;color:var(--cel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* Links del sidebar */
+  .drawer-link.side-only{display:flex}
+  .drawer-link:hover{background:var(--bg2)}
+  /* El contenido se corre a la derecha del sidebar */
+  .mtop{margin-left:280px}
+  .setup-card{margin-left:296px}
+  .app-shell{margin-left:280px;min-height:calc(100vh - 69px)}
+  .main{max-width:920px;margin:0 auto;padding:20px 24px 60px}
+  .main-chat{max-width:920px;margin:0 auto;min-height:calc(100vh - 69px)}
+  .main-chat .chat-box{max-height:calc(100vh - 380px)}
+}
+/* ---------- Vista Schedule ---------- */
+.sched-wrap{max-width:920px;margin:0 auto}
+.sched-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:6px 0 4px;flex-wrap:wrap}
+.sched-nav{display:flex;gap:6px;align-items:center}
+.sched-weeklabel{font-size:13px;font-weight:700;color:var(--mut);margin:2px 0 12px}
+.sched-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.sched-col{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:120px}
+.sched-col.today{border-color:var(--cel);box-shadow:0 0 0 1.5px var(--cel)}
+.sched-colhead{font-size:11.5px;font-weight:800;color:var(--mut);padding:8px 10px;border-bottom:1px solid var(--line-soft);text-transform:capitalize;background:var(--bg2)}
+.sched-today{display:inline-block;background:var(--cel);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;margin-left:4px;text-transform:none}
+.sched-colbody{padding:8px;display:flex;flex-direction:column;gap:8px;flex:1}
+.sched-card{border:none;background:var(--bg2);border-radius:12px;padding:6px;cursor:pointer;text-align:left;font-family:inherit;display:flex;flex-direction:column;gap:6px;touch-action:manipulation}
+.sched-card:active{transform:scale(.98)}
+.sched-card img,.sched-card video{width:100%;aspect-ratio:1;border-radius:8px;object-fit:cover;display:block;background:#fff}
+.sched-nothumb{width:100%;aspect-ratio:1;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:24px}
+.sched-cardtxt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sched-cardtxt b{font-size:12px;color:var(--cel)}
+.sched-cardtxt span{font-size:11px;color:var(--txt);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sched-vacio{color:var(--line);text-align:center;font-size:16px;padding:12px 0}
+@media(max-width:1023px){
+  .sched-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
