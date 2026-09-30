@@ -1266,13 +1266,23 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
   const cleanPhotos = freshPhotos(photos).slice(0, 4);
   const cleanLibrary = freshPhotos(library).slice(0, 6);
   // Borradores en revisión: la IA los ve y puede editarlos directo (bloque ```edit)
-  const cleanDrafts = Array.isArray(drafts)
-    ? drafts.map(d => ({
-        id: parseInt(d && d.id, 10) || 0,
-        caption: String((d && d.caption) || '').slice(0, 300),
-        when: String((d && d.when) || '').slice(0, 10),
-      })).filter(d => d.id).slice(0, 10)
-    : [];
+  // Posty ve TODO: borradores, programados, publicando, fallidos y publicados recientes.
+  // Orden: lo que necesita acción primero (borradores), después lo programado,
+  // después lo que necesita atención (publicando/fallido), después lo ya publicado.
+  let cleanDrafts = [];
+  try {
+    const rows = db.prepare(`SELECT id, caption, scheduled_for, status, media_type FROM posts
+      WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published')
+      ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
+        COALESCE(scheduled_for, created_at) DESC LIMIT 12`).all(uidChat) || [];
+    cleanDrafts = rows.map(r => ({
+      id: r.id,
+      caption: String(r.caption || '').slice(0, 300),
+      when: String(r.scheduled_for || '').slice(0, 10),
+      status: r.status,
+      media_type: r.media_type || 'image',
+    }));
+  } catch (e) { console.error('[chat] drafts ctx:', e.message); }
   try {
     const settings = getSettings(req.session.userId);
     const uid0 = req.session.userId;
@@ -1318,11 +1328,16 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       if (su) {
         const tEnds = trialEffectiveEnd(su);
         const nowMs = Date.now();
+        // Cupo REAL de la semana (de la DB): Posty tiene que saberlo a la perfección.
+        // En su propio try: si falla, el resto del contexto igual llega.
+        let quota = null;
+        try { quota = weeklyQuota(req.session.userId); } catch (e) { console.error('[chat] quota ctx:', e.message); }
         sales = {
           isTrial: su.plan_status !== 'active',
           trialExpired: su.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs,
           trialDaysLeft: (su.plan_status === 'trial' && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0,
           planName: su.plan_status === 'active' ? (su.plan || '') : '',
+          quota,
         };
       }
     } catch (e) {}
@@ -1529,6 +1544,11 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           status: r.status,
         })).filter(d => d.image_url);
       } catch (e) { console.error('[chat] show_drafts:', e.message); }
+      // Si pidió mostrar pero no hay nada con imagen: no prometer imágenes.
+      if (!showDrafts || !showDrafts.length) {
+        showDrafts = [];
+        out.reply = 'Todavía no armé nada — ¿la armamos? 🚀';
+      }
     }
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
   } catch (e) {

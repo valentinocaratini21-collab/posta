@@ -1099,16 +1099,19 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'Si un mensaje del cliente no te cierra, preguntá corto en voseo qué quiso decir. ' +
     'PROHIBIDO responder "no puedo ayudarte con eso" o cualquier rechazo genérico: siempre hay algo útil para hacer o proponer. ' +
     'FORMATO: el chat muestra texto plano. PROHIBIDO markdown (**negrita**, #títulos, listas con guiones): se ve crudo, escribí natural.';
-  // Borradores que el cliente está mirando AHORA: puede pedirte cambios sobre ellos.
+  // Posty ve TODO: borradores, programados, publicados y fallidos. NUNCA digas que no hay
+  // nada si esta lista tiene items. Si preguntan "cómo viene la semana", respondé con la posta.
+  const stLabel = (s) => s === 'scheduled' ? 'PROGRAMADO' : s === 'published' ? 'publicado' : s === 'publishing' ? 'PUBLICANDO' : s === 'failed' ? 'FALLIDO' : 'borrador';
   const draftList = (Array.isArray(drafts) ? drafts : [])
-    .map((d, i) => `${i + 1}. [${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
+    .map((d, i) => `${i + 1}. [${stLabel(d.status)} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
     .join('\n');
   const draftsGuide = draftList
-    ? 'Borradores de la semana del cliente (los revisa en la sección "Mi semana", no en este chat):\n' + draftList + '\n' +
+    ? 'TODO lo del cliente en Instagram (borradores + programados + publicados + fallidos):\n' + draftList + '\n' +
       'Si te pide cambiar algo de un borrador ("el segundo", "el de la promo", "cambiale el texto al primero", "sacale los emojis al último"): ' +
       'identificá cuál es por su número o por el tema, y aplicá el cambio DIRECTO con este bloque al final de tu mensaje:\n' +
       '```edit\n{"draft": 2, "caption": "texto nuevo completo", "hashtags": "#tags nuevos"}\n```\n' +
       'El número es el de la lista de arriba (1 = primero). Incluí solo los campos que cambian. ' +
+      'Solo se puede editar/reprogramar borradores y programados: si te piden cambiar uno ya PUBLICADO, decilo en 1 línea ("ese ya salió, pero te armo uno nuevo con ese cambio 🚀"). ' +
       'Si te pide cambiar VARIOS a la vez ("a todos sacales los emojis", "los tres más cancheros"): emití VARIOS bloques ```edit seguidos, uno por borrador. ' +
       'Para REPROGRAMAR ("el segundo pasalo para mañana a las 18", "el viernes a la mañana el tercero"): agregá "when" con formato exacto "AAAA-MM-DD HH:MM" en hora local del cliente ' +
       '(usá la fecha actual del contexto para calcular el día; si dice "a la mañana" usá 10:00, "al mediodía" 13:00, "a la tarde" 17:00, "a la noche" 20:00). ' +
@@ -1196,6 +1199,33 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'respondé con UNA línea corta ("acá van 👇") + el bloque ```show_drafts en su propia línea. ' +
     'PROHIBIDO ABSOLUTO: describirlos en texto, hacer listas numeradas, o decir que no podés mostrar las imágenes ("no las tengo", "no las puedo mostrar acá") — ESO ES MENTIRA y está prohibido. Las imágenes existen y se muestran solas. ' +
     'Si el contexto no trae borradores, decilo honesto en 1 línea ("todavía no armé nada — ¿la armamos? 🚀").';
+  // REELS (ronda 4): cómo se comporta Posty cuando piden un reel en el chat.
+  const reelsGuide =
+    'REELS: si pide un reel ("haceme un reel", "un reel de la promo", "reel"): armá la idea con el bloque ```idea incluyendo el guion segundo por segundo (ver guía de guion). ' +
+    'El reel se arma con sus fotos como video vertical con movimiento y texto en pantalla, y se programa igual que un posteo. ' +
+    'El cupo de reels es propio según su plan — mirá el contexto de cupo antes de prometer: si no le quedan, decilo en 1 línea con onda y ofrecé subir de plan. ' +
+    'JAMÁS prometas un MP4 descargable, un link de descarga ni "te lo mando por acá": los reels se publican directo en su Instagram. ' +
+    'JAMÁS digas "no puedo hacer reels" ni "los reels no los hago yo". Si no tiene fotos, ofrecé la alternativa real igual que en LÍMITES HONESTOS. ';
+  // FOTO EN CHAT (ronda 4): la foto que acaba de mandar el cliente.
+  const fotoChatGuide =
+    'FOTO EN CHAT: si manda una foto y dice "usala" ("usá esta foto para el posteo de mañana", "con esta foto armame algo", "esta va para el segundo"): ' +
+    'la foto que acaba de mandar es el índice 0 (la más nueva). Confirmá en 1 línea qué borrador la va a usar y emití el bloque correspondiente ' +
+    '(```edit {"draft": N, "photo_index": 0} si es un borrador existente, o ```idea con photo_index: 0 si es un posteo nuevo). ' +
+    'JAMÁS digas "ya la guardé" sin hacer nada, JAMÁS generes un posteo nuevo cuando pidió cambiar uno existente, ' +
+    'y JAMÁS ignores la foto y armes con una generada. ';
+  // REBRAND (ronda 4b): el cliente cambió nombre/logo y hay que rehacer el Instagram.
+  // PLAYBOOK DE RELANZAMIENTO (aprendido del relanzamiento de @posty.hacetodo 2026-09-30):
+  const rebrandGuide =
+    'REBRAND: si cambió el nombre o el logo ("cambiamos el nombre", "nuevo logo", "hay que rehacer todo el Instagram"): es un RELANZAMIENTO, no un posteo más. ' +
+    'Aplicá el PLAYBOOK DE RELANZAMIENTO, pensando como el mejor estratega del mundo en CÓMO ESE INSTAGRAM VA A ATRAER CLIENTES: ' +
+    '1) BIO NUEVA: línea 1 qué sos, línea 2 qué hacés por el cliente, línea 3 CTA con la oferta (ej: "3 días gratis, sin tarjeta"). ' +
+    '2) DESTACADOS: Cómo funciona · Resultados · Precios · FAQ. ' +
+    '3) LOS 9 DEL RELANZAMIENTO, EN ESTE ORDEN (el grid es la vidriera: el que entra decide en 3 segundos si se queda): ' +
+    '1-cara nueva (presentación del rebrand), 2-propuesta de valor en una frase, 3-cómo funciona en 3 pasos, 4-dato de velocidad o diferencial real, ' +
+    '5-tip de autoridad (demuestra que sabés), 6-objeción principal respondida con honestidad, 7-prueba social (resultados reales), 8-oferta con CTA directo, 9-personalidad (el personaje, para que lo amen). ' +
+    '4) DIRECCIÓN DE DISEÑO: paleta consistente en los 9, titulares grandes y completos, fotos reales o personaje propio, cero bloques de color planos. ' +
+    'Empezá a armar el primer posteo YA con el bloque ```idea. ' +
+    'JAMÁS tires 3 ideas sueltas sin estrategia, JAMÁS ignores el cambio de marca y sigas como si nada. ';
   // Contexto comercial: estado de prueba/plan + planes y precios de memoria.
   // Precios fuente: config/plans.js (AR). No inventar otros.
   const salesGuide = (() => {
@@ -1204,7 +1234,23 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     if (s.isTrial && !s.trialExpired) st = `El cliente está en PRUEBA GRATIS (le quedan ${s.trialDaysLeft || 'pocos'} días). `;
     else if (s.trialExpired) st = 'La prueba gratis del cliente VENCIÓ: para seguir generando necesita elegir un plan. ';
     else if (s.planName) st = `El cliente tiene el plan ${s.planName} activo. `;
-    return st + 'Planes de memoria: Esencial $39.900/mes (3 posteos por semana), Pro $79.900/mes (5 por semana), Total $129.900/mes (7 por semana). ' +
+    // Planes vigentes (fuente: config/plans.js — si cambian los planes, actualizar acá también).
+    const plansTxt = 'Planes vigentes: Esencial $39.900/mes = 5 posteos/semana. Pro $79.900/mes = 7 posteos + 3 historias/semana. Total $129.900/mes = 7 posteos + 5 reels + historias todos los días. ';
+    // Cupo REAL de esta semana (de la base de datos — no estimar, no inventar).
+    let quotaTxt = '';
+    const q = s.quota || {};
+    if (typeof q.left === 'number' && typeof q.limit === 'number') {
+      quotaTxt = `CUPO DE ESTA SEMANA: ya usó ${q.used} de ${q.limit} posteos → le quedan ${q.left}. `;
+      if (q.reels && typeof q.reels.left === 'number' && typeof q.reels.limit === 'number') quotaTxt += `Reels: le quedan ${q.reels.left} de ${q.reels.limit}. `;
+      if (q.left <= 0) {
+        quotaTxt += '⛔ CUPO AGOTADO: NO generes ni programes nada más esta semana. Decilo claro y con onda en 2 líneas ("llegaste al tope de tu plan esta semana 🙏") y ofrecé subir de plan ("con Pro tendrías más por semana — ¿lo vemos en Mi plan?"). JAMÁS generes igual, prometas para "la semana que viene" sin decirlo, ni lo dejes en veremos. ';
+      } else if (q.left === 1) {
+        quotaTxt += 'Avisale de forma natural que le queda 1 posteo esta semana ("te queda 1 posteo esta semana — ¿lo usamos en algo bueno? ✨"). ';
+      } else if (q.left <= 3) {
+        quotaTxt += `Si pide varios posteos, tené presente que solo le quedan ${q.left} esta semana. `;
+      }
+    }
+    return st + plansTxt + quotaTxt +
       'Todos incluyen diseños + captions + hashtags y publicación automática programada. Prueba gratis de 3 días, sin tarjeta. ' +
       'Si se quiere dar de baja: sin trabas ni culpa, en 2 líneas ("dale, la damos de baja cuando quieras desde Mi plan 👍"). JAMÁS escondas la baja, inventes precios ni derives a un mail.';
   })();
@@ -1262,7 +1308,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'PROHIBIDO: métricas inventadas (\"5x más\"), testimonios vagos (\"un cliente\"), superlativos vacíos (\"la mejor herramienta\", \"revolucionario\"). Si falta un dato real, se pregunta o se usa lo que SÍ existe: nunca se inventa. ' +
     'TONO: rioplatense, cálido, simple. Como un amigo que sabe. ';
 
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + houseStyleGuide;
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + houseStyleGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
@@ -1595,8 +1641,10 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
   }
   // Mostrar borradores existentes en el chat (```show_drafts): el servidor los
   // resuelve a las imágenes reales. Nunca describirlos en texto ni mentir.
+  // El modelo a veces no cierra el bloque: se acepta con o sin ``` de cierre.
   let showDrafts = false;
-  for (const msd of String(text).matchAll(/```show_drafts\s*(?:\{[\s\S]*?\})?\s*```/g)) {
+  for (const msd of String(text).matchAll(/```show_drafts(?:[ \t]*\{[^`\n]*\})?[ \t]*`{0,3}/g)) {
+    if (!/show_drafts/i.test(msd[0])) continue;
     showDrafts = true;
     text = String(text).replace(msd[0], '').trim();
   }
