@@ -17,7 +17,7 @@ async function sendEmail({ to, subject, html }) {
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
     return { ok: false, skipped: true };
   }
-  const from = process.env.EMAIL_FROM || 'Posta <hola@postahacetodo.com>';
+  const from = process.env.EMAIL_FROM || 'Posty <hola@postahacetodo.com>';
   let r;
   try {
     r = await fetch(RESEND_URL, {
@@ -76,7 +76,7 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
       <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Armar mi semana</a>
     </p>
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
-      Te llega este recordatorio porque tenés cuenta en Posta y todavía no instalaste la app en tu teléfono.
+      Te llega este recordatorio porque tenés cuenta en Posty y todavía no instalaste la app en tu teléfono.
       Cuando la instales, estos mails se apagan solos.<br>
       ¿No querés recibirlos más? Escribinos a <a href="mailto:hola@postahacetodo.com" style="color:#2793C8">hola@postahacetodo.com</a>.
     </p>
@@ -94,7 +94,7 @@ function emailShell(inner) {
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
-      Te avisamos porque tenés contenido pendiente en Posta.<br>
+      Te avisamos porque tenés contenido pendiente en Posty.<br>
       ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postahacetodo.com" style="color:#2793C8">hola@postahacetodo.com</a>.
     </p>
   </div>

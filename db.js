@@ -479,6 +479,17 @@ try { db.exec(`ALTER TABLE users ADD COLUMN training_wheels INTEGER DEFAULT 1`);
 try { db.exec(`ALTER TABLE users ADD COLUMN posty_welcomed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN client_name TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN media_asked_at INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN cancel_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN utm_source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN utm_campaign TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Gasto en ads (carga manual): para CAC cuando se prenda publicidad.
+db.exec(`CREATE TABLE IF NOT EXISTS ad_spend (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  campaign TEXT DEFAULT '',
+  amount_usd REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 // Push notifications (Web Push / VAPID): suscripciones por dispositivo.
 db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

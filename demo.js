@@ -1106,7 +1106,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       headline,
       subline,
       cta: t.cta,
-      watermark: 'Hecho con Posta',
+      watermark: 'Hecho con Posty',
     };
   });
   return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, n - 1), count: n, goalLine, topics };

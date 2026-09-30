@@ -624,7 +624,7 @@ function streakFromTrialImport(userId, nImp) {
 }
 
 app.post('/api/auth/register', (req, res) => {
-  const { email, password, ref, trial_ig } = req.body || {};
+  const { email, password, ref, trial_ig, utm } = req.body || {};
   if (!email || !password || password.length < 6)
     return res.status(400).json({ error: 'Necesito tu email y una contraseña de 6 caracteres como mínimo 🔑' });
   try {
@@ -637,7 +637,9 @@ app.post('/api/auth/register', (req, res) => {
       if (referrer && referrer.id) referredBy = referrer.id;
     }
     const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
-    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at) VALUES (?, ?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds);
+    const utmS = String((utm && utm.source) || '').slice(0, 40);
+    const utmC = String((utm && utm.campaign) || '').slice(0, 80);
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign) VALUES (?, ?, ?, ?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
     req.session.userId = r.lastInsertRowid;
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
@@ -816,7 +818,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
             body: JSON.stringify({
               model: 'gpt-4o-mini',
               messages: [
-                { role: 'system', content: `Sos Posty, el community manager de Posta, entrevistando al dueño de un negocio para conocerlo a fondo. Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta.` },
+                { role: 'system', content: `Sos Posty, el community manager personal de este negocio, entrevistando a su dueño para conocerlo a fondo. Tu nombre es Posty, siempre: nunca digas "Posta". Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta.` },
               ],
               max_tokens: 220, temperature: 0.8,
             }),
@@ -1408,6 +1410,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // Edición directa de borradores pedida por el cliente vía chat.
     // La IA puede mandar VARIOS bloques ```edit (uno por borrador) y reprogramar con "when".
     let editApplied = null;
+    let editPhotoFailed = false;
     if (Array.isArray(out.edits) && out.edits.length) {
       // Palanca 7: si el pedido cambia el CONCEPTO (no solo el texto), la imagen se
       // regenera vía concept-shot para acompañar. Solo se salta si el usuario pidió
@@ -1439,6 +1442,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         );
         // Cambio de foto: el índice refiere a sus fotos guardadas (0 = la más nueva)
         let pickedOwnPhoto = false;
+        let photoFailed = false;
         if (Number.isInteger(ed.photo_index) && ed.photo_index >= 0) {
           const { photoPaths } = req.body || {};
           let newPath = null;
@@ -1451,7 +1455,9 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           if (newPath && String(newPath).startsWith('/media/')) {
             const own = db.prepare(`SELECT id FROM assets WHERE user_id = ? AND file_path = ?`).get(uid, String(newPath));
             if (own) { db.prepare(`UPDATE posts SET image_path = ? WHERE id = ?`).run(String(newPath), post.id); pickedOwnPhoto = true; }
-          }
+            else photoFailed = true;
+          } else photoFailed = true;
+          if (photoFailed) editPhotoFailed = true;
         }
         // Palanca 7: cambió el concepto → regenerar la imagen para que acompañe.
         // (Si el usuario eligió su propia foto, o pidió solo texto, se respeta.)
@@ -1488,7 +1494,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
             return p ? absImageUrl(uid, p.image_path) : '';
           }).filter(Boolean);
         } catch (e) {}
-        editApplied = { ok: true, count: n, imageRegen: imgRegen, images: imgs };
+        editApplied = { ok: true, count: n, imageRegen: imgRegen, images: imgs, photoFailed: editPhotoFailed || undefined };
       }
     }
     // Publicación inmediata pedida en el chat: "publicalo ya" / "dale, subilo" ES la
@@ -1641,6 +1647,15 @@ setInterval(() => { // limpieza cada 5 min
   const now = Date.now();
   for (const [k, v] of TRACK_RL) if (now - v.t > 300000) TRACK_RL.delete(k);
 }, 300000).unref();
+// Garantía de cupo: un posteo trabado en 'publishing' (+60 min) se marca como fallido
+// para liberar el cupo. Nunca se le puede cobrar cupo al usuario por algo que no salió.
+setInterval(() => {
+  try {
+    const r = db.prepare(`UPDATE posts SET status='failed', error='Se trabó publicando — no salió a Instagram, el cupo se liberó.'
+      WHERE status='publishing' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) < datetime('now', '-60 minutes')`).run();
+    if (r.changes) console.log(`[quota-guard] ${r.changes} posteo(s) trabados liberados`);
+  } catch (e) { console.error('[quota-guard]:', e.message); }
+}, 300000).unref();
 app.post('/api/track', (req, res) => {
   try {
     const ip = req.ip || req.socket?.remoteAddress || '';
@@ -1671,6 +1686,7 @@ const FUNNEL_STEPS = [
   { key: 'prueba_view', label: 'Visitaron la prueba' },
   { key: 'prueba_complete', label: 'Completaron el formulario' },
   { key: 'prueba_register', label: 'Crearon cuenta' },
+  { key: 'ig_connect', label: 'Conectaron Instagram' },
   { key: 'week_generate_done', label: 'Semana generada' },
   { key: 'post_publish', label: 'Publicaron algo' },
   { key: 'payment_ok', label: 'Pagaron' },
@@ -1686,6 +1702,17 @@ const requireAdminToken = (req, res, next) => {
   if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
   next();
 };
+function funnelUniquesPrev(name, days) {
+  // Período anterior equivalente: [2*days, days] — para tendencias.
+  const ids = new Set();
+  try {
+    const rows = db.prepare(`SELECT user_id, session_id FROM events
+      WHERE name = ? AND datetime(created_at) >= datetime('now', ?) AND datetime(created_at) < datetime('now', ?)`)
+      .all(name, `-${days * 2} days`, `-${days} days`);
+    for (const r of rows) ids.add(r.user_id ? 'u:' + r.user_id : 's:' + (r.session_id || '?'));
+  } catch (e) {}
+  return ids;
+}
 function funnelUniques(name, days) {
   // Usuarios únicos por paso: user_id si hay login, si no la sesión anónima.
   const ids = new Set();
@@ -1725,7 +1752,50 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
     byDay = db.prepare(`SELECT date(created_at) AS d, name, COUNT(*) AS n FROM events
       WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d, name ORDER BY d DESC LIMIT 600`).all(`-${days} days`);
   } catch (e) {}
-  res.json({ days, totals, funnel, by_day: byDay, admin_token_set: true });
+  // Meta 200 suscriptores: suscriptores pagos, MRR y conversión trial→pago.
+  let goal = { target: 200, subscribers: 0, mrr: 0, trial_to_paid: 0, new_30d: 0 };
+  try {
+    const actives = db.prepare(`SELECT plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all();
+    let mrr = 0;
+    for (const u of actives) {
+      const base = Number(u.mp_base_amount) || 0;
+      if (base > 0) { mrr += base; continue; }
+      const pl = (PLANS && PLANS[u.plan]) || null;
+      if (pl && pl.price) mrr += Number(pl.price) || 0;
+    }
+    const regs = (totals['prueba_register'] || 0), paid = (totals['payment_ok'] || 0);
+    const newRows = db.prepare(`SELECT COUNT(DISTINCT user_id) AS n FROM events
+      WHERE name = 'payment_ok' AND user_id IS NOT NULL AND datetime(created_at) >= datetime('now', '-30 days')`).get();
+    goal = { target: 200, subscribers: actives.length, mrr: Math.round(mrr),
+      trial_to_paid: regs ? Math.round(paid / regs * 1000) / 10 : 0,
+      new_30d: newRows ? newRows.n : 0 };
+  } catch (e) {}
+  // Tendencias: cada paso vs el período anterior equivalente
+  const trends = {};
+  try {
+    for (const s of perStep) {
+      const cur = s.ids.size, prev = funnelUniquesPrev(s.key, days).size;
+      trends[s.key] = { cur, prev,
+        delta: prev ? Math.round((cur - prev) / prev * 1000) / 10 : (cur ? 100 : 0) };
+    }
+  } catch (e) {}
+  // Time-to-value: horas desde registro hasta primer posteo publicado (90 días)
+  let ttv = { n: 0, avg_h: 0, med_h: 0, d1_pct: 0 };
+  try {
+    const rows = db.prepare(`SELECT (julianday(p.first_pub) - julianday(u.created_at)) * 24 AS h
+      FROM users u JOIN (
+        SELECT user_id, MIN(published_at) AS first_pub FROM posts
+        WHERE status = 'published' AND published_at IS NOT NULL GROUP BY user_id
+      ) p ON p.user_id = u.id
+      WHERE datetime(u.created_at) >= datetime('now', '-90 days')`).all();
+    const hs = rows.map(r => Number(r.h)).filter(h => h >= 0 && h < 24 * 60).sort((a, b) => a - b);
+    if (hs.length) {
+      const avg = hs.reduce((s, h) => s + h, 0) / hs.length;
+      ttv = { n: hs.length, avg_h: Math.round(avg * 10) / 10, med_h: Math.round(hs[Math.floor(hs.length / 2)] * 10) / 10,
+        d1_pct: Math.round(hs.filter(h => h <= 24).length / hs.length * 1000) / 10 };
+    }
+  } catch (e) {}
+  res.json({ days, totals, funnel, by_day: byDay, goal, trends, ttv, admin_token_set: true });
 });
 
 // Actividad: eventos por día + usuarios activos por día (login o sesión anónima)
@@ -1784,6 +1854,203 @@ app.get('/api/admin/events', requireAdminToken, (req, res) => {
   } catch (e) {}
   res.json({ ok: true, events: rows.map(r => ({ id: r.id, user_id: r.user_id, email: r.email || null,
     session_id: r.session_id, name: r.name, props: r.props, created_at: r.created_at })) });
+});
+
+// Admin: registrar gasto en ads (para CAC)
+app.post('/api/admin/ad-spend', requireAdminToken, (req, res) => {
+  const { date, campaign, amount_usd } = req.body || {};
+  const amt = Number(amount_usd);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !(amt > 0))
+    return res.status(400).json({ error: 'Fecha (AAAA-MM-DD) y monto mayor a 0.' });
+  try {
+    db.prepare('INSERT INTO ad_spend (date, campaign, amount_usd) VALUES (?, ?, ?)')
+      .run(date, String(campaign || '').slice(0, 80), amt);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'No se pudo guardar.' }); }
+});
+// Descargar planilla CSV con toda la actividad de los clientes (para Excel/Sheets)
+app.get('/api/admin/export', requireAdminToken, (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT e.created_at, u.email, e.name, e.props FROM events e
+      LEFT JOIN users u ON u.id = e.user_id
+      WHERE datetime(e.created_at) >= datetime('now', ?)
+      ORDER BY e.id DESC LIMIT 20000`).all(`-${days} days`);
+  } catch (e) {}
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = ['fecha,email,evento,detalle'];
+  for (const r of rows) {
+    let det = '';
+    try {
+      const o = JSON.parse(r.props || '{}');
+      det = Object.entries(o).map(([k, v]) => `${k}: ${String(v).slice(0, 60)}`).join(' | ');
+    } catch (e) { det = String(r.props || '').slice(0, 200); }
+    lines.push([r.created_at, r.email || '(anonimo)', r.name, det].map(q).join(','));
+  }
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="posta-actividad-${days}d.csv"`);
+  res.send('﻿' + lines.join('\n'));
+});
+
+// Crecimiento: plata (MRR vs costo IA), referidos, rendimiento de contenido,
+// motivos de cancelación y temas del chat. Todo lo que mueve decisiones.
+app.get('/api/admin/growth', requireAdminToken, (req, res) => {
+  const out = { money: {}, referrals: {}, content: {}, cancel_reasons: [], chat_themes: [] };
+  try {
+    // Plata
+    const actives = db.prepare(`SELECT plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all();
+    let mrr = 0;
+    for (const u of actives) {
+      const base = Number(u.mp_base_amount) || 0;
+      if (base > 0) { mrr += base; continue; }
+      const pl = (PLANS && PLANS[u.plan]) || null;
+      if (pl && pl.price) mrr += Number(pl.price) || 0;
+    }
+    let ai30 = 0;
+    try { ai30 = costs.costBreakdown(30).reduce((s, r) => s + (Number(r.usd) || 0), 0); } catch (e) {}
+    out.money = { mrr: Math.round(mrr), subscribers: actives.length,
+      ai_today_usd: Math.round(costs.daySpendUsd() * 100) / 100,
+      ai_30d_usd: Math.round(ai30 * 100) / 100,
+      cost_per_user_usd: actives.length ? Math.round(ai30 / actives.length * 100) / 100 : 0 };
+    // Referidos
+    const rTot = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by IS NOT NULL`).get();
+    const rPay = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by IS NOT NULL AND plan_status = 'active'`).get();
+    const top = db.prepare(`SELECT u2.email AS email, u2.referral_code AS code, COUNT(*) AS n FROM users u
+      JOIN users u2 ON u2.id = u.referred_by GROUP BY u.referred_by ORDER BY n DESC LIMIT 8`).all();
+    out.referrals = { signups: rTot ? rTot.n : 0, paying: rPay ? rPay.n : 0,
+      top: (top || []).map(t => ({ email: t.email, code: (t.code || '').toLowerCase(), n: t.n })) };
+    // Contenido: rendimiento real en Instagram (30 días)
+    const cm = db.prepare(`SELECT COUNT(*) AS n, AVG(pm.reach) AS reach, AVG(pm.likes) AS likes,
+        AVG(pm.comments) AS comments FROM post_metrics pm
+        JOIN posts p ON p.id = pm.post_id
+        WHERE p.status = 'published' AND datetime(p.published_at) >= datetime('now', '-30 days')`).get();
+    const pubs = db.prepare(`SELECT COUNT(*) AS n FROM posts
+      WHERE status = 'published' AND datetime(published_at) >= datetime('now', '-30 days')`).get();
+    out.content = { published_30d: pubs ? pubs.n : 0,
+      avg_reach: Math.round((cm && cm.reach) || 0), avg_likes: Math.round(((cm && cm.likes) || 0) * 10) / 10,
+      avg_comments: Math.round(((cm && cm.comments) || 0) * 10) / 10 };
+    // Motivos de cancelación
+    const cr = db.prepare(`SELECT cancel_reason AS reason, COUNT(*) AS n FROM users
+      WHERE plan_status = 'cancelled' AND cancel_reason != '' AND cancel_reason IS NOT NULL
+      GROUP BY cancel_reason ORDER BY n DESC LIMIT 10`).all();
+    out.cancel_reasons = (cr || []).map(x => ({ reason: x.reason, n: x.n }));
+    // Temas del chat (últimos 30 días, mensajes del usuario)
+    const msgs = db.prepare(`SELECT text FROM chat_messages WHERE role = 'user'
+      AND datetime(created_at) >= datetime('now', '-30 days') LIMIT 2000`).all();
+    const stop = new Set(('de,la,el,que,en,y,a,los,las,un,una,por,con,se,no,me,mi,para,es,son,del,al,como,mas,pero,sus,le,lo,su,este,esta,estos,estas,ese,esa,quiero,quieres,hola,gracias,porque,tengo,tiene,tienen,hacer,hace,hacen,puedo,puede,puedes,ser,estoy,esta,estan,esto,esto,muy,tan,solo,sí,si,ni,también,donde,cuando,hay,vez,veces,cosa,cosas,algo,algo,nada,todo,todos,toda,todas,posty').split(','));
+    const freq = {};
+    for (const m of (msgs || [])) {
+      const words = String(m.text || '').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .match(/[a-z]{4,}/g) || [];
+      for (const w of words) { if (!stop.has(w)) freq[w] = (freq[w] || 0) + 1; }
+    }
+    out.chat_themes = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 12)
+      .map(([word, n]) => ({ word, n }));
+    // Cohorts: por semana de registro, cuántos siguen activos
+    try {
+      const ch = db.prepare(`SELECT strftime('%Y-%W', created_at) AS week, COUNT(*) AS total,
+          SUM(CASE WHEN plan_status = 'active' THEN 1 ELSE 0 END) AS active
+        FROM users GROUP BY week ORDER BY week DESC LIMIT 12`).all();
+      out.cohorts = (ch || []).map(c => ({ week: c.week, total: c.total, active: c.active || 0,
+        pct: c.total ? Math.round(c.active / c.total * 1000) / 10 : 0 }));
+    } catch (e) { out.cohorts = []; }
+    // Taste: templates con más rechazo (señal directa de dónde Posty está flojo)
+    try {
+      const ts = db.prepare(`SELECT COALESCE(NULLIF(template,''), '(sin template)') AS template,
+          SUM(CASE WHEN client_signal = 'approved' THEN 1 ELSE 0 END) AS ok,
+          SUM(CASE WHEN client_signal = 'rejected' THEN 1 ELSE 0 END) AS no,
+          COUNT(*) AS n FROM post_signals
+        WHERE datetime(created_at) >= datetime('now', '-90 days')
+        GROUP BY template HAVING n >= 3 ORDER BY no DESC LIMIT 12`).all();
+      out.taste = (ts || []).map(t => ({ template: t.template, ok: t.ok || 0, no: t.no || 0,
+        reject_pct: (t.ok + t.no) ? Math.round(t.no / (t.ok + t.no) * 1000) / 10 : 0 }));
+    } catch (e) { out.taste = []; }
+    // 🩺 Salud del sistema: fallos silenciosos que nadie ve
+    try {
+      const genStart = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'week_generate_start' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
+      const genDone = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'week_generate_done' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
+      const failedPosts = db.prepare(`SELECT p.id, u.email, p.error, p.created_at FROM posts p LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.status = 'failed' AND datetime(p.created_at) >= datetime('now', '-30 days') ORDER BY p.created_at DESC LIMIT 10`).all();
+      const stuck = db.prepare(`SELECT p.id, u.email, p.scheduled_at FROM posts p LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.status = 'publishing' AND p.scheduled_at IS NOT NULL AND datetime(p.scheduled_at) < datetime('now', '-60 minutes') ORDER BY p.scheduled_at DESC LIMIT 10`).all();
+      out.health = {
+        gen_start_30d: genStart, gen_done_30d: genDone,
+        gen_rate: genStart ? Math.round(genDone / genStart * 1000) / 10 : 100,
+        failed_posts_30d: db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE status = 'failed' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c,
+        failed_recent: (failedPosts || []).map(p => ({ id: p.id, email: p.email || '?', error: (p.error || '').slice(0, 90), at: p.created_at })),
+        stuck_count: (stuck || []).length,
+        stuck_recent: (stuck || []).map(p => ({ id: p.id, email: p.email || '?', at: p.scheduled_at })),
+      };
+    } catch (e) { out.health = null; }
+    // 💵 CAC: gasto en ads (carga manual) vs pagos
+    try {
+      const spend30 = db.prepare(`SELECT COALESCE(SUM(amount_usd), 0) AS s FROM ad_spend WHERE date >= date('now', '-30 days')`).get().s;
+      const paid30 = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'payment_ok' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
+      const byCamp = db.prepare(`SELECT campaign, COALESCE(SUM(amount_usd), 0) AS spend FROM ad_spend
+        WHERE date >= date('now', '-90 days') GROUP BY campaign ORDER BY spend DESC LIMIT 10`).all();
+      const paidByUtm = db.prepare(`SELECT COALESCE(NULLIF(utm_campaign, ''), '(sin utm)') AS camp, COUNT(*) AS n FROM users
+        WHERE plan_status = 'active' AND datetime(created_at) >= datetime('now', '-90 days') GROUP BY camp ORDER BY n DESC LIMIT 10`).all();
+      out.cac = { spend_30d: Math.round(spend30 * 100) / 100, paid_30d: paid30,
+        cac: paid30 ? Math.round(spend30 / paid30 * 100) / 100 : 0,
+        by_campaign: (byCamp || []).map(c => ({ campaign: c.campaign || '(sin nombre)', spend: Math.round(c.spend * 100) / 100 })),
+        paid_by_utm: (paidByUtm || []).map(c => ({ campaign: c.camp, n: c.n })) };
+      out.spend_recent = db.prepare(`SELECT id, date, campaign, amount_usd FROM ad_spend ORDER BY date DESC, id DESC LIMIT 15`).all();
+    } catch (e) { out.cac = null; }
+    // 🔗 Referidos: clicks en el link (embudo completo)
+    try {
+      const clicks = db.prepare(`SELECT JSON_EXTRACT(props, '$.code') AS code, COUNT(*) AS n FROM events
+        WHERE name = 'ref_click' AND datetime(created_at) >= datetime('now', '-90 days') AND code IS NOT NULL
+        GROUP BY code ORDER BY n DESC LIMIT 20`).all();
+      out.ref_clicks = (clicks || []).map(c => ({ code: String(c.code || '').toLowerCase(), n: c.n }));
+    } catch (e) { out.ref_clicks = []; }
+    try {
+      const alerts = [];
+      const reg5 = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE datetime(created_at) >= datetime('now', '-5 days')`).get().c;
+      if (!reg5) alerts.push({ sev: 'high', text: 'Sin registros en los últimos 5 días.' });
+      const paidCur = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'payment_ok' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
+      const paidPrev = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'payment_ok' AND datetime(created_at) >= datetime('now', '-60 days') AND datetime(created_at) < datetime('now', '-30 days')`).get().c;
+      if (paidPrev >= 2 && paidCur < paidPrev * 0.5) alerts.push({ sev: 'high', text: `Pagos en caída: ${paidCur} vs ${paidPrev} en los 30 días anteriores.` });
+      if (out.money && out.money.ai_cost_30d > 1 && out.money.ai_cost_today > 3 * (out.money.ai_cost_30d / 30))
+        alerts.push({ sev: 'high', text: `Gasto de IA disparado hoy: $${out.money.ai_cost_today} vs $${(out.money.ai_cost_30d / 30).toFixed(2)} promedio.` });
+      const churn = db.prepare(`SELECT u.id, u.email, u.plan, u.plan_status, u.created_at,
+          MAX(p.published_at) AS last_pub,
+          (SELECT MAX(e.created_at) FROM events e WHERE e.user_id = u.id) AS last_act
+        FROM users u LEFT JOIN posts p ON p.user_id = u.id AND p.status = 'published' AND p.published_at IS NOT NULL
+        WHERE u.plan_status IN ('active', 'trial')
+        GROUP BY u.id
+        HAVING (datetime(u.created_at) < datetime('now', '-7 days') AND last_pub IS NULL)
+            OR datetime(last_pub) < datetime('now', '-7 days')
+        ORDER BY last_pub ASC NULLS FIRST LIMIT 30`).all();
+      out.churn = (churn || []).map(c => ({
+        email: c.email, plan: c.plan || 'trial', status: c.plan_status,
+        days_since_signup: Math.floor((Date.now() - new Date((c.created_at || '').replace(' ', 'T') + 'Z').getTime()) / 864e5),
+        last_pub: c.last_pub || null, last_act: c.last_act || null,
+      }));
+      if (out.churn.length) alerts.push({ sev: 'med', text: `${out.churn.length} cliente(s) sin publicar hace 7+ días — escribiles antes de que cancelen.` });
+      out.alerts = alerts;
+    } catch (e) { out.alerts = []; out.churn = []; }
+    // 🚀 Readiness de inversión: ¿vale la pena meter los $5000/mes?
+    try {
+      const trials30 = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE datetime(created_at) >= datetime('now', '-30 days')`).get().c;
+      const paidEv30 = db.prepare(`SELECT COUNT(DISTINCT user_id) AS c FROM events WHERE name = 'payment_ok' AND user_id IS NOT NULL AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
+      const old = db.prepare(`SELECT COUNT(*) AS t, SUM(CASE WHEN plan_status = 'active' THEN 1 ELSE 0 END) AS a FROM users
+        WHERE datetime(created_at) < datetime('now', '-35 days')`).get();
+      const h = out.health || {};
+      out.readiness = {
+        trials_30d: trials30,
+        trial_paid_pct: trials30 ? Math.round(paidEv30 / trials30 * 1000) / 10 : 0,
+        retention_old_pct: old && old.t ? Math.round(old.a / old.t * 1000) / 10 : 0,
+        retention_n: (old && old.t) || 0,
+        gen_rate: h.gen_rate || 0,
+        failed_30d: h.failed_posts_30d || 0,
+        stuck: h.stuck_count || 0,
+        cac_measured: (out.cac && out.cac.spend_30d > 0 && out.cac.paid_30d > 0) ? true : false,
+      };
+    } catch (e) { out.readiness = null; }
+  } catch (e) { console.error('[admin/growth]', e.message); }
+  res.json({ ok: true, growth: out });
 });
 
 // Buscar usuarios por email (para el timeline)
@@ -2114,7 +2381,7 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
       if (!user.ig_user_id) throw new Error('Conectá tu Instagram primero');
       const pageId = await metaAds.resolvePageId(user.ig_user_id);
       const r = await metaAds.createBoost({
-        name: `Posta · Boost #${boostId} · u${req.session.userId}`,
+        name: `Posty · Boost #${boostId} · u${req.session.userId}`,
         pageId, igUserId: user.ig_user_id, igMediaId: post.ig_media_id,
         spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
       });
@@ -2376,7 +2643,13 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
-  res.json({ path: `/media/${name}` });
+  const filePath = `/media/${name}`;
+  // La foto subida en el chat también queda en su librería: así el servidor
+  // puede resolverla cuando Posty la elige (photo_index) en un ```edit.
+  try {
+    db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, 'photo');
+  } catch (e) { console.error('[media] assets insert:', e.message); }
+  res.json({ path: filePath });
 });
 
 // ---------- Librería de medios del cliente (fotos + logo) ----------
@@ -3421,7 +3694,7 @@ function buildIgAuth(req) {
     const ru = new URL(redirectUri);
     const thisHost = req.get('host');
     if (ru.host !== thisHost) {
-      return { error: `Tu Embed URL redirige a ${ru.host}, pero tiene que volver a Posta. En el dashboard de Meta \u2192 tu app \u2192 caso de uso Instagram \u2192 "API setup with Instagram login", pon\u00e9 como redirect URI: https://${thisHost}/api/ig/callback` };
+      return { error: `Tu Embed URL redirige a ${ru.host}, pero tiene que volver a Posty. En el dashboard de Meta \u2192 tu app \u2192 caso de uso Instagram \u2192 "API setup with Instagram login", pon\u00e9 como redirect URI: https://${thisHost}/api/ig/callback` };
     }
   } catch (e) {
     return { error: 'La Embed URL no es válida. Revisala en Ajustes \u2192 Integraciones.' };
@@ -3816,7 +4089,8 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'No pude cancelar en Mercado Pago 😅 Probá de nuevo en unos minutos — si sigue fallando, escribinos' });
     }
   }
-  db.prepare(`UPDATE users SET plan_status='cancelled', mp_preapproval_id=NULL WHERE id=?`).run(req.session.userId);
+  db.prepare(`UPDATE users SET plan_status='cancelled', mp_preapproval_id=NULL, cancel_reason=? WHERE id=?`)
+    .run(String((req.body && req.body.reason) || '').slice(0, 60), req.session.userId);
   res.json({ ok: true });
 });
 

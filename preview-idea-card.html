@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Preview — Idea lista rediseñada</title>
+<style>
+:root{
+  --bg:#FFFFFF; --bg2:#F2F9FD; --card:#FFFFFF;
+  --line:#E2EDF5; --line-soft:#EDF4FA;
+  --txt:#0A1E33; --mut:#47617A; --dim:#8CA3B8;
+  --yl:#FEC14D; --cel:#2793C8;
+  --bg-soft:#F7FBFE;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#EEF4F9;color:var(--txt);font-family:Montserrat,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px 16px;-webkit-font-smoothing:antialiased}
+.phone{max-width:430px;margin:0 auto}
+/* botón base */
+.btn{border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:14px}
+.btn-primary{background:var(--yl);color:#0A1E33}
+.btn-soft{background:#fff;color:var(--txt);border:1.5px solid var(--line)}
+.in{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-family:inherit;font-size:13px;color:var(--txt);background:#fff}
+textarea.in{resize:vertical}
+/* previews */
+.chat-previews{display:flex;gap:10px;margin:4px 0 4px}
+.chat-prev{flex:1;border-radius:14px;overflow:hidden;cursor:pointer;border:3px solid var(--line-soft);background:#fff;max-width:220px;position:relative}
+.chat-prev.sel{border-color:var(--cel);box-shadow:0 4px 16px rgba(39,147,200,.28)}
+.chat-prev .ph{aspect-ratio:4/5;background:linear-gradient(135deg,#D9ECF7,#F7FBFE);display:flex;align-items:center;justify-content:center;font-size:28px}
+.pv-tag{position:absolute;top:8px;left:8px;background:rgba(10,30,51,.85);color:#fff;font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px}
+/* caption options */
+.chat-caps{display:flex;flex-direction:column;gap:6px;margin:2px 0 8px}
+.chat-cap-opt{display:flex;gap:8px;align-items:baseline;text-align:left;background:var(--bg-soft);border:2px solid var(--line-soft);border-radius:12px;padding:8px 10px;cursor:pointer;font-size:11.5px;line-height:1.45;color:var(--txt);width:100%}
+.chat-cap-opt b{color:var(--cel);white-space:nowrap;font-size:10.5px}
+.chat-cap-opt span{color:var(--mut);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+/* storyboard */
+.chat-board{margin:14px 0 4px;border:1px solid var(--line-soft);border-radius:12px;padding:10px 14px;background:var(--bg-soft)}
+.chat-board summary{cursor:pointer;font-size:12.5px;font-weight:700;list-style:none}
+.chat-board summary::-webkit-details-marker{display:none}
+.chat-board-row{display:flex;gap:8px;margin-top:10px}
+.chat-board-scene{flex:1;max-width:120px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#D9ECF7;aspect-ratio:9/16}
+/* ===== tarjeta rediseñada ===== */
+.chat-proposal{background:#fff;border:1px solid var(--line-soft);border-radius:18px;padding:18px;margin-bottom:10px;box-shadow:0 2px 14px rgba(10,30,51,.07)}
+.cp-overline{font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--cel);margin-bottom:4px}
+.cp-title{font-size:16.5px;font-weight:800;color:var(--txt);line-height:1.35}
+.cp-angulo{font-size:12.5px;color:var(--mut);margin-top:6px;line-height:1.5}
+.cp-sec{margin-top:16px}
+.cp-sec-t{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+.cp-link{background:none;border:none;color:var(--cel);font-size:12.5px;font-weight:700;cursor:pointer;padding:4px 0;font-family:inherit}
+.cp-note{font-size:10.5px;color:var(--dim);margin-top:10px;text-align:center}
+.chat-proposal-btns{display:flex;gap:8px;margin-top:16px}
+.chat-proposal-btns .btn{flex:1;min-height:48px;font-size:14.5px;border-radius:14px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="chat-proposal">
+    <div class="cp-overline">Idea lista</div>
+    <div class="cp-title">Posty: tu aliado digital</div>
+    <div class="cp-angulo">¿Querés que tu Instagram hable por vos? Mostramos el antes y después de delegar el contenido.</div>
+    <div class="cp-sec">
+      <div class="cp-sec-t">Vista previa</div>
+      <div class="chat-previews">
+        <div class="chat-prev sel"><span class="pv-tag">1</span><div class="ph">🖼️</div></div>
+        <div class="chat-prev"><span class="pv-tag">2</span><div class="ph">🖼️</div></div>
+      </div>
+      <button class="cp-link">↻ Otra imagen</button>
+    </div>
+    <div class="cp-sec">
+      <div class="cp-sec-t">Texto</div>
+      <div class="chat-caps">
+        <button class="chat-cap-opt"><b>Opción 1</b><span>¿Te imaginás tener tu Instagram siempre al día sin esfuerzo? Con Posty, eso es posible…</span></button>
+        <button class="chat-cap-opt"><b>Opción 2</b><span>Vos vendé, yo posteo. Así de simple: tu semana de contenido lista sin mover un dedo…</span></button>
+      </div>
+      <textarea class="in" rows="4">¿Te imaginás tener tu Instagram siempre al día sin esfuerzo? Con Posty, eso es posible. Te armo toda tu semana de posteos: solo aprobás y listo.</textarea>
+      <input class="in" value="#communitymanager #instagramtips #emprendedores" style="margin-top:6px">
+      <button class="cp-link">↻ Probar otros textos</button>
+    </div>
+    <details class="chat-board">
+      <summary>Storyboard del reel <span style="color:var(--mut);font-weight:400">· 3 escenas</span></summary>
+      <div class="chat-board-row">
+        <div class="chat-board-scene"></div>
+        <div class="chat-board-scene"></div>
+        <div class="chat-board-scene"></div>
+      </div>
+    </details>
+    <div class="chat-proposal-btns">
+      <button class="btn btn-primary">Hacerlo posteo</button>
+      <button class="btn btn-soft">Hacerlo reel</button>
+    </div>
+    <div class="cp-note">Se crea como borrador y lo revisás antes de programar.</div>
+  </div>
+</div>
+</body>
+</html>
