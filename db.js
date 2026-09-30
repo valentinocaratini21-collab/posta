@@ -474,9 +474,11 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN strategy_why TEXT DEFAULT ''`); } ca
 // cliente pasan por revisión (humana o por agente) antes de ser visibles.
 // needs_review=1 => el borrador existe pero el cliente no lo ve todavía.
 try { db.exec(`ALTER TABLE posts ADD COLUMN needs_review INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN script TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN training_wheels INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN posty_welcomed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN client_name TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN media_asked_at INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Push notifications (Web Push / VAPID): suscripciones por dispositivo.
 db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

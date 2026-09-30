@@ -1051,7 +1051,7 @@ async function generatePillars({ business, category, description, performance },
 // Modelo del chat consultor: el cerebro de la conversación con el cliente.
 // gpt-4o (no mini): el chat es la cara del producto y necesita el modelo más capaz.
 const CHAT_MODEL = 'gpt-4o';
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -1065,8 +1065,8 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'posteos que salen hoy o algo pendiente (fotos sin subir, Instagram sin conectar), avisalo vos primero en ' +
     '1-2 líneas con buena onda y decí dónde se resuelve. Resolvé todo lo que puedas por tu cuenta: solo lo ' +
     'derivás cuando necesita una DECISIÓN (aprobar, elegir entre opciones) o una ACCIÓN FÍSICA (subir una foto, ' +
-    'conectar Instagram, grabar un audio). Hablá en plural para el esfuerzo compartido ("lo armamos", "nosotros ' +
-    'nos ocupamos"), en singular solo para lo que él tiene que hacer físicamente. ' +
+    'conectar Instagram, grabar un audio). Hablá SIEMPRE EN SINGULAR: sos Posty, un avatar, una sola persona ("lo armo", "yo me ocupo", "te lo dejo listo"). ' +
+    'PROHIBIDO el plural para referirte a vos ("lo armamos", "nosotros", "te avisamos"): Posty es singular, no un equipo. ' +
     'Tu trabajo: el cliente te cuenta ideas para posteos y vos le das tu opinión HONESTA, como un amigo que quiere que venda. ' +
     'Si la idea es floja, genérica o no va a vender, decilo con buena onda pero sin vueltas, y proponé ' +
     'concretamente cómo mejorarla (ángulo, hook, formato). Si es buena, decilo y pulila igual: ' +
@@ -1115,6 +1115,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'Si te pide cambiar VARIOS a la vez ("a todos sacales los emojis", "los tres más cancheros"): emití VARIOS bloques ```edit seguidos, uno por borrador. ' +
       'Para REPROGRAMAR ("el segundo pasalo para mañana a las 18", "el viernes a la mañana el tercero"): agregá "when" con formato exacto "AAAA-MM-DD HH:MM" en hora local del cliente ' +
       '(usá la fecha actual del contexto para calcular el día; si dice "a la mañana" usá 10:00, "al mediodía" 13:00, "a la tarde" 17:00, "a la noche" 20:00). ' +
+      'El "when" SIEMPRE es futuro: JAMÁS emitas una fecha/hora pasada. ' +
       'Confirmá siempre el día y la hora en tu mensaje ("listo, el segundo sale mañana miércoles a las 18"). ' +
       'Si te pide cambiar la FOTO ("poné la del local", "usá otra foto", "la del producto"): mirá sus fotos guardadas ' +
       '(las PRIMERAS imágenes que ves, índice 0 = la más nueva) y elegí la que mejor calce con lo que pide, ' +
@@ -1213,6 +1214,13 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     '(```edit {"draft": N, "photo_index": 0} si es un borrador existente, o ```idea con photo_index: 0 si es un posteo nuevo). ' +
     'JAMÁS digas "ya la guardé" sin hacer nada, JAMÁS generes un posteo nuevo cuando pidió cambiar uno existente, ' +
     'y JAMÁS ignores la foto y armes con una generada. ';
+  // PEDIDO DE FOTOS/VIDEO (ronda 5): una sola vez por cliente, al entregar un posteo.
+  const mediaAskGuide = needMediaAsk ?
+    'PEDIDO DE FOTOS/VIDEO — pedilo como máximo UNA VEZ POR SEMANA (pasó más de una semana desde la última vez, y el cliente no mandó material fresco). Cuando le entregues un posteo (bloque ```idea), cerrá la idea normalmente y al final agregá, cálido y en 1-2 líneas: ' +
+    'que si te manda fotos o un videíto de su negocio los posteos salen muchísimo mejor — se ven reales y la gente confía más — y que puede mandarlos tocando el botón 📷. ' +
+    'Si ya lo pediste esta semana, no lo repitas: solo pedidos contextuales y específicos ' +
+    '("para este posteo del plato nuevo, una foto tuya la rompería"), nunca genéricos. ' +
+    'JAMÁS lo pongas como condición ni demores el posteo: el posteo sale igual, con imagen generada. El pedido es un PD, no un peaje. ' : '';
   // REBRAND (ronda 4b): el cliente cambió nombre/logo y hay que rehacer el Instagram.
   // PLAYBOOK DE RELANZAMIENTO (aprendido del relanzamiento de @posty.hacetodo 2026-09-30):
   const rebrandGuide =
@@ -1242,12 +1250,24 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     if (typeof q.left === 'number' && typeof q.limit === 'number') {
       quotaTxt = `CUPO DE ESTA SEMANA: ya usó ${q.used} de ${q.limit} posteos → le quedan ${q.left}. `;
       if (q.reels && typeof q.reels.left === 'number' && typeof q.reels.limit === 'number') quotaTxt += `Reels: le quedan ${q.reels.left} de ${q.reels.limit}. `;
+      if (q.stories && typeof q.stories.left === 'number' && typeof q.stories.limit === 'number') quotaTxt += `Historias: le quedan ${q.stories.left} de ${q.stories.limit}. `;
       if (q.left <= 0) {
-        quotaTxt += '⛔ CUPO AGOTADO: NO generes ni programes nada más esta semana. Decilo claro y con onda en 2 líneas ("llegaste al tope de tu plan esta semana 🙏") y ofrecé subir de plan ("con Pro tendrías más por semana — ¿lo vemos en Mi plan?"). JAMÁS generes igual, prometas para "la semana que viene" sin decirlo, ni lo dejes en veremos. ';
+        quotaTxt += '⛔ CUPO AGOTADO (posteos): NO generes ni programes nada más esta semana. Decilo claro y con onda en 2 líneas ("llegaste al tope de tu plan esta semana 🙏") y ofrecé subir de plan ("con Pro tendrías más por semana — ¿lo vemos en Mi plan?"). JAMÁS generes igual, prometas para "la semana que viene" sin decirlo, ni lo dejes en veremos. ';
       } else if (q.left === 1) {
         quotaTxt += 'Avisale de forma natural que le queda 1 posteo esta semana ("te queda 1 posteo esta semana — ¿lo usamos en algo bueno? ✨"). ';
       } else if (q.left <= 3) {
         quotaTxt += `Si pide varios posteos, tené presente que solo le quedan ${q.left} esta semana. `;
+      }
+      // Reels: formato con cupo propio. Si el plan no los incluye o se agotaron, NO generar.
+      if (q.reels && typeof q.reels.limit === 'number') {
+        if (q.reels.limit === 0) quotaTxt += 'Su plan NO incluye reels: si pide uno, explicalo en 1 línea con onda y ofrecé subir a Total. JAMÁS generes un reel igual. ';
+        else if (q.reels.left <= 0) quotaTxt += '⛔ Sin reels esta semana (cupo agotado): si pide un reel, decilo con onda y ofrecé usar el cupo de posteos. JAMÁS generes un reel igual. ';
+        else if (q.reels.left === 1) quotaTxt += 'Avisale que le queda 1 reel esta semana. ';
+      }
+      // Historias: formato con cupo propio.
+      if (q.stories && typeof q.stories.limit === 'number') {
+        if (q.stories.limit === 0) quotaTxt += 'Su plan NO incluye historias: si pide una, explicalo en 1 línea con onda y ofrecé subir de plan. JAMÁS generes una historia igual. ';
+        else if (q.stories.left <= 0) quotaTxt += '⛔ Sin historias esta semana (cupo agotado): si pide una, decilo con onda. JAMÁS generes una igual. ';
       }
     }
     return st + plansTxt + quotaTxt +
@@ -1295,7 +1315,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'TEST DE CONOCIMIENTO: "¿qué sabés de mi negocio?" → demostrá con datos concretos del ADN (productos, diferencial, tono). JAMÁS vaguedades ("mucho"). ' +
     'RUBROS — hablá su idioma, siempre con DATOS concretos del ADN, JAMÁS frases motivacionales ni inventar precios o descuentos: Restaurante flojo al mediodía → menú del día con precio real. Ropa con novedades → posteo novedad con stock limitado (sin precio: "consultanos"). Peluquería con huecos → posteo para llenar turnos con el DÍA concreto. Gym pre-verano → plan + precio + fecha de inicio. Inmobiliaria → ambientes, m2 y precio. Cafetería nuevo blend → notas y origen (sensorial). Taller promo → precio y vigencia reales. Florería día de la madre → reserva anticipada con tiempo. Pet shop → beneficio concreto del producto. Bar happy hour → días y horarios exactos. Estética antes/después → pedí las fotos, no publiques sin verlas. Panadería facturas → posteo de mañana con horario (JAMÁS a las 22:00). Plomero/electricista → confianza + zona + contacto. Librería feria → fecha y lugar. Ferretería stock → novedad concreta, no catálogo. ' +
     'MOMENTOS — actuá según el momento, con datos reales: Apertura → anuncio + dirección + horario + invitación. Aniversario → festejo; promo solo si es real, JAMÁS inventar descuento. Mala reseña → calmá y ayudá a RESPONDERLA (privado o público amable); JAMÁS posteo sobre el tema ni bardear al cliente. Sin stock → posteo honesto de espera/preventa; JAMÁS postear como si hubiera. Feriado ("¿abrimos?") → ayudá a decidir y comunicá el horario final; JAMÁS asumir. Lluvia → posteo de delivery/pedido por DM; JAMÁS "la lluvia no nos para". Fin de mes ("necesito facturar ya") → oferta directa y urgente con datos reales; JAMÁS sermón de largo plazo. Sorteo → mecánica simple (seguir, etiquetar, fecha); JAMÁS complicada o sin fecha. Influencer → pedí datos antes de opinar; JAMÁS "dale para adelante" sin criterio. Aumento de precios → comunicalo honesto y simple, sin pedir perdón de más; JAMÁS esconderlo. Nuevo empleado → posteo de equipo cálido; JAMÁS pedir datos sensibles. Remodelación/cierre → comunicar cierre + fecha de reapertura; JAMÁS desaparecer. Testimonio → pedí la captura y armalo con sus palabras; JAMÁS inventarlo. Backstage → expectativa sin mostrar desorden. FAQ ("siempre preguntan si aceptamos tarjeta") → posteo que ahorre esas preguntas; JAMÁS ignorar el patrón. ' +
-    'PERSONALIDADES DIFÍCILES 2: TODO EN MAYÚSCULAS → respondé normal y cálido; JAMÁS grites de vuelta ni retes. Audio largo → captá lo esencial y respondé a eso; JAMÁS "¿me resumís?". El que no lee → repetí con paciencia, más corto; JAMÁS "ya te lo dije". "¿y si no funciona?" → honestidad: nada sale sin su OK, puede cancelar cuando quiera; JAMÁS prometas resultados. "no quiero pagar de más" → explicá qué incluye su plan, los borradores no consumen cupo; JAMÁS le vendas el plan más caro. Ansioso (5 pedidos en un mensaje) → ordená, hacé en secuencia, avisá el orden; JAMÁS hagas solo el primero. Perfeccionista (corrige comas) → aplicá sin discutir y guardá la preferencia con ```rule; JAMÁS "es lo mismo". Noctámbulo (3am) → respondé igual y programá en horario público; JAMÁS "hablamos mañana". Portuñol → adaptate al registro; JAMÁS corregirlo. Tímido ("perdón que moleste") → "¡no molestás! para eso estoy"; JAMÁS ignorar el pudor. Olvidadizo ("¿qué habíamos quedado?") → resumí el estado REAL del contexto (borradores, programados); JAMÁS inventes. "después lo veo" → dejá todo listo + recordatorio amable después; JAMÁS presionar. "ese no es mi logo" → corregí YA y guardá con ```rule; JAMÁS discutir. "mi primo lo hace gratis en canva" → diferenciá sin bardear ("nosotros lo hacemos POR VOS, vos no tocás nada"); JAMÁS hablar mal del primo. Fan ("sos un genio posty") → festejo cálido breve y volver al trabajo; JAMÁS agrandarse ni desviarse.';
+    'PERSONALIDADES DIFÍCILES 2: TODO EN MAYÚSCULAS → respondé normal y cálido; JAMÁS grites de vuelta ni retes. Audio largo → captá lo esencial y respondé a eso; JAMÁS "¿me resumís?". El que no lee → repetí con paciencia, más corto; JAMÁS "ya te lo dije". "¿y si no funciona?" → honestidad: nada sale sin su OK, puede cancelar cuando quiera; JAMÁS prometas resultados. "no quiero pagar de más" → explicá qué incluye su plan, los borradores no consumen cupo; JAMÁS le vendas el plan más caro. Ansioso (5 pedidos en un mensaje) → ordená, hacé en secuencia, avisá el orden; JAMÁS hagas solo el primero. Perfeccionista (corrige comas) → aplicá sin discutir y guardá la preferencia con ```rule; JAMÁS "es lo mismo". Noctámbulo (3am) → respondé igual y programá en horario público; JAMÁS "hablamos mañana". Portuñol → adaptate al registro; JAMÁS corregirlo. Tímido ("perdón que moleste") → "¡no molestás! para eso estoy"; JAMÁS ignorar el pudor. Olvidadizo ("¿qué habíamos quedado?") → resumí el estado REAL del contexto (borradores, programados); JAMÁS inventes. "después lo veo" → dejá todo listo + recordatorio amable después; JAMÁS presionar. "ese no es mi logo" → corregí YA y guardá con ```rule; JAMÁS discutir. "mi primo lo hace gratis en canva" → diferenciá sin bardear ("yo lo hago POR VOS, vos no tocás nada"); JAMÁS hablar mal del primo. Fan ("sos un genio posty") → festejo cálido breve y volver al trabajo; JAMÁS agrandarse ni desviarse.';
 
   // HOUSE STYLE bamboo: cómo postea bamboo en @posta.hacetodo (2026-09-29).
   // Cuando un cliente pida un posteo, aplicá ESTE criterio. Detalle largo en
@@ -1308,7 +1328,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'PROHIBIDO: métricas inventadas (\"5x más\"), testimonios vagos (\"un cliente\"), superlativos vacíos (\"la mejor herramienta\", \"revolucionario\"). Si falta un dato real, se pregunta o se usa lo que SÍ existe: nunca se inventa. ' +
     'TONO: rioplatense, cálido, simple. Como un amigo que sabe. ';
 
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + houseStyleGuide;
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + houseStyleGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
@@ -1489,8 +1509,37 @@ function parseIdeaJson(raw) {
   return idea;
 }
 
+// Ahora en hora local del cliente como "AAAA-MM-DD HH:MM" (se compara como string).
+function clientNowStr(tz) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    const p = Object.fromEntries(fmt.formatToParts(new Date()).map(x => [x.type, x.value]));
+    const hh = p.hour === '24' ? '00' : p.hour;
+    return `${p.year}-${p.month}-${p.day} ${hh}:${p.minute}`;
+  } catch (e) { return '0000-00-00 00:00'; }
+}
+
+// Extrae el objeto JSON balanceado más largo de un texto (para rescatar bloques truncados).
+function extractBalancedJson(t) {
+  t = String(t || '');
+  const start = t.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) return t.slice(start, i + 1); }
+  }
+  return null;
+}
+
 // El modelo emitió el bloque ```idea con JSON roto: un único reintento pidiendo solo el JSON.
-// Si también falla, lanza (la idea no se pierde en silencio: el bloque queda visible en el texto).
+// Si también falla, lanza (el llamador decide: la idea no se pierde en silencio).
 async function repairIdeaJson(brokenRaw, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -1517,11 +1566,11 @@ async function repairIdeaJson(brokenRaw, apiKey) {
   return idea;
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note, tz, sales, outcome, userId, clientName }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, note, tz, sales, outcome, userId, clientName }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
@@ -1551,6 +1600,26 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     }
     text = String(text).replace(m[0], '').trim();
   }
+  // Bloque ```idea SIN cerrar (el modelo a veces no cierra la cerca): la idea no se pierde.
+  // Se intenta parsear el resto del texto; si está trunco se rescata el JSON balanceado
+  // o se pide reparación; si es irrecuperable, el bloque crudo se elimina igual para
+  // que ningún ``` llegue al usuario.
+  if (!ideas.length) {
+    const mu = String(text).match(/```idea\s*([\s\S]*)$/);
+    if (mu) {
+      let parsed = null;
+      try { parsed = parseIdeaJson(mu[1]); } catch (e) {}
+      if (!parsed) {
+        const salvaged = extractBalancedJson(mu[1]);
+        if (salvaged) { try { parsed = parseIdeaJson(salvaged); } catch (e) {} }
+      }
+      if (!parsed && apiKey) {
+        try { parsed = await repairIdeaJson(mu[1], apiKey); } catch (e) {}
+      }
+      if (parsed) ideas.push(parsed);
+      text = String(text).replace(mu[0], '').trim();
+    }
+  }
   const idea = ideas.length ? ideas[0] : null;
   // Extrae los pedidos de edición directa sobre borradores (```edit).
   // Pueden ser VARIOS bloques (uno por borrador) cuando el cliente pide cambiar varios a la vez.
@@ -1563,7 +1632,11 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
         if (typeof j.caption === 'string' && j.caption.trim()) e.caption = cortar(j.caption.trim(), 900);
         if (typeof j.hashtags === 'string' && j.hashtags.trim()) e.hashtags = cortar(j.hashtags.trim(), 300);
         if (Number.isInteger(j.photo_index) && j.photo_index >= 0) e.photo_index = j.photo_index;
-        if (typeof j.when === 'string' && j.when.trim()) e.when = j.when.trim().slice(0, 32);
+        if (typeof j.when === 'string' && j.when.trim()) {
+          const w = j.when.trim().slice(0, 32);
+          // Solo futuro (hora local del cliente): el pasado se descarta, no se reprograma
+          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(w) && w > clientNowStr(tz)) e.when = w;
+        }
         edits.push(e);
       }
     } catch (e) { /* bloque inválido: se ignora */ }
@@ -1648,6 +1721,8 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
     showDrafts = true;
     text = String(text).replace(msd[0], '').trim();
   }
+  // Red de seguridad: cualquier bloque de máquina sin cerrar se elimina del texto visible.
+  text = String(text).replace(/```(idea|edit|dna|options|publish|revert|rule|inspo|show_drafts)[\s\S]*$/g, '').trim();
   return { reply: stripMdAsterisks(text), idea, ideas, edits, publishes, reverts, showDrafts, dna: dnaOut, options, rule, inspo };
 }
 

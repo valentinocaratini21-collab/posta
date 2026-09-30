@@ -1324,7 +1324,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     let sales = null;
     let su = null;
     try {
-      su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at, client_name FROM users WHERE id = ?').get(req.session.userId);
+      su = db.prepare('SELECT plan_status, plan, trial_ends_at, trial_extended_until, created_at, client_name, media_asked_at FROM users WHERE id = ?').get(req.session.userId);
       if (su) {
         const tEnds = trialEffectiveEnd(su);
         const nowMs = Date.now();
@@ -1341,14 +1341,34 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         };
       }
     } catch (e) {}
+    // Pedido de fotos/video: como máximo 1 vez por semana, y solo si el cliente
+    // no mandó fotos ni videos en los últimos 7 días.
+    let needMediaAsk = false;
+    try {
+      const lastAsk = (su && su.media_asked_at) || 0;
+      let freshCount = 0;
+      try {
+        const r = db.prepare("SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND created_at > datetime('now', '-7 days')").get(uid0);
+        freshCount = (r && r.c) || 0;
+      } catch (e) {}
+      needMediaAsk = lastAsk < Date.now() - 7 * 24 * 3600 * 1000 && freshCount === 0;
+    } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '' },
+      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk },
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
-    if (out.idea) db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
+    if (out.idea) {
+      db.prepare('INSERT INTO chat_state (user_id, idea_json, updated_at) VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET idea_json=excluded.idea_json, updated_at=excluded.updated_at').run(uid, JSON.stringify(out.idea), Date.now());
+      // Pedido de fotos/video (1 vez por semana): registrar cuándo se pidió
+      try {
+        if (out.reply && /si me mand[aá]s|mandame|mandáme|📷/i.test(String(out.reply))) {
+          db.prepare('UPDATE users SET media_asked_at = ? WHERE id = ?').run(Date.now(), uid);
+        }
+      } catch (e) {}
+    }
     else db.prepare('DELETE FROM chat_state WHERE user_id=?').run(uid);
     // La IA cerró el ADN del negocio → persistirlo con MERGE (no pisar serie, pausas ni inspo)
     let dnaSaved = false;
@@ -1484,7 +1504,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         if (post.status === 'publishing' || post.status === 'published') { pub.ok.push(target.id); continue; }
         if (!['draft', 'scheduled', 'failed'].includes(post.status)) { pub.failed.push(target.id); continue; }
         if (post.needs_review) { pub.inReview.push(target.id); continue; }
-        if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
+        if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
           const q = quotaFor(uid, post.media_type);
           if (q.left <= 0) { pub.failed.push(target.id); continue; }
         }
@@ -1558,7 +1578,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
 });
 
 // Cupo semanal por plan: posteos de feed vs postsPerWeek, reels vs reelsPerWeek,
-// historias no consumen cupo (bonus de la casa).
+// historias vs storiesPerWeek. Cada formato consume SU cupo; sin pools compartidos.
 // weeklyQuota(uid) = cupo de FEED (compatibilidad con el frontend).
 // quotaFor(uid, mediaType) = cupo para 'image' | 'video' | 'carousel' | 'story'.
 function quotaCounts(userId, monday) {
@@ -1576,22 +1596,33 @@ function quotaFor(userId, mediaType) {
   const tz = st.timezone || 'America/Argentina/Buenos_Aires';
   const monday = streaks.mondayKeyOf(streaks.tzToday(tz));
   const counts = quotaCounts(userId, monday);
-  const mt = mediaType === 'video' ? 'video' : mediaType === 'carousel' ? 'carousel' : 'image';
-  if (mediaType === 'story') return { limit: Infinity, used: 0, left: Infinity, plan: plan.id, plan_name: plan.name, free: true };
-  // Reels: cupo propio si el plan los incluye; si no, comparten el de feed
-  // (compatibilidad con el autopilotReel manual existente).
-  const reelPool = (plan.reelsPerWeek || 0) > 0 ? (plan.reelsPerWeek || 0) : (plan.postsPerWeek || 3);
-  const limit = mt === 'video' ? reelPool : (plan.postsPerWeek || 3);
-  const used = mt === 'video'
-    ? ((plan.reelsPerWeek || 0) > 0 ? (counts.video || 0) : ((counts.image || 0) + (counts.carousel || 0) + (counts.video || 0)))
-    : ((counts.image || 0) + (counts.carousel || 0));
+  const mt = mediaType === 'video' ? 'video' : mediaType === 'story' ? 'story' : mediaType === 'carousel' ? 'carousel' : 'image';
+  // Cupo PROPIO por formato (matriz de config/plans.js). Si el plan no incluye el
+  // formato (límite 0), queda bloqueado: left = 0. Sin pools compartidos.
+  // Esencial: 5/0/0 · Pro: 7/0/3 · Total: 7/5/7 (posteos/reels/historias).
+  let limit, used;
+  if (mt === 'video') {
+    limit = plan.reelsPerWeek || 0;
+    used = counts.video || 0;
+  } else if (mt === 'story') {
+    limit = plan.storiesPerWeek || 0;
+    used = counts.story || 0;
+  } else {
+    limit = plan.postsPerWeek || 3;
+    used = (counts.image || 0) + (counts.carousel || 0);
+  }
   return { limit, used, left: Math.max(0, limit - used), plan: plan.id, plan_name: plan.name };
 }
+// Nombre del formato para mensajes de cupo
+function quotaUnitName(mt) {
+  return mt === 'video' ? 'reels' : mt === 'story' ? 'historias' : 'posteos';
+}
 function weeklyQuota(userId) {
-  // Compatibilidad: el cupo "principal" es el de feed; se agregan reels e historias.
+  // El cupo "principal" es el de feed; se agregan reels e historias con su cupo propio.
   const q = quotaFor(userId, 'image');
   const qr = quotaFor(userId, 'video');
-  return { ...q, reels: { limit: qr.limit, used: qr.used, left: qr.left }, stories: { free: true } };
+  const qs = quotaFor(userId, 'story');
+  return { ...q, reels: { limit: qr.limit, used: qr.used, left: qr.left }, stories: { limit: qs.limit, used: qs.used, left: qs.left } };
 }
 app.get('/api/quota', requireAuth, (req, res) => res.json(weeklyQuota(req.session.userId)));
 // El frontend avisa hitos que solo él conoce (ej: semana aceptada).
@@ -2485,7 +2516,7 @@ function ensureImageBaseUrl(db, userId, req) {
 }
 
 app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
-  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why } = req.body || {};
+  const { image_path, caption, hashtags, scheduled_at, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, script } = req.body || {};
   if (!image_path) return res.status(400).json({ error: 'Falta la imagen' });
   // Anti-duplicados: mismo texto en las últimas 24h (no cancelado) = avisar en vez de crear otro
   const cap = (caption || '').trim();
@@ -2496,21 +2527,31 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const status = scheduled_at ? 'scheduled' : 'draft';
   const mt = media_type === 'video' ? 'video' : media_type === 'story' ? 'story' : media_type === 'carousel' ? 'carousel' : 'image';
   // Cupo del plan: solo las publicaciones consumen cupo (los borradores son gratis).
-  // Las historias no consumen cupo (bonus de la casa). El carrusel cuenta como 1 posteo.
-  if (status === 'scheduled' && mt !== 'story') {
+  // Cada formato consume SU cupo (posteos, reels, historias). El carrusel cuenta como 1 posteo.
+  if (status === 'scheduled') {
     const q = quotaFor(req.session.userId, mt);
     if (q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${mt === 'video' ? 'reels' : 'posteos'} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mt)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
     }
   }
   let cpaths = '';
   if (mt === 'carousel' && Array.isArray(carousel_paths)) {
     cpaths = JSON.stringify(carousel_paths.filter(Boolean).slice(0, 10));
   }
+  // Guion del reel (segundo a segundo): viaja con el borrador para no perderse
+  let scriptJson = '';
+  if (Array.isArray(script)) {
+    const scenes = script.slice(0, 6).map(sc => {
+      if (!sc || typeof sc !== 'object') return null;
+      const seg = String(sc.seg || '').slice(0, 12), visual = String(sc.visual || '').slice(0, 200), texto = String(sc.texto || '').slice(0, 200);
+      return (seg || visual || texto) ? { seg, visual, texto } : null;
+    }).filter(Boolean);
+    if (scenes.length) scriptJson = JSON.stringify(scenes);
+  }
   const r = db.prepare(
-    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500), status === 'draft' && trainingWheelsActive(req.session.userId) ? 1 : 0);
+    'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review, script) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+  ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500), status === 'draft' && trainingWheelsActive(req.session.userId) ? 1 : 0, scriptJson);
   ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
@@ -2538,11 +2579,11 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
     // Programar SÍ consume cupo (las publicaciones son el límite del plan). Si el posteo
     // ya estaba programado/publicado, no se descuenta de nuevo.
-    if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
+    if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
       const q = quotaFor(req.session.userId, post.media_type);
       if (q.left <= 0) {
         return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${post.media_type === 'video' ? 'reels' : 'posteos'} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
       }
     }
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='' WHERE id=?`).run(
@@ -2629,11 +2670,11 @@ app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
   }
   if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
   // Publicar ahora SÍ consume cupo (salvo que ya estuviera programado: ya se descontó).
-  if (!['scheduled', 'publishing', 'published'].includes(post.status) && post.media_type !== 'story') {
+  if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
     const q = quotaFor(req.session.userId, post.media_type);
     if (q.left <= 0) {
       return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${post.media_type === 'video' ? 'reels' : 'posteos'} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
     }
   }
   db.prepare(`UPDATE posts SET status='publishing', scheduled_at=datetime('now'), error='' WHERE id=?`).run(post.id);
@@ -2806,7 +2847,7 @@ function excludedTopicsLine(userId) {
   try {
     const rows = db.prepare(`
       SELECT s.caption AS caption FROM post_signals s
-      WHERE s.user_id = ? AND s.client_signal = 'rejected'
+      WHERE s.user_id = ? AND s.client_signal IN ('rejected', 'rating_1', 'rating_2')
         AND s.updated_at >= datetime('now', '-60 days')
       ORDER BY s.updated_at DESC LIMIT 12
     `).all(userId);
@@ -2821,7 +2862,7 @@ function approvedTopicsLine(userId) {
     const rows = db.prepare(`
       SELECT s.caption AS caption, p.tipo AS tipo FROM post_signals s
       LEFT JOIN posts p ON p.id = s.post_id
-      WHERE s.user_id = ? AND s.client_signal IN ('approved', 'edited')
+      WHERE s.user_id = ? AND s.client_signal IN ('approved', 'edited', 'rating_4', 'rating_5')
         AND s.updated_at >= datetime('now', '-60 days')
       ORDER BY s.updated_at DESC LIMIT 12
     `).all(userId);
@@ -2872,10 +2913,10 @@ function recordSignal(userId, post, signal) {
   } catch (e) { console.error('[posta] recordSignal:', e.message); }
 }
 
-// Señal manual (👍/👎) sobre un posteo
+// Señal manual sobre un posteo (👍/👎 en borradores, estrellitas 1-5 en "Ya salió")
 app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
   const { signal } = req.body || {};
-  if (!['approved', 'edited', 'rejected', 'brought_clients', 'no_clients'].includes(signal)) return res.status(400).json({ error: 'Señal inválida' });
+  if (!['approved', 'edited', 'rejected', 'brought_clients', 'no_clients', 'rating_1', 'rating_2', 'rating_3', 'rating_4', 'rating_5'].includes(signal)) return res.status(400).json({ error: 'Señal inválida' });
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   recordSignal(req.session.userId, post, signal);
@@ -3108,15 +3149,18 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     if (pending > 0) return res.status(400).json({ error: 'in_review', message: 'Tus primeros posteos están en el horno ✨ Te aviso cuando estén listos para programar.' });
     return res.status(400).json({ error: 'No hay borradores para programar' });
   }
-  // Cupo: todos de una o nada. Las historias no consumen cupo (igual que PATCH /api/posts/:id).
-  // Feed/carrusel vs postsPerWeek, reels vs reelsPerWeek.
+  // Cupo: todos de una o nada. Cada formato contra su propio cupo.
   const qf = quotaFor(uid, 'image');
   const qr = quotaFor(uid, 'video');
+  const qs = quotaFor(uid, 'story');
   const feedBillable = drafts.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
   const reelBillable = drafts.filter((d) => d.media_type === 'video').length;
-  if (feedBillable > qf.left || reelBillable > qr.left) {
-    const over = reelBillable > qr.left ? `${qr.limit} reels` : `${qf.limit} posteos`;
-    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: reelBillable > qr.left ? qr.limit : qf.limit, plan_name: qf.plan_name,
+  const storyBillable = drafts.filter((d) => d.media_type === 'story').length;
+  const overFmt = reelBillable > qr.left ? 'video' : storyBillable > qs.left ? 'story' : 'image';
+  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left) {
+    const qx = overFmt === 'video' ? qr : overFmt === 'story' ? qs : qf;
+    const over = `${qx.limit} ${quotaUnitName(overFmt)}`;
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qx.limit, plan_name: qf.plan_name,
       message: `Llegaste al límite de tu plan ${qf.plan_name} (${over} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
   }
   const tz = userTz(uid);
