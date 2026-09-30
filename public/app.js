@@ -313,7 +313,7 @@ function planCardsHTML(plans) {
 
 function anchorHTML(anchor) {
   if (!anchor) return '';
-  return `Un community manager cuesta <b>${esc(anchor.cm)}</b>. Posta arranca en <b>${esc(anchor.desde)}</b>.`;
+  return `Un community manager cuesta <b>${esc(anchor.cm)}</b>. Posty arranca en <b>${esc(anchor.desde)}</b>.`;
 }
 
 // Cambia el país de los planes en la landing sin recargar
@@ -352,7 +352,7 @@ function calcDIY() {
   const pro = (PLANS_CACHE && PLANS_CACHE.plans || []).find(p => p.id === 'pro');
   const sym = (pro && pro.currency === 'UYU') ? '$U ' : '$';
   const proLabel = pro ? pro.price_label : '$59.900';
-  out.innerHTML = `Hacerlo vos te cuesta <b>${sym}${monthly.toLocaleString('es-AR')}/mes</b> · Posta Pro: <b>${esc(proLabel)}/mes</b>`;
+  out.innerHTML = `Hacerlo vos te cuesta <b>${sym}${monthly.toLocaleString('es-AR')}/mes</b> · Posty Pro: <b>${esc(proLabel)}/mes</b>`;
   out.style.display = 'block';
 }
 function landingView(cfg) {
@@ -732,7 +732,7 @@ function pwaInstallModal() {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzPwaClose" aria-label="Cerrar">✕</button>
       <div style="font-size:37px">📲</div>
-      <h2>Guardá Posta en tu celu</h2>
+      <h2>Guardá Posty en tu celu</h2>
       <p class="pz-exp-sub">Queda como una app, con su ícono en la pantalla de inicio.</p>
       <div class="pz-pwa-steps">${steps}</div>
       <button class="btn btn-primary btn-block" id="pzPwaOk">Entendido</button>
@@ -848,7 +848,7 @@ async function pushRenderZone() {
       pushRenderZone();
     };
   } else if (perm === 'denied') {
-    z.innerHTML = '<p class="hint">Bloqueaste las notificaciones en el navegador. Para activarlas: Ajustes del celu → Posta → Notificaciones → Permitir.</p>';
+    z.innerHTML = '<p class="hint">Bloqueaste las notificaciones en el navegador. Para activarlas: Ajustes del celu → Posty → Notificaciones → Permitir.</p>';
   } else {
     z.innerHTML = '<button class="btn btn-primary" id="pushOn">🔔 Activar notificaciones</button> <span id="pushMsg"></span>';
     document.getElementById('pushOn').onclick = async () => {
@@ -874,7 +874,7 @@ function igConnectHere() {
 function setupChecklistHtml() {
   const rows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
-    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posta se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
+    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
   }
   if (!(PROFILE && PROFILE.ig_connected)) {
     rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
@@ -901,7 +901,7 @@ function appShell(tab, content) {
       <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
-    <button class="drawer-link side-only ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
@@ -2350,38 +2350,41 @@ function proposalHTML() {
   if (CHAT_IDEA.colors && CHAT_IDEA.colors.length) bits.push('🎨 en tus colores');
   return `
     <div class="chat-proposal">
-      <div style="font-weight:800;margin-bottom:4px">${isOrder ? '🧾 Tu pedido' : '✨ Idea lista'}: ${esc(CHAT_IDEA.titulo)}</div>
-      ${bits.length ? `<div style="font-size:11.5px;color:var(--mut);margin-bottom:6px">${bits.join(' · ')}</div>` : ''}
-      ${CHAT_IDEA.angulo ? `<div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
-      ${Array.isArray(CHAT_IDEA.script) && CHAT_IDEA.script.length ? `
-      <div style="margin:10px 0 4px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:6px">🎬 Guion del reel:</div>
-        ${CHAT_IDEA.script.slice(0, 6).map(s => `
-          <div class="script-row"><span class="script-seg">${esc(String((s && s.seg) || ''))}</span><span>${esc(String((s && s.visual) || ''))}</span><span style="color:var(--mut)">${esc(String((s && s.texto) || ''))}</span></div>`).join('')}
-      </div>` : ''}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px">
-        <div style="font-weight:700;font-size:12.5px">👇 Así se vería — tocá el que más te guste:</div>
-        <button class="btn btn-soft btn-sm" id="chatMoreImg" type="button" title="Generar otra imagen">🔄 Otra imagen</button>
+      <button class="cp-close" id="chatDismiss" type="button" aria-label="Cerrar">✕</button>
+      <div class="cp-head">
+        <img class="cp-avatar" src="ai-avatar.png" alt="Posty">
+        <div class="cp-head-tx">
+          <div class="cp-overline">${isOrder ? 'Tu pedido' : 'Idea lista'} ✨</div>
+          <div class="cp-title">${esc(CHAT_IDEA.titulo)}</div>
+        </div>
       </div>
-      <div class="chat-previews" id="chatPreviews"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px">
-        <div style="font-weight:700;font-size:12.5px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span></div>
-        <button class="btn btn-soft btn-sm" id="chatMoreCaps" type="button" title="Generar 3 textos nuevos">🔄 Otras</button>
-      </div>
+      <div class="chat-previews" id="chatPreviews"><div class="cp-loading">Generando tu imagen…</div></div>
       <div class="chat-caps" id="chatCaps"></div>
-      <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
-      <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
-      <details class="chat-board">
-        <summary>🎬 Ver cómo sería el reel <span style="color:var(--mut);font-weight:400">(3 escenas)</span></summary>
-        <div class="chat-board-row" id="chatBoard"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando…</div></div>
-      </details>
-      <div class="chat-proposal-btns">
-        <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo posteo</button>
-        <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
+      <div class="cp-more">
+        <button class="cp-link" id="chatMoreImg" type="button">↻ Otra imagen</button>
+        <span class="cp-dot">·</span>
+        <button class="cp-link" id="chatMoreCaps" type="button">↻ Otros textos</button>
+        <span class="cp-dot">·</span>
+        <button class="cp-link" id="chatEditTx" type="button">✎ Editar</button>
       </div>
-      <div style="font-size:10.5px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
+      <div id="chatEditBox" hidden>
+        <textarea class="in" id="chatCaption" rows="3" placeholder="Tu texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
+        <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
+      </div>
+      <div class="chat-proposal-btns">
+        <button class="btn btn-primary" id="chatMkPost">Hacerlo posteo</button>
+        <button class="btn btn-soft" id="chatMkReel">Hacerlo reel</button>
+      </div>
     </div>`;
 }
+
+// "✎ Editar": muestra/oculta el editor de texto
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? e.target.closest('#chatEditTx') : null;
+  if (!t) return;
+  const box = document.getElementById('chatEditBox');
+  if (box) box.hidden = !box.hidden;
+});
 
 // Genera (o regenera) 3 opciones de texto para la idea cerrada
 async function refreshChatCaption() {
@@ -2424,7 +2427,7 @@ async function chatMoreCaptions() {
     }
   } catch (e) { /* quedan las opciones anteriores */ }
   const b2 = $('#chatMoreCaps');
-  if (b2) { b2.disabled = false; b2.textContent = '🔄 Otras'; }
+  if (b2) { b2.disabled = false; b2.textContent = '↻ Probar otros textos'; }
 }
 
 // "🔄 Otra imagen": regenera los ejemplos visuales. Sin foto: genera una imagen nueva
@@ -2446,7 +2449,7 @@ async function chatMoreImage() {
     renderChatStoryboard();
   } finally {
     const b2 = $('#chatMoreImg');
-    if (b2 && CHAT_IDEA === idea) { b2.disabled = false; b2.textContent = '🔄 Otra imagen'; }
+    if (b2 && CHAT_IDEA === idea) { b2.disabled = false; b2.textContent = '↻ Otra imagen'; }
   }
 }
 
@@ -2744,7 +2747,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
       <button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>
-      <input id="chatInput" class="in" placeholder="Escribile a Posty… 💬" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="Escribile a Posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">🎙</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
       <div class="chat-plus-menu" id="chatPlusMenu" hidden>
@@ -3021,9 +3024,21 @@ function chatRenderProposal() {
   if (mCaps0) mCaps0.onclick = chatMoreCaptions;
   const mImg0 = $('#chatMoreImg');
   if (mImg0) mImg0.onclick = chatMoreImage;
+  const dsm = $('#chatDismiss');
+  if (dsm) dsm.onclick = () => { track('chat_idea_dismissed'); chatDismissProposal(); };
   renderChatPreviews();
   renderChatStoryboard();
   chatScroll();
+}
+
+// Salir del panel de la idea (✕) y seguir chateando con Posty.
+function chatDismissProposal() {
+  CHAT_IDEA = null; CUSTOM_PAL = null;
+  CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
+  CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  chatRenderProposal();
+  chatSay('Dale, la dejamos por acá 👍 ¿Qué más hacemos?');
+  try { api.post('/api/ideas/chat/log', { clearIdea: true }).catch(() => {}); } catch (e) {}
 }
 
 // Borradores en revisión para que la IA los vea y pueda editarlos directo
@@ -3222,7 +3237,8 @@ async function chatExchange({ text, display, extra, pushed }) {
   try { libThumbs = await chatLibThumbs(); } catch (e) {}
   try {
     const r = await api.post('/api/ideas/chat', Object.assign(
-      { messages: CHAT, photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx() }, extra || {}));
+      { messages: CHAT, photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
+        photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean) }, extra || {}));
     const t = $('#chatTyping'); if (t) t.remove();
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
@@ -3235,6 +3251,10 @@ async function chatExchange({ text, display, extra, pushed }) {
     // La IA editó un borrador directo → refrescar la revisión y mostrar la imagen en el chat
     if (r.edit && r.edit.ok) {
       try { render(); } catch (e) {}
+      if (r.edit.photoFailed) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">No pude cambiar la foto 😅 ¿me la mandás de nuevo?</div>`);
+        chatScroll();
+      }
       if (Array.isArray(r.edit.images) && r.edit.images.length) {
         box.insertAdjacentHTML('beforeend', r.edit.images.map(u =>
           `<div class="chat-msg ai" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
@@ -3311,6 +3331,7 @@ async function chatMakePost(asVideo) {
   // Cupo del plan: chequear antes de crear para no perder la idea armada
   try {
     const q = await api.get('/api/quota');
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount, q); } catch (e) {}
     if (q.left <= 0) { quotaModal(q); return; }
   } catch (e) {}
   const m = $('#chatMsg');
@@ -3333,6 +3354,8 @@ async function chatMakePost(asVideo) {
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount); } catch (e) {}
+    try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
     setTimeout(() => {
       const rc = $('#reviewCard') || $('#draftsBanner');
       if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3746,10 +3769,10 @@ async function refreshWeekPill() {
 // Chips de quick-reply contextuales sobre el input. Aceptan texto (manda el
 // Línea de cupo sobre los chips del chat: cuántos posteos/reels quedan esta semana.
 // El cliente lo ve sin preguntar; si se agota, Posty ya lo sabe por el contexto del chat.
-async function paintChatQuota(mount) {
+async function paintChatQuota(mount, q0) {
   if (!mount || !mount.isConnected) return;
-  let q = null;
-  try { q = await api.get('/api/quota'); } catch (e) { return; }
+  let q = q0 || null;
+  if (!q) { try { q = await api.get('/api/quota'); } catch (e) { return; } }
   if (!q || typeof q.left !== 'number' || !mount.isConnected) return;
   const r = q.reels || {};
   const st = q.stories || {};
@@ -5086,6 +5109,11 @@ function isPlanLimitErr(e) { return !!(e && e.status === 403 && e.data && e.data
 async function checkQuotaOrModal() {
   try {
     const q = await api.get('/api/quota');
+    // Sincronizar la barrita con el dato fresco (si no, miente)
+    try {
+      const mount = document.getElementById('chatQuickChips');
+      if (mount) paintChatQuota(mount, q);
+    } catch (e) {}
     if (q.left <= 0) {
       // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
       if (ME && ME.trial_expired) { showExpiredModal(); return false; }
@@ -5160,7 +5188,7 @@ async function wireCelebRef(root) {
   let link = '';
   try { const info = await pzReferral(); if (info && info.ok) link = info.link; } catch (e) {}
   const msg = root.querySelector('.celeb-ref-msg');
-  const shareMsg = `Mirá lo que hace Posta con el Instagram de mi negocio: arma la semana y la publica sola. Probalo 3 días gratis con mi link: ${link}`;
+  const shareMsg = `Mirá lo que hace Posty con el Instagram de mi negocio: arma la semana y la publica sola. Probalo 3 días gratis con mi link: ${link}`;
   root.querySelectorAll('[data-cref]').forEach(b => {
     b.onclick = async () => {
       if (!link) { if (msg) msg.textContent = 'No se pudo cargar tu link todavía.'; return; }
@@ -6123,7 +6151,7 @@ function ajustesView() {
     ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
     <div class="set-row"><div><div class="t">Cuenta conectada</div>
       <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
-      <div class="hint" style="margin-top:6px">🔒 Posta puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
+      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
       ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
     </div>
     <div id="igVerifyMsg" style="margin-top:10px"></div>
@@ -6205,7 +6233,7 @@ function maybeShowIgPopup(tab) {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <div style="font-size:46px;line-height:1">📸</div>
       <h2>Conectá tu Instagram</h2>
-      <p class="pz-exp-sub">Así Posta deja tu semana lista para publicar.</p>
+      <p class="pz-exp-sub">Así Posty deja tu semana lista para publicar.</p>
       <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">Conectar Instagram</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
       <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
@@ -6547,10 +6575,23 @@ async function render() {
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado
   try {
-    const r = new URLSearchParams(location.search).get('ref');
+    const qs = new URLSearchParams(location.search);
+    const r = qs.get('ref');
     if (r) {
       const clean = String(r).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
-      if (clean) localStorage.setItem('posta_ref', clean);
+      if (clean) {
+        localStorage.setItem('posta_ref', clean);
+        // Click en link de referido: una vez por sesión (embudo completo de referidos)
+        if (!sessionStorage.getItem('ref_click_sent')) {
+          sessionStorage.setItem('ref_click_sent', '1');
+          track('ref_click', { code: clean.toLowerCase() });
+        }
+      }
+    }
+    // UTMs para CAC: se guardan y viajan con el registro
+    const us = qs.get('utm_source'), uc = qs.get('utm_campaign');
+    if (us || uc) {
+      try { localStorage.setItem('posta_utm', JSON.stringify({ source: String(us || '').slice(0, 40), campaign: String(uc || '').slice(0, 80) })); } catch (e) {}
     }
   } catch (e) {}
   const hash = location.hash || '#/';
@@ -6595,6 +6636,7 @@ async function render() {
         if (isReg) {
           const rf = localStorage.getItem('posta_ref');
           if (rf) body.ref = rf;
+          try { const u = JSON.parse(localStorage.getItem('posta_utm') || 'null'); if (u) body.utm = u; } catch (e) {}
         } else {
           // Login viniendo de /prueba: pasamos el @ para importar su semana como borradores
           try {
@@ -6606,6 +6648,7 @@ async function render() {
         if (!isReg) { try { localStorage.removeItem('posta_trial_profile'); } catch (e) {} }
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
+        if (isReg) { try { localStorage.removeItem('posta_utm'); } catch (e) {} }
         // Puente /prueba → cuenta: si viene de la prueba, pre-cargamos el perfil con los
         // datos que ya nos dio (negocio, rubro, etc.) y se saltea el onboarding.
         // Solo si la prueba es fresca (24h): datos viejos de tests no deben volverse marca permanente.
@@ -8173,8 +8216,8 @@ function bindSettings() {
         return items ? `<div class="pm-mix">${items}</div>` : '';
       };
       const pmMixDup = /(\d+\s*(posts?|reels|historias)\b|historias todos los días)/i;
-      const pmSym = (p.currency === 'UYU' ? '$U ' : '$');
       const planCard = (p) => {
+        const pmSym = (p.currency === 'UYU' ? '$U ' : '$');
         const feats = (p.features || []).filter(f => !pmMixDup.test(f)).slice(0, 6);
         return `
           <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}${p.highlighted ? ' rec' : ''}">
@@ -8265,9 +8308,12 @@ function bindSettings() {
         <p style="font-size:11.5px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
         $('#btnCancelSub').onclick = async () => {
           if (!confirm('¿Cancelar tu suscripción? Mantenés tu plan hasta el fin del período ya pago.')) return;
+          const reasonRaw = prompt('¿Nos contás por qué te vas? (opcional)\n\n1 · Precio\n2 · No me sirvió el contenido\n3 · Prefiero hacerlo yo\n4 · Otro motivo', '');
+          const reasonMap = { 1: 'Precio', 2: 'No me sirvió el contenido', 3: 'Prefiero hacerlo yo', 4: 'Otro motivo' };
+          const reason = reasonRaw && reasonMap[reasonRaw.trim()] ? reasonMap[reasonRaw.trim()] : String(reasonRaw || '').slice(0, 60);
           const b = $('#btnCancelSub'); b.disabled = true; b.textContent = 'Cancelando...';
           try {
-            await api.post('/api/billing/cancel');
+            await api.post('/api/billing/cancel', { reason });
             await refreshSession(); render();
           } catch (e) {
             $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
@@ -8320,7 +8366,7 @@ function bindSettings() {
     } catch (e) {}
     const fmt$ = (v) => '$' + Math.round(v).toLocaleString('es-AR');
     const half$ = planPrice ? fmt$(planPrice / 2) : null;
-    const shareMsg = `Uso Posta para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link ahorrás hasta $25.980 por mes en tu plan: ${info.link}`;
+    const shareMsg = `Uso Posty para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link ahorrás hasta $25.980 por mes en tu plan: ${info.link}`;
     const slots = Array.from({ length: need }, (_, i) =>
       `<span class="pz-slot${i < n ? ' on' : ''}">${i < n ? '\u2713' : (i + 1)}</span>`).join('');
     z.innerHTML = `
@@ -8382,12 +8428,12 @@ function bindSettings() {
       const p = info.pending[Number(b.dataset.nudge)];
       if (!p) return;
       const who = (p.name && p.name !== 'Un referido') ? ` ${p.name}` : '';
-      copyText(`Che${who}! Vi que empezaste tu prueba de Posta con mi link 🚀 Si te suscribís${p.days_left > 0 ? ` (te quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba)` : ''}, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
+      copyText(`Che${who}! Vi que empezaste tu prueba de Posty con mi link 🚀 Si te suscribís${p.days_left > 0 ? ` (te quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba)` : ''}, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
     });
     const nativeBtn = $('#pzRefNative');
     if (nativeBtn && navigator.share) {
       nativeBtn.style.display = '';
-      nativeBtn.onclick = async () => { try { await navigator.share({ title: 'Posta', text: shareMsg }); } catch (e) {} };
+      nativeBtn.onclick = async () => { try { await navigator.share({ title: 'Posty', text: shareMsg }); } catch (e) {} };
     }
     z.querySelectorAll('[data-share]').forEach(b => b.onclick = () => {
       const k = b.dataset.share;
@@ -8589,7 +8635,7 @@ function bindSettings() {
   const bd = $('#btnIgDisc');
   if (bd) bd.onclick = async () => {
     const u = (PROFILE && PROFILE.ig_username) ? '@' + PROFILE.ig_username : 'tu cuenta';
-    if (!confirm(`¿Desconectar ${u} de Posta?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
+    if (!confirm(`¿Desconectar ${u} de Posty?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
     track('ig_disconnect'); trackBeacon();
     await api.post('/api/ig/disconnect'); render();
   };
@@ -8673,7 +8719,7 @@ async function adminApi(path, method, data) {
   }
 }
 async function adminView() {
-  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posta — solo equipo</p></div></div>
+  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posty — solo equipo</p></div></div>
   <div class="card" id="adminCard"><div class="d">⏳ Cargando…</div></div>`;
 }
 async function bindAdmin() {
@@ -8706,16 +8752,29 @@ async function bindAdmin() {
       <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
       <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
       <button class="btn btn-soft btn-sm" data-atab="review">✨ Revisión</button>
+      <button class="btn btn-soft btn-sm" data-atab="money">💰 Plata</button>
+      <button class="btn btn-soft btn-sm" data-atab="referrals">🔗 Referidos</button>
+      <button class="btn btn-soft btn-sm" data-atab="content">📊 Contenido</button>
+      <button class="btn btn-soft btn-sm" data-atab="cohorts">🔁 Cohorts</button>
+      <button class="btn btn-soft btn-sm" data-atab="churn">⚠️ En riesgo</button>
+      <button class="btn btn-soft btn-sm" data-atab="health">🩺 Salud</button>
+      <button class="btn btn-soft btn-sm" id="adExport">📥 Planilla</button>
       <button class="btn btn-soft btn-sm" id="adLogout">🔑 Cambiar token</button>
       <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
         <option value="7">7 días</option><option value="30" selected>30 días</option>
       </select>
     </div>
     <div id="adBody"><div class="d">⏳ Cargando…</div></div>`;
-  const lo = $('#adLogout');
-  if (lo) lo.onclick = () => { try { localStorage.removeItem('posta_admin_token'); } catch (e) {} location.reload(); };
   const body = $('#adBody');
   const days = () => ($('#adDays') && $('#adDays').value) || '30';
+  const lo = $('#adLogout');
+  if (lo) lo.onclick = () => { try { localStorage.removeItem('posta_admin_token'); } catch (e) {} location.reload(); };
+  const dl = $('#adExport');
+  if (dl) dl.onclick = () => {
+    const a = document.createElement('a');
+    a.href = '/api/admin/export?days=' + days() + '&token=' + encodeURIComponent(adminToken());
+    document.body.appendChild(a); a.click(); a.remove();
+  };
   const bar = (pct) => `<div style="height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.max(1, Math.min(100, pct))}%;background:var(--cel);border-radius:99px"></div></div>`;
   async function showFunnel() {
     body.innerHTML = `<div class="d">⏳ Cargando funnel…</div>`;
@@ -8723,15 +8782,53 @@ async function bindAdmin() {
     try { r = await adminApi('funnel?days=' + days()); }
     catch (e) { body.innerHTML = `<div class="err">No se pudo cargar. Revisá el token.</div>`; return; }
     const f = r.funnel || [];
-    body.innerHTML = f.map((s, i) => `
-      <div style="padding:12px 0;border-bottom:1px solid var(--line)">
+    const g = r.goal || {};
+    const tr = r.trends || {};
+    const ttv = r.ttv || {};
+    // Paso con mayor pérdida relativa (se marca en rojo)
+    let worst = -1, worstDrop = 0;
+    f.forEach((s, i) => { if (i > 0 && s.pct_prev < 100 - worstDrop) { worstDrop = 100 - s.pct_prev; worst = i; } });
+    const gpct = g.target ? Math.min(100, Math.round(g.subscribers / g.target * 1000) / 10) : 0;
+    const mrrFmt = '$' + Math.round(g.mrr || 0).toLocaleString('es-AR');
+    const trendArrow = (t) => {
+      if (!t || t.prev === 0) return '';
+      const d = t.delta, up = d >= 0;
+      return `<span style="font-size:11px;font-weight:800;color:${up ? 'var(--green-d)' : 'var(--red-d)'}">${up ? '▲' : '▼'} ${Math.abs(d)}%</span>`;
+    };
+    body.innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <b>🎯 Meta: ${g.subscribers || 0}/${g.target || 200} suscriptores</b>
+          <span style="font-size:17.5px;font-weight:800">${gpct}%</span>
+        </div>
+        ${bar(gpct)}
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--mut)">
+          <span>💰 MRR <b style="color:var(--txt)">${mrrFmt}</b></span>
+          <span>📈 Trial→pago <b style="color:var(--txt)">${g.trial_to_paid || 0}%</b></span>
+          <span>🆕 Nuevos (30d) <b style="color:var(--txt)">${g.new_30d || 0}</b></span>
+        </div>
+      </div>
+      ` + f.map((s, i) => `
+      <div style="padding:12px 0;border-bottom:1px solid var(--line)${i === worst ? ';border-left:4px solid var(--red);padding-left:10px' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <b>${i + 1}. ${esc(s.label)}</b>
-          <span style="font-size:17.5px;font-weight:800">${s.users}</span>
+          <b>${i + 1}. ${esc(s.label)}${i === worst ? ' <span style="font-size:10.5px;color:var(--red);font-weight:800">· MAYOR PÉRDIDA</span>' : ''}</b>
+          <span style="font-size:17.5px;font-weight:800">${s.users} ${trendArrow(tr[s.key])}</span>
         </div>
         ${bar(s.pct_first)}
         <div style="font-size:11.5px;color:var(--mut);margin-top:4px">${s.pct_prev}% del paso anterior · ${s.pct_first}% del inicio</div>
       </div>`).join('') || `<div class="d">Todavía no hay datos.</div>`;
+    if (ttv.n) {
+      body.insertAdjacentHTML('beforeend', `
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:16px">
+        <b>⏱ Time-to-value</b>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:var(--mut)">
+          <span>Promedio <b style="color:var(--txt)">${ttv.avg_h}h</b></span>
+          <span>Mediana <b style="color:var(--txt)">${ttv.med_h}h</b></span>
+          <span>En 24h <b style="color:var(--txt)">${ttv.d1_pct}%</b></span>
+          <span style="color:var(--dim)">(${ttv.n} usuarios)</span>
+        </div>
+      </div>`);
+    }
   }
   async function showActivity() {
     body.innerHTML = `<div class="d">⏳ Cargando actividad…</div>`;
@@ -8748,6 +8845,212 @@ async function bindAdmin() {
       </div>
       <h4 style="margin:0 0 8px">Eventos más comunes</h4>
       ${tops.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-family:monospace;font-size:11.5px">${esc(k)}</span><b>${v}</b></div>`).join('') || '<div class="d">Sin datos.</div>'}`;
+  }
+  async function showMoney() {
+    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
+    let r;
+    try { r = await adminApi('growth'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const m = (r.growth && r.growth.money) || {};
+    const cr = (r.growth && r.growth.cancel_reasons) || [];
+    const cac = (r.growth && r.growth.cac) || null;
+    const spendRecent = (r.growth && r.growth.spend_recent) || [];
+    const rd = (r.growth && r.growth.readiness) || null;
+    const fmt$ = (v) => '$' + Math.round(v || 0).toLocaleString('es-AR');
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">MRR</div><div style="font-size:19px;font-weight:800">${fmt$(m.mrr)}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto IA hoy</div><div style="font-size:19px;font-weight:800">US$ ${m.ai_today_usd || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto IA 30d</div><div style="font-size:19px;font-weight:800">US$ ${m.ai_30d_usd || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Costo IA / cliente</div><div style="font-size:19px;font-weight:800">US$ ${m.cost_per_user_usd || 0}</div></div>
+      </div>
+      <h4 style="margin:0 0 8px">Por qué se van</h4>
+      ${cr.map(x => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(x.reason)}</span><b>${x.n}</b></div>`).join('') || '<div class="d">Sin cancelaciones con motivo todavía.</div>'}
+      ${rd ? (() => {
+        const chk = (ok, label, detail) => `<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;font-size:12.5px"><span>${ok ? '✅' : '⬜'}</span><span>${label}${detail ? ` <span style="color:var(--mut)">(${detail})</span>` : ''}</span></div>`;
+        const checks = [
+          chk(rd.trials_30d >= 30, 'Suficientes trials para medir', `${rd.trials_30d}/30 en 30d`),
+          chk(rd.trial_paid_pct >= 15, 'Conversión trial → pago sana', `${rd.trial_paid_pct}% (meta 15%)`),
+          chk(rd.retention_n >= 5 && rd.retention_old_pct >= 50, 'La gente se queda', rd.retention_n >= 5 ? `${rd.retention_old_pct}% activos de +35 días` : 'faltan datos'),
+          chk(rd.gen_rate >= 95 && !rd.failed_30d && !rd.stuck, 'Sistema sano', `gen ${rd.gen_rate}% · ${rd.failed_30d} fallidos · ${rd.stuck} atascados`),
+          chk(rd.cac_measured, 'CAC medido con test chico', rd.cac_measured ? 'sí' : 'cargá gasto en ads'),
+        ];
+        const autoOk = rd.trials_30d >= 30 && rd.trial_paid_pct >= 15 && rd.retention_n >= 5 && rd.retention_old_pct >= 50 && rd.gen_rate >= 95 && !rd.failed_30d && !rd.stuck && rd.cac_measured;
+        return `<h4 style="margin:16px 0 8px">🚀 ¿Listo para los $5000/mes?</h4>
+        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px">
+          ${checks.join('')}
+          ${chk(false, 'Meta App Review aprobado', 'lo confirmás vos')}
+          ${chk(false, 'Pago real de MercadoPago verificado', 'lo confirmás vos')}
+          <div style="margin-top:10px;font-size:13.5px;font-weight:800">${autoOk ? '🟢 Los números dicen que SÍ. Avisame y lo hablamos.' : '🔴 Todavía no — los números mandan.'}</div>
+        </div>`;
+      })() : ''}
+      <h4 style="margin:16px 0 8px">💵 CAC — costo de adquisición</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto ads 30d</div><div style="font-size:19px;font-weight:800">US$ ${cac ? cac.spend_30d : 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Pagos 30d</div><div style="font-size:19px;font-weight:800">${cac ? cac.paid_30d : 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">CAC</div><div style="font-size:19px;font-weight:800">${cac && cac.cac ? 'US$ ' + cac.cac : '—'}</div></div>
+      </div>
+      ${cac && cac.paid_by_utm && cac.paid_by_utm.length ? `<div class="d" style="margin-bottom:8px">Pagos por campaña (UTM, 90d)</div>
+      ${cac.paid_by_utm.map(x => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">${esc(x.campaign)}</span><b>${x.n}</b></div>`).join('')}` : ''}
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px">
+        <b style="font-size:13px">Registrar gasto en ads</b>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <input id="spDate" type="date" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px" value="${new Date().toISOString().slice(0, 10)}">
+          <input id="spCamp" type="text" placeholder="Campaña (opcional)" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;flex:1;min-width:140px">
+          <input id="spAmt" type="number" min="0" step="0.01" placeholder="US$" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:110px">
+          <button class="btn btn-primary btn-sm" id="spAdd">Guardar</button>
+        </div>
+        <div id="spMsg" style="font-size:12px;margin-top:6px"></div>
+        ${spendRecent.length ? `<div class="d" style="margin:10px 0 4px">Últimos gastos</div>` + spendRecent.map(s => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(s.date)}${s.campaign ? ' · ' + esc(s.campaign) : ''}</span><b>US$ ${s.amount_usd}</b></div>`).join('') : ''}
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px">
+        <b style="font-size:13px">🧮 Simulador de CAC</b>
+        <p class="d" style="margin:4px 0 10px">Jugá con los números antes de gastar en diciembre.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
+          <label style="font-size:11.5px;color:var(--mut)">CPC (US$)<input id="simCpc" type="number" min="0" step="0.1" value="2" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
+          <label style="font-size:11.5px;color:var(--mut)">Click → trial %<input id="simC2t" type="number" min="0.1" step="0.5" value="5" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
+          <label style="font-size:11.5px;color:var(--mut)">Trial → pago %<input id="simT2p" type="number" min="0.1" step="1" value="20" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
+          <label style="font-size:11.5px;color:var(--mut)">ARPU mensual (US$)<input id="simArpu" type="number" min="1" step="1" value="52" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
+          <label style="font-size:11.5px;color:var(--mut)">Meses que se queda<input id="simMos" type="number" min="1" step="1" value="6" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
+        </div>
+        <div id="simOut" style="margin-top:12px"></div>
+      </div>`;
+    const spAdd = $('#spAdd');
+    if (spAdd) spAdd.onclick = async () => {
+      const d = $('#spDate').value, c = $('#spCamp').value.trim(), a = parseFloat($('#spAmt').value);
+      const msg = $('#spMsg');
+      if (!d || !(a > 0)) { msg.innerHTML = `<span style="color:var(--red-d)">Fecha y monto válido.</span>`; return; }
+      try {
+        await adminApi('ad-spend', 'POST', { date: d, campaign: c, amount_usd: a });
+        msg.innerHTML = `<span style="color:var(--green-d)">Guardado ✅</span>`;
+        setTimeout(showMoney, 900);
+      } catch (e) { msg.innerHTML = `<span style="color:var(--red-d)">No se pudo guardar.</span>`; }
+    };
+    // Simulador de CAC
+    const simCalc = () => {
+      const v = (id) => parseFloat(($('#' + id) || {}).value) || 0;
+      const cpc = v('simCpc'), c2t = v('simC2t') / 100, t2p = v('simT2p') / 100, arpu = v('simArpu'), mos = v('simMos');
+      const out = $('#simOut');
+      if (!cpc || !c2t || !t2p || !arpu || !mos) { out.innerHTML = `<div class="d">Completá todos los valores.</div>`; return; }
+      const cac = cpc / c2t / t2p;
+      const ltv = arpu * mos;
+      const ratio = ltv / cac;
+      const payback = cac / arpu;
+      const clients = Math.floor(5000 / cac);
+      const verdict = ratio >= 3 ? ['🟢', 'Negocio sano: cada dólar en ads vuelve x' + ratio.toFixed(1) + '.']
+        : ratio >= 1 ? ['🟡', 'Ajustado: ganás, pero hay poco margen para errores.']
+        : ['🔴', 'Perdés plata con cada cliente. No escales así.'];
+      out.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+          <div><div style="font-size:11px;color:var(--mut)">CAC</div><div style="font-size:19px;font-weight:800">US$ ${cac.toFixed(0)}</div></div>
+          <div><div style="font-size:11px;color:var(--mut)">LTV</div><div style="font-size:19px;font-weight:800">US$ ${ltv.toFixed(0)}</div></div>
+          <div><div style="font-size:11px;color:var(--mut)">LTV : CAC</div><div style="font-size:19px;font-weight:800">${ratio.toFixed(1)} : 1</div></div>
+          <div><div style="font-size:11px;color:var(--mut)">Payback</div><div style="font-size:19px;font-weight:800">${payback.toFixed(1)} meses</div></div>
+          <div><div style="font-size:11px;color:var(--mut)">Clientes con $5000</div><div style="font-size:19px;font-weight:800">${clients}</div></div>
+        </div>
+        <div style="margin-top:10px;font-size:13px"><b>${verdict[0]}</b> ${verdict[1]}</div>`;
+    };
+    ['simCpc', 'simC2t', 'simT2p', 'simArpu', 'simMos'].forEach(id => { const el = $('#' + id); if (el) el.oninput = simCalc; });
+    simCalc();
+  }
+  async function showReferrals() {
+    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
+    let r;
+    try { r = await adminApi('growth'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const rf = (r.growth && r.growth.referrals) || {};
+    const rc = (r.growth && r.growth.ref_clicks) || [];
+    const clickByCode = {}; rc.forEach(c => { clickByCode[c.code] = c.n; });
+    const conv = rf.signups ? Math.round(rf.paying / rf.signups * 1000) / 10 : 0;
+    const totalClicks = rc.reduce((s, c) => s + c.n, 0);
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Clicks en links</div><div style="font-size:19px;font-weight:800">${totalClicks}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Registros por referido</div><div style="font-size:19px;font-weight:800">${rf.signups || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">De esos, pagan</div><div style="font-size:19px;font-weight:800">${rf.paying || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Conversión referido</div><div style="font-size:19px;font-weight:800">${conv}%</div></div>
+      </div>
+      <h4 style="margin:0 0 8px">Top referidores (clicks → registros)</h4>
+      ${((rf.top || []).map(t => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(t.email)}</span><b>${clickByCode[t.code] || 0} clicks → ${t.n} reg.</b></div>`).join('')) || '<div class="d">Todavía nadie refirió.</div>'}`;
+  }
+  async function showContent() {
+    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
+    let r;
+    try { r = await adminApi('growth'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const c = (r.growth && r.growth.content) || {};
+    const th = (r.growth && r.growth.chat_themes) || [];
+    const ts = (r.growth && r.growth.taste) || [];
+    const maxT = Math.max(1, ...th.map(t => t.n));
+    body.innerHTML = `
+      <h4 style="margin:0 0 8px">Rendimiento en Instagram (30 días)</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Publicados</div><div style="font-size:19px;font-weight:800">${c.published_30d || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Alcance prom.</div><div style="font-size:19px;font-weight:800">${c.avg_reach || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Likes prom.</div><div style="font-size:19px;font-weight:800">${c.avg_likes || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Comentarios prom.</div><div style="font-size:19px;font-weight:800">${c.avg_comments || 0}</div></div>
+      </div>
+      <h4 style="margin:0 0 8px">Qué le piden a Posty (temas del chat)</h4>
+      ${th.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:110px;font-size:12.5px">${esc(t.word)}</span><div style="flex:1;height:8px;background:var(--bg2);border-radius:99px;overflow:hidden"><div style="height:100%;width:${Math.round(t.n / maxT * 100)}%;background:var(--cel);border-radius:99px"></div></div><b style="font-size:12px">${t.n}</b></div>`).join('') || '<div class="d">Sin mensajes todavía.</div>'}
+      <h4 style="margin:16px 0 8px">👍/👎 Qué rechazan (90 días)</h4>
+      ${ts.map(t => `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">${esc(t.template)}</span><span style="font-size:12px;color:${t.reject_pct >= 30 ? 'var(--red-d)' : 'var(--mut)'}"><b>${t.reject_pct}%</b> rechazo · ${t.ok}👍 ${t.no}👎</span></div>`).join('') || '<div class="d">Sin señales todavía.</div>'}`;
+  }
+  async function showHealth() {
+    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
+    let r;
+    try { r = await adminApi('growth'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const h = (r.growth && r.growth.health) || {};
+    const ok = (v, good, warn) => v >= good ? 'var(--green-d)' : v >= warn ? 'var(--txt)' : 'var(--red-d)';
+    body.innerHTML = `
+      <h4 style="margin:0 0 4px">🩺 Salud del sistema (30 días)</h4>
+      <p class="d" style="margin:0 0 12px">Fallos que ningún usuario te reporta.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Generación exitosa</div><div style="font-size:19px;font-weight:800;color:${ok(h.gen_rate || 0, 95, 80)}">${h.gen_rate || 0}%</div><div style="font-size:11px;color:var(--mut)">${h.gen_done_30d || 0}/${h.gen_start_30d || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Posts fallidos</div><div style="font-size:19px;font-weight:800;color:${(h.failed_posts_30d || 0) ? 'var(--red-d)' : 'var(--green-d)'}">${h.failed_posts_30d || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Atascados publicando</div><div style="font-size:19px;font-weight:800;color:${(h.stuck_count || 0) ? 'var(--red-d)' : 'var(--green-d)'}">${h.stuck_count || 0}</div><div style="font-size:11px;color:var(--mut)">+60 min en "publishing"</div></div>
+      </div>
+      ${(h.stuck_recent && h.stuck_recent.length) ? `<h4 style="margin:0 0 8px">Atascados</h4>` + h.stuck_recent.map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(p.email)} · post #${p.id}</span><span style="color:var(--mut)">desde ${esc(p.at || '')}</span></div>`).join('') : ''}
+      ${(h.failed_recent && h.failed_recent.length) ? `<h4 style="margin:16px 0 8px">Últimos fallidos</h4>` + h.failed_recent.map(p => `<div style="font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(p.email)}</b> · post #${p.id}<div style="color:var(--mut);font-size:11.5px">${esc(p.error || 'sin detalle')}</div></div>`).join('') : ''}
+      ${!(h.stuck_count || h.failed_posts_30d) ? '<div class="d">🎉 Todo sano: nada falló ni se atascó.</div>' : ''}`;
+  }
+  async function showChurn() {
+    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
+    let r;
+    try { r = await adminApi('growth'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const ch = (r.growth && r.growth.churn) || [];
+    body.innerHTML = `
+      <h4 style="margin:0 0 4px">⚠️ En riesgo de irse</h4>
+      <p class="d" style="margin:0 0 12px">Clientes activos o en trial sin publicar hace 7+ días. Escribiles antes de que cancelen.</p>
+      ${ch.map(c => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+          <b style="font-size:12.5px">${esc(c.email)}</b>
+          <span style="font-size:11px;color:var(--mut)">${esc(c.plan)} · ${esc(c.status)}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--mut);margin-top:3px">
+          ${c.last_pub ? `Última publicación: hace ${Math.max(0, Math.round((Date.now() - new Date(c.last_pub.replace(' ', 'T') + 'Z').getTime()) / 864e5))} días` : 'Nunca publicó'} · registrado hace ${c.days_since_signup} días
+        </div>
+      </div>`).join('') || '<div class="d">🎉 Nadie en riesgo. Todos publicando.</div>'}`;
+  }
+  async function showCohorts() {
+    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
+    let r;
+    try { r = await adminApi('growth'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
+    const ch = (r.growth && r.growth.cohorts) || [];
+    body.innerHTML = `
+      <h4 style="margin:0 0 4px">Retención por semana de registro</h4>
+      <p class="d" style="margin:0 0 12px">% que sigue con suscripción activa hoy.</p>
+      ${ch.map(c => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+          <b style="font-size:12.5px">Semana ${esc(c.week)}</b>
+          <span style="font-size:12.5px;color:var(--mut)">${c.active}/${c.total} · <b style="color:${c.pct >= 50 ? 'var(--green-d)' : c.pct >= 25 ? 'var(--txt)' : 'var(--red-d)'}">${c.pct}%</b></span>
+        </div>
+        ${bar(c.pct)}
+      </div>`).join('') || '<div class="d">Sin datos.</div>'}`;
   }
   async function showUsers() {
     body.innerHTML = `
@@ -8832,8 +9135,20 @@ async function bindAdmin() {
   $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
     $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
     b.classList.add('btn-primary');
-    ({ funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview })[b.dataset.atab]();
+    ({ funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
   });
+  // Banner de alertas: la info tiene que buscar al dueño
+  try {
+    const gr = await adminApi('growth');
+    const al = (gr.growth && gr.growth.alerts) || [];
+    if (al.length) {
+      const bar = document.createElement('div');
+      bar.style.cssText = 'margin-bottom:12px;border-radius:12px;padding:12px 14px;background:#fff7ed;border:1.5px solid #fdba74';
+      bar.innerHTML = '<b style="font-size:13px">🔔 Alertas</b>' + al.map(a =>
+        `<div style="font-size:12.5px;margin-top:6px;${a.sev === 'high' ? 'color:var(--red-d);font-weight:700' : ''}">• ${esc(a.text)}</div>`).join('');
+      card.insertBefore(bar, card.firstChild);
+    }
+  } catch (e) {}
   const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
   const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
 }
