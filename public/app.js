@@ -50,7 +50,7 @@ const api = {
         signal: AbortSignal.timeout(opts.timeout || 30000),
       });
     } catch (e) {
-      const err = new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+      const err = new Error('¡Uh! Me desconecté un segundo 😅 Revisá tu conexión y probá de nuevo.');
       err.networkError = true; // error de red: NO es "sesión cerrada"
       throw err;
     }
@@ -151,10 +151,10 @@ async function uploadAssetFile(file, kind) {
       signal: AbortSignal.timeout(120000),
     });
   } catch (e) {
-    throw new Error('El servidor no responde. Revisá tu conexión y probá de nuevo.');
+    throw new Error('¡Uh! Me desconecté un segundo 😅 Revisá tu conexión y probá de nuevo.');
   }
   const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data.ok) throw new Error((data && (data.error || data.message)) || 'No se pudo subir el archivo');
+  if (!r.ok || !data.ok) throw new Error((data && (data.error || data.message)) || 'No pude subir el archivo 😅 Probá de nuevo');
   try { if (typeof ASSETS !== 'undefined') ASSETS = await api.get('/api/assets').catch(() => ASSETS); } catch (e) {}
   return data;
 }
@@ -363,7 +363,7 @@ function landingView(cfg) {
   return `
   ${pzRefBandHTML()}
   <div class="nav nav-landing"><div class="wrap">
-    <a class="logo" href="#/">Posta<span class="dot">.</span></a>
+    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="Posty">Posty</a>
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#incluye">Qué incluye</a>
@@ -385,9 +385,10 @@ function landingView(cfg) {
     <a class="btn btn-primary btn-block" href="#/registro">Empezar ahora</a>
   </div></div>
   <div class="hero"><div class="wrap">
-    <div class="pill">Tu equipo de marketing en automático <b>🇦🇷</b></div>
-    <h1>Vos vendé. <span class="hl">Nosotros posteamos.</span></h1>
-    <p class="sub"><b>Nosotros nos encargamos de todo.</b> Con un clic armamos tu semana; vos la revisás y se publica sola en tu Instagram.</p>
+    <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
+    <div class="pill">🤖 Tu community manager</div>
+    <h1>¡Hola! Soy <span class="hl">Posty</span></h1>
+    <p class="sub"><b>Te armo tu semana de Instagram en minutos.</b> Ideas, diseños, textos y hashtags con tu marca — vos solo aprobás, yo me ocupo de todo.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
       <a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a>
@@ -402,56 +403,57 @@ function landingView(cfg) {
         <div class="pz-ba-arrow">→</div>
         <div class="pz-ba-panel">
           <div class="pz-ba-label pz-ba-label-on">CON POSTA</div>
-          <img src="hero-feed.jpg" alt="Feed de Instagram gestionado por Posta">
+          <img src="hero-feed.jpg" alt="Feed de Instagram gestionado por Posty">
         </div>
       </div>
     </div>
     <div class="hero-note">Sin tarjeta · 3 días gratis · Cancelá cuando quieras</div>
+    <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
-        <img src="hero-post.jpg" alt="Ejemplo de posteo creado por Posta">
+        <img src="hero-post.jpg" alt="Ejemplo de posteo creado por Posty">
         <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#2793C8">#modaargentina #emprendedoresargentinos</span></div>
       </div></div>
       <div class="phone"><div class="screen">
         <video src="hero-reel2.mp4" poster="hero-reel2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video>
-        <div class="cap"><b>Pet Shop Huella</b> 🎬 Su reel de la semana, hecho con Posta...</div>
+        <div class="cap"><b>Pet Shop Huella</b> 🎬 Su reel de la semana, hecho por Posty...</div>
       </div></div>
     </div>
   </div></div>
   <div class="sample-banner"><div class="wrap">
-    <div class="sample-txt"><b>🎁 Tu semana de posteos GRATIS</b><span>La armamos por vos en 1 minuto, con tu negocio real. Sin registro.</span></div>
+    <div class="sample-txt"><b>🎁 Tu semana de posteos GRATIS</b><span>Te la armo en 1 minuto, con tu negocio real. Sin registro.</span></div>
     <a class="btn btn-primary" href="/prueba">Armemos tu semana gratis</a>
   </div></div>
   <div class="pz-trialband"><div class="wrap">
-    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armamos tus ideas + tu semana en 1 minuto. Sin registro.</span></div>
+    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armo tus ideas + tu semana en 1 minuto. Sin registro.</span></div>
     <a class="btn btn-primary" href="/prueba">Probar la app</a>
   </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
-    <h2>Hecho con Posta</h2>
-    <p class="lede">Diseños y videos creados en minutos, para cualquier rubro. Cada post de nuestros clientes lleva la marca Hecho con Posta — es nuestra mejor publicidad.</p>
+    <h2>Hecho por Posty 🤖</h2>
+    <p class="lede">Diseños y videos que armo en minutos, para cualquier rubro. Cada post de mis clientes lleva mi marca — es mi mejor publicidad.</p>
     <div class="show-row">
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posta"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posty"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
       <div class="phone sm"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-moda.png" alt="Diseño para tienda de ropa creado por Posta"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-barber.png" alt="Diseño para barbería creado por Posta"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-belleza.png" alt="Diseño para estética creado por Posta"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-mascotas.png" alt="Diseño para pet shop creado por Posta"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posta"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posta"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-moda.png" alt="Diseño para tienda de ropa creado por Posty"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-barber.png" alt="Diseño para barbería creado por Posty"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-belleza.png" alt="Diseño para estética creado por Posty"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-mascotas.png" alt="Diseño para pet shop creado por Posty"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
+      <div class="phone sm"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posty"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
     </div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
-    <h2>Así de simple</h2>
-    <p class="lede">Vos seguí atendiendo tu negocio. Del resto nos ocupamos nosotros.</p>
+    <h2>Así trabajo yo 👇</h2>
+    <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
     <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Contanos tu negocio una vez</h3><p>Qué vendés, tu estilo y tus competidores. Te lleva 2 minutos y no te pedimos más nada.</p></div>
-      <div class="step"><div class="num">2</div><h3>Creamos todo por vos</h3><p>Ideas estratégicas, diseños con tus fotos y tu marca, captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Tu semana, armada</h3><p>Ideas, diseños y captions programados a la mejor hora. Vos solo aprobás cuándo sale cada posteo.</p></div>
+      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo y tus competidores. Te lleva 2 minutos y no te pido más nada.</p></div>
+      <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
+      <div class="step"><div class="num">3</div><h3>Vos aprobás, yo publico</h3><p>Tu semana queda programada a la mejor hora. Nada sale sin tu OK.</p></div>
     </div>
   </div></div>
   <div class="section" id="incluye" style="background:var(--bg2)"><div class="wrap">
     <h2>Qué incluye</h2>
-    <p class="lede">Todo lo que haría tu equipo de marketing, sin contratar a nadie.</p>
+    <p class="lede">Todo lo que haría tu equipo de marketing, sin contratar a nadie. Esto es lo que hago por vos cada semana 👇</p>
     <div class="grid3">
       <div class="feat"><div class="ico">💡</div><h3>Ideas estratégicas</h3><p>Cada semana pensamos el contenido por vos: novedades, promos, tips, testimonios y más.</p></div>
       <div class="feat"><div class="ico">🎨</div><h3>Diseños con tu marca</h3><p>Usamos TUS fotos, TU logo y TUS colores. Nada de plantillas genéricas que no te representan.</p></div>
@@ -474,7 +476,7 @@ function landingView(cfg) {
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
-    <p class="lede">Las herramientas te dan más trabajo. Nosotros te lo sacamos de encima.</p>
+    <p class="lede">Las herramientas te dan más trabajo. Yo te lo saco de encima.</p>
     <div class="vs-list">
       <div class="vs-item">
         <div class="vs-top">🧰 <b>Apps para programar posteos</b></div>
@@ -489,30 +491,30 @@ function landingView(cfg) {
         <p>Horas por semana que no tenés, para un Instagram a medias.</p>
       </div>
       <div class="vs-item win">
-        <div class="vs-top">🚀 <b>Posta</b></div>
-        <p>Nos contás de tu negocio <b>una sola vez</b>. Creamos las ideas, los diseños y los textos, y programamos tu semana en tu cuenta. Nada sale sin tu OK. En pesos, con MercadoPago. Y lo probás <b>3 días gratis</b>, sin tarjeta.</p>
+        <div class="vs-top">🚀 <b>Posty</b></div>
+        <p>Me contás de tu negocio <b>una sola vez</b>. Creo las ideas, los diseños y los textos, y programo tu semana en tu cuenta. Nada sale sin tu OK. En pesos, con MercadoPago. Y me probás <b>3 días gratis</b>, sin tarjeta.</p>
       </div>
     </div>
-    <p class="unico-line">Somos el único servicio argentino 100% done-for-you para Instagram.</p>
+    <p class="unico-line">Soy el único community manager argentino 100% done-for-you para Instagram.</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
   <div class="section" id="vs-agencia"><div class="wrap" style="max-width:860px">
-    <h2>Posta vs. agencia de marketing</h2>
+    <h2>Posty vs. agencia de marketing</h2>
     <p class="lede">Lo mismo que te promete una agencia, sin todo lo que odiás de las agencias.</p>
-    <div class="cmp-table" role="table" aria-label="Comparación Posta vs agencia">
-      <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posta</div></div>
+    <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
+      <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
       <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $39.900</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">Minutos</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div>
-    <p class="unico-line">Las agencias te venden reuniones. Nosotros te entregamos la semana hecha.</p>
+    <p class="unico-line">Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
-    <p class="lede">Sin letra chica. Cancelá cuando quieras.</p>
+    <p class="lede">Elegí tu plan y arrancamos hoy mismo. Sin letra chica, cancelás cuando quieras.</p>
     <div class="country-toggle">
       <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
@@ -526,14 +528,14 @@ function landingView(cfg) {
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
     <div class="faq">
-      <details><summary>¿Necesito hacer algo?</summary><p>No. Nos contás de tu negocio una sola vez al registrarte y listo. Nosotros creamos las ideas, los diseños, los textos y publicamos. Si querés, podés revisar todo antes de que salga.</p></details>
-      <details><summary>¿Publican en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publicamos directamente en tu perfil con la API oficial de Meta. También podés ver tu semana armada en la prueba gratis antes de registrarte.</p></details>
-      <details><summary>¿Usan mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
+      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez al registrarte y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
+      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. También podés ver tu semana armada en la prueba gratis antes de registrarte.</p></details>
+      <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
-      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendemos de lo que te gusta para hacerlo cada vez mejor.</p></details>
-      <details><summary>¿Tengo que darles mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca vemos ni guardamos tu contraseña.</p></details>
-      <details><summary>¿Publican sin que yo lo apruebe?</summary><p>No. Todo queda como borrador en tu cuenta y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: usalo 3 días, mirá tu semana armada y decidí. Si no te sirve, no pagás nada.</p></details>
+      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendo de lo que te gusta para hacerlo cada vez mejor.</p></details>
+      <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
+      <details><summary>¿Publicás sin que yo lo apruebe?</summary><p>No. Todo queda como borrador en tu cuenta y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: probame 3 días, mirá tu semana armada y decidí. Si no te sirve, no pagás nada.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Antes de pagar: en la prueba gratis ya ves tu semana armada, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
       <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
       <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
@@ -544,8 +546,8 @@ function landingView(cfg) {
     </div>
   </div></div>
   <div class="footer"><div class="wrap">
-    <span class="logo" style="font-size:17.5px">Posta<span class="dot">.</span></span>
-    <span>Hecho en Argentina 🇦🇷 · © 2026</span>
+    <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="Posty">Posty</span>
+    <span>Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
   </div></div>
   <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">✨ Probar gratis</a></div></div>`;
@@ -556,7 +558,7 @@ function authView(mode) {
   const isLogin = mode === 'login';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo" href="#/">Posta<span class="dot">.</span></a>
+    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="Posty">Posty</a>
     <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? 'Crear cuenta' : 'Entrar'}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -632,6 +634,13 @@ window.addEventListener('appinstalled', () => {
   pwaReportInstalled();
   const b = document.getElementById('pwaBanner');
   if (b) b.remove();
+  // Ofrecer notificaciones push una sola vez, con la tarjeta amable de Posty.
+  try {
+    if (!localStorage.getItem('push-asked')) {
+      localStorage.setItem('push-asked', '1');
+      setTimeout(() => { try { pushEnableFlow(); } catch (e) {} }, 2000);
+    }
+  } catch (e) { /* nunca bloquear */ }
 });
 function pwaIsInstalled() {
   try { if (localStorage.getItem('pwa-installed') === '1') return true; } catch (e) {}
@@ -678,11 +687,11 @@ function pwaInstallModal() {
     <div class="pz-pwa-step"><span class="pz-pwa-n">1</span><div><b>Tocá los tres puntitos •••</b><small>Abajo a la derecha, junto a la dirección.</small></div></div>
     <div class="pz-pwa-step"><span class="pz-pwa-n">2</span><div><b>Tocá Compartir</b><small>El cuadradito con la flecha hacia arriba.</small></div></div>
     <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Elegí "Agregar a pantalla de inicio"</b><small>Deslizá un poco hacia abajo para encontrarla.</small></div></div>
-    <div class="pz-pwa-step"><span class="pz-pwa-n">4</span><div><b>Tocá "Agregar"</b><small>Arriba a la derecha. ¡Listo! Posta queda como una app 🎉</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">4</span><div><b>Tocá "Agregar"</b><small>Arriba a la derecha. ¡Listo! Posty queda como una app en tu teléfono 🎉</small></div></div>
   ` : `
     <div class="pz-pwa-step"><span class="pz-pwa-n">1</span><div><b>Tocá el menú ⋮</b><small>Arriba a la derecha en Chrome.</small></div></div>
     <div class="pz-pwa-step"><span class="pz-pwa-n">2</span><div><b>Elegí "Instalar app"</b><small>O "Agregar a pantalla de inicio".</small></div></div>
-    <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Confirmá</b><small>¡Listo! Posta queda como una app 🎉</small></div></div>
+    <div class="pz-pwa-step"><span class="pz-pwa-n">3</span><div><b>Confirmá</b><small>¡Listo! Posty queda como una app en tu teléfono 🎉</small></div></div>
   `;
   const ov = document.createElement('div');
   ov.id = 'pzPwaOverlay';
@@ -719,6 +728,110 @@ function pwaWire() {
     if (ms) ms.classList.remove('open');
     pwaDoInstall();
   };
+}
+
+/* ---------- PUSH NOTIFICATIONS (VAPID): Posty te avisa en el celu ---------- */
+// La tarjeta amable de Posty SIEMPRE va antes del prompt del navegador.
+// Si el usuario no da permiso, todo sigue funcionando igual. Nunca spam.
+function pushSupported() {
+  try { return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+  catch (e) { return false; }
+}
+function pushPerm() { try { return Notification.permission; } catch (e) { return 'denied'; } }
+function pushKeyToU8(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const b = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function pushAskCard() {
+  return new Promise((resolve) => {
+    if (document.getElementById('pzPushOv')) { resolve(false); return; }
+    const ov = document.createElement('div');
+    ov.id = 'pzPushOv';
+    ov.className = 'pz-exp-overlay';
+    ov.innerHTML = `
+      <div class="pz-exp-modal" role="dialog" aria-modal="true">
+        <div style="font-size:37px">🔔</div>
+        <h2>¿Te aviso cuando pase algo?</h2>
+        <p class="pz-exp-sub">Te mando un avisito cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Nada de spam, lo prometo 🤙</p>
+        <button class="btn btn-primary btn-block" id="pzPushYes">Sí, avisame 👍</button>
+        <button class="btn btn-soft btn-block" id="pzPushNo" style="margin-top:8px">Ahora no</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = (v) => { try { ov.remove(); } catch (e) {} resolve(v); };
+    ov.querySelector('#pzPushYes').onclick = () => close(true);
+    ov.querySelector('#pzPushNo').onclick = () => close(false);
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(false); });
+  });
+}
+async function pushDoSubscribe() {
+  if (!pushSupported()) return { ok: false, reason: 'unsupported' };
+  if (pushPerm() === 'denied') return { ok: false, reason: 'denied' };
+  try {
+    const r = await api.get('/api/push/vapid-key');
+    if (!r || !r.key) return { ok: false, reason: 'no_vapid' };
+    if (pushPerm() === 'default') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') return { ok: false, reason: 'denied' };
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKeyToU8(r.key) });
+    const j = sub.toJSON();
+    await api.post('/api/push/subscribe', { endpoint: j.endpoint, keys: j.keys });
+    try { localStorage.setItem('push-sub', '1'); } catch (e) {}
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: (e && e.message) || 'error' };
+  }
+}
+// Flujo completo: tarjeta de Posty → permiso real → suscripción.
+async function pushEnableFlow() {
+  if (!pushSupported()) return { ok: false, reason: 'unsupported' };
+  if (pushPerm() === 'denied') return { ok: false, reason: 'denied' };
+  const accepted = await pushAskCard();
+  if (!accepted) return { ok: false, reason: 'declined' };
+  return pushDoSubscribe();
+}
+async function pushRenderZone() {
+  const z = document.getElementById('pushZone');
+  if (!z) return;
+  if (!pushSupported()) { z.innerHTML = '<p class="hint">Tu navegador no soporta notificaciones push. Todo sigue funcionando igual 👍</p>'; return; }
+  let sub = null;
+  try { const reg = await navigator.serviceWorker.ready; sub = await reg.pushManager.getSubscription(); } catch (e) { sub = null; }
+  const perm = pushPerm();
+  if (perm === 'granted' && sub) {
+    z.innerHTML = '<div class="okmsg">🔔 Notificaciones activadas en este dispositivo.</div>' +
+      '<button class="btn btn-ghost btn-sm" id="pushOff">Desactivar en este dispositivo</button>';
+    document.getElementById('pushOff').onclick = async () => {
+      try {
+        const j = sub.toJSON();
+        await api.post('/api/push/unsubscribe', { endpoint: j.endpoint });
+        await sub.unsubscribe();
+      } catch (e) { /* igual seguir */ }
+      try { localStorage.removeItem('push-sub'); } catch (e) {}
+      pushRenderZone();
+    };
+  } else if (perm === 'denied') {
+    z.innerHTML = '<p class="hint">Bloqueaste las notificaciones en el navegador. Para activarlas: Ajustes del celu → Posta → Notificaciones → Permitir.</p>';
+  } else {
+    z.innerHTML = '<button class="btn btn-primary" id="pushOn">🔔 Activar notificaciones</button> <span id="pushMsg"></span>';
+    document.getElementById('pushOn').onclick = async () => {
+      const m = document.getElementById('pushMsg');
+      const res = await pushEnableFlow();
+      if (res.ok) { pushRenderZone(); return; }
+      if (m) {
+        const msg = res.reason === 'declined' ? 'Dale, cuando quieras las activás desde acá 👍'
+          : res.reason === 'denied' ? 'El navegador no dio permiso. Fijate en Ajustes → Notificaciones.'
+          : res.reason === 'no_vapid' ? 'Todavía no están configuradas. Probá de nuevo en un rato.'
+          : 'No se pudo activar 😅 Probá de nuevo.';
+        m.innerHTML = '<span class="hint">' + msg + '</span>';
+      }
+    };
+  }
 }
 
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
@@ -1391,7 +1504,7 @@ function bindMediaCard() {
         const r = await fetch('/api/assets?kind=' + (f.type.startsWith('video/') ? 'video' : 'photo'), {
           method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
         ok++;
       }
       msg.innerHTML = `<div class="okmsg">✅ ${ok === 1 ? 'Agregado' : ok + ' agregados'} — ya los usamos en tus posteos.</div>`;
@@ -2002,7 +2115,7 @@ async function regenDraft(id, btn) {
     });
     render();
   } catch (e) {
-    alert('No se pudo regenerar. Probá de nuevo.');
+    alert('No pude regenerarlo 😅 Probá de nuevo.');
     if (isBtn) { btn.disabled = false; btn.innerHTML = old; }
   }
 }
@@ -2050,13 +2163,13 @@ async function draftVariants(id, btn) {
         render();
       } catch (e) {
         p.disabled = false; p.style.opacity = '';
-        alert('No se pudo aplicar la variante. Probá de nuevo.');
+        alert('No pude aplicar la variante 😅 Probá de nuevo.');
       }
     });
   } catch (e) {
     const msg = e.message === 'no_variants'
       ? 'No se pudieron generar las variantes. Probá de nuevo en un minuto.'
-      : (e.message || 'No se pudo generar. Probá de nuevo.');
+      : (e.message || 'No pude generarlo 😅 Probá de nuevo.');
     mount.innerHTML = `<div class="err" style="margin-top:10px">⚠️ ${esc(msg)}</div>`;
     mount.dataset.open = ''; // el error no deja el picker trabado: se puede reintentar
   }
@@ -2085,7 +2198,7 @@ async function changeDraftPhoto(id, el, photoPath) {
     await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: imagePath });
     render();
   } catch (e) {
-    alert('No se pudo cambiar la foto. Probá de nuevo.');
+    alert('No pude cambiar la foto 😅 Probá de nuevo.');
     el.style.opacity = ''; el.style.pointerEvents = '';
   }
 }
@@ -2109,7 +2222,7 @@ function togglePhotoPicker(id, btn) {
     try {
       const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+      if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       await changeDraftPhoto(id, up, data.path);
       track('photo_upload', { kind: 'draft' });
@@ -2126,7 +2239,7 @@ async function changeDraftVideo(id, el, videoPath) {
     await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: videoPath });
     render();
   } catch (e) {
-    alert('No se pudo cambiar el video. Probá de nuevo.');
+    alert('No pude cambiar el video 😅 Probá de nuevo.');
     el.style.opacity = ''; el.style.pointerEvents = '';
   }
 }
@@ -2149,7 +2262,7 @@ function toggleVideoPicker(id, btn) {
     try {
       const r = await fetch('/api/assets?kind=video', { method: 'POST', headers: { 'Content-Type': f.type }, body: f });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+      if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       await changeDraftVideo(id, up, data.path);
     } catch (e) { alert('No se pudo subir el video: ' + e.message); }
@@ -2407,6 +2520,12 @@ async function chatLoadHistory() {
       const chips = $('#chatChips');
       if (chips) chips.remove(); // con historial, los ejemplos ya no hacen falta
     }
+    if (r && typeof r.welcome === 'string' && r.welcome.trim()) {
+      const box = $('#chatBox');
+      if (box) box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
+      const chips = $('#chatChips');
+      if (chips) chips.remove();
+    }
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
       applyChatOrder(r.idea);
@@ -2454,7 +2573,7 @@ async function draftFromPreview(idea, prev) {
     const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
     const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen');
+    if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
     imagePath = data.path;
   }
   try {
@@ -2496,12 +2615,14 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
-      <button class="btn btn-soft" id="chatMic" title="Pedir con nota de voz">🎙</button>
-      <input id="chatInput" class="in" placeholder="Pedime lo que sea… 💬" maxlength="2000" autocomplete="off">
-      <button class="btn btn-soft" id="chatPhotoBtn" title="Enviar fotos">📷</button>
-      <button class="btn btn-soft" id="chatVideoBtn" title="Enviar videos">🎬</button>
-      <button class="btn btn-primary" id="chatSend" title="Enviar">➤</button>
+      <button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>
+      <input id="chatInput" class="in" placeholder="Escribile a Posty… 💬" maxlength="2000" autocomplete="off">
+      <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">🎙</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
+      <div class="chat-plus-menu" id="chatPlusMenu" hidden>
+        <button data-k="photo">📷 Foto</button>
+        <button data-k="video">🎬 Video</button>
+      </div>
     </div>
     <div id="chatMsg"></div>
   </div>`;
@@ -2556,6 +2677,7 @@ function renderChatPhotos() {
     CHAT_PHOTOS.splice(+b.dataset.chatrm, 1);
     if (CHAT_PHOTO_IDX >= CHAT_PHOTOS.length) CHAT_PHOTO_IDX = 0;
     renderChatPhotos();
+    chatUpdateSendBtn();
     if (CHAT_IDEA) renderChatPreviews();
   });
 }
@@ -2636,7 +2758,7 @@ async function chatUploadPhotos(files) {
       chatSay('📸 ¡Agregado! La IA también lo puede ver 👇');
     }
   } catch (e) {
-    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
+    if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
   }
 }
 
@@ -2761,6 +2883,7 @@ async function chatSend() {
   track('chat_message', { len: sendText.length });
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
   inp.value = '';
+  chatUpdateSendBtn();
   chatScroll();
   // "Armame la semana" (chip) → dispara el autopilot directo, como el CTA.
   if (/arma(m|r)?(me)? la semana|armemos (mi|la) semana/i.test(sendText)) {
@@ -2910,7 +3033,7 @@ function renderChatIdeaOptions(ideas) {
 // Intercambio completo con /api/ideas/chat. `extra` agrega campos al JSON
 // (ej: { audio: "data:audio/webm;base64,..." } para notas de voz).
 async function chatExchange({ text, display, extra, pushed }) {
-  const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatSend');
+  const box = $('#chatBox'), m = $('#chatMsg'), btn = $('#chatMicSend');
   if (!pushed) {
     const oldOpts = $('#chatOptions'); if (oldOpts) oldOpts.remove();
     const oldIdeas = $('#chatIdeaOptions'); if (oldIdeas) oldIdeas.remove();
@@ -2918,7 +3041,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(display || text)}</div>`);
     chatScroll();
   }
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
   chatScroll();
@@ -2951,7 +3074,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     const t = $('#chatTyping'); if (t) t.remove();
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
   }
-  btn.disabled = false;
+  if (btn) { btn.disabled = false; chatUpdateSendBtn(); }
   chatScroll();
 }
 
@@ -2988,7 +3111,8 @@ async function chatMakePost(asVideo) {
       if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
   } catch (e) {
-    if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
+    const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
+    if (m) m.innerHTML = capMsg ? `<div class="okmsg">${esc(capMsg)}</div>` : `<div class="err">Error: ${esc(e.message)}</div>`;
     if (mkP) mkP.disabled = false;
     if (mkR) mkR.disabled = false;
   }
@@ -2998,7 +3122,7 @@ async function chatMakePost(asVideo) {
 let VOICE_REC = null, VOICE_CHUNKS = [], VOICE_TIMER = null, VOICE_START = 0, VOICE_MIME = '';
 function voiceTick() {
   if (!VOICE_REC) return;
-  const b = document.getElementById('chatMic');
+  const b = document.getElementById('chatMicSend');
   const msg = document.getElementById('chatMsg');
   const s = Math.floor((Date.now() - VOICE_START) / 1000);
   const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -3023,7 +3147,7 @@ async function voiceToggle() {
     VOICE_REC = rec;
     rec.start();
     VOICE_START = Date.now();
-    const b = document.getElementById('chatMic');
+    const b = document.getElementById('chatMicSend');
     if (b) { b.classList.add('btn-rec'); b.textContent = '⏺ 0:00'; }
     clearInterval(VOICE_TIMER);
     VOICE_TIMER = setInterval(voiceTick, 500);
@@ -3037,8 +3161,9 @@ function voiceStop() {
   const rec = VOICE_REC;
   VOICE_REC = null;
   clearInterval(VOICE_TIMER);
-  const b = document.getElementById('chatMic');
-  if (b) { b.classList.remove('btn-rec'); b.textContent = '🎙'; }
+  const b = document.getElementById('chatMicSend');
+  if (b) { b.classList.remove('btn-rec'); }
+  chatUpdateSendBtn();
   const msg = document.getElementById('chatMsg');
   if (msg) msg.innerHTML = '';
   if (rec) { try { rec.stop(); } catch (e) { voiceSend(); } }
@@ -3058,14 +3183,38 @@ async function voiceSend() {
   return chatExchange({ text: '🎙️ Nota de voz', extra: { audio: dataUrl } });
 }
 
+// Barra estilo Muse: a la derecha va 🎙 si no hay nada para enviar, ➤ si hay texto o fotos.
+function chatUpdateSendBtn() {
+  const b = $('#chatMicSend'), inp = $('#chatInput');
+  if (!b) return;
+  const unsent = (typeof CHAT_PHOTOS !== 'undefined' && CHAT_PHOTOS.some(p => !p.sent));
+  const ready = (inp && inp.value.trim().length > 0) || unsent;
+  if (VOICE_REC) return; // grabando: no tocar
+  if (ready) { b.textContent = '➤'; b.className = 'btn btn-primary'; b.title = 'Enviar'; b.onclick = () => chatSend(); }
+  else { b.textContent = '🎙'; b.className = 'btn btn-soft'; b.title = 'Pedir con nota de voz'; b.onclick = () => voiceToggle(); }
+}
+
 function bindChat() {
-  const btn = $('#chatSend'), inp = $('#chatInput');
-  if (!btn || !inp) return;
+  const inp = $('#chatInput');
+  if (!inp) return;
   if (!window.__chatOpenT) { window.__chatOpenT = true; track('chat_open'); }
-  btn.onclick = chatSend;
-  const mic = $('#chatMic');
-  if (mic) mic.onclick = voiceToggle;
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chatSend(); } });
+  inp.addEventListener('input', chatUpdateSendBtn);
+  // Botón ＋ : menú para foto/video (estilo Muse)
+  const plus = $('#chatPlus'), menu = $('#chatPlusMenu');
+  if (plus && menu) {
+    plus.onclick = (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; };
+    if (!window.__plusMenuDoc) {
+      window.__plusMenuDoc = true;
+      document.addEventListener('click', () => { const mm = $('#chatPlusMenu'); if (mm) mm.hidden = true; });
+    }
+    menu.querySelectorAll('button[data-k]').forEach(b => b.onclick = (e) => {
+      e.stopPropagation(); menu.hidden = true;
+      const file = $('#chatFile'); if (!file) return;
+      file.accept = b.dataset.k === 'video' ? 'video/*' : 'image/*';
+      file.click();
+    });
+  }
   chatScroll();
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
@@ -3073,11 +3222,8 @@ function bindChat() {
   const mCapsB = $('#chatMoreCaps');
   if (mCapsB) mCapsB.onclick = chatMoreCaptions;
   const file = $('#chatFile');
-  if (file) file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; };
-  const phb = $('#chatPhotoBtn');
-  if (phb && file) phb.onclick = () => { file.accept = 'image/*'; file.click(); };
-  const vdb = $('#chatVideoBtn');
-  if (vdb && file) vdb.onclick = () => { file.accept = 'video/*'; file.click(); };
+  if (file) file.onchange = () => { chatUploadPhotos(file.files); file.value = ''; chatUpdateSendBtn(); };
+  chatUpdateSendBtn();
   // Chips de ejemplo: un toque y el ejemplo cae en el input (no se envía solo)
   $$('#chatChips [data-chip]').forEach(b => b.onclick = () => {
     const i = $('#chatInput');
@@ -3097,7 +3243,7 @@ async function chatView() {
   <div class="chat-home">
     <div class="chome-top">
       <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
-      <div><b>Posty</b><div class="chome-sub">te arma la semana y la publica por vos</div></div>
+      <div><b>Posty</b><div class="chome-sub">tu community manager: te arma la semana y la publica por vos</div></div>
     </div>
     ${chatCardHTML(true, true, true)}
     <div id="revMsg"></div>
@@ -3491,7 +3637,7 @@ async function renderDesignImage(o) {
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
   const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'No se pudo subir la imagen');
+  if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
   return data.path;
 }
 function slotDate(i) {
@@ -3569,7 +3715,7 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub, on
     try {
       const cp = await aiConceptShot({ idea, tipo, headline, refs });
       if (cp) return { image_path: cp, text: '', duration: 3 };
-    } catch (e) {}
+    } catch (e) { if (isAiCapErr(e)) throw e; }
     // Fallback: como antes (foto del usuario o canvas)
     if (usePhotos) return { image_path: photos[(idx + k) % photos.length].file_path, text, duration: 3 };
     // Sin fotos: generamos el diseño y lo usamos como escena (ya trae texto, no duplicamos)
@@ -3635,14 +3781,24 @@ function pickHeadline(idea, caption = '') {
 // idea y las fotos reales del cliente. Devuelve el path o null si falla
 // (el llamador cae al flujo clásico sin romper nada).
 async function aiConceptShot({ idea, tipo, headline, refs }) {
-  try {
-    const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [] }, { timeout: 120000 });
-    return r && r.path ? r.path : null;
-  } catch (e) {
-    console.warn('[concept-shot] no disponible, sigo con el flujo clásico:', (e && e.message) || e);
-    return null;
+  // Posty GENERA la imagen siempre (como bamboo): 1 reintento ante fallos
+  // transitorios. Si el tope diario de IA frenó (capped), se propaga el mensaje
+  // amable y NO se cae a canvas en silencio.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [] }, { timeout: 120000 });
+      if (r && r.ok === false && r.capped) throw { aiCap: true, message: r.error || '' };
+      if (r && r.path) return r.path;
+    } catch (e) {
+      if (e && e.aiCap) throw e;
+      console.warn('[concept-shot] intento ' + (attempt + 1) + ' falló:', (e && e.message) || e);
+      if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+    }
   }
+  console.warn('[concept-shot] no disponible tras reintento, sigo con el flujo clásico');
+  return null;
 }
+function isAiCapErr(e) { return !!(e && e.aiCap); }
 async function draftFromIdea(idea, asVideo, idx = 0, useChatText = false, onProgress = null) {
   // Las fotos más nuevas van primero: las que sube esta semana (misión)
   // protagonizan los posteos, no adivinamos.
@@ -3847,6 +4003,13 @@ async function runAutopilot(n, tag) {
             quotaStopped = true;
             return;
           }
+          if (isAiCapErr(e)) {
+            const msg = e.message || 'Llegamos al tope de IA de hoy \uD83D\uDD0B Seguimos ma\u00F1ana \uD83D\uDCAA';
+            try { prog.innerHTML = `<div class="okmsg">${esc(msg)}</div>`; } catch (_) {}
+            try { if (typeof chatSayLocal === 'function') chatSayLocal(msg); } catch (_) {}
+            quotaStopped = true;
+            return;
+          }
           // Error de un borrador solo: se registra y la semana sigue con los demás
           if (!firstErr) firstErr = e;
           console.error('[autopilot] no se pudo crear el borrador "' + (idea.titulo || i) + '":', (e && e.message) || e);
@@ -3859,13 +4022,13 @@ async function runAutopilot(n, tag) {
     await Promise.all(Array.from({ length: Math.min(POOL_SIZE, picks.length) }, apWorker));
     // Si no salió NINGÚN borrador, algo está roto: mostrar el error en vez de un festejo vacío
     if (firstErr && !live.length) throw firstErr;
-    prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
+    prog.innerHTML = `<div class="okmsg">🎉 ¡Tu semana está lista! La armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
     // Chat-first: si el usuario está en el chat, la promesa "te aviso acá mismo"
     // se cumple acá — el aviso cae como mensaje de la IA (sin tarjetas: la
     // gestión vive en Mi semana) y se refrescan píldora + chips.
     try {
       if ((location.hash || '').startsWith('#/app/chat') && document.getElementById('chatBox')) {
-        chatSayLocal('¡Tu semana está lista! 📋 La dejé en Mi semana para que la revises 👇');
+        chatSayLocal('¡Tu semana está lista! 🎉 La dejé en Mi semana para que la revises — mirala con amor que la hice para vos 👇');
         if (typeof refreshWeekPill === 'function') refreshWeekPill().then(() => {
           try { renderQuickChips(REVIEW_DRAFTS, [], false); } catch (e) {}
         });
@@ -3905,7 +4068,7 @@ async function runAutopilot(n, tag) {
           }
         }
       }
-      prog.innerHTML = `<div class="okmsg">📋 ¡Tu semana está lista!</div>${liveHTML()}`;
+      prog.innerHTML = `<div class="okmsg">🎉 ¡Tu semana está lista! La armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
     } catch (e) { console.error('[historias]', e.message); }
     track('week_generate_done', { count: live.length, ms: Date.now() - apT0, tag: t });
     // Racha: registrar la semana armada (idempotente por semana)
@@ -3920,7 +4083,9 @@ async function runAutopilot(n, tag) {
       if (sk && sk.newWeek) setTimeout(() => showStreakCelebration(sk), 600);
     }, 900);
   } catch (e) {
-    prog.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
+    // 429 = tope amable de Posty (rate limit / kill-switch): se muestra tal cual, sin "Error:".
+    const friendly = e && (e.status === 429);
+    prog.innerHTML = friendly ? `<div class="okmsg">${esc(e.message)}</div>` : `<div class="err">Error: ${esc(e.message)}</div>`;
   } finally {
     // Cubrir todos los returns tempranos: la corrida terminó (o abortó)
     AUTOPILOT_RUNNING = false;
@@ -4226,7 +4391,51 @@ function postItem(p, actions) {
   </div>`;
 }
 /* ---------- Publicar ahora (instantáneo, con progreso en vivo) ---------- */
+// Tarjeta de aprobación antes de publicar (pedido de Valentino 2026-09-29):
+// el cliente ve imagen + texto + cuenta destino y da el OK explícito.
+// Nada se publica sin esta aprobación.
+function publishApproveSheet(postId) {
+  return new Promise(async (resolve) => {
+    let post = null;
+    try { post = (await api.get(`/api/posts/${postId}`)).post; } catch (e) {}
+    if (!post) { resolve(false); return; }
+    const prof = (typeof PROFILE !== 'undefined' && PROFILE) || {};
+    const igOn = !!prof.ig_connected;
+    const handle = prof.ig_username || '';
+    const img = post.image_path ? esc(post.image_path) : '';
+    const cap = String(post.caption || '');
+    const tags = String(post.hashtags || '');
+    const full = (cap + (tags ? '\n' + tags : '')).trim();
+    const ov = document.createElement('div');
+    ov.className = 'pubsheet-ov';
+    ov.innerHTML =
+      '<div class="pubsheet" role="dialog" aria-modal="true">' +
+      '<div class="pubsheet-grip"></div>' +
+      '<div class="pubsheet-title">\u00BFPublicar en Instagram?</div>' +
+      '<div class="pubsheet-sub">' + (igOn && handle ? `Se publica en <b>@${esc(handle)}</b>` : 'Todav\u00EDa no conectaste tu Instagram') + '</div>' +
+      '<div class="pubsheet-body">' +
+        (img ? `<img class="pubsheet-img" src="${img}" alt="Vista previa del posteo">` : '') +
+        `<div class="pubsheet-cap">${esc(full.length > 240 ? full.slice(0, 240) + '\u2026' : full)}</div>` +
+      '</div>' +
+      '<div class="pubsheet-row">' +
+        '<button class="btn btn-soft" data-ps="no">Cancelar</button>' +
+        (igOn ? '<button class="btn btn-primary" data-ps="yes">Publicar</button>'
+              : '<button class="btn btn-primary" data-ps="connect">Conectar Instagram</button>') +
+      '</div></div>';
+    const done = (v) => { try { ov.remove(); } catch (e) {} resolve(v); };
+    ov.querySelector('[data-ps="no"]').onclick = () => done(false);
+    const yes = ov.querySelector('[data-ps="yes"]');
+    if (yes) yes.onclick = () => done(true);
+    const conn = ov.querySelector('[data-ps="connect"]');
+    if (conn) conn.onclick = () => { done(false); try { igConnect(); } catch (e) { location.hash = '#/app/ajustes'; } };
+    ov.addEventListener('click', (e) => { if (e.target === ov) done(false); });
+    document.body.appendChild(ov);
+  });
+}
+
 async function publishNowFlow(postId, mount) {
+  const approved = await publishApproveSheet(postId);
+  if (!approved) return { ok: false, cancelled: true };
   const steps = ['Preparando imagen', 'Publicando en Instagram'];
   const paint = (activeIdx, doneAll, err) => {
     mount.innerHTML = `<div class="pubnow">` +
@@ -4364,7 +4573,7 @@ function bindFastTrack() {
       setSt('⏳ Subiendo…');
       const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+      if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
       const newPath = data.path;
       setSt('🎨 Mejorando la imagen…');
       const improved = await aiConceptShot({
@@ -4384,7 +4593,7 @@ function bindFastTrack() {
       setSt('✅ Listo — tu foto ya está en el posteo.');
     } catch (e) {
       // Nunca bloquear: se sigue con la imagen original.
-      setSt('😅 No pudimos mejorar la foto esta vez — sale con la imagen original, igual va a quedar bien.');
+      setSt(isAiCapErr(e) ? '🔋 ' + (e.message || 'Llegamos al tope de IA de hoy — seguimos mañana 💪') : '😅 No pudimos mejorar la foto esta vez — sale con la imagen original, igual va a quedar bien.');
       FT.photoDone = true;
     }
   };
@@ -4501,10 +4710,10 @@ function quotaModal(q, opts = {}) {
   const left = q.left || 0;
   track('paywall_view', { plan: (q && q.plan_name) || '', limit: (q && q.limit) || 0 });
   streakModalShell(`
-    <div class="big-emoji">🚀</div>
-    <h3 style="margin:12px 0 4px">Llegaste al tope de tu semana</h3>
-    <p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b>.</p>
-    <p class="d">Mejorá tu paquete para seguir posteando esta semana — se activa al instante, sin vueltas.</p>
+    <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
+    <h3 style="margin:12px 0 4px">¡Llegamos al tope de la semana! 🚀</h3>
+    <p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b> — y los usamos todos, ¡bien ahí!</p>
+    <p class="d">Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.</p>
     ${left > 0 && opts.onPartial ? `<button class="btn btn-soft btn-block" id="qPartial" style="margin-top:10px">Armar solo ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
     <button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>
     <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Ahora no</button>`);
@@ -5150,7 +5359,7 @@ async function loadMissionCard() {  const el = $('#missionCard');
         loadMissionCard(); // re-render → estado hecho
       } catch (e) {
         b.disabled = false;
-        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
       }
       inp.value = '';
     };
@@ -5206,7 +5415,7 @@ function inspoIdleHTML(el) {
         loadInspoCard(); // re-render → estado hecho
       } catch (e) {
         b.disabled = false;
-        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No se pudo subir')}</div>`;
+        if (msg) msg.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
       }
       inp.value = '';
     };
@@ -5401,9 +5610,11 @@ function showStreakCelebration(sk) {
   const lv = sk.level || { emoji: '🔥', name: '' };
   const pts = sk.current * 100;
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
+  const isFirst = sk.newWeek && sk.current === 1;
   streakModalShell(`
-    <div class="big-emoji">${lv.emoji}</div>
-    <h3 style="margin:12px 0 4px">${sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!'}</h3>
+    ${isFirst ? '<img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">' : `<div class="big-emoji">${lv.emoji}</div>`}
+    <h3 style="margin:12px 0 4px">${isFirst ? '¡Tu primera semana! 🎉' : (sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!')}</h3>
+    ${isFirst ? '<p style="font-size:15px;margin:0 0 6px;color:var(--mut)">La primera de muchas. Yo armo, vos aprobás — así de fácil va a ser siempre 💪</p>' : ''}
     <p style="font-size:16px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
     <p style="font-size:15px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
     ${streakNextTxt(sk)}
@@ -5469,17 +5680,17 @@ function shareStreakImage(sk) {
   x.font = '220px serif'; x.fillText(lv.emoji, 540, 700);
   x.font = '900 210px -apple-system, Arial, sans-serif'; x.fillText(String(sk.current), 540, 1010);
   x.font = '700 62px -apple-system, Arial, sans-serif';
-  x.fillText(sk.current === 1 ? 'SEMANA CON POSTA' : 'SEMANAS CON POSTA', 540, 1130);
+  x.fillText(sk.current === 1 ? 'SEMANA CON POSTY' : 'SEMANAS CON POSTY', 540, 1130);
   x.globalAlpha = 0.85; x.font = '500 44px -apple-system, Arial, sans-serif';
   x.fillText('Mi negocio no para ' + lv.emoji, 540, 1240);
   x.globalAlpha = 0.6; x.font = '500 36px -apple-system, Arial, sans-serif';
-  x.fillText('Hecho con Posta', 540, 1820);
+  x.fillText('Hecho por Posty 🤖', 540, 1820);
   x.globalAlpha = 1;
   cv.toBlob(async (blob) => {
     if (!blob) return;
-    const file = new File([blob], 'mi-racha-posta.png', { type: 'image/png' });
+    const file = new File([blob], 'mi-racha-posty.png', { type: 'image/png' });
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: 'Mi racha con Posta' }); return; }
+      try { await navigator.share({ files: [file], title: 'Mi racha con Posty' }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
     const a = document.createElement('a');
@@ -6026,6 +6237,10 @@ function ajustesView() {
   </div></div>
   <div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div></div>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🔔 Notificaciones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Te aviso en el celu cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Sin spam, lo prometo 🤙</p>
+    <div id="pushZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
@@ -6590,7 +6805,7 @@ async function showExpiredModal() {
   ov.innerHTML = `
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
-      <div style="font-size:37px">🔒</div>
+      <img src="ai-avatar.png" alt="Posty" style="width:74px;height:74px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
       <h2>Tu prueba gratis termin\u00f3</h2>
       <p class="pz-exp-sub">Elegí tu plan y seguimos publicando por vos.</p>
       <div class="pz-exp-plans">${rows}</div>
@@ -6747,7 +6962,7 @@ function bindCreator() {
       try {
         const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
         c.productPhoto = data.path;
         ASSETS = await api.get('/api/assets').catch(() => ASSETS);
       } catch (e) {
@@ -6959,7 +7174,7 @@ function bindCreator() {
       try {
         const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No se pudo subir');
+        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
         ASSETS = await api.get('/api/assets').catch(() => ASSETS);
         await applyCardPhoto(pickIdx, data.path);
       } catch (e) {
@@ -7116,7 +7331,8 @@ function bindCreator() {
         }));
         applyOptions(out);
       } catch (e) {
-        $('#optErr').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+        const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
+        $('#optErr').innerHTML = `<div class="${capMsg ? 'okmsg' : 'err'}">${esc(capMsg || e.message)}</div>`;
         btn.disabled = false; btn.textContent = '🔄 Regenerar opciones';
       }
     };
@@ -7239,6 +7455,8 @@ function bindSettings() {
     h.onclick = tg;
     h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
   });
+  // Notificaciones push: pinta la sección 🔔 según el estado del permiso.
+  try { pushRenderZone(); } catch (e) { /* nunca bloquear ajustes */ }
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');
@@ -7805,7 +8023,7 @@ function bindSettings() {
       try { refInfo = await pzReferral(); } catch (e) {}
       let trialBanner = '';
       if (!hasActive && ME && ME.plan_status === 'trial') {
-        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Tu prueba gratis terminó.</b> Elegí tu plan para seguir publicando con tu marca.</div>`;
+        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos 🥹</div>`;
         else if (trialLeft > 0) trialBanner = trialLeft <= 3
           ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
           : `<div class="pz-trial-ok">🎁 Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;

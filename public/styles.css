@@ -63,6 +63,10 @@ button{font-family:inherit}
 .hero{padding:110px 0 80px;text-align:center;position:relative;overflow:hidden}
 .hero::before{content:"";position:absolute;top:-220px;left:50%;transform:translateX(-50%);width:860px;height:520px;background:radial-gradient(ellipse,rgba(39,147,200,.12),transparent 70%);pointer-events:none}
 .pill{display:inline-block;background:#F2F9FD;border:1px solid #CFE7F5;border-radius:999px;padding:8px 18px;font-size:11.5px;font-weight:700;color:var(--cel);margin-bottom:26px}
+.logo-posty{display:inline-flex;align-items:center;text-decoration:none}
+.logo-posty img{width:32px;height:32px;border-radius:50%;object-fit:cover;margin-right:9px;box-shadow:0 2px 8px rgba(39,147,200,.3)}
+.hero-posty{width:136px;height:136px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 20px;border:5px solid #fff;box-shadow:0 14px 36px rgba(39,147,200,.35)}
+.hero-co{margin-top:10px;font-size:12px;color:var(--dim)}
 .hero h1{font-size:clamp(37px,6vw,67px);font-weight:800;letter-spacing:-.03em;line-height:1.05;max-width:820px;margin:0 auto}
 .hero h1 .hl{color:var(--cel)}
 .hero p.sub{font-size:17.5px;color:var(--mut);max-width:620px;margin:24px auto 36px;line-height:1.55}
@@ -513,6 +517,9 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
   .hero-cta{flex-direction:column;align-items:stretch}
   .hero-cta .btn{width:100%;max-width:340px;margin:0 auto}
   .hero-note{font-size:11.5px;padding:0 8px}
+  .hero-posty{width:104px;height:104px;margin-bottom:16px;border-width:4px}
+  .hero-co{font-size:11px;padding:0 8px}
+  .logo-posty img{width:28px;height:28px;margin-right:7px}
   .mock-row{margin-top:48px;gap:22px}
   .phone{width:272px}
   .section{padding:60px 0}
@@ -940,7 +947,29 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-board-scene canvas{width:100%;height:auto;display:block}
 #chatCaption{font-size:13px;min-height:96px}
 #chatHashtags:empty{display:none}
-.chat-input-row{display:flex;gap:8px;align-items:center}
+.chat-input-row{display:flex;gap:8px;align-items:center;position:relative}
+/* Tarjeta de aprobación antes de publicar (pedido de Valentino 2026-09-29):
+   el cliente ve imagen + texto + cuenta y da el OK explícito. */
+.pubsheet-ov{position:fixed;inset:0;background:rgba(10,30,51,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center;animation:fadeUp .18s ease}
+.pubsheet{background:#fff;width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:10px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(10,30,51,.25);max-height:88vh;overflow-y:auto}
+.pubsheet-grip{width:44px;height:5px;border-radius:99px;background:var(--line);margin:4px auto 12px}
+.pubsheet-title{font-size:17px;font-weight:800;color:var(--txt);text-align:center}
+.pubsheet-sub{font-size:13px;color:var(--dim);text-align:center;margin:4px 0 14px}
+.pubsheet-sub b{color:var(--cel)}
+.pubsheet-body{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.pubsheet-img{width:110px;height:138px;object-fit:cover;border-radius:12px;flex-shrink:0;border:1px solid var(--line-soft)}
+.pubsheet-cap{font-size:13.5px;line-height:1.55;color:var(--txt);white-space:pre-wrap;word-break:break-word;flex:1;min-width:0}
+.pubsheet-row{display:flex;gap:10px}
+.pubsheet-row .btn{flex:1;min-height:50px;font-size:15.5px;border-radius:16px}
+@media(min-width:761px){
+  .pubsheet-ov{align-items:center;padding:20px}
+  .pubsheet{border-radius:22px;max-width:460px}
+}
+.chat-plus-menu{position:absolute;left:0;bottom:calc(100% + 8px);background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(10,30,51,.16);padding:6px;display:flex;flex-direction:column;gap:2px;z-index:60;min-width:150px}
+.chat-plus-menu[hidden]{display:none}
+.chat-plus-menu button{border:none;background:none;font-family:inherit;font-size:14.5px;font-weight:600;color:var(--txt);text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.chat-plus-menu button:hover{background:var(--bg2)}
+.chat-plus-menu button:active{background:var(--line-soft)}
 .chat-input-row .in{flex:1;margin:0;border-radius:999px;padding:16px 22px;font-size:17px;box-shadow:0 2px 10px rgba(10,30,51,.06)}
 .chat-input-row .btn{padding:0;width:56px;height:56px;border-radius:50%;font-size:20px;flex-shrink:0}
 .chat-proposal{background:#FFF9EC;border:2px solid var(--yel);border-radius:14px;padding:14px;margin-bottom:10px}
@@ -956,7 +985,7 @@ textarea.in{resize:vertical;min-height:96px}
   .hero{padding:44px 0 40px}
   .hero h1{font-size:30px}
   .hero p.sub{font-size:14px;margin:16px auto 24px}
-  /* Hecho con Posta: carrusel horizontal con snap */
+  /* Hecho por Posty: carrusel horizontal con snap */
   #ejemplos .show-row{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:14px;margin:28px -20px 0;padding:4px 20px 14px;scrollbar-width:none}
   #ejemplos .show-row::-webkit-scrollbar{display:none}
   #ejemplos .show-row .phone.sm{flex:0 0 200px;width:200px;scroll-snap-align:center}
@@ -1293,7 +1322,7 @@ textarea.in{resize:vertical;min-height:96px}
    La landing pública para visitantes no logueados no cambia.
    ============================================================ */
 @media(min-width:761px){
-  .main-chat{width:100%;margin:0;display:flex;flex-direction:column;min-height:calc(100vh - 72px)}
+  .main-chat{width:100%;max-width:820px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100vh - 72px)}
   .main-chat .chat-home{flex:1;display:flex;flex-direction:column}
   .main-chat .chome-top{margin-bottom:10px}
   .main-chat #chatCard{flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}

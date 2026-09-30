@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Probá Posta por dentro — Tu semana armada gratis</title>
+<title>Posty — Tu semana de Instagram armada gratis</title>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.postahacetodo.com/prueba">
-<meta property="og:title" content="Tu semana de posteos, armada — gratis">
+<meta property="og:title" content="Posty te arma tu semana de posteos — gratis">
 <meta property="og:description" content="Describí tu negocio en detalle (1 minuto) y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. 3 días gratis, sin tarjeta.">
 <meta property="og:image" content="https://www.postahacetodo.com/og-prueba.jpg">
 <meta name="twitter:card" content="summary_large_image">
@@ -285,11 +285,31 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .done-view p{color:var(--mut);line-height:1.7;margin-bottom:24px}
 .footer{text-align:center;padding:40px 20px 110px;color:var(--mut);font-size:13px}
 @media(max-width:760px){.ba{grid-template-columns:1fr}.ba-arrow{transform:rotate(90deg);justify-content:center}.week{grid-template-columns:repeat(2,1fr)}.plans{grid-template-columns:1fr}.plan.hot{transform:none}.stat-band{grid-template-columns:1fr}.sticky-cta b{font-size:13px}.modal{padding:24px 18px}.steps3{grid-template-columns:1fr}#btnBuy2{font-size:17px!important;padding:16px 24px!important;max-width:100%}.ph-grid{grid-template-columns:repeat(3,1fr)}.wk{min-width:100px}.day.feat .db{height:150px;margin:10px 0 10px 10px}.day.feat .dcap{padding:8px 12px 10px 2px}.chat-chips{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:14px}.chat-chips button{flex-shrink:0}}
+/* POSTY protagonista */
+html{scroll-behavior:smooth}
+.logo-posty{display:inline-flex;align-items:center;gap:9px;font-weight:900;font-size:22px;color:var(--navy);text-decoration:none}
+.logo-posty img{width:34px;height:34px;border-radius:50%;box-shadow:0 3px 10px rgba(39,147,200,.35)}
+#formCard{scroll-margin-top:76px}
+.hero .cta-row{margin-top:22px}
+.work3{margin:44px 0 6px}
+.work3 h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.work3 .lede{text-align:center;color:var(--mut);margin-bottom:4px;font-size:15px}
+.ejemplos{margin:44px 0 6px}
+.ejemplos h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.ejemplos .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
+.ej-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ej-card{border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fff;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.ej-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
+.ej-card p{padding:10px 12px;font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4}
+.ej-foot{text-align:center;color:var(--mut);font-size:13px;margin-top:14px;font-weight:700}
+.footer-posty{display:inline-flex;align-items:center;gap:8px;font-weight:800;color:var(--navy)}
+.footer-posty img{width:26px;height:26px;border-radius:50%}
+@media(max-width:760px){.ej-grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 <div class="nav"><div class="wrap">
-  <a class="logo" href="/">Posta<span class="dot">.</span></a>
+  <a class="logo-posty" href="/"><img src="ai-avatar.png" alt="Posty">Posty</a>
   <span class="pill">PRUEBA GRATIS · UNA SOLA VEZ</span>
 </div></div>
 
@@ -297,11 +317,14 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 <div id="v-onboarding">
   <div class="wrap">
     <div class="hero">
-      <span class="pill">TE CONFIGURAMOS TODO 🚀</span>
-      <h1>Tu semana de posteos, armada.<br><span class="hl">Nosotros nos encargamos de todo.</span></h1>
-      <p class="sub">Contanos de tu negocio (1 minuto), respondé 3 preguntas rápidas y mirá tu semana — ideas, diseños, textos y hashtags — como si ya fueras cliente. Sin tarjeta.</p>
+      <span class="pill">🤖 TU COMMUNITY MANAGER</span>
+      <img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;box-shadow:0 8px 24px rgba(39,147,200,.45);margin-bottom:4px">
+      <h1>¡Hola! Soy Posty 🤖</h1>
+      <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Te armo tu semana de Instagram — diseños, textos y hashtags con la onda de tu negocio.</p>
+      <p class="sub">Vos solo aprobás, yo me ocupo de todo. Contame de tu negocio en 1 minuto y mirá tu semana como si ya fueras cliente. Sin tarjeta.</p>
+      <div class="cta-row"><a class="btn btn-primary" href="#formCard">Armar mi semana 👇</a></div>
     </div>
-    <div class="card form-card">
+    <div class="card form-card" id="formCard">
       <div class="err" id="obErr"></div>
       <div class="field"><label>Nombre de tu negocio *</label><input type="text" id="f_biz" placeholder="Ej: Café Martínez" maxlength="60"></div>
       <div class="field"><label>Tu Instagram *</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Lo usamos para personalizar tu semana con tu perfil real.</div></div>
@@ -317,15 +340,37 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <p class="tiny" style="margin-top:6px">🔒 Conectás tu cuenta con Meta — sin compartir tu contraseña</p>
     </div>
 
+  <div class="work3">
+    <h3>Así trabajo yo 👇</h3>
+    <p class="lede">Tres pasos y tu Instagram anda solo.</p>
+    <div class="steps3">
+      <div class="step3"><div class="n">1</div><div><b>Me contás de tu negocio</b><p>1 minuto en el formulario + 3 preguntas rápidas. Mientras más detalle, más parecen hechos por vos.</p></div></div>
+      <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
+      <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo publico</b><p>Nada sale sin tu OK. Y cada semana se repite en automático.</p></div></div>
+    </div>
+  </div>
+
+  <div class="ejemplos">
+    <h3>Hecho por Posty 🤖</h3>
+    <p class="lede">Posteos reales, publicados en Instagram.</p>
+    <div class="ej-grid">
+      <div class="ej-card"><img src="prueba-ej1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>Te presento a Posty, tu community manager</p></div>
+      <div class="ej-card"><img src="prueba-ej2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>Tu semana de Instagram, armada por mí</p></div>
+      <div class="ej-card"><img src="prueba-ej3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>Probame 3 días gratis, sin tarjeta</p></div>
+      <div class="ej-card"><img src="prueba-ej4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>Tu semana lista en minutos</p></div>
+    </div>
+    <p class="ej-foot">Diseño + caption + hashtags — todo lo armo yo 🤖</p>
+  </div>
+
   <div class="benefits">
-    <h3>¿Qué te llevás con Posta?</h3>
+    <h3>Esto hago por vos cada semana 👇</h3>
     <div class="bgrid">
-      <div class="bcard"><div class="bi">🗓️</div><div><b>Tus posteos semanales</b><p>Diseño, caption y hashtags. Nosotros nos encargamos de todo.</p></div></div>
-      <div class="bcard"><div class="bi">🙌</div><div><b>100% hecho por nosotros</b><p>Vos vendé. Nosotros posteamos.</p></div></div>
-      <div class="bcard"><div class="bi">✅</div><div><b>Vos aprobás todo</b><p>Nada se publica sin tu OK.</p></div></div>
+      <div class="bcard"><div class="bi">🗓️</div><div><b>Tu semana armada</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda.</p></div></div>
+      <div class="bcard"><div class="bi">🙌</div><div><b>100% hecho por mí</b><p>Vos vendé. Yo posteo.</p></div></div>
+      <div class="bcard"><div class="bi">✅</div><div><b>Vos aprobás todo</b><p>Nada se publica sin tu OK. Nunca.</p></div></div>
       <div class="bcard"><div class="bi">🎬</div><div><b>Reels incluidos</b><p>Videos verticales listos para publicar.</p></div></div>
       <div class="bcard"><div class="bi">📈</div><div><b>Publicación automática</b><p>Tu Instagram activo todas las semanas, sin depender de tu tiempo.</p></div></div>
-      <div class="bcard"><div class="bi">💳</div><div><b>En pesos, sin vueltas</b><p>Pagás por MercadoPago y cancelás cuando quieras.</p></div></div>
+      <div class="bcard"><div class="bi">💳</div><div><b>En pesos, sin vueltas</b><p>Pagás en pesos por MercadoPago y cancelás cuando quieras.</p></div></div>
     </div>
   </div>
   </div>
@@ -364,7 +409,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 <div id="v-results" style="display:none">
   <div class="wrap">
     <div class="res-hero">
+      <img src="ai-avatar.png" alt="Posty" style="width:72px;height:72px;border-radius:50%;box-shadow:0 6px 20px rgba(39,147,200,.4)">
       <h2 id="rTitle">¡Tu semana está lista, <span class="hl" id="rBiz">tu negocio</span>! 🎉</h2>
+      <p class="sub" style="margin-top:-4px">La armé yo, <b>Posty</b> 🤖 — con la onda de tu negocio</p>
       <p class="sub" id="rSub"></p>
       <div id="rCached" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px"></div>
       <p class="tiny" id="rTime" style="display:none;margin-top:8px"></p>
@@ -422,9 +469,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
       <div class="wkstrip">
         <div class="wk now"><b>Esta semana</b><span>✓ Lista</span></div>
         <div class="wk-arrow">→</div>
-        <div class="wk future"><b>Próxima</b><span>Posta la arma</span></div>
+        <div class="wk future"><b>Próxima</b><span>Posty la arma 🤖</span></div>
         <div class="wk-arrow">→</div>
-        <div class="wk future"><b>Siguiente</b><span>Posta la arma</span></div>
+        <div class="wk future"><b>Siguiente</b><span>Posty la arma 🤖</span></div>
         <div class="wk-arrow">→</div>
         <div class="wk future"><b>Siempre</b><span>vos solo aprobás ♾️</span></div>
       </div>
@@ -487,7 +534,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
   </div>
 </div></div>
 
-<div class="footer">Posta · Vos vendé. Nosotros posteamos. · Hecho en Argentina 🇦🇷</div>
+<div class="footer"><span class="footer-posty"><img src="ai-avatar.png" alt="Posty">Posty 🤖</span> · Un producto de Posta · Hecho en Argentina 🇦🇷</div>
 
 <script>
 const $ = (s) => document.querySelector(s);

@@ -37,3 +37,38 @@ self.addEventListener('fetch', (e) => {
     }))
   );
 });
+
+// ---------- Push notifications (Web Push / VAPID) ----------
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (err) { data = {}; }
+  const title = data.title || 'Posty 💬';
+  const body = data.body || '';
+  const url = data.url || '/#/app/semana';
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url },
+      tag: 'posta-push',
+      renotify: false,
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/#/app/semana';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const c of clients) {
+        try {
+          const u = new URL(c.url);
+          if (u.origin === self.location.origin) { c.navigate(url); return c.focus(); }
+        } catch (err) { /* seguir */ }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
