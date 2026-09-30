@@ -7,7 +7,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://postyhacetodo.com/prueba">
 <meta property="og:title" content="Posty te arma tu semana de posteos — gratis">
-<meta property="og:description" content="Describí tu negocio en detalle (1 minuto) y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. 3 días gratis, sin tarjeta.">
+<meta property="og:description" content="Contanos tu negocio en 30 segundos y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. 3 días gratis, sin tarjeta.">
 <meta property="og:image" content="https://postyhacetodo.com/og-prueba.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,10 +34,6 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .field input[type=text],.field select,.field textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:13px 15px;font-family:inherit;font-size:16px;color:var(--navy);background:#fff;outline:none;transition:border .15s}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cel)}
 .field textarea{resize:vertical;min-height:74px}
-.field textarea#f_goal{min-height:118px;line-height:1.55}
-.goal-meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;color:var(--mut)}
-#goalPraise{font-weight:700;color:var(--cel)}
-.goal-nudge{display:none;background:#FFF8E8;border:1.5px solid var(--yl);border-radius:12px;padding:12px 14px;font-size:13.5px;font-weight:600;color:var(--navy);margin-top:10px;line-height:1.5;animation:pop .2s ease}
 .field .hint{font-size:13px;color:var(--mut);margin-top:6px}
 .tone-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .tone-card{border:2px solid var(--line);border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;background:#fff}
@@ -56,12 +52,7 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .filebtn.has{border-style:solid;border-color:var(--cel);background:#f2f9fd}
 .filewrap{position:relative}
 .filewrap input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}
-.cchips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
-.cchips:empty{margin-bottom:0}
-.cchip{display:inline-flex;align-items:center;gap:7px;background:#f2f9fd;border:1.5px solid #d8e9f4;border-radius:999px;padding:5px 6px 5px 5px;font-size:14px;font-weight:700}
-.cchip a{display:inline-flex;align-items:center;gap:7px;color:var(--navy);text-decoration:none}
-.cchip i{width:26px;height:26px;border-radius:50%;background:var(--cel);color:#fff;font-style:normal;font-weight:800;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
-.cchip b{cursor:pointer;color:var(--mut);font-size:16px;padding:0 6px 0 2px}
+.cchips{display:none}
 .country-row{display:flex;gap:10px}
 .country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
 .country-btn.on{border-color:var(--cel);background:var(--bg2)}
@@ -73,13 +64,6 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .btn-sm{padding:10px 20px;font-size:14px}
 .err{background:#FDE8E8;color:#B42323;border-radius:12px;padding:13px 16px;font-weight:600;font-size:14px;margin-bottom:16px;display:none}
 .tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
-.benefits{margin:36px 0 6px}
-.benefits h3{text-align:center;color:var(--navy);font-size:20px;margin:0 0 16px}
-.bgrid{display:flex;flex-direction:column}
-.bcard{display:flex;gap:12px;align-items:flex-start;padding:13px 2px;background:none;border:none;border-radius:0}
-.bcard + .bcard{border-top:1px solid var(--line)}
-.bcard .bi{flex:0 0 42px;width:42px;height:42px;border-radius:13px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:22px}
-.bcard b{display:block;color:var(--navy);font-size:15px;margin-bottom:2px}
 .bcard p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
 @media(min-width:640px){
   .bgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
@@ -311,7 +295,7 @@ html{scroll-behavior:smooth}
 <body>
 <div class="nav"><div class="wrap">
   <a class="logo-posty" href="/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-  <span class="pill">PRUEBA GRATIS · UNA SOLA VEZ</span>
+  <span class="pill">3 DÍAS GRATIS</span>
 </div></div>
 
 <!-- VISTA: onboarding -->
@@ -328,15 +312,10 @@ html{scroll-behavior:smooth}
     <div class="card form-card" id="formCard">
       <div class="err" id="obErr"></div>
       <div class="field"><label>Nombre de tu negocio *</label><input type="text" id="f_biz" placeholder="Ej: Café Martínez" maxlength="60"></div>
-      <div class="field"><label>Tu Instagram *</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Lo usamos para personalizar tu semana con tu perfil real.</div></div>
+      <div class="field"><label>Tu Instagram</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40"><div class="hint">Opcional: lo usamos para personalizar tu semana con tu perfil real.</div></div>
       <div class="field"><label>Rubro *</label><select id="f_cat"></select></div>
-      <div class="field" id="goalField"><label>Tu negocio en detalle ✍️ *</label><textarea id="f_goal" maxlength="400" rows="4" placeholder="Ej: Tengo una tienda de celulares en Palermo. Vendo iPhone y Samsung nuevos y usados, y también hago reparaciones. Quiero posteos que muestren los últimos modelos, las ofertas de la semana y el plan canje, con un tono canchero para gente de 20 a 35 años."></textarea><div class="hint">Mientras más detalle, más van a parecer hechos por vos. Contanos <b>qué vendés</b>, <b>a quién</b> y <b>qué querés lograr</b> con los posteos.</div><div class="goal-meta"><span id="goalCount">0/400</span><span id="goalPraise"></span></div><div class="goal-nudge" id="goalNudge">💡 Con un poco más de detalle tus posteos salen mucho mejores. ¡Agregá una línea más! ✍️</div></div>
-      <div class="field"><label>Tus competidores (opcional)</label>
-        <div class="cchips" id="compChips"></div>
-        <input type="text" id="f_comp" placeholder="Escribí su @ y apretá Enter" maxlength="40" autocomplete="off">
-        <div class="hint" id="compHint">Los tenemos en cuenta para que tu semana se diferencie.</div>
-      </div>
-      <button class="btn btn-primary btn-block" id="btnGo">Armemos tu semana 🚀</button>
+      <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana 👀</button>
+      <p class="tiny" style="margin-top:10px">Tu semana lista en ~30 segundos.</p>
       <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
       <p class="tiny" style="margin-top:6px">🔒 Conectás tu cuenta con Meta — sin compartir tu contraseña</p>
     </div>
@@ -345,7 +324,7 @@ html{scroll-behavior:smooth}
     <h3>Así trabajo yo 👇</h3>
     <p class="lede">Tres pasos y tu Instagram anda solo.</p>
     <div class="steps3">
-      <div class="step3"><div class="n">1</div><div><b>Me contás de tu negocio</b><p>1 minuto en el formulario + 3 preguntas rápidas. Mientras más detalle, más parecen hechos por vos.</p></div></div>
+      <div class="step3"><div class="n">1</div><div><b>Me contás de tu negocio</b><p>30 segundos: nombre y rubro, nada más.</p></div></div>
       <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
       <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo publico</b><p>Nada sale sin tu OK. Y cada semana se repite en automático.</p></div></div>
     </div>
@@ -353,7 +332,7 @@ html{scroll-behavior:smooth}
 
   <div class="ejemplos">
     <h3>Hecho por Posty 🤖</h3>
-    <p class="lede">Posteos reales, publicados en Instagram.</p>
+    <p class="lede">Una muestra de lo que armo para tu negocio.</p>
     <div class="ej-grid">
       <div class="ej-card"><img src="prueba-ej1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>Te presento a Posty, tu community manager</p></div>
       <div class="ej-card"><img src="prueba-ej2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>Tu semana de Instagram, armada por mí</p></div>
@@ -363,16 +342,6 @@ html{scroll-behavior:smooth}
     <p class="ej-foot">Diseño + caption + hashtags — todo lo armo yo 🤖</p>
   </div>
 
-  <div class="benefits">
-    <h3>Esto hago por vos cada semana 👇</h3>
-    <div class="bgrid">
-      <div class="bcard"><div class="bi">🗓️</div><div><b>Tu semana armada</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda.</p></div></div>
-      <div class="bcard"><div class="bi">🙌</div><div><b>100% hecho por mí</b><p>Vos vendé. Yo posteo.</p></div></div>
-      <div class="bcard"><div class="bi">✅</div><div><b>Vos aprobás todo</b><p>Nada se publica sin tu OK. Nunca.</p></div></div>
-      <div class="bcard"><div class="bi">🎬</div><div><b>Reels incluidos</b><p>Videos verticales listos para publicar.</p></div></div>
-      <div class="bcard"><div class="bi">📈</div><div><b>Publicación automática</b><p>Tu Instagram activo todas las semanas, sin depender de tu tiempo.</p></div></div>
-      <div class="bcard"><div class="bi">💳</div><div><b>En pesos, sin vueltas</b><p>Pagás en pesos por MercadoPago y cancelás cuando quieras.</p></div></div>
-    </div>
   </div>
   </div>
 </div>
@@ -424,6 +393,18 @@ html{scroll-behavior:smooth}
       <div class="week" id="rWeek"></div>
       <div class="share-row"><button class="share-btn" id="btnShare">📤 Compartir mi semana</button></div>
       <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">¿Algo no te cierra? Pedilo por chat 👇</a></p>
+      <!-- Email del lead (abandono de trial): solo visitantes no logueados.
+           Una línea sutil: si deja su email y no se registra, en ~24h recibe
+           UN aviso de que su semana sigue guardada. -->
+      <div id="leadEmailRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
+        <p style="font-size:14px;color:#47617A;margin:0 0 8px">📧 ¿Te la mando por email para verla tranquila?</p>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="leadEmail" placeholder="tu@email.com" autocomplete="email" inputmode="email"
+            style="flex:1;min-width:0;font-size:16px;padding:12px 14px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33">
+          <button id="leadEmailGo" class="btn btn-primary" style="white-space:nowrap;padding:12px 20px">Mandar</button>
+        </div>
+        <p class="tiny" id="leadEmailMsg" style="margin:8px 0 0;min-height:18px"></p>
+      </div>
     </div>
 
     <div class="sec">
@@ -502,9 +483,8 @@ html{scroll-behavior:smooth}
   <h2>Creá tu cuenta gratis</h2>
   <p class="msub" id="rgSub"></p>
   <div class="field"><label>Email</label><input type="email" id="rg_email" placeholder="tu@email.com" autocomplete="email"></div>
-  <div class="field"><label>Contraseña</label><input type="password" id="rg_pass" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
   <div class="err" id="rgErr"></div>
-  <button class="btn btn-primary btn-block" id="btnReg">Crear mi cuenta 🚀</button>
+  <button class="btn btn-primary btn-block" id="btnReg">Mandar mi link de acceso 📧</button>
   <p class="tiny">Sin tarjeta · Desde $39.900/mes al terminar · Cancelá cuando quieras</p>
   <p class="tiny" style="margin-top:6px">🔒 Tu Instagram se conecta con Meta — sin compartir tu contraseña</p>
   <p class="tiny" style="margin-top:8px">¿Ya tenés cuenta? <a href="/#/login" style="color:var(--cel);font-weight:700">Entrá</a></p>
@@ -595,6 +575,12 @@ const TEST_KEY_QS = (() => {
   const k = new URLSearchParams(location.search).get('test_key');
   return k ? '?test_key=' + encodeURIComponent(k) : '';
 })();
+// Link del email "tu semana te está esperando": ?ig=... carga la semana
+// guardada directo en la pantalla de resultados (viene del cron de abandono).
+const DEEP_IG = (() => {
+  const v = new URLSearchParams(location.search).get('ig');
+  return v && /^[a-z0-9._]{1,30}$/i.test(v.trim()) ? v.trim().replace(/^@/, '').toLowerCase() : '';
+})();
 function saveTrial() { try { if (!TEST_KEY_QS) idb.set(TRIAL); } catch (e) {} }
 let _toastT = null;
 function toast(msg) {
@@ -623,19 +609,6 @@ function show(id) {
  try {
   $('#f_cat').innerHTML = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('#btnGo').onclick = startTrial;
-  // Contador + refuerzo para el párrafo de detalle
-  const gTa = $('#f_goal');
-  if (gTa) gTa.addEventListener('input', () => {
-    const n = gTa.value.length;
-    const c = $('#goalCount'); if (c) c.textContent = n + '/400';
-    const p = $('#goalPraise');
-    if (p) p.textContent = n >= 80 ? '¡Perfecto! Con este detalle tus posteos van a salir a medida ✨' : '';
-    const ng = $('#goalNudge');
-    if (ng && n >= 30) ng.style.display = 'none';
-  });
-  const ci = $('#f_comp');
-  ci.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addComp(ci.value); ci.value = ''; } });
-  ci.addEventListener('blur', () => { if (ci.value.trim()) { addComp(ci.value); ci.value = ''; } });
   $('#btnBuy2').onclick = openRegTrial;
   $('#btnBuy3').onclick = openRegTrial;
   $('#xLb').onclick = () => $('#lb').classList.remove('open');
@@ -643,6 +616,22 @@ function show(id) {
   $('#lbNext').onclick = (e) => { e.stopPropagation(); lbNav(1); };
   $('#lb').addEventListener('click', (e) => { if (e.target.id === 'lb') $('#lb').classList.remove('open'); });
 
+  // ¿Llegó por el link del email "tu semana te está esperando"? (?ig=...)
+  // Carga la semana guardada directo en resultados, sin pasar por el form.
+  if (DEEP_IG && !TEST_KEY_QS) {
+    try {
+      const r = await fetch('/api/trial/week?ig=' + encodeURIComponent(DEEP_IG));
+      if (r.ok) {
+        const data = await r.json();
+        if (data && data.posts && data.posts.length) {
+          TRIAL = data;
+          resetTrialChat();
+          renderResults();
+          return;
+        }
+      }
+    } catch (e) {}
+  }
   // ¿Ya generaste tu semana en este navegador? Mostrala directo.
   // (En otro navegador o dispositivo: completás el form con el mismo @
   // y el servidor te devuelve tu semana cacheada al instante.)
@@ -655,24 +644,6 @@ function show(id) {
   show('v-onboarding');
  } catch (e) { try { show('v-onboarding'); } catch (e2) {} }
 })();
-
-// ---------- competidores: chips con @ clickeables ----------
-const compHandles = [];
-function renderCompChips() {
-  const box = $('#compChips');
-  box.innerHTML = compHandles.map((h, i) => `
-    <span class="cchip"><a href="https://www.instagram.com/${encodeURIComponent(h)}/" target="_blank" rel="noopener"><i>${esc(h[0].toUpperCase())}</i>@${esc(h)}</a><b data-i="${i}" title="Quitar">×</b></span>`).join('');
-  box.querySelectorAll('b').forEach((b) => { b.onclick = () => { compHandles.splice(parseInt(b.dataset.i, 10), 1); renderCompChips(); }; });
-  $('#compHint').textContent = compHandles.length
-    ? 'Tocá cada @ para ver su Instagram.'
-    : 'Los tenemos en cuenta para que tu semana se diferencie.';
-}
-function addComp(raw) {
-  const h = String(raw || '').trim().replace(/^@/, '').toLowerCase();
-  if (!h || !/^[a-z0-9._]{1,30}$/.test(h)) return;
-  if (!compHandles.includes(h) && compHandles.length < 5) compHandles.push(h);
-  renderCompChips();
-}
 
 // ---------- generar ----------
 const TK_STEPS = [
@@ -698,19 +669,9 @@ async function startTrial() {
   const err = $('#obErr');
   const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
   if (!biz) return fail('Contanos el nombre de tu negocio 🙂');
-  if (!$('#f_ig').value.trim()) return fail('Contanos tu Instagram 🙂');
-  const gv = $('#f_goal').value.trim();
-  if (!gv) return fail('Contanos de tu negocio en detalle, así tu semana sale a medida 🙂');
-  if (gv.length < 30 && !window._goalNudged) {
-    window._goalNudged = true;
-    $('#goalNudge').style.display = 'block';
-    $('#goalField').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => $('#f_goal').focus({ preventScroll: true }), 450);
-    return;
-  }
   err.style.display = 'none';
   TRIAL_BIZ = biz;
-  TRIAL_DESC = gv;
+  TRIAL_DESC = '';
   trk('prueba_step', { step: 'formulario' });
   showQuestions();
 }
@@ -807,8 +768,8 @@ async function beginGeneration() {
   fd.append('category', $('#f_cat').value);
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
-  fd.append('goal', $('#f_goal').value.trim());
-  fd.append('competitors', compHandles.map((h) => '@' + h).join(', '));
+  fd.append('goal', '');
+  fd.append('competitors', '');
   // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
   fd.append('goal_key', TRIAL_ANS.goal_key || '');
   fd.append('producto', TRIAL_ANS.producto || '');
@@ -835,8 +796,8 @@ async function beginGeneration() {
         saved_at: Date.now(),
         business_name: TRIAL_BIZ,
         category: $('#f_cat').value,
-        description: $('#f_goal').value.trim(),
-        competitors: compHandles.map((h) => '@' + h).join(', '),
+        description: '',
+        competitors: '',
         ig_username: $('#f_ig').value.trim().replace(/^@/, ''),
         tone: TONE,
         country: COUNTRY,
@@ -908,6 +869,49 @@ function renderResults() {
   const sc = $('#stickyCta');
   sc.style.display = 'block';
   initTrialChat();
+  maybeShowLeadEmail();
+}
+
+// Email del lead (abandono de trial): línea sutil bajo los resultados, SOLO
+// si el visitante no está logueado. Si llegó por el link del email (?ig=...),
+// ya tenemos su email: no se muestra.
+let _meP = null, _leadWired = false;
+function meCached() {
+  if (!_meP) _meP = fetch('/api/auth/me').then((r) => r.json()).then((j) => (j && j.user) || null).catch(() => null);
+  return _meP;
+}
+async function maybeShowLeadEmail() {
+  const row = $('#leadEmailRow');
+  if (!row) return;
+  if (DEEP_IG) return; // vino del email: ya tenemos su email
+  if (_leadWired) { row.style.display = 'block'; return; }
+  const me = await meCached();
+  if (me) return; // logueado: el email ya está en su cuenta
+  row.style.display = 'block';
+  _leadWired = true;
+  const em = $('#leadEmail'), go = $('#leadEmailGo'), msg = $('#leadEmailMsg');
+  const send = async () => {
+    const v = em.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { msg.textContent = 'Revisá el email, que no parece válido 😅'; return; }
+    if (!(TRIAL && TRIAL.ig)) { msg.textContent = 'No encontramos tu semana 😅'; return; }
+    go.disabled = true; msg.textContent = 'Guardando…';
+    try {
+      const r = await fetch('/api/trial/lead-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ig: TRIAL.ig, email: v }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'No pudimos guardarlo');
+      em.disabled = true; go.disabled = true;
+      msg.textContent = '¡Listo! Te avisamos por email antes de que se borre 📧';
+      trk('prueba_lead_email');
+    } catch (e) {
+      go.disabled = false;
+      msg.textContent = e.message || 'No pudimos guardarlo. Probá de nuevo.';
+    }
+  };
+  go.onclick = send;
+  em.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
 }
 
 function trialWeekOrdered() {
@@ -1307,54 +1311,44 @@ function closeReg() {
   $('#ovReg').classList.remove('open');
   document.body.style.overflow = '';
 }async function doRegister() {
-  const email = $('#rg_email').value.trim(), pass = $('#rg_pass').value;
+  const email = $('#rg_email').value.trim();
   const err = $('#rgErr');
   const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) return fail('Poné un email válido 🙂');
-  if (pass.length < 6) return fail('La contraseña tiene que tener al menos 6 caracteres 🙂');
   err.style.display = 'none';
   const b = $('#btnReg');
-  b.disabled = true; b.textContent = 'Creando tu cuenta…';
+  b.disabled = true; b.textContent = 'Mandando tu link…';
   try {
-    const body = { email, password: pass };
+    const body = { email };
     if (TRIAL && TRIAL.ig) body.trial_ig = TRIAL.ig;
     try { const rf = localStorage.getItem('posta_ref'); if (rf) body.ref = rf; } catch (e) {}
-    await pj('/api/auth/register', body);
-    try { localStorage.removeItem('posta_ref'); } catch (e) {}
-    // Puente /prueba → cuenta: pre-cargamos el perfil con los datos de la prueba
-    // Solo si la prueba es fresca (24h): datos viejos de tests no deben volverse marca permanente.
+    // Puente /prueba → cuenta: el servidor importa el perfil al canjear el magic link.
     try {
       const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
-      const fresh = tp && tp.saved_at && (Date.now() - tp.saved_at < 24 * 3600 * 1000);
-      if (fresh && tp.business_name) {
-        const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
-        await pj('/api/profile', {
-          business_name: String(tp.business_name).slice(0, 80),
-          category: catMap[tp.category] || 'otro',
-          description: String(tp.description || '').slice(0, 600),
-          competitors: String(tp.competitors || '').slice(0, 200),
-          ig_username: String(tp.ig_username || '').slice(0, 40),
-          tone: tp.tone === 'tu' ? 'profesional' : 'canchero',
-          goal: 'vender',
-        }, 'PUT');
-        const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
-        if (bc.length >= 2) await pj('/api/settings', { brand_colors: bc.slice(0, 3) }, 'PUT').catch(() => {});
+      if (tp && typeof tp === 'object') {
+        const pf = {};
+        ['business_name', 'category', 'description', 'competitors', 'ig_username', 'tone', 'brand_colors']
+          .forEach((k) => { if (tp[k] !== undefined) pf[k] = tp[k]; });
+        if (Object.keys(pf).length) body.trial_profile = pf;
       }
     } catch (e) {}
-    try { localStorage.removeItem('posta_trial_profile'); } catch (e) {}
-    b.textContent = '¡Listo! ✅';
-    setTimeout(() => {
-      location.href = '/#/app/semana';
-    }, 700);
+    await pj('/api/auth/magic-request', body);
+    try { localStorage.removeItem('posta_ref'); } catch (e) {}
+    const m = document.querySelector('#ovReg .modal');
+    m.innerHTML = `<button class="x" id="xReg">✕</button>
+      <h2 style="margin-top:18px">Revisá tu email 👀</h2>
+      <p class="msub">📧 <b>Te mandamos un link a tu email</b><br>Tocalo y entrás directo, sin contraseña. Vale 15 minutos.</p>
+      <p class="tiny">Sin tarjeta · Desde $39.900/mes al terminar · Cancelá cuando quieras</p>`;
+    $('#xReg').onclick = closeReg;
   } catch (e) {
     fail(e.message);
-    b.disabled = false; b.textContent = 'Crear mi cuenta 🚀';
+    b.disabled = false; b.textContent = 'Mandar mi link de acceso 📧';
   }
 }
 $('#xReg').onclick = closeReg;
 $('#btnReg').onclick = doRegister;
 $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') closeReg(); });
-['rg_email', 'rg_pass'].forEach((id) => {
+['rg_email'].forEach((id) => {
   document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 });
 </script>

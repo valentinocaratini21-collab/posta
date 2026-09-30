@@ -30,6 +30,7 @@
  ],
  "lang": "es",
  "name": "Posty — Tu community manager",
+ "id": "/",
  "orientation": "portrait",
  "scope": "/",
  "short_name": "Posty",

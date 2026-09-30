@@ -476,6 +476,12 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .pz-exp-go{background:var(--yl);color:#0A1E33;font-weight:800;font-size:11.5px;padding:8px 14px;border-radius:999px;white-space:nowrap}
 .pz-exp-guar{font-size:11px;color:var(--mut);margin:6px 0 12px}
 .pz-exp-later{border:0;background:none;color:var(--dim);font-size:11.5px;cursor:pointer;text-decoration:underline;padding:6px}
+.pz-exp-plan small{display:block}
+.pz-exp-mix{margin-top:2px;font-weight:600}
+.pz-exp-tag{display:inline-block;background:#FEC14D;color:#0A1E33;font-size:9.5px;font-weight:800;letter-spacing:.5px;padding:3px 9px;border-radius:999px;margin-bottom:5px}
+/* ---------- Banner persistente: trial vencido (tab Schedule) ---------- */
+.pz-trial-banner{display:flex;align-items:center;justify-content:center;gap:8px;background:#0A1E33;color:#fff;font-size:12.5px;font-weight:700;text-align:center;line-height:1.4;padding:10px 14px;border-radius:12px;margin:0 0 10px;text-decoration:none;touch-action:manipulation}
+.pz-trial-banner:active{opacity:.85}
 @keyframes pzFadeIn{from{opacity:0}to{opacity:1}}
 .pz-guar{background:#EFFBF3;border:1px solid #B9E6C7;border-radius:14px;padding:12px 16px;font-size:12.5px;margin-top:14px;line-height:1.5}
 .pz-refrow{display:flex;gap:10px;margin:12px 0}
@@ -696,6 +702,26 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .bar-w span{font-size:10px;color:var(--dim);font-weight:600}
 .big-pct{font-size:40.5px;font-weight:800;color:var(--txt);letter-spacing:-.02em;margin:4px 0 10px}
 .card .d{color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 14px}
+/* ---------- 📊 Tus números ---------- */
+.st-wrap{max-width:680px}
+.st-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 14px}
+.st-card{background:linear-gradient(180deg,#FFFFFF 0%,#FCFEFF 100%);border:1px solid var(--line);border-radius:18px;padding:18px 16px;box-shadow:var(--shadow);min-height:104px;display:flex;flex-direction:column;justify-content:center}
+.st-card .st-num{font-size:27px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.st-card .st-label{font-size:13px;color:var(--mut);margin-top:4px;line-height:1.35}
+.st-card.st-loading .st-num{color:var(--dim)}
+.st-empty{text-align:center}
+.st-empty-ico{font-size:38px;margin-bottom:8px}
+.st-empty b{font-size:15.5px}
+.st-empty p{color:var(--mut);font-size:13.5px;margin:8px 0 0}
+.st-best-row{display:flex;gap:14px;align-items:center;margin-top:2px}
+.st-best-row img{width:88px;height:88px;border-radius:14px;object-fit:cover;flex:none;background:var(--bg2)}
+.st-best-row b{font-size:14.5px;display:block;margin-bottom:6px}
+.st-best-row p{color:var(--mut);font-size:13.5px;margin:0}
+@media (max-width:420px){
+  .st-card{padding:15px 13px;min-height:96px}
+  .st-card .st-num{font-size:24px}
+  .st-best-row img{width:76px;height:76px}
+}
 .sig-btn{background:var(--bg2);border:1px solid var(--line);border-radius:10px;font-size:13px;padding:6px 10px;cursor:pointer;font-family:inherit;transition:transform .12s,border-color .12s}
 .sig-btn:active{transform:scale(.92)}
 .sig-btn.on{border-color:var(--cel);background:var(--cel-soft);box-shadow:0 0 0 1px var(--cel)}
@@ -952,6 +978,9 @@ textarea.in{resize:vertical;min-height:96px}
 /* Chips de quick-reply contextuales: fila scrolleable sobre el input, un tap = enviar */
 .chat-quick{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 6px;margin:0;scrollbar-width:none;-webkit-overflow-scrolling:touch;flex-wrap:wrap}
 .chat-quick .chat-quota{flex:0 0 100%}
+.chat-quick.quota-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;overflow:visible}
+.chat-quick.quota-row .chat-quota{grid-column:1;text-align:left;width:auto;padding:4px 0 4px 8px}
+.chat-quick.quota-row button{grid-column:2}
 .chat-quick::-webkit-scrollbar{display:none}
 .chat-quick button{flex:0 0 auto;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 15px;font-size:12.5px;font-weight:700;color:#0A1E33;cursor:pointer;font-family:inherit;white-space:nowrap}
 .chat-quick button:active{background:var(--cel);border-color:var(--cel);color:#fff;transform:scale(.96)}
@@ -1278,9 +1307,10 @@ textarea.in{resize:vertical;min-height:96px}
 /* (bottom nav eliminada 2026-09-29: la reemplaza el drawer del topbar) */
 /* Drawer mobile: oculto por defecto (solo existe en mobile) */
 .drawer,.drawer-ov{display:none}
-.chome-top{display:flex;flex-direction:row;align-items:center;text-align:left;gap:8px;margin:0 0 10px;padding:6px 2px;position:sticky;top:0;background:var(--bg);z-index:5}
-.chome-top .chome-sub{display:none}
-.chome-top b{font-size:14px}
+.chome-top{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;margin:0 0 14px;padding:18px 8px 12px}
+.chome-top .chome-sub{display:block;font-size:13px;color:var(--dim);max-width:300px;line-height:1.45}
+.chome-top b{font-size:20px}
+.chome-top .chome-ava-wrap{width:64px;height:64px}
 .chat-cta-row{margin:6px 0 2px;align-self:flex-start}
 /* Avatar de la IA: burbujas del asistente en todo el chat */
 .chat-msg.ai{position:relative;margin-left:38px;max-width:calc(88% - 38px)}
@@ -1338,6 +1368,11 @@ textarea.in{resize:vertical;min-height:96px}
   .chat-home .chat-box{max-height:56vh;min-height:200px}
   .chat-home .chat-input-row{position:sticky;bottom:0;z-index:5;background:var(--bg);padding:10px 2px calc(10px + env(safe-area-inset-bottom))}
   .chat-home #chatCard{margin:0}
+  /* El chat llena la pantalla: sin espacio muerto abajo */
+  .main-chat{display:flex;flex-direction:column}
+  .main-chat .chat-home{flex:1;display:flex;flex-direction:column;min-height:0}
+  .main-chat #chatCard{flex:1;display:flex;flex-direction:column;min-height:0}
+  .main-chat .chat-box{flex:1 1 auto;min-height:140px}
 }
 
 /* ============================================================
@@ -1355,10 +1390,10 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-msg.ai::before{left:-32px;width:26px;height:26px}
 
 /* Header del chat: Posty protagonista, centrado */
-.chome-top{gap:5px;margin:0 0 10px}
-.chome-top .chome-ava-wrap{width:52px;height:52px}
-.chome-top b{font-size:14px}
-.chome-top .chome-sub{font-size:10px}
+.chome-top{padding:14px 8px 10px}
+.chome-top .chome-ava-wrap{width:56px;height:56px}
+.chome-top b{font-size:18px}
+.chome-top .chome-sub{font-size:12px}
 
 /* Chips de sugerencia: más chicos y discretos */
 .chat-quick{padding:8px 2px 4px}
@@ -1403,11 +1438,11 @@ textarea.in{resize:vertical;min-height:96px}
    La landing pública para visitantes no logueados no cambia.
    ============================================================ */
 @media(min-width:761px){
-  .main-chat{width:100%;max-width:820px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100vh - 72px)}
-  .main-chat .chat-home{flex:1;display:flex;flex-direction:column}
+  .main-chat{width:100%;max-width:1080px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 72px)}
+  .main-chat .chat-home{flex:1;display:flex;flex-direction:column;min-height:0}
   .main-chat .chome-top{margin-bottom:10px}
-  .main-chat #chatCard{flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
-  .main-chat .chat-box{flex:1 1 auto;min-height:280px;max-height:calc(100vh - 400px);overflow-y:auto}
+  .main-chat #chatCard{flex:1;display:flex;flex-direction:column;min-height:0;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
+  .main-chat .chat-box{flex:1 1 auto;min-height:200px;max-height:none;overflow-y:auto}
   .main-chat .chat-input-row{position:sticky;bottom:0;background:#fff;padding:10px 0 4px;z-index:5}
 }
 
@@ -1557,3 +1592,56 @@ textarea.in{resize:vertical;min-height:96px}
 .star-btn:hover{color:#F5B800;transform:scale(1.12)}
 .star-btn:disabled{opacity:.9}
 .chat-quota{font-size:11.5px;color:var(--mut);text-align:center;padding:4px 8px 0;font-weight:600;display:block;width:100%}
+
+/* ============================================================
+   🔔 POSTY TE AVISA — aprobación de posteos por notificación
+   Mobile-first: la mayoría entra desde la notificación en el celu.
+   Textos ≥16px (anti-zoom iOS).
+   ============================================================ */
+.apv-wrap{max-width:620px;margin:0 auto;padding:6px 2px 44px}
+.apv-back{display:inline-block;font-size:14px;font-weight:700;color:var(--cel);margin:2px 0 12px;padding:8px 4px}
+.apv-media{border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);margin-bottom:14px;background:#0A1E33}
+.apv-media img,.apv-media video{width:100%;aspect-ratio:1/1;object-fit:cover;display:block}
+.apv-pillrow{margin:2px 0 10px}
+.apv-pill{display:inline-block;font-size:14px;font-weight:700;padding:9px 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;line-height:1.35}
+.apv-pill-ok{border-color:rgba(34,197,94,.45);background:rgba(34,197,94,.08);color:#15803D}
+.apv-pill-pend{border-color:var(--yl-line);background:var(--yl-soft);color:#8a5a00}
+.apv-pill-bad{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07);color:var(--red-d)}
+.apv-pill-warn{border-color:rgba(254,193,77,.7);background:#FFFBF0;color:#8a5a00}
+.apv-pill-auto{border-color:var(--cel-line);background:var(--cel-soft);color:#1D82B0}
+.apv-when{font-size:16px;font-weight:700;margin:0 0 12px;color:var(--txt)}
+.apv-caption{font-size:16px;line-height:1.65;color:var(--txt);margin:0 0 6px;overflow-wrap:anywhere}
+.apv-tags{margin-top:10px;font-size:14px;color:var(--cel);line-height:1.6}
+.apv-link{font-size:14px;font-weight:700;color:var(--cel);text-decoration:underline}
+.apv-actions{display:flex;gap:10px;margin-top:18px}
+.apv-actions .btn{flex:1;min-height:54px;font-size:16px;border-radius:16px;padding:12px 8px;white-space:nowrap}
+.apv-confirm{margin-top:18px;border:1.5px solid rgba(239,68,68,.35);background:rgba(239,68,68,.05);border-radius:16px;padding:18px 16px}
+.apv-confirm p{font-size:16px;margin:0 0 4px;color:var(--txt)}
+.apv-confirm .apv-actions{margin-top:12px}
+@media (min-width:720px){
+  .apv-wrap{padding:16px 8px 56px}
+}
+
+/* ---------- 🧠 Lo que Posty sabe de tu negocio: filas compactas ---------- */
+.src-intro{color:var(--mut);font-size:12.5px;margin:0 0 4px}
+.src-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:11px 2px;border-bottom:1px solid var(--line);min-height:56px}
+.src-row:last-child{border-bottom:0}
+.src-ico{font-size:21px;flex:none;width:30px;text-align:center}
+.src-tx{flex:1;min-width:0}
+.src-tx b{display:block;font-size:13.5px}
+.src-tx small{display:block;color:var(--mut);font-size:11.5px;margin-top:1px}
+.src-act{flex:none}
+.src-re{min-width:44px;min-height:44px;font-size:19px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--cel);cursor:pointer;font-family:inherit;line-height:1}
+.src-re:active{background:#F2F9FD}
+.src-full{flex:1 1 100%;display:flex;gap:8px;margin-top:4px}
+.src-full input{flex:1;min-width:0;font-size:16px;padding:10px 12px;min-height:44px;border:1px solid var(--line);border-radius:12px;font-family:inherit;background:#fff;color:var(--txt)}
+.src-full .btn{min-height:44px;flex:none}
+.src-full .hint{align-self:center}
+/* ---------- Checklist: fila cumplida (email fallback) ---------- */
+.setup-row.setup-done{cursor:default}
+.setup-row.setup-done:active{background:none}
+.setup-row.setup-done .setup-go{color:#2E9E5B}
+/* ---------- Checklist: confetti de festejo (CSS puro, no bloquea ni rompe el layout mobile) ---------- */
+.posty-confetti{position:fixed;inset:0;pointer-events:none;z-index:10002;overflow:hidden}
+.posty-confetti i{position:absolute;top:-12px;width:8px;height:12px;border-radius:2px;opacity:.9;animation:posty-confetti-fall 2.2s ease-in forwards}
+@keyframes posty-confetti-fall{to{transform:translateY(110vh) rotate(540deg);opacity:0}}

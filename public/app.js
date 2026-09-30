@@ -75,6 +75,13 @@ const api = {
   del: (u) => api.req('DELETE', u),
 };
 
+// IS_NATIVE: la app corre empaquetada (Capacitor iOS / TWA Android). Sin ventas: cero precios, cero CTAs de pago.
+const IS_NATIVE = (() => { try {
+  if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
+  if (typeof document !== 'undefined' && document.referrer && document.referrer.indexOf('android-app://') === 0) return true;
+  return false;
+} catch (e) { return false; } })();
+
 // ---------- Analytics propio: mide el uso para mejorar el producto ----------
 // Fire-and-forget: encola eventos y los manda en batch. JAMÁS rompe ni frena la UI.
 const AN_Q = [];
@@ -828,44 +835,41 @@ async function pushEnableFlow() {
   if (!accepted) return { ok: false, reason: 'declined' };
   return pushDoSubscribe();
 }
-async function pushRenderZone() {
-  const z = document.getElementById('pushZone');
-  if (!z) return;
-  if (!pushSupported()) { z.innerHTML = '<p class="hint">Tu navegador no soporta notificaciones push. Todo sigue funcionando igual 👍</p>'; return; }
-  let sub = null;
-  try { const reg = await navigator.serviceWorker.ready; sub = await reg.pushManager.getSubscription(); } catch (e) { sub = null; }
-  const perm = pushPerm();
-  if (perm === 'granted' && sub) {
-    z.innerHTML = '<div class="okmsg">🔔 Notificaciones activadas en este dispositivo.</div>' +
-      '<button class="btn btn-ghost btn-sm" id="pushOff">Desactivar en este dispositivo</button>';
-    document.getElementById('pushOff').onclick = async () => {
-      try {
-        const j = sub.toJSON();
-        await api.post('/api/push/unsubscribe', { endpoint: j.endpoint });
-        await sub.unsubscribe();
-      } catch (e) { /* igual seguir */ }
-      try { localStorage.removeItem('push-sub'); } catch (e) {}
-      pushRenderZone();
-    };
-  } else if (perm === 'denied') {
-    z.innerHTML = '<p class="hint">Bloqueaste las notificaciones en el navegador. Para activarlas: Ajustes del celu → Posty → Notificaciones → Permitir.</p>';
-  } else {
-    z.innerHTML = '<button class="btn btn-primary" id="pushOn">🔔 Activar notificaciones</button> <span id="pushMsg"></span>';
-    document.getElementById('pushOn').onclick = async () => {
-      const m = document.getElementById('pushMsg');
-      const res = await pushEnableFlow();
-      if (res.ok) { pushRenderZone(); return; }
-      if (m) {
-        const msg = res.reason === 'declined' ? 'Dale, cuando quieras las activás desde acá 👍'
-          : res.reason === 'denied' ? 'El navegador no dio permiso. Fijate en Ajustes → Notificaciones.'
-          : res.reason === 'no_vapid' ? 'Todavía no están configuradas. Probá de nuevo en un rato.'
-          : 'No se pudo activar 😅 Probá de nuevo.';
-        m.innerHTML = '<span class="hint">' + msg + '</span>';
-      }
-    };
-  }
+/* ---------- CHECKLIST QUE FESTEJA ---------- */
+// Detecta la transición a 0 pasos (todos completados) y celebra UNA SOLA VEZ.
+let SETUP_COUNT_PREV = null; // conteo del último render del checklist
+const SETUP_CELEBRATED_KEY = 'posty-checklist-celebrated';
+function setupChecklistCelebrate(n) {
+  try {
+    const prev = SETUP_COUNT_PREV;
+    SETUP_COUNT_PREV = n; // se actualiza SIEMPRE: un render = una oportunidad
+    if (!(prev > 0 && n === 0)) return; // solo transición real a cero
+    let flag = null;
+    try { flag = localStorage.getItem(SETUP_CELEBRATED_KEY); } catch (e) {}
+    if (flag) return; // ya festejó: jamás repetir
+    try { localStorage.setItem(SETUP_CELEBRATED_KEY, '1'); } catch (e) {} // flag ANTES de los efectos
+    const msg = '¡Listo! Ya estoy trabajando para vos 🎉';
+    chatSay(msg); // mensaje de Posty en el chat (persiste en el servidor vía /api/ideas/chat/log)
+    toast('🎉 <b>¡Listo!</b> Ya estoy trabajando para vos 🎉'); // toast visible en la app
+    postyConfetti(); // confetti sutil
+  } catch (e) {}
 }
-
+// Confetti sutil: ~25 piezas con CSS puro, sin librerías. No bloquea ni rompe el layout mobile.
+function postyConfetti() {
+  const colors = ['#2793C8', '#FEC14D', '#0A1E33', '#7EC8F2', '#FFE29A'];
+  const box = document.createElement('div');
+  box.className = 'posty-confetti';
+  for (let i = 0; i < 25; i++) {
+    const p = document.createElement('i');
+    p.style.left = (Math.random() * 100).toFixed(2) + 'vw';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
+    p.style.animationDuration = (1.6 + Math.random() * 1.2).toFixed(2) + 's';
+    box.appendChild(p);
+  }
+  document.body.appendChild(box);
+  setTimeout(() => { try { box.remove(); } catch (e) {} }, 3600);
+}
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
 function igConnectHere() {
   const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
@@ -882,9 +886,57 @@ function setupChecklistHtml() {
   if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
     rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">📲</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
   }
+  // 🔔 Notificaciones: obligatorias. Sin botón de descartar: el paso se cumple
+  // activando push, o por email si el OS lo bloquea (el email siempre llega).
+  if (pushSupported() && pushPerm() !== 'granted') {
+    if (pushPerm() === 'denied') {
+      rows.push(`<div class="setup-row setup-done"><span class="setup-ico">📧</span><span class="setup-txt"><b>Te aviso por email</b><small>Bloqueaste las notificaciones: los avisos llegan a tu email.</small></span><span class="setup-go">✓</span></div>`);
+    } else {
+      rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">🔔</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar →</span></button>`);
+    }
+  }
+  // La detección de transición vive acá: cubre TODAS las rutas que pintan el checklist
+  // (refreshSetupChecklist, appShell, chatView), porque todas pasan por esta función.
+  setupChecklistCelebrate(rows.length);
   if (!rows.length) return '';
   const n = rows.length;
   return `<div class="setup-card"><div class="setup-title">🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}</div>${rows.join('')}</div>`;
+}
+// Bindea las filas del checklist (se re-bindea tras cada refresh del checklist).
+function bindSetupRows() {
+  const sg = $('#setupIgRow');
+  if (sg) sg.onclick = igConnectHere;
+  const sb = $('#setupBizRow');
+  if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
+  const pi = $('#pwaInstallBtn');
+  if (pi) pi.onclick = pwaDoInstall;
+  const sp = $('#setupPushRow');
+  if (sp) sp.onclick = async () => {
+    sp.disabled = true;
+    try {
+      const r = await pushEnableFlow();
+      if (r && r.ok) {
+        toast('🔔 <b>¡Listo!</b> Te aviso antes de cada posteo 🙌');
+        refreshSetupChecklist();
+      } else if (r && r.reason === 'denied') {
+        // El OS lo bloqueó: la fila pasa a estado cumplido por email.
+        refreshSetupChecklist();
+      }
+    } catch (e) {}
+    try { sp.disabled = false; } catch (e) {}
+  };
+}
+// Re-render del checklist en el lugar (tras activar notificaciones, etc.).
+function refreshSetupChecklist() {
+  document.querySelectorAll('.setup-card').forEach(card => {
+    const h = setupChecklistHtml();
+    if (!h) { card.remove(); return; }
+    const t = document.createElement('template');
+    t.innerHTML = h.trim();
+    const fresh = t.content.firstElementChild;
+    if (fresh) card.replaceWith(fresh);
+  });
+  bindSetupRows();
 }
 
 function appShell(tab, content) {
@@ -902,6 +954,7 @@ function appShell(tab, content) {
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
     <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'numeros' ? 'on' : ''}" data-tab="numeros"><span class="di">📊</span>Tus números</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
@@ -1490,7 +1543,7 @@ function autopilotCardHTML(tag) {
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Armemos tu semana</h3>
-    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — al aceptar, salen solos.</p>
     <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
@@ -1568,10 +1621,10 @@ function fmtWhenTxt(v) {
   const p2 = n => String(n).padStart(2, '0');
   return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
-// Pill de fecha del borrador: aclara que es la fecha programada de salida
+// Pill de fecha del borrador: fecha PROPUESTA (condicional, todavía no aceptado)
 function fmtWhenPill(v) {
   const wt = fmtWhenTxt(v);
-  return wt === 'Elegir día y hora' ? wt : `Programado para ${wt}`;
+  return wt === 'Elegir día y hora' ? wt : `Saldría ${wt}`;
 }
 // Badge de estrategia (tipo de contenido) junto al pill de fecha
 function tipoBadge(t) {
@@ -1591,8 +1644,9 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
-    <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — al aceptar, salen solos a la hora indicada.</p>
     ${n ? `<button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin:6px 0 10px">📅 Programar mi semana →</button>` : ''}
+    ${n ? `<button class="btn btn-soft btn-block" id="btnAcceptAll" style="margin:0 0 10px">✅ Aceptar todos</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -2075,6 +2129,46 @@ function bindScheduleAll() {
   const b = document.getElementById('btnScheduleAll');
   if (!b) return;
   b.onclick = () => doScheduleAll(b);
+}
+
+// "✅ Aceptar todos": un tap aprueba TODOS los borradores pendientes y los deja
+// programados en la hora que muestra la tarjeta. El tap ES la confirmación.
+async function doAcceptAll(btn) {
+  const b = btn || document.getElementById('btnAcceptAll');
+  const m = $('#revMsg');
+  // Sin Instagram conectado, "sale solo" es mentira: mismo gate que los demás.
+  if (!(PROFILE && PROFILE.ig_connected)) {
+    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+    const g = $('#revIgGo');
+    if (g) g.onclick = () => igConnectHere();
+    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (b) { b.disabled = true; b.textContent = 'Aceptando…'; }
+  try {
+    const items = $$('#reviewCard [data-revwhen]')
+      .map((inp) => ({ id: +inp.dataset.revwhen, scheduled_at: inp.value ? new Date(inp.value).toISOString() : null }))
+      .filter((it) => it.id > 0);
+    const r = await api.post('/api/posts/accept-all', { items });
+    const n = (r && r.accepted) || 0;
+    if (!n) throw new Error('No había borradores pendientes');
+    try { track('accept_all', { count: n }); } catch (e) {}
+    try { REVIEW_DRAFTS = []; } catch (e) {}
+    try { paintWeekPill(); } catch (e) {}
+    toast(n === 1
+      ? `✅ <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada 👌`
+      : `✅ <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada 👌`);
+    render();
+  } catch (e) {
+    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (b) { b.disabled = false; b.textContent = '✅ Aceptar todos'; }
+  }
+}
+function bindAcceptAll() {
+  const b = document.getElementById('btnAcceptAll');
+  if (!b) return;
+  b.onclick = () => doAcceptAll(b);
 }
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
@@ -3495,7 +3589,7 @@ async function chatView() {
   <div class="chat-home">
     <div class="chome-top">
       <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
-      <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza. Vos vendé. Yo posteo.</div></div>
+      <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza.<br>Vos vendé. Yo posteo.</div></div>
     </div>
     ${setupChecklistHtml()}
     ${chatCardHTML(true, true, true)}
@@ -3508,6 +3602,7 @@ async function bindChatView() {
   bindChat();
   bindReview();
   bindScheduleAll();
+  bindAcceptAll();
   bindAutopilot();
   // El auto-arranque de la semana también aplica entrando por el chat.
   if (typeof maybeAutoStartWeek === 'function') { try { maybeAutoStartWeek(); } catch (e) {} }
@@ -3519,6 +3614,15 @@ async function bindChatView() {
   let forced = null;
   try { forced = sessionStorage.getItem('posty-force-nudge'); sessionStorage.removeItem('posty-force-nudge'); } catch (e) {}
   try { await maybePostyNudge(forced || undefined); } catch (e) {}
+  // 🔔 Posty te avisa: "Editar" de #/app/post/:id pre-llena el chat (el chat edita posteos hablando)
+  try {
+    const pre = sessionStorage.getItem('posty-chat-prefill');
+    if (pre) {
+      sessionStorage.removeItem('posty-chat-prefill');
+      const ci = document.getElementById('chatInput');
+      if (ci) { ci.value = pre; ci.focus({ preventScroll: true }); }
+    }
+  } catch (e) {}
 }
 
 // Nudge proactivo de Posty (~1/semana, en momentos distintos): pide por chat lo
@@ -3790,6 +3894,7 @@ async function paintChatQuota(mount, q0) {
   const old = mount.querySelector('.chat-quota');
   if (old) old.remove();
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
+  try { mount.classList.toggle('quota-row', mount.querySelectorAll(':scope > button').length === 1); } catch (e) {}
 }
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
@@ -5129,10 +5234,10 @@ function quotaModal(q, opts = {}) {
     <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
     <h3 style="margin:12px 0 4px">¡Llegamos al tope de la semana! 🚀</h3>
     <p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b> — y los usamos todos, ¡bien ahí!</p>
-    <p class="d">Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.</p>
+    <p class="d">${(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? 'La semana que viene arrancás de cero de nuevo.' : 'Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.'}</p>
     ${left > 0 && opts.onPartial ? `<button class="btn btn-soft btn-block" id="qPartial" style="margin-top:10px">Armar solo ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
-    <button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>
-    <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Ahora no</button>`);
+    ${!(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? '<button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>' : ''}
+    <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Entendido</button>`);
   const up = document.getElementById('qUpgrade');
   if (up) up.onclick = () => { closeStreakModal(); location.hash = '#/app/ajustes?plan=1'; };
   const cl = document.getElementById('qClose');
@@ -5567,6 +5672,7 @@ async function adsRecAction(card, opts) {
 
 // Tarjeta "a la vista" para Mi semana: los recomendados sin entrar a otra pantalla
 function adsBoostCardHTML(cfg, recs) {
+  if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return ''; // sin ventas en app nativa
   const list = (recs && recs.recommendations) || [];
   const budgets = (cfg && cfg.budget_options) || [];
   if (!list.length || !budgets.length) return '';
@@ -6007,7 +6113,7 @@ function ajustesView() {
   const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
-  const planMsg = q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
+  const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
@@ -6114,20 +6220,13 @@ function ajustesView() {
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='web' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 La web de tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="webZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div id="srcStoriesCard" class="card ajsec${openSec==='stories' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📱 Tus historias recientes</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="storiesZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div id="srcFbCard" class="card ajsec${openSec==='fb' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📘 Tu página de Facebook</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="fbZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>💬 Lo que preguntan tus seguidores</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="srcCommentsCard"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div id="srcPlacesCard" class="card ajsec${openSec==='places' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>⭐ Lo que dicen tus clientes</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="placesZone"><p style="color:var(--dim)">Cargando…</p></div>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🧠 Lo que Posty sabe de tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p class="src-intro">Lo estudio solo para crear posteos que venden.</p>
+    <div class="src-row" id="webZone"><p class="hint">Cargando…</p></div>
+    <div class="src-row" id="storiesZone"><p class="hint">Cargando…</p></div>
+    <div class="src-row" id="fbZone"><p class="hint">Cargando…</p></div>
+    <div class="src-row" id="srcCommentsCard"><p class="hint">Cargando…</p></div>
+    <div class="src-row" id="placesZone"><p class="hint">Cargando…</p></div>
   </div></div>
   <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="igBanner"></div>
@@ -6174,13 +6273,9 @@ function ajustesView() {
   <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
-  <div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🔔 Notificaciones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Te aviso en el celu cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Sin spam, lo prometo 🤙</p>
-    <div id="pushZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
+  </div></div>`}
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>📸 App de Meta</h4>
@@ -6305,6 +6400,8 @@ function handleIgResult() {
           .catch(() => {});
       }).catch(() => {});
     } catch (e) {}
+    // 🔔 Posty te avisa: tras conectar IG, pedir permiso push UNA vez (oportuno, nunca en frío)
+    try { maybeAskPushPostIg(); } catch (e) {}
   } else if (r === 'personal') {
     toast('⚠️ <b>Tu cuenta de Instagram es personal.</b><br>Para publicar necesitás una cuenta profesional (Business o Creator).');
   } else if (r === 'error') {
@@ -6734,6 +6831,8 @@ async function render() {
   if (!ME && NET_OFFLINE) { root.innerHTML = offlineView(); bindOffline(); return; }
   if (!ME) { location.hash = '#/login'; return; }
   const tabRaw = path.split('/')[2] || '';
+  // 🔔 Posty te avisa: #/app/post/:id → el id del posteo a aprobar
+  const postId = decodeURIComponent(path.split('/')[3] || '').trim();
   // Chat-first en todas las plataformas: sin pestaña explícita se abre el
   // chat con Posty. Con pestaña explícita se respeta (navegación secundaria).
   let tab = tabRaw || 'chat';
@@ -6741,6 +6840,7 @@ async function render() {
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') content = await scheduleView();
+  else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
   else if (tab === 'video') { location.hash = '#/app/schedule'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
@@ -6748,11 +6848,17 @@ async function render() {
   else if (tab === 'onboarding') { if (!OB) OB = loadOB() || freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
-  else if (tab === 'ads') content = await adsView(); // 🚀 Potenciar: billetera + boost de posteos
+  else if (tab === 'ads') { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { location.hash = '#/app/semana'; } else content = await adsView(); } // 🚀 Potenciar: billetera + boost (solo web)
   else if (tab === 'admin') content = await adminView(); // 📊 Analytics (solo equipo)
+  else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
   else content = ajustesView();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
+  try {
+    const _tbs = document.querySelectorAll('#pzTrialBanner');
+    for (let _i = 1; _i < _tbs.length; _i++) _tbs[_i].remove();
+  } catch (e) {}
   // Si vino con ?plan=1 o ?plan_sel= → la sección Mi plan queda abierta Y en pantalla (no arriba de Ajustes)
   try {
     const _pq = new URLSearchParams(location.hash.split('?')[1] || '');
@@ -6765,12 +6871,31 @@ async function render() {
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
   if (!(PROFILE && PROFILE.ig_pending)) maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso)
-  // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan)
+  // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan).
+  // En nativo (tiendas): sin modal de ventas → aviso neutro inline, sin CTA de pago.
   try {
     if (ME && ME.trial_expired && ME.plan_status === 'trial' && tab !== 'ajustes' && !sessionStorage.getItem('pz_exp_modal')) {
-      showExpiredModal();
+      if (IS_NATIVE) showExpiredNoticeNative(); else showExpiredModal();
     }
   } catch (e) {}
+}
+
+/* ---------- Aviso neutro (nativo): trial vencido, sin CTA de pago ---------- */
+function showExpiredNoticeNative() {
+  if (document.getElementById('pzExpNativeNote')) return;
+  try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} // una vez por sesión
+  const main = document.querySelector('.main');
+  if (!main) return;
+  const n = document.createElement('div');
+  n.id = 'pzExpNativeNote';
+  n.innerHTML = `
+    <div style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;color:var(--mut)">Tu prueba terminó.</div>
+      <button id="pzExpNativeX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim)">✕</button>
+    </div>`;
+  main.prepend(n);
+  const x = document.getElementById('pzExpNativeX');
+  if (x) x.onclick = () => n.remove();
 }
 
 /* ---------- Modal agresivo: trial vencido ---------- */
@@ -6780,9 +6905,16 @@ async function showExpiredModal() {
   let plans = [];
   try { const d = await api.get('/api/billing/plans'); plans = d.plans || []; } catch (e) {}
   const perDay = (p) => '\u2248 $' + Math.round(p.price / 30).toLocaleString('es-AR') + ' por d\u00eda';
+  const expMix = (p) => {
+    const parts = [];
+    if (p.postsPerWeek > 0) parts.push(`${p.postsPerWeek} posteo${p.postsPerWeek > 1 ? 's' : ''}`);
+    if (p.reelsPerWeek > 0) parts.push(`${p.reelsPerWeek} reel${p.reelsPerWeek > 1 ? 's' : ''}`);
+    if (p.storiesPerWeek > 0) parts.push(`${p.storiesPerWeek} historia${p.storiesPerWeek > 1 ? 's' : ''}`);
+    return parts.length ? `<small class="pz-exp-mix">${parts.join(' + ')} por semana</small>` : '';
+  };
   const rows = plans.map(p => `
     <button class="pz-exp-plan" data-exp-plan="${p.id}">
-      <span><b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small></span>
+      <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
       <span class="pz-exp-go">Elegir \u2192</span>
     </button>`).join('');
   const ov = document.createElement('div');
@@ -6792,11 +6924,11 @@ async function showExpiredModal() {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
       <img src="ai-avatar.png" alt="Posty" style="width:74px;height:74px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
-      <h2>Tu prueba gratis termin\u00f3</h2>
-      <p class="pz-exp-sub">Elegí tu plan y seguimos publicando por vos.</p>
+      <h2>Se termin\u00f3 tu prueba 🥹</h2>
+      <p class="pz-exp-sub">Tus posteos no tienen por qu\u00e9 frenar: eleg\u00ed tu plan y el lunes tu semana est\u00e1 lista como siempre.</p>
       <div class="pz-exp-plans">${rows}</div>
       ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes 🚀</button>'}
-      <button class="pz-exp-later" id="pzExpLater">Por ahora no</button>
+      <button class="pz-exp-later" id="pzExpLater">Pausar mis posteos</button>
     </div>`;
   document.body.appendChild(ov);
   const close = () => { try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} ov.remove(); };
@@ -6806,6 +6938,24 @@ async function showExpiredModal() {
   const goBtn = ov.querySelector('#pzExpGo');
   if (goBtn) goBtn.onclick = () => goPlan('');
   ov.querySelectorAll('[data-exp-plan]').forEach(b => b.onclick = () => goPlan(b.dataset.expPlan));
+}
+
+/* ---------- Banner persistente: trial vencido (tab Schedule / Mi semana) ---------- */
+let PZ_TRIAL_PLANS_CACHE = null; // plan m\u00e1s barato de /api/billing/plans (fetch cacheado por sesi\u00f3n)
+async function trialExpiredBannerHTML() {
+  try { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return ''; } catch (e) {}
+  if (!(typeof ME !== 'undefined' && ME && ME.trial_expired && ME.plan_status === 'trial')) return '';
+  if (typeof document !== 'undefined' && document.getElementById('pzExpOverlay')) return ''; // modal abierto: no competir
+  try {
+    if (!PZ_TRIAL_PLANS_CACHE) {
+      const d = await api.get('/api/billing/plans');
+      const arr = (d && d.plans) || [];
+      PZ_TRIAL_PLANS_CACHE = arr.slice().sort((a, b) => (a.price || 0) - (b.price || 0))[0] || null;
+    }
+  } catch (e) {}
+  if (!PZ_TRIAL_PLANS_CACHE || !(PZ_TRIAL_PLANS_CACHE.price > 0)) return '';
+  const perDay = '\u2248 $' + Math.round(PZ_TRIAL_PLANS_CACHE.price / 30).toLocaleString('es-AR') + '/d\u00eda';
+  return `<a id="pzTrialBanner" class="pz-trial-banner" href="#/app/ajustes">\uD83D\uDD12 Tu prueba termin\u00f3 \u2014 reactiv\u00e1 tu semana por ${perDay} \u2192</a>`;
 }
 
 /* ---------- SCHEDULE: calendario de posteos programados ---------- */
@@ -6879,6 +7029,7 @@ async function scheduleView() {
   const failed = allPosts.filter(p => p.status === 'failed');
   const slots = suggestSlots(drafts.length, schedPosts);
   const { xpStrip, expBanner } = xpStripHTML(sk, st, drafts.length);
+  const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
   const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
@@ -6963,6 +7114,7 @@ async function scheduleView() {
   // Sin borradores ni programados: la tarjeta para armar la semana vive acá.
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   return `<div id="schedView" class="sched-wrap">
+    ${trialBanner}
     ${xpStrip}${expBanner}
     ${ftBlock}
     ${reviewBlock}
@@ -6970,7 +7122,7 @@ async function scheduleView() {
     ${armBlock}
     <div class="sched-top">
       <div><h2 style="margin:0">📅 Schedule</h2>
-      <p class="sub" style="margin:4px 0 0">Todo lo que sale solo, día por día.</p></div>
+      <p class="sub" style="margin:4px 0 0">Los que ya aceptaste — salen solos a la hora indicada.</p></div>
       <div class="sched-nav">
         <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_WEEK_OFFSET <= 0 ? 'disabled' : ''} aria-label="Semana anterior">‹</button>
         <button class="btn btn-ghost btn-sm" id="schedToday">Esta semana</button>
@@ -6992,6 +7144,68 @@ async function scheduleView() {
     ${salioBlock}
   </div>`;
 }
+/* ---------- 📊 TUS NÚMEROS: stats reales de Instagram ---------- */
+// Números honestos: lo que trae la API de IG (o caché local). Si no hay datos,
+// el empty state lo dice de frente, sin inventar nada.
+function statsView() {
+  const cards = ['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores']
+    .map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${esc(l)}</div></div>`)
+    .join('');
+  return `
+  <div class="st-wrap">
+    <div class="page-head">
+      <div class="ph-ico">📊</div>
+      <div class="ph-txt"><h1>Tus números</h1><p class="sub">Cómo viene rindiendo tu Instagram.</p></div>
+    </div>
+    <div class="st-grid">${cards}</div>
+    <div id="stBest"></div>
+  </div>`;
+}
+function bindStats() {
+  const paint = async () => {
+    try {
+      const d = await api.get('/api/stats/ig');
+      const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
+      const vals = [d.reach_7d, d.reach_30d, d.interactions_30d, d.followers];
+      vals.forEach((v, i) => {
+        const el = document.getElementById('stNum' + i);
+        if (el) { el.textContent = fmt(v); el.closest('.st-card').classList.remove('st-loading'); }
+      });
+      const box = document.getElementById('stBest');
+      if (!box) return;
+      const hasData = vals.some((v) => Number(v) > 0) || d.best_post;
+      if (!hasData) {
+        box.innerHTML = `<div class="card st-empty">
+          <div class="st-empty-ico">📊</div>
+          <b>Cuando publiquemos tu primera semana, vas a ver tus números acá 📊</b>
+          <p>Alcance, interacciones y tu mejor posteo, todo juntito.</p>
+        </div>`;
+        return;
+      }
+      box.innerHTML = d.best_post
+        ? `<div class="card st-best">
+            <h3>⭐ Tu mejor posteo</h3>
+            <div class="st-best-row">
+              ${d.best_post.image_url ? `<img src="${esc(d.best_post.image_url)}" alt="" loading="lazy">` : ''}
+              <div><b>${esc(d.best_post.caption_short || 'Tu posteo')}</b>
+              <p>${esc(d.best_post.metric)}</p></div>
+            </div>
+          </div>`
+        : `<div class="card st-empty"><b>Todavía no hay suficientes datos para elegir un mejor posteo 🙂</b>
+           <p>Publicá un poco más y aparece acá solito.</p></div>`;
+    } catch (e) {
+      const box = document.getElementById('stBest');
+      if (box) box.innerHTML = `<div class="card st-empty">
+        <b>Ups, no pude traer tus números ahora 😅</b>
+        <p>Probá de nuevo en un ratito.</p>
+        <button class="btn btn-primary btn-sm" id="stRetry" style="margin-top:10px">Reintentar</button>
+      </div>`;
+      const r = document.getElementById('stRetry');
+      if (r) r.onclick = () => { r.disabled = true; r.textContent = 'Cargando…'; paint(); };
+    }
+  };
+  paint();
+}
 function bindSchedule() {
   const pv = $('#schedPrev'), nx = $('#schedNext'), td = $('#schedToday');
   if (pv) pv.onclick = () => { if (SCHED_WEEK_OFFSET > 0) { SCHED_WEEK_OFFSET--; render(); } };
@@ -7005,6 +7219,7 @@ function bindSchedule() {
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
   bindScheduleAll(); // "📅 Programar mi semana →" dentro de la tarjeta de revisión
+  bindAcceptAll(); // "✅ Aceptar todos" dentro de la tarjeta de revisión
   bindAutopilot(); // tarjeta "Armemos tu semana" (estado vacío)
   // Fast-track "🚀 Tu primer posteo" (solo cuentas que nunca publicaron).
   try { if (typeof bindFastTrack === 'function') bindFastTrack(); } catch (e) {}
@@ -7042,6 +7257,8 @@ function bindApp(tab) {
   if (tab === 'admin') bindAdmin();
   if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
   if (tab === 'schedule') bindSchedule();
+  if (tab === 'numeros') bindStats(); // 📊 Tus números
+  if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
   pwaWire();
   // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
   if (!window.__revMoreWired) {
@@ -7063,10 +7280,7 @@ function bindApp(tab) {
   }
   $$('[data-tab]').forEach(b => b.onclick = () => { closeDrawer(); location.hash = '#/app/' + b.dataset.tab; });
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
-  const sg = $('#setupIgRow');
-  if (sg) sg.onclick = igConnectHere;
-  const sb = $('#setupBizRow');
-  if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
+  bindSetupRows();
   const loA = $('#btnLogoutAj');
   if (loA) loA.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   const bg = $('#mtopBurger');
@@ -7614,8 +7828,6 @@ function bindSettings() {
     h.onclick = tg;
     h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
   });
-  // Notificaciones push: pinta la sección 🔔 según el estado del permiso.
-  try { pushRenderZone(); } catch (e) { /* nunca bloquear ajustes */ }
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');
@@ -7743,7 +7955,7 @@ function bindSettings() {
           <div class="field" style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${t} ${tag}</label>
             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${arr.map(it => `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`).join('')}</div>
           </div>`).join('')}
-        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "🌐 La web de tu negocio".</div>
+        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "🧠 Lo que Posty sabe de tu negocio".</div>
       </div>`;
   };
   const refreshWebDna = () => { api.get('/api/dna').then(r => paintWebDna(r && r.dna)).catch(() => {}); };
@@ -7847,42 +8059,48 @@ function bindSettings() {
     if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
     return s;
   };
+  // --- 🧠 Lo que Posty sabe de tu negocio: 5 fuentes en filas compactas ---
+  // Fila compacta: icono + nombre/estado + acción. El input va a full-width (src-full).
+  const srcRow = (ico, name, state, actHtml, fullHtml) => `
+    <div class="src-ico">${ico}</div>
+    <div class="src-tx"><b>${name}</b><small>${state}</small></div>
+    ${actHtml ? `<div class="src-act">${actHtml}</div>` : ''}
+    ${fullHtml ? `<div class="src-full">${fullHtml}</div>` : ''}`;
+  const srcRetryBtn = (id, title) => `<button class="src-re" id="${id}" title="${title}" aria-label="${title}">↻</button>`;
   const paintWebZone = (st, errMsg) => {
     if (st) webStatus = st;
     if (!webZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!webStatus) { webZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tu web. Probá recargar la página.</div>'; return; }
+    if (!webStatus) {
+      webZone.innerHTML = srcRow('🌐', 'Tu web', '⚠️ no se pudo cargar', srcRetryBtn('btnWebRetry', 'Reintentar'));
+      const br = $('#btnWebRetry');
+      if (br) br.onclick = () => api.get('/api/website/status').then(s2 => paintWebZone(s2)).catch(() => paintWebZone(null));
+      return;
+    }
+    if (errMsg) {
+      webZone.innerHTML = srcRow('🌐', 'Tu web', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnWebRe', 'Reintentar'));
+      const b = $('#btnWebRe');
+      if (b) b.onclick = () => runWebAnalyze({ force: true });
+      return;
+    }
     if (webStatus.ok) {
-      webZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(webStatus.url || 'Tu web')}</b><br>Analizada el ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' <b>(parcial:</b> no pudimos leer todas las páginas)' : ''}</div>
-        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">Sacamos de tu web productos, precios y promos para que la IA cree posteos que venden.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnWebRe">🔄 Analizar de nuevo</button> <span id="webMsg"></span>
-        </div>${err}`;
+      webZone.innerHTML = srcRow('🌐', 'Tu web', `✅ al día · ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnWebRe', 'Analizar de nuevo'));
       const b = $('#btnWebRe');
       if (b) b.onclick = () => runWebAnalyze({ force: true });
     } else {
       const det = String(webStatus.url || '').trim();
-      webZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${det ? `Detectamos esta web en tu bio de Instagram 👇` : '¿Tenés web? La estudiamos y sacamos productos, precios y promos para que la IA cree posteos que venden.'}</p>
-        <div class="field" style="margin-bottom:10px"><label>URL de tu web o publicación</label>
-          <input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnWebGo">🔍 Analizar mi web</button> <span id="webMsg"></span>
-        </div>
-        <p class="hint" style="margin-top:10px">🛒 <b>¿Vendés en MercadoLibre?</b> Pegá el link de tu publicación (articulo.mercadolibre.com…) y sacamos título, precio y descripción para tus posteos.</p>${err}`;
+      webZone.innerHTML = srcRow('🌐', 'Tu web', det ? '⚪ la detecté en tu bio 👇' : '⚪ pegá tu link y la estudio', '',
+        `<input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnWebGo">Analizar</button>`);
       const b = $('#btnWebGo');
       if (b) b.onclick = () => {
         const u = normWebUrl(($('#s_weburl') || {}).value);
-        if (!u) { const m = $('#webMsg'); if (m) m.innerHTML = '<span style="color:#B3402E;font-size:12.5px">Pegá la URL de tu web</span>'; return; }
+        if (!u) { toast('Pegá la URL de tu web'); return; }
         runWebAnalyze({ url: u });
       };
     }
   };
   const runWebAnalyze = async (body) => {
     if (!webZone) return;
-    webZone.innerHTML = '<div class="hint">⏳ Analizando tu web… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    webZone.innerHTML = srcRow('🌐', 'Tu web', '⏳ analizando…', '');
     try {
       await api.post('/api/website/analyze', body, { timeout: 240000 });
       try { webStatus = await api.get('/api/website/status'); } catch (e) { /* queda el anterior */ }
@@ -7909,30 +8127,31 @@ function bindSettings() {
   const paintStoriesZone = (st, errMsg) => {
     if (st) storiesStatus = st;
     if (!storiesZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!storiesStatus) { storiesZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tus historias. Probá recargar la página.</div>'; return; }
+    if (!storiesStatus) {
+      storiesZone.innerHTML = srcRow('📱', 'Historias', '⚠️ no se pudo cargar', srcRetryBtn('btnStoriesRetry', 'Reintentar'));
+      const br = $('#btnStoriesRetry');
+      if (br) br.onclick = () => api.get('/api/ig/stories-status').then(s2 => paintStoriesZone(s2)).catch(() => paintStoriesZone(null));
+      return;
+    }
+    if (errMsg) {
+      storiesZone.innerHTML = srcRow('📱', 'Historias', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnStoriesGo', 'Reintentar'));
+      const b = $('#btnStoriesGo');
+      if (b) b.onclick = runStoriesAnalyze;
+      return;
+    }
     if (storiesStatus.ok) {
-      const n = (storiesStatus.promos || 0) + (storiesStatus.anuncios || 0);
-      storiesZone.innerHTML = `
-        <div class="okmsg">✅ <b>Historias analizadas el ${esc(fmtWebAt(storiesStatus.analyzed_at))}</b><br>${n ? `Sacamos ${n} dato${n === 1 ? '' : 's'} de tus historias (promos y anuncios): la IA los usa para crear posteos al día.` : 'No encontramos texto en tus historias recientes: si publicás una promo o un anuncio, volvé a analizarlas.'}</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
-          <button class="btn btn-soft btn-sm" id="btnStoriesGo">🔄 Analizar de nuevo</button> <span id="storiesMsg"></span>
-        </div>${err}`;
+      storiesZone.innerHTML = srcRow('📱', 'Historias', `✅ al día · ${esc(fmtWebAt(storiesStatus.analyzed_at))}`, srcRetryBtn('btnStoriesGo', 'Analizar de nuevo'));
       const b = $('#btnStoriesGo');
       if (b) b.onclick = runStoriesAnalyze;
     } else {
-      storiesZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Leemos tus historias de las últimas 24h y sacamos las promos y anuncios que publicaste, para que la IA cree posteos al día. <b>Ojo:</b> Instagram solo nos deja ver las de las últimas 24 horas, no el archivo.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnStoriesGo">📱 Analizar historias</button> <span id="storiesMsg"></span>
-        </div>${err}`;
+      storiesZone.innerHTML = srcRow('📱', 'Historias', '⚪ leo tus promos y anuncios', `<button class="btn btn-primary btn-sm" id="btnStoriesGo">Analizar</button>`);
       const b = $('#btnStoriesGo');
       if (b) b.onclick = runStoriesAnalyze;
     }
   };
   const runStoriesAnalyze = async () => {
     if (!storiesZone) return;
-    storiesZone.innerHTML = '<div class="hint">⏳ Leyendo tus historias de las últimas 24h… las analizamos una por una, puede tardar un ratito.</div>';
+    storiesZone.innerHTML = srcRow('📱', 'Historias', '⏳ analizando…', '');
     try {
       await api.post('/api/ig/mine-stories', {}, { timeout: 240000 });
       try { storiesStatus = await api.get('/api/ig/stories-status'); } catch (e) { /* queda el anterior */ }
@@ -7964,32 +8183,33 @@ function bindSettings() {
   const paintSrcComments = (st, errMsg) => {
     if (st) srcCommentsStatus = st;
     if (!srcCommentsCard) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!srcCommentsStatus) { srcCommentsCard.innerHTML = '<div class="err">❌ No pudimos cargar el estado de los comentarios. Probá recargar la página.</div>'; return; }
+    if (!srcCommentsStatus) {
+      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⚠️ no se pudo cargar', srcRetryBtn('btnSrcCommentsRetry', 'Reintentar'));
+      const br = $('#btnSrcCommentsRetry');
+      if (br) br.onclick = () => api.get('/api/ig/comments-status').then(s2 => paintSrcComments(s2)).catch(() => paintSrcComments(null));
+      return;
+    }
+    if (errMsg) {
+      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnSrcCommentsGo', 'Reintentar'));
+      const b = $('#btnSrcCommentsGo');
+      if (b) b.onclick = () => runCommentsMine({});
+      return;
+    }
     if (srcCommentsStatus.ok) {
       const c = srcCommentsStatus.counts || {};
       const n = Number(c.comments || 0);
-      srcCommentsCard.innerHTML = `
-        <div class="okmsg">✅ <b>${n} comentarios</b> analizados${c.posts ? ` de ${c.posts} posteos` : ''}<br><span style="color:var(--dim);font-size:11.5px">Último análisis: ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}</span></div>
-        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">La IA leyó lo que te preguntan tus seguidores y lo usa para crear posteos que responden antes de que pregunten.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnSrcCommentsRe">🔄 Analizar de nuevo</button> <span id="srcCommentsMsg"></span>
-        </div>${err}`;
+      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', `✅ ${n} comentarios · ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}`, srcRetryBtn('btnSrcCommentsRe', 'Analizar de nuevo'));
       const b = $('#btnSrcCommentsRe');
       if (b) b.onclick = () => runCommentsMine({ force: true });
     } else {
-      srcCommentsCard.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Leemos los comentarios de tus últimos posteos y la IA saca <b>qué te preguntan</b>, <b>qué objeciones tienen</b> y <b>qué desean</b> — sin pedirte nada más. Esos datos entrenan a la IA para vender mejor.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">💬 Analizar comentarios</button> <span id="srcCommentsMsg"></span>
-        </div>${err}`;
+      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⚪ descubro qué te preguntan', `<button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">Analizar</button>`);
       const b = $('#btnSrcCommentsGo');
       if (b) b.onclick = () => runCommentsMine({});
     }
   };
   const runCommentsMine = async (body) => {
     if (!srcCommentsCard) return;
-    srcCommentsCard.innerHTML = '<div class="hint">⏳ Analizando comentarios… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⏳ analizando…', '');
     try {
       await api.post('/api/ig/mine-comments', body, { timeout: 240000 });
       try { srcCommentsStatus = await api.get('/api/ig/comments-status'); } catch (e) { /* queda el anterior */ }
@@ -8008,49 +8228,38 @@ function bindSettings() {
   const paintPlacesZone = (st, errMsg) => {
     if (st) placesStatus = st;
     if (!placesZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!placesStatus) { placesZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado. Probá recargar la página.</div>'; return; }
-    // Sin key: explicación + cómo conseguirla.
+    if (!placesStatus) {
+      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚠️ no se pudo cargar', srcRetryBtn('btnPlacesRetry', 'Reintentar'));
+      const br = $('#btnPlacesRetry');
+      if (br) br.onclick = () => api.get('/api/places/status').then(s2 => paintPlacesZone(s2)).catch(() => paintPlacesZone(null));
+      return;
+    }
+    // Sin key: una línea, la clave se pide por chat.
     if (!placesStatus.has_key) {
-      placesZone.innerHTML = `
-        <div class="hint" style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12.5px">
-          🔑 <b>Todavía no conectamos Google.</b><br>
-          Para leer las reseñas de tu negocio necesitás una clave de Google Places API: entrás a
-          <b>console.cloud.google.com</b> → activás la API <b>"Places API"</b> → creás una API key.
-          Pasanos la key y la activamos por vos.
-        </div>
-        <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Con eso sacamos lo que repiten tus clientes (atención, precios, calidad) y testimonios reales que la IA puede usar en los posteos.</p>${err}`;
+      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚪ falta', '', `<span class="hint">Pedime la clave de Google Places en el chat y la activo por vos.</span>`);
+      return;
+    }
+    if (errMsg) {
+      placesZone.innerHTML = srcRow('⭐', 'Reseñas', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnPlacesGo', 'Reintentar'));
+      const b = $('#btnPlacesGo');
+      if (b) b.onclick = () => runPlacesAnalyze({});
       return;
     }
     if (placesStatus.ok) {
-      const chips = (placesStatus.puntos_fuertes || []).map(x => `<span style="display:inline-block;background:#FFF6E3;border:1px solid #F5D98B;color:#8a6d1a;border-radius:999px;padding:4px 12px;margin:0 6px 6px 0;font-size:11.5px;font-weight:700">${esc(x)}</span>`).join('');
-      const tests = (placesStatus.testimonios || []).map(t => `<div style="border-left:3px solid #2793C8;padding:6px 12px;margin:0 0 10px;font-size:12.5px;color:var(--txt)">"${esc(t.cita || '')}"${t.autor ? ` <b style="color:var(--dim)">— ${esc(t.autor)}</b>` : ''}</div>`).join('');
-      placesZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(placesStatus.place_name || 'Tu negocio')}</b>${placesStatus.rating ? ` <span style="color:#f5a623">★</span> ${esc(String(placesStatus.rating))}` : ''}${placesStatus.total_ratings ? ` <span style="color:var(--dim);font-weight:400">(${esc(String(placesStatus.total_ratings))} reseñas)</span>` : ''}<br><span style="font-size:11.5px;color:var(--mut)">Analizado el ${esc(fmtWebAt(placesStatus.analyzed_at))}${placesStatus.partial ? ' (parcial)' : ''}</span></div>
-        ${chips ? `<div style="font-weight:800;margin:12px 0 6px;font-size:12.5px">Lo que más repiten tus clientes</div><div>${chips}</div>` : ''}
-        ${tests ? `<div style="font-weight:800;margin:12px 0 6px;font-size:12.5px">Testimonios reales</div><div>${tests}</div>` : '<p style="color:var(--mut);font-size:12.5px;margin:12px 0 0">Todavía no encontramos reseñas para citar.</p>'}
-        <p style="color:var(--mut);font-size:11.5px;margin:12px 0">Los puntos fuertes y testimonios quedan en "🧬 Lo que la IA sabe" para que la IA los use.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnPlacesRe">🔄 Buscar de nuevo</button> <span id="placesMsg"></span>
-        </div>${err}`;
+      const rating = placesStatus.rating ? ` · ★ ${esc(String(placesStatus.rating))}` : '';
+      placesZone.innerHTML = srcRow('⭐', 'Reseñas', `✅ al día · ${esc(fmtWebAt(placesStatus.analyzed_at))}${rating}`, srcRetryBtn('btnPlacesRe', 'Buscar de nuevo'));
       const b = $('#btnPlacesRe');
       if (b) b.onclick = () => runPlacesAnalyze({ force: true });
     } else {
-      placesZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Buscamos tu negocio en Google, leemos las reseñas y sacamos lo que más repiten tus clientes + testimonios reales que la IA usa para vender.</p>
-        <div class="field" style="margin-bottom:10px"><label>Nombre de tu negocio en Google <span style="color:var(--dim);font-weight:400">(opcional: si lo dejás vacío usamos tu perfil)</span></label>
-          <input id="s_placesq" style="font-size:16px" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnPlacesGo">⭐ Buscar mi negocio</button> <span id="placesMsg"></span>
-        </div>${err}`;
+      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚪ busco tu negocio en Google', '',
+        `<input id="s_placesq" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnPlacesGo">Buscar</button>`);
       const b = $('#btnPlacesGo');
       if (b) b.onclick = () => runPlacesAnalyze({ query: (($('#s_placesq') || {}).value || '').trim() });
     }
   };
   const runPlacesAnalyze = async (body) => {
     if (!placesZone) return;
-    placesZone.innerHTML = '<div class="hint">⏳ Buscando tu negocio en Google… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⏳ buscando…', '');
     try {
       await api.post('/api/places/analyze', body, { timeout: 240000 });
       try { placesStatus = await api.get('/api/places/status'); } catch (e) { /* queda el anterior */ }
@@ -8069,34 +8278,32 @@ function bindSettings() {
   const paintFbZone = (st, errMsg) => {
     if (st) fbStatus = st;
     if (!fbZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!fbStatus) { fbZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tu página. Probá recargar la página.</div>'; return; }
+    if (!fbStatus) {
+      fbZone.innerHTML = srcRow('📘', 'Facebook', '⚠️ no se pudo cargar', srcRetryBtn('btnFbRetry', 'Reintentar'));
+      const br = $('#btnFbRetry');
+      if (br) br.onclick = () => api.get('/api/fb/status').then(s2 => paintFbZone(s2)).catch(() => paintFbZone(null));
+      return;
+    }
+    if (errMsg) {
+      fbZone.innerHTML = srcRow('📘', 'Facebook', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnFbGo', 'Reintentar'));
+      const b = $('#btnFbGo');
+      if (b) b.onclick = () => runFbAnalyze({});
+      return;
+    }
     if (fbStatus.ok) {
-      fbZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(fbStatus.page || 'Tu página')}</b><br>Analizada el ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' <b>(parcial:</b> tu página tiene poquitos datos)' : ''}</div>
-        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">Sacamos de tu página horarios, ubicación, descripción y lo que dicen tus clientes para que la IA hable de tu negocio con datos reales.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnFbRe">🔄 Analizar de nuevo</button> <span id="fbMsg"></span>
-        </div>${err}`;
+      fbZone.innerHTML = srcRow('📘', 'Facebook', `✅ al día · ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnFbRe', 'Analizar de nuevo'));
       const b = $('#btnFbRe');
       if (b) b.onclick = () => runFbAnalyze({ force: true });
     } else {
-      fbZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Tenés página de Facebook? La estudiamos: horarios, ubicación, descripción y opiniones de tus clientes. Si tu Instagram está conectado la detectamos sola 👇</p>
-        <div class="field" style="margin-bottom:6px"><label>URL o ID de tu página de Facebook</label>
-          <input id="s_fbpage" placeholder="https://www.facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div class="hint" style="margin-bottom:14px">Cómo pegarla: abrí tu página en Facebook y copiá lo que dice la barra de direcciones (ej: facebook.com/tu-negocio). Podés dejarlo vacío si tu Instagram está conectado.</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnFbGo">📘 Analizar mi página</button> <span id="fbMsg"></span>
-        </div>${err}`;
+      fbZone.innerHTML = srcRow('📘', 'Facebook', '⚪ la estudio: horarios, ubicación y opiniones', '',
+        `<input id="s_fbpage" placeholder="facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnFbGo">Analizar</button>`);
       const b = $('#btnFbGo');
       if (b) b.onclick = () => runFbAnalyze({ page: (($('#s_fbpage') || {}).value || '').trim() });
     }
   };
   const runFbAnalyze = async (body) => {
     if (!fbZone) return;
-    fbZone.innerHTML = '<div class="hint">⏳ Analizando tu página de Facebook… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+    fbZone.innerHTML = srcRow('📘', 'Facebook', '⏳ analizando…', '');
     try {
       await api.post('/api/fb/analyze', body, { timeout: 120000 });
       try { fbStatus = await api.get('/api/fb/status'); } catch (e) { /* queda el anterior */ }
@@ -8184,6 +8391,30 @@ function bindSettings() {
     };
     const run = async () => {
     try {
+      // IS_NATIVE (tiendas): sin ventas — solo nombre del plan y estado. Sin precios, sin botones, sin links de pago.
+      if (IS_NATIVE) {
+        let planName = (ME && ME.plan) || 'esencial';
+        try {
+          const d = await loadPlans();
+          const p = (d.plans || []).find(x => x.id === planName) || (d.plans || [])[0];
+          if (p && p.name) planName = p.name;
+        } catch (e) {}
+        const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
+        const trialLeft = (ME && ME.trial_days_left) || 0;
+        let estado = 'Activo';
+        if (!hasActive) {
+          if (ME && ME.plan_status === 'cancelled') estado = 'Cancelado';
+          else if (ME && ME.trial_expired) estado = 'Tu prueba terminó.';
+          else estado = trialLeft > 0 ? `Estás en tu prueba gratis: te quedan ${trialLeft} día${trialLeft === 1 ? '' : 's'}.` : 'En prueba';
+        }
+        z.innerHTML = `
+        <div style="margin-bottom:16px">
+          <div style="font-size:11.5px;color:var(--dim)">Tu plan actual</div>
+          <div style="font-size:17.5px;font-weight:800">${esc(planName)}</div>
+          <div style="font-size:12.5px;color:var(--dim);margin-top:4px">${estado}</div>
+        </div>`;
+        return;
+      }
       const { plans, mp_configured } = await loadPlans();
       const cur = (ME && ME.plan) || 'esencial';
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
@@ -9151,6 +9382,208 @@ async function bindAdmin() {
   } catch (e) {}
   const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
   const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
+}
+
+/* ============================================================
+   🔔 POSTY TE AVISA — aprobación de posteos por notificación
+   Ruta #/app/post/:id. Todo nuevo con prefijo apv-. No toca
+   pushEnableFlow/pushSupported/pushPerm ni el sw.
+   ============================================================ */
+function apvTz() {
+  try { return (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires'; } catch (e) { return 'America/Argentina/Buenos_Aires'; }
+}
+// Misma convención de parseo que el Schedule: ISO UTC con ' ' o 'T'.
+function apvParse(iso) {
+  const s0 = String(iso || '');
+  let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
+  if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+  return new Date(s);
+}
+function apvDayKey(d, tz) { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } }
+function apvHM(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
+// "Sale hoy 18:00" / "Sale mañana 18:00" / "Sale el jueves 2 de octubre a las 18:00"
+function apvWhenText(d, tz) {
+  const hm = apvHM(d, tz), k = apvDayKey(d, tz);
+  if (k === apvDayKey(new Date(), tz)) return `Sale hoy ${hm}`;
+  if (k === apvDayKey(new Date(Date.now() + 864e5), tz)) return `Sale mañana ${hm}`;
+  let dl = '';
+  try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }); } catch (e) {}
+  return dl ? `Sale el ${dl} a las ${hm}` : 'Sale pronto';
+}
+// Cuenta regresiva corta para el pill de pendiente: "en 2 h 15 min".
+function apvCountdown(d) {
+  const ms = d.getTime() - Date.now();
+  if (!(ms > 0)) return 'en cualquier momento';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `en ${mins} min`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h < 48) return `en ${h} h${m ? ` ${m} min` : ''}`;
+  const days = Math.floor(h / 24);
+  return `en ${days} día${days > 1 ? 's' : ''}`;
+}
+function apvPill(p, d, dOk) {
+  const ap = String(p.approval || ''), st = String(p.status || '');
+  const tz = apvTz();
+  if (st === 'published') {
+    const link = p.permalink || p.ig_permalink || p.url || '';
+    return `<span class="apv-pill apv-pill-ok">✅ Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ↗</a>` : ''}`;
+  }
+  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">⚠️ No salió: sin aprobación a tiempo</span>';
+  if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">❌ Rechazado — no se publica</span>';
+  if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">🤖 Salió solo (no lo viste a tiempo)</span>';
+  if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">✅ Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
+  if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;
+  return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
+}
+function apvNotFound() {
+  return `<div class="apv-wrap"><div class="card" style="text-align:center">
+    <img src="ai-avatar.png" alt="Posty" style="width:72px;height:72px;border-radius:50%">
+    <h3 style="margin:12px 0 6px">Ese posteo no existe 😅</h3>
+    <p class="hint">Capaz se borró o el link está mal.</p>
+    <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Volver a Schedule</a>
+  </div></div>`;
+}
+// Mensaje pre-llenado del chat para "Editar": el usuario completa qué cambiar.
+function apvEditPrompt(d, tz) {
+  const hm = apvHM(d, tz), k = apvDayKey(d, tz);
+  if (k === apvDayKey(new Date(), tz)) return `Quiero editar el posteo que sale hoy a las ${hm}`;
+  if (k === apvDayKey(new Date(Date.now() + 864e5), tz)) return `Quiero editar el posteo que sale mañana a las ${hm}`;
+  let dl = '';
+  try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) {}
+  return dl ? `Quiero editar el posteo que sale el ${dl} a las ${hm}` : 'Quiero editar ese posteo';
+}
+async function approvalPostView(id) {
+  if (!id) return apvNotFound();
+  let p = null, is404 = false, loadErr = false;
+  try {
+    const r = await api.get('/api/posts/' + encodeURIComponent(id));
+    // El endpoint existente devuelve {post:{...}}; si el backend lo aplana, también sirve.
+    p = (r && r.post) ? r.post : r;
+  }
+  catch (e) {
+    if (e && e.status === 404) is404 = true;
+    else loadErr = true;
+  }
+  if (is404 || (!loadErr && (!p || p.id == null))) return apvNotFound();
+  if (loadErr) return `<div class="apv-wrap"><div class="card" style="text-align:center">
+    <h3 style="margin:0 0 6px">😅 Uh, no pude cargar el posteo</h3>
+    <p class="hint">Revisá tu conexión y probá de nuevo.</p>
+    <button class="btn btn-soft" id="apvRetry" style="margin-top:10px">Reintentar</button>
+  </div></div>`;
+  try { track('apv_view', { id: p.id }); } catch (e) {}
+  const tz = apvTz();
+  const d = apvParse(p.scheduled_at), dOk = !isNaN(d);
+  const st = String(p.status || ''), ap = String(p.approval || '');
+  // Acciones solo mientras todavía hay algo que decidir.
+  const canAct = st === 'scheduled' && (ap === 'pending' || ap === 'approved');
+  const isVideo = String(p.media_type || '') === 'video';
+  const media = p.image_path
+    ? `<div class="apv-media">${isVideo
+      ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
+      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager">`}</div>`
+    : '';
+  const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
+  const tags = String(p.hashtags || '').trim();
+  const editPrompt = dOk ? apvEditPrompt(d, tz) : 'Quiero editar ese posteo';
+  const actions = canAct ? `
+    <div class="apv-actions" id="apvActions">
+      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ✅</button>
+      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ✏️</button>
+      <button class="btn btn-danger" id="apvReject">Rechazar ❌</button>
+    </div>
+    <div class="apv-confirm" id="apvConfirm" hidden>
+      <p><b>¿Seguro?</b> No se va a publicar.</p>
+      <div class="apv-actions">
+        <button class="btn btn-danger" id="apvRejectYes" data-apvid="${esc(String(p.id))}">Sí, rechazar</button>
+        <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
+      </div>
+    </div>` : '';
+  return `<div class="apv-wrap">
+    <a class="apv-back" href="#/app/schedule">← Schedule</a>
+    ${media}
+    <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
+    ${dOk ? `<div class="apv-when">⏰ ${esc(apvWhenText(d, tz))}</div>` : ''}
+    <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
+    ${actions}
+  </div>`;
+}
+function bindApprovalPost() {
+  const rt = document.getElementById('apvRetry');
+  if (rt) rt.onclick = () => render();
+  const acc = document.getElementById('apvAccept');
+  if (acc) acc.onclick = async () => {
+    acc.disabled = true; acc.textContent = 'Aprobando…';
+    try {
+      await api.post('/api/posts/' + encodeURIComponent(acc.dataset.apvid) + '/approve');
+      try { track('apv_approve', { id: acc.dataset.apvid }); } catch (e) {}
+      toast('✅ <b>¡Aprobado!</b> Sale a la hora indicada 🙌');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo aprobar')); }
+    render(); // re-render sin recargar la página
+  };
+  const rej = document.getElementById('apvReject');
+  if (rej) rej.onclick = () => {
+    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions');
+    if (c) c.hidden = false;
+    if (a) a.style.display = 'none';
+  };
+  const rno = document.getElementById('apvRejectNo');
+  if (rno) rno.onclick = () => {
+    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions');
+    if (c) c.hidden = true;
+    if (a) a.style.display = '';
+  };
+  const ryes = document.getElementById('apvRejectYes');
+  if (ryes) ryes.onclick = async () => {
+    ryes.disabled = true; ryes.textContent = 'Rechazando…';
+    try {
+      await api.post('/api/posts/' + encodeURIComponent(ryes.dataset.apvid) + '/reject');
+      try { track('apv_reject', { id: ryes.dataset.apvid }); } catch (e) {}
+      toast('❌ <b>Rechazado.</b> No se va a publicar.');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo rechazar')); }
+    render(); // re-render sin recargar la página
+  };
+  const ed = document.getElementById('apvEdit');
+  if (ed) ed.onclick = () => {
+    // La edición vive en el chat (ahí Posty edita posteos hablando): se pre-llena el mensaje.
+    try { sessionStorage.setItem('posty-chat-prefill', ed.dataset.apvedit || 'Quiero editar ese posteo'); } catch (e) {}
+    location.hash = '#/app/chat';
+  };
+}
+/* ---------- Pedido de permiso push oportuno: solo tras conectar IG ---------- */
+// Se muestra UNA vez (flag localStorage 'push-ask-ig'). Nunca en frío al abrir la app.
+function maybeAskPushPostIg() {
+  try {
+    if (localStorage.getItem('push-ask-ig')) return;
+    localStorage.setItem('push-ask-ig', '1'); // consumido aunque no se muestre (p.ej. sin soporte)
+  } catch (e) { return; }
+  if (!pushSupported() || pushPerm() !== 'default') return; // sin soporte, bloqueado o ya dado: no molestar
+  setTimeout(() => {
+    if (document.getElementById('apvPushOv')) return;
+    const ov = document.createElement('div');
+    ov.id = 'apvPushOv';
+    ov.className = 'pz-exp-overlay';
+    ov.innerHTML = `
+      <div class="pz-exp-modal" role="dialog" aria-modal="true">
+        <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
+        <h2>¿Te aviso antes de cada posteo? 👀</h2>
+        <p class="pz-exp-sub">Te lo muestro 3 horas antes y lo aprobás con un toque.</p>
+        <button class="btn btn-primary btn-block" id="apvPushYes">Sí, avisame</button>
+        <button class="btn btn-soft btn-block" id="apvPushNo" style="margin-top:8px">Ahora no</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = () => { try { ov.remove(); } catch (e) {} };
+    ov.querySelector('#apvPushYes').onclick = async () => {
+      close();
+      // pushDoSubscribe = segunda mitad de pushEnableFlow (permiso → suscripción),
+      // sin repetir la tarjeta genérica: esta tarjeta YA fue el pedido amable.
+      try {
+        const r = await pushDoSubscribe();
+        if (r && r.ok) toast('🔔 <b>¡Listo!</b> Te aviso antes de cada posteo 🙌');
+      } catch (e) {}
+    };
+    ov.querySelector('#apvPushNo').onclick = close;
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  }, 2500);
 }
 
 window.addEventListener('hashchange', render);

@@ -45,30 +45,62 @@ self.addEventListener('push', (e) => {
   const title = data.title || 'Posty 💬';
   const body = data.body || '';
   const url = data.url || '/#/app/semana';
-  e.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      data: { url },
-      tag: 'posta-push',
-      renotify: false,
-    })
-  );
+  const opts = {
+    body,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: Object.assign({ url }, data.data || {}),
+    tag: 'posta-push',
+    renotify: false,
+  };
+  if (data.image) opts.image = data.image;
+  if (Array.isArray(data.actions) && data.actions.length) opts.actions = data.actions;
+  e.waitUntil(self.registration.showNotification(title, opts));
 });
+
+function openPushUrl(url) {
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    for (const c of clients) {
+      try {
+        const u = new URL(c.url);
+        if (u.origin === self.location.origin) { c.navigate(url); return c.focus(); }
+      } catch (err) { /* seguir */ }
+    }
+    return self.clients.openWindow(url);
+  });
+}
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/#/app/semana';
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      for (const c of clients) {
-        try {
-          const u = new URL(c.url);
-          if (u.origin === self.location.origin) { c.navigate(url); return c.focus(); }
-        } catch (err) { /* seguir */ }
+  const ndata = e.notification.data || {};
+  const url = ndata.url || '/#/app/semana';
+  const postId = ndata.postId;
+  // Botones de aprobación (Posty te avisa): acción directa sin abrir la app.
+  if ((e.action === 'approve' || e.action === 'reject') && postId) {
+    const verb = e.action === 'approve' ? 'approve' : 'reject';
+    const doneTitle = e.action === 'approve'
+      ? '✅ ¡Aprobado! Sale a la hora indicada.'
+      : '❌ Rechazado. No se va a publicar.';
+    e.waitUntil((async () => {
+      try {
+        const r = await fetch('/api/posts/' + encodeURIComponent(postId) + '/' + verb, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!r.ok) throw new Error('http ' + r.status);
+        await self.registration.showNotification(doneTitle, {
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          data: { url },
+          tag: 'posta-push-confirm',
+        });
+      } catch (err) {
+        // Si el fetch falla, abrir la URL igual (el usuario lo resuelve en la app).
+        await openPushUrl(url);
       }
-      return self.clients.openWindow(url);
-    })
-  );
+    })());
+    return;
+  }
+  // Tap en el cuerpo de la notificación: comportamiento de siempre.
+  e.waitUntil(openPushUrl(url));
 });
