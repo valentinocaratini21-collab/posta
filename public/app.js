@@ -363,7 +363,7 @@ function landingView(cfg) {
   return `
   ${pzRefBandHTML()}
   <div class="nav nav-landing"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="Posty">Posty</a>
+    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#incluye">Qué incluye</a>
@@ -546,7 +546,7 @@ function landingView(cfg) {
     </div>
   </div></div>
   <div class="footer"><div class="wrap">
-    <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="Posty">Posty</span>
+    <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
     <span>Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
   </div></div>
@@ -558,7 +558,7 @@ function authView(mode) {
   const isLogin = mode === 'login';
   return `
   <div class="nav"><div class="wrap">
-    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="Posty">Posty</a>
+    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links"><a href="#/${isLogin ? 'registro' : 'login'}">${isLogin ? 'Crear cuenta' : 'Entrar'}</a></div>
   </div></div>
   <div class="wrap"><div class="form-card">
@@ -569,8 +569,40 @@ function authView(mode) {
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <button class="btn btn-primary btn-block" id="btnAuth">${isLogin ? 'Entrar' : 'Crear cuenta'}</button>
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
-      ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
+      ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
     </p>
+  </div></div>`;
+}
+
+function forgotView() {
+  return `
+  <div class="nav"><div class="wrap">
+    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+    <div class="nav-links"><a href="#/login">Entrar</a></div>
+  </div></div>
+  <div class="wrap"><div class="form-card">
+    <h2>Recuperá tu contraseña 🔑</h2>
+    <p class="sub">Te mando un link a tu email para elegir una nueva.</p>
+    <div id="forgotMsg"></div>
+    <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com" autocomplete="email" style="font-size:16px"></div>
+    <button class="btn btn-primary btn-block" id="btnForgot">Mandame el link</button>
+    <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
+      <a href="#/login" style="color:var(--cel)">Volver a entrar</a>
+    </p>
+  </div></div>`;
+}
+
+function resetView() {
+  return `
+  <div class="nav"><div class="wrap">
+    <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+  </div></div>
+  <div class="wrap"><div class="form-card">
+    <h2>Elegí tu nueva contraseña 🔑</h2>
+    <p class="sub">Que sea de 6 caracteres como mínimo.</p>
+    <div id="resetMsg"></div>
+    <div class="field"><label>Nueva contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" style="font-size:16px"></div>
+    <button class="btn btn-primary btn-block" id="btnReset">Guardar y entrar</button>
   </div></div>`;
 }
 
@@ -6725,6 +6757,37 @@ async function render() {
       } catch (e) {
         const dup = /ya está registrado/i.test(e.message || '');
         $('#formErr').innerHTML = `<div class="err">${dup ? `Ese email ya tiene cuenta. ¿Eras vos? <a href="#/login" style="color:var(--cel);font-weight:700">Entrá</a>` : esc(e.message)}</div>`;
+      }
+    };
+    return;
+  }
+  if (path === '#/forgot') {
+    LANDING_ON = false;
+    root.innerHTML = forgotView();
+    $('#btnForgot').onclick = async () => {
+      const email = ($('#f_email').value || '').trim();
+      if (!email) { $('#forgotMsg').innerHTML = `<div class="err">Escribí tu email 📧</div>`; return; }
+      try {
+        await api.post('/api/auth/forgot', { email });
+        $('#forgotMsg').innerHTML = `<div class="ok-msg">¡Listo! 📬 Si ese email tiene cuenta, ya te mandé el link para cambiar tu contraseña. Revisá tu casilla (y el spam).</div>`;
+      } catch (e) {
+        $('#forgotMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+      }
+    };
+    return;
+  }
+  if (path.startsWith('#/reset')) {
+    const token = new URLSearchParams((location.hash.split('?')[1] || '')).get('token') || '';
+    LANDING_ON = false;
+    root.innerHTML = resetView();
+    $('#btnReset').onclick = async () => {
+      const password = $('#f_pass').value || '';
+      try {
+        await api.post('/api/auth/reset', { token, password });
+        await refreshSession();
+        postAuthLanding();
+      } catch (e) {
+        $('#resetMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
       }
     };
     return;
