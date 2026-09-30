@@ -1438,9 +1438,10 @@ textarea.in{resize:vertical;min-height:96px}
    La landing pública para visitantes no logueados no cambia.
    ============================================================ */
 @media(min-width:761px){
-  .main-chat{width:100%;max-width:1080px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 72px)}
+  .main-chat{width:100%;max-width:1280px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100dvh - 72px)}
+  .main.main-chat{padding-top:6px}
   .main-chat .chat-home{flex:1;display:flex;flex-direction:column;min-height:0}
-  .main-chat .chome-top{margin-bottom:10px}
+  .main-chat .chome-top{margin-bottom:10px;padding:6px 8px 10px}
   .main-chat #chatCard{flex:1;display:flex;flex-direction:column;min-height:0;background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
   .main-chat .chat-box{flex:1 1 auto;min-height:200px;max-height:none;overflow-y:auto}
   .main-chat .chat-input-row{position:sticky;bottom:0;background:#fff;padding:10px 0 4px;z-index:5}
