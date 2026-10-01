@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261001-dogfood'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261001-v5'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2967,6 +2967,8 @@ function chatStripFpMarker(t) { return String(t || '').replace(/\[first-publish\
 const CELEBRATE_MARKER = /\[celebrate\]/i;
 const CELEBRATE_MARKER_G = /\[celebrate\]/gi;
 function chatStripCelebrate(t) { return String(t || '').replace(CELEBRATE_MARKER_G, '').trim(); }
+// Limpia marcadores internos del texto antes de mandarlo a la IA (el historial no los necesita).
+function chatStripMcMarker(t) { return chatStripCelebrate(t); }
 // Claves de mensajes ya renderizados: un mensaje con [celebrate] festeja UNA sola vez,
 // aunque el historial se recargue (visibilitychange, re-render, etc.).
 const CHAT_CELEBRATED_SEEN = new Set();
@@ -3853,7 +3855,7 @@ async function chatMakePost(asVideo) {
   // Cupo del plan: chequear antes de crear para no perder la idea armada
   try {
     const q = await api.get('/api/quota');
-    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount, q); } catch (e) {}
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount, q); paintUpcoming(mount); } } catch (e) {}
     if (q.left <= 0) { quotaModal(q); return; }
   } catch (e) {}
   const m = $('#chatMsg');
@@ -3883,7 +3885,7 @@ async function chatMakePost(asVideo) {
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
-    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount); } catch (e) {}
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount); paintUpcoming(mount); } } catch (e) {}
     try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
     setTimeout(() => {
       const rc = $('#reviewCard') || $('#draftsBanner');
@@ -4400,6 +4402,59 @@ async function paintChatQuota(mount, q0) {
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
   try { mount.classList.toggle('quota-row', mount.querySelectorAll(':scope > button').length === 1); } catch (e) {}
 }
+// 📅 "Se viene": próximos posteos programados integrados al chat.
+// Tarjeta compacta sobre el input: miniatura + día/hora + caption. Un tap = vista previa.
+async function paintUpcoming(mount) {
+  if (!mount || !mount.isConnected) return;
+  const old = mount.querySelector('.chat-upcoming');
+  if (old) old.remove();
+  let posts = [];
+  try { posts = await api.get('/api/posts'); } catch (e) { return; }
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const now = Date.now();
+  const up = (Array.isArray(posts) ? posts : [])
+    .filter(p => p.status === 'scheduled' && p.scheduled_at)
+    .map(p => {
+      const s0 = String(p.scheduled_at || '');
+      const d = new Date(s0.length === 16 ? s0.replace(' ', 'T') : s0.replace(' ', 'T'));
+      return { p, d: isNaN(d) ? null : d };
+    })
+    .filter(x => x.d && x.d.getTime() > now - 3600000)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3);
+  if (!up.length || !mount.isConnected) return;
+  const fmtD = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
+  const fmtH = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
+  const items = up.map(({ p, d }) => {
+    const cap = String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 60);
+    const isV = p.media_type === 'video';
+    const thumb = !p.image_path ? `<span class="cu-thumb cu-nothumb">📝</span>`
+      : isV ? `<video class="cu-thumb" src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+      : `<img class="cu-thumb" src="${esc(p.image_path)}" alt="" loading="lazy">`;
+    return `<button type="button" class="cu-item" data-cu-src="${esc(p.image_path || '')}" data-cu-video="${isV ? 1 : 0}">
+      ${thumb}
+      <span class="cu-txt"><b>${esc(fmtD(d))} · ${esc(fmtH(d))}</b><span>${esc(cap)}</span></span>
+    </button>`;
+  }).join('');
+  mount.insertAdjacentHTML('afterbegin', `<div class="chat-upcoming">
+    <button type="button" class="cu-head" data-cu-go="schedule">📅 Se viene <span class="cu-go">Ver todo →</span></button>
+    <div class="cu-list">${items}</div>
+  </div>`);
+  // Debajo de la tira de cupo si ya está (orden estable sin importar el timing).
+  const box0 = mount.querySelector('.chat-upcoming');
+  const qEl = mount.querySelector('.chat-quota');
+  if (box0 && qEl && qEl.compareDocumentPosition(box0) & Node.DOCUMENT_POSITION_PRECEDING) {
+    qEl.insertAdjacentElement('afterend', box0);
+  }
+  const box = mount.querySelector('.chat-upcoming');
+  if (!box || !box.isConnected) return;
+  const go = box.querySelector('[data-cu-go]');
+  if (go) go.onclick = () => { location.hash = '#/app/schedule'; };
+  box.querySelectorAll('.cu-item').forEach(b => b.onclick = () => {
+    const src = b.dataset.cuSrc;
+    if (src && typeof openLightbox === 'function') openLightbox(src, b.dataset.cuVideo === '1');
+  });
+}
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
   const card = document.getElementById('chatCard');
@@ -4438,7 +4493,7 @@ function renderQuickChips(drafts, scheduled, running) {
     i.value = t;
     chatSend();
   });
-  paintChatQuota(mount);
+  paintChatQuota(mount); paintUpcoming(mount);
 }
 
 // Utilidades de agenda con la zona horaria del usuario (misma convención que "Lo que se viene").
@@ -5837,7 +5892,7 @@ async function checkQuotaOrModal() {
     // Sincronizar la barrita con el dato fresco (si no, miente)
     try {
       const mount = document.getElementById('chatQuickChips');
-      if (mount) paintChatQuota(mount, q);
+      if (mount) { paintChatQuota(mount, q); paintUpcoming(mount); }
     } catch (e) {}
     if (q.left <= 0) {
       // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
@@ -7424,6 +7479,7 @@ function failedCardHTML(failed) {
         ${p.error ? `<div style="font-size:11.5px;color:var(--mut)">${esc(humanError(p.error))}</div>` : ''}
       </div>
       <button class="btn btn-soft btn-sm" data-failed-retry="${p.id}">🔄 Reintentar</button>
+      <button class="btn btn-soft btn-sm" data-failed-dismiss="${p.id}" title="Descartar este posteo">✕</button>
     </div>`).join('')}
     <div class="hint" data-failed-msg style="margin-top:4px"></div>
   </div>`;
@@ -7446,15 +7502,15 @@ function salioCardHTML(publishedList) {
   return `
   <div class="card" id="salioCard">
     <h3 style="margin:0 0 4px">📮 Ya salió</h3>
-    <p class="hint" style="margin:0 0 10px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos 🙂</p>
+    <p class="hint" style="margin:0 0 12px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos 🙂</p>
     ${list.map(p => `
-    <div style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        ${p.image_path ? `<img src="${esc(p.image_path)}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none" alt="">` : ''}
-        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(p.caption || p.source_topic || 'Posteo').split('\\n')[0].slice(0, 60))}</div>
-      </div>
-      <div style="display:flex;gap:6px;margin-left:54px">
-        ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">★</button>`).join('')}
+    <div class="st-rate-row">
+      ${p.image_path ? `<img class="st-rate-thumb" src="${esc(p.image_path)}" alt="" loading="lazy">` : ''}
+      <div class="st-rate-body">
+        <div class="st-rate-cap">${esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 90))}</div>
+        <div class="st-rate-stars">
+          ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">★</button>`).join('')}
+        </div>
       </div>
     </div>`).join('')}
   </div>`;
@@ -7490,8 +7546,6 @@ async function scheduleView() {
   const fpBlock = (!published.length) ? firstPublishCardHTML(drafts) : '';
   // Fallidos: debajo de la revisión, antes del calendario.
   const failedBlock = failedCardHTML(failed);
-  // "Ya salió": debajo del calendario, al fondo.
-  const salioBlock = salioCardHTML(published);
   const parse = (iso) => {
     const s0 = String(iso || '');
     let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
@@ -7501,6 +7555,12 @@ async function scheduleView() {
   const dayKey = (d) => { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } };
   const scheduled = schedPosts
     .map(p => ({ p, d: parse(p.scheduled_at) }))
+    .filter(x => !isNaN(x.d))
+    .sort((a, b) => a.d - b.d);
+  // Publicados de la semana visible: van en el día que salieron (✓ Salió).
+  // Así el calendario + "te quedan X" siempre suman el cupo del plan.
+  const publishedThisWeek = published
+    .map(p => ({ p, d: parse(p.published_at || p.scheduled_at), done: true }))
     .filter(x => !isNaN(x.d))
     .sort((a, b) => a.d - b.d);
   // Lunes de la semana visible (offset en semanas desde la actual)
@@ -7533,10 +7593,12 @@ async function scheduleView() {
   const dayLong = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
   // Pulso de la semana: resumen vivo arriba del calendario.
   const weekSchedCount = scheduled.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
+  const weekPubCount = publishedThisWeek.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
   let pulseHTML = '';
   if (SCHED_WEEK_OFFSET === 0) {
     const parts = [];
     if (weekSchedCount) parts.push(`📮 ${weekSchedCount} programado${weekSchedCount > 1 ? 's' : ''}`);
+    if (weekPubCount) parts.push(`✅ ${weekPubCount} publicado${weekPubCount > 1 ? 's' : ''}`);
     if (drafts.length) parts.push(`📝 ${drafts.length} borrador${drafts.length > 1 ? 'es' : ''}`);
     pulseHTML = parts.length ? parts.join(' <span class="sched-pulse-sep">·</span> ') : '🕊️ Tu semana está vacía';
   } else {
@@ -7544,27 +7606,28 @@ async function scheduleView() {
   }
   const cells = days.map(d => {
     const k = dayKey(d);
-    const items = scheduled.filter(x => dayKey(x.d) === k);
+    const items = scheduled.filter(x => dayKey(x.d) === k)
+      .concat(publishedThisWeek.filter(x => dayKey(x.d) === k))
+      .sort((a, b) => a.d - b.d);
     const isToday = k === todayK;
     return `<div class="sched-col${isToday ? ' today' : ''}">
       <div class="sched-colhead">${esc(fmtDay(d))}${isToday ? ' <span class="sched-today">hoy</span>' : ''}</div>
       <div class="sched-colbody">
-        ${items.length ? items.map(({ p, d: dt }) => `
-        <button class="sched-card" data-lightbox="${esc(p.image_path || '')}" ${p.media_type === 'video' ? 'data-video="1"' : ''}>
+        ${items.length ? items.map(({ p, d: dt, done }) => `
+        <button class="sched-card${done ? ' is-done' : ''}" data-lightbox="${esc(p.image_path || '')}" ${p.media_type === 'video' ? 'data-video="1"' : ''}>
           <span class="sched-thumbwrap">
             ${p.image_path
               ? (p.media_type === 'video'
                 ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
                 : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`)
               : `<span class="sched-nothumb">📝</span>`}
-            ${typeBadge(p)}
           </span>
-          <div class="sched-cardtxt"><b>${esc(fmtHour24(dt))}</b><span>${capFull(p)}</span></div>
+          <div class="sched-cardtxt"><div class="sched-cardmeta"><b>${esc(fmtHour24(dt))}</b>${done ? '<span class="sched-badge">✅ Salió</span>' : typeBadge(p)}</div><span>${capFull(p)}</span></div>
         </button>`).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
       </div>
     </div>`;
   }).join('');
-  const empty = !scheduled.length && SCHED_WEEK_OFFSET === 0;
+  const empty = !scheduled.length && !publishedThisWeek.length && SCHED_WEEK_OFFSET === 0;
   // Sin borradores ni programados: la tarjeta para armar la semana vive acá.
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   return `<div id="schedView" class="sched-wrap">
@@ -7597,7 +7660,6 @@ async function scheduleView() {
          </div>`
       : `<div class="sched-grid">${cells}</div>
          <p class="hint" style="margin-top:10px">Tocá un posteo para verlo en grande 🔍</p>`}
-    ${salioBlock}
   </div>`;
 }
 /* ---------- 📊 TUS NÚMEROS: stats reales de Instagram ---------- */
@@ -7615,12 +7677,21 @@ function statsView() {
     </div>
     <div class="st-grid" id="stGrid">${cards}</div>
     <div id="stBest"></div>
+    <div id="stRate"></div>
   </div>`;
 }
 function bindStats() {
   const paint = async () => {
     try {
       const d = await api.get('/api/stats/ig');
+      // 📮 "Ya salió": las estrellitas viven acá, con los números (aunque no haya alcance todavía).
+      try {
+        const posts = await api.get('/api/posts');
+        const pub = (Array.isArray(posts) ? posts : []).filter(p => p.status === 'published');
+        const rateBox = document.getElementById('stRate');
+        if (rateBox) rateBox.innerHTML = salioCardHTML(pub);
+        bindSignalBtns();
+      } catch (e) { /* sin posteos no hay estrellitas */ }
       const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
       const grid = document.getElementById('stGrid');
       const box = document.getElementById('stBest');
@@ -7721,8 +7792,20 @@ function bindSchedule() {
       if (msg) msg.innerHTML = `<div class="err">${esc(humanError(e.message || 'No se pudo reintentar'))}</div>`;
     }
   });
-  // 👍/👎 del "Ya salió" (outcome loop).
-  bindSignalBtns();
+  // Descartar un fallido: lo saca de la tarjeta sin publicarlo.
+  $$('#schedView [data-failed-dismiss]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.failedDismiss;
+    b.disabled = true;
+    try {
+      await api.post(`/api/posts/${id}/dismiss-failed`, {});
+      render();
+    } catch (e) {
+      b.disabled = false;
+      const msg = document.querySelector('#failedCard [data-failed-msg]');
+      if (msg) msg.innerHTML = `<div class="err">${esc(humanError(e.message || 'No se pudo descartar'))}</div>`;
+    }
+  });
+  // 👍/👎 del "Ya salió": ahora viven en 📊 Tus números (bindStats los cablea).
   // Barra XP: pintado + click abre el modal de racha.
   try { paintBrandStrip(); } catch (e) {}
   const xs = $('#xpStrip');
