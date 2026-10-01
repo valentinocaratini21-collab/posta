@@ -166,6 +166,32 @@ async function uploadAssetFile(file, kind) {
   return data;
 }
 
+// ---------- Lazy chunks: vistas pesadas fuera del primer pantallazo ----------
+// app.js trae el primer pantallazo (landing, auth, chat, semana, schedule, aprobación).
+// Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
+// cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
+// comparten el scope global con este archivo, sin imports/exports que mantener.
+const CHUNK_V = '20261001-dogfood'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const __CHUNKS = {};
+function loadChunk(name) {
+  if (__CHUNKS[name]) return __CHUNKS[name];
+  __CHUNKS[name] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/chunk-' + name + '.js?v=' + CHUNK_V;
+    s.onload = () => resolve();
+    s.onerror = () => { delete __CHUNKS[name]; reject(new Error('chunk ' + name + ' no cargó')); };
+    document.head.appendChild(s);
+  });
+  return __CHUNKS[name];
+}
+// Tarjeta amable si un chunk no pudo descargarse (p. ej. sin conexión).
+function chunkFailHTML() {
+  return '<div class="apv-wrap"><div class="card" style="text-align:center">'
+    + '<h3 style="margin:0 0 6px">\U0001f605 Uh, no pude cargar esta secci\u00f3n</h3>'
+    + '<p class="hint">Revis\u00e1 tu conexi\u00f3n y prob\u00e1 de nuevo.</p>'
+    + '<button class="btn btn-soft" onclick="render()">Reintentar</button>'
+    + '</div></div>';
+}
 let ME = null;
 let PROFILE = null;
 let SETTINGS = null;
@@ -186,6 +212,8 @@ async function pzReferral() {
 let NET_OFFLINE = false;
 // Callback que re-pinta la tarjeta "🌐 La web de tu negocio" (lo registra bindSettings cuando renderiza Ajustes)
 let PZ_WEB_REFRESH = null;
+// Callback que re-consulta GET /api/posty/level y repinta la tarjeta "🧠 Lo que Posty sabe de tu negocio"
+let PZ_LEVEL_REFRESH = null;
 async function refreshSession() {
   let lastErr = null;
   for (let i = 0; i < 3; i++) {
@@ -314,7 +342,7 @@ function planCardsHTML(plans) {
       ${pzPerDayHTML(p)}
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="#/registro">Empezar ahora</a>
+      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
     </div>`).join('');
 }
 
@@ -350,17 +378,14 @@ function pzRefBandHTML() {
   return '';
 }
 // Calculadora "cuánto te cuesta hacerlo vos" (global, la llama el botón)
-function calcDIY() {
-  const h = Math.max(0, parseFloat(($('#diy_hours') || {}).value) || 0);
-  const r = Math.max(0, parseFloat(($('#diy_rate') || {}).value) || 0);
-  const out = $('#diy_out');
-  if (!out) return;
-  const monthly = Math.round(h * r * 4);
-  const pro = (PLANS_CACHE && PLANS_CACHE.plans || []).find(p => p.id === 'pro');
-  const sym = (pro && pro.currency === 'UYU') ? '$U ' : '$';
-  const proLabel = pro ? pro.price_label : '$59.900';
-  out.innerHTML = `Hacerlo vos te cuesta <b>${sym}${monthly.toLocaleString('es-AR')}/mes</b> · Posty Pro: <b>${esc(proLabel)}/mes</b>`;
-  out.style.display = 'block';
+
+// Lugares reales: el estático del template ("50") es solo un fallback; el número
+// vivo baja de /api/capacity (spots_total = MONTHLY_SPOTS en server.js).
+function refreshScarcity() {
+  fetch('/api/capacity').then(r => r.json()).then(c => {
+    const el = document.getElementById('scarcityLine');
+    if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
+  }).catch(() => {});
 }
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
@@ -373,33 +398,32 @@ function landingView(cfg) {
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
-      <a href="#incluye">Qué incluye</a>
       <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
       <a href="#faq">Preguntas</a>
       <a href="#/login">Entrar</a>
-      <a class="btn btn-primary btn-sm" href="#/registro">Empezar ahora</a>
+      <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
     <a href="#como-funciona">Cómo funciona</a>
-    <a href="#incluye">Qué incluye</a>
     <a href="#ejemplos">Ejemplos</a>
     <a href="#planes">Planes</a>
     <a href="#faq">Preguntas</a>
     <a href="#/login">Entrar</a>
-    <a class="btn btn-primary btn-block" href="#/registro">Empezar ahora</a>
+    <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
-    <h1>¡Hola! Soy <span class="hl">Posty</span></h1>
-    <p class="sub"><b>Te armo tu semana de Instagram en minutos.</b> Ideas, diseños, textos y hashtags con tu marca — vos solo aprobás, yo me ocupo de todo.</p>
+    <h1>Tu semana de Instagram,<br><span class="hl">hecha en 1 minuto</span></h1>
+    <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b>. Vos solo aprobás — yo me ocupo de todo.</p>
     <div class="hero-cta">
-      <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
-      <a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a>
+      <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
     </div>
+    <div class="hero-note">Sin tarjeta · probalo gratis · Cancelá cuando quieras</div>
+    <div class="hero-note" style="margin-top:10px"><a href="/auditoria" style="color:var(--cel);font-weight:800;text-decoration:none">🔍 ¿Tu Instagram vende? Audit gratis →</a></div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
       <div class="pz-ba-row">
@@ -409,12 +433,11 @@ function landingView(cfg) {
         </div>
         <div class="pz-ba-arrow">→</div>
         <div class="pz-ba-panel">
-          <div class="pz-ba-label pz-ba-label-on">CON POSTA</div>
+          <div class="pz-ba-label pz-ba-label-on">CON POSTY</div>
           <img src="hero-feed.jpg" alt="Feed de Instagram gestionado por Posty">
         </div>
       </div>
     </div>
-    <div class="hero-note">Sin tarjeta · 3 días gratis · Cancelá cuando quieras</div>
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
@@ -427,17 +450,9 @@ function landingView(cfg) {
       </div></div>
     </div>
   </div></div>
-  <div class="sample-banner"><div class="wrap">
-    <div class="sample-txt"><b>🎁 Tu semana de posteos GRATIS</b><span>Te la armo en 1 minuto, con tu negocio real. Sin registro.</span></div>
-    <a class="btn btn-primary" href="/prueba">Armemos tu semana gratis</a>
-  </div></div>
-  <div class="pz-trialband"><div class="wrap">
-    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armo tus ideas + tu semana en 1 minuto. Sin registro.</span></div>
-    <a class="btn btn-primary" href="/prueba">Probar la app</a>
-  </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
     <h2>Hecho por Posty 🤖</h2>
-    <p class="lede">Diseños y videos que armo en minutos, para cualquier rubro. Cada post de mis clientes lleva mi marca — es mi mejor publicidad.</p>
+    <p class="lede">Diseños y videos que armo en minutos, para cualquier rubro. Imaginá tu negocio acá 👇</p>
     <div class="show-row">
       <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posty"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
       <div class="phone sm"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
@@ -448,86 +463,41 @@ function landingView(cfg) {
       <div class="phone sm"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
       <div class="phone sm"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posty"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
     </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero mi semana así 👀</a></div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así trabajo yo 👇</h2>
     <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
     <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo y tus competidores. Te lleva 2 minutos y no te pido más nada.</p></div>
+      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
       <div class="step"><div class="num">3</div><h3>Vos aprobás, yo publico</h3><p>Tu semana queda programada a la mejor hora. Nada sale sin tu OK.</p></div>
     </div>
-  </div></div>
-  <div class="section" id="incluye" style="background:var(--bg2)"><div class="wrap">
-    <h2>Qué incluye</h2>
-    <p class="lede">Todo lo que haría tu equipo de marketing, sin contratar a nadie. Esto es lo que hago por vos cada semana 👇</p>
-    <div class="grid3">
-      <div class="feat"><div class="ico">💡</div><h3>Ideas estratégicas</h3><p>Cada semana pensamos el contenido por vos: novedades, promos, tips, testimonios y más.</p></div>
-      <div class="feat"><div class="ico">🎨</div><h3>Diseños con tu marca</h3><p>Usamos TUS fotos, TU logo y TUS colores. Nada de plantillas genéricas que no te representan.</p></div>
-      <div class="feat"><div class="ico">✍️</div><h3>Captions + hashtags</h3><p>Textos en rioplatense con tu tono, pensados para vender, con hashtags para Argentina.</p></div>
-      <div class="feat"><div class="ico">🎬</div><h3>Videos para Reels</h3><p>Convertimos tus fotos en videos verticales listos para Reels, en el formato que más rinde.</p></div>
-      <div class="feat"><div class="ico">📅</div><h3>Publicación automática</h3><p>Programamos tu semana completa: la revisás una vez y el sistema publica solo, a la hora exacta, en tu cuenta real.</p></div>
-      <div class="feat"><div class="ico">🔍</div><h3>Diferenciación de tu competencia</h3><p>Nos contás quiénes son tus competidores y creamos contenido que te haga destacar, no copiar.</p></div>
-    </div>
-  </div></div>
-  <div class="section" id="calculadora" style="background:var(--bg2)"><div class="wrap" style="max-width:760px;text-align:center">
-    <h2>¿Cuánto te cuesta hacerlo vos?</h2>
-    <p class="lede">La cuenta que nadie hace antes de contratar un community manager.</p>
-    <div class="pz-calc">
-      <div class="field"><label>Horas por semana que le dedicás</label><input id="diy_hours" type="number" min="0" value="5"></div>
-      <div class="field"><label>Valor de tu hora ($)</label><input id="diy_rate" type="number" min="0" value="8000"></div>
-      <button class="btn btn-primary" onclick="calcDIY()">Calcular</button>
-      <div id="diy_out" class="pz-calc-out" style="display:none"></div>
-      <div style="text-align:center;margin-top:14px"><a class="btn btn-ghost" href="/prueba">Probar gratis</a></div>
-    </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
-    <p class="lede">Las herramientas te dan más trabajo. Yo te lo saco de encima.</p>
-    <div class="vs-list">
-      <div class="vs-item">
-        <div class="vs-top">🧰 <b>Apps para programar posteos</b></div>
-        <p>Vos creás los diseños, vos escribís los textos, vos programás cada posteo. Y se pagan en dólares con tarjeta.</p>
-      </div>
-      <div class="vs-item">
-        <div class="vs-top">🧑‍💼 <b>Community manager</b></div>
-        <p>$300.000+ por mes. Hay que buscarlo, dirigirlo, revisarlo y esperarlo.</p>
-      </div>
-      <div class="vs-item">
-        <div class="vs-top">😮‍💨 <b>Hacerlo vos</b></div>
-        <p>Horas por semana que no tenés, para un Instagram a medias.</p>
-      </div>
-      <div class="vs-item win">
-        <div class="vs-top">🚀 <b>Posty</b></div>
-        <p>Me contás de tu negocio <b>una sola vez</b>. Creo las ideas, los diseños y los textos, y programo tu semana en tu cuenta. Nada sale sin tu OK. En pesos, con MercadoPago. Y me probás <b>3 días gratis</b>, sin tarjeta.</p>
-      </div>
-    </div>
-    <p class="unico-line">Soy el único community manager argentino 100% done-for-you para Instagram.</p>
-    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
-  </div></div>
-  <div class="section" id="vs-agencia"><div class="wrap" style="max-width:860px">
-    <h2>Posty vs. agencia de marketing</h2>
-    <p class="lede">Lo mismo que te promete una agencia, sin todo lo que odiás de las agencias.</p>
+    <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
       <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $39.900</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">Minutos</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">Probalo gratis, sin tarjeta</div></div>
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div>
-    <p class="unico-line">Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
+    <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$39.900</b>.</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
-    <p class="lede">Elegí tu plan y arrancamos hoy mismo. Sin letra chica, cancelás cuando quieras.</p>
+    <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
     <div class="country-toggle">
       <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
     </div>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
-    <div class="scarcity" id="scarcityLine">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
+    <div class="scarcity" id="scarcityLine">🔥 Solo <b>50 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
   </div></div>
@@ -535,21 +505,18 @@ function landingView(cfg) {
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
     <div class="faq">
-      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez al registrarte y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
-      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. También podés ver tu semana armada en la prueba gratis antes de registrarte.</p></details>
+      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
+      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. Y en la prueba gratis ya ves tu semana armada antes de registrarte.</p></details>
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
-      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendo de lo que te gusta para hacerlo cada vez mejor.</p></details>
+      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Me lo decís por el chat y lo cambio, o lo eliminás antes de que se publique. Además aprendo de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
-      <details><summary>¿Publicás sin que yo lo apruebe?</summary><p>No. Todo queda como borrador en tu cuenta y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: probame 3 días, mirá tu semana armada y decidí. Si no te sirve, no pagás nada.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Antes de pagar: en la prueba gratis ya ves tu semana armada, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
-      <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
-      <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
+      <details><summary>¿Publicás sin que yo lo apruebe?</summary><p>No. Todo queda como borrador y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-primary" href="#/registro" style="font-size:16px;padding:18px 44px">Empezar ahora</a>
-      <div style="margin-top:18px"><a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a></div>
+      <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     </div>
   </div></div>
   <div class="footer"><div class="wrap">
@@ -570,7 +537,7 @@ function authView(mode) {
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
-    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '3 días gratis, sin tarjeta.'}</p>
+    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : 'Probalo gratis, sin tarjeta.'}</p>
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
@@ -870,12 +837,50 @@ function postyConfetti() {
   document.body.appendChild(box);
   setTimeout(() => { try { box.remove(); } catch (e) {} }, 3600);
 }
+// Celebración grande: confetti (ya existente) + coreografía de malabares ~3.2s:
+// el avatar en grande (~120px) saltando + 3 pelotas amarillas en cascada.
+// Todo CSS puro (clases .posty-celebrate / .pc-ava / .pc-ball en styles.css).
+// Idempotente: si ya hay una celebración en curso, no se apila otra (flag con timestamp).
+let POSTY_CELEBRATE_UNTIL = 0;
+function postyCelebrate() {
+  try {
+    const now = Date.now();
+    if (POSTY_CELEBRATE_UNTIL && now < POSTY_CELEBRATE_UNTIL) return; // ya hay una en curso
+    POSTY_CELEBRATE_UNTIL = now + 3200;
+    if (typeof postyConfetti === 'function') postyConfetti();
+    const ov = document.createElement('div');
+    ov.className = 'posty-celebrate';
+    ov.innerHTML = '<img class="pc-ava" src="ai-avatar.png" alt="Posty festejando">'
+      + '<span class="pc-ball b1"></span><span class="pc-ball b2"></span><span class="pc-ball b3"></span>';
+    document.body.appendChild(ov);
+    setTimeout(() => {
+      try { ov.remove(); } catch (e) {}
+      try { if (Date.now() >= POSTY_CELEBRATE_UNTIL) POSTY_CELEBRATE_UNTIL = 0; } catch (e2) {}
+    }, 3300);
+  } catch (e) {}
+}
+// Magia de primera apertura: confetti sutil (ya existente) + el avatar "saluda"
+// (bounce + giro sutil, 1.2s, CSS puro). Una sola vez por sesión.
+function firstOpenParty() {
+  let done = false;
+  try { done = sessionStorage.getItem('posta_first_open_party') === '1'; } catch (e) {}
+  if (done) return;
+  try { sessionStorage.setItem('posta_first_open_party', '1'); } catch (e) {}
+  try { if (typeof postyCelebrate === 'function') postyCelebrate(); } catch (e) {} // confetti + malabares
+  try {
+    const ava = document.querySelector('.chome-ava');
+    if (ava) {
+      ava.classList.add('chome-ava-wave');
+      setTimeout(() => { try { ava.classList.remove('chome-ava-wave'); } catch (e2) {} }, 1600);
+    }
+  } catch (e) {}
+}
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
 function igConnectHere() {
   const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
   igConnect(cur);
 }
-function setupChecklistHtml() {
+function setupChecklistHtml(title) {
   const rows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
     rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
@@ -900,7 +905,15 @@ function setupChecklistHtml() {
   setupChecklistCelebrate(rows.length);
   if (!rows.length) return '';
   const n = rows.length;
-  return `<div class="setup-card"><div class="setup-title">🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}</div>${rows.join('')}</div>`;
+  const t = title || `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`;
+  return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}</div>`;
+}
+// Checklist como sección secundaria al final del chat: mismas filas y mismos
+// binds (sigue funcional), solo baja de protagonismo con título propio.
+function setupSecondaryHtml() {
+  const h = setupChecklistHtml('Para que la magia siga ✨');
+  if (!h) return '';
+  return `<section class="setup-secondary" aria-label="Para que la magia siga">${h}</section>`;
 }
 // Bindea las filas del checklist (se re-bindea tras cada refresh del checklist).
 function bindSetupRows() {
@@ -917,20 +930,26 @@ function bindSetupRows() {
       const r = await pushEnableFlow();
       if (r && r.ok) {
         toast('🔔 <b>¡Listo!</b> Te aviso antes de cada posteo 🙌');
-        refreshSetupChecklist();
       } else if (r && r.reason === 'denied') {
-        // El OS lo bloqueó: la fila pasa a estado cumplido por email.
-        refreshSetupChecklist();
+        // El OS lo bloqueó: al refrescar, la fila pasa a "Te aviso por email".
+      } else if (r && r.reason !== 'declined') {
+        toast(r && r.reason === 'no_vapid'
+          ? '🔔 Todavía no están listas del lado del servidor. Probá en un rato.'
+          : '🔔 No se pudo activar 😅 Probá de nuevo.');
       }
     } catch (e) {}
+    // Siempre refrescar: la fila se deriva del permiso real, así converge a la verdad.
+    refreshSetupChecklist();
     try { sp.disabled = false; } catch (e) {}
   };
 }
 // Re-render del checklist en el lugar (tras activar notificaciones, etc.).
+// Conserva el título de la sección secundaria del chat ("Para que la magia siga ✨").
 function refreshSetupChecklist() {
   document.querySelectorAll('.setup-card').forEach(card => {
-    const h = setupChecklistHtml();
-    if (!h) { card.remove(); return; }
+    const sec = card.closest('.setup-secondary');
+    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined);
+    if (!h) { (sec || card).remove(); return; }
     const t = document.createElement('template');
     t.innerHTML = h.trim();
     const fresh = t.content.firstElementChild;
@@ -969,9 +988,6 @@ function appShell(tab, content) {
 function openDrawer(){ const d = $('#drawer'), o = $('#drawerOv'); if (d) d.classList.add('open'); if (o) o.hidden = false; }
 function closeDrawer(){ const d = $('#drawer'), o = $('#drawerOv'); if (d) d.classList.remove('open'); if (o) o.hidden = true; }
 
-/* ---------- CREAR ---------- */
-let CREATOR_OPEN = false; // el creador manual vive dentro de Mi semana, plegado hasta que se abre
-let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {}, carouselMode: false, carouselPhotos: [], isCarousel: false };
 
 
 const BASE_PALETTES = [
@@ -1148,325 +1164,294 @@ function drawPost(canvas, o) {
   const ctx = canvas.getContext('2d');
   const pals = getPalettes();
   const pal = pals[o.pal] || pals[0];
-  const acc = pal.c[2] || pal.c[0]; // acento de LA MARCA del cliente, nunca el de Posta
+  const c0 = pal.c[0], c1 = pal.c[1] || pal.c[0];
+  let acc = pal.c[2] || pal.c[0]; // acento de LA MARCA del cliente, nunca el de Posta
   const ink = pal.dark ? '#0A1E33' : '#FFFFFF';
-  const sub = pal.dark ? 'rgba(10,30,51,.72)' : 'rgba(255,255,255,.82)';
+  const FONT = "-apple-system, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
+  const SERIF = "Georgia, 'Times New Roman', serif";
 
-  if (o.photoImg) {
-    // La foto va de fondo y el diseño se mantiene: velo con los colores de la marca
-    drawCover(ctx, o.photoImg, 0, 0, W, H);
-    if (o.tpl === 'claro') ctx.fillStyle = 'rgba(255,255,255,.88)';
-    else if (o.tpl === 'noche') ctx.fillStyle = 'rgba(10,30,51,.86)';
-    else { const pg = ctx.createLinearGradient(0, 0, W, H); pg.addColorStop(0, hexA(pal.c[0], .62)); pg.addColorStop(1, hexA(pal.c[1], .62)); ctx.fillStyle = pg; }
-    ctx.fillRect(0, 0, W, H);
-  }
+  const title = String(o.title || 'Tu título');
+  const subtitle = String(o.subtitle || '');
+  const handle = '@' + (o.handle || 'tunegocio');
 
-  if (o.tpl === 'claro') {
-    if (!o.photoImg) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); }
-    ctx.fillStyle = acc; ctx.fillRect(90, 120, 130, 18);
-    ctx.fillStyle = '#0A1E33'; ctx.textAlign = 'center';
-    ctx.font = '800 96px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'Tu título', W - 220).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, 420 + i * 116));
-    ctx.fillStyle = 'rgba(10,30,51,.65)'; ctx.font = '400 52px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.subtitle || '', W - 260).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 900 + i * 70));
-    ctx.fillStyle = '#0A1E33'; ctx.font = '700 44px -apple-system, Inter, sans-serif';
-    ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, 1230);
-  } else if (o.tpl === 'noche') {
-    if (!o.photoImg) { ctx.fillStyle = '#0A1E33'; ctx.fillRect(0, 0, W, H); }
-    ctx.strokeStyle = acc; ctx.lineWidth = 10; ctx.strokeRect(50, 50, W - 100, H - 100);
-    ctx.fillStyle = acc; ctx.font = '800 40px -apple-system, Inter, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(('' + (o.handle || 'tunegocio')).toUpperCase(), W / 2, 170);
-    ctx.fillStyle = '#fff'; ctx.font = '800 104px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'Tu título', W - 240).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, 560 + i * 124));
-    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = '400 54px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.subtitle || '', W - 280).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 1020 + i * 72));
-  } else if (o.tpl === 'promo') {
-    if (!o.photoImg) {
-      const g = ctx.createLinearGradient(0, 0, W, H);
-      g.addColorStop(0, pal.c[0]); g.addColorStop(1, pal.c[1]);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
-    ctx.fillStyle = ink; ctx.globalAlpha = .16;
-    ctx.beginPath(); ctx.arc(W / 2, 560, 330, 0, 7); ctx.fill();
-    ctx.globalAlpha = 1; ctx.textAlign = 'center';
-    ctx.font = '800 130px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'OFERTA', W - 200).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 520 + i * 150));
-    ctx.font = '700 58px -apple-system, Inter, sans-serif'; ctx.fillStyle = sub;
-    wrapText(ctx, o.subtitle || '', W - 240).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 980 + i * 76));
-    // pill handle
-    ctx.font = '800 46px -apple-system, Inter, sans-serif';
-    const hw = ctx.measureText('@' + (o.handle || 'tunegocio')).width + 90;
-    ctx.fillStyle = pal.dark ? '#0A1E33' : '#fff';
-    ctx.beginPath(); ctx.roundRect(W / 2 - hw / 2, 1150, hw, 96, 48); ctx.fill();
-    ctx.fillStyle = pal.dark ? '#fff' : '#0A1E33';
-    ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, 1214);
-  } else { // gradiente
-    if (!o.photoImg) {
-      const g = ctx.createLinearGradient(0, 0, W, H);
-      g.addColorStop(0, pal.c[0]); g.addColorStop(1, pal.c[1]);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
-    ctx.fillStyle = ink; ctx.textAlign = 'left';
-    ctx.font = '800 44px -apple-system, Inter, sans-serif';
-    ctx.fillText('@' + (o.handle || 'tunegocio'), 90, 150);
-    ctx.font = '800 118px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'Tu título', W - 180).slice(0, 4).forEach((l, i) => ctx.fillText(l, 90, 420 + i * 138));
-    ctx.fillStyle = sub; ctx.font = '400 56px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.subtitle || '', W - 180).slice(0, 4).forEach((l, i) => ctx.fillText(l, 90, 1010 + i * 74));
-    ctx.fillStyle = ink; ctx.fillRect(90, H - 130, 120, 14);
-  }
-
-  // Logo del cliente en la esquina inferior derecha (brand kit)
-  if (o.logoImg) {
-    const lw = 170, lh = Math.min(170, 170 * o.logoImg.height / Math.max(1, o.logoImg.width));
-    const pad = 44;
-    ctx.fillStyle = 'rgba(255,255,255,.94)';
+  // ---------- helpers de dibujo ----------
+  function rr(x, y, w, h, r) {
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(W - pad - lw - 22, H - pad - lh - 22, lw + 44, lh + 44, 30);
-    else ctx.rect(W - pad - lw - 22, H - pad - lh - 22, lw + 44, lh + 44);
-    ctx.fill();
-    ctx.drawImage(o.logoImg, W - pad - lw, H - pad - lh, lw, lh);
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+  }
+  function L(text, maxW, font) { ctx.font = font; return wrapText(ctx, text, maxW); }
+  function cl(ls, cx, y, lh) { ls.forEach((l, i) => ctx.fillText(l, cx, y + i * lh)); } // centradas
+  function ll(ls, x, y, lh) { ls.forEach((l, i) => ctx.fillText(l, x, y + i * lh)); }   // a la izquierda
+  // Ajuste tipográfico: achica la fuente hasta que el texto entre en maxLines.
+  // NUNCA corta palabras: prefiere achicar antes que truncar. Si ni al mínimo
+  // entra, devuelve todas las líneas igual (los layouts centrados lo absorben).
+  // overflow=true solo se usa para subtítulos: mejor ausentes que cortados.
+  function fit(text, maxW, maxLines, mkFont, startSize, minSize) {
+    let size = startSize, ls = [];
+    while (true) {
+      ls = L(text, maxW, mkFont(size));
+      if (ls.length <= maxLines || size <= minSize) break;
+      size -= 6;
+    }
+    const overflow = ls.length > maxLines;
+    return { lines: ls, size, overflow };
+  }
+  function overline(text, cx, y, color, size) {
+    ctx.font = '700 ' + (size || 38) + 'px ' + FONT;
+    try { ctx.letterSpacing = '7px'; } catch (e) {}
+    ctx.fillStyle = color; ctx.textAlign = 'center';
+    ctx.fillText(String(text).toUpperCase(), cx, y);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+  }
+  function pill(cx, cy, text, font, bg, fg, opts) {
+    opts = opts || {};
+    ctx.font = font;
+    const padX = opts.padX != null ? opts.padX : 46;
+    const w = ctx.measureText(text).width + padX * 2, h = opts.h || 92;
+    ctx.save();
+    if (!opts.flat) { ctx.shadowColor = 'rgba(10,30,51,.25)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6; }
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2);
+    if (opts.stroke) { ctx.strokeStyle = opts.stroke; ctx.lineWidth = opts.lw || 3; ctx.stroke(); }
+    else { ctx.fillStyle = bg; ctx.fill(); }
+    ctx.restore();
+    ctx.fillStyle = fg; ctx.textAlign = 'center';
+    const fs = parseInt((font.match(/(\d+)px/) || [0, 40])[1], 10);
+    ctx.fillText(text, cx, cy + fs * 0.36);
+    return w;
+  }
+  // foto de fondo con velo; devuelve false si no hay foto
+  function photoBG(veil) {
+    if (!o.photoImg) return false;
+    drawCover(ctx, o.photoImg, 0, 0, W, H);
+    ctx.fillStyle = veil; ctx.fillRect(0, 0, W, H);
+    return true;
+  }
+  function brandGrad(x0, y0, x1, y1) {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, c0); g.addColorStop(1, c1);
+    return g;
+  }
+
+  const tpl = o.tpl || 'gradiente';
+
+  if (tpl === 'claro') {
+    // ---- Tarjeta luminosa: aire, overline con tracking, titular protagonista ----
+    const hasPhoto = photoBG('rgba(255,255,255,.90)');
+    if (!hasPhoto) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); }
+    if (!hasPhoto) {
+      const gl = ctx.createLinearGradient(0, 0, 0, 560);
+      gl.addColorStop(0, hexA(c0, 0.10)); gl.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gl; ctx.fillRect(0, 0, W, 560);
+    }
+    ctx.textAlign = 'center';
+    overline(handle, W / 2, 148, acc);
+    ctx.fillStyle = acc; rr(W / 2 - 60, 182, 120, 9, 4.5); ctx.fill();
+    const t = fit(title, W - 240, 4, s => '800 ' + s + 'px ' + FONT, 100, 70);
+    const th = (t.lines.length - 1) * t.size * 1.18, cy = 600;
+    ctx.fillStyle = '#0A1E33';
+    cl(t.lines, W / 2, cy - th / 2, t.size * 1.18);
+    if (subtitle) {
+      const s = fit(subtitle, W - 300, 3, z => '400 ' + z + 'px ' + FONT, 50, 34);
+      if (!s.overflow) {
+        ctx.fillStyle = 'rgba(10,30,51,.64)';
+        cl(s.lines, W / 2, cy + th / 2 + 72, s.size * 1.36);
+      }
+    }
+  } else if (tpl === 'noche') {
+    // ---- Noche premium: marco doble fino, titular blanco con subrayado acento ----
+    const hasPhoto = photoBG('rgba(10,30,51,.85)');
+    if (!hasPhoto) { ctx.fillStyle = '#0A1E33'; ctx.fillRect(0, 0, W, H); }
+    const vg = ctx.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 950);
+    vg.addColorStop(0, 'rgba(255,255,255,.06)'); vg.addColorStop(1, 'rgba(0,0,0,.30)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = acc; ctx.lineWidth = 5; ctx.strokeRect(46, 46, W - 92, H - 92);
+    ctx.strokeStyle = hexA(acc, 0.35); ctx.lineWidth = 2; ctx.strokeRect(68, 68, W - 136, H - 136);
+    ctx.textAlign = 'center';
+    overline(handle, W / 2, 172, acc);
+    const t = fit(title, W - 280, 4, s => '800 ' + s + 'px ' + FONT, 106, 72);
+    const th = (t.lines.length - 1) * t.size * 1.17, cy = 640;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+    cl(t.lines, W / 2, cy - th / 2, t.size * 1.17);
+    ctx.restore();
+    ctx.fillStyle = acc; rr(W / 2 - 70, cy + th / 2 + 36, 140, 10, 5); ctx.fill();
+    if (subtitle) {
+      const s = fit(subtitle, W - 320, 3, z => '400 ' + z + 'px ' + FONT, 52, 34);
+      if (!s.overflow) {
+        ctx.fillStyle = 'rgba(255,255,255,.72)';
+        cl(s.lines, W / 2, cy + th / 2 + 102, s.size * 1.35);
+      }
+    }
+  } else if (tpl === 'promo') {
+    // ---- Energía de oferta: diagonal, círculos deco, pill de marca ----
+    const hasPhoto = photoBG((() => {
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, hexA(c0, 0.70)); g.addColorStop(1, hexA(c1, 0.70));
+      return g;
+    })());
+    if (!hasPhoto) { ctx.fillStyle = brandGrad(0, 0, W, H); ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = 'rgba(255,255,255,.13)';
+    ctx.beginPath(); ctx.arc(W * 0.84, 250, 150, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(130, 1090, 210, 0, 7); ctx.fill();
+    ctx.save();
+    ctx.translate(W / 2, H / 2); ctx.rotate(-0.32);
+    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(-W, -70, W * 2, 140);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    overline(handle, W / 2, 150, hexA(ink, 0.85));
+    const t = fit(title, W - 200, 4, s => '900 ' + s + 'px ' + FONT, 138, 80);
+    const th = (t.lines.length - 1) * t.size * 1.15, cy = 620;
+    ctx.fillStyle = ink;
+    ctx.save();
+    ctx.shadowColor = 'rgba(10,30,51,.30)'; ctx.shadowOffsetY = 10; ctx.shadowBlur = 0;
+    cl(t.lines, W / 2, cy - th / 2, t.size * 1.15);
+    ctx.restore();
+    if (subtitle) {
+      const s = fit(subtitle, W - 260, 3, z => '700 ' + z + 'px ' + FONT, 56, 36);
+      if (!s.overflow) {
+        ctx.fillStyle = hexA(ink, 0.88);
+        cl(s.lines, W / 2, cy + th / 2 + 66, s.size * 1.32);
+      }
+    }
+    pill(W / 2, 1200, '✦ ' + handle + ' ✦', '800 42px ' + FONT,
+      pal.dark ? '#0A1E33' : 'rgba(255,255,255,.94)', pal.dark ? '#FFFFFF' : '#0A1E33', { padX: 40, h: 88 });
+  } else if (tpl === 'editorial') {
+    // ---- Revista: foto arriba, bloque de marca abajo, serif gigante ----
+    const PH = 780;
+    if (o.photoImg) { drawCover(ctx, o.photoImg, 0, 0, W, PH); }
+    else { ctx.fillStyle = brandGrad(0, 0, W, PH); ctx.fillRect(0, 0, W, PH); }
+    const sc = ctx.createLinearGradient(0, PH - 170, 0, PH + 20);
+    sc.addColorStop(0, hexA(c0, 0)); sc.addColorStop(1, c0);
+    ctx.fillStyle = sc; ctx.fillRect(0, PH - 170, W, 190);
+    ctx.fillStyle = c0; ctx.fillRect(0, PH, W, H - PH);
+    ctx.textAlign = 'left';
+    ctx.font = '800 40px ' + FONT; ctx.fillStyle = '#FFFFFF';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+    ctx.fillText(handle, 90, 112);
+    ctx.restore();
+    const kickC = (acc !== c0) ? acc : ink;
+    const t = fit(title, 720, 3, s => '700 ' + s + 'px ' + SERIF, 110, 54);
+    const tlh = t.size * 1.11;
+    // kicker dinámico: siempre arriba del titular, sin tocarlo
+    const kickY = 962 - t.size * 0.95 - 30;
+    ctx.font = '700 36px ' + FONT;
+    try { ctx.letterSpacing = '6px'; } catch (e) {}
+    ctx.fillStyle = kickC; ctx.textAlign = 'left';
+    ctx.fillText('DESTACADO', 90, kickY);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+    ctx.font = '700 ' + t.size + 'px ' + SERIF;
+    ctx.fillStyle = ink;
+    ll(t.lines, 90, 962, tlh);
+    const ruleY = 962 + (t.lines.length - 1) * tlh + 46;
+    ctx.fillStyle = kickC; rr(90, ruleY, 160, 7, 3.5); ctx.fill();
+    if (subtitle) {
+      const sMax = t.lines.length >= 3 ? 1 : 2;
+      const s = fit(subtitle, 720, sMax, z => '400 ' + z + 'px ' + FONT, 46, 32);
+      // si ni así entra, se omite: mejor ausente que cortado a mitad de frase
+      if (!s.overflow) {
+        ctx.fillStyle = hexA(ink, 0.80);
+        ll(s.lines, 90, ruleY + 52, s.size * 1.35);
+      }
+    }
+  } else if (tpl === 'bold') {
+    // ---- Tipográfico gigante: marca de agua + titular enorme ----
+    const hasPhoto = photoBG((() => {
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, hexA(c0, 0.84)); g.addColorStop(1, hexA(c1, 0.84));
+      return g;
+    })());
+    if (!hasPhoto) {
+      ctx.fillStyle = c0; ctx.fillRect(0, 0, W, H);
+      const hl = ctx.createRadialGradient(W / 2, H * 0.42, 100, W / 2, H * 0.42, 800);
+      hl.addColorStop(0, 'rgba(255,255,255,.10)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hl; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.save();
+    ctx.globalAlpha = 0.08; ctx.fillStyle = ink; ctx.textAlign = 'center';
+    ctx.font = '900 330px ' + FONT;
+    const wword = (title.split(' ')[0] || title).toUpperCase().slice(0, 10);
+    ctx.fillText(wword, W / 2, 400);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    const t = fit(title.toUpperCase(), W - 160, 3, s => '900 ' + s + 'px ' + FONT, 168, 76);
+    const tlh = t.size * 1.06, th = (t.lines.length - 1) * tlh, cy = 640;
+    const lastAcc = (acc !== c0) ? acc : ink;
+    t.lines.forEach((ln, i) => {
+      ctx.fillStyle = (i === t.lines.length - 1 && t.lines.length > 1) ? lastAcc : ink;
+      ctx.fillText(ln, W / 2, cy - th / 2 + i * tlh);
+    });
+    if (subtitle) {
+      // pill de una línea: achica hasta entrar; si no entra, texto normal en 2 líneas
+      let pz = 44, pw = 0;
+      const maxPw = W - 240;
+      while (pz > 28) {
+        ctx.font = '700 ' + pz + 'px ' + FONT;
+        pw = ctx.measureText(subtitle).width + 100;
+        if (pw <= maxPw) break;
+        pz -= 2;
+      }
+      if (pw <= maxPw) {
+        pill(W / 2, cy + th / 2 + 112, subtitle, '700 ' + pz + 'px ' + FONT,
+          'rgba(255,255,255,.16)', ink, { stroke: hexA(ink, 0.85), lw: 3, flat: true });
+      } else {
+        const s = fit(subtitle, W - 260, 2, z => '700 ' + z + 'px ' + FONT, 44, 30);
+        if (!s.overflow) {
+          ctx.fillStyle = hexA(ink, 0.88);
+          cl(s.lines, W / 2, cy + th / 2 + 96, s.size * 1.32);
+        }
+      }
+    }
+    ctx.textAlign = 'left'; ctx.font = '700 40px ' + FONT;
+    ctx.fillStyle = hexA(ink, 0.75);
+    ctx.fillText(handle, 90, 1240);
+  } else { // gradiente
+    // ---- Moderno alineado a la izquierda: riel de acento, aire, jerarquía ----
+    const hasPhoto = photoBG((() => {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, hexA(c0, 0.68)); g.addColorStop(1, hexA(c1, 0.68));
+      return g;
+    })());
+    if (!hasPhoto) { ctx.fillStyle = brandGrad(0, 0, 0, H); ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = acc; rr(84, 150, 14, 920, 7); ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.font = '700 38px ' + FONT;
+    try { ctx.letterSpacing = '6px'; } catch (e) {}
+    ctx.fillStyle = hexA(ink, 0.80);
+    ctx.fillText(handle.toUpperCase(), 130, 152);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+    const t = fit(title, W - 300, 4, s => '800 ' + s + 'px ' + FONT, 116, 76);
+    const tlh = t.size * 1.17, th = (t.lines.length - 1) * tlh, cy = 640;
+    ctx.fillStyle = ink;
+    ctx.save();
+    ctx.shadowColor = 'rgba(10,30,51,.22)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    ll(t.lines, 130, cy - th / 2, tlh);
+    ctx.restore();
+    if (subtitle) {
+      const s = fit(subtitle, W - 320, 3, z => '400 ' + z + 'px ' + FONT, 54, 34);
+      if (!s.overflow) {
+        ctx.fillStyle = hexA(ink, 0.82);
+        ll(s.lines, 130, cy + th / 2 + 62, s.size * 1.33);
+      }
+    }
+    ctx.fillStyle = acc; rr(130, H - 170, 130, 12, 6); ctx.fill();
+  }
+
+  // Logo del cliente: siempre visible pero discreto, esquina inferior derecha
+  if (o.logoImg) {
+    const lw = 150, lh = Math.min(150, 150 * o.logoImg.height / Math.max(1, o.logoImg.width));
+    const pad = 40, card = 20;
+    const bx = W - pad - lw - card * 2, by = H - pad - lh - card * 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(10,30,51,.28)'; ctx.shadowBlur = 20; ctx.shadowOffsetY = 8;
+    ctx.fillStyle = 'rgba(255,255,255,.96)';
+    rr(bx, by, lw + card * 2, lh + card * 2, 26); ctx.fill();
+    ctx.restore();
+    ctx.drawImage(o.logoImg, bx + card, by + card, lw, lh);
   }
 }
 
-function creatorChips() {
-  const p = (typeof PROFILE !== 'undefined' && PROFILE) || {};
-  const biz = p.business_name || 'tu negocio';
-  const M = {
-    ropa: ['Nuevo ingreso de la semana', 'Prenda destacada de hoy', 'Sale: hasta 40% off'],
-    gastronomia: ['Promo 2x1 en pizzas', 'Plato nuevo de la carta', 'Menú del día'],
-    cafeteria: ['Latte nuevo de la casa', 'Promo merienda', 'Café de especialidad'],
-    belleza: ['Tratamiento nuevo', 'Promo del mes', 'Antes y después'],
-    barberia: ['Corte de la semana', 'Promo corte + barba', 'Reservá tu turno'],
-    fitness: ['Clase nueva esta semana', 'Promo primer mes', 'Rutina para arrancar'],
-    salud: ['Nuevo servicio', 'Turnos disponibles', 'Tip de salud'],
-    mascotas: ['Novedad para tu mascota', 'Promo en alimento', 'Tip para cuidarla'],
-    servicios: ['Servicio nuevo', 'Promo este mes', 'Pedí tu presupuesto'],
-    educacion: ['Curso nuevo', 'Inscripciones abiertas', 'Clase gratuita'],
-    tecnologia: ['Producto nuevo', 'Oferta de la semana', 'Tip tecnológico'],
-    hogar: ['Novedad para tu casa', 'Promo en deco', 'Antes y después'],
-    inmobiliaria: ['Nueva propiedad', 'Oportunidad de la semana', 'Conocé este depto'],
-    eventos: ['Próximo evento', 'Entradas disponibles', 'Así fue el último'],
-    viajes: ['Nuevo destino', 'Promo en paquetes', 'Escapada del finde'],
-    arte: ['Obra nueva', 'Mi proceso creativo', 'Encargá tu pieza'],
-    otro: [`Lo nuevo de ${biz}`, 'Promo de la semana', 'Detrás de escena'],
-  };
-  return M[p.category] || M.otro;
-}
-
-function creatorView(embed) {
-  const c = CREATOR;
-  const head1 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>`;
-  const head2 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>`;
-  const head3 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>`;
-  const headO = embed ? '' : `<div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>`;
-  const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
-  if (c.step === 1) {
-    return `
-    ${head1}
-    ${stepsBar}
-    <div class="card">
-      <div class="field"><label>¿Alguna idea en mente? <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
-        <textarea id="c_topic" placeholder="${esc('Ej: ' + creatorChips().map(t => '"' + t + '"').join(', '))}">${esc(c.topic)}</textarea>
-        <div class="hint">Si no escribís nada, igual te armamos el posteo con nuestra estrategia. Una frase alcanza si querés guiarnos.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          ${creatorChips().map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
-        </div></div>
-      <div class="field"><label>📷 Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
-        <div id="c_prodPhotoBox"></div>
-        <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
-        <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
-      <button class="btn btn-soft" id="btnGen">✨ Armar mi posteo</button>
-      <div id="genErr"></div>
-      <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
-        <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
-        <div class="field"><label>Hashtags</label><textarea id="c_tags" style="min-height:70px">${esc(c.hashtags)}</textarea></div>
-        <button class="btn btn-primary" id="btnToDesign">Siguiente: diseñar imagen →</button>
-      </div>
-    </div>`;
-  }
-  if (c.step === 2) {
-    return `
-    ${head2}
-    ${stepsBar}
-    <div class="designer">
-      <div>
-        <div class="card" style="padding:22px">
-          <h3>Plantilla</h3>
-          <div class="tpl-grid">
-            ${['gradiente', 'claro', 'noche', 'promo'].map(t => `<div class="tpl ${c.tpl === t ? 'on' : ''}" data-tpl="${t}">${t[0].toUpperCase() + t.slice(1)}</div>`).join('')}
-          </div>
-          <h3 style="margin-top:18px">Paleta</h3>
-          <div class="pal-row">${getPalettes().map((p, i) => `<div class="pal ${c.pal === i ? 'on' : ''}" data-pal="${i}" title="${p.name}${p.brand ? ' (tus colores)' : ''}" style="background:linear-gradient(135deg,${p.c.join(',')});${p.brand ? 'box-shadow:0 0 0 2px var(--yl)' : ''}"></div>`).join('')}</div>
-          <div class="field" style="margin-top:18px"><label>Título</label><input id="d_title" value="${esc(c.title)}" placeholder="HASTA 40% OFF"></div>
-          <div class="field"><label>Subtítulo</label><input id="d_sub" value="${esc(c.subtitle)}" placeholder="Solo esta semana"></div>
-          <div class="field"><label>Usuario de Instagram (sin @)</label><input id="d_handle" value="${esc(c.handle || (PROFILE?.ig_username || ''))}" placeholder="tunegocio"></div>
-          <div class="field"><label>${c.carouselMode ? 'Fotos del carrusel' : 'Foto del producto (opcional)'}</label>
-            ${c.carouselMode ? `
-            <div id="photoLib" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-              ${assetPhotos().map(a => {
-                const ord = c.carouselPhotos.indexOf(a.file_path);
-                return `<div style="position:relative;cursor:pointer" data-carlib="${esc(a.file_path)}">`
-                  + `<img src="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid ${ord >= 0 ? 'var(--cel)' : 'var(--line)'}">`
-                  + (ord >= 0 ? `<span class="car-ord">${ord + 1}</span>` : '') + `</div>`;
-              }).join('')}
-            </div>
-            <div class="hint">Elegí de 2 a 10 fotos para el carrusel — la primera es la portada. Tocá de nuevo para sacar.</div>
-            <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="btnCarouselOff" type="button">← Volver a foto única</button></div>
-            <div id="carErr"></div>` : (c.photo ? `
-            <div style="display:flex;gap:10px;align-items:center">
-              <img src="${c.photo}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
-              <div style="display:flex;gap:8px">
-                <button class="btn btn-ghost btn-sm" id="btnPhotoCh" type="button">Cambiar</button>
-                <button class="btn btn-ghost btn-sm" id="btnPhotoRm" type="button">Quitar</button>
-              </div>
-            </div>` : `
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" id="btnPhotoAdd" type="button">📷 Subir foto</button>
-              ${assetPhotos().length ? `<button class="btn btn-ghost btn-sm" id="btnPhotoLib" type="button">🖼️ Mis fotos</button>` : ''}
-              ${assetPhotos().length >= 2 ? `<button class="btn btn-ghost btn-sm" id="btnCarousel" type="button">🎞️ Carrusel</button>` : ''}
-            </div>
-            <div id="photoLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
-              ${assetPhotos().map(a => `<img src="${a.file_path}" data-lib="${a.file_path}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer">`).join('')}
-            </div>
-            <div class="hint">La foto va de fondo y el diseño se mantiene igual.${assetLogo() ? ' Tu logo se agrega solo en la esquina.' : ''}</div>`)}
-            <input type="file" id="d_photo" accept="image/*" style="display:none">
-          </div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-ghost" id="btnBack1">← Atrás</button>
-          <button class="btn btn-primary" id="btnSaveDesign" style="flex:1">${c.carouselMode ? 'Continuar →' : 'Guardar diseño →'}</button>
-        </div>
-      </div>
-      <div><div class="preview-box"><canvas id="postCanvas"></canvas></div>
-      <p style="color:var(--dim);font-size:11.5px;margin-top:10px;text-align:center">Vista previa real — así se va a ver en el feed.</p></div>
-    </div>`;
-  }
-  if (c.step === 'options') {
-    const det = c.detected || {};
-    const colors = det.colors || [];
-    const hexes = det.colorHex || [];
-    const opts = c.options || [];
-    const libPhotos = (typeof assetPhotos === 'function' ? assetPhotos() : []);
-    const colorNames = colors.length > 1
-      ? colors.slice(0, -1).join(', ') + ' y ' + colors[colors.length - 1]
-      : colors.join(', ');
-    return `
-    ${headO}
-    <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
-    ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
-    ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
-    ${det.photoQuery && !det.productPhoto ? `<div class="photoq-note">📸 Fotos de: <b>${esc(det.photoQuery)}</b>${det.userPhotos ? ` · usando tus fotos primero ✨` : ''}</div>` : ''}
-    ${libPhotos.length ? `
-    <div class="myphotos-card" style="padding:14px 18px">
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <span style="font-weight:700">📷 Tus fotos</span>
-        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:12.5px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
-        <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">📤 Subir más</button>
-        <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
-      </div>
-      <div id="mpMsg"></div>
-    </div>` : `
-    <div class="myphotos-card">
-      <div class="mp-title">📷 Tus fotos</div>
-      <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
-      <div class="mp-row" id="mpRow"><span class="mut">Todavía no subiste fotos.</span></div>
-      <button class="btn btn-soft" id="btnUploadPhotos">📤 Subir fotos de tus productos</button>
-      <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
-      <div id="mpMsg"></div>
-    </div>`}
-    <div id="optErr"></div>
-    <div class="opt-grid">
-      ${opts.map((o, i) => `
-      <div class="opt-card" data-card="${i}">
-        ${i === c.recommendedIndex ? `<div class="opt-badge">⭐ Recomendada</div>` : ''}
-        <label class="opt-sel"><input type="checkbox" class="opt-selbox" data-sel="${i}"><span>Elegir</span></label>
-        <img class="opt-img" data-optimg="${i}" src="${esc(o.image)}" alt="${esc(o.title || ('Diseño ' + (i + 1)))}" loading="lazy" title="Tocá para ver en grande">
-        ${i === c.recommendedIndex && c.recommendedReason ? `<p class="opt-reason">${esc(c.recommendedReason)}</p>` : ''}
-        ${o.title ? `<p class="opt-title">${esc(o.title)}</p>` : ''}
-        ${o.caption ? `<p class="opt-caption">${esc(o.caption)}</p>` : ''}
-        <div class="opt-actions">
-          <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño →</button>
-          <button class="btn btn-ghost btn-sm opt-myphoto" data-mp="${i}">📷 Mi foto</button>
-        </div>
-        <button class="opt-customlink" data-custom="${i}">✏️ Personalizar a mano</button>
-      </div>`).join('')}
-    </div>
-    <div id="multiBar" style="display:none">
-      <span id="multiCount">✅ 0 elegidos</span>
-      <button class="btn btn-primary" id="btnMultiSched">Programar (0)</button>
-    </div>
-    <div style="display:flex;justify-content:center;margin:4px 0 26px">
-      <button class="btn btn-soft" id="btnRegen">🔄 Regenerar opciones</button>
-    </div>
-    <div class="feedback-card">
-      <p class="feedback-title">¿Querés cambiar algo? Decime y lo arreglamos. O lo mejoramos.</p>
-      <div class="feedback-row">
-        <input id="fb_input" placeholder='Ej: "más rojo", "otra foto", "caption más corto"'>
-        <button class="btn btn-primary btn-sm" id="btnFeedback">Arreglar</button>
-      </div>
-      <div id="feedbackMsg"></div>
-    </div>
-    <div id="schedModal" class="modal-ov" style="display:none">
-      <div class="modal-card">
-        <h3>📅 Programar diseños</h3>
-        <p class="mut" style="margin-bottom:12px">Elegí día y hora para cada uno.</p>
-        <div id="schedRows"></div>
-        <div id="schedMsg"></div>
-        <div class="modal-actions">
-          <button class="btn btn-ghost" id="btnSchedCancel">Cancelar</button>
-          <button class="btn btn-primary" id="btnSchedConfirm">✅ Confirmar</button>
-        </div>
-      </div>
-    </div>
-    <div id="optLight" class="modal-ov" style="display:none">
-      <div class="modal-card light-card">
-        <img id="optLightImg" alt="Diseño en grande">
-        <p id="optLightCap"></p>
-        <button class="btn btn-ghost btn-block" id="btnLightClose">Cerrar</button>
-      </div>
-    </div>
-    <div id="photoPickModal" class="modal-ov" style="display:none">
-      <div class="modal-card">
-        <h3>📷 Foto para este diseño</h3>
-        <button class="btn btn-soft btn-block" id="btnPickUpload" style="margin:12px 0">📤 Subir nueva foto</button>
-        <input type="file" id="pickFile" accept="image/*" style="display:none">
-        <p class="mut" style="margin:6px 0 8px"><b>De tu librería</b></p>
-        <div class="mp-row" id="pickLib"></div>
-        <p class="mut" style="margin:6px 0 8px"><b>Del banco de fotos</b></p>
-        <div class="mp-row" id="pickStock"></div>
-        <div id="pickMsg"></div>
-        <button class="btn btn-ghost btn-block" id="btnPickClose" style="margin-top:14px">Cancelar</button>
-      </div>
-    </div>
-    <button class="btn btn-ghost btn-sm" id="btnBackOptions" style="margin-top:16px">← Volver</button>`;
-  }
-  // step 3
-  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  const minDt = now.toISOString().slice(0, 16);
-  return `
-  ${head3}
-  ${stepsBar}
-  <div class="card">
-    <div style="display:flex;gap:22px;flex-wrap:wrap">
-      <img src="${esc(c.imagePath)}" style="width:180px;border-radius:14px;border:1px solid var(--line)">
-      <div style="flex:1;min-width:240px">
-        <div class="field"><label>Caption</label><textarea id="p_caption" style="min-height:120px">${esc(c.caption)}</textarea></div>
-        <div class="field"><label>Hashtags</label><textarea id="p_tags" style="min-height:60px">${esc(c.hashtags)}</textarea></div>
-      </div>
-    </div>
-    <div class="row2" style="margin-top:24px">
-      <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="p_when" min="${minDt}" value="${minDt}"></div>
-      <div class="field"><label>&nbsp;</label><div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" id="btnSchedule">📅 Programar</button>
-        <button class="btn btn-soft" id="btnNow">⚡ Publicar ahora</button>
-        <button class="btn btn-ghost" id="btnDraft">💾 Borrador</button>
-      </div></div>
-    </div>
-    <div id="pubMsg"></div>
-    <button class="btn btn-ghost btn-sm" id="btnBack2" style="margin-top:8px">← Atrás</button>
-  </div>`;
-}
 
 /* ---------- IDEAS: nosotros pensamos el contenido por vos ---------- */
 // ---------- Checklist primeros pasos + próximo posteo recomendado ----------
@@ -1645,8 +1630,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
     <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — al aceptar, salen solos a la hora indicada.</p>
-    ${n ? `<button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin:6px 0 10px">📅 Programar mi semana →</button>` : ''}
-    ${n ? `<button class="btn btn-soft btn-block" id="btnAcceptAll" style="margin:0 0 10px">✅ Aceptar todos</button>` : ''}
+    ${n ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:6px 0 10px">🚀 Activar mi semana</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -1704,7 +1688,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <button data-revedit="${d.id}">✏️ Editar</button>
           ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">✨ Otro diseño</button>`}
           ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">🔄 Otras 3</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button><button data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">📷 Foto</button>${d.media_type !== 'carousel' ? `<button data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">🎨 Restylear</button><button data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">✨ Mejorar</button><button data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">🎠 Carousel</button><button data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">🎬 Reel</button>` : ''}`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
         ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
@@ -1723,6 +1707,11 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
             <input class="in" id="aiphoto-inp-${d.id}" placeholder="¿Qué foto uso? Ej: la del local…" maxlength="200" autocomplete="off">
             <button class="btn btn-primary btn-sm" id="aiphoto-go-${d.id}">Aplicar</button>
           </div>
+          <div class="aiedit-row" style="margin-top:8px">
+            <select class="in" id="aistyle-sel-${d.id}" title="Elegí un estilo para regenerar la foto">
+              <option value="">✨ Estilo: automático</option>
+            </select>
+          </div>
           <button class="rev-nowsub" id="aiphoto-manual-${d.id}">o elegí la foto vos</button>
           <div class="aiedit-msg" id="aiphoto-msg-${d.id}"></div>
         </div>
@@ -1735,104 +1724,8 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
       ${drafts.length > 1 ? `<button class="car-arrow right" data-carnext aria-label="Posteo siguiente">›</button>` : ''}
       ${drafts.length > 1 ? `<div class="igmock-dots">${drafts.map((_, j) => `<i class="${j === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
     </div>
-    <div class="rev-voice">
-      <button class="rev-voice-btn" id="revVoiceBtn">🎙 ¿Cambiar algo? Pedilo por voz</button>
-      <div class="rev-voice-msg" id="revVoiceMsg"></div>
-    </div>
     <div id="revMsg"></div>
   </div>`;
-}
-
-// Nota de voz para pedir cambios en los borradores: vive abajo de los posteos,
-// cero fricción. Graba, se transcribe con Whisper y la IA lo aplica directo.
-let DVOICE_REC = null, DVOICE_CHUNKS = [], DVOICE_MIME = '', DVOICE_TIMER = null, DVOICE_START = 0;
-function draftVoiceMsg(html) {
-  const m = document.getElementById('revVoiceMsg');
-  if (m) m.innerHTML = html;
-}
-function draftVoiceUI(rec) {
-  const b = document.getElementById('revVoiceBtn');
-  if (!b) return;
-  b.classList.toggle('btn-rec', !!rec);
-  if (!rec) b.innerHTML = '🎙 ¿Cambiar algo? Pedilo por voz';
-}
-function draftVoiceTick() {
-  if (!DVOICE_REC) return;
-  const b = document.getElementById('revVoiceBtn');
-  const s = Math.floor((Date.now() - DVOICE_START) / 1000);
-  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  if (b) b.innerHTML = `🔴 ${t} — tocá para enviar`;
-  draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué le cambio a tus posteos</span>');
-}
-async function draftVoiceToggle() {
-  if (DVOICE_REC) { draftVoiceStop(); return; }
-  if (!REVIEW_DRAFTS.length) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    DVOICE_CHUNKS = [];
-    DVOICE_MIME = rec.mimeType || '';
-    rec.ondataavailable = e => { if (e.data && e.data.size) DVOICE_CHUNKS.push(e.data); };
-    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); draftVoiceSend(); };
-    DVOICE_REC = rec;
-    rec.start();
-    DVOICE_START = Date.now();
-    draftVoiceUI(true);
-    clearInterval(DVOICE_TIMER);
-    DVOICE_TIMER = setInterval(draftVoiceTick, 500);
-    draftVoiceTick();
-    setTimeout(() => { if (DVOICE_REC) draftVoiceStop(); }, 90000);
-  } catch (e) {
-    draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso.</span>');
-  }
-}
-function draftVoiceStop() {
-  const rec = DVOICE_REC;
-  DVOICE_REC = null;
-  clearInterval(DVOICE_TIMER);
-  draftVoiceUI(false);
-  if (rec) { try { rec.stop(); } catch (e) { draftVoiceSend(); } }
-}
-async function draftVoiceSend() {
-  const chunks = DVOICE_CHUNKS; DVOICE_CHUNKS = [];
-  draftVoiceUI(false);
-  const blob = new Blob(chunks, { type: DVOICE_MIME || 'audio/mp4' });
-  if (blob.size < 1500) { draftVoiceMsg(''); return; }
-  const dataUrl = await new Promise((res) => {
-    const fr = new FileReader();
-    fr.onload = () => res(String(fr.result || ''));
-    fr.onerror = () => res('');
-    fr.readAsDataURL(blob);
-  });
-  if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
-    draftVoiceMsg('<span style="color:#B3402E;font-size:11.5px">No pudimos procesar la nota. Probá de nuevo.</span>');
-    return;
-  }
-  draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">⏳ Escuchando y aplicando…</span>');
-  try {
-    const lib = assetPhotos().slice().reverse().slice(0, 6);
-    const r = await api.post('/api/ideas/chat', {
-      messages: [{ role: 'user', text: '🎙️ Nota de voz' }],
-      audio: dataUrl,
-      drafts: REVIEW_DRAFTS.map(d => ({ id: d.id, caption: d.caption, when: d.scheduled_at })),
-      library: await chatLibThumbs(),
-      photoPaths: lib.map(p => p.file_path),
-    }, { timeout: 90000 });
-    if (r.edit && r.edit.ok) {
-      draftVoiceMsg(`<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`);
-      setTimeout(() => { try { render(); } catch (e) {} }, 1200);
-    } else {
-      draftVoiceMsg(`<span style="font-size:11.5px">${esc(r.reply || 'No te escuché bien, probá de nuevo')}</span>`);
-    }
-  } catch (e) {
-    draftVoiceMsg(`<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error, probá de nuevo')}</span>`);
-  }
 }
 
 // Edición de un borrador por IA (texto o foto): el cliente lo pide en lenguaje
@@ -1884,6 +1777,145 @@ async function runAiEdit(id, kind) {
     msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error, probá de nuevo')}</span>`;
   }
   if (go) go.disabled = false;
+}
+// "🎨 Restylear": restylea la foto ACTUAL del borrador con el estilo elegido en
+// el select "✨ Estilo" (mismo producto, otro estilo). Si no eligió estilo, abre
+// el panel para que lo elija.
+async function restyleDraftPhoto(id, btn) {
+  const sel = document.getElementById(`aistyle-sel-${id}`);
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const code = sel && sel.value;
+  if (!code) {
+    const panel = document.getElementById(`aiphoto-${id}`);
+    if (panel) panel.hidden = false;
+    if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Elegí un estilo arriba 👆 y tocá 🎨 Restylear</span>`;
+    if (sel) sel.focus();
+    return;
+  }
+  const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Restyleando tu foto con ${esc(code)}…</span>`;
+  try {
+    const r = await api.post(`/api/drafts/${id}/photo-restyle`, { style: code }, { timeout: 180000 });
+    if (r && r.ok && r.path) {
+      if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Tu foto, versión ${esc(code)}</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+  if (sel) sel.value = '';
+}
+// "✨ Mejorar": rescate de foto mediocre en un tap (luz, nitidez, color).
+async function enhanceDraftPhoto(id, btn) {
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const panel = document.getElementById(`aiphoto-${id}`);
+  if (panel) panel.hidden = false;
+  const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Mejorando la foto…</span>`;
+  try {
+    const r = await api.post(`/api/drafts/${id}/photo-enhance`, {}, { timeout: 180000 });
+    if (r && r.ok && r.path) {
+      if (draft) draft.image_path = r.path;
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto mejorada</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+}
+// "🎠 Carousel": convierte el borrador en carousel (portada + 3 placas).
+async function carouselDraft(id, btn) {
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const panel = document.getElementById(`aiphoto-${id}`);
+  if (panel) panel.hidden = false;
+  const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Armándo el carousel (portada + 3 placas)…</span>`;
+  try {
+    const r = await api.post('/api/carousel-generate', { postId: id }, { timeout: 300000 });
+    if (r && r.ok) {
+      if (draft) { draft.media_type = 'carousel'; draft.carousel_paths = r.paths; draft.image_path = r.cover; }
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Carousel listo 🎠</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+}
+// "🎬 Reel": arma un reel automático (Ken Burns + headline animado) desde el borrador.
+async function reelDraft(id, btn) {
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const panel = document.getElementById(`aiphoto-${id}`);
+  if (panel) panel.hidden = false;
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Armándo el reel (Ken Burns + headline)…</span>`;
+  try {
+    const r = await api.post('/api/reel-generate', { postId: id }, { timeout: 300000 });
+    if (r && r.ok) {
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Reel listo 🎬</span><br><span style="font-size:11px;color:var(--mut)">${esc(r.audioNote || '')}</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 2600);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+}
+// FEATURE-ESTILOS: lista de estilos cacheada + llenado de los selects "✨ Estilo".
+let IMAGE_STYLES_CACHE = null;async function imageStylesList() {
+  if (IMAGE_STYLES_CACHE) return IMAGE_STYLES_CACHE;
+  try {
+    const r = await api.get('/api/image-styles');
+    IMAGE_STYLES_CACHE = (r && r.styles) || [];
+  } catch (e) { IMAGE_STYLES_CACHE = []; }
+  return IMAGE_STYLES_CACHE;
+}
+async function fillStyleSelects() {
+  const styles = await imageStylesList();
+  $$('#reviewCard [id^="aistyle-sel-"]').forEach(sel => {
+    if (sel.dataset.filled) return;
+    sel.dataset.filled = '1';
+    for (const s of styles) {
+      const o = document.createElement('option');
+      o.value = s.code;
+      o.textContent = `${s.code} · ${s.name}${s.brandSafe ? '' : ' 🎲'}`;
+      sel.appendChild(o);
+    }
+    sel.onchange = async () => {
+      const code = sel.value;
+      if (!code) return;
+      const id = sel.id.replace('aistyle-sel-', '');
+      const msg = document.getElementById(`aiphoto-msg-${id}`);
+      const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+      if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Regenerando la foto con ${esc(code)}…</span>`;
+      try {
+        const r = await api.post(`/api/drafts/${id}/photo-style`, { style: code }, { timeout: 120000 });
+        if (r && r.ok && r.path) {
+          if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
+          if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto nueva con ${esc(code)}</span>`;
+          setTimeout(() => { try { render(); } catch (e) {} }, 900);
+        } else {
+          if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+        }
+      } catch (e) {
+        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+      }
+      sel.value = '';
+    };
+  });
 }
 
 function bindReview() {
@@ -1963,9 +1995,6 @@ function bindReview() {
   $$('#reviewCard [id^="aiedit-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiedit-go-', ''), 'text'));
   // Otra foto por IA: el cliente describe qué foto quiere y la IA la elige de su librería
   $$('#reviewCard [id^="aiphoto-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiphoto-go-', ''), 'photo'));
-  // Nota de voz para pedir cambios: abajo de los posteos
-  const rvb = document.getElementById('revVoiceBtn');
-  if (rvb) rvb.onclick = draftVoiceToggle;
   // Enter en los campos de edición por IA también aplica
   $$('#reviewCard [id^="aiedit-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiedit-inp-', ''), 'text'); }));
   $$('#reviewCard [id^="aiphoto-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiphoto-inp-', ''), 'photo'); }));
@@ -1975,6 +2004,9 @@ function bindReview() {
     if (panel) panel.hidden = true;
     togglePhotoPicker(+id);
   });
+  // FEATURE-ESTILOS: picker "✨ Estilo" — regenera SOLO la foto del borrador
+  // con el estilo elegido (mantiene caption, hashtags y horario).
+  fillStyleSelects();
   // Al guardar el caption, refrescar el preview
   $$('[data-revcap]').forEach(ta => ta.addEventListener('change', () => {
     const p = document.querySelector(`[data-revpreview="${ta.dataset.revcap}"]`);
@@ -1999,17 +2031,63 @@ function bindReview() {
     panel.hidden = !panel.hidden;
     if (!panel.hidden) { const i = document.getElementById(`aiphoto-inp-${id}`); if (i) i.focus({ preventScroll: true }); }
   });
+  // FEATURE-FOTO-BORRADOR: "📷 Foto" abre el picker directo (librería + subir + quitar foto)
+  $$('[data-revphotopick]').forEach(b => b.onclick = () => toggleDraftPhotoPicker(+b.dataset.revphotopick));
+  // "🎨 Restylear": restylea la foto ACTUAL con el estilo elegido en el select
+  $$('[data-revrestyle]').forEach(b => b.onclick = () => restyleDraftPhoto(+b.dataset.revrestyle, b));
+  // "✨ Mejorar": un tap rescata la foto (luz, nitidez, color)
+  $$('[data-revenhance]').forEach(b => b.onclick = () => enhanceDraftPhoto(+b.dataset.revenhance, b));
+  // "🎠 Carousel": convierte el borrador en carousel automático
+  $$('[data-revcarousel]').forEach(b => b.onclick = () => carouselDraft(+b.dataset.revcarousel, b));   // "🎬 Reel": arma un reel automático desde el borrador
+   $$('[data-revreel]').forEach(b => b.onclick = () => reelDraft(+b.dataset.revreel, b));
   // Cambiar el video de un borrador reel: tira de videos + subir nuevo
   $$('[data-revvideo]').forEach(b => b.onclick = () => toggleVideoPicker(+b.dataset.revvideo, b));
   // Eliminar borrador (señal honesta: lo borró = no le gustó; va antes del DELETE)
   // Track 4 (agregado): si era el último borrador de la semana, el servidor
   // dispara la reconstrucción con otro enfoque y lo avisa en la respuesta.
+// Overlay con chips: ¿qué no le gustó del borrador? (patrón de pickLogoImage)
+function pickRejectReason() {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.setAttribute('style', 'position:fixed;inset:0;background:rgba(10,30,51,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px');
+    const box = document.createElement('div');
+    box.setAttribute('style', 'background:#fff;border-radius:18px;padding:18px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)');
+    box.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:4px">¿Qué no te gustó?</div>' +
+      '<div style="font-size:11.5px;color:#47617A;margin-bottom:12px">Contame y no lo repito en tu próxima semana.</div>';
+    const chips = [
+      ['generico', 'Muy genérico'],
+      ['estilo', 'No es mi estilo'],
+      ['avatar', 'El logo salió raro'],
+      ['representa', 'No me representa'],
+    ];
+    chips.forEach(([key, label]) => {
+      const c = document.createElement('button');
+      c.setAttribute('style', 'display:block;width:100%;text-align:left;border:2px solid #E3EEF6;border-radius:12px;background:#fff;padding:10px 12px;margin-bottom:8px;font-size:13px;font-weight:600;cursor:pointer');
+      c.textContent = label;
+      c.onclick = () => close(() => resolve(key));
+      box.appendChild(c);
+    });
+    const cancel = document.createElement('button');
+    cancel.className = 'btn btn-soft btn-sm';
+    cancel.setAttribute('style', 'margin-top:4px;width:100%');
+    cancel.textContent = 'Cancelar';
+    box.appendChild(cancel);
+    ov.appendChild(box);
+    const close = (fn) => { try { document.body.removeChild(ov); } catch (_) {} fn(); };
+    cancel.onclick = () => close(() => resolve(null));
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(() => resolve(null)); });
+    document.body.appendChild(ov);
+  });
+}
   $$('[data-revdel]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Eliminar este borrador?')) return;
-    try { await api.post(`/api/posts/${b.dataset.revdel}/signal`, { signal: 'rejected' }); } catch (e) {}
+    const reason = await pickRejectReason();
+    if (!reason) return; // canceló: no pasa nada
+    const pid = b.dataset.revdel;
+    try { await api.post(`/api/posts/${pid}/reject-reason`, { reason }); } catch (e) {}
+    try { await api.post(`/api/posts/${pid}/signal`, { signal: 'rejected' }); } catch (e) {}
     let delRes = null;
-    try { delRes = await api.delete('/api/posts/' + b.dataset.revdel); } catch (e) {}
-    track('draft_delete', { id: b.dataset.revdel });
+    try { delRes = await api.delete('/api/posts/' + pid); } catch (e) {}
+    track('draft_delete', { id: pid });
     await render(); // el DOM se escribe tras los awaits: la barrita va después
     const rb = delRes && delRes.rebuild;
     if (rb && rb.rebuilding) rebuildWatchStart();
@@ -2129,6 +2207,75 @@ function bindScheduleAll() {
   const b = document.getElementById('btnScheduleAll');
   if (!b) return;
   b.onclick = () => doScheduleAll(b);
+}
+
+// "🚀 Activar mi semana": UN tap deja toda la semana lista. Acepta todos los
+// borradores respetando las horas que muestran las tarjetas y programa con
+// horario automático los que no tengan hora. El tap ES la confirmación.
+async function doActivateWeek(btn) {
+  const b = btn || document.getElementById('btnActivateWeek');
+  const m = $('#revMsg');
+  if (!(PROFILE && PROFILE.ig_connected)) {
+    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+    const g = $('#revIgGo');
+    if (g) g.onclick = () => igConnectHere();
+    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (b) { b.disabled = true; b.innerHTML = '🚀 Activando tu semana…'; }
+  try {
+    // 1) Acepta con las horas de las tarjetas (respeta horas personalizadas).
+    const items = $$('#reviewCard [data-revwhen]')
+      .map((inp) => ({ id: +inp.dataset.revwhen, scheduled_at: inp.value ? new Date(inp.value).toISOString() : null }))
+      .filter((it) => it.id > 0);
+    let n1 = 0;
+    try {
+      const r1 = await api.post('/api/posts/accept-all', { items });
+      n1 = (r1 && r1.accepted) || 0;
+    } catch (e) { if (!isPlanLimitErr(e)) throw e; else throw e; }
+    // 2) Los que quedaron sin hora se programan con horario automático.
+    let n2 = 0;
+    try {
+      const r2 = await api.post('/api/posts/schedule-all', {});
+      n2 = (r2 && (r2.scheduled || []).length) || 0;
+    } catch (e) {
+      if (!(e && /No hay borradores para programar/.test(e.message || ''))) throw e;
+    }
+    const n = n1 + n2;
+    if (!n) throw new Error('No había borradores pendientes');
+    track('activate_week', { count: n });
+    try { REVIEW_DRAFTS = []; } catch (e) {}
+    try { paintWeekPill(); } catch (e) {}
+    try { renderQuickChips([], [], false); } catch (e) {}
+    postyCelebrate();
+    streakModalShell(`
+      <div class="big-emoji">🚀</div>
+      <h3 style="margin:12px 0 4px">Tu semana está activa</h3>
+      <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+      <p class="d">Vos a lo tuyo — Posty se ocupa del resto 💪</p>
+      ${typeof celebRefHTML === 'function' ? celebRefHTML() : ''}
+      <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
+    const cmo = document.getElementById('streakModal');
+    if (cmo && typeof wireCelebRef === 'function') wireCelebRef(cmo);
+    const cg = $('#celebGoSa');
+    if (cg) cg.onclick = () => {
+      closeStreakModal();
+      render().then(() => {
+        const sc = document.querySelector('.sched-card');
+        if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+    else render();
+  } catch (e) {
+    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (b) { b.disabled = false; b.innerHTML = '🚀 Activar mi semana'; }
+  }
+}
+function bindActivateWeek() {
+  const b = document.getElementById('btnActivateWeek');
+  if (!b) return;
+  b.onclick = () => doActivateWeek(b);
 }
 
 // "✅ Aceptar todos": un tap aprueba TODOS los borradores pendientes y los deja
@@ -2383,6 +2530,72 @@ function togglePhotoPicker(id, btn) {
   };
 }
 
+// FEATURE-FOTO-BORRADOR: picker directo de foto para un borrador (botón "📷 Foto").
+// Librería del cliente (assetPhotos) + subir nueva vía POST /api/media
+// (que ya deja la foto en la librería como kind=photo) + "Sin foto" para
+// volver al diseño plano con los colores de la marca. Al elegir, reusa
+// changeDraftPhoto: el mismo pipeline que "✨ Otro diseño" (renderDesignImage
+// + PATCH save-draft); conserva título, subtítulo, handle y logo.
+function toggleDraftPhotoPicker(id) {
+  const mount = document.getElementById('revph-' + id);
+  if (!mount) return;
+  if (mount.dataset.open === '1' && mount.dataset.which === 'foto') { mount.innerHTML = ''; mount.dataset.open = ''; mount.dataset.which = ''; return; }
+  mount.dataset.open = '1'; mount.dataset.which = 'foto';
+  const photos = assetPhotos().slice().reverse(); // más nuevas primero
+  mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
+    <button type="button" data-rmphoto style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px solid var(--line);background:var(--bg2);cursor:pointer;font-size:10.5px;font-weight:700;color:var(--mut);line-height:1.25;font-family:inherit" title="Quitar la foto: diseño plano con tus colores">🚫<br>Sin<br>foto</button>
+    ${photos.map(p => `<img src="${esc(p.file_path)}" data-pickphoto="${esc(p.file_path)}" alt="Foto del negocio" style="width:64px;height:64px;flex-shrink:0;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line)">`).join('')}
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
+  </div>`;
+  mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => changeDraftPhoto(id, img, img.dataset.pickphoto));
+  const rm = mount.querySelector('[data-rmphoto]');
+  if (rm) rm.onclick = () => removeDraftPhoto(id, rm);
+  const up = mount.querySelector('[data-uploadphoto]');
+  if (up) up.onchange = async () => {
+    const f = up.files[0]; if (!f) return;
+    if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
+    try {
+      const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'No pude subirla 😅 Probá de nuevo');
+      ASSETS = await api.get('/api/assets').catch(() => ASSETS); // /api/media ya la dejó en la librería
+      await changeDraftPhoto(id, up, data.path);
+      track('photo_upload', { kind: 'draft' });
+    } catch (e) { alert('No se pudo subir la foto: ' + e.message); }
+  };
+}
+
+// FEATURE-FOTO-BORRADOR: quita la foto de fondo del borrador → diseño plano con
+// los colores de la marca (renderDesignImage con photoImg: null; drawPost ya lo
+// maneja). Conserva título, subtítulo, handle y logo; se guarda como el nuevo
+// diseño del borrador igual que "✨ Otro diseño".
+async function removeDraftPhoto(id, el) {
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  if (!d || d.media_type === 'video') return;
+  try {
+    el.style.opacity = '0.4'; el.style.pointerEvents = 'none';
+    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+    const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
+    const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
+    const title = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
+    const imagePath = await renderDesignImage({
+      tpl: pickTpl(idx + 1, false),
+      pal: defaultPal(),
+      title,
+      subtitle: cortar(String(d.caption || '').split('\n')[0], 90),
+      handle: (PROFILE || {}).ig_username || '',
+      photoImg: null,
+      logoImg: logo,
+    });
+    await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: imagePath });
+    track('photo_remove', { kind: 'draft' });
+    render();
+  } catch (e) {
+    alert('No pude quitar la foto 😅 Probá de nuevo.');
+    el.style.opacity = ''; el.style.pointerEvents = '';
+  }
+}
+
 // Cambiar el VIDEO de un borrador reel por otro de la biblioteca del cliente.
 async function changeDraftVideo(id, el, videoPath) {
   const d = REVIEW_DRAFTS.find(x => x.id === id);
@@ -2452,7 +2665,7 @@ function proposalHTML() {
           <div class="cp-title">${esc(CHAT_IDEA.titulo)}</div>
         </div>
       </div>
-      <div class="chat-previews" id="chatPreviews"><div class="cp-loading">Generando tu imagen…</div></div>
+      <div class="chat-previews" id="chatPreviews"><div class="cp-loading" id="chatPrevThinking"></div></div>
       <div class="chat-caps" id="chatCaps"></div>
       <div class="cp-more">
         <button class="cp-link" id="chatMoreImg" type="button">↻ Otra imagen</button>
@@ -2504,7 +2717,7 @@ async function chatMoreCaptions() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreCaps');
-  if (b) { b.disabled = true; b.textContent = '⏳…'; }
+  if (b) { b.disabled = true; postyThinking(b); }
   try {
     const out = await api.post('/api/generate', { topic: idea.titulo, n: 3, seed: (Date.now() % 100000) + 7 });
     if (CHAT_IDEA !== idea) return;
@@ -2521,7 +2734,7 @@ async function chatMoreCaptions() {
     }
   } catch (e) { /* quedan las opciones anteriores */ }
   const b2 = $('#chatMoreCaps');
-  if (b2) { b2.disabled = false; b2.textContent = '↻ Probar otros textos'; }
+  if (b2) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Probar otros textos'; }
 }
 
 // "🔄 Otra imagen": regenera los ejemplos visuales. Sin foto: genera una imagen nueva
@@ -2531,7 +2744,7 @@ async function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
-  if (b) { b.disabled = true; b.textContent = '⏳…'; }
+  if (b) { b.disabled = true; postyThinking(b); }
   try {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     if (lib.length) {
@@ -2543,7 +2756,7 @@ async function chatMoreImage() {
     renderChatStoryboard();
   } finally {
     const b2 = $('#chatMoreImg');
-    if (b2 && CHAT_IDEA === idea) { b2.disabled = false; b2.textContent = '↻ Otra imagen'; }
+    if (b2 && CHAT_IDEA === idea) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Otra imagen'; }
   }
 }
 
@@ -2645,6 +2858,8 @@ async function renderChatPreviews() {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
+  // Detiene la rotación "Posty pensando" del placeholder de ejemplos (si sigue viva)
+  const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
   try {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
@@ -2673,7 +2888,8 @@ async function renderChatPreviews() {
     } else {
       // SIN FOTO: PROHIBIDO el bloque de color plano (se ve malísimo). Se genera la
       // imagen REAL con IA — es exactamente la que va a salir al crear el posteo.
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">🎨 Generando tu imagen…</div>';
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)" id="chatPrevThinking"></div>';
+      postyThinking($('#chatPrevThinking'));
       let genPath = null;
       try {
         genPath = await aiConceptShot({
@@ -2684,6 +2900,7 @@ async function renderChatPreviews() {
         });
       } catch (e) {
         if (isAiCapErr(e)) {
+          stopPrevThinking();
           box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
           CHAT_PREVIEWS = [];
           return;
@@ -2691,6 +2908,7 @@ async function renderChatPreviews() {
       }
       if (CHAT_IDEA !== idea) return;
       if (!genPath) {
+        stopPrevThinking();
         box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora, pero tocá ✨ Hacerlo posteo y la creo en el momento 👇</div>';
         CHAT_PREVIEWS = [];
         return;
@@ -2704,6 +2922,7 @@ async function renderChatPreviews() {
       renderChatStoryboard();
     }
     CHAT_PREV_SEL = 0;
+    stopPrevThinking();
     box.innerHTML = '';
     CHAT_PREVIEWS.forEach((pv, i) => {
       const d = document.createElement('div');
@@ -2722,12 +2941,152 @@ async function renderChatPreviews() {
       box.appendChild(d);
     });
   } catch (e) {
+    stopPrevThinking();
     box.innerHTML = `<div style="font-size:11.5px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
     CHAT_PREVIEWS = [];
   }
 }
 
 let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
+
+// ---- Logo auto-extraído: banner confirmable en el chat ----
+// El servidor guarda el mensaje con el marcador [logo-candidate:/media/xxx.jpg];
+// el frontend lo renderiza como banner con la foto + 2 botones táctiles (≥44px).
+const LC_MARKER_RE = /\[logo-candidate(?::([^\]]+))?\]/;
+function chatStripLcMarker(t) { return String(t || '').replace(/\[logo-candidate(?::[^\]]+)?\]/g, '').trim(); }
+
+// ---- Nudge "¿publicamos tu primero?": banner con botón de 1 tap ----
+// El servidor guarda el mensaje con el marcador [first-publish]; el frontend
+// lo renderiza como banner con el botón "🚀 Publicar mi primero", que lleva a
+// Schedule y auto-dispara el flujo (mismo patrón que [logo-candidate:...]).
+const FP_MARKER_RE = /\[first-publish\]/;
+function chatStripFpMarker(t) { return String(t || '').replace(/\[first-publish\]/g, '').trim(); }
+
+// Marcador [celebrate]: el backend lo inserta en un mensaje para que el frontend
+// festeje al renderizarlo. Se stripa SIEMPRE del texto visible (jamás se ve).
+const CELEBRATE_MARKER = /\[celebrate\]/i;
+const CELEBRATE_MARKER_G = /\[celebrate\]/gi;
+function chatStripCelebrate(t) { return String(t || '').replace(CELEBRATE_MARKER_G, '').trim(); }
+// Claves de mensajes ya renderizados: un mensaje con [celebrate] festeja UNA sola vez,
+// aunque el historial se recargue (visibilitychange, re-render, etc.).
+const CHAT_CELEBRATED_SEEN = new Set();
+function chatCelebrateScan(messages) {
+  try {
+    (messages || []).forEach(m => {
+      if (!m || m.role === 'user' || !m.text) return;
+      const key = m.role + ' ' + String(m.text);
+      if (CHAT_CELEBRATED_SEEN.has(key)) return;
+      CHAT_CELEBRATED_SEEN.add(key);
+      if (CELEBRATE_MARKER.test(String(m.text))) postyCelebrate();
+    });
+  } catch (e) {}
+}
+
+// Linkify mínimo del chat: las URLs en los mensajes salen como <a> (target=_blank).
+// Orden seguro: se splitea el texto CRUDO por URL, se escapa cada parte por
+// separado y solo las URLs capturadas se envuelven en <a>. Jamás se linkea sobre
+// HTML ya escapado ni se escapa el <a> generado. Los marcadores internos
+// ([celebrate], [logo-candidate:...]) ya se stripearon antes de llegar acá.
+const CHAT_URL_RE = /(https?:\/\/[^\s<>"'`]+)/g;
+function linkifyEsc(text) {
+  return String(text || '').split(CHAT_URL_RE).map((p, i) => {
+    if (i % 2 !== 1) return esc(p);
+    // Puntuación de fin de frase fuera del link: "https://x.com/p/1." linkea sin el punto.
+    const m = p.match(/^(.*?)([.,;:!?]+)$/);
+    const url = m ? m[1] : p, trail = m ? m[2] : '';
+    return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>${esc(trail)}`;
+  }).join('');
+}
+
+// HTML de un mensaje del chat: si trae el marcador de logo candidato,
+// renderiza el banner confirmable; si no, la burbuja normal.
+function chatMsgHtml(role, text) {
+  text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
+  // Banner "¿publicamos tu primero?": texto + botón táctil de 1 tap.
+  if (role !== 'user' && FP_MARKER_RE.test(String(text || ''))) {
+    return `<div class="chat-msg ai fp-banner">`
+      + `<div>${esc(chatStripFpMarker(text))}</div>`
+      + `<button type="button" class="btn btn-primary btn-block" data-fp-pub style="margin-top:10px;min-height:48px;touch-action:manipulation">🚀 Publicar mi primero</button>`
+      + `</div>`;
+  }
+  const m = String(text || '').match(LC_MARKER_RE);
+  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}">${linkifyEsc(text)}</div>`;
+  const imgPath = (m[1] || '').trim();
+  const img = imgPath
+    ? `<img src="${esc(imgPath)}" alt="Posible logo de tu marca" loading="lazy" style="width:96px;height:96px;object-fit:cover;border-radius:16px;display:block;margin:8px auto" onerror="this.closest('.lc-banner').remove()">`
+    : '';
+  return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" style="touch-action:manipulation">`
+    + `<div>${esc(chatStripLcMarker(text))}</div>${img}`
+    + `<div style="display:flex;gap:8px;margin-top:8px">`
+    + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#1F9D55;color:#fff;font-size:15px;font-weight:700">Sí, ese es ✅</button>`
+    + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#EEF0F2;color:#333;font-size:15px;font-weight:700">No ❌</button>`
+    + `</div></div>`;
+}
+
+// Confirma o rechaza el logo candidato y reemplaza el banner por texto chico.
+// Si el candidato ya no existe (404), el banner se auto-oculta.
+async function logoCandidateRespond(ok, bannerEl) {
+  try {
+    const r = await api.post(ok ? '/api/brand/logo-confirm' : '/api/brand/logo-reject', {});
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    if (bannerEl) bannerEl.outerHTML = `<div style="font-size:12px;color:var(--mut);margin:6px 0">${ok ? '✅ ¡Listo! Lo uso en todos tus diseños' : '👌 Dale, cuando quieras subí tu logo desde Mi marca'}</div>`;
+  } catch (e) { if (bannerEl) bannerEl.remove(); }
+}
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? (e.target.closest('.lc-yes') || e.target.closest('.lc-no')) : null;
+  if (!t) return;
+  try { e.preventDefault(); } catch (_) {}
+  logoCandidateRespond(t.classList.contains('lc-yes'), t.closest('.lc-banner'));
+});
+
+// Banner "¿publicamos tu primero?": 1 tap → Schedule y auto-disparo del flujo.
+// La bandera vive en sessionStorage: si ya está en Schedule, dispara directo.
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? e.target.closest('[data-fp-pub]') : null;
+  if (!t) return;
+  try { e.preventDefault(); } catch (_) {}
+  try { sessionStorage.setItem('posta_fp_auto', '1'); } catch (_) {}
+  if ((location.hash || '') === '#/app/schedule') { try { autoClickFirstPublish(); } catch (_) {} }
+  else location.hash = '#/app/schedule';
+});
+
+// Si el candidato ya no existe (confirmado/rechazado en otra sesión),
+// los banners pendientes se auto-ocultan.
+async function chatLogoBannersVerify() {
+  try {
+    const r = await api.get('/api/brand/logo-candidate');
+    if (!r || r.path) return;
+    document.querySelectorAll('.lc-banner').forEach(b => b.remove());
+  } catch (_) {}
+}
+let CHAT_FIRST_PICK = null; // sugerencia "¿Arrancamos por este? 👀" (GET /api/ideas/chat, solo primera apertura)
+
+// Fix auditoría #2: 1 tap para rearmar la semana de /prueba cuando la
+// importación trajo 0 (cache vencido). Genera en segundo plano; responde al toque.
+async function trialRebuildWeek() {
+  const b = document.getElementById('trialRebuildBtn');
+  const say = (t, dis) => { if (b) { b.textContent = t; b.disabled = !!dis; } };
+  say('⏳ Rearmándola…', true);
+  try {
+    const r = await api.post('/api/trial/rebuild-import', {});
+    if (r && r.rebuilding) {
+      say('✅ ¡En marcha! Te aviso cuando esté ✨', true);
+      const box = $('#chatBox');
+      if (box) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc('Dale, la estoy rearmando ⏳ Te aviso acá mismo cuando tu semana esté lista ✨')}</div>`);
+        chatScroll();
+      }
+    } else if (r && r.reason === 'has_drafts') {
+      say('✅ Ya tenés borradores ✨', true);
+    } else {
+      say('⚡ Rearmar mi semana', false);
+      alert('No pude arrancar la regeneración 😅 Probá de nuevo en un toque.');
+    }
+  } catch (e) {
+    say('⚡ Rearmar mi semana', false);
+    alert((e && e.message) || 'No pude arrancar la regeneración 😅 Probá de nuevo.');
+  }
+}
 
 // Trae el historial del chat del servidor (persiste entre sesiones)
 async function chatLoadHistory() {
@@ -2738,7 +3097,9 @@ async function chatLoadHistory() {
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text)
         .map(m => ({ role: m.role, text: String(m.text).slice(0, 2000) }));
       const box = $('#chatBox');
-      if (box) box.innerHTML = CHAT.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+      if (box) box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
+      // Auto-trigger por marcador: mensajes NUEVOS con [celebrate] festejan una sola vez.
+      chatCelebrateScan(CHAT);
       const chips = $('#chatChips');
       if (chips) chips.remove(); // con historial, los ejemplos ya no hacen falta
     }
@@ -2747,7 +3108,24 @@ async function chatLoadHistory() {
       if (box) box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
       const chips = $('#chatChips');
       if (chips) chips.remove();
+      // Magia de primera apertura: confetti sutil + el avatar saluda.
+      // Solo si el chat está visible (este fetch también corre desde otras vistas).
+      if (box) { try { firstOpenParty(); } catch (e) {} }
     }
+    // Fix auditoría #2: si la importación de /prueba trajo 0, el welcome honesto
+    // viene con 1 tap para rearmar la semana (POST /api/trial/rebuild-import).
+    if (r && r.welcome_regen) {
+      const box = $('#chatBox');
+      if (box && !document.getElementById('trialRebuildBtn')) {
+        box.insertAdjacentHTML('beforeend',
+          `<div style="margin:10px 0 4px"><button class="btn btn-primary btn-sm" id="trialRebuildBtn">⚡ Rearmar mi semana</button></div>`);
+        const rb = document.getElementById('trialRebuildBtn');
+        if (rb) rb.onclick = trialRebuildWeek;
+      }
+    }
+    // Sugerencia de primera apertura: se cachea acá y se pinta en bindChatView
+    // (este fetch también corre desde otras vistas, donde el slot no existe).
+    try { CHAT_FIRST_PICK = (r && r.first_pick) || null; } catch (e) { CHAT_FIRST_PICK = null; }
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
       applyChatOrder(r.idea);
@@ -2757,8 +3135,21 @@ async function chatLoadHistory() {
       refreshChatCaption();
     }
     chatScroll();
+    // Banners de logo candidato que ya no existe: se auto-ocultan.
+    try { chatLogoBannersVerify(); } catch (_) {}
   } catch (e) { /* sin historial: se empieza de cero */ }
 }
+// Llegada en vivo: cuando la app vuelve a primer plano y la vista chat está activa,
+// se recarga el historial para que el festejo de una publicación llegue sin recargar
+// (el backend inserta el mensaje con [celebrate]; el scan de chatLoadHistory lo dispara).
+document.addEventListener('visibilitychange', () => {
+  try {
+    if (document.visibilityState !== 'visible') return;
+    if (!(location.hash || '').startsWith('#/app/chat')) return;
+    if (!document.getElementById('chatBox')) return;
+    if (typeof chatLoadHistory === 'function') chatLoadHistory();
+  } catch (e) {}
+});
 
 // Crea el borrador usando el ejemplo elegido.
 // Si se eligió "solo foto", se usa la foto directo sin diseño.
@@ -2780,7 +3171,11 @@ async function draftFromPreview(idea, prev) {
   // usando las fotos que mandó en el chat (si mandó). Si falla, sigue como siempre.
   const cm = $('#chatMsg');
   const cmPrev = cm ? cm.innerHTML : null;
-  if (!reuseGen && cm) cm.innerHTML = `<div class="okmsg">🎨 Creando la imagen…</div>`;
+  if (!reuseGen && cm) {
+    stopPostyThinking(document.getElementById('chatMkThinking')); // venía rotando desde "Hacerlo posteo"
+    cm.innerHTML = '<div class="okmsg"><span id="chatMkThinking"></span></div>';
+    postyThinking($('#chatMkThinking'));
+  }
   const chatRefs = CHAT_PHOTOS.filter(p => p && p.kind !== 'video' && p.file_path).slice(0, 2).map(p => p.file_path);
   const csPath = reuseGen || await aiConceptShot({
     idea,
@@ -2788,7 +3183,7 @@ async function draftFromPreview(idea, prev) {
     headline: pickHeadline(idea, caption),
     refs: chatRefs,
   });
-  if (cm && cmPrev !== null) cm.innerHTML = cmPrev;
+  if (cm && cmPrev !== null) { stopPostyThinking(document.getElementById('chatMkThinking')); cm.innerHTML = cmPrev; }
   if (csPath) {
     imagePath = csPath;
   } else if (prev && prev.kind === 'photo' && prev.path) {
@@ -2814,8 +3209,7 @@ async function draftFromPreview(idea, prev) {
 }
 
 function chatCardHTML(compact, noEditChip, bareWrap) {
-  const msgs = CHAT.map(m => `
-    <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
@@ -2857,7 +3251,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
 function chatSay(text) {
   CHAT.push({ role: 'assistant', text });
   const box = $('#chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(text)}</div>`);
+  if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   chatScroll();
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text }] }).catch(() => {}); } catch (e) {}
 }
@@ -3110,6 +3504,9 @@ function chatRenderProposal() {
   const p = $('#chatProposal');
   if (!p) return;
   p.innerHTML = proposalHTML();
+  // Placeholder de los ejemplos visuales: Posty piensa en voz alta mientras se generan
+  const pvT = document.getElementById('chatPrevThinking');
+  if (pvT) postyThinking(pvT);
   if (!CHAT_IDEA) return;
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
@@ -3143,6 +3540,36 @@ function chatDraftsCtx() {
       .slice(0, 10)
       .map(d => ({ id: d.id, caption: String(d.caption || '').slice(0, 300), when: String(d.scheduled_at || '').slice(0, 10) }));
   } catch (e) { return []; }
+}
+
+// "Posty pensando en voz alta": mientras se genera una idea o imagen, el estado
+// rota en primera persona (voz cálida de Posty) cada ~2.5s, en vez de un ⏳ frío.
+// postyThinking(el, stages) arranca la rotación sobre `el` y devuelve stop().
+// REGLA DURA: llamar a stop (o a stopPostyThinking(el)) SIEMPRE al completar —
+// éxito o error — para no dejar intervalos zombis. Si el elemento se desconecta
+// del DOM sin stop, el intervalo se apaga solo (seguro extra, no reemplazo).
+const POSTY_THINKING = [
+  'Estoy eligiendo tu mejor foto 📸…',
+  'Escribiendo en tu tono ✍️…',
+  'Dándole los toques finales ✨…',
+];
+function postyThinking(el, stages) {
+  if (!el) return function () {};
+  stopPostyThinking(el); // nunca dos intervalos rotando sobre el mismo elemento
+  const msgs = (stages && stages.length) ? stages : POSTY_THINKING;
+  let i = 0;
+  el.textContent = msgs[0];
+  const t = setInterval(() => {
+    if (!el.isConnected) { clearInterval(t); return; }
+    i = (i + 1) % msgs.length;
+    el.textContent = msgs[i];
+  }, 2500);
+  const stop = function () { clearInterval(t); };
+  try { el._ptStop = stop; } catch (e) {}
+  return stop;
+}
+function stopPostyThinking(el) {
+  try { if (el && el._ptStop) { el._ptStop(); el._ptStop = null; } } catch (e) {}
 }
 
 async function chatSend() {
@@ -3321,7 +3748,8 @@ async function chatExchange({ text, display, extra, pushed }) {
   }
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping"></div>`);
+  postyThinking(document.getElementById('chatTyping'));
   chatScroll();
   postyWorking(true);
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
@@ -3331,12 +3759,12 @@ async function chatExchange({ text, display, extra, pushed }) {
   try { libThumbs = await chatLibThumbs(); } catch (e) {}
   try {
     const r = await api.post('/api/ideas/chat', Object.assign(
-      { messages: CHAT, photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
+      { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
         photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean) }, extra || {}));
-    const t = $('#chatTyping'); if (t) t.remove();
+    const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
-    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
+    box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
     if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
@@ -3365,7 +3793,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     // Nunca texto sin imágenes.
     if (Array.isArray(r.showDrafts) && r.showDrafts.length) renderChatShowDrafts(r.showDrafts);
   } catch (e) {
-    const t = $('#chatTyping'); if (t) t.remove();
+    const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
   }
   postyWorking(false);
@@ -3433,12 +3861,19 @@ async function chatMakePost(asVideo) {
   if (mkP) mkP.disabled = true;
   if (mkR) mkR.disabled = true;
   try {
-    if (m) m.innerHTML = `<div class="okmsg">⏳ Creando tu ${asVideo ? 'reel' : 'posteo'}…</div>`;
+    if (m) {
+      m.innerHTML = '<div class="okmsg"><span id="chatMkThinking"></span></div>';
+      postyThinking($('#chatMkThinking'), asVideo
+        ? ['Estoy eligiendo tu mejor foto 📸…', 'Armando las escenas de tu reel 🎬…', 'Dándole los toques finales ✨…']
+        : POSTY_THINKING);
+    }
     if (!asVideo && CHAT_PREVIEWS.length) {
       await draftFromPreview(idea, CHAT_PREVIEWS[CHAT_PREV_SEL] || CHAT_PREVIEWS[0]);
     } else {
       await draftFromIdea(idea, asVideo, 0, true);
     }
+    stopPostyThinking(document.getElementById('chatMkThinking'));
+    if (m) m.innerHTML = '<div class="okmsg">¡Listo! ✅</div>';
     CHAT_IDEA = null;
     CUSTOM_PAL = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
@@ -3456,6 +3891,7 @@ async function chatMakePost(asVideo) {
     }, 150);
   } catch (e) {
     const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
+    stopPostyThinking(document.getElementById('chatMkThinking'));
     if (m) m.innerHTML = capMsg ? `<div class="okmsg">${esc(capMsg)}</div>` : `<div class="err">Error: ${esc(e.message)}</div>`;
     if (mkP) mkP.disabled = false;
     if (mkR) mkR.disabled = false;
@@ -3585,15 +4021,19 @@ function bindChat() {
 // Vista #/app/chat: el chat a pantalla completa, con saludo proactivo y
 // las tarjetas de la semana adentro. Mi semana y Ajustes siguen como pestañas.
 async function chatView() {
+  // Orden "contenido primero": la estrella son los borradores; el chat y el
+  // checklist bajan de protagonismo (el checklist sigue 100% funcional).
   return `
   <div class="chat-home">
     <div class="chome-top">
       <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
       <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza.<br>Vos vendé. Yo posteo.</div></div>
     </div>
-    ${setupChecklistHtml()}
-    ${chatCardHTML(true, true, true)}
+    <div id="firstPickSlot"></div>
     <div id="revMsg"></div>
+    <div id="nextStepCta" style="display:none"><button type="button" class="btn btn-primary" id="nextStepBtn">Revisá tu semana 👇</button></div>
+    ${chatCardHTML(true, true, true)}
+    ${setupSecondaryHtml()}
     <div id="apProg-semana"></div>
   </div>`;
 }
@@ -3603,6 +4043,7 @@ async function bindChatView() {
   bindReview();
   bindScheduleAll();
   bindAcceptAll();
+  bindActivateWeek();
   bindAutopilot();
   // El auto-arranque de la semana también aplica entrando por el chat.
   if (typeof maybeAutoStartWeek === 'function') { try { maybeAutoStartWeek(); } catch (e) {} }
@@ -3610,6 +4051,22 @@ async function bindChatView() {
   // si ya cargó antes, no hay nada que esperar.
   try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
   try { await chatGreet(); } catch (e) {}
+  // Tarjeta "¿Arrancamos por este? 👀" (solo primera apertura con borradores).
+  try { renderFirstPick(CHAT_FIRST_PICK); } catch (e) {}
+  // Un solo próximo paso: debajo de los borradores, solo si hay borradores.
+  try {
+    const nsc = document.getElementById('nextStepCta');
+    const nsb = document.getElementById('nextStepBtn');
+    if (nsc && nsb) {
+      const hasDrafts = Array.isArray(REVIEW_DRAFTS) && REVIEW_DRAFTS.length > 0;
+      nsc.style.display = hasDrafts ? '' : 'none';
+      nsb.onclick = () => {
+        // #revMsg en el chat solo recibe errores: los borradores reales viven
+        // en #/app/schedule (reviewCardHTML "📋 Revisá tu semana").
+        location.hash = '#/app/schedule';
+      };
+    }
+  } catch (e) {}
   // Nudge forzado (ej: botón "Contame de tu negocio" del festejo) o pendiente semanal.
   let forced = null;
   try { forced = sessionStorage.getItem('posty-force-nudge'); sessionStorage.removeItem('posty-force-nudge'); } catch (e) {}
@@ -3769,8 +4226,55 @@ async function pnVoiceSend(id, done) {
 function chatSayLocal(text) {
   try { CHAT.push({ role: 'assistant', text }); } catch (e) {}
   const box = document.getElementById('chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(text)}</div>`);
+  if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   if (typeof chatScroll === 'function') chatScroll();
+}
+
+// Tarjeta "¿Arrancamos por este? 👀": solo primera apertura con borradores.
+// first_pick llega en GET /api/ideas/chat (contrato backend). Tras responder se
+// oculta y no vuelve a aparecer (flag en sessionStorage).
+let FIRST_PICK_DONE = false;
+function renderFirstPick(fp) {
+  if (FIRST_PICK_DONE) return;
+  try { if (sessionStorage.getItem('posta_first_pick_done') === '1') { FIRST_PICK_DONE = true; return; } } catch (e) {}
+  const slot = document.getElementById('firstPickSlot');
+  if (!slot || !fp || !(fp.post_id > 0)) return;
+  const cap = String(fp.caption || '').trim();
+  const excerpt = cap.length > 140 ? cap.slice(0, 140).trimEnd() + '…' : cap;
+  slot.innerHTML = `
+  <div class="card first-pick" id="firstPickCard">
+    <div class="fp-title">¿Arrancamos por este? 👀</div>
+    ${fp.image_url ? `<img class="fp-img" src="${esc(String(fp.image_url))}" alt="Posteo sugerido" loading="lazy">` : ''}
+    ${excerpt ? `<div class="fp-cap">${esc(excerpt)}</div>` : ''}
+    ${fp.reason ? `<div class="fp-reason">📸 ${esc(String(fp.reason))}</div>` : ''}
+    <div class="fp-btns">
+      <button type="button" class="btn btn-primary btn-sm" data-fpchoice="picked">Dale, ese 👍</button>
+      <button type="button" class="btn btn-soft btn-sm" data-fpchoice="other">Prefiero otro</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-fpchoice="dismissed">Ahora no</button>
+    </div>
+  </div>`;
+  slot.querySelectorAll('[data-fpchoice]').forEach(b => {
+    b.onclick = () => firstPickAnswer(fp.post_id, b.dataset.fpchoice);
+  });
+}
+async function firstPickAnswer(postId, choice) {
+  const card = document.getElementById('firstPickCard');
+  if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  let reply = null;
+  try {
+    const r = await api.post('/api/posty/pick-feedback', { post_id: postId, choice });
+    if (r && typeof r.reply === 'string' && r.reply.trim()) reply = r.reply.trim().slice(0, 600);
+  } catch (e) { /* endpoint aún no desplegado: igual se oculta la tarjeta */ }
+  FIRST_PICK_DONE = true;
+  try { sessionStorage.setItem('posta_first_pick_done', '1'); } catch (e) {}
+  const slot = document.getElementById('firstPickSlot');
+  if (slot) slot.innerHTML = '';
+  if (reply) { try { chatSay(reply); } catch (e) {} }
+  if (choice === 'other') {
+    // "Prefiero otro": los borradores están en Schedule, no en #revMsg
+    // (que solo recibe errores en el chat).
+    location.hash = '#/app/schedule';
+  }
 }
 
 // Saludo proactivo con el estado REAL (una sola burbuja, una vez por sesión).
@@ -4177,7 +4681,9 @@ async function renderDesignImage(o) {
   const cv = document.createElement('canvas');
   drawPost(cv, o);
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-  const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  // FIX-FANTASMA: el diseño generado se registra como kind='design' (no 'photo')
+  // para que el próximo "✨ Otro diseño" no lo tome como foto de fondo.
+  const res = await fetch('/api/media?kind=design', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
   return data.path;
@@ -4283,7 +4789,7 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub, on
 // Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
 // Rotación de estilos de diseño: el autopilot y el chat generan los posteos
 // con plantillas distintas para que la semana no se vea toda igual.
-const DESIGN_TPLS = ['gradiente', 'claro', 'noche', 'promo'];
+const DESIGN_TPLS = ['gradiente', 'claro', 'noche', 'promo', 'editorial', 'bold'];
 let TPL_ROT = 0;
 function pickTpl(idx, fromChat, topic) {
   if (fromChat) return DESIGN_TPLS[(TPL_ROT++) % DESIGN_TPLS.length];
@@ -5153,6 +5659,120 @@ function bindFastTrack() {
     }
   };
 }
+/* ============================================================
+   "🚀 Publicar mi primero" (mejora 2026-09-30: garantizar el primer posteo)
+   Tarjeta hero en Schedule, visible SOLO cuando hay 0 posteos publicados.
+   1 tap → publica el primer borrador (publish-now, con el OK explícito de
+   siempre: imagen + cuenta destino). Si no hay borradores, primero genera UNO
+   con el flujo autopilot existente (n=1) y después lo publica. Sin gates nuevos.
+   ============================================================ */
+function firstPublishCardHTML(drafts) {
+  const list = Array.isArray(drafts) ? drafts : [];
+  const n = list.length;
+  const sub = n
+    ? (n === 1
+        ? 'Ya tenés 1 borrador listo ✨ — publicalo y miralo vivo en tu Instagram.'
+        : `Ya tenés ${n} borradores listos ✨ — publicá el primero y miralo vivo en tu Instagram.`)
+    : 'Todavía no hay borradores — tocá el botón, armo el primero al toque y lo publicamos 🚀';
+  return `
+  <div class="card" id="firstPublishCard" style="border:2px solid var(--yel);background:#FFF9EC">
+    <h3 style="margin:0 0 4px">🚀 Tu primer posteo</h3>
+    <p class="hint" style="margin:0 0 10px">${sub}</p>
+    <button type="button" class="btn btn-primary btn-block" id="btnFirstPublish" style="min-height:52px;font-size:16px;touch-action:manipulation">🚀 Publicar mi primero</button>
+    <div id="fpPubMount" style="margin-top:10px"></div>
+  </div>`;
+}
+
+// Espera liviana a que aparezca al menos 1 borrador (caso "generar primero"):
+// resuelve con los borradores o [] al agotar el timeout.
+async function fpWaitDrafts(timeoutMs) {
+  const t0 = Date.now();
+  for (;;) {
+    let posts = [];
+    try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
+    const drafts = (Array.isArray(posts) ? posts : []).filter(p => p && p.status === 'draft').sort((a, b) => a.id - b.id);
+    if (drafts.length) return drafts;
+    if (Date.now() - t0 > timeoutMs) return [];
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+async function firstPublishFlow() {
+  const btn0 = document.getElementById('btnFirstPublish');
+  if (!btn0 || btn0.disabled) return;
+  const mount = () => document.getElementById('fpPubMount');
+  const say = (t, dis) => { const b = document.getElementById('btnFirstPublish'); if (b) { b.textContent = t; b.disabled = !!dis; } };
+  // Mismo resguardo que el fast-track: sin cupo, modal de mejora (no es un gate nuevo).
+  const hasQuota = await checkQuotaOrModal();
+  if (!hasQuota) return;
+  say('⏳ Preparando…', true);
+  try {
+    // Anti-carrera: si ya publicó por otro lado, no duplicar.
+    let posts = await api.get('/api/posts').catch(() => []);
+    if ((posts || []).some(p => p && p.status === 'published')) { try { render(); } catch (e) {} return; }
+    let drafts = (posts || []).filter(p => p && p.status === 'draft').sort((a, b) => a.id - b.id);
+    if (!drafts.length) {
+      // Sin borradores: generar UNO con el flujo existente (autopilot n=1).
+      // El progreso necesita su elemento: si la tarjeta "Armemos tu semana" no
+      // está (hay programados pero 0 borradores), se crea uno temporal acá.
+      let prog = document.getElementById('apProg-schedule');
+      if (!prog) {
+        const m0 = mount();
+        if (m0) m0.innerHTML = '<div id="apProg-schedule"></div>';
+        prog = document.getElementById('apProg-schedule');
+      }
+      if (prog) prog.innerHTML = '<div class="okmsg">🎨 Armando tu primer posteo…</div>';
+      const alreadyRunning = (typeof AUTOPILOT_RUNNING !== 'undefined') && !!AUTOPILOT_RUNNING;
+      await runAutopilotSmart(1, 'schedule');
+      drafts = await fpWaitDrafts(alreadyRunning ? 90000 : 8000);
+      if (!drafts.length) {
+        // El autopilot no generó (gate de ADN → chat, o cupo): decirlo de frente.
+        say('🚀 Publicar mi primero', false);
+        const m1 = mount();
+        if (m1) m1.innerHTML = '<div class="hint">😅 No lo pude armar solo — <a href="#/app/chat" style="color:var(--cel);font-weight:700">contame de tu negocio en el chat</a> y lo hacemos juntos 👇</div>';
+        return;
+      }
+      // runAutopilot re-renderiza la vista a los ~900ms: esperar al DOM nuevo
+      // antes de publicar (el mount viejo queda descolgado).
+      await new Promise(r => setTimeout(r, 1400));
+    }
+    const m2 = mount();
+    // publishNowFlow pide el OK explícito (imagen + cuenta destino): nada sale sin ese tap.
+    const res = await publishNowFlow(drafts[0].id, m2 || document.getElementById('btnFirstPublish').parentElement);
+    if (res && res.ok) { try { render(); } catch (e) {} }
+    else say('🚀 Publicar mi primero', false);
+  } catch (e) {
+    say('🚀 Publicar mi primero', false);
+    const m3 = mount();
+    if (m3) m3.innerHTML = `<div class="err">${esc(humanError((e && e.message) || 'No se pudo'))}</div>`;
+  }
+}
+
+// Auto-disparo desde el banner del chat ("¿publicamos tu primero?"):
+// verifica que siga en 0 publicados y toca el botón.
+async function autoClickFirstPublish() {
+  const btn = document.getElementById('btnFirstPublish');
+  if (!btn || btn.disabled) return;
+  try {
+    const posts = await api.get('/api/posts').catch(() => []);
+    if ((posts || []).some(p => p && p.status === 'published')) return; // ya salió por otro lado
+  } catch (e) {}
+  const b2 = document.getElementById('btnFirstPublish');
+  if (b2 && !b2.disabled) b2.click();
+}
+
+function bindFirstPublish() {
+  const btn = document.getElementById('btnFirstPublish');
+  if (!btn) return;
+  btn.onclick = () => { firstPublishFlow(); };
+  // Llegada desde el banner del chat: auto-disparar.
+  try {
+    if (sessionStorage.getItem('posta_fp_auto') === '1') {
+      sessionStorage.removeItem('posta_fp_auto');
+      setTimeout(() => { try { autoClickFirstPublish(); } catch (e) {} }, 500);
+    }
+  } catch (e) {}
+}
 /* ---------- MI SEMANA (dashboard) ---------- */
 let SEM_NUDGES = [];
 
@@ -5293,7 +5913,7 @@ async function wireCelebRef(root) {
   let link = '';
   try { const info = await pzReferral(); if (info && info.ok) link = info.link; } catch (e) {}
   const msg = root.querySelector('.celeb-ref-msg');
-  const shareMsg = `Mirá lo que hace Posty con el Instagram de mi negocio: arma la semana y la publica sola. Probalo 3 días gratis con mi link: ${link}`;
+  const shareMsg = `Mirá lo que hace Posty con el Instagram de mi negocio: arma la semana y la publica sola. Probalo gratis con mi link: ${link}`;
   root.querySelectorAll('[data-cref]').forEach(b => {
     b.onclick = async () => {
       if (!link) { if (msg) msg.textContent = 'No se pudo cargar tu link todavía.'; return; }
@@ -5773,7 +6393,12 @@ async function adsView() {
   const budgets = (cfg && cfg.budget_options) || [];
   const recCards = list.length && budgets.length
     ? `<div id="adsRecsCard">${list.map(r => adsRecCardHTML(r, budgets)).join('')}</div>`
-    : `<div class="hint" style="padding:8px 0">Todavía no hay datos suficientes. Cuando tus posteos junten alcance, te decimos acá cuáles conviene potenciar. 👆</div>`;
+    : `<div class="st-empty">
+         <div class="st-empty-ico">⭐</div>
+         <b>Las recomendaciones van a vivir acá</b>
+         <p>Cuando tus posteos junten alcance, te marcamos acá cuáles conviene potenciar.</p>
+         <a class="btn btn-primary btn-sm" href="#/app/schedule" style="margin-top:12px">📅 Ir a mi semana</a>
+       </div>`;
 
   const bl = (boosts && boosts.boosts) || [];
   const statusTxt = (b) => b.status === 'active' ? '🟢 Activa'
@@ -5785,7 +6410,12 @@ async function adsView() {
         <div style="color:var(--mut);font-size:10.5px">${b.last_reach ? `👁️ ${Number(b.last_reach).toLocaleString('es-AR')} alcance · 💸 ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
       </div>
     </div>`).join('')
-    : `<p class="d" style="margin:0">Todavía no potenciaste ningún posteo.</p>`;
+    : `<div class="st-empty">
+         <div class="st-empty-ico">📣</div>
+         <b>Tus pautas van a vivir acá</b>
+         <p>Cuando potencies tu primer posteo, lo ves acá con su alcance y lo gastado, sin misterio.</p>
+         <button class="btn btn-soft btn-sm" id="adsBoostGoRecs" style="margin-top:12px">⭐ Ver recomendaciones</button>
+       </div>`;
 
   return `
   <div class="card" style="text-align:center">
@@ -5803,7 +6433,7 @@ async function adsView() {
       <div id="adsMsg"></div>
     ` : `<p class="d">La carga de crédito se habilita en estos días. Escribinos y la activamos para tu cuenta.</p>`}
   </div>
-  <div class="card">
+  <div class="card" id="adsRecsSec">
     <h3 style="margin:0 0 4px">⭐ Te recomendamos potenciar</h3>
     <p class="d" style="margin:0 0 10px">Elegidos por rendimiento real, no por corazonada.</p>
     ${recCards}
@@ -5840,6 +6470,12 @@ function bindAds() {
   });
   const arc = document.getElementById('adsRecsCard');
   if (arc) bindAdsRecCards(arc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'ads' });
+  // Empty state "Tus pautas": el CTA lleva a la sección de recomendaciones (misma página).
+  const bgRecs = document.getElementById('adsBoostGoRecs');
+  if (bgRecs) bgRecs.onclick = () => {
+    const sec = document.getElementById('adsRecsSec');
+    if (sec && typeof sec.scrollIntoView === 'function') sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 }
 
 function showStreakCelebration(sk) {
@@ -6107,194 +6743,6 @@ async function maybeAutoStartWeek() {
 
 
 /* ---------- AJUSTES ---------- */
-function ajustesView() {
-  const p = PROFILE, s = SETTINGS;
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : 'marca';
-  const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
-    : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
-  const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
-    : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
-    : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
-  const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
-  const bc = brandColors();
-  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
-  ${igMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
-    <div class="row2">
-      <div class="field"><label>Logo</label>
-        <div style="display:flex;gap:10px;align-items:center">
-          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
-          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
-          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
-        </div>
-        <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
-        <div class="hint" style="font-size:10.5px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
-      </div>
-    </div>
-    <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
-      <div style="font-size:10.5px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
-      <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
-          <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
-          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:88px;text-align:center;font-size:16px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
-          <div style="position:relative">
-            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:16px;font-weight:700;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:9px 30px 9px 14px;background:#F2F9FD;max-width:150px;cursor:pointer">
-              ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
-            </select>
-            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);pointer-events:none">⌄</span>
-          </div>
-        </div>`).join('')}
-      </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
-    </div>
-    <div class="field"><label>Vista previa</label>
-      <div id="brandPrev"></div>
-      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
-    </div>
-    <div class="field"><label>Foto de perfil</label>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="brand-pf" id="brandPf"></div>
-        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
-      <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
-    </div>
-    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
-  </div></div>
-  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
-    <div class="row2">
-      <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
-      <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
-    </div>
-    <div class="row2">
-      <div class="field"><label>Rubro</label><select id="s_cat">
-        ${CATS.map(([v, ico, t]) => `<option ${catSel(p.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-      <div class="field" id="s_catother_w" style="${catSel(p.category) === 'otro' ? '' : 'display:none'}"><label>¿Cuál?</label><input id="s_catother" value="${esc(catCustom(p.category))}" placeholder="Ej: veterinaria, librería..." maxlength="40"></div>
-      <div class="field"><label>Tono de la IA</label><select id="s_tone">
-        ${TONES.map(([v, ico, t]) => `<option ${p.tone === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="row2">
-      <div class="field"><label>Zona horaria <span style="color:var(--dim);font-weight:400">(para programar a la hora de tu país)</span></label><select id="s_tz">
-        ${TIMEZONES.map(([v, l]) => `<option ${s.timezone === v ? 'selected' : ''} value="${v}">${l}</option>`).join('')}
-      </select></div>
-      <div class="field"><label>Objetivo</label><select id="s_goal">
-        ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
-      <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
-      </div>
-    <div class="field"><label>Tus competidores</label>
-      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
-      <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
-      <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
-    <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
-      <label style="font-size:13px">🧬 Lo que la IA sabe de tu negocio</label>
-      <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
-      <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
-        <textarea id="s_dna_productos" rows="3" placeholder="Remera oversize — $25.000&#10;Zapatillas retro — $89.900"></textarea></div>
-      <div class="field"><label>Promos activas <span id="dnaChip_promos_activas"></span> <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
-        <textarea id="s_dna_promos" rows="2" placeholder="2x1 en remeras esta semana"></textarea></div>
-      <div class="row2">
-        <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
-        <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-soft" id="btnSaveDna">💾 Guardar datos del negocio</button> <span id="dnaMsg"></span>
-      </div>
-      <div id="webDnaZone"></div>
-      <div id="dnaFuentesZone"></div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
-      <span id="profDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
-      <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
-      <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
-    </div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🧠 Lo que Posty sabe de tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p class="src-intro">Lo estudio solo para crear posteos que venden.</p>
-    <div class="src-row" id="webZone"><p class="hint">Cargando…</p></div>
-    <div class="src-row" id="storiesZone"><p class="hint">Cargando…</p></div>
-    <div class="src-row" id="fbZone"><p class="hint">Cargando…</p></div>
-    <div class="src-row" id="srcCommentsCard"><p class="hint">Cargando…</p></div>
-    <div class="src-row" id="placesZone"><p class="hint">Cargando…</p></div>
-  </div></div>
-  <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="igBanner"></div>
-    <div class="ig-checklist">
-      <div class="t">Tu Instagram está listo cuando:</div>
-      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
-      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
-      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
-    </div>
-    <div style="font-weight:800;margin-bottom:8px">Modo de publicación</div>
-    <div class="ig-modes">
-      <div class="ig-mode ${s.demo_mode ? 'sel' : ''}" id="igModeDemo" role="button" tabindex="0">
-        <div class="ig-mode-h">🧪 Demo ${s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Simulamos todo: probá el flujo completo sin conectar nada.</span>
-      </div>
-      <div class="ig-mode ${!s.demo_mode ? 'sel' : ''}" id="igModeReal" role="button" tabindex="0">
-        <div class="ig-mode-h">🚀 Real ${!s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Publicamos en tu Instagram de verdad.</span>
-      </div>
-    </div>
-    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
-    <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
-      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
-      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
-    </div>
-    <div id="igVerifyMsg" style="margin-top:10px"></div>
-    <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
-      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
-      <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
-        <li>Abrí Instagram y andá a tu perfil</li>
-        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
-        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
-        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
-      </ol>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">📲 Abrir Instagram</a>
-        <button class="btn btn-primary btn-sm" id="btnIgRetry">🔄 Ya la hice profesional — conectar</button>
-      </div>
-      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
-    </div>
-    <div id="igMsg"></div>
-  </div></div>
-  <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
-  ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>`}
-  <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
-    <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
-    <div class="int-block"><h4>📸 App de Meta</h4>
-      <div class="row2">
-        <div class="field"><label>Meta App ID</label><input id="s_appid" value="${esc(s.meta_app_id)}" placeholder="123456789">
-          <p class="hint">El número identificador de tu app en Meta.</p></div>
-        <div class="field"><label>Meta App Secret</label><input id="s_appsecret" type="password" value="${esc(s.meta_app_secret)}" placeholder="••••••">
-          <p class="hint">La clave secreta de tu app. Nunca la compartas.</p></div>
-      </div>
-      <p class="hint">Los encontrás en <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com</a> → tu app → Configuración.</p>
-      <div class="field" style="margin-top:10px"><button class="btn btn-ghost" id="btnTestMeta" type="button">Probar conexión</button> <span id="metaTestMsg" style="font-size:11.5px"></span></div>
-      <div class="field"><label>Instagram Embed URL</label>
-        <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?...">
-        <p class="hint">La dirección que Meta genera para conectar tu Instagram. Se copia del dashboard de Meta: caso de uso Instagram → "API setup with Instagram login".</p></div>
-    </div>
-    <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
-  </details>
-  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">🚪 Salir</button></div>`;
-}
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
@@ -6701,10 +7149,7 @@ async function render() {
       root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
       // Lugares reales: bajan solos con cada cliente nuevo
-      fetch('/api/capacity').then(r => r.json()).then(c => {
-        const el = document.getElementById('scarcityLine');
-        if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
-      }).catch(() => {});
+      refreshScarcity();
       // Puntitos del carrusel de planes
       const pr = document.getElementById('plansRow'), pd = document.getElementById('planDots');
       if (pr && pd) {
@@ -6822,6 +7267,7 @@ async function render() {
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
+    refreshScarcity(); // número vivo de /api/capacity (fallback: 50 del template)
     return;
   }
 
@@ -6849,9 +7295,10 @@ async function render() {
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
   else if (tab === 'ads') { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { location.hash = '#/app/semana'; } else content = await adsView(); } // 🚀 Potenciar: billetera + boost (solo web)
-  else if (tab === 'admin') content = await adminView(); // 📊 Analytics (solo equipo)
+  else if (tab === 'admin') { let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
   else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
-  else content = ajustesView();
+  else if (tab === 'dogfood') content = await dogfoodView(postId); // 🤖 Posty dogfood: propuesta del día
+  else { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
   // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
@@ -7030,10 +7477,17 @@ async function scheduleView() {
   const slots = suggestSlots(drafts.length, schedPosts);
   const { xpStrip, expBanner } = xpStripHTML(sk, st, drafts.length);
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
+  // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
+  let dogfoodPost = null;
+  try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
+  const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
   const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
   const ftBlock = (!published.length && ftCandidates.length) ? fastTrackCardHTML(ftCandidates) : '';
+  // "🚀 Publicar mi primero" (mejora 2026-09-30): hero de 1 tap, visible SOLO
+  // con 0 posteos publicados. Si no hay borradores, el botón genera uno primero.
+  const fpBlock = (!published.length) ? firstPublishCardHTML(drafts) : '';
   // Fallidos: debajo de la revisión, antes del calendario.
   const failedBlock = failedCardHTML(failed);
   // "Ya salió": debajo del calendario, al fondo.
@@ -7066,7 +7520,7 @@ async function scheduleView() {
       return `${a} – ${b}`;
     } catch (e) { return ''; }
   })();
-  const cap1 = (p) => esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 70) || 'Posteo');
+  const capFull = (p) => esc(String(p.caption || p.source_topic || 'Posteo') || 'Posteo');
   const typeBadge = (p) => {
     const mt = String(p.media_type || '');
     if (mt === 'video') return '<span class="sched-badge">🎬 Reel</span>';
@@ -7105,7 +7559,7 @@ async function scheduleView() {
               : `<span class="sched-nothumb">📝</span>`}
             ${typeBadge(p)}
           </span>
-          <div class="sched-cardtxt"><b>${esc(fmtHour24(dt))}</b><span>${cap1(p)}</span></div>
+          <div class="sched-cardtxt"><b>${esc(fmtHour24(dt))}</b><span>${capFull(p)}</span></div>
         </button>`).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
       </div>
     </div>`;
@@ -7115,7 +7569,9 @@ async function scheduleView() {
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   return `<div id="schedView" class="sched-wrap">
     ${trialBanner}
+    ${dogfoodBlock}
     ${xpStrip}${expBanner}
+    ${fpBlock}
     ${ftBlock}
     ${reviewBlock}
     ${failedBlock}
@@ -7149,7 +7605,7 @@ async function scheduleView() {
 // el empty state lo dice de frente, sin inventar nada.
 function statsView() {
   const cards = ['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores']
-    .map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${esc(l)}</div></div>`)
+    .map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${esc(l)}</div>${i === 0 ? '<div id="stDelta"></div>' : ''}</div>`)
     .join('');
   return `
   <div class="st-wrap">
@@ -7157,7 +7613,7 @@ function statsView() {
       <div class="ph-ico">📊</div>
       <div class="ph-txt"><h1>Tus números</h1><p class="sub">Cómo viene rindiendo tu Instagram.</p></div>
     </div>
-    <div class="st-grid">${cards}</div>
+    <div class="st-grid" id="stGrid">${cards}</div>
     <div id="stBest"></div>
   </div>`;
 }
@@ -7166,22 +7622,45 @@ function bindStats() {
     try {
       const d = await api.get('/api/stats/ig');
       const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
+      const grid = document.getElementById('stGrid');
+      const box = document.getElementById('stBest');
       const vals = [d.reach_7d, d.reach_30d, d.interactions_30d, d.followers];
+      const hasData = vals.some((v) => Number(v) > 0) || d.best_post;
+      if (!hasData) {
+        // Sin datos no hay tarjetas: solo el empty state con vista previa.
+        if (grid) grid.style.display = 'none';
+        if (box) box.innerHTML = `<div class="card st-empty">
+          <div class="st-empty-ico">📊</div>
+          <b>Tus números van a vivir acá</b>
+          <p>Cuando publiquemos tu primera semana, vas a ver tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>
+          <div class="st-preview"><span class="st-preview-tag">Vista previa</span>
+            <div class="st-grid">
+              ${['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores'].map(l => `<div class="st-card st-skel"><div class="st-skel-num"></div><div class="st-label">${esc(l)}</div></div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+        return;
+      }
+      if (grid) grid.style.display = '';
       vals.forEach((v, i) => {
         const el = document.getElementById('stNum' + i);
         if (el) { el.textContent = fmt(v); el.closest('.st-card').classList.remove('st-loading'); }
       });
-      const box = document.getElementById('stBest');
-      if (!box) return;
-      const hasData = vals.some((v) => Number(v) > 0) || d.best_post;
-      if (!hasData) {
-        box.innerHTML = `<div class="card st-empty">
-          <div class="st-empty-ico">📊</div>
-          <b>Cuando publiquemos tu primera semana, vas a ver tus números acá 📊</b>
-          <p>Alcance, interacciones y tu mejor posteo, todo juntito.</p>
-        </div>`;
-        return;
+      // Delta honesto del alcance semanal: solo si ambas cohortes tienen ≥3 posteos
+      // con datos. Con pocos datos el % es puro ruido (swings absurdos) y mezcla
+      // volumen con rendimiento: mejor el número absoluto, sin delta.
+      const cur = Number(d.reach_7d) || 0, prev = Number(d.reach_prev7d) || 0;
+      const postsCur = Number(d.posts_7d) || 0, postsPrev = Number(d.posts_prev7d) || 0;
+      const dEl = document.getElementById('stDelta');
+      if (dEl) {
+        if (postsCur >= 3 && postsPrev >= 3 && prev > 0 && cur !== prev) {
+          const pct = Math.round((cur - prev) / prev * 100);
+          dEl.innerHTML = pct > 0
+            ? `<span class="st-delta up">▲ ${pct}% vs sem. pasada</span>`
+            : `<span class="st-delta down">▼ ${Math.abs(pct)}% vs sem. pasada</span>`;
+        } else dEl.innerHTML = '';
       }
+      if (!box) return;
       box.innerHTML = d.best_post
         ? `<div class="card st-best">
             <h3>⭐ Tu mejor posteo</h3>
@@ -7218,11 +7697,16 @@ function bindSchedule() {
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
-  bindScheduleAll(); // "📅 Programar mi semana →" dentro de la tarjeta de revisión
-  bindAcceptAll(); // "✅ Aceptar todos" dentro de la tarjeta de revisión
+  bindScheduleAll(); // "📅 Programar mi semana →" (chip del chat)
+  bindAcceptAll(); // legacy (ya no se pinta en la tarjeta)
+  bindActivateWeek(); // "🚀 Activar mi semana" dentro de la tarjeta de revisión
   bindAutopilot(); // tarjeta "Armemos tu semana" (estado vacío)
   // Fast-track "🚀 Tu primer posteo" (solo cuentas que nunca publicaron).
   try { if (typeof bindFastTrack === 'function') bindFastTrack(); } catch (e) {}
+  // "🚀 Publicar mi primero" (mejora 2026-09-30: 1 tap, solo 0 publicados).
+  try { if (typeof bindFirstPublish === 'function') bindFirstPublish(); } catch (e) {}
+  // 🤖 Posty dogfood: ✅ Publicar / ⏭️ Saltar.
+  try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {}
   // Reintento de fallidos: publica de nuevo vía publish-now.
   $$('#schedView [data-failed-retry]').forEach(b => b.onclick = async () => {
     const id = b.dataset.failedRetry;
@@ -7254,9 +7738,10 @@ function bindSchedule() {
 
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
-  if (tab === 'admin') bindAdmin();
+  if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
   if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
   if (tab === 'schedule') bindSchedule();
+  if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números
   if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
   pwaWire();
@@ -7293,503 +7778,9 @@ function bindApp(tab) {
   const dlo = $('#drawerLogout');
   if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
 
-  if (tab === 'ajustes') bindSettings();
+  if (tab === 'ajustes' && typeof bindSettings === 'function') bindSettings(); // el chunk ya lo cargó render()
 }
 
-function bindCreator() {
-  const c = CREATOR;
-  if (c.step === 1) {
-    // 📷 Foto del producto (opcional): se sube al momento y viaja como productPhoto.
-    const renderProdBox = () => {
-      const box = $('#c_prodPhotoBox');
-      if (!box) return;
-      box.innerHTML = c.productPhoto
-        ? `<div style="display:flex;gap:10px;align-items:center">
-            <img src="${esc(c.productPhoto)}" style="width:72px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)" alt="Foto de tu producto">
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" id="btnProdPhCh" type="button">Cambiar</button>
-              <button class="btn btn-ghost btn-sm" id="btnProdPhRm" type="button">Quitar</button>
-            </div>
-          </div>`
-        : `<div style="display:flex;gap:8px;flex-wrap:wrap">
-             <button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
-             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">🖼️ Tus fotos</button>` : ''}
-           </div>
-           <div id="prodPhLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
-             ${assetPhotos().map(a => `<img src="${esc(a.file_path)}" data-prodpick="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer" alt="Tu foto">`).join('')}
-           </div>
-           <div id="prodPhMsg"></div>`;
-      const trig = () => $('#c_prodPhotoFile').click();
-      const bAdd = $('#btnProdPhAdd'); if (bAdd) bAdd.onclick = trig;
-      const bLib = $('#btnProdPhLib'); if (bLib) bLib.onclick = () => { const l = $('#prodPhLib'); if (l) l.style.display = l.style.display === 'none' ? 'flex' : 'none'; };
-      $$('#prodPhLib [data-prodpick]').forEach(img => img.onclick = () => { c.productPhoto = img.dataset.prodpick; renderProdBox(); });
-      const bCh = $('#btnProdPhCh'); if (bCh) bCh.onclick = trig;
-      const bRm = $('#btnProdPhRm'); if (bRm) bRm.onclick = () => { c.productPhoto = ''; renderProdBox(); };
-    };
-    const prodInput = $('#c_prodPhotoFile');
-    if (prodInput) prodInput.onchange = async () => {
-      const f = prodInput.files[0]; if (!f) return;
-      if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
-      const msg = $('#prodPhMsg');
-      if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo foto...</div>`;
-      try {
-        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
-        c.productPhoto = data.path;
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-      } catch (e) {
-        alert('No se pudo subir la foto: ' + e.message);
-      }
-      renderProdBox();
-    };
-    renderProdBox();
-    $$('[data-chip]').forEach(b => b.onclick = () => { const t = $('#c_topic'); if (t) { t.value = b.dataset.chip; t.focus(); } });
-    $('#btnGen').onclick = async () => {
-      c.topic = $('#c_topic').value.trim();
-      if (!c.topic) {
-        // Sin idea del usuario: Posta decide con los datos del negocio
-        const p = (typeof PROFILE !== 'undefined' && PROFILE) || {};
-        c.topic = [p.business_name, p.category].filter(Boolean).join(' — ') || 'Posteo para mi negocio';
-      }
-      const btn = $('#btnGen');
-      btn.disabled = true; btn.textContent = '🎨 Armándo tus 6 opciones...';
-      try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
-        if (!out || !Array.isArray(out.options) || out.options.length !== 6) throw new Error('Respuesta incompleta');
-        c.options = out.options;
-        c.detected = out.detected || null;
-        c.recommendedIndex = out.recommendedIndex || 0;
-        c.recommendedReason = out.recommendedReason || '';
-        c.feedback = '';
-        c.selected = [];
-        c.cardPhoto = {};
-        c.step = 'options'; render();
-      } catch (e) {
-        // Fallback al comportamiento viejo (pantalla de texto con caption/hashtags)
-        try {
-          const out = await api.post('/api/generate', { topic: c.topic });
-          c.caption = out.caption; c.hashtags = out.hashtags;
-          $('#genErr').innerHTML = '';
-          $('#genOut').style.display = 'block';
-          $('#c_caption').value = c.caption; $('#c_tags').value = c.hashtags;
-        } catch (e2) { $('#genErr').innerHTML = `<div class="err">${esc(e2.message)}</div>`; }
-        btn.disabled = false; btn.textContent = '✨ Armar mi posteo';
-      }
-    };
-    const toDesign = $('#btnToDesign');
-    if (toDesign) toDesign.onclick = () => {
-      c.caption = $('#c_caption').value; c.hashtags = $('#c_tags').value;
-      if (!c.title) c.title = c.topic.split(' ').slice(0, 4).join(' ').toUpperCase();
-      if (!c.palTouched) c.pal = defaultPal();
-      c.step = 2; render();
-    };
-  }
-  if (c.step === 2) {
-    const cv = $('#postCanvas');
-    const redraw = async () => {
-      const pi = await photoImg(c.photo);
-      const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-      drawPost(cv, { tpl: c.tpl, pal: c.pal, title: $('#d_title').value, subtitle: $('#d_sub').value, handle: $('#d_handle').value, photoImg: pi, logoImg: logo });
-    };
-    ['d_title', 'd_sub', 'd_handle'].forEach(id => $('#' + id).oninput = () => {
-      c.title = $('#d_title').value; c.subtitle = $('#d_sub').value; c.handle = $('#d_handle').value; redraw();
-    });
-    $$('.tpl').forEach(t => t.onclick = () => { c.tpl = t.dataset.tpl; render(); });
-    $$('.pal').forEach(p => p.onclick = () => { c.pal = +p.dataset.pal; c.palTouched = true; render(); });
-    const fp = $('#d_photo');
-    if (fp) {
-      const pick = () => fp.click();
-      const bAdd = $('#btnPhotoAdd'); if (bAdd) bAdd.onclick = pick;
-      const bCh = $('#btnPhotoCh'); if (bCh) bCh.onclick = pick;
-      const bRm = $('#btnPhotoRm'); if (bRm) bRm.onclick = () => { c.photo = ''; render(); };
-      const bLib = $('#btnPhotoLib');
-      if (bLib) bLib.onclick = () => { const z = $('#photoLib'); z.style.display = z.style.display === 'none' ? 'flex' : 'none'; };
-      $$('#photoLib [data-lib]').forEach(im => im.onclick = () => { c.photo = im.dataset.lib; render(); });
-      // Modo carrusel: multi-selección de 2 a 10 fotos con numerito de orden
-      const bCar = $('#btnCarousel');
-      if (bCar) bCar.onclick = () => { c.carouselMode = true; c.carouselPhotos = []; render(); };
-      const bCarOff = $('#btnCarouselOff');
-      if (bCarOff) bCarOff.onclick = () => { c.carouselMode = false; c.carouselPhotos = []; render(); };
-      $$('#photoLib [data-carlib]').forEach(el => el.onclick = () => {
-        const p = el.dataset.carlib;
-        const i = c.carouselPhotos.indexOf(p);
-        if (i >= 0) c.carouselPhotos.splice(i, 1);
-        else { if (c.carouselPhotos.length >= 10) return; c.carouselPhotos.push(p); }
-        render();
-      });
-      fp.onchange = () => {
-        const f = fp.files[0]; if (!f) return;
-        if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
-        const r = new FileReader();
-        r.onload = () => { c.photo = r.result; render(); };
-        r.readAsDataURL(f);
-      };
-    }
-    c.title = $('#d_title').value; c.subtitle = $('#d_sub').value; c.handle = $('#d_handle').value;
-    redraw();
-    $('#btnBack1').onclick = () => { c.step = 1; render(); };
-    $('#btnSaveDesign').onclick = async () => {
-      // Modo carrusel: sin diseño canvas, las fotos van directo como slides
-      if (c.carouselMode) {
-        if (c.carouselPhotos.length < 2) {
-          const e = $('#carErr');
-          if (e) e.innerHTML = `<div class="err" style="margin-top:8px">Elegí al menos 2 fotos para el carrusel.</div>`;
-          return;
-        }
-        c.imagePath = c.carouselPhotos[0]; c.isCarousel = true; c.step = 3; render(); return;
-      }
-      $('#btnSaveDesign').disabled = true; $('#btnSaveDesign').textContent = '⏳ Guardando...';
-      try {
-        const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-        const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error);
-        c.imagePath = data.path; c.fromOptions = false; c.step = 3; render();
-      } catch (e) { alert('Error: ' + e.message); $('#btnSaveDesign').disabled = false; $('#btnSaveDesign').textContent = 'Guardar diseño →'; }
-    };
-  }
-  if (c.step === 'options') {
-    $$('.opt-use').forEach(b => b.onclick = () => {
-      const o = c.options[+b.dataset.use]; if (!o) return;
-      c.imagePath = o.image; c.caption = o.caption || ''; c.hashtags = o.hashtags || '';
-      c.fromOptions = true;
-      c.step = 3; render();
-    });
-    $$('.opt-customlink').forEach(b => b.onclick = () => {
-      const o = c.options[+b.dataset.custom]; if (!o) return;
-      c.title = o.title || ''; c.subtitle = o.subtitle || ''; c.caption = o.caption || '';
-      c.hashtags = o.hashtags || ''; c.photo = o.image || '';
-      c.tpl = 'gradiente'; c.pal = defaultPal(); c.palTouched = false;
-      c.step = 2; render();
-    });
-    const applyOptions = (out) => {
-      c.options = out.options; c.detected = out.detected || null;
-      c.recommendedIndex = out.recommendedIndex || 0;
-      c.recommendedReason = out.recommendedReason || '';
-      c.selected = []; c.cardPhoto = {};
-      render();
-    };
-    // ---- Selección múltiple ----
-    function updateMultiBar() {
-      const n = c.selected.length;
-      const bar = $('#multiBar');
-      if (!bar) return;
-      bar.style.display = n ? 'flex' : 'none';
-      $('#multiCount').textContent = `✅ ${n} elegido${n === 1 ? '' : 's'}`;
-      $('#btnMultiSched').textContent = `Programar (${n})`;
-    }
-    $$('.opt-selbox').forEach(ch => ch.onchange = () => {
-      const i = +ch.dataset.sel;
-      c.selected = c.selected.filter(x => x !== i);
-      if (ch.checked) { c.selected.push(i); c.selected.sort((a, b) => a - b); }
-      const card = document.querySelector(`[data-card="${i}"]`);
-      if (card) card.classList.toggle('selected', ch.checked);
-      updateMultiBar();
-    });
-    // ---- Detalle en grande (tap en la imagen) ----
-    $$('.opt-img').forEach(im => im.onclick = () => {
-      const o = c.options[+im.dataset.optimg]; if (!o) return;
-      $('#optLightImg').src = o.image;
-      $('#optLightCap').textContent = (o.caption || '') + (o.hashtags ? '\n\n' + o.hashtags : '');
-      $('#optLight').style.display = 'flex';
-    });
-    const closeLight = () => { const l = $('#optLight'); if (l) l.style.display = 'none'; };
-    $('#btnLightClose').onclick = closeLight;
-    $('#optLight').onclick = (e) => { if (e.target.id === 'optLight') closeLight(); };
-    // ---- "📷 Mi foto" por tarjeta ----
-    let pickIdx = null;
-    function openMyPhotoPicker(idx) {
-      pickIdx = idx;
-      const o = c.options[idx]; if (!o) return;
-      const lib = assetPhotos();
-      $('#pickLib').innerHTML = lib.length
-        ? lib.map(a => `<img src="${esc(a.file_path)}" data-pick="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('')
-        : `<span class="mut">Todavía no subiste fotos.</span>`;
-      const stock = (o.photoCandidates || []).filter(u => !lib.some(a => a.file_path === u)).slice(0, 6);
-      $('#pickStock').innerHTML = stock.length
-        ? stock.map(u => `<img src="${esc(u)}" data-pick="${esc(u)}" class="mp-thumb" alt="Foto del banco">`).join('')
-        : `<span class="mut">Sin alternativas.</span>`;
-      $('#pickMsg').innerHTML = '';
-      $('#photoPickModal').style.display = 'flex';
-    }
-    async function applyCardPhoto(idx, photoUrl) {
-      const o = c.options[idx]; if (!o) return;
-      $('#pickMsg').innerHTML = `<div class="hint">⏳ Actualizando diseño...</div>`;
-      try {
-        const r = await api.post('/api/creator/rerender', {
-          style: o.style, photo: photoUrl, headline: o.title, subline: o.subtitle,
-          pill: o.pill, bar: o.bar, cta: o.cta, colors: o.colors,
-        });
-        if (!r || !r.image) throw new Error('Sin imagen');
-        o.image = r.image;
-        c.cardPhoto[idx] = photoUrl;
-        if (o.photoCandidates && !o.photoCandidates.includes(photoUrl)) o.photoCandidates.unshift(photoUrl);
-        const img = document.querySelector(`img[data-optimg="${idx}"]`);
-        if (img) img.src = r.image;
-        $('#photoPickModal').style.display = 'none';
-      } catch (e) {
-        $('#pickMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-      }
-    }
-    $$('.opt-myphoto').forEach(b => b.onclick = () => openMyPhotoPicker(+b.dataset.mp));
-    $('#photoPickModal').onclick = async (e) => {
-      const t = e.target;
-      if (t.id === 'photoPickModal' || t.id === 'btnPickClose') { $('#photoPickModal').style.display = 'none'; return; }
-      if (t.id === 'btnPickUpload') { $('#pickFile').click(); return; }
-      const pk = t.dataset && t.dataset.pick;
-      if (pk && pickIdx !== null) await applyCardPhoto(pickIdx, pk);
-    };
-    $('#pickFile').onchange = async () => {
-      const f = $('#pickFile').files[0]; if (!f || pickIdx === null) return;
-      if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
-      $('#pickMsg').innerHTML = `<div class="hint">⏳ Subiendo foto...</div>`;
-      try {
-        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-        await applyCardPhoto(pickIdx, data.path);
-      } catch (e) {
-        $('#pickMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-      }
-      $('#pickFile').value = '';
-    };
-    // ---- Subir fotos a la librería (arriba de las opciones) ----
-    $('#btnUploadPhotos').onclick = () => $('#mpFiles').click();
-    // ---- Borrar foto de la librería: no se usa más en posteos nuevos ----
-    $$('#mpRow [data-mpdel]').forEach(b => b.onclick = async (ev) => {
-      ev.stopPropagation();
-      if (!confirm('¿Borrar esta foto? No se va a usar más en tus posteos nuevos.')) return;
-      try {
-        await api.delete('/api/assets/' + b.dataset.mpdel);
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-        render(); // refresca el creador y la tira de Mis fotos
-      } catch (e) { alert('No se pudo borrar: ' + (e.message || e)); }
-    });
-    $('#mpFiles').onchange = async () => {
-      const files = Array.from($('#mpFiles').files || []).filter(f => f.type.startsWith('image/'));
-      if (!files.length) return;
-      const msg = $('#mpMsg');
-      msg.innerHTML = `<div class="hint">⏳ Subiendo ${files.length} ${files.length === 1 ? 'foto' : 'fotos'}...</div>`;
-      let ok = 0;
-      for (const f of files) {
-        try {
-          const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
-          const data = await r.json();
-          if (r.ok) ok++;
-          else if (msg) msg.innerHTML = `<div class="err">${esc(data.error || 'Error')}</div>`;
-        } catch (e) { msg.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-      }
-      $('#mpFiles').value = '';
-      ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-      if (ok) {
-        msg.innerHTML = `<div class="hint">✅ ¡Listo! Regenerando con tus fotos...</div>`;
-        try {
-          const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
-          if (out && Array.isArray(out.options) && out.options.length) { applyOptions(out); return; }
-        } catch (e) { /* queda el mensaje de abajo */ }
-        msg.innerHTML = `<div class="hint">✅ ¡Listo! Tocá "🔄 Regenerar opciones" para usarlas.</div>`;
-      }
-    };
-    // ---- Programar N ----
-    async function openSchedModal() {
-      if (!c.selected.length) return;
-      const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
-      let scheduled = [];
-      try { scheduled = await api.get('/api/posts?status=scheduled'); } catch (e) { scheduled = []; }
-      const taken = new Set((scheduled || []).map(p => tzDayKey(p.scheduled_at, tz)).filter(Boolean));
-      let off = 0;
-      const rows = c.selected.map(idx => {
-        let iso = slotDate19(0, tz);
-        let guard = 0;
-        while (guard++ < 90) {
-          iso = slotDate19(off, tz); off++;
-          const k = tzDayKey(iso, tz);
-          if (k && !taken.has(k)) { taken.add(k); break; }
-        }
-        return { idx, iso };
-      });
-      $('#schedRows').innerHTML = rows.map(r => {
-        const o = c.options[r.idx];
-        return `<div class="sched-row" data-row="${r.idx}">
-          <img src="${esc(o.image)}" class="sched-thumb" alt="">
-          <div class="sched-info"><b>${esc(o.title || 'Diseño')}</b><span class="mut">${esc((o.caption || '').slice(0, 60))}…</span></div>
-          <input type="datetime-local" data-swhen="${r.idx}" value="${isoToLocalInput(r.iso)}">
-          <button class="btn btn-soft btn-sm sched-now" data-now="${r.idx}" title="Publicar ahora en Instagram">⚡ Postear ahora</button>
-        </div>
-        <div class="pubnow-mount" data-mount="${r.idx}"></div>`;
-      }).join('');
-      $('#schedMsg').innerHTML = '';
-      // "⚡ Postear ahora" por fila: crea el post y lo publica al instante
-      $$('#schedRows [data-now]').forEach(b => b.onclick = async () => {
-        const idx = +b.dataset.now;
-        const o = c.options[idx]; if (!o) return;
-        b.disabled = true;
-        const mount = document.querySelector(`#schedRows [data-mount="${idx}"]`);
-        const row = document.querySelector(`#schedRows [data-row="${idx}"]`);
-        try {
-          const r = await api.post('/api/creator/schedule', { items: [{ image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date().toISOString() }] });
-          if (!r.ids || !r.ids.length) throw new Error('Ya hay un posteo igual creado hoy');
-          const res = await publishNowFlow(r.ids[0], mount);
-          if (res && res.ok) {
-            // ya salió (o está saliendo): sacarlo de la selección para no duplicarlo al confirmar
-            c.selected = c.selected.filter(x => x !== idx);
-            const ch = document.querySelector(`.opt-selbox[data-sel="${idx}"]`);
-            if (ch) ch.checked = false;
-            const card = document.querySelector(`[data-card="${idx}"]`);
-            if (card) card.classList.remove('selected');
-            updateMultiBar();
-            const inp = row ? row.querySelector('input[data-swhen]') : null;
-            if (inp) inp.disabled = true;
-            if (row) row.style.opacity = '.55';
-            b.textContent = '✅ Posteado';
-          } else {
-            b.disabled = false;
-          }
-        } catch (e) {
-          if (mount) mount.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-          b.disabled = false;
-        }
-      });
-      $('#schedModal').style.display = 'flex';
-    }
-    $('#btnMultiSched').onclick = openSchedModal;
-    $('#btnSchedCancel').onclick = () => { $('#schedModal').style.display = 'none'; };
-    $('#schedModal').onclick = (e) => { if (e.target.id === 'schedModal') $('#schedModal').style.display = 'none'; };
-    $('#btnSchedConfirm').onclick = async () => {
-      const btn = $('#btnSchedConfirm');
-      btn.disabled = true; btn.textContent = '⏳ Programando...';
-      try {
-        const items = c.selected.map(idx => {
-          const o = c.options[idx];
-          const inp = document.querySelector(`input[data-swhen="${idx}"]`);
-          const v = inp && inp.value;
-          if (!v) throw new Error('Elegí fecha y hora para todos los diseños');
-          return { image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date(v).toISOString() };
-        });
-        const r = await api.post('/api/creator/schedule', { items });
-        $('#schedMsg').innerHTML = `<div class="okmsg">✅ ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/schedule">ver en Schedule</a></div>`;
-        c.selected = [];
-        $$('.opt-selbox').forEach(ch => { ch.checked = false; });
-        $$('.opt-card').forEach(cd => cd.classList.remove('selected'));
-        updateMultiBar();
-        setTimeout(() => { $('#schedModal').style.display = 'none'; location.hash = '#/app/schedule'; }, 1800);
-      } catch (e) {
-        $('#schedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-        btn.disabled = false; btn.textContent = '✅ Confirmar';
-      }
-    };
-    $('#btnRegen').onclick = async () => {
-      if (!confirm('¿Genero 6 opciones nuevas? Las actuales se reemplazan.')) return;
-      const btn = $('#btnRegen');
-      btn.disabled = true; btn.textContent = '🎨 Generando nuevas opciones...';
-      try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
-        if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
-        // Motor de imágenes nivel agencia: intenta primero un concept shot por opción
-        // con la foto del producto y las de la librería (máx 2). Si alguna falla,
-        // esa opción queda con su imagen canvas de siempre — nada se rompe.
-        const libRefs = (c.productPhoto ? [c.productPhoto] : [])
-          .concat(assetPhotos().slice(0, 2).map(a => a.file_path)).slice(0, 2);
-        const csTipo = tipoFromText(c.topic);
-        await Promise.all(out.options.map(async (o) => {
-          const p = await aiConceptShot({
-            idea: c.topic || o.title || '',
-            tipo: csTipo,
-            headline: pickHeadline({ titulo: o.title }, o.caption),
-            refs: libRefs,
-          });
-          if (p) o.image = p;
-        }));
-        applyOptions(out);
-      } catch (e) {
-        const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
-        $('#optErr').innerHTML = `<div class="${capMsg ? 'okmsg' : 'err'}">${esc(capMsg || e.message)}</div>`;
-        btn.disabled = false; btn.textContent = '🔄 Regenerar opciones';
-      }
-    };
-    $('#btnFeedback').onclick = async () => {
-      const inp = $('#fb_input');
-      const fb = inp.value.trim();
-      const msg = $('#feedbackMsg');
-      if (!fb) { msg.innerHTML = `<div class="hint" style="margin:10px 0 0">Contame qué querés cambiar 👇</div>`; return; }
-      const btn = $('#btnFeedback');
-      btn.disabled = true; btn.textContent = '🔧 Arreglándolo...';
-      try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, feedback: fb, productPhoto: c.productPhoto || undefined });
-        if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
-        c.feedback = fb; applyOptions(out);
-      } catch (e) {
-        msg.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-        btn.disabled = false; btn.textContent = 'Arreglar';
-      }
-    };
-    $('#btnBackOptions').onclick = () => { c.step = 1; render(); };
-  }
-  if (c.step === 3) {
-    const resetCreator = () => {
-      CREATOR_OPEN = false;
-      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {}, carouselMode: false, carouselPhotos: [], isCarousel: false };
-    };
-    const done = (msg, hash) => {
-      $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
-      resetCreator();
-      setTimeout(() => location.hash = hash || '#/app/schedule', 1400);
-    };
-    const carPayload = () => {
-      const p = { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags };
-      if (c.isCarousel) { p.media_type = 'carousel'; p.carousel_paths = c.carouselPhotos; }
-      return p;
-    };
-    $('#btnSchedule').onclick = async () => {
-      const when = $('#p_when').value;
-      if (!when) { $('#pubMsg').innerHTML = `<div class="err">Elegí fecha y hora</div>`; return; }
-      if (!(await checkQuotaOrModal())) return;
-      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
-      try {
-        await api.post('/api/posts', { ...carPayload(), scheduled_at: new Date(when).toISOString() });
-        done('✅ Post programado. Se publica solo a la hora indicada.');
-      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-    };
-    $('#btnNow').onclick = async () => {
-      const btn = $('#btnNow');
-      if (!(await checkQuotaOrModal())) return;
-      btn.disabled = true; // bloquea el doble tap
-      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
-      try {
-        const { id } = await api.post('/api/posts', carPayload());
-        $('#pubMsg').innerHTML = '<div class="pubnow-mount"></div>';
-        const r = await publishNowFlow(id, $('#pubMsg .pubnow-mount'));
-        if (r && r.ok && r.permalink) {
-          // publishNowFlow ya mostró "¡Publicado! Ver en IG ↗"
-          resetCreator();
-          setTimeout(() => location.hash = '#/app/schedule', 8000);
-        } else if (r && r.ok) {
-          done('⏳ Se está publicando… lo ves en Mi semana en un minuto.');
-        }
-        // si falló, publishNowFlow ya mostró el error con botón Reintentar
-      } catch (e) {
-        if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
-        $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;
-      }
-    };
-    $('#btnDraft').onclick = async () => {
-      const btn = $('#btnDraft');
-      // Guardar borrador no consume cupo: el plan limita las publicaciones, no la creación.
-      btn.disabled = true;
-      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
-      try {
-        await api.post('/api/posts', carPayload());
-        done('💾 Guardado como borrador. Lo revisás en Schedule.', '#/app/schedule');
-      } catch (e) {
-        if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
-        $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;
-      }
-    };
-    $('#btnBack2').onclick = () => { c.step = c.fromOptions ? 'options' : 2; render(); };
-  }
-}
 
 function igConnect(next) {
   const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
@@ -7821,1568 +7812,7 @@ function renderIgResume() {
   document.body.appendChild(b);
   b.querySelector('#igResumeGo').onclick = () => igConnect();
 }
-function bindSettings() {
-  // Acordeón de secciones en móvil
-  $$('.ajsec-h').forEach(h => {
-    const tg = () => h.parentElement.classList.toggle('open');
-    h.onclick = tg;
-    h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
-  });
-  const sCat = $('#s_cat');
-  if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
-  const sDesc = $('#s_desc');
-  if (sDesc) sDesc.oninput = () => { $('#s_desc_n').textContent = sDesc.value.length; };
-  // --- competidores como chips ---
-  let compChips = String((PROFILE && PROFILE.competitors) || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
-  let compPics = {};
-  const compBox = $('#s_chips');
-  const renderChips = () => {
-    compBox.innerHTML = compChips.map((c, i) => {
-      const pic = compPics[c.toLowerCase()];
-      const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : `<span class="comp-av comp-av-fb">📷</span>`;
-      return `<span class="comp-chip">${av}${esc(c)}<b data-ci="${i}" style="cursor:pointer;margin-left:6px">×</b></span>`;
-    }).join('');
-    compBox.querySelectorAll('[data-ci]').forEach(x => x.onclick = () => { compChips.splice(+x.dataset.ci, 1); renderChips(); markDirty(); });
-  };
-  const fetchPic = async (name) => {
-    const k = name.toLowerCase();
-    if (compPics[k] !== undefined) return;
-    compPics[k] = null;
-    try {
-      const r = await api.get('/api/ig/avatar?u=' + encodeURIComponent(name));
-      if (r && r.pic_url) { compPics[k] = r.pic_url; renderChips(); }
-    } catch (e) {}
-  };
-  const addChip = () => {
-    const v = $('#s_compin').value.trim().replace(/^@+/, '');
-    const cHint = $('#compHint');
-    if (!v) return;
-    if (v.includes('@')) {
-      if (cHint) { cHint.textContent = 'Eso parece un email — poné el nombre o el usuario de Instagram del competidor.'; cHint.style.display = ''; }
-      $('#s_compin').value = '';
-      return;
-    }
-    if (cHint) cHint.style.display = 'none';
-    if (compChips.length >= 10) { $('#s_compin').value = ''; return; }
-    if (!compChips.some(c => c.toLowerCase() === v.toLowerCase())) { compChips.push(v); fetchPic(v); }
-    $('#s_compin').value = ''; renderChips(); markDirty();
-  };
-  renderChips();
-  compChips.forEach(fetchPic);
-  $('#s_compin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addChip(); } });
-  $('#s_compbox').addEventListener('click', e => { if (e.target.id !== 's_compin') $('#s_compin').focus(); });
-  // --- cambios sin guardar ---
-  let profDirty = false;
-  const dirtyEl = $('#profDirty');
-  function markDirty() { if (!profDirty) { profDirty = true; if (dirtyEl) dirtyEl.style.display = ''; } }
-  ['s_biz', 's_iguser', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_desc'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', markDirty);
-    if (el) el.addEventListener('change', markDirty);
-  });
-  $('#btnSaveProfile').onclick = async () => {
-    if (!$('#s_biz').value.trim()) { $('#profMsg').innerHTML = '<div class="err">Poné el nombre de tu negocio</div>'; return; }
-    const catOther = $('#s_catother').value.trim();
-    await api.put('/api/profile', {
-      business_name: $('#s_biz').value, ig_username: $('#s_iguser').value.replace('@', ''),
-      category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
-      tone: $('#s_tone').value, description: $('#s_desc').value,
-      competitors: compChips.join(', '), goal: $('#s_goal').value,
-    });
-    await api.put('/api/settings', { timezone: $('#s_tz').value });
-    $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-    profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
-    PROFILE = await api.get('/api/profile');
-    SETTINGS = await api.get('/api/settings');
-  };
-  // --- ADN del negocio (GET/PUT /api/dna): listas simples, sin fricción ---
-  const dnaEls = { productos: $('#s_dna_productos'), promos: $('#s_dna_promos'), horarios: $('#s_dna_horarios'), ubicacion: $('#s_dna_ubicacion') };
-  const splitNamePrice = (line) => {
-    const m = String(line || '').match(/^(.*?)\s+[—–-]\s+(.*)$/);
-    if (!m) return { nombre: String(line || '').trim(), precio: '' };
-    return { nombre: m[1].trim(), precio: m[2].trim() };
-  };
-  const dnaArrLine = (it) => {
-    if (typeof it === 'string') return it;
-    const a = (it.nombre || it.titulo || '').trim();
-    const b = (it.precio || it.detalle || '').trim();
-    return b ? `${a} — ${b}` : a;
-  };
-  const paintDna = (dna) => {
-    const d = dna || {};
-    if (dnaEls.productos) dnaEls.productos.value = (Array.isArray(d.productos) ? d.productos : []).map(dnaArrLine).filter(Boolean).join('\n');
-    if (dnaEls.promos) dnaEls.promos.value = (Array.isArray(d.promos_activas) ? d.promos_activas : []).map(dnaArrLine).filter(Boolean).join('\n');
-    if (dnaEls.horarios) dnaEls.horarios.value = d.horarios || '';
-    if (dnaEls.ubicacion) dnaEls.ubicacion.value = d.ubicacion || '';
-    paintSrcChips(d);
-  };
-  // --- chips de fuente por bloque (Expertos en información): dna.fuentes = { campo: 'etiqueta' } ---
-  // Si un campo no tiene fuente registrada, se muestra sin chip (defensivo).
-  const DNA_SRC_STYLE = 'font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap';
-  const dnaSrcChip = (fuentes, field) => {
-    const t = (fuentes && typeof fuentes === 'object' && fuentes[field]) || '';
-    return t ? `<span style="${DNA_SRC_STYLE}">${esc(String(t))}</span>` : '';
-  };
-  const paintSrcChips = (dna) => {
-    const d = dna || {};
-    for (const f of ['productos', 'promos_activas', 'horarios', 'ubicacion']) {
-      const el = document.getElementById('dnaChip_' + f);
-      if (el) el.innerHTML = dnaSrcChip(d.fuentes, f);
-    }
-  };
-  // --- datos de la web dentro del ADN: read-only, con etiqueta "de tu web" ---
-  const webDnaZone = $('#webDnaZone');
-  const webArrOf = (v) => {
-    if (v == null) return [];
-    if (Array.isArray(v)) return v.filter(x => x && String(typeof x === 'string' ? x : (x.nombre || x.titulo || '')).trim());
-    return [v];
-  };
-  const paintWebDna = (dna) => {
-    if (!webDnaZone) return;
-    const d = dna || {};
-    const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
-    const w = isObj(d.website) ? d.website : (isObj(d.web_data) ? d.web_data : {});
-    const prods = webArrOf(w.productos || d.website_productos || d.web_productos);
-    const precios = webArrOf(w.precios || d.website_precios || d.web_precios);
-    const promos = webArrOf(w.promos || d.website_promos || d.web_promos);
-    const groups = [['🛍️ Productos', prods], ['💲 Precios', precios], ['🎉 Promos', promos]].filter(([, a]) => a.length);
-    if (!groups.length) { webDnaZone.innerHTML = ''; return; }
-    const tag = '<span style="font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">🌐 de tu web</span>';
-    webDnaZone.innerHTML = `
-      <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">🌐 Lo que encontramos en tu web</div>
-        ${groups.map(([t, arr]) => `
-          <div class="field" style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${t} ${tag}</label>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${arr.map(it => `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`).join('')}</div>
-          </div>`).join('')}
-        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "🧠 Lo que Posty sabe de tu negocio".</div>
-      </div>`;
-  };
-  const refreshWebDna = () => { api.get('/api/dna').then(r => paintWebDna(r && r.dna)).catch(() => {}); };
-  // --- 📚 Datos de otras fuentes: bloques de solo lectura con su chip de fuente ---
-  // Cada track (comentarios IG, Facebook, Google, MercadoLibre, historias) guarda sus campos
-  // en el ADN con su etiqueta en dna.fuentes. Campos nuevos de otros tracks que todavía no
-  // existan se cablean defensivo (título generado desde el nombre del campo).
-  const DNA_INFO_BLOCKS = [
-    ['producto_estrella', '⭐ Producto estrella'], ['cliente_ideal', '🎯 Cliente ideal'],
-    ['diferencial', '✨ Diferencial'], ['servicios', '🛠️ Servicios'], ['promos', '🎉 Promos'],
-    ['precio_rango', '💲 Rango de precios'], ['preguntas_frecuentes', '❓ Preguntas frecuentes'],
-    ['objeciones', '🚧 Objeciones'], ['deseos', '💭 Deseos de tus clientes'],
-    ['testimonios', '💬 Testimonios'], ['puntos_fuertes', '💪 Puntos fuertes'],
-    ['descripcion_fb', '📘 Descripción de Facebook'], ['reviews_fb', '📘 Reviews de Facebook'],
-    ['anuncios', '📣 Anuncios'], ['tono_ejemplos', '🗣️ Frases del dueño'],
-  ];
-  // Campos que ya tienen UI propia en esta tarjeta o no son mostrables.
-  const DNA_INFO_SKIP = new Set(['fuentes', 'productos', 'promos_activas', 'horarios', 'ubicacion',
-    'website', 'web_data', 'inspo', 'tono', 'series', 'paused_tipos', 'paused_series',
-    'website_url', 'website_analyzed_at', 'website_partial', 'resumen']);
-  const dnaHas = (v) => {
-    if (v == null) return false;
-    if (typeof v === 'string') return !!v.trim();
-    if (Array.isArray(v)) return v.some(x => x && (typeof x === 'string' ? x.trim() : String(x.nombre || x.titulo || x.pregunta || x.texto || '').trim()));
-    return true;
-  };
-  const dnaInfoLine = (it) => {
-    if (it && typeof it === 'object') {
-      const q = String(it.pregunta || '').trim();
-      const a = String(it.respuesta || '').trim();
-      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:12.5px">❓ ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:11.5px">💬 ${esc(a)}</div>` : ''}</div>`;
-    }
-    return `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`;
-  };
-  const paintFuentesDna = (dna) => {
-    const zone = $('#dnaFuentesZone');
-    if (!zone) return;
-    const d = dna || {};
-    const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
-    const fuentes = isObj(d.fuentes) ? d.fuentes : {};
-    const known = new Set(DNA_INFO_BLOCKS.map(([f]) => f));
-    const blocks = [];
-    for (const [field, title] of DNA_INFO_BLOCKS) {
-      if (dnaHas(d[field])) blocks.push([field, title, d[field]]);
-    }
-    for (const field of Object.keys(fuentes)) {
-      if (known.has(field) || DNA_INFO_SKIP.has(field) || !dnaHas(d[field])) continue;
-      const title = '🧩 ' + field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      blocks.push([field, title, d[field]]);
-    }
-    if (!blocks.length) { zone.innerHTML = ''; return; }
-    zone.innerHTML = `
-      <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">📚 Datos de otras fuentes</div>
-        ${blocks.map(([field, title, v]) => `
-          <div class="field" style="margin-bottom:10px">
-            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)} ${dnaSrcChip(fuentes, field)}</label>
-            <div style="margin-top:6px">${Array.isArray(v)
-              ? v.slice(0, 6).map(dnaInfoLine).join('') + (v.length > 6 ? `<div class="hint">…y ${v.length - 6} más</div>` : '')
-              : `<div style="font-size:12.5px">${esc(String(v))}</div>`}</div>
-          </div>`).join('')}
-        <div class="hint">La IA usa estos datos para crear posteos que venden de verdad.</div>
-      </div>`;
-  };
-  if (dnaEls.productos) {
-    api.get('/api/dna').then(r => { paintDna(r && r.dna); paintWebDna(r && r.dna); paintFuentesDna(r && r.dna); }).catch(() => {});
-    const bDna = $('#btnSaveDna');
-    if (bDna) bDna.onclick = async () => {
-      const msg = $('#dnaMsg');
-      try {
-        const productos = dnaEls.productos.value.split('\n').map(splitNamePrice).filter(p => p.nombre).map(p => ({ nombre: p.nombre, precio: p.precio }));
-        const promos_activas = dnaEls.promos.value.split('\n').map(l => { const s = splitNamePrice(l); return s.nombre ? { titulo: s.nombre, detalle: s.precio } : null; }).filter(Boolean);
-        const r = await api.put('/api/dna', {
-          productos, promos_activas,
-          horarios: dnaEls.horarios.value.trim(),
-          ubicacion: dnaEls.ubicacion.value.trim(),
-        });
-        paintDna(r && r.dna);
-        if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-      } catch (e) {
-        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
-      }
-    };
-  }
-  // --- 🌐 La web de tu negocio (GET /api/website/status · POST /api/website/analyze) ---
-  let webStatus = null;
-  const webZone = $('#webZone');
-  const fmtWebAt = (at) => {
-    try {
-      let s = String(at || '').trim().replace(' ', 'T');
-      if (!s) return '';
-      if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'; // datetimes de SQLite vienen en UTC
-      const d = new Date(s);
-      if (isNaN(d)) return String(at);
-      return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch (e) { return String(at || ''); }
-  };
-  const normWebUrl = (u) => {
-    let s = String(u || '').trim();
-    if (!s) return '';
-    if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
-    return s;
-  };
-  // --- 🧠 Lo que Posty sabe de tu negocio: 5 fuentes en filas compactas ---
-  // Fila compacta: icono + nombre/estado + acción. El input va a full-width (src-full).
-  const srcRow = (ico, name, state, actHtml, fullHtml) => `
-    <div class="src-ico">${ico}</div>
-    <div class="src-tx"><b>${name}</b><small>${state}</small></div>
-    ${actHtml ? `<div class="src-act">${actHtml}</div>` : ''}
-    ${fullHtml ? `<div class="src-full">${fullHtml}</div>` : ''}`;
-  const srcRetryBtn = (id, title) => `<button class="src-re" id="${id}" title="${title}" aria-label="${title}">↻</button>`;
-  const paintWebZone = (st, errMsg) => {
-    if (st) webStatus = st;
-    if (!webZone) return;
-    if (!webStatus) {
-      webZone.innerHTML = srcRow('🌐', 'Tu web', '⚠️ no se pudo cargar', srcRetryBtn('btnWebRetry', 'Reintentar'));
-      const br = $('#btnWebRetry');
-      if (br) br.onclick = () => api.get('/api/website/status').then(s2 => paintWebZone(s2)).catch(() => paintWebZone(null));
-      return;
-    }
-    if (errMsg) {
-      webZone.innerHTML = srcRow('🌐', 'Tu web', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnWebRe', 'Reintentar'));
-      const b = $('#btnWebRe');
-      if (b) b.onclick = () => runWebAnalyze({ force: true });
-      return;
-    }
-    if (webStatus.ok) {
-      webZone.innerHTML = srcRow('🌐', 'Tu web', `✅ al día · ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnWebRe', 'Analizar de nuevo'));
-      const b = $('#btnWebRe');
-      if (b) b.onclick = () => runWebAnalyze({ force: true });
-    } else {
-      const det = String(webStatus.url || '').trim();
-      webZone.innerHTML = srcRow('🌐', 'Tu web', det ? '⚪ la detecté en tu bio 👇' : '⚪ pegá tu link y la estudio', '',
-        `<input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnWebGo">Analizar</button>`);
-      const b = $('#btnWebGo');
-      if (b) b.onclick = () => {
-        const u = normWebUrl(($('#s_weburl') || {}).value);
-        if (!u) { toast('Pegá la URL de tu web'); return; }
-        runWebAnalyze({ url: u });
-      };
-    }
-  };
-  const runWebAnalyze = async (body) => {
-    if (!webZone) return;
-    webZone.innerHTML = srcRow('🌐', 'Tu web', '⏳ analizando…', '');
-    try {
-      await api.post('/api/website/analyze', body, { timeout: 240000 });
-      try { webStatus = await api.get('/api/website/status'); } catch (e) { /* queda el anterior */ }
-      paintWebZone(webStatus);
-      refreshWebDna();
-      toast('✅ <b>Ya estudiamos tu web.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintWebZone(webStatus, (e && e.message) || 'No se pudo analizar tu web');
-    }
-  };
-  if (webZone) {
-    api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => paintWebZone(null));
-    // refresco invocable desde el auto-análisis post-OAuth (?ig=ok)
-    PZ_WEB_REFRESH = () => {
-      api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => {});
-      refreshWebDna();
-    };
-  }
-  // --- 📱 Tus historias recientes (GET /api/ig/stories-status · POST /api/ig/mine-stories) ---
-  // Lee las historias de las últimas 24h y la IA saca promos y anuncios del texto visible.
-  // Solo lee: nunca publica nada. Ojo: Instagram no da el archivo, solo las últimas 24h.
-  let storiesStatus = null;
-  const storiesZone = $('#storiesZone');
-  const paintStoriesZone = (st, errMsg) => {
-    if (st) storiesStatus = st;
-    if (!storiesZone) return;
-    if (!storiesStatus) {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', '⚠️ no se pudo cargar', srcRetryBtn('btnStoriesRetry', 'Reintentar'));
-      const br = $('#btnStoriesRetry');
-      if (br) br.onclick = () => api.get('/api/ig/stories-status').then(s2 => paintStoriesZone(s2)).catch(() => paintStoriesZone(null));
-      return;
-    }
-    if (errMsg) {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnStoriesGo', 'Reintentar'));
-      const b = $('#btnStoriesGo');
-      if (b) b.onclick = runStoriesAnalyze;
-      return;
-    }
-    if (storiesStatus.ok) {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', `✅ al día · ${esc(fmtWebAt(storiesStatus.analyzed_at))}`, srcRetryBtn('btnStoriesGo', 'Analizar de nuevo'));
-      const b = $('#btnStoriesGo');
-      if (b) b.onclick = runStoriesAnalyze;
-    } else {
-      storiesZone.innerHTML = srcRow('📱', 'Historias', '⚪ leo tus promos y anuncios', `<button class="btn btn-primary btn-sm" id="btnStoriesGo">Analizar</button>`);
-      const b = $('#btnStoriesGo');
-      if (b) b.onclick = runStoriesAnalyze;
-    }
-  };
-  const runStoriesAnalyze = async () => {
-    if (!storiesZone) return;
-    storiesZone.innerHTML = srcRow('📱', 'Historias', '⏳ analizando…', '');
-    try {
-      await api.post('/api/ig/mine-stories', {}, { timeout: 240000 });
-      try { storiesStatus = await api.get('/api/ig/stories-status'); } catch (e) { /* queda el anterior */ }
-      paintStoriesZone(storiesStatus);
-      refreshWebDna();
-      toast('✅ <b>Ya leímos tus historias.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintStoriesZone(storiesStatus, (e && e.message) || 'No se pudieron analizar tus historias');
-    }
-  };
-  if (storiesZone) {
-    api.get('/api/ig/stories-status').then(st => paintStoriesZone(st)).catch(() => paintStoriesZone(null));
-  }
-  // --- 💬 Lo que preguntan tus seguidores (GET /api/ig/comments-status · POST /api/ig/mine-comments) ---
-  // Lee los últimos ~20 posteos + comentarios y la IA saca preguntas frecuentes, objeciones y deseos.
-  // Solo lee: nunca publica ni comenta nada. Conectá IG para usarlo.
-  let srcCommentsStatus = null;
-  const srcCommentsCard = $('#srcCommentsCard');
-  const fmtSrcAt = (at) => {
-    try {
-      let s = String(at || '').trim().replace(' ', 'T');
-      if (!s) return '';
-      if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
-      const d = new Date(s);
-      if (isNaN(d)) return String(at);
-      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    } catch (e) { return String(at || ''); }
-  };
-  const paintSrcComments = (st, errMsg) => {
-    if (st) srcCommentsStatus = st;
-    if (!srcCommentsCard) return;
-    if (!srcCommentsStatus) {
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⚠️ no se pudo cargar', srcRetryBtn('btnSrcCommentsRetry', 'Reintentar'));
-      const br = $('#btnSrcCommentsRetry');
-      if (br) br.onclick = () => api.get('/api/ig/comments-status').then(s2 => paintSrcComments(s2)).catch(() => paintSrcComments(null));
-      return;
-    }
-    if (errMsg) {
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnSrcCommentsGo', 'Reintentar'));
-      const b = $('#btnSrcCommentsGo');
-      if (b) b.onclick = () => runCommentsMine({});
-      return;
-    }
-    if (srcCommentsStatus.ok) {
-      const c = srcCommentsStatus.counts || {};
-      const n = Number(c.comments || 0);
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', `✅ ${n} comentarios · ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}`, srcRetryBtn('btnSrcCommentsRe', 'Analizar de nuevo'));
-      const b = $('#btnSrcCommentsRe');
-      if (b) b.onclick = () => runCommentsMine({ force: true });
-    } else {
-      srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⚪ descubro qué te preguntan', `<button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">Analizar</button>`);
-      const b = $('#btnSrcCommentsGo');
-      if (b) b.onclick = () => runCommentsMine({});
-    }
-  };
-  const runCommentsMine = async (body) => {
-    if (!srcCommentsCard) return;
-    srcCommentsCard.innerHTML = srcRow('💬', 'Comentarios', '⏳ analizando…', '');
-    try {
-      await api.post('/api/ig/mine-comments', body, { timeout: 240000 });
-      try { srcCommentsStatus = await api.get('/api/ig/comments-status'); } catch (e) { /* queda el anterior */ }
-      paintSrcComments(srcCommentsStatus);
-      toast('✅ <b>Ya analizamos tus comentarios.</b><br>La IA ahora sabe qué te preguntan tus seguidores.');
-    } catch (e) {
-      paintSrcComments(srcCommentsStatus, (e && e.message) || 'No se pudieron analizar los comentarios');
-    }
-  };
-  if (srcCommentsCard) {
-    api.get('/api/ig/comments-status').then(st => paintSrcComments(st)).catch(() => paintSrcComments(null));
-  }
-  // --- ⭐ Lo que dicen tus clientes (GET /api/places/status · POST /api/places/analyze) ---
-  let placesStatus = null;
-  const placesZone = $('#placesZone');
-  const paintPlacesZone = (st, errMsg) => {
-    if (st) placesStatus = st;
-    if (!placesZone) return;
-    if (!placesStatus) {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚠️ no se pudo cargar', srcRetryBtn('btnPlacesRetry', 'Reintentar'));
-      const br = $('#btnPlacesRetry');
-      if (br) br.onclick = () => api.get('/api/places/status').then(s2 => paintPlacesZone(s2)).catch(() => paintPlacesZone(null));
-      return;
-    }
-    // Sin key: una línea, la clave se pide por chat.
-    if (!placesStatus.has_key) {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚪ falta', '', `<span class="hint">Pedime la clave de Google Places en el chat y la activo por vos.</span>`);
-      return;
-    }
-    if (errMsg) {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnPlacesGo', 'Reintentar'));
-      const b = $('#btnPlacesGo');
-      if (b) b.onclick = () => runPlacesAnalyze({});
-      return;
-    }
-    if (placesStatus.ok) {
-      const rating = placesStatus.rating ? ` · ★ ${esc(String(placesStatus.rating))}` : '';
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', `✅ al día · ${esc(fmtWebAt(placesStatus.analyzed_at))}${rating}`, srcRetryBtn('btnPlacesRe', 'Buscar de nuevo'));
-      const b = $('#btnPlacesRe');
-      if (b) b.onclick = () => runPlacesAnalyze({ force: true });
-    } else {
-      placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⚪ busco tu negocio en Google', '',
-        `<input id="s_placesq" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnPlacesGo">Buscar</button>`);
-      const b = $('#btnPlacesGo');
-      if (b) b.onclick = () => runPlacesAnalyze({ query: (($('#s_placesq') || {}).value || '').trim() });
-    }
-  };
-  const runPlacesAnalyze = async (body) => {
-    if (!placesZone) return;
-    placesZone.innerHTML = srcRow('⭐', 'Reseñas', '⏳ buscando…', '');
-    try {
-      await api.post('/api/places/analyze', body, { timeout: 240000 });
-      try { placesStatus = await api.get('/api/places/status'); } catch (e) { /* queda el anterior */ }
-      paintPlacesZone(placesStatus);
-      toast('✅ <b>Ya leímos tus reseñas.</b><br>Los testimonios quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintPlacesZone(placesStatus, (e && e.message) || 'No se pudo buscar tu negocio');
-    }
-  };
-  if (placesZone) {
-    api.get('/api/places/status').then(st => paintPlacesZone(st)).catch(() => paintPlacesZone(null));
-  }
-  // --- 📘 Tu página de Facebook (GET /api/fb/status · POST /api/fb/analyze) ---
-  let fbStatus = null;
-  const fbZone = $('#fbZone');
-  const paintFbZone = (st, errMsg) => {
-    if (st) fbStatus = st;
-    if (!fbZone) return;
-    if (!fbStatus) {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', '⚠️ no se pudo cargar', srcRetryBtn('btnFbRetry', 'Reintentar'));
-      const br = $('#btnFbRetry');
-      if (br) br.onclick = () => api.get('/api/fb/status').then(s2 => paintFbZone(s2)).catch(() => paintFbZone(null));
-      return;
-    }
-    if (errMsg) {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', `⚠️ ${esc(errMsg)}`, srcRetryBtn('btnFbGo', 'Reintentar'));
-      const b = $('#btnFbGo');
-      if (b) b.onclick = () => runFbAnalyze({});
-      return;
-    }
-    if (fbStatus.ok) {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', `✅ al día · ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' (parcial)' : ''}`, srcRetryBtn('btnFbRe', 'Analizar de nuevo'));
-      const b = $('#btnFbRe');
-      if (b) b.onclick = () => runFbAnalyze({ force: true });
-    } else {
-      fbZone.innerHTML = srcRow('📘', 'Facebook', '⚪ la estudio: horarios, ubicación y opiniones', '',
-        `<input id="s_fbpage" placeholder="facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="btn btn-primary btn-sm" id="btnFbGo">Analizar</button>`);
-      const b = $('#btnFbGo');
-      if (b) b.onclick = () => runFbAnalyze({ page: (($('#s_fbpage') || {}).value || '').trim() });
-    }
-  };
-  const runFbAnalyze = async (body) => {
-    if (!fbZone) return;
-    fbZone.innerHTML = srcRow('📘', 'Facebook', '⏳ analizando…', '');
-    try {
-      await api.post('/api/fb/analyze', body, { timeout: 120000 });
-      try { fbStatus = await api.get('/api/fb/status'); } catch (e) { /* queda el anterior */ }
-      paintFbZone(fbStatus);
-      refreshWebDna();
-      toast('✅ <b>Ya estudiamos tu página de Facebook.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintFbZone(fbStatus, (e && e.message) || 'No se pudo analizar tu página');
-    }
-  };
-  if (fbZone) {
-    api.get('/api/fb/status').then(st => paintFbZone(st)).catch(() => paintFbZone(null));
-  }
-  const bOnb = $('#btnOnb');
-  if (bOnb) bOnb.onclick = () => { OB = loadOB() || freshOB(); location.hash = '#/app/onboarding'; };
-  const bPrev = $('#btnPreview');
-  if (bPrev) bPrev.onclick = openPreview;
-  function openPreview() {
-    const catV = $('#s_cat').value;
-    const catE = CATS.find(c => c[0] === catV) || ['otro', '🏷️', 'Otro'];
-    const catTxt = catV === 'otro' ? ($('#s_catother').value.trim() || 'Otro') : catE[2];
-    const toneE = TONES.find(t => t[0] === $('#s_tone').value) || ['', '🎭', '—'];
-    const goalE = GOALS.find(g => g[0] === $('#s_goal').value) || ['', '🎯', '—', ''];
-    const tzE = TIMEZONES.find(z => z[0] === $('#s_tz').value) || [];
-    const biz = $('#s_biz').value.trim();
-    const igu = $('#s_iguser').value.trim().replace(/^@+/, '');
-    const desc = $('#s_desc').value.trim();
-    const row = (ico, lbl, val) => `<div class="pv-row"><span class="pv-ico">${ico}</span><div><div class="pv-lbl">${lbl}</div><div class="pv-val">${val}</div></div></div>`;
-    const chips = compChips.length
-      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">` + compChips.map(c => {
-          const pic = compPics[c.toLowerCase()];
-          const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : '';
-          return `<span class="comp-chip">${av}${esc(c)}</span>`;
-        }).join('') + `</div>`
-      : `<span class="pv-warn">Todavía no sumaste competidores.</span>`;
-    const tips = [];
-    if (!desc) tips.push('una descripción de tu negocio');
-    if (!compChips.length) tips.push('al menos un competidor');
-    const ov = document.createElement('div');
-    ov.className = 'modal-ov';
-    ov.innerHTML = `
-      <div class="modal-card" style="max-width:440px" role="dialog" aria-modal="true">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <h3 style="margin:0">🤖 Cómo me ve la IA</h3>
-          <button class="btn btn-ghost btn-sm" id="pvX">✕</button>
-        </div>
-        <p style="color:var(--mut);font-size:11.5px;margin:0 0 8px">Con estos datos creamos tus ideas y posteos:</p>
-        ${row('🏪', 'Negocio', esc(biz) || '<span class="pv-warn">Falta el nombre</span>')}
-        ${row('📸', 'Instagram', igu ? '@' + esc(igu) : '<span class="pv-warn">Sin usuario</span>')}
-        ${row(catE[1], 'Rubro', esc(catTxt))}
-        ${row(toneE[1], 'Tono de la IA', esc(toneE[2]))}
-        ${row(goalE[1], 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">${esc(goalE[3])}</span>` : ''))}
-        ${row('🕐', 'Zona horaria', esc(tzE[1] || '—'))}
-        ${row('📝', 'Descripción', desc ? esc(desc.length > 160 ? desc.slice(0, 160) + '…' : desc) : '<span class="pv-warn">Sin descripción.</span>')}
-        ${row('⚔️', 'Competidores', chips)}
-        ${tips.length ? `<div class="pv-tip">💡 <b>Tip:</b> sumá ${tips.join(' y ')} para ideas mucho mejores.</div>` : `<div class="pv-tip">✅ <b>Perfil completo:</b> la IA tiene todo lo que necesita.</div>`}
-        <button class="btn btn-primary btn-block" id="pvOk" style="margin-top:12px">Entendido</button>
-      </div>`;
-    document.body.appendChild(ov);
-    const close = () => { document.removeEventListener('keydown', onKey); ov.remove(); };
-    const onKey = e => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', onKey);
-    ov.addEventListener('click', e => { if (e.target === ov) close(); });
-    ov.querySelector('#pvX').onclick = close;
-    ov.querySelector('#pvOk').onclick = close;
-  }
-  // Mi plan
-  (async () => {
-    const z = $('#planZone');
-    if (!z) return;
-    // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
-    const loadPlans = async () => {
-      let lastErr = null;
-      for (let i = 0; i < 2; i++) {
-        try { return await api.get('/api/billing/plans'); }
-        catch (e) { lastErr = e; console.error('[planes] intento ' + (i + 1) + ':', e.message); }
-      }
-      throw lastErr;
-    };
-    const showPlansError = (err) => {
-      const detail = err && err.message ? `<br><small style="opacity:.65;font-size:11px">Motivo: ${esc(String(err.message)).slice(0, 160)}</small>` : '';
-      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.${detail}<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">🔄 Reintentar</button></div>`;
-      const rb = document.getElementById('plansRetry');
-      if (rb) rb.onclick = () => { z.innerHTML = '<p style="color:var(--dim)">Cargando...</p>'; run(); };
-    };
-    const run = async () => {
-    try {
-      // IS_NATIVE (tiendas): sin ventas — solo nombre del plan y estado. Sin precios, sin botones, sin links de pago.
-      if (IS_NATIVE) {
-        let planName = (ME && ME.plan) || 'esencial';
-        try {
-          const d = await loadPlans();
-          const p = (d.plans || []).find(x => x.id === planName) || (d.plans || [])[0];
-          if (p && p.name) planName = p.name;
-        } catch (e) {}
-        const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
-        const trialLeft = (ME && ME.trial_days_left) || 0;
-        let estado = 'Activo';
-        if (!hasActive) {
-          if (ME && ME.plan_status === 'cancelled') estado = 'Cancelado';
-          else if (ME && ME.trial_expired) estado = 'Tu prueba terminó.';
-          else estado = trialLeft > 0 ? `Estás en tu prueba gratis: te quedan ${trialLeft} día${trialLeft === 1 ? '' : 's'}.` : 'En prueba';
-        }
-        z.innerHTML = `
-        <div style="margin-bottom:16px">
-          <div style="font-size:11.5px;color:var(--dim)">Tu plan actual</div>
-          <div style="font-size:17.5px;font-weight:800">${esc(planName)}</div>
-          <div style="font-size:12.5px;color:var(--dim);margin-top:4px">${estado}</div>
-        </div>`;
-        return;
-      }
-      const { plans, mp_configured } = await loadPlans();
-      const cur = (ME && ME.plan) || 'esencial';
-      const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
-      const pcm = document.getElementById('planConfirmMsg');
-      if (pcm) pcm.innerHTML = hasActive
-        ? '✅ ¡Pago recibido! Tu plan ya está activo.'
-        : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.';
-      const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
-      const trialLeft = (ME && ME.trial_days_left) || 0;
-      // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
-      let refInfo = null;
-      try { refInfo = await pzReferral(); } catch (e) {}
-      let trialBanner = '';
-      if (!hasActive && ME && ME.plan_status === 'trial') {
-        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos 🥹</div>`;
-        else if (trialLeft > 0) trialBanner = trialLeft <= 3
-          ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
-          : `<div class="pz-trial-ok">🎁 Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
-      }
-      const pmMixTxt = (pl) => [pl.postsPerWeek > 0 && `${pl.postsPerWeek} posteos`, pl.reelsPerWeek > 0 && `${pl.reelsPerWeek} reels`, pl.storiesPerWeek > 0 && `${pl.storiesPerWeek} historias`].filter(Boolean).join(' + ');
-      const curPlan = plans.find(p => p.id === cur) || plans[0];
-      // Mix semanal con iconos (solo lo que el plan incluye) + features sin duplicar el mix.
-      const pmMixItem = (icon, n, label) => n > 0 ? `<span>${icon} <b>${n}</b> ${label}</span>` : '';
-      const pmMixHTML = (p) => {
-        const items = [
-          pmMixItem('📝', p.postsPerWeek, p.postsPerWeek === 1 ? 'posteo' : 'posteos'),
-          pmMixItem('🎬', p.reelsPerWeek, p.reelsPerWeek === 1 ? 'reel' : 'reels'),
-          pmMixItem('📸', p.storiesPerWeek, p.storiesPerWeek === 1 ? 'historia' : 'historias'),
-        ].filter(Boolean).join('');
-        return items ? `<div class="pm-mix">${items}</div>` : '';
-      };
-      const pmMixDup = /(\d+\s*(posts?|reels|historias)\b|historias todos los días)/i;
-      const planCard = (p) => {
-        const pmSym = (p.currency === 'UYU' ? '$U ' : '$');
-        const feats = (p.features || []).filter(f => !pmMixDup.test(f)).slice(0, 6);
-        return `
-          <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}${p.highlighted ? ' rec' : ''}">
-            ${p.highlighted ? '<div class="pm-flag">EL MÁS ELEGIDO</div>' : ''}
-            <div class="pm-top"><b>${esc(p.name)}</b>${p.id === cur && hasActive ? '<span class="pm-cur-tag">Tu plan</span>' : ''}</div>
-            ${p.tagline ? `<p class="pm-tagline">${esc(p.tagline)}</p>` : ''}
-            <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
-            <div class="pm-perday">≈ ${pmSym}${Math.round(p.price / 30).toLocaleString('es-AR')} por día</div>
-            ${pmMixHTML(p)}
-            <ul class="pm-feats">${feats.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
-            <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
-          </div>`;
-      };
-      const bindSub = () => {
-        $$('#planList [data-sub]').forEach(b => b.onclick = () => {
-          track('plan_select', { plan: b.dataset.sub });
-          if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía.</div>`; return; }
-          // Paso 1: pedir el email de la cuenta de MercadoPago (debe coincidir con la que paga)
-          const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
-          const subPlan = plans.find(p => p.id === b.dataset.sub) || curPlan;
-          const discLine = (refInfo && refInfo.discount_active)
-            ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>50% off</b> por referidos: este plan te queda en <b>$${Math.round(subPlan.price / 2).toLocaleString('es-AR')}/mes</b>.</div>`
-            : (refInfo && refInfo.invited)
-              ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>20% off</b> de invitado: este plan te queda en <b>$${Math.round(subPlan.price * 0.8).toLocaleString('es-AR')}/mes</b>.</div>`
-              : '';
-          $('#planMsg').innerHTML = `
-            <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
-              ${discLine}
-              <div style="font-weight:800;margin-bottom:6px">Un paso más 💳</div>
-              <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>.</div>
-              <div style="font-size:11.5px;background:#FFF7E6;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;margin-bottom:10px">El comprobante de pago te va a llegar a <b>ese email</b>: fijate que sea el de tu cuenta de MercadoPago.</div>
-              <div class="field"><input id="mpEmail" type="email" placeholder="tu@email.com" value="${preset}" autocomplete="email"></div>
-              <button class="btn btn-primary btn-block" id="btnGoMP">Continuar al pago</button>
-            </div>`;
-          const emInput = $('#mpEmail');
-          if (emInput) emInput.focus();
-          $('#btnGoMP').onclick = async () => {
-            const em = ($('#mpEmail').value || '').trim();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-              $('#planMsg').innerHTML = `<div class="err">Ingresá un email válido.</div>`;
-              return;
-            }
-            const btn = $('#btnGoMP');
-            btn.disabled = true; btn.textContent = '⏳ Redirigiendo a MercadoPago...';
-            try {
-              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em });
-              track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
-              location.href = init_point;
-            } catch (e) {
-              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-            }
-          };
-        });
-      };
-      if (!hasActive) {
-        z.innerHTML = `
-        <div style="margin-bottom:16px">
-          <div style="font-size:11.5px;color:var(--dim)">Plan actual</div>
-          <div style="font-size:17.5px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
-        </div>
-        ${trialBanner}
-        <div style="font-size:14px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
-        <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
-        <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
-        bindSub();
-      } else if (ME && ME.plan === 'free') {
-        z.innerHTML = `
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div class="plan-cur">
-            <div class="pc-label">Plan actual</div>
-            <div class="pc-name">Founder 🚀</div>
-            <div class="pc-det">Gratis para siempre · 7 posteos + 5 reels + 7 historias/semana</div>
-          </div>
-        </div>
-        <div id="planMsg" style="margin-top:10px"></div>`;
-      } else {
-        z.innerHTML = `
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div class="plan-cur">
-            <div class="pc-label">Plan actual</div>
-            <div class="pc-name">${esc(curPlan.name)}</div>
-            <div class="pc-det">${esc(curPlan.price_label)}/mes · ${pmMixTxt(curPlan)}/semana · se renueva solo cada mes</div>
-          </div>
-          <button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>
-        </div>
-        <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:11.5px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
-        $('#btnCancelSub').onclick = async () => {
-          if (!confirm('¿Cancelar tu suscripción? Mantenés tu plan hasta el fin del período ya pago.')) return;
-          const reasonRaw = prompt('¿Nos contás por qué te vas? (opcional)\n\n1 · Precio\n2 · No me sirvió el contenido\n3 · Prefiero hacerlo yo\n4 · Otro motivo', '');
-          const reasonMap = { 1: 'Precio', 2: 'No me sirvió el contenido', 3: 'Prefiero hacerlo yo', 4: 'Otro motivo' };
-          const reason = reasonRaw && reasonMap[reasonRaw.trim()] ? reasonMap[reasonRaw.trim()] : String(reasonRaw || '').slice(0, 60);
-          const b = $('#btnCancelSub'); b.disabled = true; b.textContent = 'Cancelando...';
-          try {
-            await api.post('/api/billing/cancel', { reason });
-            await refreshSession(); render();
-          } catch (e) {
-            $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-            b.disabled = false; b.textContent = 'Cancelar suscripción';
-          }
-        };
-      }
-      // 🎁 50% off por referidos: se aplica automáticamente al suscribirte
-      try {
-        if (refInfo && refInfo.discount_active) {
-          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎁 <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
-        } else if (refInfo && refInfo.invited && !hasActive) {
-          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎉 <b>Tenés 20% off de invitado</b>: se aplica automáticamente al suscribirte, todos los meses.</div>`);
-        }
-      } catch (e) {}
-      // Plan preseleccionado desde /prueba (?plan_sel=): click programático UNA vez
-      if (!PZ_AUTO_PLAN && !hasActive) {
-        const pq = new URLSearchParams(location.hash.split('?')[1] || '');
-        const sel = (pq.get('plan_sel') || '').replace(/[^a-z]/g, '');
-        if (sel) {
-          PZ_AUTO_PLAN = true;
-          try { history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {}
-          localStorage.removeItem('posta_chosen_plan');
-          const btn = document.querySelector(`#planList [data-sub="${sel}"]`);
-          if (btn && !btn.disabled) btn.click();
-        }
-      }
-    } catch (e) {
-      console.error('[planes] error final:', e);
-      showPlansError(e);
-    }
-    };
-    run();
-  })();
-  // 🎁 Referidos
-  (async () => {
-    const z = $('#refZone');
-    if (!z) return;
-    const info = await pzReferral();
-    if (!info || !info.ok) { z.innerHTML = `<p style="color:var(--dim)">No se pudo cargar tu link de referidos.</p>`; return; }
-    const n = info.referred_count || 0, need = info.needed || 2;
-    const pct = Math.min(100, Math.round(n / need * 100));
-    const missing = Math.max(0, need - n);
-    // Precio concreto según el plan actual (o el del trial)
-    let planPrice = 0;
-    try {
-      const pd = await api.get('/api/billing/plans');
-      const pl = (pd.plans || []).find(x => x.id === ((ME && ME.plan) || 'esencial')) || (pd.plans || [])[0];
-      if (pl) planPrice = pl.price || 0;
-    } catch (e) {}
-    const fmt$ = (v) => '$' + Math.round(v).toLocaleString('es-AR');
-    const half$ = planPrice ? fmt$(planPrice / 2) : null;
-    const shareMsg = `Uso Posty para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link ahorrás hasta $25.980 por mes en tu plan: ${info.link}`;
-    const slots = Array.from({ length: need }, (_, i) =>
-      `<span class="pz-slot${i < n ? ' on' : ''}">${i < n ? '\u2713' : (i + 1)}</span>`).join('');
-    z.innerHTML = `
-      <div class="pz-ref-hero">
-        <div class="pz-ref-hero-t">🎁 Pagás la mitad, todos los meses</div>
-        ${half$ ? `<div class="pz-ref-hero-p">Pasás de <s>${fmt$(planPrice)}</s> a <b>${half$}</b>/mes con ${need} referidos suscriptos.</div>`
-          : `<div class="pz-ref-hero-p">Con <b>${need} referidos</b> suscriptos, tu plan te sale <b>la mitad</b>.</div>`}
-      </div>
-      <div class="pz-ref-steps">
-        <div><span>1️⃣</span>Compartí tu link</div>
-        <div><span>2️⃣</span>Ellos se suscriben con <b>20% off todos los meses</b></div>
-        <div><span>3️⃣</span>Vos pagás la mitad mientras sigan suscriptos</div>
-      </div>
-      <div class="pz-ref-share">
-        <button class="btn btn-wa btn-sm" data-share="wa">WhatsApp</button>
-        <button class="btn btn-ig btn-sm" data-share="ig">Instagram</button>
-        <button class="btn btn-x btn-sm" data-share="x">X</button>
-        <button class="btn btn-primary btn-sm" id="pzRefNative" style="display:none">📤 Compartir</button>
-        <button class="btn btn-ghost btn-sm" id="pzRefCopy">Copiar link</button>
-        <button class="btn btn-ghost btn-sm" id="pzRefCopyMsg">Copiar mensaje</button>
-      </div>
-      <div class="pz-refrow">
-        <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
-      </div>
-      <details style="font-size:11.5px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">👀 Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
-      <div class="pz-ref-slots">${slots}</div>
-      <div class="pz-refbar"><div style="width:${pct}%"></div></div>
-      <p style="font-size:12.5px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
-      ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link 🎉</div>${info.joined.map(nm => `<div class="pz-ref-join">✓ ${esc(nm)}</div>`).join('')}</div>` : ''}
-      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">📋 Copiar mensaje</button></div>`).join('')}</div>` : ''}
-      ${info.discount_active
-        ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
-        : `<p style="font-size:12.5px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
-      <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
-      <span id="pzRefMsg" style="font-size:11.5px"></span>`;
-    const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
-    const copyLink = async (okMsg) => {
-      const v = $('#pzRefLink').value;
-      try { await navigator.clipboard.writeText(v); }
-      catch (e) {
-        const t = document.createElement('textarea'); t.value = v; document.body.appendChild(t); t.select();
-        try { document.execCommand('copy'); } catch (e2) {}
-        t.remove();
-      }
-      say(okMsg || '✅ Link copiado');
-    };
-    $('#pzRefCopy').onclick = () => copyLink();
-    const copyText = async (t, okMsg) => {
-      try { await navigator.clipboard.writeText(t); }
-      catch (e) {
-        const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); } catch (e2) {}
-        ta.remove();
-      }
-      say(okMsg || '✅ Copiado');
-    };
-    $('#pzRefCopyMsg').onclick = () => copyText(shareMsg, '✅ Mensaje copiado: pegalo donde quieras');
-    z.querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => {
-      const p = info.pending[Number(b.dataset.nudge)];
-      if (!p) return;
-      const who = (p.name && p.name !== 'Un referido') ? ` ${p.name}` : '';
-      copyText(`Che${who}! Vi que empezaste tu prueba de Posty con mi link 🚀 Si te suscribís${p.days_left > 0 ? ` (te quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba)` : ''}, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
-    });
-    const nativeBtn = $('#pzRefNative');
-    if (nativeBtn && navigator.share) {
-      nativeBtn.style.display = '';
-      nativeBtn.onclick = async () => { try { await navigator.share({ title: 'Posty', text: shareMsg }); } catch (e) {} };
-    }
-    z.querySelectorAll('[data-share]').forEach(b => b.onclick = () => {
-      const k = b.dataset.share;
-      if (k === 'wa') window.open('https://wa.me/?text=' + encodeURIComponent(shareMsg), '_blank');
-      else if (k === 'x') window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareMsg), '_blank');
-      else if (k === 'ig') copyLink('✅ Link copiado: pegalo en tu historia o por DM');
-    });
-  })();
-  // Marca
-  const bBlog = $('#btnBrandLogo');
-  if (bBlog) bBlog.onclick = () => $('#s_logofile').click();
-  $$('[data-lightbox]').forEach(el => el.onclick = () => openLightbox(el.dataset.lightbox, el.dataset.video === '1'));
-  // Si el creador ya tenía 6 opciones generadas, las regenera con los colores
-  // nuevos para que el cambio se vea al instante (cero pasos extra).
-  async function refreshCreatorWithNewColors(msgEl) {
-    try {
-      const cc = (typeof CREATOR !== 'undefined' && CREATOR) || null;
-      if (!cc || !Array.isArray(cc.options) || cc.options.length !== 6 || !cc.topic) return false;
-      if (msgEl) msgEl.innerHTML = '<span style="font-size:12.5px;color:var(--cel)">🎨 Actualizando tus diseños…</span>';
-      const out = await api.post('/api/creator/options', { topic: cc.topic, productPhoto: cc.productPhoto || undefined });
-      if (out && Array.isArray(out.options) && out.options.length === 6) {
-        cc.options = out.options; cc.detected = out.detected || null;
-        cc.recommendedIndex = out.recommendedIndex || 0;
-        cc.recommendedReason = out.recommendedReason || '';
-        cc.selected = []; cc.cardPhoto = {};
-        return true;
-      }
-    } catch (e) { /* no bloquea el guardado */ }
-    return false;
-  }
-  const slf = $('#s_logofile');
-  if (slf) slf.onchange = async () => {
-    const orig = slf.files[0]; slf.value = '';
-    if (!orig) return;
-    try {
-      const nm = (orig.name || '').toLowerCase();
-      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--dim)">⏳ Convirtiendo tu archivo a imagen…</span>';
-      const f = await logoFileToImage(orig);
-      await uploadAssetFile(f, 'logo');
-      try {
-        const img = await loadImageFile(f);
-        const cols = extractTopColors(img, 3);
-        if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
-      } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
-      SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
-      const refreshed = await refreshCreatorWithNewColors($('#brandMsg'));
-      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--cel)">✅ Colores actualizados en tus diseños</span>';
-      render();
-    }
-    catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`; }
-  };
-  // --- vista previa de marca ---
-  const lumInk = (hex) => {
-    const n = parseInt(String(hex).slice(1), 16);
-    const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-    return lum > 0.6 ? '#0A1E33' : '#FFFFFF';
-  };
-  function renderBrandPrev() {
-    const logo = assetLogo();
-    const pf = $('#brandPf');
-    if (pf) pf.innerHTML = logo ? `<img src="${logo.file_path}" alt="logo">` : '';
-    const box = $('#brandPrev');
-    if (!box) return;
-    const c = [$('#s_c0') && $('#s_c0').value, $('#s_c1') && $('#s_c1').value, $('#s_c2') && $('#s_c2').value].filter(Boolean);
-    if (!c.length) { box.innerHTML = ''; return; }
-    const biz = (PROFILE && PROFILE.business_name) || 'Tu negocio';
-    const ink = lumInk(c[0]);
-    box.innerHTML = `
-      <div class="bp-card" style="background:linear-gradient(135deg,${c[0]},${c[1] || c[0]})">
-        <div class="bp-head">${logo ? `<img src="${logo.file_path}">` : ''}<span style="color:${ink}">${esc(biz)}</span></div>
-        <div class="bp-title" style="color:${ink}">¡NUEVA<br>COLECCIÓN!</div>
-        <div><span class="bp-cta" style="background:${c[2] || c[1] || c[0]};color:${lumInk(c[2] || c[1] || c[0])}">Ver más →</span></div>
-      </div>`;
-  }
-  let brandDirty = false;
-  const bDirtyEl = $('#brandDirty');
-  function markBrandDirty() { if (!brandDirty) { brandDirty = true; if (bDirtyEl) bDirtyEl.style.display = ''; } }
-  const normHex = (v) => {
-    let h = String(v || '').trim().replace(/^#/, '');
-    if (/^[0-9a-fA-F]{3}$/.test(h)) h = h.split('').map(c => c + c).join('');
-    return /^[0-9a-fA-F]{6}$/.test(h) ? '#' + h.toUpperCase() : null;
-  };
-  const syncHexFromPicker = (i) => { const hx = $('#s_h' + i); const pk = $('#s_c' + i); if (hx && pk) hx.value = pk.value.toUpperCase(); };
-  ['s_c0', 's_c1', 's_c2'].forEach((id, i) => {
-    const pick = document.getElementById(id);
-    const hex = document.getElementById('s_h' + i);
-    if (pick) pick.addEventListener('input', () => { syncHexFromPicker(i); markBrandDirty(); renderBrandPrev(); });
-    if (hex && pick) {
-      hex.addEventListener('input', () => {
-        const n = normHex(hex.value);
-        if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
-      });
-      hex.addEventListener('change', () => {
-        const n = normHex(hex.value);
-        hex.value = n || pick.value.toUpperCase();
-        if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
-      });
-    }
-  });
-  // Reordenar roles: el menú de cada color permite elegir Principal/Secundario/Acento;
-  // los colores se intercambian de lugar solos. El rol es posicional: el menú vuelve a su lugar.
-  const swapBrandColors = (a, b) => {
-    const pa = document.getElementById('s_c' + a), pb = document.getElementById('s_c' + b);
-    if (!pa || !pb) return;
-    const va = pa.value;
-    pa.value = pb.value; pb.value = va;
-    syncHexFromPicker(a); syncHexFromPicker(b);
-    markBrandDirty(); renderBrandPrev();
-  };
-  [0, 1, 2].forEach((i) => {
-    const sel = document.getElementById('s_r' + i);
-    if (sel) sel.addEventListener('change', () => {
-      const to = parseInt(sel.value, 10);
-      sel.value = String(i);
-      if (Number.isInteger(to) && to >= 0 && to <= 2 && to !== i) swapBrandColors(i, to);
-    });
-  });
-  renderBrandPrev();
-  const bBlogDel = $('#btnBrandLogoDel');
-  if (bBlogDel) bBlogDel.onclick = async () => {
-    if (!confirm('¿Quitar el logo de tu marca?')) return;
-    const logo = assetLogo();
-    if (logo && logo.id) { try { await api.del('/api/assets/' + logo.id); } catch (e) {} }
-    ASSETS = await api.get('/api/assets').catch(() => []);
-    render();
-  };
-  // Si hay logo pero no colores de marca: detectarlos del logo automáticamente
-  (async () => {
-    try {
-      if (brandColors().length >= 2) return;
-      const logo = assetLogo();
-      if (!logo) return;
-      const img = await loadImageUrl(logo.file_path);
-      const cols = extractTopColors(img, 3);
-      let filled = 0;
-      cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; syncHexFromPicker(i); filled++; } });
-      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:12.5px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
-    } catch (e) { /* quedan los valores actuales */ }
-  })();
-  $('#btnSaveBrand').onclick = async () => {
-    const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
-    const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
-    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:12.5px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
-    await api.put('/api/settings', { brand_colors: colors });
-    const brandMsgEl = $('#brandMsg');
-    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada</span>';
-    brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
-    SETTINGS = await api.get('/api/settings');
-    if (await refreshCreatorWithNewColors(brandMsgEl))
-      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada — diseños actualizados</span>';
-  };
-  // Reiniciar todo: marca (logo, colores, nombre) + posteos pendientes (borradores y
-  // programados). Para cuando se cambió de negocio/cuenta. El historial publicado no se toca.
-  const btnResetBrand = $('#btnResetBrand');
-  if (btnResetBrand) btnResetBrand.onclick = async () => {
-    if (!confirm('¿Reiniciar todo? Se borran el logo, los colores, el nombre del negocio y los posteos pendientes (borradores y programados). El historial publicado no se toca.')) return;
-    const brandMsgEl = $('#brandMsg');
-    try {
-      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:12.5px">⏳ Reiniciando…</span>';
-      await api.post('/api/brand/reset', {});
-      ASSETS = await api.get('/api/assets').catch(() => []);
-      SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
-      await refreshSession();
-      brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
-      render();
-    } catch (e) {
-      brandMsgEl.innerHTML = `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`;
-    }
-  };
-  $('#btnSaveSettings').onclick = async () => {
-    await api.put('/api/settings', {
-      meta_app_id: $('#s_appid').value,
-      meta_app_secret: $('#s_appsecret').value, ig_embed_url: $('#s_igembed').value,
-    });
-    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-  };
-  const btm = $('#btnTestMeta');
-  if (btm) btm.onclick = async () => {
-    const msg = $('#metaTestMsg');
-    const appId = $('#s_appid').value.trim(), appSecret = $('#s_appsecret').value.trim();
-    if (!appId || !appSecret) { msg.innerHTML = '<span style="color:var(--red)">Completá App ID y App Secret primero</span>'; return; }
-    msg.textContent = 'Probando…';
-    try {
-      const r = await api.post('/api/settings/test-meta', { app_id: appId, app_secret: appSecret });
-      msg.innerHTML = r.ok
-        ? `<span style="color:var(--green-d)">✅ App válida: <b>${esc(r.app_name)}</b></span>`
-        : `<span style="color:var(--red)">❌ ${esc(r.error)}</span>`;
-    } catch (e) { msg.innerHTML = `<span style="color:var(--red)">❌ ${esc(e.message)}</span>`; }
-  };
-  const setDemoMode = async (v) => {
-    await api.put('/api/settings', { demo_mode: v });
-    IG_MODE_WARN = (!v && !(PROFILE && PROFILE.ig_connected));
-    render();
-  };
-  const md = $('#igModeDemo'); if (md) { md.onclick = () => setDemoMode(true); md.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(true); } }; }
-  const mr = $('#igModeReal'); if (mr) { mr.onclick = () => setDemoMode(false); mr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(false); } }; }
-  const bc = $('#btnIgConn');
-  if (bc) bc.onclick = igConnect;
-  const bd = $('#btnIgDisc');
-  if (bd) bd.onclick = async () => {
-    const u = (PROFILE && PROFILE.ig_username) ? '@' + PROFILE.ig_username : 'tu cuenta';
-    if (!confirm(`¿Desconectar ${u} de Posty?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
-    track('ig_disconnect'); trackBeacon();
-    await api.post('/api/ig/disconnect'); render();
-  };
-  const stampVerified = () => {
-    const d = new Date();
-    IG_VERIFIED_AT = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  };
-  const bv = $('#btnIgVerify');
-  if (bv) bv.onclick = async () => {
-    const vm = $('#igVerifyMsg');
-    if (vm) vm.innerHTML = '<div class="hint">🔍 Verificando tu conexión con Instagram…</div>';
-    try {
-      const r = await api.get('/api/ig/sync');
-      if (r && r.username) {
-        PROFILE.ig_username = r.username;
-        stampVerified();
-        render();
-      } else if (vm) {
-        vm.innerHTML = `<div class="err">❌ No se pudo verificar: ${esc((r && r.error) || 'respuesta vacía')}</div>`;
-      }
-    } catch (e) {
-      if (vm) vm.innerHTML = `<div class="err">❌ La verificación falló: ${esc(e.message)}</div>`;
-    }
-  };
-  const igProLink = $('#igProLink');
-  if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
-  const igRetry = $('#btnIgRetry');
-  if (igRetry) igRetry.onclick = () => igConnect();
-  // Si está conectado pero el username quedó vacío: sincronizar solo (reintenta una vez a los 10s)
-  if (PROFILE && PROFILE.ig_connected && !PROFILE.ig_username) {
-    const doIgSync = async (isRetry) => {
-      const m = $('#igMsg');
-      const bindRetry = () => {
-        const rb = $('#igSyncRetry');
-        if (rb) rb.onclick = (ev) => { ev.preventDefault(); doIgSync(false); };
-      };
-      try {
-        const r = await api.get('/api/ig/sync');
-        if (r && r.username) { PROFILE.ig_username = r.username; render(); return; }
-        throw new Error((r && r.error) || 'respuesta vacía');
-      } catch (e) {
-        if (!isRetry) {
-          if (m) m.innerHTML = `<div class="hint">🔄 Sincronizando tu cuenta de Instagram…</div>`;
-          setTimeout(() => doIgSync(true), 10000);
-        } else {
-          if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
-          bindRetry();
-        }
-      }
-    };
-    doIgSync(false);
-  }
-  // Verificación silenciosa: conectado con username → tildar el checklist sin pedir taps
-  if (PROFILE && PROFILE.ig_connected && PROFILE.ig_username && !IG_VERIFIED_AT) {
-    (async () => {
-      try {
-        const r = await api.get('/api/ig/sync');
-        if (r && r.username) { PROFILE.ig_username = r.username; stampVerified(); render(); }
-      } catch (e) { /* queda sin verificar; el botón manual sigue disponible */ }
-    })();
-  }
-}
 
-/* ---------- 📊 Panel de analytics (solo equipo Posta) ---------- */
-// Ruta oculta #/app/admin. Gate: token de admin (el mismo ADMIN_TOKEN del servidor).
-function adminToken() { try { return localStorage.getItem('posta_admin_token') || ''; } catch (e) { return ''; } }
-async function adminApi(path, method, data) {
-  const t = adminToken();
-  const url = '/api/admin/' + path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t);
-  try {
-    if (method === 'POST') return await api.post(url, data || {});
-    return await api.get(url);
-  } catch (e) {
-    if (e && (e.status === 403 || e.status === 401)) {
-      try { localStorage.removeItem('posta_admin_token'); } catch (ee) {}
-      try { sessionStorage.setItem('posta_admin_msg', 'El token guardado no funcionó. Pegá el token actual (variable ADMIN_TOKEN en Railway).'); } catch (ee2) {}
-      location.reload();
-      const err = new Error('admin_auth'); err.adminAuthFailed = true; throw err;
-    }
-    throw e;
-  }
-}
-async function adminView() {
-  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posty — solo equipo</p></div></div>
-  <div class="card" id="adminCard"><div class="d">⏳ Cargando…</div></div>`;
-}
-async function bindAdmin() {
-  const card = $('#adminCard'); if (!card) return;
-  if (!adminToken()) {
-    let gateMsg = '';
-    try { gateMsg = sessionStorage.getItem('posta_admin_msg') || ''; sessionStorage.removeItem('posta_admin_msg'); } catch (e) {}
-    card.innerHTML = `<h3 style="margin:0 0 8px">🔒 Acceso restringido</h3>
-      ${gateMsg ? `<div class="err" style="margin-bottom:10px">${gateMsg}</div>` : ''}
-      <p class="d">Pegá el token de admin del servidor (ADMIN_TOKEN).</p>
-      <div class="field"><input id="adTok" type="password" placeholder="token" style="width:100%;font-size:16px"></div>
-      <button class="btn btn-primary" id="adTokGo">Entrar</button>
-      <div id="adTokMsg" style="margin-top:8px"></div>`;
-    $('#adTokGo').onclick = async () => {
-      const v = ($('#adTok').value || '').trim();
-      if (!v) return;
-      try { localStorage.setItem('posta_admin_token', v); } catch (e) {}
-      try { await adminApi('funnel?days=7'); bindAdmin(); }
-      catch (e) {
-        if (e && e.adminAuthFailed) return;
-        try { localStorage.removeItem('posta_admin_token'); } catch (ee) {}
-        $('#adTokMsg').innerHTML = `<div class="err">Token inválido.</div>`;
-      }
-    };
-    return;
-  }
-  card.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
-      <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
-      <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
-      <button class="btn btn-soft btn-sm" data-atab="review">✨ Revisión</button>
-      <button class="btn btn-soft btn-sm" data-atab="money">💰 Plata</button>
-      <button class="btn btn-soft btn-sm" data-atab="referrals">🔗 Referidos</button>
-      <button class="btn btn-soft btn-sm" data-atab="content">📊 Contenido</button>
-      <button class="btn btn-soft btn-sm" data-atab="cohorts">🔁 Cohorts</button>
-      <button class="btn btn-soft btn-sm" data-atab="churn">⚠️ En riesgo</button>
-      <button class="btn btn-soft btn-sm" data-atab="health">🩺 Salud</button>
-      <button class="btn btn-soft btn-sm" id="adExport">📥 Planilla</button>
-      <button class="btn btn-soft btn-sm" id="adLogout">🔑 Cambiar token</button>
-      <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
-        <option value="7">7 días</option><option value="30" selected>30 días</option>
-      </select>
-    </div>
-    <div id="adBody"><div class="d">⏳ Cargando…</div></div>`;
-  const body = $('#adBody');
-  const days = () => ($('#adDays') && $('#adDays').value) || '30';
-  const lo = $('#adLogout');
-  if (lo) lo.onclick = () => { try { localStorage.removeItem('posta_admin_token'); } catch (e) {} location.reload(); };
-  const dl = $('#adExport');
-  if (dl) dl.onclick = () => {
-    const a = document.createElement('a');
-    a.href = '/api/admin/export?days=' + days() + '&token=' + encodeURIComponent(adminToken());
-    document.body.appendChild(a); a.click(); a.remove();
-  };
-  const bar = (pct) => `<div style="height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.max(1, Math.min(100, pct))}%;background:var(--cel);border-radius:99px"></div></div>`;
-  async function showFunnel() {
-    body.innerHTML = `<div class="d">⏳ Cargando funnel…</div>`;
-    let r;
-    try { r = await adminApi('funnel?days=' + days()); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar. Revisá el token.</div>`; return; }
-    const f = r.funnel || [];
-    const g = r.goal || {};
-    const tr = r.trends || {};
-    const ttv = r.ttv || {};
-    // Paso con mayor pérdida relativa (se marca en rojo)
-    let worst = -1, worstDrop = 0;
-    f.forEach((s, i) => { if (i > 0 && s.pct_prev < 100 - worstDrop) { worstDrop = 100 - s.pct_prev; worst = i; } });
-    const gpct = g.target ? Math.min(100, Math.round(g.subscribers / g.target * 1000) / 10) : 0;
-    const mrrFmt = '$' + Math.round(g.mrr || 0).toLocaleString('es-AR');
-    const trendArrow = (t) => {
-      if (!t || t.prev === 0) return '';
-      const d = t.delta, up = d >= 0;
-      return `<span style="font-size:11px;font-weight:800;color:${up ? 'var(--green-d)' : 'var(--red-d)'}">${up ? '▲' : '▼'} ${Math.abs(d)}%</span>`;
-    };
-    body.innerHTML = `
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-          <b>🎯 Meta: ${g.subscribers || 0}/${g.target || 200} suscriptores</b>
-          <span style="font-size:17.5px;font-weight:800">${gpct}%</span>
-        </div>
-        ${bar(gpct)}
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--mut)">
-          <span>💰 MRR <b style="color:var(--txt)">${mrrFmt}</b></span>
-          <span>📈 Trial→pago <b style="color:var(--txt)">${g.trial_to_paid || 0}%</b></span>
-          <span>🆕 Nuevos (30d) <b style="color:var(--txt)">${g.new_30d || 0}</b></span>
-        </div>
-      </div>
-      ` + f.map((s, i) => `
-      <div style="padding:12px 0;border-bottom:1px solid var(--line)${i === worst ? ';border-left:4px solid var(--red);padding-left:10px' : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <b>${i + 1}. ${esc(s.label)}${i === worst ? ' <span style="font-size:10.5px;color:var(--red);font-weight:800">· MAYOR PÉRDIDA</span>' : ''}</b>
-          <span style="font-size:17.5px;font-weight:800">${s.users} ${trendArrow(tr[s.key])}</span>
-        </div>
-        ${bar(s.pct_first)}
-        <div style="font-size:11.5px;color:var(--mut);margin-top:4px">${s.pct_prev}% del paso anterior · ${s.pct_first}% del inicio</div>
-      </div>`).join('') || `<div class="d">Todavía no hay datos.</div>`;
-    if (ttv.n) {
-      body.insertAdjacentHTML('beforeend', `
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:16px">
-        <b>⏱ Time-to-value</b>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12.5px;color:var(--mut)">
-          <span>Promedio <b style="color:var(--txt)">${ttv.avg_h}h</b></span>
-          <span>Mediana <b style="color:var(--txt)">${ttv.med_h}h</b></span>
-          <span>En 24h <b style="color:var(--txt)">${ttv.d1_pct}%</b></span>
-          <span style="color:var(--dim)">(${ttv.n} usuarios)</span>
-        </div>
-      </div>`);
-    }
-  }
-  async function showActivity() {
-    body.innerHTML = `<div class="d">⏳ Cargando actividad…</div>`;
-    let r;
-    try { r = await adminApi('activity?days=' + days()); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const dau = (r.dau || []).slice(0, 14).reverse();
-    const maxD = Math.max(1, ...dau.map(x => x.n));
-    const tops = Object.entries(r.totals || {}).slice(0, 20);
-    body.innerHTML = `
-      <h4 style="margin:0 0 8px">Usuarios activos por día</h4>
-      <div style="display:flex;align-items:flex-end;gap:4px;height:90px;margin-bottom:16px">
-        ${dau.map(x => `<div title="${esc(x.d)}: ${x.n}" style="flex:1;background:var(--cel);border-radius:4px 4px 0 0;height:${Math.max(3, x.n / maxD * 88)}px;min-width:8px"></div>`).join('')}
-      </div>
-      <h4 style="margin:0 0 8px">Eventos más comunes</h4>
-      ${tops.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-family:monospace;font-size:11.5px">${esc(k)}</span><b>${v}</b></div>`).join('') || '<div class="d">Sin datos.</div>'}`;
-  }
-  async function showMoney() {
-    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
-    let r;
-    try { r = await adminApi('growth'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const m = (r.growth && r.growth.money) || {};
-    const cr = (r.growth && r.growth.cancel_reasons) || [];
-    const cac = (r.growth && r.growth.cac) || null;
-    const spendRecent = (r.growth && r.growth.spend_recent) || [];
-    const rd = (r.growth && r.growth.readiness) || null;
-    const fmt$ = (v) => '$' + Math.round(v || 0).toLocaleString('es-AR');
-    body.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">MRR</div><div style="font-size:19px;font-weight:800">${fmt$(m.mrr)}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto IA hoy</div><div style="font-size:19px;font-weight:800">US$ ${m.ai_today_usd || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto IA 30d</div><div style="font-size:19px;font-weight:800">US$ ${m.ai_30d_usd || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Costo IA / cliente</div><div style="font-size:19px;font-weight:800">US$ ${m.cost_per_user_usd || 0}</div></div>
-      </div>
-      <h4 style="margin:0 0 8px">Por qué se van</h4>
-      ${cr.map(x => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(x.reason)}</span><b>${x.n}</b></div>`).join('') || '<div class="d">Sin cancelaciones con motivo todavía.</div>'}
-      ${rd ? (() => {
-        const chk = (ok, label, detail) => `<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;font-size:12.5px"><span>${ok ? '✅' : '⬜'}</span><span>${label}${detail ? ` <span style="color:var(--mut)">(${detail})</span>` : ''}</span></div>`;
-        const checks = [
-          chk(rd.trials_30d >= 30, 'Suficientes trials para medir', `${rd.trials_30d}/30 en 30d`),
-          chk(rd.trial_paid_pct >= 15, 'Conversión trial → pago sana', `${rd.trial_paid_pct}% (meta 15%)`),
-          chk(rd.retention_n >= 5 && rd.retention_old_pct >= 50, 'La gente se queda', rd.retention_n >= 5 ? `${rd.retention_old_pct}% activos de +35 días` : 'faltan datos'),
-          chk(rd.gen_rate >= 95 && !rd.failed_30d && !rd.stuck, 'Sistema sano', `gen ${rd.gen_rate}% · ${rd.failed_30d} fallidos · ${rd.stuck} atascados`),
-          chk(rd.cac_measured, 'CAC medido con test chico', rd.cac_measured ? 'sí' : 'cargá gasto en ads'),
-        ];
-        const autoOk = rd.trials_30d >= 30 && rd.trial_paid_pct >= 15 && rd.retention_n >= 5 && rd.retention_old_pct >= 50 && rd.gen_rate >= 95 && !rd.failed_30d && !rd.stuck && rd.cac_measured;
-        return `<h4 style="margin:16px 0 8px">🚀 ¿Listo para los $5000/mes?</h4>
-        <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px">
-          ${checks.join('')}
-          ${chk(false, 'Meta App Review aprobado', 'lo confirmás vos')}
-          ${chk(false, 'Pago real de MercadoPago verificado', 'lo confirmás vos')}
-          <div style="margin-top:10px;font-size:13.5px;font-weight:800">${autoOk ? '🟢 Los números dicen que SÍ. Avisame y lo hablamos.' : '🔴 Todavía no — los números mandan.'}</div>
-        </div>`;
-      })() : ''}
-      <h4 style="margin:16px 0 8px">💵 CAC — costo de adquisición</h4>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Gasto ads 30d</div><div style="font-size:19px;font-weight:800">US$ ${cac ? cac.spend_30d : 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Pagos 30d</div><div style="font-size:19px;font-weight:800">${cac ? cac.paid_30d : 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">CAC</div><div style="font-size:19px;font-weight:800">${cac && cac.cac ? 'US$ ' + cac.cac : '—'}</div></div>
-      </div>
-      ${cac && cac.paid_by_utm && cac.paid_by_utm.length ? `<div class="d" style="margin-bottom:8px">Pagos por campaña (UTM, 90d)</div>
-      ${cac.paid_by_utm.map(x => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">${esc(x.campaign)}</span><b>${x.n}</b></div>`).join('')}` : ''}
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px">
-        <b style="font-size:13px">Registrar gasto en ads</b>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-          <input id="spDate" type="date" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px" value="${new Date().toISOString().slice(0, 10)}">
-          <input id="spCamp" type="text" placeholder="Campaña (opcional)" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;flex:1;min-width:140px">
-          <input id="spAmt" type="number" min="0" step="0.01" placeholder="US$" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:110px">
-          <button class="btn btn-primary btn-sm" id="spAdd">Guardar</button>
-        </div>
-        <div id="spMsg" style="font-size:12px;margin-top:6px"></div>
-        ${spendRecent.length ? `<div class="d" style="margin:10px 0 4px">Últimos gastos</div>` + spendRecent.map(s => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(s.date)}${s.campaign ? ' · ' + esc(s.campaign) : ''}</span><b>US$ ${s.amount_usd}</b></div>`).join('') : ''}
-      </div>
-      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px">
-        <b style="font-size:13px">🧮 Simulador de CAC</b>
-        <p class="d" style="margin:4px 0 10px">Jugá con los números antes de gastar en diciembre.</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
-          <label style="font-size:11.5px;color:var(--mut)">CPC (US$)<input id="simCpc" type="number" min="0" step="0.1" value="2" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
-          <label style="font-size:11.5px;color:var(--mut)">Click → trial %<input id="simC2t" type="number" min="0.1" step="0.5" value="5" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
-          <label style="font-size:11.5px;color:var(--mut)">Trial → pago %<input id="simT2p" type="number" min="0.1" step="1" value="20" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
-          <label style="font-size:11.5px;color:var(--mut)">ARPU mensual (US$)<input id="simArpu" type="number" min="1" step="1" value="52" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
-          <label style="font-size:11.5px;color:var(--mut)">Meses que se queda<input id="simMos" type="number" min="1" step="1" value="6" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:100%;margin-top:4px"></label>
-        </div>
-        <div id="simOut" style="margin-top:12px"></div>
-      </div>`;
-    const spAdd = $('#spAdd');
-    if (spAdd) spAdd.onclick = async () => {
-      const d = $('#spDate').value, c = $('#spCamp').value.trim(), a = parseFloat($('#spAmt').value);
-      const msg = $('#spMsg');
-      if (!d || !(a > 0)) { msg.innerHTML = `<span style="color:var(--red-d)">Fecha y monto válido.</span>`; return; }
-      try {
-        await adminApi('ad-spend', 'POST', { date: d, campaign: c, amount_usd: a });
-        msg.innerHTML = `<span style="color:var(--green-d)">Guardado ✅</span>`;
-        setTimeout(showMoney, 900);
-      } catch (e) { msg.innerHTML = `<span style="color:var(--red-d)">No se pudo guardar.</span>`; }
-    };
-    // Simulador de CAC
-    const simCalc = () => {
-      const v = (id) => parseFloat(($('#' + id) || {}).value) || 0;
-      const cpc = v('simCpc'), c2t = v('simC2t') / 100, t2p = v('simT2p') / 100, arpu = v('simArpu'), mos = v('simMos');
-      const out = $('#simOut');
-      if (!cpc || !c2t || !t2p || !arpu || !mos) { out.innerHTML = `<div class="d">Completá todos los valores.</div>`; return; }
-      const cac = cpc / c2t / t2p;
-      const ltv = arpu * mos;
-      const ratio = ltv / cac;
-      const payback = cac / arpu;
-      const clients = Math.floor(5000 / cac);
-      const verdict = ratio >= 3 ? ['🟢', 'Negocio sano: cada dólar en ads vuelve x' + ratio.toFixed(1) + '.']
-        : ratio >= 1 ? ['🟡', 'Ajustado: ganás, pero hay poco margen para errores.']
-        : ['🔴', 'Perdés plata con cada cliente. No escales así.'];
-      out.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
-          <div><div style="font-size:11px;color:var(--mut)">CAC</div><div style="font-size:19px;font-weight:800">US$ ${cac.toFixed(0)}</div></div>
-          <div><div style="font-size:11px;color:var(--mut)">LTV</div><div style="font-size:19px;font-weight:800">US$ ${ltv.toFixed(0)}</div></div>
-          <div><div style="font-size:11px;color:var(--mut)">LTV : CAC</div><div style="font-size:19px;font-weight:800">${ratio.toFixed(1)} : 1</div></div>
-          <div><div style="font-size:11px;color:var(--mut)">Payback</div><div style="font-size:19px;font-weight:800">${payback.toFixed(1)} meses</div></div>
-          <div><div style="font-size:11px;color:var(--mut)">Clientes con $5000</div><div style="font-size:19px;font-weight:800">${clients}</div></div>
-        </div>
-        <div style="margin-top:10px;font-size:13px"><b>${verdict[0]}</b> ${verdict[1]}</div>`;
-    };
-    ['simCpc', 'simC2t', 'simT2p', 'simArpu', 'simMos'].forEach(id => { const el = $('#' + id); if (el) el.oninput = simCalc; });
-    simCalc();
-  }
-  async function showReferrals() {
-    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
-    let r;
-    try { r = await adminApi('growth'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const rf = (r.growth && r.growth.referrals) || {};
-    const rc = (r.growth && r.growth.ref_clicks) || [];
-    const clickByCode = {}; rc.forEach(c => { clickByCode[c.code] = c.n; });
-    const conv = rf.signups ? Math.round(rf.paying / rf.signups * 1000) / 10 : 0;
-    const totalClicks = rc.reduce((s, c) => s + c.n, 0);
-    body.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Clicks en links</div><div style="font-size:19px;font-weight:800">${totalClicks}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Registros por referido</div><div style="font-size:19px;font-weight:800">${rf.signups || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">De esos, pagan</div><div style="font-size:19px;font-weight:800">${rf.paying || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Conversión referido</div><div style="font-size:19px;font-weight:800">${conv}%</div></div>
-      </div>
-      <h4 style="margin:0 0 8px">Top referidores (clicks → registros)</h4>
-      ${((rf.top || []).map(t => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(t.email)}</span><b>${clickByCode[t.code] || 0} clicks → ${t.n} reg.</b></div>`).join('')) || '<div class="d">Todavía nadie refirió.</div>'}`;
-  }
-  async function showContent() {
-    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
-    let r;
-    try { r = await adminApi('growth'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const c = (r.growth && r.growth.content) || {};
-    const th = (r.growth && r.growth.chat_themes) || [];
-    const ts = (r.growth && r.growth.taste) || [];
-    const maxT = Math.max(1, ...th.map(t => t.n));
-    body.innerHTML = `
-      <h4 style="margin:0 0 8px">Rendimiento en Instagram (30 días)</h4>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Publicados</div><div style="font-size:19px;font-weight:800">${c.published_30d || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Alcance prom.</div><div style="font-size:19px;font-weight:800">${c.avg_reach || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Likes prom.</div><div style="font-size:19px;font-weight:800">${c.avg_likes || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Comentarios prom.</div><div style="font-size:19px;font-weight:800">${c.avg_comments || 0}</div></div>
-      </div>
-      <h4 style="margin:0 0 8px">Qué le piden a Posty (temas del chat)</h4>
-      ${th.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:110px;font-size:12.5px">${esc(t.word)}</span><div style="flex:1;height:8px;background:var(--bg2);border-radius:99px;overflow:hidden"><div style="height:100%;width:${Math.round(t.n / maxT * 100)}%;background:var(--cel);border-radius:99px"></div></div><b style="font-size:12px">${t.n}</b></div>`).join('') || '<div class="d">Sin mensajes todavía.</div>'}
-      <h4 style="margin:16px 0 8px">👍/👎 Qué rechazan (90 días)</h4>
-      ${ts.map(t => `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12.5px">${esc(t.template)}</span><span style="font-size:12px;color:${t.reject_pct >= 30 ? 'var(--red-d)' : 'var(--mut)'}"><b>${t.reject_pct}%</b> rechazo · ${t.ok}👍 ${t.no}👎</span></div>`).join('') || '<div class="d">Sin señales todavía.</div>'}`;
-  }
-  async function showHealth() {
-    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
-    let r;
-    try { r = await adminApi('growth'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const h = (r.growth && r.growth.health) || {};
-    const ok = (v, good, warn) => v >= good ? 'var(--green-d)' : v >= warn ? 'var(--txt)' : 'var(--red-d)';
-    body.innerHTML = `
-      <h4 style="margin:0 0 4px">🩺 Salud del sistema (30 días)</h4>
-      <p class="d" style="margin:0 0 12px">Fallos que ningún usuario te reporta.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Generación exitosa</div><div style="font-size:19px;font-weight:800;color:${ok(h.gen_rate || 0, 95, 80)}">${h.gen_rate || 0}%</div><div style="font-size:11px;color:var(--mut)">${h.gen_done_30d || 0}/${h.gen_start_30d || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Posts fallidos</div><div style="font-size:19px;font-weight:800;color:${(h.failed_posts_30d || 0) ? 'var(--red-d)' : 'var(--green-d)'}">${h.failed_posts_30d || 0}</div></div>
-        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Atascados publicando</div><div style="font-size:19px;font-weight:800;color:${(h.stuck_count || 0) ? 'var(--red-d)' : 'var(--green-d)'}">${h.stuck_count || 0}</div><div style="font-size:11px;color:var(--mut)">+60 min en "publishing"</div></div>
-      </div>
-      ${(h.stuck_recent && h.stuck_recent.length) ? `<h4 style="margin:0 0 8px">Atascados</h4>` + h.stuck_recent.map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)"><span>${esc(p.email)} · post #${p.id}</span><span style="color:var(--mut)">desde ${esc(p.at || '')}</span></div>`).join('') : ''}
-      ${(h.failed_recent && h.failed_recent.length) ? `<h4 style="margin:16px 0 8px">Últimos fallidos</h4>` + h.failed_recent.map(p => `<div style="font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line)"><b>${esc(p.email)}</b> · post #${p.id}<div style="color:var(--mut);font-size:11.5px">${esc(p.error || 'sin detalle')}</div></div>`).join('') : ''}
-      ${!(h.stuck_count || h.failed_posts_30d) ? '<div class="d">🎉 Todo sano: nada falló ni se atascó.</div>' : ''}`;
-  }
-  async function showChurn() {
-    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
-    let r;
-    try { r = await adminApi('growth'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const ch = (r.growth && r.growth.churn) || [];
-    body.innerHTML = `
-      <h4 style="margin:0 0 4px">⚠️ En riesgo de irse</h4>
-      <p class="d" style="margin:0 0 12px">Clientes activos o en trial sin publicar hace 7+ días. Escribiles antes de que cancelen.</p>
-      ${ch.map(c => `
-      <div style="padding:10px 0;border-bottom:1px solid var(--line)">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
-          <b style="font-size:12.5px">${esc(c.email)}</b>
-          <span style="font-size:11px;color:var(--mut)">${esc(c.plan)} · ${esc(c.status)}</span>
-        </div>
-        <div style="font-size:11.5px;color:var(--mut);margin-top:3px">
-          ${c.last_pub ? `Última publicación: hace ${Math.max(0, Math.round((Date.now() - new Date(c.last_pub.replace(' ', 'T') + 'Z').getTime()) / 864e5))} días` : 'Nunca publicó'} · registrado hace ${c.days_since_signup} días
-        </div>
-      </div>`).join('') || '<div class="d">🎉 Nadie en riesgo. Todos publicando.</div>'}`;
-  }
-  async function showCohorts() {
-    body.innerHTML = `<div class="d">⏳ Cargando…</div>`;
-    let r;
-    try { r = await adminApi('growth'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const ch = (r.growth && r.growth.cohorts) || [];
-    body.innerHTML = `
-      <h4 style="margin:0 0 4px">Retención por semana de registro</h4>
-      <p class="d" style="margin:0 0 12px">% que sigue con suscripción activa hoy.</p>
-      ${ch.map(c => `
-      <div style="padding:8px 0;border-bottom:1px solid var(--line)">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-          <b style="font-size:12.5px">Semana ${esc(c.week)}</b>
-          <span style="font-size:12.5px;color:var(--mut)">${c.active}/${c.total} · <b style="color:${c.pct >= 50 ? 'var(--green-d)' : c.pct >= 25 ? 'var(--txt)' : 'var(--red-d)'}">${c.pct}%</b></span>
-        </div>
-        ${bar(c.pct)}
-      </div>`).join('') || '<div class="d">Sin datos.</div>'}`;
-  }
-  async function showUsers() {
-    body.innerHTML = `
-      <div class="field" style="display:flex;gap:8px"><input id="adQ" placeholder="email del usuario…" style="flex:1;font-size:16px"><button class="btn btn-primary btn-sm" id="adQGo">Buscar</button></div>
-      <div id="adUsers"></div><div id="adTimeline" style="margin-top:12px"></div>`;
-    const go = async () => {
-      const q = ($('#adQ').value || '').trim();
-      if (!q) return;
-      $('#adUsers').innerHTML = `<div class="d">⏳ Buscando…</div>`;
-      let r;
-      try { r = await adminApi('users?q=' + encodeURIComponent(q)); }
-      catch (e) { $('#adUsers').innerHTML = `<div class="err">Error.</div>`; return; }
-      $('#adUsers').innerHTML = (r.users || []).map(u => `
-        <button class="btn btn-ghost btn-block" data-uid="${u.id}" style="text-align:left;margin-bottom:6px">
-          <b>${esc(u.email)}</b><br><span style="font-size:10.5px;color:var(--mut)">${esc(u.plan || '')} · ${esc(u.plan_status || '')} · desde ${esc((u.created_at || '').slice(0, 10))}</span>
-        </button>`).join('') || `<div class="d">Sin resultados.</div>`;
-      $$('#adUsers [data-uid]').forEach(b => b.onclick = async () => {
-        $('#adTimeline').innerHTML = `<div class="d">⏳ Cargando línea de tiempo…</div>`;
-        let t;
-        try { t = await adminApi('events?user_id=' + b.dataset.uid + '&days=' + days() + '&limit=200'); }
-        catch (e) { $('#adTimeline').innerHTML = `<div class="err">Error.</div>`; return; }
-        $('#adTimeline').innerHTML = `<h4 style="margin:0 0 8px">Línea de tiempo</h4>` + ((t.events || []).map(e => {
-          let pr = '';
-          try { const o = JSON.parse(e.props || '{}'); const ks = Object.keys(o).slice(0, 4); if (ks.length) pr = ' <span style="color:var(--mut)">(' + ks.map(k => k + ': ' + String(o[k]).slice(0, 24)).join(', ') + ')</span>'; } catch (ee) {}
-          return `<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--mut);font-size:10.5px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:11.5px">${esc(e.name)}</b>${pr}</div>`;
-        }).join('') || `<div class="d">Sin eventos.</div>`);
-      });
-    };
-    $('#adQGo').onclick = go;
-    $('#adQ').onkeydown = (e) => { if (e.key === 'Enter') go(); };
-  }
-  // Cola de revisión de la "primera semana con rueditas": borradores con
-  // needs_review=1. Aprobar → visible al cliente + golden example. Editar →
-  // aplica caption, aprueba y guarda el golden con lo final. Rechazar → nota
-  // que alimenta el aprendizaje y regenera el borrador con otro enfoque.
-  async function showReview() {
-    body.innerHTML = `<div class="d">⏳ Cargando cola de revisión…</div>`;
-    let r;
-    try { r = await adminApi('review-queue'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const q = r.queue || [];
-    if (!q.length) { body.innerHTML = `<div class="d">✨ Nada pendiente. La cola está vacía.</div>`; return; }
-    body.innerHTML = `<div style="margin-bottom:10px;font-size:13px;color:var(--mut)">${q.length} borrador${q.length > 1 ? 'es' : ''} esperando revisión</div>` +
-      q.map(p => `
-      <div data-rev="${p.id}" style="border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px">
-          <b style="font-size:14px">${esc(p.business_name || p.email || ('Usuario ' + p.user_id))}</b>
-          <span style="font-size:11px;color:var(--mut)">${esc((p.created_at || '').slice(0, 16))} · ${esc(p.tipo || p.media_type || '')}</span>
-        </div>
-        ${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;border-radius:10px;margin-bottom:8px" loading="lazy">` : ''}
-        <div style="font-size:13.5px;white-space:pre-wrap;margin-bottom:4px">${esc(p.caption || '')}</div>
-        <div style="font-size:12px;color:var(--mut);margin-bottom:10px">${esc(p.hashtags || '')}</div>
-        <textarea data-rev-note rows="2" placeholder="Nota para el rechazo (¿qué hay que cambiar?)" style="font-size:16px;width:100%;border:2px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px"></textarea>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" data-rev-approve="${p.id}">✅ Aprobar</button>
-          <button class="btn btn-soft btn-sm" data-rev-edit="${p.id}">✏️ Aprobar con edición</button>
-          <button class="btn btn-soft btn-sm" data-rev-reject="${p.id}">🔄 Rechazar y regenerar</button>
-        </div>
-      </div>`).join('');
-    body.querySelectorAll('[data-rev-approve]').forEach(b => b.onclick = async () => {
-      b.disabled = true;
-      try { await adminApi('review/' + b.dataset.revApprove + '/approve', 'POST'); showReview(); }
-      catch (e) { alert('No se pudo aprobar'); b.disabled = false; }
-    });
-    body.querySelectorAll('[data-rev-edit]').forEach(b => b.onclick = async () => {
-      const orig = (q.find(x => String(x.id) === String(b.dataset.revEdit)) || {});
-      const cap = prompt('Caption final:', orig.caption || '');
-      if (cap === null) return;
-      b.disabled = true;
-      try { await adminApi('review/' + b.dataset.revEdit + '/edit', 'POST', { caption: cap }); showReview(); }
-      catch (e) { alert('No se pudo guardar'); b.disabled = false; }
-    });
-    body.querySelectorAll('[data-rev-reject]').forEach(b => b.onclick = async () => {
-      const card = body.querySelector(`[data-rev="${b.dataset.revReject}"]`);
-      const note = card && card.querySelector('[data-rev-note]') ? card.querySelector('[data-rev-note]').value.trim() : '';
-      if (!note) { alert('Escribí una nota: ¿qué hay que cambiar?'); return; }
-      b.disabled = true;
-      try { await adminApi('review/' + b.dataset.revReject + '/reject', 'POST', { note }); showReview(); }
-      catch (e) { alert('No se pudo rechazar'); b.disabled = false; }
-    });
-  }
-  $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
-    $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
-    b.classList.add('btn-primary');
-    ({ funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
-  });
-  // Banner de alertas: la info tiene que buscar al dueño
-  try {
-    const gr = await adminApi('growth');
-    const al = (gr.growth && gr.growth.alerts) || [];
-    if (al.length) {
-      const bar = document.createElement('div');
-      bar.style.cssText = 'margin-bottom:12px;border-radius:12px;padding:12px 14px;background:#fff7ed;border:1.5px solid #fdba74';
-      bar.innerHTML = '<b style="font-size:13px">🔔 Alertas</b>' + al.map(a =>
-        `<div style="font-size:12.5px;margin-top:6px;${a.sev === 'high' ? 'color:var(--red-d);font-weight:700' : ''}">• ${esc(a.text)}</div>`).join('');
-      card.insertBefore(bar, card.firstChild);
-    }
-  } catch (e) {}
-  const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
-  const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
-}
 
 /* ============================================================
    🔔 POSTY TE AVISA — aprobación de posteos por notificación
@@ -9451,6 +7881,58 @@ function apvEditPrompt(d, tz) {
   let dl = '';
   try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) {}
   return dl ? `Quiero editar el posteo que sale el ${dl} a las ${hm}` : 'Quiero editar ese posteo';
+}
+// ---------------------------------------------------------------------------
+// Posty dogfood: tarjeta de la propuesta del día + vista dedicada (#/app/dogfood/:id).
+// ---------------------------------------------------------------------------
+function dogfoodCardHTML(p) {
+  const cap = esc(String(p.caption || '')).slice(0, 220);
+  return `<div class="card dogfood-card" id="dogfoodCard" style="border:2px solid #FEC14D;background:linear-gradient(135deg,#fffdf5,#fff)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:20px">🤖</span>
+      <div><b>Posty para @posty.hacetodo</b>
+      <div class="hint">⏳ Pendiente de tu aprobación — propuesta de hoy</div></div>
+    </div>
+    ${p.image_path ? `<img src="${esc(p.image_path)}" alt="Propuesta de Posty" style="width:100%;border-radius:12px" loading="eager">` : ''}
+    <p style="margin:10px 0 4px">${cap}${String(p.caption || '').length > 220 ? '…' : ''}</p>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-primary" id="dogfoodApprove" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">✅ Publicar</button>
+      <button class="btn btn-soft" id="dogfoodDismiss" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">⏭️ Saltar</button>
+    </div>
+  </div>`;
+}
+async function dogfoodAction(id, action) {
+  const btn = action === 'approve' ? $('#dogfoodApprove') : $('#dogfoodDismiss');
+  try { if (btn) { btn.disabled = true; btn.textContent = action === 'approve' ? 'Publicando…' : 'Descartando…'; } } catch (e) {}
+  try {
+    const r = await api.post(`/api/dogfood/${id}/${action}`, {});
+    if (r && r.ok) {
+      if (action === 'approve') toast('🎉 ¡Publicado en @posty.hacetodo!');
+      else toast('⏭️ Descartado. Mañana te propongo otro.');
+      render();
+    } else {
+      toast('😅 ' + ((r && (r.error || r.blocked)) || 'No se pudo completar'));
+      render();
+    }
+  } catch (e) { toast('😅 No se pudo completar, probá de nuevo'); render(); }
+}
+function bindDogfood() {
+  const a = $('#dogfoodApprove'), d = $('#dogfoodDismiss');
+  if (a) a.onclick = () => dogfoodAction(a.dataset.dfid, 'approve');
+  if (d) d.onclick = () => dogfoodAction(d.dataset.dfid, 'dismiss');
+}
+async function dogfoodView(id) {
+  let p = null;
+  try { const r = await api.get('/api/dogfood/pending'); p = (r && r.post) || null; } catch (e) {}
+  if (!p || (id && String(p.id) !== String(id))) {
+    return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">🤖 Sin propuesta pendiente</h3>
+      <p class="hint">Cada mañana te propongo un posteo para @posty.hacetodo. Volvé mañana ☀️</p>
+      <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a Schedule</a></div>`;
+  }
+  return `<div class="apv-wrap">
+    <a class="apv-back" href="#/app/schedule">← Schedule</a>
+    ${dogfoodCardHTML(p)}
+  </div>`;
 }
 async function approvalPostView(id) {
   if (!id) return apvNotFound();

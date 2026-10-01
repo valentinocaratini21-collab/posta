@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Posty — Audit gratis de tu Instagram 🔍</title>
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://postyhacetodo.com/auditoria">
+<meta property="og:title" content="¿Tu Instagram vende o solo existe? Audit gratis 🔍">
+<meta property="og:description" content="Posty analiza tu feed en 30 segundos: score, qué está flojo y cómo arreglarlo. Gratis, sin registro.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--cel:#2793C8;--yl:#FEC14D;--navy:#0A1E33;--bg:#fff;--bg2:#F2F9FD;--mut:#47617A;--line:#E2EDF5;--ok:#22c55e;--warn:#F59E0B;--bad:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(--navy);-webkit-font-smoothing:antialiased;overflow-x:clip}
+input,button{font-size:16px}
+.wrap{max-width:680px;margin:0 auto;padding:0 20px}
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+.logo{font-weight:900;font-size:24px;color:var(--navy);text-decoration:none;display:flex;align-items:center;gap:8px}
+.logo img{width:34px;height:34px;border-radius:50%}
+.logo .dot{color:var(--cel)}
+.btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:14px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s;touch-action:manipulation}
+.btn-primary{background:var(--yl);color:var(--navy);box-shadow:0 8px 24px rgba(254,193,77,.45)}
+.btn-primary:active{transform:scale(.98)}
+.btn-block{width:100%}
+.btn-sm{padding:10px 20px;font-size:14px}
+.hero{text-align:center;padding:40px 0 10px}
+.hero img.avatar{width:84px;height:84px;border-radius:50%;box-shadow:0 8px 24px rgba(39,147,200,.3)}
+.pill{display:inline-block;background:var(--yl);color:var(--navy);font-weight:800;font-size:12px;letter-spacing:1px;padding:8px 16px;border-radius:999px;margin:14px 0}
+.hero h1{font-size:clamp(28px,6vw,42px);font-weight:900;line-height:1.15;margin-bottom:12px}
+.hero h1 .hl{color:var(--cel)}
+.hero .sub{color:var(--mut);font-size:16px;max-width:520px;margin:0 auto;line-height:1.6}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.form-card{margin:26px 0 60px}
+.igrow{display:flex;gap:10px}
+.igrow .at{align-items:center;display:flex;background:var(--bg2);border:2px solid var(--line);border-right:none;border-radius:12px 0 0 12px;padding:0 0 0 16px;font-weight:800;color:var(--mut)}
+.igrow input{flex:1;min-width:0;border:2px solid var(--line);border-left:none;border-radius:0 12px 12px 0;padding:14px 15px;font-family:inherit;font-weight:600;color:var(--navy);outline:none}
+.igrow input:focus{border-color:var(--cel)}
+.igrow .at:focus-within{border-color:var(--cel)}
+.err{background:#FDE8E8;color:#B42323;border-radius:12px;padding:13px 16px;font-weight:600;font-size:14px;margin-bottom:16px;display:none}
+.tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px;line-height:1.5}
+/* loading */
+.loading{display:none;text-align:center;padding:40px 0 60px}
+.loading img{width:96px;height:96px;border-radius:50%;animation:pulse 1.2s infinite;box-shadow:0 8px 28px rgba(39,147,200,.35)}
+.loading .step{font-weight:700;font-size:16px;margin-top:18px;min-height:24px}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+/* results */
+.results{display:none;padding-bottom:120px}
+.prow{display:flex;align-items:center;gap:14px;margin:26px 0 6px}
+.prow img{width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid var(--line);background:var(--bg2)}
+.prow b{font-size:18px}
+.prow span{display:block;color:var(--mut);font-size:13px;font-weight:600}
+.score-card{text-align:center;margin:18px 0}
+.dial{position:relative;width:190px;height:190px;margin:0 auto}
+.dial svg{transform:rotate(-90deg)}
+.dial .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dial .num b{font-size:52px;font-weight:900}
+.dial .num span{font-size:12px;color:var(--mut);font-weight:700;letter-spacing:1px}
+.summary{font-size:16px;line-height:1.6;color:var(--navy);max-width:520px;margin:14px auto 0;font-weight:600}
+.dims{margin:26px 0}
+.dim{margin-bottom:16px}
+.dim .dh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.dim .dh b{font-size:15px}
+.dim .dh span{font-weight:800;font-size:14px}
+.dim .bar{height:10px;background:var(--bg2);border-radius:99px;overflow:hidden}
+.dim .bar i{display:block;height:100%;border-radius:99px;width:0;transition:width 1s ease}
+.dim .dl{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.5}
+.sect{font-size:20px;font-weight:900;margin:30px 0 14px}
+.fix{border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden;background:#fff}
+.fix summary{cursor:pointer;padding:16px 18px;font-weight:800;font-size:15px;list-style:none;display:flex;gap:10px;align-items:flex-start;touch-action:manipulation}
+.fix summary::-webkit-details-marker{display:none}
+.fix summary .n{background:var(--cel);color:#fff;font-size:13px;font-weight:900;min-width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.fix .fb{padding:0 18px 18px;font-size:14px;line-height:1.65;color:var(--navy)}
+.fix .fb .ev{background:var(--bg2);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;color:var(--mut)}
+.fix .fb .ev b{color:var(--cel)}
+.fix .fb .ex{border-left:3px solid var(--yl);padding-left:12px;margin-top:10px;font-style:italic;color:var(--mut)}
+.wins{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:16px;padding:20px;margin-top:6px}
+.wins .w{display:flex;gap:10px;margin-bottom:10px;font-size:14px;font-weight:600;line-height:1.55}
+.wins .w:last-child{margin-bottom:0}
+/* sticky CTA */
+.sticky-cta{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:12px 20px calc(12px + env(safe-area-inset-bottom));display:none}
+.sticky-cta.show{display:block}
+.sticky-cta .wrap{max-width:680px}
+.sticky-cta small{display:block;text-align:center;color:var(--mut);font-size:12px;margin-top:8px}
+footer{text-align:center;color:var(--mut);font-size:13px;padding:30px 0 110px}
+footer a{color:var(--cel);font-weight:700;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="nav"><div class="wrap">
+  <a class="logo" href="/"><img src="/ai-avatar.png" alt="posty.">posty<span class="dot">.</span></a>
+  <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
+</div></div>
+
+<div class="wrap">
+  <!-- FORM -->
+  <div id="form-view">
+    <div class="hero">
+      <img class="avatar" src="/ai-avatar.png" alt="Posty">
+      <div><span class="pill">🔍 AUDIT GRATIS</span></div>
+      <h1>¿Tu Instagram <span class="hl">vende</span><br>o solo existe?</h1>
+      <p class="sub">Escribí tu @ y Posty analiza tu feed en 30 segundos: te pone un score, te muestra qué está flojo <b>con datos concretos</b> y cómo arreglarlo.</p>
+    </div>
+    <div class="card form-card">
+      <div class="err" id="err"></div>
+      <div class="igrow">
+        <span class="at">@</span>
+        <input id="ig" type="text" placeholder="tu.instagram" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text">
+      </div>
+      <button class="btn btn-primary btn-block" id="go" style="margin-top:14px">Auditar mi Instagram 🔍</button>
+      <p class="tiny">Gratis · Sin registro · Solo perfiles públicos<br>5 auditorías por día por dispositivo</p>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading" id="loading">
+    <img src="/ai-avatar.png" alt="Posty trabajando">
+    <div class="step" id="step">Mirando tu bio…</div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results">
+    <div class="prow">
+      <img id="r-pic" src="/ai-avatar.png" alt="">
+      <div><b id="r-handle">@</b><span id="r-sub"></span></div>
+    </div>
+    <div class="card score-card">
+      <div class="dial">
+        <svg width="190" height="190" viewBox="0 0 190 190">
+          <circle cx="95" cy="95" r="78" fill="none" stroke="#E2EDF5" stroke-width="16"/>
+          <circle id="dial-arc" cx="95" cy="95" r="78" fill="none" stroke="#2793C8" stroke-width="16"
+                  stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"/>
+        </svg>
+        <div class="num"><b id="r-score">0</b><span>SCORE</span></div>
+      </div>
+      <p class="summary" id="r-summary"></p>
+    </div>
+    <h2 class="sect">📊 El detalle</h2>
+    <div class="dims" id="r-dims"></div>
+    <h2 class="sect">🎯 Tus arreglos, en orden</h2>
+    <div id="r-fixes"></div>
+    <h2 class="sect">💪 Lo que ya hacés bien</h2>
+    <div class="wins" id="r-wins"></div>
+  </div>
+</div>
+
+<div class="sticky-cta" id="cta">
+  <div class="wrap">
+    <a class="btn btn-primary btn-block" id="cta-link" href="/prueba">🚀 Que Posty lo arregle por mí</a>
+    <small>Tu semana armada gratis · Sin tarjeta</small>
+  </div>
+</div>
+
+<footer>Hecho con 🤖 por <a href="/">posty.</a> · <a href="/prueba">Probalo gratis</a></footer>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var formView = $('form-view'), loading = $('loading'), results = $('results'),
+      err = $('err'), igInput = $('ig'), cta = $('cta');
+
+  function showErr(msg){
+    err.textContent = msg; err.style.display = 'block';
+    err.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+  function clean(h){ return String(h||'').trim().replace(/^@/,'').replace(/[^a-zA-Z0-9._]/g,'').slice(0,40); }
+
+  var STEPS = ['Mirando tu bio…','Leyendo tus últimos posteos…','Analizando tus captions…','Midiendo tu frecuencia…','Armando tu reporte…'];
+  var stepTimer = null;
+  function startLoading(){
+    formView.style.display = 'none'; results.style.display = 'none'; cta.classList.remove('show');
+    loading.style.display = 'block';
+    var i = 0;
+    $('step').textContent = STEPS[0];
+    stepTimer = setInterval(function(){
+      i = (i + 1) % STEPS.length;
+      $('step').textContent = STEPS[i];
+    }, 2200);
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+  function stopLoading(){ clearInterval(stepTimer); loading.style.display = 'none'; }
+
+  function scoreColor(s){
+    if (s === null || s === undefined) return '#CBD5E1';
+    if (s >= 70) return '#22c55e';
+    if (s >= 50) return '#F59E0B';
+    return '#ef4444';
+  }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function render(audit){
+    stopLoading();
+    var handle = audit.handle || '';
+    $('r-handle').textContent = '@' + handle;
+    var sub = [];
+    if (audit.name) sub.push(audit.name);
+    if (audit.followers != null) sub.push(Number(audit.followers).toLocaleString('es-AR') + ' seguidores');
+    $('r-sub').textContent = sub.join(' · ');
+    if (audit.pic) $('r-pic').src = audit.pic;
+
+    // dial
+    var score = audit.score, C = 490;
+    var arc = $('dial-arc');
+    arc.style.stroke = scoreColor(score);
+    requestAnimationFrame(function(){
+      arc.style.transition = 'stroke-dashoffset 1.2s ease';
+      arc.style.strokeDashoffset = String(C - (C * score / 100));
+    });
+    var n = 0, target = score;
+    var cnt = setInterval(function(){
+      n += Math.max(1, Math.round((target - n) / 8));
+      if (n >= target) { n = target; clearInterval(cnt); }
+      $('r-score').textContent = n;
+    }, 40);
+    $('r-summary').textContent = audit.summary || '';
+
+    // dimensions
+    var dimsHtml = '';
+    (audit.dimensions || []).forEach(function(d){
+      var c = scoreColor(d.score);
+      var pct = d.score == null ? 0 : d.score;
+      dimsHtml += '<div class="dim"><div class="dh"><b>' + esc(d.label) + '</b><span style="color:' + c + '">' +
+        (d.score == null ? '—' : d.score) + '</span></div>' +
+        '<div class="bar"><i data-w="' + pct + '" style="background:' + c + '"></i></div>' +
+        '<div class="dl">' + esc(d.line) + '</div></div>';
+    });
+    $('r-dims').innerHTML = dimsHtml;
+
+    // fixes
+    var fxHtml = '';
+    (audit.fixes || []).forEach(function(fx, i){
+      fxHtml += '<details class="fix"' + (i === 0 ? ' open' : '') + '><summary><span class="n">' + (i+1) + '</span><span>' +
+        esc(fx.title) + '</span></summary><div class="fb">' +
+        '<div class="ev">📎 <b>Evidencia:</b> ' + esc(fx.evidence) + '</div>' +
+        '<div>' + esc(fx.fix) + '</div>' +
+        (fx.example ? '<div class="ex">' + esc(fx.example) + '</div>' : '') +
+        '</div></details>';
+    });
+    $('r-fixes').innerHTML = fxHtml;
+
+    // wins
+    var wHtml = '';
+    (audit.wins || []).forEach(function(w){
+      wHtml += '<div class="w"><span>✅</span><span>' + esc(w) + '</span></div>';
+    });
+    $('r-wins').innerHTML = wHtml;
+
+    // CTA → /prueba con el @ pre-rellenado
+    $('cta-link').href = '/prueba?ig=' + encodeURIComponent(handle);
+
+    results.style.display = 'block';
+    cta.classList.add('show');
+    window.scrollTo({top:0, behavior:'smooth'});
+    // animate bars
+    setTimeout(function(){
+      document.querySelectorAll('#r-dims .bar i').forEach(function(b){
+        b.style.width = b.getAttribute('data-w') + '%';
+      });
+    }, 100);
+    // URL compartible
+    try { history.replaceState(null, '', '/auditoria?ig=' + encodeURIComponent(handle)); } catch(e){}
+  }
+
+  async function runAudit(handle){
+    err.style.display = 'none';
+    startLoading();
+    try {
+      var res = await fetch('/api/audit', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ig: handle}),
+      });
+      var data = await res.json().catch(function(){ return {}; });
+      if (!res.ok || !data.ok) { stopLoading(); formView.style.display = 'block'; showErr(data.error || 'No pudimos auditar ese Instagram. Probá de nuevo.'); return; }
+      render(data.audit);
+    } catch(e) {
+      stopLoading(); formView.style.display = 'block';
+      showErr('Se cortó la conexión. Probá de nuevo.');
+    }
+  }
+
+  $('go').addEventListener('click', function(){
+    var h = clean(igInput.value);
+    if (!h) { showErr('Escribí tu @ de Instagram 👆'); return; }
+    runAudit(h);
+  });
+  igInput.addEventListener('keydown', function(e){ if (e.key === 'Enter') $('go').click(); });
+
+  // Link compartido: /auditoria?ig=@x → intenta cache directo
+  (function(){
+    var q = new URLSearchParams(location.search).get('ig');
+    var h = clean(q);
+    if (!h) return;
+    igInput.value = h;
+    startLoading();
+    fetch('/api/audit/' + encodeURIComponent(h))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.ok && data.audit) render(data.audit);
+        else { stopLoading(); formView.style.display = 'block'; }
+      })
+      .catch(function(){ stopLoading(); formView.style.display = 'block'; });
+  })();
+})();
+</script>
+</body>
+</html>

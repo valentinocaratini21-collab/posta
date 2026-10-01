@@ -158,8 +158,8 @@ function ajustesView() {
     </div>
     <div id="igVerifyMsg" style="margin-top:10px"></div>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button>
-      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span>
+      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button><button class="btn btn-soft btn-sm" id="btnClientBrief">🔄 Actualizar mi brief</button>
+      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span><span class="hint" id="clientBriefMsg"></span>
     </div>
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
       <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
@@ -1333,6 +1333,15 @@ function bindSettings() {
     try { const r = await api.post('/api/caption-style/analyze'); if (m) m.textContent = r.ok ? 'Listo ✅ Tus próximos captions van a sonar como vos.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
     catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
     bcs.disabled = false;
+  };
+  // Brief Unificado: re-mina la bio y reconstruye NEGOCIO + VOZ + VISUAL + MARCA.
+  const bcb = $('#btnClientBrief');
+  if (bcb) bcb.onclick = async () => {
+    const m = $('#clientBriefMsg');
+    bcb.disabled = true; if (m) m.textContent = 'Armando tu brief…';
+    try { const r = await api.post('/api/client-brief/refresh'); if (m) m.textContent = r.ok ? 'Listo ✅ Posty ya sabe quién sos: qué vendés, cómo hablás y cómo te ves.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
+    catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
+    bcb.disabled = false;
   };
   const igRetry = $('#btnIgRetry');
   if (igRetry) igRetry.onclick = () => igConnect();

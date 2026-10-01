@@ -308,10 +308,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .aiedit-row{display:flex;gap:8px}
 .aiedit-row .in{flex:1;min-width:0}
 .aiedit-msg{margin-top:8px;font-size:11.5px}
-.rev-voice{margin-top:14px;padding-top:12px;border-top:1.5px solid var(--line);text-align:center}
-.rev-voice-btn{display:inline-flex;align-items:center;gap:8px;background:#0A1E33;color:#fff;border:none;border-radius:999px;padding:13px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-.rev-voice-btn.btn-rec{background:#B3402E}
-.rev-voice-msg{margin-top:8px;min-height:20px}
 .rev-when{display:flex;align-items:center;gap:8px}
 .rev-dt{font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--txt);font-family:inherit;flex:1;min-width:0}
 .rev-promise{text-align:center;font-size:11.5px;color:var(--dim);margin:8px 0 0}
@@ -658,6 +654,28 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
   .ajsec.open .ajsec-c{transform:rotate(180deg)}
   .ajsec-b{display:none}
   .ajsec.open>.ajsec-b{display:block}
+  .ajsec-h h3{flex:1 1 auto;min-width:0} /* la píldora de nivel siempre visible, no la aplasta el título */
+  .lvl-pill{flex:none}
+
+/* ⭐ Niveles de Posty: píldora en el header de la tarjeta + progreso + quests de 1 tap */
+.lvl-pill{display:inline-flex;align-items:center;gap:6px;background:#E7F4FB;color:#166E9C;border:1px solid #BFE3F3;border-radius:999px;padding:5px 11px;font-size:12px;line-height:1.35;white-space:nowrap;vertical-align:middle}
+.lvl-pill .lvl-num{font-weight:800}
+.lvl-pill .lvl-name{font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lvl-block{margin:0 0 14px;background:#F7FCFE;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.lvl-top{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.lvl-pct{font-weight:800;font-size:13px;color:#166E9C;min-width:40px;text-align:right}
+.lvl-bar{flex:1;height:10px;border-radius:999px;background:#E2EEF5;overflow:hidden}
+.lvl-bar i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#2793C8,#FEC14D);transition:width .6s ease}
+.lvl-qh{font-size:13px;font-weight:700;color:var(--mut);margin:8px 0 6px}
+.lvl-quests{display:flex;flex-direction:column;gap:8px}
+.lvl-quest{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:16px;font-weight:700;color:#0A1E33;text-decoration:none;touch-action:manipulation}
+.lvl-quest b{color:#2793C8;font-weight:800}
+.lvl-quest:active{background:#EAF6FC;border-color:#2793C8}
+.lvl-done{font-size:16px;font-weight:700;color:#166E9C;padding:2px 0}
+@media(min-width:761px){
+  .lvl-quests{flex-direction:row;flex-wrap:wrap}
+  .lvl-quest{flex:1 1 220px}
+}
   /* Checklist y encabezado compactos en móvil */
   .setup-card{margin:8px 12px 0;padding:2px 4px}
   .setup-title{font-size:11.5px;padding:6px 10px 0}
@@ -714,9 +732,19 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .st-empty b{font-size:15.5px}
 .st-empty p{color:var(--mut);font-size:13.5px;margin:8px 0 0}
 .st-best-row{display:flex;gap:14px;align-items:center;margin-top:2px}
-.st-best-row img{width:88px;height:88px;border-radius:14px;object-fit:cover;flex:none;background:var(--bg2)}
+.st-best-row img{width:112px;height:112px;border-radius:16px;object-fit:cover;flex:none;background:var(--bg2);box-shadow:0 4px 16px rgba(10,30,51,.12)}
 .st-best-row b{font-size:14.5px;display:block;margin-bottom:6px}
 .st-best-row p{color:var(--mut);font-size:13.5px;margin:0}
+/* Delta vs semana anterior: el número cuenta una historia */
+.st-delta{display:inline-block;margin-top:10px;font-size:12px;font-weight:800;padding:5px 12px;border-radius:999px}
+.st-delta.up{background:#E2F5EA;color:#147A3C}
+.st-delta.down{background:#FBE9E7;color:#B3402E}
+/* Empty state con vista previa: sin datos no hay tarjetas, solo la promesa */
+.st-preview{margin-top:18px;padding-top:16px;border-top:1.5px dashed var(--line)}
+.st-preview-tag{display:inline-block;font-size:11px;font-weight:800;color:var(--cel);background:#E8F4FB;border-radius:999px;padding:4px 12px;margin-bottom:12px;letter-spacing:.04em;text-transform:uppercase}
+.st-skel{pointer-events:none}
+.st-skel-num{height:30px;border-radius:8px;background:linear-gradient(90deg,#EAF2F8 25%,#F7FBFE 50%,#EAF2F8 75%);background-size:200% 100%;animation:stShimmer 1.6s infinite;margin-bottom:8px;max-width:110px}
+@keyframes stShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media (max-width:420px){
   .st-card{padding:15px 13px;min-height:96px}
   .st-card .st-num{font-size:24px}
@@ -1260,8 +1288,6 @@ textarea.in{resize:vertical;min-height:96px}
   .btn{padding:13px 24px;font-size:13.5px}
   /* Revisión de borradores: CTA más proporcionado */
   .igmock-accept{padding:12px 18px;font-size:13px}
-  /* Nota de voz: que no domine la tarjeta */
-  .rev-voice-btn{padding:11px 18px;font-size:12.5px}
 }
 
 /* ============================================================
@@ -1324,6 +1350,10 @@ textarea.in{resize:vertical;min-height:96px}
 /* Posty vivo: movimiento humano sutil (respira, no flota). Solo la imagen se mueve; el círculo queda quieto. */
 .chome-ava{animation:posty-idle 6s ease-in-out infinite}
 @keyframes posty-idle{0%,100%{transform:translateY(0) rotate(0deg) scale(1)}22%{transform:translateY(-1.5px) rotate(.8deg) scale(1.008)}47%{transform:translateY(.5px) rotate(-.5deg) scale(1)}71%{transform:translateY(-1px) rotate(.3deg) scale(1.005)}}
+/* Magia de primera apertura: el avatar "saluda" (bounce + giro sutil, 1.2s, una sola vez).
+   Va DESPUÉS de .chome-ava para pisar la animación idle mientras dura; al sacarse la clase, vuelve el idle. */
+@keyframes posty-wave{0%{transform:translateY(0) rotate(0deg)}20%{transform:translateY(-9px) rotate(-7deg)}40%{transform:translateY(0) rotate(5deg)}60%{transform:translateY(-5px) rotate(-4deg)}80%{transform:translateY(0) rotate(2deg)}100%{transform:translateY(0) rotate(0deg)}}
+.chome-ava-wave{animation:posty-wave 1.2s ease-in-out 1;transform-origin:50% 85%}
 /* Posty trabajando: video de malabares con 3 pelotitas amarillas 🤹 */
 .chome-ava-vid{width:118%;height:118%;object-fit:cover;display:block;margin:-9%}
 .chome-ava-wrap.working .chome-ava{animation:none}
@@ -1360,8 +1390,6 @@ textarea.in{resize:vertical;min-height:96px}
   .drawer-link .di{font-size:20px;width:28px;text-align:center;flex-shrink:0}
   .drawer-link:active{background:var(--bg2)}
   .drawer-link.on{color:var(--cel);font-weight:800}
-  .sched-count{margin-left:auto;background:#E5484D;color:#fff;font-size:12px;font-weight:800;min-width:24px;height:24px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px;box-shadow:0 2px 8px rgba(229,72,77,.45);animation:schedPing 2.4s ease-in-out infinite}
-  @keyframes schedPing{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
   .drawer-grow{flex:1}
   .drawer-logout{color:#d33;font-weight:700}
   /* Chat home: el input queda pegado abajo (sin bottom nav) */
@@ -1374,6 +1402,10 @@ textarea.in{resize:vertical;min-height:96px}
   .main-chat #chatCard{flex:1;display:flex;flex-direction:column;min-height:0}
   .main-chat .chat-box{flex:1 1 auto;min-height:140px}
 }
+
+/* Badge de notificación del Schedule: vale en mobile Y desktop (antes solo mobile) */
+.sched-count{margin-left:auto;background:#E5484D;color:#fff;font-size:12px;font-weight:800;min-width:24px;height:24px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 7px;box-shadow:0 2px 8px rgba(229,72,77,.45);animation:schedPing 2.4s ease-in-out infinite}
+@keyframes schedPing{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 
 /* ============================================================
    REFINAMIENTO COMPACTO (2026-09-29): "bajarle el zoom".
@@ -1546,12 +1578,14 @@ textarea.in{resize:vertical;min-height:96px}
   /* Links del sidebar */
   .drawer-link:hover{background:var(--bg2)}
   /* El contenido se corre a la derecha del sidebar */
-  .mtop{margin-left:280px}
+  /* El topbar en desktop ancho está vacío (el burger se oculta): se elimina */
+  .mtop{display:none}
   .setup-card{margin-left:296px}
-  .app-shell{margin-left:280px;min-height:calc(100vh - 69px)}
+  .app-shell{margin-left:280px;min-height:100dvh}
   .main{max-width:920px;margin:0 auto;padding:20px 24px 60px}
-  .main-chat{max-width:920px;margin:0 auto;min-height:calc(100vh - 69px)}
-  .main-chat .chat-box{max-height:calc(100vh - 380px)}
+  .main.main-chat{padding-top:6px}
+  .main-chat{max-width:1280px;margin:0 auto;min-height:100dvh}
+  .main-chat .chat-box{max-height:none}
 }
 /* ---------- Vista Schedule ---------- */
 .sched-wrap{max-width:920px;margin:0 auto}
@@ -1574,7 +1608,7 @@ textarea.in{resize:vertical;min-height:96px}
 .sched-badge{position:absolute;top:6px;left:6px;background:rgba(10,30,51,.72);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:3px 9px;line-height:1.4;backdrop-filter:blur(2px)}
 .sched-cardtxt{display:flex;flex-direction:column;gap:2px;min-width:0;padding:0 2px 2px}
 .sched-cardtxt b{font-size:13px;color:var(--cel);font-weight:800}
-.sched-cardtxt span{font-size:11px;color:var(--txt);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sched-cardtxt span{font-size:12.5px;color:var(--txt);line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .sched-ghost{border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--dim);font-family:inherit;width:100%;flex:1;min-height:76px;touch-action:manipulation}
 .sched-ghost:active{transform:scale(.97);border-color:var(--cel);color:var(--cel)}
 .sg-plus{font-size:22px;font-weight:300;line-height:1}
@@ -1646,3 +1680,34 @@ textarea.in{resize:vertical;min-height:96px}
 .posty-confetti{position:fixed;inset:0;pointer-events:none;z-index:10002;overflow:hidden}
 .posty-confetti i{position:absolute;top:-12px;width:8px;height:12px;border-radius:2px;opacity:.9;animation:posty-confetti-fall 2.2s ease-in forwards}
 @keyframes posty-confetti-fall{to{transform:translateY(110vh) rotate(540deg);opacity:0}}
+
+/* ---------- Magia de primera apertura: tarjeta "¿Arrancamos por este? 👀" ---------- */
+.first-pick{padding:20px;text-align:center;border:2px solid var(--yl);margin-bottom:14px}
+.fp-title{font-weight:800;font-size:17px;margin:0 0 12px}
+.fp-img{width:100%;max-height:280px;object-fit:cover;border-radius:12px;display:block;margin:0 0 10px}
+.fp-cap{font-size:13px;line-height:1.55;color:var(--txt);margin:0 0 8px;text-align:left;overflow-wrap:anywhere}
+.fp-reason{font-size:12px;color:var(--mut);line-height:1.5;margin:0 0 14px;text-align:left;background:var(--bg2);border-radius:10px;padding:8px 10px}
+.fp-btns{display:flex;flex-direction:column;gap:8px}
+.fp-btns .btn{width:100%}
+@media(max-width:760px){.first-pick{padding:16px}}
+/* ---------- Magia de primera apertura: checklist como sección secundaria ---------- */
+.setup-secondary{margin:20px 0 8px;opacity:.94}
+.setup-secondary .setup-card{margin:0;box-shadow:none;padding:2px 4px}
+.setup-secondary .setup-title{font-size:12px;color:var(--mut);font-weight:700}
+/* ---------- Magia de primera apertura: un solo próximo paso ---------- */
+#nextStepCta{margin:2px 0 16px;text-align:center}
+#nextStepCta .btn{width:100%}
+
+/* ---------- postyCelebrate(): coreografía de malabares (~3.2s, CSS puro) ---------- */
+/* Overlay temporal fixed: pointer-events:none (no bloquea scroll ni toques), z-index alto,
+   no rompe el layout mobile. El avatar (ai-avatar.png, ~120px) salta + 3 pelotas
+   amarillas #FEC14D (~22px) en cascada de malabares (trayectorias parabólicas cruzadas,
+   desfasadas en fase). El JS remueve el overlay del DOM al terminar. */
+.posty-celebrate{position:fixed;inset:0;pointer-events:none;z-index:10003;overflow:hidden;touch-action:manipulation}
+.posty-celebrate .pc-ava{position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;object-fit:cover;box-shadow:0 10px 30px rgba(10,30,51,.3);animation:pc-jump .62s ease-in-out infinite}
+@keyframes pc-jump{0%,100%{transform:translateY(0)}30%{transform:translateY(-24px)}55%{transform:translateY(0)}75%{transform:translateY(-10px)}}
+.posty-celebrate .pc-ball{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#FEC14D;box-shadow:0 3px 8px rgba(10,30,51,.3)}
+.posty-celebrate .pc-ball.b1{animation:pc-cascade 1.14s ease-in-out infinite}
+.posty-celebrate .pc-ball.b2{animation:pc-cascade 1.14s ease-in-out infinite;animation-delay:-.38s}
+.posty-celebrate .pc-ball.b3{animation:pc-cascade 1.14s ease-in-out infinite;animation-delay:-.76s}
+@keyframes pc-cascade{0%{transform:translate(-64px,18px)}25%{transform:translate(0,-64px)}50%{transform:translate(64px,18px)}75%{transform:translate(0,-64px)}100%{transform:translate(-64px,18px)}}
