@@ -8108,7 +8108,14 @@ app.get('/api/ig/stories-status', requireAuth, (req, res) => {
 });
 
 // ---------- Health ----------
+// BUILD_ID: cambiar en cada zip consolidado. Sirve para verificar desde el
+// navegador que producción está corriendo el código nuevo:
+//   https://postyhacetodo.com/api/version  →  {"build":"..."}.
+// Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
+// duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
+const BUILD_ID = '20261001-v13';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
+app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID }));
 
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

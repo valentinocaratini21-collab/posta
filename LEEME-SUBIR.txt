@@ -1,0 +1,41 @@
+CÓMO SUBIR ESTE ZIP A GITHUB (desde el iPhone) — 5 pasos
+=========================================================
+
+1) Descomprimí el zip en el iPhone (la app Archivos lo hace sola).
+
+2) ANTES DE SUBIR, mirá los nombres: si algún archivo se llama
+   "server 2.js", "app 2.js" o parecido (con un número), RENOMBRALO
+   y sacale el número. Tiene que llamarse EXACTAMENTE igual que el
+   archivo que ya está en GitHub. Si no, GitHub lo sube como archivo
+   NUEVO y producción sigue corriendo el código viejo.
+
+3) En la web de GitHub, entrá al repo y subí cada archivo a SU carpeta:
+   - Los que dicen "raíz" van en la raíz del repo.
+   - Los que dicen "public/" van adentro de la carpeta public/.
+   GitHub reemplaza el archivo viejo por el nuevo automáticamente.
+
+4) Esperá ~3 minutos (Railway está haciendo el deploy).
+
+5) VERIFICÁ que tomó el código nuevo, abrí en el navegador:
+     https://postyhacetodo.com/api/version
+   Tiene que decir: {"ok":true,"build":"20261001-v13"}
+   Si dice un build más viejo, algún archivo se subió duplicado:
+   volvé al paso 2.
+
+CONTENIDO DEL ZIP (45 archivos)
+------------------------------
+A la RAÍZ del repo (36):
+  server.js, db.js, scheduler.js, stats.js, generator.js, email.js,
+  wins.js, posty-level.js, style-visual.js, activation-nudge.js,
+  demo.js, demo-captions.js, first-publish-nudge.js, level-boosts.js,
+  caption-style.js, client-brief.js, feed-audit.js, image-styles.js,
+  image-styles-data.js, image-styles-rubros.js, image-fallback.js,
+  brand-card.py, scrollstop.js, carousel.js, reels.js, learning.js,
+  hooks.js, stories.js, community.js, reactive.js, dogfood.js,
+  insights.js, push.js, approval.js, notify-email.js, notify-push.js
+
+A la carpeta public/ (9):
+  app.js, styles.css, index.html, prueba.html, auditoria.html, sw.js,
+  chunk-ajustes.js, chunk-admin.js, chunk-creator.js
+
+NO subir la carpeta data/ (es la base de datos local).
