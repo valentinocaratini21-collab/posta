@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261001-v8'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261001-v13'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -983,8 +983,7 @@ function appShell(tab, content) {
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
     <div class="side-posty" id="sidePosty" aria-label="Posty">
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
-      <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b><small id="sidePostyLvl">…</small></span>
-      <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
+      <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
     <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
@@ -2206,7 +2205,7 @@ async function doScheduleAll(btn) {
       if (cg) cg.onclick = () => {
         closeStreakModal();
         render().then(() => {
-          const sc = document.querySelector('.sched-card');
+          const sc = document.querySelector('.pcard');
           if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       };
@@ -2276,7 +2275,7 @@ async function doActivateWeek(btn) {
     if (cg) cg.onclick = () => {
       closeStreakModal();
       render().then(() => {
-        const sc = document.querySelector('.sched-card');
+        const sc = document.querySelector('.pcard');
         if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     };
@@ -2348,19 +2347,15 @@ function paintSchedCount() {
     b.style.display = n > 0 ? '' : 'none';
   } catch (e) {}
 }
-// Bloque de identidad del drawer mobile: logo + nombre del negocio + nivel de la marca + Mi plan.
-let __drawerLvl = null, __drawerLvlAt = 0;
+// Bloque de identidad del drawer mobile: logo + nombre del negocio.
+// Limpio: sin nivel ni "Mi plan" (igual que en el sidebar de escritorio;
+// el nivel vive en el avatar del chat, el plan solo en Ajustes).
 async function paintDrawerIdent() {
   const mount = document.getElementById('drawerIdent');
   if (!mount) return;
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   let logo = (typeof assetLogo === 'function') ? assetLogo() : null;
   if (!logo) { try { const a = await api.get('/api/assets'); if (Array.isArray(a)) logo = a.find(x => x.kind === 'logo'); } catch (e) {} }
-  if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
-    try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
-  }
-  const lv = (__drawerLvl && __drawerLvl.level) || 1;
-  const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
   const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
   const fbBg = bc[0] || '#2793C8';
   const initial = (biz.trim()[0] || 'M').toUpperCase();
@@ -2369,25 +2364,18 @@ async function paintDrawerIdent() {
     : `<span class="drawer-ident-fb" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
   mount.innerHTML = `
     <span class="drawer-ident-logo">${logoHtml}</span>
-    <span class="drawer-ident-txt"><b>${esc(biz)}</b><small>Nivel ${lv}</small></span>
-    <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>`;
+    <span class="drawer-ident-txt"><b>${esc(biz)}</b></span>`;
 }
 // Identidad de Posty para el sidebar fijo de escritorio (≥1024px).
 async function paintSidePosty() {
-  const el = document.getElementById('sidePostyLvl');
-  if (!el) return;
-  // El nombre se muestra TAL CUAL lo escribió el cliente (si pone mayúscula, va mayúscula)
+  // El nombre se muestra TAL CUAL lo escribió el cliente (si pone mayúscula, va mayúscula).
+  // Sin nivel ni "Mi plan": el header queda limpio (el nivel vive en el avatar del chat,
+  // el plan solo en Ajustes).
   try {
     const nm = document.getElementById('sidePostyName');
     const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
     if (nm && biz) nm.textContent = biz;
   } catch (e) {}
-  if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
-    try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
-  }
-  const lv = (__drawerLvl && __drawerLvl.level) || 1;
-  const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
-  el.textContent = `Nivel ${lv}`;
 }
 // Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen
 // borradores de la N+1, el teaser permite verlos como semana corriente.
@@ -3589,6 +3577,13 @@ function postyThinking(el, stages) {
 function stopPostyThinking(el) {
   try { if (el && el._ptStop) { el._ptStop(); el._ptStop = null; } } catch (e) {}
 }
+// "Posty está escribiendo": tres puntitos animados, como WhatsApp.
+// Sin narración del proceso interno (elegir foto, tono, etc.): eso se ve todo.
+function postyTyping(el) {
+  if (!el) return;
+  try { stopPostyThinking(el); } catch (e) {}
+  el.innerHTML = '<span class="typing-dots" aria-label="Posty está escribiendo"><span></span><span></span><span></span></span>';
+}
 
 async function chatSend() {
   const inp = $('#chatInput');
@@ -3767,7 +3762,7 @@ async function chatExchange({ text, display, extra, pushed }) {
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping"></div>`);
-  postyThinking(document.getElementById('chatTyping'));
+  postyTyping(document.getElementById('chatTyping'));
   chatScroll();
   postyWorking(true);
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
@@ -4045,7 +4040,10 @@ async function chatView() {
   return `
   <div class="chat-home">
     <div class="chome-top">
-      <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
+      <button type="button" class="chome-ava-btn" id="chomeLvlBtn" aria-label="Nivel de Posty">
+        <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
+        <span class="chome-lvl" id="chomeLvl" hidden></span>
+      </button>
       <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza.<br>Vos vendé. Yo posteo.</div></div>
     </div>
     <div id="firstPickSlot"></div>
@@ -4064,6 +4062,8 @@ async function bindChatView() {
   bindAcceptAll();
   bindActivateWeek();
   bindAutopilot();
+  // El nivel vive en el avatar del chat (no en el Schedule).
+  try { paintChatLevel(); } catch (e) {}
   // El auto-arranque de la semana también aplica entrando por el chat.
   if (typeof maybeAutoStartWeek === 'function') { try { maybeAutoStartWeek(); } catch (e) {} }
   // El saludo va DESPUÉS del historial (chatLoadHistory reemplaza el box):
@@ -4420,41 +4420,336 @@ async function paintChatQuota(mount, q0) {
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
   try { mount.classList.toggle('quota-row', mount.querySelectorAll(':scope > button').length === 1); } catch (e) {}
 }
+/* ============================================================
+   📇 TARJETA DE POSTEO UNIFICADA (chat "Se viene" + Schedule)
+   Un solo componente, todo inline sin navegar: ver, editar
+   caption, cambiar imagen (3 caminos), saltar con deshacer, aprobar.
+   Acciones por UN listener delegado en document ([data-pc-act]).
+   ============================================================ */
+function pcTz() {
+  try { return (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires'; }
+  catch (e) { return 'America/Argentina/Buenos_Aires'; }
+}
+// Misma convención de parseo que el Schedule: "YYYY-MM-DD HH:MM" (16) = hora local,
+// con 'T'/Z u offset se respeta lo que traiga.
+function pcParseDate(s0) {
+  const s = String(s0 || '');
+  if (!s) return null;
+  let x = s.length === 16 ? s.replace(' ', 'T') : s.replace(' ', 'T');
+  if (s.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(x)) x += 'Z';
+  const d = new Date(x);
+  return isNaN(d) ? null : d;
+}
+function pcFmtDay(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
+function pcFmtDayLong(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
+function pcFmtHour(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
+function pcBadge(p) {
+  if (String(p.status) === 'published') return '<span class="pcard-badge pcard-badge-done">✅ Salió</span>';
+  const mt = String(p.media_type || '');
+  if (mt === 'video') return '<span class="pcard-badge">🎬 Reel</span>';
+  if (mt === 'story') return '<span class="pcard-badge">📸 Story</span>';
+  if (mt === 'carousel') return '<span class="pcard-badge">🖼️ Carrusel</span>';
+  return '<span class="pcard-badge">📝 Post</span>';
+}
+// layout: 'row' (chat, horizontal compacto) | 'col' (schedule, vertical)
+function postCardHTML(p, opts) {
+  opts = opts || {};
+  const layout = opts.layout === 'col' ? 'col' : 'row';
+  const tz = pcTz();
+  const isPub = String(p.status) === 'published';
+  const d = pcParseDate(isPub ? (p.published_at || p.scheduled_at) : p.scheduled_at);
+  const when = d ? pcFmtDay(d, tz) + ' · ' + pcFmtHour(d, tz) : '';
+  const dayLabel = d ? pcFmtDayLong(d, tz) + ' a las ' + pcFmtHour(d, tz) : '';
+  const isV = String(p.media_type || '') === 'video';
+  const media = !p.image_path ? '<span class="pcard-nothumb">📝</span>'
+    : isV ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+    : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`;
+  const capFull = String(p.caption || p.source_topic || 'Posteo');
+  const canApprove = String(p.approval) === 'pending' && String(p.status) === 'scheduled';
+  const actions = isPub ? '' : `<div class="pcard-actions">
+      ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+      <button type="button" data-pc-act="skip">⏭️ Saltar</button>
+      ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
+    </div>`;
+  return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
+    <button type="button" class="pcard-media" data-pc-act="open" aria-label="Ver posteo">${media}</button>
+    <div class="pcard-body">
+      <div class="pcard-meta"><b>${esc(when)}</b>${pcBadge(p)}</div>
+      <div class="pcard-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>
+      ${actions}
+    </div>
+  </div>`;
+}
+// Toast con acciones (fijo abajo, sobre el input). actions: [{label, fn}]
+function postToast(o) {
+  o = o || {};
+  try {
+    document.querySelectorAll('.ptoast').forEach(t => t.remove());
+    const t = document.createElement('div');
+    t.className = 'ptoast';
+    t.innerHTML = `<span class="ptoast-txt">${esc(o.text || '')}</span><span class="ptoast-acts"></span>`;
+    const acts = t.querySelector('.ptoast-acts');
+    (o.actions || []).forEach(a => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ptoast-btn';
+      b.textContent = a.label;
+      b.onclick = async () => { try { await a.fn(); } catch (e) {} try { t.remove(); } catch (e2) {} };
+      acts.appendChild(b);
+    });
+    document.body.appendChild(t);
+    setTimeout(() => { try { t.remove(); } catch (e) {} }, o.ms || 5000);
+  } catch (e) {}
+}
+// --- Edición inline del caption ---
+function pcStartEdit(card) {
+  if (!card || card.querySelector('.pcard-edit')) return;
+  const capEl = card.querySelector('.pcard-cap');
+  if (!capEl) return;
+  const current = capEl.dataset.full || capEl.textContent || '';
+  capEl.style.display = 'none';
+  const wrap = document.createElement('div');
+  wrap.className = 'pcard-edit';
+  wrap.innerHTML = `<textarea rows="3" maxlength="2200">${esc(current)}</textarea>
+    <div class="pcard-edit-btns">
+      <button type="button" class="btn btn-primary btn-sm" data-pc-act="save-cap">Guardar</button>
+      <button type="button" class="btn btn-soft btn-sm" data-pc-act="cancel-cap">Cancelar</button>
+    </div>`;
+  capEl.after(wrap);
+  const ta = wrap.querySelector('textarea');
+  if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+}
+function pcCancelEdit(card) {
+  if (!card) return;
+  const ed = card.querySelector('.pcard-edit');
+  if (ed) ed.remove();
+  const capEl = card.querySelector('.pcard-cap');
+  if (capEl) capEl.style.display = '';
+}
+async function pcSaveCap(card, id, btn) {
+  const wrap = card ? card.querySelector('.pcard-edit') : null;
+  const ta = wrap ? wrap.querySelector('textarea') : null;
+  if (!ta) return;
+  const v = ta.value.trim();
+  if (btn) btn.disabled = true;
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { caption: v });
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    toast('No se pudo guardar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  // Actualiza todas las tarjetas visibles de este posteo.
+  document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
+    const ce = c.querySelector('.pcard-cap');
+    if (ce) { ce.dataset.full = v; ce.textContent = v; ce.style.display = ''; }
+    const we = c.querySelector('.pcard-edit');
+    if (we) we.remove();
+  });
+  toast('✅ Caption actualizado');
+}
+// --- Loading + imagen inline en todas las tarjetas del posteo ---
+function pcSetLoading(id, on, label) {
+  document.querySelectorAll('[data-post-id="' + id + '"] .pcard-media').forEach(m => {
+    let ov = m.querySelector('.pcard-loading');
+    if (on) {
+      if (!ov) { ov = document.createElement('div'); ov.className = 'pcard-loading'; m.appendChild(ov); }
+      ov.innerHTML = '<span>' + esc(label || '⏳ Generando…') + '</span>';
+    } else if (ov) ov.remove();
+  });
+}
+function pcSetImage(id, path) {
+  document.querySelectorAll('[data-post-id="' + id + '"] .pcard-media').forEach(m => {
+    const img = m.querySelector('img');
+    if (img) img.src = path;
+    else m.innerHTML = '<img src="' + esc(path) + '" alt="" loading="lazy">';
+  });
+}
+// --- Bottom sheet: cambiar imagen (3 caminos) ---
+let PC_STYLES_CACHE = null;
+function pcCloseSheet() {
+  document.querySelectorAll('.pcsheet-backdrop').forEach(x => { try { x.remove(); } catch (e) {} });
+}
+async function pcLoadStyles(sel) {
+  if (PC_STYLES_CACHE) { pcFillStyles(sel, PC_STYLES_CACHE); return; }
+  try {
+    const r = await api.get('/api/image-styles');
+    PC_STYLES_CACHE = ((r && r.styles) || []).filter(s => s && (s.code || s.id));
+  } catch (e) { PC_STYLES_CACHE = []; }
+  pcFillStyles(sel, PC_STYLES_CACHE);
+}
+function pcFillStyles(sel, styles) {
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Elegí un estilo…</option>' + styles.map(s => {
+    const code = String(s.code || s.id || '');
+    const label = String(s.name || s.label || code);
+    return '<option value="' + esc(code) + '">' + esc(label) + '</option>';
+  }).join('');
+  sel.dataset.loaded = '1';
+}
+function pcOpenImageSheet(id) {
+  pcCloseSheet();
+  const bd = document.createElement('div');
+  bd.className = 'pcsheet-backdrop';
+  bd.innerHTML = `<div class="pcsheet" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
+    <div class="pcsheet-handle"></div>
+    <div class="pcsheet-title">Cambiar imagen</div>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-style">🎨 Otro estilo</button>
+    <div class="pcsheet-stylewrap" hidden>
+      <select class="pcsheet-select" aria-label="Elegí un estilo"><option value="">Cargando estilos…</option></select>
+    </div>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto</button>
+    <input type="file" accept="image/*" class="pcsheet-file" hidden>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta</button>
+    <button type="button" class="pcsheet-close" data-pc-act="img-close">Cerrar</button>
+    <div class="pcsheet-msg"></div>
+  </div>`;
+  document.body.appendChild(bd);
+  bd.addEventListener('click', (e) => { if (e.target === bd) pcCloseSheet(); });
+  const sheet = bd.querySelector('.pcsheet');
+  const sel = sheet.querySelector('.pcsheet-select');
+  sel.addEventListener('change', () => { if (sel.value) pcRestyle(id, sel.value); });
+  const file = sheet.querySelector('.pcsheet-file');
+  file.addEventListener('change', () => { if (file.files && file.files[0]) pcUploadPhoto(id, file.files[0]); });
+}
+function pcSheetMsg(id, html) {
+  const m = document.querySelector('.pcsheet[data-post-id="' + id + '"] .pcsheet-msg');
+  if (m) m.innerHTML = html;
+}
+async function pcRestyle(id, style) {
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Creando nueva imagen…');
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-restyle', { style }, { timeout: 180000 });
+    if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Imagen actualizada'); }
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+async function pcEnhance(id) {
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Mejorando la foto…');
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
+    if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Foto mejorada'); }
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+async function pcUploadPhoto(id, file) {
+  if (!file || !String(file.type || '').startsWith('image/')) { toast('Elegí un archivo de imagen'); return; }
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Subiendo foto…');
+  try {
+    const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': file.type || 'image/png' }, body: file });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'No pude subirla');
+    await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'save-draft', image_path: data.path });
+    pcSetImage(id, data.path);
+    toast('✅ Foto actualizada');
+  } catch (e) { toast('No se pudo subir: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+// --- Saltar con deshacer (5s) + armar otro ---
+async function pcSkip(id, card) {
+  if (!card) return;
+  const schedAt = card.dataset.schedAt || '';
+  const dayLabel = card.dataset.dayLabel || 'ese día';
+  card.style.pointerEvents = 'none';
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'cancel' });
+  } catch (e) {
+    card.style.pointerEvents = '';
+    toast('No se pudo saltar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  card.classList.add('pcard-gone');
+  setTimeout(() => { if (card.classList.contains('pcard-gone')) card.style.display = 'none'; }, 280);
+  postToast({
+    text: 'Posteo saltado',
+    ms: 5000,
+    actions: [
+      { label: 'Deshacer', fn: async () => {
+        try { await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: schedAt }); }
+        catch (e) { toast('No se pudo deshacer: ' + esc((e && e.message) || 'probá de nuevo')); return; }
+        card.style.display = '';
+        requestAnimationFrame(() => { card.classList.remove('pcard-gone'); card.style.pointerEvents = ''; });
+      } },
+      { label: 'Armar otro', fn: () => {
+        try { sessionStorage.setItem('posty-chat-prefill', 'Armame un posteo para el ' + dayLabel); } catch (e) {}
+        location.hash = '#/app/chat';
+      } },
+    ],
+  });
+}
+// --- Aprobar ---
+async function pcApprove(id, card, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await api.post('/api/posts/' + encodeURIComponent(id) + '/approve', {});
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    toast('No se pudo aprobar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
+    const b = c.querySelector('.pcard-badge');
+    if (b) b.outerHTML = '<span class="pcard-badge pcard-badge-ok">✅ Aprobado</span>';
+    const ab = c.querySelector('[data-pc-act="approve"]');
+    if (ab) ab.remove();
+  });
+  toast('✅ Aprobado — sale a su hora');
+}
+// --- UN solo listener delegado para [data-pc-act] ---
+function pcOnClick(e) {
+  const el = e.target && e.target.closest ? e.target.closest('[data-pc-act]') : null;
+  if (!el) return;
+  const root = el.closest('[data-post-id]');
+  if (!root) return;
+  const id = root.dataset.postId;
+  const act = el.dataset.pcAct;
+  if (act === 'open') { location.hash = '#/app/post/' + encodeURIComponent(id); return; }
+  if (act === 'edit-cap') { pcStartEdit(root); return; }
+  if (act === 'save-cap') { pcSaveCap(root, id, el); return; }
+  if (act === 'cancel-cap') { pcCancelEdit(root); return; }
+  if (act === 'image') { pcOpenImageSheet(id); return; }
+  if (act === 'skip') { pcSkip(id, root); return; }
+  if (act === 'approve') { pcApprove(id, root, el); return; }
+  if (act === 'img-style') {
+    const wrap = root.querySelector('.pcsheet-stylewrap');
+    const sel = root.querySelector('.pcsheet-select');
+    if (wrap) {
+      const show = wrap.hidden;
+      wrap.hidden = !show;
+      if (show && sel && !sel.dataset.loaded) pcLoadStyles(sel);
+    }
+    return;
+  }
+  if (act === 'img-upload') { const f = root.querySelector('.pcsheet-file'); if (f) f.click(); return; }
+  if (act === 'img-enhance') { pcEnhance(id); return; }
+  if (act === 'img-close') { pcCloseSheet(); return; }
+}
+if (!window.__pcardBound) {
+  window.__pcardBound = true;
+  document.addEventListener('click', pcOnClick);
+}
 // 📅 "Se viene": próximos posteos programados integrados al chat.
-// Tarjeta compacta sobre el input: miniatura + día/hora + caption. Un tap = vista previa.
+// Usa la tarjeta unificada (todo inline: ver, editar, imagen, saltar, aprobar).
 async function paintUpcoming(mount) {
   if (!mount || !mount.isConnected) return;
   const old = mount.querySelector('.chat-upcoming');
   if (old) old.remove();
   let posts = [];
   try { posts = await api.get('/api/posts'); } catch (e) { return; }
-  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
   const now = Date.now();
   const up = (Array.isArray(posts) ? posts : [])
     .filter(p => p.status === 'scheduled' && p.scheduled_at)
-    .map(p => {
-      const s0 = String(p.scheduled_at || '');
-      const d = new Date(s0.length === 16 ? s0.replace(' ', 'T') : s0.replace(' ', 'T'));
-      return { p, d: isNaN(d) ? null : d };
-    })
+    .map(p => ({ p, d: pcParseDate(p.scheduled_at) }))
     .filter(x => x.d && x.d.getTime() > now - 3600000)
     .sort((a, b) => a.d - b.d)
     .slice(0, 3);
   if (!up.length || !mount.isConnected) return;
-  const fmtD = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
-  const fmtH = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
-  const items = up.map(({ p, d }) => {
-    const cap = String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 60);
-    const isV = p.media_type === 'video';
-    const thumb = !p.image_path ? `<span class="cu-thumb cu-nothumb">📝</span>`
-      : isV ? `<video class="cu-thumb" src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
-      : `<img class="cu-thumb" src="${esc(p.image_path)}" alt="" loading="lazy">`;
-    return `<button type="button" class="cu-item" data-cu-id="${p.id}">
-      ${thumb}
-      <span class="cu-txt"><b>${esc(fmtD(d))} · ${esc(fmtH(d))}</b><span>${esc(cap)}</span></span>
-      <span class="cu-chev">›</span>
-    </button>`;
-  }).join('');
+  const items = up.map(({ p }) => postCardHTML(p, { layout: 'row' })).join('');
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-upcoming">
     <button type="button" class="cu-head" data-cu-go="schedule">📅 Se viene <span class="cu-go">Ver todo →</span></button>
     <div class="cu-list">${items}</div>
@@ -4469,10 +4764,6 @@ async function paintUpcoming(mount) {
   if (!box || !box.isConnected) return;
   const go = box.querySelector('[data-cu-go]');
   if (go) go.onclick = () => { location.hash = '#/app/schedule'; };
-  box.querySelectorAll('.cu-item').forEach(b => b.onclick = () => {
-    // La vista de aprobación trae aceptar / declinar / editar del posteo.
-    if (b.dataset.cuId) location.hash = '#/app/post/' + b.dataset.cuId;
-  });
 }
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
@@ -4650,60 +4941,39 @@ async function chatAvatarLevel() {
   }
 }
 
-// Pinta el nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con
-// marco de nivel (bronce/plata/oro) + badge, nombre del negocio, UNA barra
-// al siguiente nivel y 2-3 stats. Si no hay logo: inicial con la paleta del cliente.
-async function paintBrandStrip() {
-  const mount = document.getElementById('xpBrand');
-  if (!mount) return;
+// El nivel se ve en el logo del chat: badge "Nv N" sobre el avatar.
+// Tap → modal con el progreso (nombre del nivel, barra, qué falta).
+async function paintChatLevel() {
+  const badge = document.getElementById('chomeLvl');
+  const btn = document.getElementById('chomeLvlBtn');
+  if (!badge || !btn) return;
   let lv = null;
   try { lv = await api.get('/api/avatar-level'); } catch (e) {}
-  let logo = (typeof assetLogo === 'function') ? assetLogo() : null;
-  if (!logo) { try { const a = await api.get('/api/assets'); if (Array.isArray(a)) logo = a.find(x => x.kind === 'logo'); } catch (e) {} }
-  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
-  const lvl = (lv && lv.ok) ? lv.level : 1;
-  const lvlName = (lv && lv.ok && (lv.levelName || POSTA_LVL_NAMES[lv.level])) || POSTA_LVL_NAMES[1];
-  const tier = (lv && lv.ok && lv.tier) || 'none';
-  const xp = (lv && lv.ok && lv.xp) || 0;
-  const published = (lv && lv.ok && lv.published) || 0;
-  let pct = 0, sub;
-  if (lv && lv.ok && lv.nextXp) {
+  if (!lv || !lv.ok) { badge.hidden = true; return; }
+  badge.hidden = false;
+  badge.textContent = 'Nv ' + (lv.level || 1);
+  btn.onclick = () => postyLevelModal(lv);
+}
+function postyLevelModal(lv) {
+  const lvl = (lv && lv.level) || 1;
+  const name = (lv && (lv.levelName || POSTA_LVL_NAMES[lvl])) || POSTA_LVL_NAMES[1] || '';
+  const xp = (lv && lv.xp) || 0;
+  let pct = 100, nextTxt = '👑 ¡Nivel máximo!';
+  if (lv && lv.nextXp) {
     pct = Math.min(99, Math.round((xp / lv.nextXp) * 100));
-    sub = `${xp} de ${lv.nextXp} pts · próximo: ${lv.nextName}`;
-  } else if (lv && lv.ok) { pct = 100; sub = `👑 ¡Nivel máximo: ${lvlName}!`; }
-  else { sub = 'Publicá para subir de nivel'; }
-  const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
-  const fbBg = bc[0] || '#2793C8';
-  const initial = (biz.trim()[0] || 'M').toUpperCase();
-  const logoHtml = (logo && logo.file_path)
-    ? `<img src="${esc(logo.file_path)}" alt="logo">`
-    : `<span class="xp-logo-fallback" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
-  mount.innerHTML = `
-    <span class="xp-logo-wrap tier-${tier}">${logoHtml}<span class="xp-lvl-badge">${lvl}</span></span>
-    <span class="xp-brand-txt"><span class="xp-title">Tu progreso</span><b class="xp-biz">${esc(biz)}</b><span class="xp-lvlname">Nivel ${lvl} · ${esc(lvlName)}</span></span>`;
-  const bar = document.getElementById('xpBrandBar'); if (bar) bar.style.width = pct + '%';
-  const subEl = document.getElementById('xpBrandSub'); if (subEl) subEl.textContent = sub;
-  const stats = document.getElementById('xpBrandStats');
-  if (stats) {
-    let streakTxt = '';
-    try {
-      const sk = await api.get('/api/streak');
-      if (sk && sk.current > 0) streakTxt = `<span>🔥 ${sk.current} ${sk.current === 1 ? 'semana' : 'semanas'}</span>`;
-      // Vencimiento de la racha: SIEMPRE visible, muy claro. Pulso solo si se apaga pronto.
-      const expEl = document.getElementById('xpBrandExp');
-      if (expEl) {
-        if (sk && sk.current > 0 && sk.expiresInMs > 0) {
-          expEl.textContent = `⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)}`;
-          expEl.classList.add('show');
-          expEl.classList.toggle('on', !!sk.expiringSoon);
-        } else {
-          expEl.classList.remove('show', 'on');
-          expEl.textContent = '';
-        }
-      }
-    } catch (e) {}
-    stats.innerHTML = `<span>⚡ ${xp} pts</span>${streakTxt}<span>📮 ${published} ${published === 1 ? 'publicado' : 'publicados'}</span>`;
+    nextTxt = `${xp} de ${lv.nextXp} pts · próximo: ${esc(lv.nextName || '')}`;
   }
+  streakModalShell(`
+    <div class="stk-hero">
+      <p class="stk-eyebrow">Nivel de Posty</p>
+      <p class="stk-pts"><b>Nv ${lvl}</b> · ${esc(name)}</p>
+      <div class="xp-bar" style="margin:12px auto;max-width:260px"><span style="width:${pct}%"></span></div>
+      <p class="stk-next">${esc(nextTxt)}</p>
+    </div>
+    <p class="d" style="text-align:center">Cada posteo publicado suma: 100 pts por post, 150 por reel.</p>
+    <button class="btn btn-ghost btn-block" id="lvlCloseBtn" style="margin-top:10px">Cerrar</button>`);
+  const c = document.getElementById('lvlCloseBtn');
+  if (c) c.onclick = () => closeStreakModal();
 }
 
 // Misiones de Posty: una activa por vez, narradas en el chat.
@@ -6662,10 +6932,10 @@ function shareStreakImage(sk) {
   });
 }
 
-/* ---------- Barra XP unificada (racha + progreso) ---------- */
-// Extraída de Mi semana para reutilizar en Schedule: racha + tu progreso en un
-// solo vistazo. El pintado fino lo hace paintBrandStrip() sobre #xpBrand etc.
-// El click abre el modal de racha (streakPillModal) vía el binding de la vista.
+/* ---------- Barra XP (racha) ---------- */
+// En Schedule solo se usa el expBanner (aviso de racha por apagarse) y el
+// cálculo de WEEKLY_BARS_HTML. La barrita del nivel se eliminó: el nivel
+// vive en el avatar del chat (badge "Nv N" con tap → progreso).
 function xpStripHTML(sk, st, draftN) {
   if (!st) return { xpStrip: '', expBanner: '' };
   const w = st.week, mo = st.month;
@@ -7550,7 +7820,7 @@ async function scheduleView() {
   const published = allPosts.filter(p => p.status === 'published');
   const failed = allPosts.filter(p => p.status === 'failed');
   const slots = suggestSlots(drafts.length, schedPosts);
-  const { xpStrip, expBanner } = xpStripHTML(sk, st, drafts.length);
+  const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
   // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
   let dogfoodPost = null;
@@ -7599,16 +7869,6 @@ async function scheduleView() {
       return `${a} – ${b}`;
     } catch (e) { return ''; }
   })();
-  const capFull = (p) => esc(String(p.caption || p.source_topic || 'Posteo') || 'Posteo');
-  const typeBadge = (p) => {
-    const mt = String(p.media_type || '');
-    if (mt === 'video') return '<span class="sched-badge">🎬 Reel</span>';
-    if (mt === 'story') return '<span class="sched-badge">📸 Story</span>';
-    if (mt === 'carousel') return '<span class="sched-badge">🖼️ Carrusel</span>';
-    return '<span class="sched-badge">📝 Post</span>';
-  };
-  // Hora en 24h ("19:00"), como se lee en Argentina.
-  const fmtHour24 = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
   const dayLong = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
   // Pulso de la semana: resumen vivo arriba del calendario.
   const weekSchedCount = scheduled.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
@@ -7632,17 +7892,7 @@ async function scheduleView() {
     return `<div class="sched-col${isToday ? ' today' : ''}">
       <div class="sched-colhead">${esc(fmtDay(d))}${isToday ? ' <span class="sched-today">hoy</span>' : ''}</div>
       <div class="sched-colbody">
-        ${items.length ? items.map(({ p, d: dt, done }) => `
-        <button class="sched-card${done ? ' is-done' : ''}" data-lightbox="${esc(p.image_path || '')}" ${p.media_type === 'video' ? 'data-video="1"' : ''}>
-          <span class="sched-thumbwrap">
-            ${p.image_path
-              ? (p.media_type === 'video'
-                ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
-                : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`)
-              : `<span class="sched-nothumb">📝</span>`}
-          </span>
-          <div class="sched-cardtxt"><div class="sched-cardmeta"><b>${esc(fmtHour24(dt))}</b>${done ? '<span class="sched-badge">✅ Salió</span>' : typeBadge(p)}</div><span>${capFull(p)}</span></div>
-        </button>`).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
+        ${items.length ? items.map(({ p }) => postCardHTML(p, { layout: 'col' })).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
       </div>
     </div>`;
   }).join('');
@@ -7652,7 +7902,7 @@ async function scheduleView() {
   return `<div id="schedView" class="sched-wrap">
     ${trialBanner}
     ${dogfoodBlock}
-    ${xpStrip}${expBanner}
+    ${expBanner}
     ${fpBlock}
     ${ftBlock}
     ${reviewBlock}
@@ -7662,6 +7912,7 @@ async function scheduleView() {
       <div><h2 style="margin:0">📅 Schedule</h2>
       <p class="sub" style="margin:4px 0 0">Los que ya aceptaste — salen solos a la hora indicada.</p></div>
       <div class="sched-nav">
+        ${(sk && sk.current > 0) ? `<button type="button" class="sched-streak" id="schedStreakPill" aria-label="Ver mi racha">🔥 ${sk.current}</button>` : ''}
         <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_WEEK_OFFSET <= 0 ? 'disabled' : ''} aria-label="Semana anterior">‹</button>
         <button class="btn btn-ghost btn-sm" id="schedToday">Esta semana</button>
         <button class="btn btn-ghost btn-sm" id="schedNext" aria-label="Semana siguiente">›</button>
@@ -7825,11 +8076,10 @@ function bindSchedule() {
     }
   });
   // 👍/👎 del "Ya salió": ahora viven en 📊 Tus números (bindStats los cablea).
-  // Barra XP: pintado + click abre el modal de racha.
-  try { paintBrandStrip(); } catch (e) {}
-  const xs = $('#xpStrip');
-  if (xs) xs.onclick = async () => {
-    try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
+  // Racha: pill compacta en el header del Schedule → abre el modal de racha.
+  const sp = $('#schedStreakPill');
+  if (sp) sp.onclick = async () => {
+    try { const sk2 = await api.get('/api/streak'); if (sk2 && sk2.current > 0) streakPillModal(sk2); } catch (e) {}
   };
   // Festejos (antes se chequeaban al entrar a Mi semana).
   setTimeout(() => maybeFirstPublishCelebration(), 1200);
@@ -7876,7 +8126,6 @@ function bindApp(tab) {
   if (dov) dov.onclick = closeDrawer;
   try { paintDrawerIdent(); } catch (e) {}
   try { paintSidePosty(); } catch (e) {}
-  $$('.drawer-plan').forEach(a => { a.onclick = () => closeDrawer(); });
   const dlo = $('#drawerLogout');
   if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
 

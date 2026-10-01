@@ -1510,8 +1510,6 @@ textarea.in{resize:vertical;min-height:96px}
   .drawer-ident-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
   .drawer-ident-txt b{font-size:14.5px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
   .drawer-ident-txt small{font-size:11.5px;font-weight:700;color:var(--cel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .drawer-plan{flex:none;font-size:12px;font-weight:800;color:#0A1E33;background:var(--yl);padding:10px 14px;border-radius:999px;text-decoration:none;white-space:nowrap;min-height:40px;display:inline-flex;align-items:center;font-family:inherit}
-  .drawer-plan:hover{filter:brightness(.97)}
   /* Layout: sin sidebar el chat ocupa todo el viewport */
   .app-shell{min-height:calc(100vh - 69px)}
   .main{margin:0 auto}
@@ -1539,8 +1537,6 @@ textarea.in{resize:vertical;min-height:96px}
   .drawer-ident-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
   .drawer-ident-txt b{font-size:14.5px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
   .drawer-ident-txt small{font-size:11.5px;font-weight:700;color:var(--cel);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .drawer-plan{flex:none;font-size:12px;font-weight:800;color:#0A1E33;background:var(--yl);padding:10px 14px;border-radius:999px;text-decoration:none;white-space:nowrap;touch-action:manipulation;min-height:40px;display:inline-flex;align-items:center;font-family:inherit}
-  .drawer-plan:active{transform:scale(.96)}
   /* 3. La píldora no se parte en dos líneas cuando lleva el conteo */
   .mtop-pill{white-space:nowrap}
   /* 1. Unificación con el lenguaje del chat: radios generosos, aire, misma paleta */
@@ -1620,15 +1616,53 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-upcoming{flex:0 0 100%;margin:0 0 8px;background:var(--bg2);border-radius:14px;padding:10px 10px 8px;box-shadow:0 2px 10px rgba(10,30,51,.06)}
 .cu-head{border:none;background:none;font:inherit;font-weight:800;font-size:13.5px;color:var(--txt);display:flex;align-items:center;justify-content:space-between;width:100%;padding:0 2px 8px;cursor:pointer;touch-action:manipulation}
 .cu-go{font-size:12px;font-weight:700;color:var(--cel)}
-.cu-list{display:flex;flex-direction:column;gap:6px}
-.cu-item{display:flex;gap:10px;align-items:center;border:none;background:#fff;border-radius:10px;padding:6px;text-align:left;font:inherit;cursor:pointer;width:100%;touch-action:manipulation}
-.cu-item:active{transform:scale(.98)}
-.cu-thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none;background:#eef2f6;display:block}
-.cu-nothumb{display:flex;align-items:center;justify-content:center;font-size:20px}
-.cu-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-.cu-txt b{font-size:12.5px;color:var(--cel)}
-.cu-txt span{font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cu-chev{font-size:20px;color:var(--dim);flex:none;padding:0 4px}
+.cu-list{display:flex;flex-direction:column;gap:8px}
+/* 📇 Tarjeta de posteo unificada */
+.pcard{border:none;background:var(--bg2);border-radius:12px;padding:8px;font-family:inherit;text-align:left;box-shadow:0 2px 10px rgba(10,30,51,.07);touch-action:manipulation;transition:opacity .25s,transform .25s;overflow-x:clip}
+.pcard-row{display:flex;gap:10px;align-items:flex-start}
+.pcard-col{display:flex;flex-direction:column;gap:8px}
+.pcard-media{position:relative;border:none;background:#fff;border-radius:10px;overflow:hidden;cursor:pointer;flex:none;padding:0;touch-action:manipulation}
+.pcard-row .pcard-media{width:72px;height:72px}
+.pcard-col .pcard-media{width:100%;aspect-ratio:4/5}
+.pcard-media img,.pcard-media video{width:100%;height:100%;object-fit:cover;display:block;background:#fff}
+.pcard-nothumb{width:100%;height:100%;min-height:72px;display:flex;align-items:center;justify-content:center;font-size:26px;background:#fff}
+.pcard-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.pcard-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pcard-meta b{font-size:12.5px;color:var(--cel);font-weight:800}
+.pcard-badge{background:rgba(10,30,51,.08);color:var(--txt);font-size:10px;font-weight:800;border-radius:999px;padding:3px 9px;line-height:1.4;white-space:nowrap}
+.pcard-badge-done{background:#E5F6EC;color:#1B7A3D}
+.pcard-badge-ok{background:#E5F6EC;color:#1B7A3D}
+.pcard-cap{font-size:12.5px;color:var(--txt);line-height:1.45;word-break:break-word;cursor:pointer}
+.pcard-row .pcard-cap{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pcard-col .pcard-cap{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pcard-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.pcard-actions button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font-size:11.5px;font-weight:700;color:var(--txt);cursor:pointer;font-family:inherit;touch-action:manipulation;white-space:nowrap}
+.pcard-actions button:active{transform:scale(.96)}
+.pcard-actions button:disabled{opacity:.5}
+.pcard-approve{border-color:var(--cel) !important;color:var(--cel) !important}
+.pcard-edit textarea{width:100%;font-size:16px;font-family:inherit;line-height:1.5;border:1.5px solid var(--cel);border-radius:10px;padding:8px;resize:vertical;min-height:64px;background:#fff;color:var(--txt)}
+.pcard-edit-btns{display:flex;gap:8px;margin-top:6px}
+.pcard-gone{opacity:0 !important;transform:scale(.97);pointer-events:none}
+.pcard-loading{position:absolute;inset:0;background:rgba(10,30,51,.55);display:flex;align-items:center;justify-content:center;z-index:2}
+.pcard-loading span{color:#fff;font-size:12px;font-weight:700;text-align:center;padding:0 8px}
+/* Bottom sheet: cambiar imagen */
+.pcsheet-backdrop{position:fixed;inset:0;background:rgba(10,30,51,.45);z-index:10003;display:flex;align-items:flex-end;justify-content:center;touch-action:manipulation}
+.pcsheet{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:520px;padding:8px 18px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,.2);animation:pcsheet-up .22s ease-out;overflow-x:clip}
+@keyframes pcsheet-up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+.pcsheet-handle{width:40px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 10px}
+.pcsheet-title{font-size:15px;font-weight:800;color:var(--txt);margin-bottom:10px;text-align:center}
+.pcsheet-opt{display:block;width:100%;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:13px;font-size:14px;font-weight:700;color:var(--txt);font-family:inherit;cursor:pointer;margin-bottom:8px;touch-action:manipulation;text-align:left}
+.pcsheet-opt:active{background:var(--bg2)}
+.pcsheet-close{display:block;width:100%;border:none;background:var(--bg2);border-radius:12px;padding:13px;font-size:14px;font-weight:700;color:var(--mut);font-family:inherit;cursor:pointer;margin-top:4px;touch-action:manipulation}
+.pcsheet-stylewrap{margin:-2px 0 8px}
+.pcsheet-select{width:100%;font-size:16px;font-family:inherit;border:1.5px solid var(--cel);border-radius:12px;padding:12px;background:#fff;color:var(--txt)}
+.pcsheet-msg{font-size:12.5px;color:var(--mut);text-align:center;min-height:18px;margin-top:4px}
+/* Toast con acciones (sobre el input) */
+.ptoast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;z-index:10002;background:#0A1E33;color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.35);font-size:13px;overflow-x:clip}
+.ptoast-txt{line-height:1.4}
+.ptoast-acts{display:flex;gap:8px;flex:none}
+.ptoast-btn{border:1.5px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:800;font-family:inherit;cursor:pointer;touch-action:manipulation;white-space:nowrap}
+.ptoast-btn:active{background:rgba(255,255,255,.15)}
 .sched-ghost{border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--dim);font-family:inherit;width:100%;flex:1;min-height:76px;touch-action:manipulation}
 .sched-ghost:active{transform:scale(.97);border-color:var(--cel);color:var(--cel)}
 .sg-plus{font-size:22px;font-weight:300;line-height:1}
@@ -1731,3 +1765,16 @@ textarea.in{resize:vertical;min-height:96px}
 .posty-celebrate .pc-ball.b2{animation:pc-cascade 1.14s ease-in-out infinite;animation-delay:-.38s}
 .posty-celebrate .pc-ball.b3{animation:pc-cascade 1.14s ease-in-out infinite;animation-delay:-.76s}
 @keyframes pc-cascade{0%{transform:translate(-64px,18px)}25%{transform:translate(0,-64px)}50%{transform:translate(64px,18px)}75%{transform:translate(0,-64px)}100%{transform:translate(-64px,18px)}}
+/* "Posty está escribiendo": puntitos animados en la burbuja del chat */
+.typing-dots{display:inline-flex;gap:5px;padding:8px 4px;align-items:center}
+.typing-dots span{width:8px;height:8px;border-radius:50%;background:var(--dim);opacity:.35;animation:tdot 1.2s infinite}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
+@keyframes tdot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+/* Nivel de Posty sobre el logo del chat */
+.chome-ava-btn{position:relative;background:none;border:0;padding:0;cursor:pointer;line-height:0;flex-shrink:0}
+.chome-ava-btn:active{transform:scale(.96)}
+.chome-lvl{position:absolute;right:-6px;bottom:-6px;background:#0A1E33;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;border:2px solid #fff;line-height:1.3;white-space:nowrap;box-shadow:0 2px 6px rgba(10,30,51,.25)}
+/* Pill de racha en el header del Schedule (abre el modal de racha) */
+.sched-streak{background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:7px 13px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(254,193,77,.35);font-family:inherit}
+.sched-streak:active{transform:scale(.95)}
