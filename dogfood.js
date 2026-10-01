@@ -266,15 +266,23 @@ function buildCaption(angle, ownerId, db) {
 // La mascota se usa como referencia visual si existe en data/media/.
 // ---------------------------------------------------------------------------
 function mascotRefPath(mediaDir) {
-  try {
-    const p = path.join(mediaDir, HOUSE.mascotFile);
-    return (fs.existsSync(p) && fs.statSync(p).isFile()) ? p : null;
-  } catch (e) { return null; }
+  // 1) override local: data/media/posty-mascot.png
+  // 2) avatar oficial bundelado: public/ai-avatar.png (viaja en el deploy, siempre disponible)
+  const candidates = [
+    path.join(mediaDir, HOUSE.mascotFile),
+    path.join(__dirname, 'public', 'ai-avatar.png'),
+  ];
+  for (const p of candidates) {
+    try { if (fs.existsSync(p) && fs.statSync(p).isFile()) return p; } catch (e) {}
+  }
+  return null;
 }
+// Posty SIEMPRE igual: la cara no se negocia (Valentino la aprobó así).
+const POSTY_LOOK = 'Posty, the cute Pixar-style 3D blue robot: round bright-blue head with darker blue accent patches on the cheeks and sides, big expressive cartoon eyes, small friendly smile, yellow antenna ball on top of the head, yellow round chest button';
 
 function buildImagePrompt(angle, stylePick) {
   const paletteLine = `Use EXACTLY this brand palette, it always wins: primary #2793C8 (bright sky blue), accent #FEC14D (warm yellow), deep navy #0A1E33 for text/backgrounds. Never use other brand colors.`;
-  const scene = `Adorable premium 3D render in Pixar style, vertical 4:5 composition, Instagram post quality. Scene: ${angle.visual}.`;
+  const scene = `Adorable premium 3D render in Pixar style, vertical 4:5 composition, Instagram post quality. Main character (must be identical every time): ${POSTY_LOOK}. Scene: ${angle.visual}.`;
   const frag = stylePick && stylePick.style ? `\n\n${styleFragment(stylePick.style, HOUSE.palette)}` : '';
   return `${scene}\n\n${paletteLine}${frag}`;
 }
@@ -295,7 +303,7 @@ async function generateDogfoodImage({ angle, openaiKey, mediaDir, tmpName }) {
       const ext = path.extname(mascot).toLowerCase();
       const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
       form.append('image', new Blob([buf], { type: mime }), 'mascot' + ext);
-      form.append('prompt', prompt + ' IMPORTANT: keep the SAME cute blue robot mascot character from the reference photo (same face, same colors, same style). Only change the scene around it.');
+      form.append('prompt', prompt + ' IMPORTANT: keep the EXACT same character from the reference photo — identical face, same bright blue body, darker blue accent patches, yellow antenna ball, yellow chest button, same Pixar 3D style. The character must be instantly recognizable as the same Posty. Only change the scene, pose and props around it.');
       form.append('size', '1024x1536');
       r = await fetch('https://api.openai.com/v1/images/edits', {
         method: 'POST', headers: { Authorization: `Bearer ${openaiKey}` }, body: form,
