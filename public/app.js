@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261001-v5'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261001-v8'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -744,6 +744,21 @@ function pushSupported() {
   catch (e) { return false; }
 }
 function pushPerm() { try { return Notification.permission; } catch (e) { return 'denied'; } }
+// 🔔 Posty te habla y estás en otra pestaña: notificación local del navegador.
+// Usa el mismo permiso que el push (pushEnableFlow). Solo dispara si la pestaña está oculta.
+function postyNotify(title, body) {
+  try {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    if (!document.hidden) return;
+    const n = new Notification(title || 'Posty', {
+      body: String(body || '').replace(/\n+/g, ' ').slice(0, 140),
+      icon: 'ai-avatar.png',
+      tag: 'posty-chat',
+    });
+    n.onclick = () => { try { window.focus(); } catch (e) {} try { n.close(); } catch (e2) {} };
+  } catch (e) {}
+}
 function pushKeyToU8(b64) {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
   const b = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
@@ -3255,6 +3270,7 @@ function chatSay(text) {
   const box = $('#chatBox');
   if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   chatScroll();
+  postyNotify('Posty', text);
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text }] }).catch(() => {}); } catch (e) {}
 }
 
@@ -3767,6 +3783,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
     box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
+    postyNotify('Posty', r.reply || '…');
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
     if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
@@ -4230,6 +4247,7 @@ function chatSayLocal(text) {
   const box = document.getElementById('chatBox');
   if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   if (typeof chatScroll === 'function') chatScroll();
+  if (typeof postyNotify === 'function') postyNotify('Posty', text);
 }
 
 // Tarjeta "¿Arrancamos por este? 👀": solo primera apertura con borradores.
@@ -4431,9 +4449,10 @@ async function paintUpcoming(mount) {
     const thumb = !p.image_path ? `<span class="cu-thumb cu-nothumb">📝</span>`
       : isV ? `<video class="cu-thumb" src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img class="cu-thumb" src="${esc(p.image_path)}" alt="" loading="lazy">`;
-    return `<button type="button" class="cu-item" data-cu-src="${esc(p.image_path || '')}" data-cu-video="${isV ? 1 : 0}">
+    return `<button type="button" class="cu-item" data-cu-id="${p.id}">
       ${thumb}
       <span class="cu-txt"><b>${esc(fmtD(d))} · ${esc(fmtH(d))}</b><span>${esc(cap)}</span></span>
+      <span class="cu-chev">›</span>
     </button>`;
   }).join('');
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-upcoming">
@@ -4451,8 +4470,8 @@ async function paintUpcoming(mount) {
   const go = box.querySelector('[data-cu-go]');
   if (go) go.onclick = () => { location.hash = '#/app/schedule'; };
   box.querySelectorAll('.cu-item').forEach(b => b.onclick = () => {
-    const src = b.dataset.cuSrc;
-    if (src && typeof openLightbox === 'function') openLightbox(src, b.dataset.cuVideo === '1');
+    // La vista de aprobación trae aceptar / declinar / editar del posteo.
+    if (b.dataset.cuId) location.hash = '#/app/post/' + b.dataset.cuId;
   });
 }
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
