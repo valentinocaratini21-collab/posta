@@ -75,6 +75,13 @@ const api = {
   del: (u) => api.req('DELETE', u),
 };
 
+// IS_NATIVE: la app corre empaquetada (Capacitor iOS / TWA Android). Sin ventas: cero precios, cero CTAs de pago.
+const IS_NATIVE = (() => { try {
+  if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) return true;
+  if (typeof document !== 'undefined' && document.referrer && document.referrer.indexOf('android-app://') === 0) return true;
+  return false;
+} catch (e) { return false; } })();
+
 // ---------- Analytics propio: mide el uso para mejorar el producto ----------
 // Fire-and-forget: encola eventos y los manda en batch. JAMÁS rompe ni frena la UI.
 const AN_Q = [];
@@ -159,6 +166,32 @@ async function uploadAssetFile(file, kind) {
   return data;
 }
 
+// ---------- Lazy chunks: vistas pesadas fuera del primer pantallazo ----------
+// app.js trae el primer pantallazo (landing, auth, chat, semana, schedule, aprobación).
+// Las vistas pesadas (ajustes, admin, creador manual) viven en /js/chunk-*.js y se
+// cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
+// comparten el scope global con este archivo, sin imports/exports que mantener.
+const CHUNK_V = '20260930-post'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const __CHUNKS = {};
+function loadChunk(name) {
+  if (__CHUNKS[name]) return __CHUNKS[name];
+  __CHUNKS[name] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/js/chunk-' + name + '.js?v=' + CHUNK_V;
+    s.onload = () => resolve();
+    s.onerror = () => { delete __CHUNKS[name]; reject(new Error('chunk ' + name + ' no cargó')); };
+    document.head.appendChild(s);
+  });
+  return __CHUNKS[name];
+}
+// Tarjeta amable si un chunk no pudo descargarse (p. ej. sin conexión).
+function chunkFailHTML() {
+  return '<div class="apv-wrap"><div class="card" style="text-align:center">'
+    + '<h3 style="margin:0 0 6px">\U0001f605 Uh, no pude cargar esta secci\u00f3n</h3>'
+    + '<p class="hint">Revis\u00e1 tu conexi\u00f3n y prob\u00e1 de nuevo.</p>'
+    + '<button class="btn btn-soft" onclick="render()">Reintentar</button>'
+    + '</div></div>';
+}
 let ME = null;
 let PROFILE = null;
 let SETTINGS = null;
@@ -179,6 +212,8 @@ async function pzReferral() {
 let NET_OFFLINE = false;
 // Callback que re-pinta la tarjeta "🌐 La web de tu negocio" (lo registra bindSettings cuando renderiza Ajustes)
 let PZ_WEB_REFRESH = null;
+// Callback que re-consulta GET /api/posty/level y repinta la tarjeta "🧠 Lo que Posty sabe de tu negocio"
+let PZ_LEVEL_REFRESH = null;
 async function refreshSession() {
   let lastErr = null;
   for (let i = 0; i < 3; i++) {
@@ -307,13 +342,13 @@ function planCardsHTML(plans) {
       ${pzPerDayHTML(p)}
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="#/registro">Empezar ahora</a>
+      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
     </div>`).join('');
 }
 
 function anchorHTML(anchor) {
   if (!anchor) return '';
-  return `Un community manager cuesta <b>${esc(anchor.cm)}</b>. Posta arranca en <b>${esc(anchor.desde)}</b>.`;
+  return `Un community manager cuesta <b>${esc(anchor.cm)}</b>. Posty arranca en <b>${esc(anchor.desde)}</b>.`;
 }
 
 // Cambia el país de los planes en la landing sin recargar
@@ -343,17 +378,14 @@ function pzRefBandHTML() {
   return '';
 }
 // Calculadora "cuánto te cuesta hacerlo vos" (global, la llama el botón)
-function calcDIY() {
-  const h = Math.max(0, parseFloat(($('#diy_hours') || {}).value) || 0);
-  const r = Math.max(0, parseFloat(($('#diy_rate') || {}).value) || 0);
-  const out = $('#diy_out');
-  if (!out) return;
-  const monthly = Math.round(h * r * 4);
-  const pro = (PLANS_CACHE && PLANS_CACHE.plans || []).find(p => p.id === 'pro');
-  const sym = (pro && pro.currency === 'UYU') ? '$U ' : '$';
-  const proLabel = pro ? pro.price_label : '$59.900';
-  out.innerHTML = `Hacerlo vos te cuesta <b>${sym}${monthly.toLocaleString('es-AR')}/mes</b> · Posta Pro: <b>${esc(proLabel)}/mes</b>`;
-  out.style.display = 'block';
+
+// Lugares reales: el estático del template ("50") es solo un fallback; el número
+// vivo baja de /api/capacity (spots_total = MONTHLY_SPOTS en server.js).
+function refreshScarcity() {
+  fetch('/api/capacity').then(r => r.json()).then(c => {
+    const el = document.getElementById('scarcityLine');
+    if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
+  }).catch(() => {});
 }
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
@@ -366,33 +398,31 @@ function landingView(cfg) {
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
-      <a href="#incluye">Qué incluye</a>
       <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
       <a href="#faq">Preguntas</a>
       <a href="#/login">Entrar</a>
-      <a class="btn btn-primary btn-sm" href="#/registro">Empezar ahora</a>
+      <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
     <a href="#como-funciona">Cómo funciona</a>
-    <a href="#incluye">Qué incluye</a>
     <a href="#ejemplos">Ejemplos</a>
     <a href="#planes">Planes</a>
     <a href="#faq">Preguntas</a>
     <a href="#/login">Entrar</a>
-    <a class="btn btn-primary btn-block" href="#/registro">Empezar ahora</a>
+    <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
-    <h1>¡Hola! Soy <span class="hl">Posty</span></h1>
-    <p class="sub"><b>Te armo tu semana de Instagram en minutos.</b> Ideas, diseños, textos y hashtags con tu marca — vos solo aprobás, yo me ocupo de todo.</p>
+    <h1>Tu semana de Instagram,<br><span class="hl">hecha en 1 minuto</span></h1>
+    <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b>. Vos solo aprobás — yo me ocupo de todo.</p>
     <div class="hero-cta">
-      <a class="btn btn-primary" href="#/registro">Empezar ahora</a>
-      <a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a>
+      <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
     </div>
+    <div class="hero-note">Sin tarjeta · probalo gratis · Cancelá cuando quieras</div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
       <div class="pz-ba-row">
@@ -402,12 +432,11 @@ function landingView(cfg) {
         </div>
         <div class="pz-ba-arrow">→</div>
         <div class="pz-ba-panel">
-          <div class="pz-ba-label pz-ba-label-on">CON POSTA</div>
+          <div class="pz-ba-label pz-ba-label-on">CON POSTY</div>
           <img src="hero-feed.jpg" alt="Feed de Instagram gestionado por Posty">
         </div>
       </div>
     </div>
-    <div class="hero-note">Sin tarjeta · 3 días gratis · Cancelá cuando quieras</div>
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷</div>
     <div class="mock-row">
       <div class="phone"><div class="screen">
@@ -420,17 +449,9 @@ function landingView(cfg) {
       </div></div>
     </div>
   </div></div>
-  <div class="sample-banner"><div class="wrap">
-    <div class="sample-txt"><b>🎁 Tu semana de posteos GRATIS</b><span>Te la armo en 1 minuto, con tu negocio real. Sin registro.</span></div>
-    <a class="btn btn-primary" href="/prueba">Armemos tu semana gratis</a>
-  </div></div>
-  <div class="pz-trialband"><div class="wrap">
-    <div class="pz-trialband-txt"><b>🚀 Probá la app completa</b><span>Te armo tus ideas + tu semana en 1 minuto. Sin registro.</span></div>
-    <a class="btn btn-primary" href="/prueba">Probar la app</a>
-  </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
     <h2>Hecho por Posty 🤖</h2>
-    <p class="lede">Diseños y videos que armo en minutos, para cualquier rubro. Cada post de mis clientes lleva mi marca — es mi mejor publicidad.</p>
+    <p class="lede">Diseños y videos que armo en minutos, para cualquier rubro. Imaginá tu negocio acá 👇</p>
     <div class="show-row">
       <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posty"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
       <div class="phone sm"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
@@ -441,86 +462,41 @@ function landingView(cfg) {
       <div class="phone sm"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
       <div class="phone sm"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posty"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
     </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero mi semana así 👀</a></div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así trabajo yo 👇</h2>
     <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
     <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo y tus competidores. Te lleva 2 minutos y no te pido más nada.</p></div>
+      <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
       <div class="step"><div class="num">3</div><h3>Vos aprobás, yo publico</h3><p>Tu semana queda programada a la mejor hora. Nada sale sin tu OK.</p></div>
     </div>
-  </div></div>
-  <div class="section" id="incluye" style="background:var(--bg2)"><div class="wrap">
-    <h2>Qué incluye</h2>
-    <p class="lede">Todo lo que haría tu equipo de marketing, sin contratar a nadie. Esto es lo que hago por vos cada semana 👇</p>
-    <div class="grid3">
-      <div class="feat"><div class="ico">💡</div><h3>Ideas estratégicas</h3><p>Cada semana pensamos el contenido por vos: novedades, promos, tips, testimonios y más.</p></div>
-      <div class="feat"><div class="ico">🎨</div><h3>Diseños con tu marca</h3><p>Usamos TUS fotos, TU logo y TUS colores. Nada de plantillas genéricas que no te representan.</p></div>
-      <div class="feat"><div class="ico">✍️</div><h3>Captions + hashtags</h3><p>Textos en rioplatense con tu tono, pensados para vender, con hashtags para Argentina.</p></div>
-      <div class="feat"><div class="ico">🎬</div><h3>Videos para Reels</h3><p>Convertimos tus fotos en videos verticales listos para Reels, en el formato que más rinde.</p></div>
-      <div class="feat"><div class="ico">📅</div><h3>Publicación automática</h3><p>Programamos tu semana completa: la revisás una vez y el sistema publica solo, a la hora exacta, en tu cuenta real.</p></div>
-      <div class="feat"><div class="ico">🔍</div><h3>Diferenciación de tu competencia</h3><p>Nos contás quiénes son tus competidores y creamos contenido que te haga destacar, no copiar.</p></div>
-    </div>
-  </div></div>
-  <div class="section" id="calculadora" style="background:var(--bg2)"><div class="wrap" style="max-width:760px;text-align:center">
-    <h2>¿Cuánto te cuesta hacerlo vos?</h2>
-    <p class="lede">La cuenta que nadie hace antes de contratar un community manager.</p>
-    <div class="pz-calc">
-      <div class="field"><label>Horas por semana que le dedicás</label><input id="diy_hours" type="number" min="0" value="5"></div>
-      <div class="field"><label>Valor de tu hora ($)</label><input id="diy_rate" type="number" min="0" value="8000"></div>
-      <button class="btn btn-primary" onclick="calcDIY()">Calcular</button>
-      <div id="diy_out" class="pz-calc-out" style="display:none"></div>
-      <div style="text-align:center;margin-top:14px"><a class="btn btn-ghost" href="/prueba">Probar gratis</a></div>
-    </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
-    <p class="lede">Las herramientas te dan más trabajo. Yo te lo saco de encima.</p>
-    <div class="vs-list">
-      <div class="vs-item">
-        <div class="vs-top">🧰 <b>Apps para programar posteos</b></div>
-        <p>Vos creás los diseños, vos escribís los textos, vos programás cada posteo. Y se pagan en dólares con tarjeta.</p>
-      </div>
-      <div class="vs-item">
-        <div class="vs-top">🧑‍💼 <b>Community manager</b></div>
-        <p>$300.000+ por mes. Hay que buscarlo, dirigirlo, revisarlo y esperarlo.</p>
-      </div>
-      <div class="vs-item">
-        <div class="vs-top">😮‍💨 <b>Hacerlo vos</b></div>
-        <p>Horas por semana que no tenés, para un Instagram a medias.</p>
-      </div>
-      <div class="vs-item win">
-        <div class="vs-top">🚀 <b>Posty</b></div>
-        <p>Me contás de tu negocio <b>una sola vez</b>. Creo las ideas, los diseños y los textos, y programo tu semana en tu cuenta. Nada sale sin tu OK. En pesos, con MercadoPago. Y me probás <b>3 días gratis</b>, sin tarjeta.</p>
-      </div>
-    </div>
-    <p class="unico-line">Soy el único community manager argentino 100% done-for-you para Instagram.</p>
-    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
-  </div></div>
-  <div class="section" id="vs-agencia"><div class="wrap" style="max-width:860px">
-    <h2>Posty vs. agencia de marketing</h2>
-    <p class="lede">Lo mismo que te promete una agencia, sin todo lo que odiás de las agencias.</p>
+    <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
       <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $39.900</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">Minutos</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">Probalo gratis, sin tarjeta</div></div>
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div>
-    <p class="unico-line">Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
+    <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$39.900</b>.</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
-    <p class="lede">Elegí tu plan y arrancamos hoy mismo. Sin letra chica, cancelás cuando quieras.</p>
+    <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
     <div class="country-toggle">
       <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
     </div>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
-    <div class="scarcity" id="scarcityLine">🔥 Solo <b>15 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
+    <div class="scarcity" id="scarcityLine">🔥 Solo <b>50 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
   </div></div>
@@ -528,21 +504,18 @@ function landingView(cfg) {
     <h2>Preguntas frecuentes</h2>
     <p class="lede">Lo que todos preguntan antes de empezar.</p>
     <div class="faq">
-      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez al registrarte y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
-      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. También podés ver tu semana armada en la prueba gratis antes de registrarte.</p></details>
+      <details><summary>¿Necesito hacer algo?</summary><p>No. Me contás de tu negocio una sola vez y listo. Yo creo las ideas, los diseños, los textos y publico. Si querés, podés revisar todo antes de que salga.</p></details>
+      <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. Y en la prueba gratis ya ves tu semana armada antes de registrarte.</p></details>
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
-      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Podés pedir cambios o eliminarlo antes de que se publique. Además aprendo de lo que te gusta para hacerlo cada vez mejor.</p></details>
+      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Me lo decís por el chat y lo cambio, o lo eliminás antes de que se publique. Además aprendo de lo que te gusta para hacerlo cada vez mejor.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
-      <details><summary>¿Publicás sin que yo lo apruebe?</summary><p>No. Todo queda como borrador en tu cuenta y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
-      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: probame 3 días, mirá tu semana armada y decidí. Si no te sirve, no pagás nada.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Antes de pagar: en la prueba gratis ya ves tu semana armada, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
-      <details><summary>¿Tienen programa de referidos?</summary><p>Sí 🎁 En Ajustes → Referidos tenés tu link personal: si 2 referidos se suscriben con tu link, pagás la mitad todos los meses.</p></details>
-      <details><summary>¿Qué pasa si mi referido cancela?</summary><p>El 50% off se mantiene mientras tus 2 referidos sigan suscriptos. Si uno cancela, volvés al precio normal hasta conseguir otro referido activo.</p></details>
+      <details><summary>¿Publicás sin que yo lo apruebe?</summary><p>No. Todo queda como borrador y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
+      <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-primary" href="#/registro" style="font-size:16px;padding:18px 44px">Empezar ahora</a>
-      <div style="margin-top:18px"><a class="btn btn-ghost" href="/prueba">✨ Probar gratis</a></div>
+      <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     </div>
   </div></div>
   <div class="footer"><div class="wrap">
@@ -563,7 +536,7 @@ function authView(mode) {
   </div></div>
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
-    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : '3 días gratis, sin tarjeta.'}</p>
+    <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : 'Probalo gratis, sin tarjeta.'}</p>
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
@@ -732,7 +705,7 @@ function pwaInstallModal() {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzPwaClose" aria-label="Cerrar">✕</button>
       <div style="font-size:37px">📲</div>
-      <h2>Guardá Posta en tu celu</h2>
+      <h2>Guardá Posty en tu celu</h2>
       <p class="pz-exp-sub">Queda como una app, con su ícono en la pantalla de inicio.</p>
       <div class="pz-pwa-steps">${steps}</div>
       <button class="btn btn-primary btn-block" id="pzPwaOk">Entendido</button>
@@ -828,53 +801,88 @@ async function pushEnableFlow() {
   if (!accepted) return { ok: false, reason: 'declined' };
   return pushDoSubscribe();
 }
-async function pushRenderZone() {
-  const z = document.getElementById('pushZone');
-  if (!z) return;
-  if (!pushSupported()) { z.innerHTML = '<p class="hint">Tu navegador no soporta notificaciones push. Todo sigue funcionando igual 👍</p>'; return; }
-  let sub = null;
-  try { const reg = await navigator.serviceWorker.ready; sub = await reg.pushManager.getSubscription(); } catch (e) { sub = null; }
-  const perm = pushPerm();
-  if (perm === 'granted' && sub) {
-    z.innerHTML = '<div class="okmsg">🔔 Notificaciones activadas en este dispositivo.</div>' +
-      '<button class="btn btn-ghost btn-sm" id="pushOff">Desactivar en este dispositivo</button>';
-    document.getElementById('pushOff').onclick = async () => {
-      try {
-        const j = sub.toJSON();
-        await api.post('/api/push/unsubscribe', { endpoint: j.endpoint });
-        await sub.unsubscribe();
-      } catch (e) { /* igual seguir */ }
-      try { localStorage.removeItem('push-sub'); } catch (e) {}
-      pushRenderZone();
-    };
-  } else if (perm === 'denied') {
-    z.innerHTML = '<p class="hint">Bloqueaste las notificaciones en el navegador. Para activarlas: Ajustes del celu → Posta → Notificaciones → Permitir.</p>';
-  } else {
-    z.innerHTML = '<button class="btn btn-primary" id="pushOn">🔔 Activar notificaciones</button> <span id="pushMsg"></span>';
-    document.getElementById('pushOn').onclick = async () => {
-      const m = document.getElementById('pushMsg');
-      const res = await pushEnableFlow();
-      if (res.ok) { pushRenderZone(); return; }
-      if (m) {
-        const msg = res.reason === 'declined' ? 'Dale, cuando quieras las activás desde acá 👍'
-          : res.reason === 'denied' ? 'El navegador no dio permiso. Fijate en Ajustes → Notificaciones.'
-          : res.reason === 'no_vapid' ? 'Todavía no están configuradas. Probá de nuevo en un rato.'
-          : 'No se pudo activar 😅 Probá de nuevo.';
-        m.innerHTML = '<span class="hint">' + msg + '</span>';
-      }
-    };
-  }
+/* ---------- CHECKLIST QUE FESTEJA ---------- */
+// Detecta la transición a 0 pasos (todos completados) y celebra UNA SOLA VEZ.
+let SETUP_COUNT_PREV = null; // conteo del último render del checklist
+const SETUP_CELEBRATED_KEY = 'posty-checklist-celebrated';
+function setupChecklistCelebrate(n) {
+  try {
+    const prev = SETUP_COUNT_PREV;
+    SETUP_COUNT_PREV = n; // se actualiza SIEMPRE: un render = una oportunidad
+    if (!(prev > 0 && n === 0)) return; // solo transición real a cero
+    let flag = null;
+    try { flag = localStorage.getItem(SETUP_CELEBRATED_KEY); } catch (e) {}
+    if (flag) return; // ya festejó: jamás repetir
+    try { localStorage.setItem(SETUP_CELEBRATED_KEY, '1'); } catch (e) {} // flag ANTES de los efectos
+    const msg = '¡Listo! Ya estoy trabajando para vos 🎉';
+    chatSay(msg); // mensaje de Posty en el chat (persiste en el servidor vía /api/ideas/chat/log)
+    toast('🎉 <b>¡Listo!</b> Ya estoy trabajando para vos 🎉'); // toast visible en la app
+    postyConfetti(); // confetti sutil
+  } catch (e) {}
 }
-
+// Confetti sutil: ~25 piezas con CSS puro, sin librerías. No bloquea ni rompe el layout mobile.
+function postyConfetti() {
+  const colors = ['#2793C8', '#FEC14D', '#0A1E33', '#7EC8F2', '#FFE29A'];
+  const box = document.createElement('div');
+  box.className = 'posty-confetti';
+  for (let i = 0; i < 25; i++) {
+    const p = document.createElement('i');
+    p.style.left = (Math.random() * 100).toFixed(2) + 'vw';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
+    p.style.animationDuration = (1.6 + Math.random() * 1.2).toFixed(2) + 's';
+    box.appendChild(p);
+  }
+  document.body.appendChild(box);
+  setTimeout(() => { try { box.remove(); } catch (e) {} }, 3600);
+}
+// Celebración grande: confetti (ya existente) + coreografía de malabares ~3.2s:
+// el avatar en grande (~120px) saltando + 3 pelotas amarillas en cascada.
+// Todo CSS puro (clases .posty-celebrate / .pc-ava / .pc-ball en styles.css).
+// Idempotente: si ya hay una celebración en curso, no se apila otra (flag con timestamp).
+let POSTY_CELEBRATE_UNTIL = 0;
+function postyCelebrate() {
+  try {
+    const now = Date.now();
+    if (POSTY_CELEBRATE_UNTIL && now < POSTY_CELEBRATE_UNTIL) return; // ya hay una en curso
+    POSTY_CELEBRATE_UNTIL = now + 3200;
+    if (typeof postyConfetti === 'function') postyConfetti();
+    const ov = document.createElement('div');
+    ov.className = 'posty-celebrate';
+    ov.innerHTML = '<img class="pc-ava" src="ai-avatar.png" alt="Posty festejando">'
+      + '<span class="pc-ball b1"></span><span class="pc-ball b2"></span><span class="pc-ball b3"></span>';
+    document.body.appendChild(ov);
+    setTimeout(() => {
+      try { ov.remove(); } catch (e) {}
+      try { if (Date.now() >= POSTY_CELEBRATE_UNTIL) POSTY_CELEBRATE_UNTIL = 0; } catch (e2) {}
+    }, 3300);
+  } catch (e) {}
+}
+// Magia de primera apertura: confetti sutil (ya existente) + el avatar "saluda"
+// (bounce + giro sutil, 1.2s, CSS puro). Una sola vez por sesión.
+function firstOpenParty() {
+  let done = false;
+  try { done = sessionStorage.getItem('posta_first_open_party') === '1'; } catch (e) {}
+  if (done) return;
+  try { sessionStorage.setItem('posta_first_open_party', '1'); } catch (e) {}
+  try { if (typeof postyCelebrate === 'function') postyCelebrate(); } catch (e) {} // confetti + malabares
+  try {
+    const ava = document.querySelector('.chome-ava');
+    if (ava) {
+      ava.classList.add('chome-ava-wave');
+      setTimeout(() => { try { ava.classList.remove('chome-ava-wave'); } catch (e2) {} }, 1600);
+    }
+  } catch (e) {}
+}
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
 function igConnectHere() {
   const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
   igConnect(cur);
 }
-function setupChecklistHtml() {
+function setupChecklistHtml(title) {
   const rows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
-    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posta se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
+    rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
   }
   if (!(PROFILE && PROFILE.ig_connected)) {
     rows.push(`<button class="setup-row" id="setupIgRow"><span class="setup-ico">📸</span><span class="setup-txt"><b>Conectá tu Instagram</b><small>Dejá tu semana lista para publicar.</small></span><span class="setup-go">Conectar →</span></button>`);
@@ -882,9 +890,71 @@ function setupChecklistHtml() {
   if (pwaIsMobile() && !pwaIsInstalled() && !pwaDismissed()) {
     rows.push(`<button class="setup-row" id="pwaInstallBtn"><span class="setup-ico">📲</span><span class="setup-txt"><b>Instalá la app</b><small>Acceso directo en tu teléfono.</small></span><span class="setup-go">Instalar →</span></button>`);
   }
+  // 🔔 Notificaciones: obligatorias. Sin botón de descartar: el paso se cumple
+  // activando push, o por email si el OS lo bloquea (el email siempre llega).
+  if (pushSupported() && pushPerm() !== 'granted') {
+    if (pushPerm() === 'denied') {
+      rows.push(`<div class="setup-row setup-done"><span class="setup-ico">📧</span><span class="setup-txt"><b>Te aviso por email</b><small>Bloqueaste las notificaciones: los avisos llegan a tu email.</small></span><span class="setup-go">✓</span></div>`);
+    } else {
+      rows.push(`<button class="setup-row" id="setupPushRow"><span class="setup-ico">🔔</span><span class="setup-txt"><b>Activá las notificaciones</b><small>Te aviso antes de publicar cada posteo.</small></span><span class="setup-go">Activar →</span></button>`);
+    }
+  }
+  // La detección de transición vive acá: cubre TODAS las rutas que pintan el checklist
+  // (refreshSetupChecklist, appShell, chatView), porque todas pasan por esta función.
+  setupChecklistCelebrate(rows.length);
   if (!rows.length) return '';
   const n = rows.length;
-  return `<div class="setup-card"><div class="setup-title">🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}</div>${rows.join('')}</div>`;
+  const t = title || `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`;
+  return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}</div>`;
+}
+// Checklist como sección secundaria al final del chat: mismas filas y mismos
+// binds (sigue funcional), solo baja de protagonismo con título propio.
+function setupSecondaryHtml() {
+  const h = setupChecklistHtml('Para que la magia siga ✨');
+  if (!h) return '';
+  return `<section class="setup-secondary" aria-label="Para que la magia siga">${h}</section>`;
+}
+// Bindea las filas del checklist (se re-bindea tras cada refresh del checklist).
+function bindSetupRows() {
+  const sg = $('#setupIgRow');
+  if (sg) sg.onclick = igConnectHere;
+  const sb = $('#setupBizRow');
+  if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
+  const pi = $('#pwaInstallBtn');
+  if (pi) pi.onclick = pwaDoInstall;
+  const sp = $('#setupPushRow');
+  if (sp) sp.onclick = async () => {
+    sp.disabled = true;
+    try {
+      const r = await pushEnableFlow();
+      if (r && r.ok) {
+        toast('🔔 <b>¡Listo!</b> Te aviso antes de cada posteo 🙌');
+      } else if (r && r.reason === 'denied') {
+        // El OS lo bloqueó: al refrescar, la fila pasa a "Te aviso por email".
+      } else if (r && r.reason !== 'declined') {
+        toast(r && r.reason === 'no_vapid'
+          ? '🔔 Todavía no están listas del lado del servidor. Probá en un rato.'
+          : '🔔 No se pudo activar 😅 Probá de nuevo.');
+      }
+    } catch (e) {}
+    // Siempre refrescar: la fila se deriva del permiso real, así converge a la verdad.
+    refreshSetupChecklist();
+    try { sp.disabled = false; } catch (e) {}
+  };
+}
+// Re-render del checklist en el lugar (tras activar notificaciones, etc.).
+// Conserva el título de la sección secundaria del chat ("Para que la magia siga ✨").
+function refreshSetupChecklist() {
+  document.querySelectorAll('.setup-card').forEach(card => {
+    const sec = card.closest('.setup-secondary');
+    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined);
+    if (!h) { (sec || card).remove(); return; }
+    const t = document.createElement('template');
+    t.innerHTML = h.trim();
+    const fresh = t.content.firstElementChild;
+    if (fresh) card.replaceWith(fresh);
+  });
+  bindSetupRows();
 }
 
 function appShell(tab, content) {
@@ -901,7 +971,8 @@ function appShell(tab, content) {
       <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
-    <button class="drawer-link side-only ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'numeros' ? 'on' : ''}" data-tab="numeros"><span class="di">📊</span>Tus números</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
@@ -916,9 +987,6 @@ function appShell(tab, content) {
 function openDrawer(){ const d = $('#drawer'), o = $('#drawerOv'); if (d) d.classList.add('open'); if (o) o.hidden = false; }
 function closeDrawer(){ const d = $('#drawer'), o = $('#drawerOv'); if (d) d.classList.remove('open'); if (o) o.hidden = true; }
 
-/* ---------- CREAR ---------- */
-let CREATOR_OPEN = false; // el creador manual vive dentro de Mi semana, plegado hasta que se abre
-let CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {}, carouselMode: false, carouselPhotos: [], isCarousel: false };
 
 
 const BASE_PALETTES = [
@@ -1176,244 +1244,7 @@ function drawPost(canvas, o) {
   }
 }
 
-function creatorChips() {
-  const p = (typeof PROFILE !== 'undefined' && PROFILE) || {};
-  const biz = p.business_name || 'tu negocio';
-  const M = {
-    ropa: ['Nuevo ingreso de la semana', 'Prenda destacada de hoy', 'Sale: hasta 40% off'],
-    gastronomia: ['Promo 2x1 en pizzas', 'Plato nuevo de la carta', 'Menú del día'],
-    cafeteria: ['Latte nuevo de la casa', 'Promo merienda', 'Café de especialidad'],
-    belleza: ['Tratamiento nuevo', 'Promo del mes', 'Antes y después'],
-    barberia: ['Corte de la semana', 'Promo corte + barba', 'Reservá tu turno'],
-    fitness: ['Clase nueva esta semana', 'Promo primer mes', 'Rutina para arrancar'],
-    salud: ['Nuevo servicio', 'Turnos disponibles', 'Tip de salud'],
-    mascotas: ['Novedad para tu mascota', 'Promo en alimento', 'Tip para cuidarla'],
-    servicios: ['Servicio nuevo', 'Promo este mes', 'Pedí tu presupuesto'],
-    educacion: ['Curso nuevo', 'Inscripciones abiertas', 'Clase gratuita'],
-    tecnologia: ['Producto nuevo', 'Oferta de la semana', 'Tip tecnológico'],
-    hogar: ['Novedad para tu casa', 'Promo en deco', 'Antes y después'],
-    inmobiliaria: ['Nueva propiedad', 'Oportunidad de la semana', 'Conocé este depto'],
-    eventos: ['Próximo evento', 'Entradas disponibles', 'Así fue el último'],
-    viajes: ['Nuevo destino', 'Promo en paquetes', 'Escapada del finde'],
-    arte: ['Obra nueva', 'Mi proceso creativo', 'Encargá tu pieza'],
-    otro: [`Lo nuevo de ${biz}`, 'Promo de la semana', 'Detrás de escena'],
-  };
-  return M[p.category] || M.otro;
-}
 
-function creatorView(embed) {
-  const c = CREATOR;
-  const head1 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 1 de 3 — Nosotros pensamos la estrategia. Vos solo aprobás.</p></div></div>`;
-  const head2 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 2 de 3 — El diseño ya está listo. Retocalo si querés.</p></div></div>`;
-  const head3 = embed ? '' : `<div class="page-head"><div class="ph-ico">✨</div><div class="ph-txt"><h1>Crear posteo</h1><p class="sub">Paso 3 de 3 — Programalo y olvidate.</p></div></div>`;
-  const headO = embed ? '' : `<div class="page-head"><div class="ph-ico">🎨</div><div class="ph-txt"><h1>Tus 6 diseños</h1><p class="sub">Te recomendamos la marcada con ⭐. Si preferís otra, elegila y programala.</p></div></div>`;
-  const stepsBar = `<div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= c.step ? 'on' : ''}"></div>`).join('')}</div>`;
-  if (c.step === 1) {
-    return `
-    ${head1}
-    ${stepsBar}
-    <div class="card">
-      <div class="field"><label>¿Alguna idea en mente? <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
-        <textarea id="c_topic" placeholder="${esc('Ej: ' + creatorChips().map(t => '"' + t + '"').join(', '))}">${esc(c.topic)}</textarea>
-        <div class="hint">Si no escribís nada, igual te armamos el posteo con nuestra estrategia. Una frase alcanza si querés guiarnos.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          ${creatorChips().map(t => `<button class="btn btn-ghost btn-sm" data-chip="${esc(t)}" type="button">${esc(t)}</button>`).join('')}
-        </div></div>
-      <div class="field"><label>📷 Foto de tu producto <span style="font-weight:400;color:var(--mut)">(opcional)</span></label>
-        <div id="c_prodPhotoBox"></div>
-        <input type="file" id="c_prodPhotoFile" accept="image/*" style="display:none">
-        <div class="hint">Si la subís, las 6 opciones usan TU foto. Ideal para vender tu producto exacto. Si no, usamos fotos del banco.</div></div>
-      <button class="btn btn-soft" id="btnGen">✨ Armar mi posteo</button>
-      <div id="genErr"></div>
-      <div id="genOut" style="margin-top:24px;${c.caption ? '' : 'display:none'}">
-        <div class="field"><label>Caption</label><textarea id="c_caption" style="min-height:150px">${esc(c.caption)}</textarea></div>
-        <div class="field"><label>Hashtags</label><textarea id="c_tags" style="min-height:70px">${esc(c.hashtags)}</textarea></div>
-        <button class="btn btn-primary" id="btnToDesign">Siguiente: diseñar imagen →</button>
-      </div>
-    </div>`;
-  }
-  if (c.step === 2) {
-    return `
-    ${head2}
-    ${stepsBar}
-    <div class="designer">
-      <div>
-        <div class="card" style="padding:22px">
-          <h3>Plantilla</h3>
-          <div class="tpl-grid">
-            ${['gradiente', 'claro', 'noche', 'promo'].map(t => `<div class="tpl ${c.tpl === t ? 'on' : ''}" data-tpl="${t}">${t[0].toUpperCase() + t.slice(1)}</div>`).join('')}
-          </div>
-          <h3 style="margin-top:18px">Paleta</h3>
-          <div class="pal-row">${getPalettes().map((p, i) => `<div class="pal ${c.pal === i ? 'on' : ''}" data-pal="${i}" title="${p.name}${p.brand ? ' (tus colores)' : ''}" style="background:linear-gradient(135deg,${p.c.join(',')});${p.brand ? 'box-shadow:0 0 0 2px var(--yl)' : ''}"></div>`).join('')}</div>
-          <div class="field" style="margin-top:18px"><label>Título</label><input id="d_title" value="${esc(c.title)}" placeholder="HASTA 40% OFF"></div>
-          <div class="field"><label>Subtítulo</label><input id="d_sub" value="${esc(c.subtitle)}" placeholder="Solo esta semana"></div>
-          <div class="field"><label>Usuario de Instagram (sin @)</label><input id="d_handle" value="${esc(c.handle || (PROFILE?.ig_username || ''))}" placeholder="tunegocio"></div>
-          <div class="field"><label>${c.carouselMode ? 'Fotos del carrusel' : 'Foto del producto (opcional)'}</label>
-            ${c.carouselMode ? `
-            <div id="photoLib" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-              ${assetPhotos().map(a => {
-                const ord = c.carouselPhotos.indexOf(a.file_path);
-                return `<div style="position:relative;cursor:pointer" data-carlib="${esc(a.file_path)}">`
-                  + `<img src="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid ${ord >= 0 ? 'var(--cel)' : 'var(--line)'}">`
-                  + (ord >= 0 ? `<span class="car-ord">${ord + 1}</span>` : '') + `</div>`;
-              }).join('')}
-            </div>
-            <div class="hint">Elegí de 2 a 10 fotos para el carrusel — la primera es la portada. Tocá de nuevo para sacar.</div>
-            <div style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="btnCarouselOff" type="button">← Volver a foto única</button></div>
-            <div id="carErr"></div>` : (c.photo ? `
-            <div style="display:flex;gap:10px;align-items:center">
-              <img src="${c.photo}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
-              <div style="display:flex;gap:8px">
-                <button class="btn btn-ghost btn-sm" id="btnPhotoCh" type="button">Cambiar</button>
-                <button class="btn btn-ghost btn-sm" id="btnPhotoRm" type="button">Quitar</button>
-              </div>
-            </div>` : `
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" id="btnPhotoAdd" type="button">📷 Subir foto</button>
-              ${assetPhotos().length ? `<button class="btn btn-ghost btn-sm" id="btnPhotoLib" type="button">🖼️ Mis fotos</button>` : ''}
-              ${assetPhotos().length >= 2 ? `<button class="btn btn-ghost btn-sm" id="btnCarousel" type="button">🎞️ Carrusel</button>` : ''}
-            </div>
-            <div id="photoLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
-              ${assetPhotos().map(a => `<img src="${a.file_path}" data-lib="${a.file_path}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer">`).join('')}
-            </div>
-            <div class="hint">La foto va de fondo y el diseño se mantiene igual.${assetLogo() ? ' Tu logo se agrega solo en la esquina.' : ''}</div>`)}
-            <input type="file" id="d_photo" accept="image/*" style="display:none">
-          </div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-ghost" id="btnBack1">← Atrás</button>
-          <button class="btn btn-primary" id="btnSaveDesign" style="flex:1">${c.carouselMode ? 'Continuar →' : 'Guardar diseño →'}</button>
-        </div>
-      </div>
-      <div><div class="preview-box"><canvas id="postCanvas"></canvas></div>
-      <p style="color:var(--dim);font-size:11.5px;margin-top:10px;text-align:center">Vista previa real — así se va a ver en el feed.</p></div>
-    </div>`;
-  }
-  if (c.step === 'options') {
-    const det = c.detected || {};
-    const colors = det.colors || [];
-    const hexes = det.colorHex || [];
-    const opts = c.options || [];
-    const libPhotos = (typeof assetPhotos === 'function' ? assetPhotos() : []);
-    const colorNames = colors.length > 1
-      ? colors.slice(0, -1).join(', ') + ' y ' + colors[colors.length - 1]
-      : colors.join(', ');
-    return `
-    ${headO}
-    <div class="steps-bar">${[1, 2, 3].map(i => `<div class="s ${i <= 1 ? 'on' : ''}"></div>`).join('')}</div>
-    ${colors.length ? `<div class="colors-note">🎨 Tus colores: ${esc(colorNames)}${hexes.map(h => `<span class="swatch" style="background:${esc(h)}" title="${esc(h)}"></span>`).join('')}</div>` : ''}
-    ${det.productPhoto ? `<div class="prodphoto-note">📷 Usando la foto de tu producto en las 6 opciones</div>` : ''}
-    ${det.photoQuery && !det.productPhoto ? `<div class="photoq-note">📸 Fotos de: <b>${esc(det.photoQuery)}</b>${det.userPhotos ? ` · usando tus fotos primero ✨` : ''}</div>` : ''}
-    ${libPhotos.length ? `
-    <div class="myphotos-card" style="padding:14px 18px">
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <span style="font-weight:700">📷 Tus fotos</span>
-        <div class="mp-row" id="mpRow" style="margin:0">${libPhotos.map(a => `<span style="position:relative;display:inline-block"><img src="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto"><button data-mpdel="${a.id}" title="Borrar foto" aria-label="Borrar foto" style="position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:1.5px solid #fff;background:#0A1E33;color:#fff;font-size:12.5px;line-height:1;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.3)">×</button></span>`).join('')}</div>
-        <button class="btn btn-ghost btn-sm" id="btnUploadPhotos">📤 Subir más</button>
-        <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
-      </div>
-      <div id="mpMsg"></div>
-    </div>` : `
-    <div class="myphotos-card">
-      <div class="mp-title">📷 Tus fotos</div>
-      <p class="mp-text">Para vender tu producto exacto (como tu buzo), subí sus fotos una vez y el creador las usa siempre.</p>
-      <div class="mp-row" id="mpRow"><span class="mut">Todavía no subiste fotos.</span></div>
-      <button class="btn btn-soft" id="btnUploadPhotos">📤 Subir fotos de tus productos</button>
-      <input type="file" id="mpFiles" accept="image/*" multiple style="display:none">
-      <div id="mpMsg"></div>
-    </div>`}
-    <div id="optErr"></div>
-    <div class="opt-grid">
-      ${opts.map((o, i) => `
-      <div class="opt-card" data-card="${i}">
-        ${i === c.recommendedIndex ? `<div class="opt-badge">⭐ Recomendada</div>` : ''}
-        <label class="opt-sel"><input type="checkbox" class="opt-selbox" data-sel="${i}"><span>Elegir</span></label>
-        <img class="opt-img" data-optimg="${i}" src="${esc(o.image)}" alt="${esc(o.title || ('Diseño ' + (i + 1)))}" loading="lazy" title="Tocá para ver en grande">
-        ${i === c.recommendedIndex && c.recommendedReason ? `<p class="opt-reason">${esc(c.recommendedReason)}</p>` : ''}
-        ${o.title ? `<p class="opt-title">${esc(o.title)}</p>` : ''}
-        ${o.caption ? `<p class="opt-caption">${esc(o.caption)}</p>` : ''}
-        <div class="opt-actions">
-          <button class="btn btn-primary btn-sm opt-use" data-use="${i}">Usar este diseño →</button>
-          <button class="btn btn-ghost btn-sm opt-myphoto" data-mp="${i}">📷 Mi foto</button>
-        </div>
-        <button class="opt-customlink" data-custom="${i}">✏️ Personalizar a mano</button>
-      </div>`).join('')}
-    </div>
-    <div id="multiBar" style="display:none">
-      <span id="multiCount">✅ 0 elegidos</span>
-      <button class="btn btn-primary" id="btnMultiSched">Programar (0)</button>
-    </div>
-    <div style="display:flex;justify-content:center;margin:4px 0 26px">
-      <button class="btn btn-soft" id="btnRegen">🔄 Regenerar opciones</button>
-    </div>
-    <div class="feedback-card">
-      <p class="feedback-title">¿Querés cambiar algo? Decime y lo arreglamos. O lo mejoramos.</p>
-      <div class="feedback-row">
-        <input id="fb_input" placeholder='Ej: "más rojo", "otra foto", "caption más corto"'>
-        <button class="btn btn-primary btn-sm" id="btnFeedback">Arreglar</button>
-      </div>
-      <div id="feedbackMsg"></div>
-    </div>
-    <div id="schedModal" class="modal-ov" style="display:none">
-      <div class="modal-card">
-        <h3>📅 Programar diseños</h3>
-        <p class="mut" style="margin-bottom:12px">Elegí día y hora para cada uno.</p>
-        <div id="schedRows"></div>
-        <div id="schedMsg"></div>
-        <div class="modal-actions">
-          <button class="btn btn-ghost" id="btnSchedCancel">Cancelar</button>
-          <button class="btn btn-primary" id="btnSchedConfirm">✅ Confirmar</button>
-        </div>
-      </div>
-    </div>
-    <div id="optLight" class="modal-ov" style="display:none">
-      <div class="modal-card light-card">
-        <img id="optLightImg" alt="Diseño en grande">
-        <p id="optLightCap"></p>
-        <button class="btn btn-ghost btn-block" id="btnLightClose">Cerrar</button>
-      </div>
-    </div>
-    <div id="photoPickModal" class="modal-ov" style="display:none">
-      <div class="modal-card">
-        <h3>📷 Foto para este diseño</h3>
-        <button class="btn btn-soft btn-block" id="btnPickUpload" style="margin:12px 0">📤 Subir nueva foto</button>
-        <input type="file" id="pickFile" accept="image/*" style="display:none">
-        <p class="mut" style="margin:6px 0 8px"><b>De tu librería</b></p>
-        <div class="mp-row" id="pickLib"></div>
-        <p class="mut" style="margin:6px 0 8px"><b>Del banco de fotos</b></p>
-        <div class="mp-row" id="pickStock"></div>
-        <div id="pickMsg"></div>
-        <button class="btn btn-ghost btn-block" id="btnPickClose" style="margin-top:14px">Cancelar</button>
-      </div>
-    </div>
-    <button class="btn btn-ghost btn-sm" id="btnBackOptions" style="margin-top:16px">← Volver</button>`;
-  }
-  // step 3
-  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  const minDt = now.toISOString().slice(0, 16);
-  return `
-  ${head3}
-  ${stepsBar}
-  <div class="card">
-    <div style="display:flex;gap:22px;flex-wrap:wrap">
-      <img src="${esc(c.imagePath)}" style="width:180px;border-radius:14px;border:1px solid var(--line)">
-      <div style="flex:1;min-width:240px">
-        <div class="field"><label>Caption</label><textarea id="p_caption" style="min-height:120px">${esc(c.caption)}</textarea></div>
-        <div class="field"><label>Hashtags</label><textarea id="p_tags" style="min-height:60px">${esc(c.hashtags)}</textarea></div>
-      </div>
-    </div>
-    <div class="row2" style="margin-top:24px">
-      <div class="field"><label>Fecha y hora de publicación</label><input type="datetime-local" id="p_when" min="${minDt}" value="${minDt}"></div>
-      <div class="field"><label>&nbsp;</label><div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" id="btnSchedule">📅 Programar</button>
-        <button class="btn btn-soft" id="btnNow">⚡ Publicar ahora</button>
-        <button class="btn btn-ghost" id="btnDraft">💾 Borrador</button>
-      </div></div>
-    </div>
-    <div id="pubMsg"></div>
-    <button class="btn btn-ghost btn-sm" id="btnBack2" style="margin-top:8px">← Atrás</button>
-  </div>`;
-}
 
 /* ---------- IDEAS: nosotros pensamos el contenido por vos ---------- */
 // ---------- Checklist primeros pasos + próximo posteo recomendado ----------
@@ -1490,7 +1321,7 @@ function autopilotCardHTML(tag) {
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Armemos tu semana</h3>
-    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — al aceptar, salen solos.</p>
     <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
@@ -1568,10 +1399,10 @@ function fmtWhenTxt(v) {
   const p2 = n => String(n).padStart(2, '0');
   return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]} · ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
-// Pill de fecha del borrador: aclara que es la fecha programada de salida
+// Pill de fecha del borrador: fecha PROPUESTA (condicional, todavía no aceptado)
 function fmtWhenPill(v) {
   const wt = fmtWhenTxt(v);
-  return wt === 'Elegir día y hora' ? wt : `Programado para ${wt}`;
+  return wt === 'Elegir día y hora' ? wt : `Saldría ${wt}`;
 }
 // Badge de estrategia (tipo de contenido) junto al pill de fecha
 function tipoBadge(t) {
@@ -1591,8 +1422,9 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   return `
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
-    <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — nada sale sin tu OK.</p>
+    <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — al aceptar, salen solos a la hora indicada.</p>
     ${n ? `<button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin:6px 0 10px">📅 Programar mi semana →</button>` : ''}
+    ${n ? `<button class="btn btn-soft btn-block" id="btnAcceptAll" style="margin:0 0 10px">✅ Aceptar todos</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -1681,104 +1513,8 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
       ${drafts.length > 1 ? `<button class="car-arrow right" data-carnext aria-label="Posteo siguiente">›</button>` : ''}
       ${drafts.length > 1 ? `<div class="igmock-dots">${drafts.map((_, j) => `<i class="${j === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
     </div>
-    <div class="rev-voice">
-      <button class="rev-voice-btn" id="revVoiceBtn">🎙 ¿Cambiar algo? Pedilo por voz</button>
-      <div class="rev-voice-msg" id="revVoiceMsg"></div>
-    </div>
     <div id="revMsg"></div>
   </div>`;
-}
-
-// Nota de voz para pedir cambios en los borradores: vive abajo de los posteos,
-// cero fricción. Graba, se transcribe con Whisper y la IA lo aplica directo.
-let DVOICE_REC = null, DVOICE_CHUNKS = [], DVOICE_MIME = '', DVOICE_TIMER = null, DVOICE_START = 0;
-function draftVoiceMsg(html) {
-  const m = document.getElementById('revVoiceMsg');
-  if (m) m.innerHTML = html;
-}
-function draftVoiceUI(rec) {
-  const b = document.getElementById('revVoiceBtn');
-  if (!b) return;
-  b.classList.toggle('btn-rec', !!rec);
-  if (!rec) b.innerHTML = '🎙 ¿Cambiar algo? Pedilo por voz';
-}
-function draftVoiceTick() {
-  if (!DVOICE_REC) return;
-  const b = document.getElementById('revVoiceBtn');
-  const s = Math.floor((Date.now() - DVOICE_START) / 1000);
-  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  if (b) b.innerHTML = `🔴 ${t} — tocá para enviar`;
-  draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🔴 Grabando… contame qué le cambio a tus posteos</span>');
-}
-async function draftVoiceToggle() {
-  if (DVOICE_REC) { draftVoiceStop(); return; }
-  if (!REVIEW_DRAFTS.length) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 Tu navegador no soporta notas de voz.</span>');
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-      : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    DVOICE_CHUNKS = [];
-    DVOICE_MIME = rec.mimeType || '';
-    rec.ondataavailable = e => { if (e.data && e.data.size) DVOICE_CHUNKS.push(e.data); };
-    rec.onstop = () => { stream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} }); draftVoiceSend(); };
-    DVOICE_REC = rec;
-    rec.start();
-    DVOICE_START = Date.now();
-    draftVoiceUI(true);
-    clearInterval(DVOICE_TIMER);
-    DVOICE_TIMER = setInterval(draftVoiceTick, 500);
-    draftVoiceTick();
-    setTimeout(() => { if (DVOICE_REC) draftVoiceStop(); }, 90000);
-  } catch (e) {
-    draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">🎙 No pudimos usar el micrófono. Revisá el permiso.</span>');
-  }
-}
-function draftVoiceStop() {
-  const rec = DVOICE_REC;
-  DVOICE_REC = null;
-  clearInterval(DVOICE_TIMER);
-  draftVoiceUI(false);
-  if (rec) { try { rec.stop(); } catch (e) { draftVoiceSend(); } }
-}
-async function draftVoiceSend() {
-  const chunks = DVOICE_CHUNKS; DVOICE_CHUNKS = [];
-  draftVoiceUI(false);
-  const blob = new Blob(chunks, { type: DVOICE_MIME || 'audio/mp4' });
-  if (blob.size < 1500) { draftVoiceMsg(''); return; }
-  const dataUrl = await new Promise((res) => {
-    const fr = new FileReader();
-    fr.onload = () => res(String(fr.result || ''));
-    fr.onerror = () => res('');
-    fr.readAsDataURL(blob);
-  });
-  if (!dataUrl || !dataUrl.startsWith('data:audio/')) {
-    draftVoiceMsg('<span style="color:#B3402E;font-size:11.5px">No pudimos procesar la nota. Probá de nuevo.</span>');
-    return;
-  }
-  draftVoiceMsg('<span style="color:var(--mut);font-size:11.5px">⏳ Escuchando y aplicando…</span>');
-  try {
-    const lib = assetPhotos().slice().reverse().slice(0, 6);
-    const r = await api.post('/api/ideas/chat', {
-      messages: [{ role: 'user', text: '🎙️ Nota de voz' }],
-      audio: dataUrl,
-      drafts: REVIEW_DRAFTS.map(d => ({ id: d.id, caption: d.caption, when: d.scheduled_at })),
-      library: await chatLibThumbs(),
-      photoPaths: lib.map(p => p.file_path),
-    }, { timeout: 90000 });
-    if (r.edit && r.edit.ok) {
-      draftVoiceMsg(`<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ ${esc(r.reply || 'Listo, aplicado')}</span>`);
-      setTimeout(() => { try { render(); } catch (e) {} }, 1200);
-    } else {
-      draftVoiceMsg(`<span style="font-size:11.5px">${esc(r.reply || 'No te escuché bien, probá de nuevo')}</span>`);
-    }
-  } catch (e) {
-    draftVoiceMsg(`<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error, probá de nuevo')}</span>`);
-  }
 }
 
 // Edición de un borrador por IA (texto o foto): el cliente lo pide en lenguaje
@@ -1909,9 +1645,6 @@ function bindReview() {
   $$('#reviewCard [id^="aiedit-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiedit-go-', ''), 'text'));
   // Otra foto por IA: el cliente describe qué foto quiere y la IA la elige de su librería
   $$('#reviewCard [id^="aiphoto-go-"]').forEach(b => b.onclick = () => runAiEdit(b.id.replace('aiphoto-go-', ''), 'photo'));
-  // Nota de voz para pedir cambios: abajo de los posteos
-  const rvb = document.getElementById('revVoiceBtn');
-  if (rvb) rvb.onclick = draftVoiceToggle;
   // Enter en los campos de edición por IA también aplica
   $$('#reviewCard [id^="aiedit-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiedit-inp-', ''), 'text'); }));
   $$('#reviewCard [id^="aiphoto-inp-"]').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') runAiEdit(i.id.replace('aiphoto-inp-', ''), 'photo'); }));
@@ -1950,12 +1683,49 @@ function bindReview() {
   // Eliminar borrador (señal honesta: lo borró = no le gustó; va antes del DELETE)
   // Track 4 (agregado): si era el último borrador de la semana, el servidor
   // dispara la reconstrucción con otro enfoque y lo avisa en la respuesta.
+// Overlay con chips: ¿qué no le gustó del borrador? (patrón de pickLogoImage)
+function pickRejectReason() {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.setAttribute('style', 'position:fixed;inset:0;background:rgba(10,30,51,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px');
+    const box = document.createElement('div');
+    box.setAttribute('style', 'background:#fff;border-radius:18px;padding:18px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)');
+    box.innerHTML = '<div style="font-weight:800;font-size:14px;margin-bottom:4px">¿Qué no te gustó?</div>' +
+      '<div style="font-size:11.5px;color:#47617A;margin-bottom:12px">Contame y no lo repito en tu próxima semana.</div>';
+    const chips = [
+      ['generico', 'Muy genérico'],
+      ['estilo', 'No es mi estilo'],
+      ['avatar', 'El logo salió raro'],
+      ['representa', 'No me representa'],
+    ];
+    chips.forEach(([key, label]) => {
+      const c = document.createElement('button');
+      c.setAttribute('style', 'display:block;width:100%;text-align:left;border:2px solid #E3EEF6;border-radius:12px;background:#fff;padding:10px 12px;margin-bottom:8px;font-size:13px;font-weight:600;cursor:pointer');
+      c.textContent = label;
+      c.onclick = () => close(() => resolve(key));
+      box.appendChild(c);
+    });
+    const cancel = document.createElement('button');
+    cancel.className = 'btn btn-soft btn-sm';
+    cancel.setAttribute('style', 'margin-top:4px;width:100%');
+    cancel.textContent = 'Cancelar';
+    box.appendChild(cancel);
+    ov.appendChild(box);
+    const close = (fn) => { try { document.body.removeChild(ov); } catch (_) {} fn(); };
+    cancel.onclick = () => close(() => resolve(null));
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(() => resolve(null)); });
+    document.body.appendChild(ov);
+  });
+}
   $$('[data-revdel]').forEach(b => b.onclick = async () => {
-    if (!confirm('¿Eliminar este borrador?')) return;
-    try { await api.post(`/api/posts/${b.dataset.revdel}/signal`, { signal: 'rejected' }); } catch (e) {}
+    const reason = await pickRejectReason();
+    if (!reason) return; // canceló: no pasa nada
+    const pid = b.dataset.revdel;
+    try { await api.post(`/api/posts/${pid}/reject-reason`, { reason }); } catch (e) {}
+    try { await api.post(`/api/posts/${pid}/signal`, { signal: 'rejected' }); } catch (e) {}
     let delRes = null;
-    try { delRes = await api.delete('/api/posts/' + b.dataset.revdel); } catch (e) {}
-    track('draft_delete', { id: b.dataset.revdel });
+    try { delRes = await api.delete('/api/posts/' + pid); } catch (e) {}
+    track('draft_delete', { id: pid });
     await render(); // el DOM se escribe tras los awaits: la barrita va después
     const rb = delRes && delRes.rebuild;
     if (rb && rb.rebuilding) rebuildWatchStart();
@@ -2075,6 +1845,46 @@ function bindScheduleAll() {
   const b = document.getElementById('btnScheduleAll');
   if (!b) return;
   b.onclick = () => doScheduleAll(b);
+}
+
+// "✅ Aceptar todos": un tap aprueba TODOS los borradores pendientes y los deja
+// programados en la hora que muestra la tarjeta. El tap ES la confirmación.
+async function doAcceptAll(btn) {
+  const b = btn || document.getElementById('btnAcceptAll');
+  const m = $('#revMsg');
+  // Sin Instagram conectado, "sale solo" es mentira: mismo gate que los demás.
+  if (!(PROFILE && PROFILE.ig_connected)) {
+    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+    const g = $('#revIgGo');
+    if (g) g.onclick = () => igConnectHere();
+    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (b) { b.disabled = true; b.textContent = 'Aceptando…'; }
+  try {
+    const items = $$('#reviewCard [data-revwhen]')
+      .map((inp) => ({ id: +inp.dataset.revwhen, scheduled_at: inp.value ? new Date(inp.value).toISOString() : null }))
+      .filter((it) => it.id > 0);
+    const r = await api.post('/api/posts/accept-all', { items });
+    const n = (r && r.accepted) || 0;
+    if (!n) throw new Error('No había borradores pendientes');
+    try { track('accept_all', { count: n }); } catch (e) {}
+    try { REVIEW_DRAFTS = []; } catch (e) {}
+    try { paintWeekPill(); } catch (e) {}
+    toast(n === 1
+      ? `✅ <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada 👌`
+      : `✅ <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada 👌`);
+    render();
+  } catch (e) {
+    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (b) { b.disabled = false; b.textContent = '✅ Aceptar todos'; }
+  }
+}
+function bindAcceptAll() {
+  const b = document.getElementById('btnAcceptAll');
+  if (!b) return;
+  b.onclick = () => doAcceptAll(b);
 }
 
 // Borradores visibles en la tarjeta de revisión (para regenerar por id)
@@ -2350,38 +2160,41 @@ function proposalHTML() {
   if (CHAT_IDEA.colors && CHAT_IDEA.colors.length) bits.push('🎨 en tus colores');
   return `
     <div class="chat-proposal">
-      <div style="font-weight:800;margin-bottom:4px">${isOrder ? '🧾 Tu pedido' : '✨ Idea lista'}: ${esc(CHAT_IDEA.titulo)}</div>
-      ${bits.length ? `<div style="font-size:11.5px;color:var(--mut);margin-bottom:6px">${bits.join(' · ')}</div>` : ''}
-      ${CHAT_IDEA.angulo ? `<div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">${esc(CHAT_IDEA.angulo)}</div>` : ''}
-      ${Array.isArray(CHAT_IDEA.script) && CHAT_IDEA.script.length ? `
-      <div style="margin:10px 0 4px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:6px">🎬 Guion del reel:</div>
-        ${CHAT_IDEA.script.slice(0, 6).map(s => `
-          <div class="script-row"><span class="script-seg">${esc(String((s && s.seg) || ''))}</span><span>${esc(String((s && s.visual) || ''))}</span><span style="color:var(--mut)">${esc(String((s && s.texto) || ''))}</span></div>`).join('')}
-      </div>` : ''}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:10px 0 6px">
-        <div style="font-weight:700;font-size:12.5px">👇 Así se vería — tocá el que más te guste:</div>
-        <button class="btn btn-soft btn-sm" id="chatMoreImg" type="button" title="Generar otra imagen">🔄 Otra imagen</button>
+      <button class="cp-close" id="chatDismiss" type="button" aria-label="Cerrar">✕</button>
+      <div class="cp-head">
+        <img class="cp-avatar" src="ai-avatar.png" alt="Posty">
+        <div class="cp-head-tx">
+          <div class="cp-overline">${isOrder ? 'Tu pedido' : 'Idea lista'} ✨</div>
+          <div class="cp-title">${esc(CHAT_IDEA.titulo)}</div>
+        </div>
       </div>
-      <div class="chat-previews" id="chatPreviews"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando ejemplos…</div></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px">
-        <div style="font-weight:700;font-size:12.5px">📝 Elegí el texto <span style="font-weight:400;color:var(--mut)">(o retocalo)</span></div>
-        <button class="btn btn-soft btn-sm" id="chatMoreCaps" type="button" title="Generar 3 textos nuevos">🔄 Otras</button>
-      </div>
+      <div class="chat-previews" id="chatPreviews"><div class="cp-loading" id="chatPrevThinking"></div></div>
       <div class="chat-caps" id="chatCaps"></div>
-      <textarea class="in" id="chatCaption" rows="4" placeholder="⏳ Generando texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
-      <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
-      <details class="chat-board">
-        <summary>🎬 Ver cómo sería el reel <span style="color:var(--mut);font-weight:400">(3 escenas)</span></summary>
-        <div class="chat-board-row" id="chatBoard"><div style="font-size:11.5px;color:var(--mut)">⏳ Generando…</div></div>
-      </details>
-      <div class="chat-proposal-btns">
-        <button class="btn btn-primary btn-sm" id="chatMkPost">✨ Hacerlo posteo</button>
-        <button class="btn btn-soft btn-sm" id="chatMkReel">🎬 Hacerlo reel</button>
+      <div class="cp-more">
+        <button class="cp-link" id="chatMoreImg" type="button">↻ Otra imagen</button>
+        <span class="cp-dot">·</span>
+        <button class="cp-link" id="chatMoreCaps" type="button">↻ Otros textos</button>
+        <span class="cp-dot">·</span>
+        <button class="cp-link" id="chatEditTx" type="button">✎ Editar</button>
       </div>
-      <div style="font-size:10.5px;color:var(--dim);margin-top:8px">Se crea como borrador y lo revisás antes de programar.</div>
+      <div id="chatEditBox" hidden>
+        <textarea class="in" id="chatCaption" rows="3" placeholder="Tu texto…" oninput="this.dataset.touched='1'">${esc((CHAT_CAPTION && CHAT_CAPTION.caption) || '')}</textarea>
+        <input class="in" id="chatHashtags" placeholder="#hashtags…" oninput="this.dataset.touched='1'" value="${esc((CHAT_CAPTION && CHAT_CAPTION.hashtags) || '')}" style="margin-top:6px">
+      </div>
+      <div class="chat-proposal-btns">
+        <button class="btn btn-primary" id="chatMkPost">Hacerlo posteo</button>
+        <button class="btn btn-soft" id="chatMkReel">Hacerlo reel</button>
+      </div>
     </div>`;
 }
+
+// "✎ Editar": muestra/oculta el editor de texto
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? e.target.closest('#chatEditTx') : null;
+  if (!t) return;
+  const box = document.getElementById('chatEditBox');
+  if (box) box.hidden = !box.hidden;
+});
 
 // Genera (o regenera) 3 opciones de texto para la idea cerrada
 async function refreshChatCaption() {
@@ -2407,7 +2220,7 @@ async function chatMoreCaptions() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreCaps');
-  if (b) { b.disabled = true; b.textContent = '⏳…'; }
+  if (b) { b.disabled = true; postyThinking(b); }
   try {
     const out = await api.post('/api/generate', { topic: idea.titulo, n: 3, seed: (Date.now() % 100000) + 7 });
     if (CHAT_IDEA !== idea) return;
@@ -2424,7 +2237,7 @@ async function chatMoreCaptions() {
     }
   } catch (e) { /* quedan las opciones anteriores */ }
   const b2 = $('#chatMoreCaps');
-  if (b2) { b2.disabled = false; b2.textContent = '🔄 Otras'; }
+  if (b2) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Probar otros textos'; }
 }
 
 // "🔄 Otra imagen": regenera los ejemplos visuales. Sin foto: genera una imagen nueva
@@ -2434,7 +2247,7 @@ async function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
-  if (b) { b.disabled = true; b.textContent = '⏳…'; }
+  if (b) { b.disabled = true; postyThinking(b); }
   try {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     if (lib.length) {
@@ -2446,7 +2259,7 @@ async function chatMoreImage() {
     renderChatStoryboard();
   } finally {
     const b2 = $('#chatMoreImg');
-    if (b2 && CHAT_IDEA === idea) { b2.disabled = false; b2.textContent = '🔄 Otra imagen'; }
+    if (b2 && CHAT_IDEA === idea) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Otra imagen'; }
   }
 }
 
@@ -2548,6 +2361,8 @@ async function renderChatPreviews() {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
+  // Detiene la rotación "Posty pensando" del placeholder de ejemplos (si sigue viva)
+  const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
   try {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
     const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
@@ -2576,7 +2391,8 @@ async function renderChatPreviews() {
     } else {
       // SIN FOTO: PROHIBIDO el bloque de color plano (se ve malísimo). Se genera la
       // imagen REAL con IA — es exactamente la que va a salir al crear el posteo.
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">🎨 Generando tu imagen…</div>';
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)" id="chatPrevThinking"></div>';
+      postyThinking($('#chatPrevThinking'));
       let genPath = null;
       try {
         genPath = await aiConceptShot({
@@ -2587,6 +2403,7 @@ async function renderChatPreviews() {
         });
       } catch (e) {
         if (isAiCapErr(e)) {
+          stopPrevThinking();
           box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
           CHAT_PREVIEWS = [];
           return;
@@ -2594,6 +2411,7 @@ async function renderChatPreviews() {
       }
       if (CHAT_IDEA !== idea) return;
       if (!genPath) {
+        stopPrevThinking();
         box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora, pero tocá ✨ Hacerlo posteo y la creo en el momento 👇</div>';
         CHAT_PREVIEWS = [];
         return;
@@ -2607,6 +2425,7 @@ async function renderChatPreviews() {
       renderChatStoryboard();
     }
     CHAT_PREV_SEL = 0;
+    stopPrevThinking();
     box.innerHTML = '';
     CHAT_PREVIEWS.forEach((pv, i) => {
       const d = document.createElement('div');
@@ -2625,12 +2444,152 @@ async function renderChatPreviews() {
       box.appendChild(d);
     });
   } catch (e) {
+    stopPrevThinking();
     box.innerHTML = `<div style="font-size:11.5px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
     CHAT_PREVIEWS = [];
   }
 }
 
 let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
+
+// ---- Logo auto-extraído: banner confirmable en el chat ----
+// El servidor guarda el mensaje con el marcador [logo-candidate:/media/xxx.jpg];
+// el frontend lo renderiza como banner con la foto + 2 botones táctiles (≥44px).
+const LC_MARKER_RE = /\[logo-candidate(?::([^\]]+))?\]/;
+function chatStripLcMarker(t) { return String(t || '').replace(/\[logo-candidate(?::[^\]]+)?\]/g, '').trim(); }
+
+// ---- Nudge "¿publicamos tu primero?": banner con botón de 1 tap ----
+// El servidor guarda el mensaje con el marcador [first-publish]; el frontend
+// lo renderiza como banner con el botón "🚀 Publicar mi primero", que lleva a
+// Schedule y auto-dispara el flujo (mismo patrón que [logo-candidate:...]).
+const FP_MARKER_RE = /\[first-publish\]/;
+function chatStripFpMarker(t) { return String(t || '').replace(/\[first-publish\]/g, '').trim(); }
+
+// Marcador [celebrate]: el backend lo inserta en un mensaje para que el frontend
+// festeje al renderizarlo. Se stripa SIEMPRE del texto visible (jamás se ve).
+const CELEBRATE_MARKER = /\[celebrate\]/i;
+const CELEBRATE_MARKER_G = /\[celebrate\]/gi;
+function chatStripCelebrate(t) { return String(t || '').replace(CELEBRATE_MARKER_G, '').trim(); }
+// Claves de mensajes ya renderizados: un mensaje con [celebrate] festeja UNA sola vez,
+// aunque el historial se recargue (visibilitychange, re-render, etc.).
+const CHAT_CELEBRATED_SEEN = new Set();
+function chatCelebrateScan(messages) {
+  try {
+    (messages || []).forEach(m => {
+      if (!m || m.role === 'user' || !m.text) return;
+      const key = m.role + ' ' + String(m.text);
+      if (CHAT_CELEBRATED_SEEN.has(key)) return;
+      CHAT_CELEBRATED_SEEN.add(key);
+      if (CELEBRATE_MARKER.test(String(m.text))) postyCelebrate();
+    });
+  } catch (e) {}
+}
+
+// Linkify mínimo del chat: las URLs en los mensajes salen como <a> (target=_blank).
+// Orden seguro: se splitea el texto CRUDO por URL, se escapa cada parte por
+// separado y solo las URLs capturadas se envuelven en <a>. Jamás se linkea sobre
+// HTML ya escapado ni se escapa el <a> generado. Los marcadores internos
+// ([celebrate], [logo-candidate:...]) ya se stripearon antes de llegar acá.
+const CHAT_URL_RE = /(https?:\/\/[^\s<>"'`]+)/g;
+function linkifyEsc(text) {
+  return String(text || '').split(CHAT_URL_RE).map((p, i) => {
+    if (i % 2 !== 1) return esc(p);
+    // Puntuación de fin de frase fuera del link: "https://x.com/p/1." linkea sin el punto.
+    const m = p.match(/^(.*?)([.,;:!?]+)$/);
+    const url = m ? m[1] : p, trail = m ? m[2] : '';
+    return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>${esc(trail)}`;
+  }).join('');
+}
+
+// HTML de un mensaje del chat: si trae el marcador de logo candidato,
+// renderiza el banner confirmable; si no, la burbuja normal.
+function chatMsgHtml(role, text) {
+  text = chatStripCelebrate(text); // el marcador [celebrate] jamás se ve
+  // Banner "¿publicamos tu primero?": texto + botón táctil de 1 tap.
+  if (role !== 'user' && FP_MARKER_RE.test(String(text || ''))) {
+    return `<div class="chat-msg ai fp-banner">`
+      + `<div>${esc(chatStripFpMarker(text))}</div>`
+      + `<button type="button" class="btn btn-primary btn-block" data-fp-pub style="margin-top:10px;min-height:48px;touch-action:manipulation">🚀 Publicar mi primero</button>`
+      + `</div>`;
+  }
+  const m = String(text || '').match(LC_MARKER_RE);
+  if (!m || role === 'user') return `<div class="chat-msg ${role === 'user' ? 'u' : 'ai'}">${linkifyEsc(text)}</div>`;
+  const imgPath = (m[1] || '').trim();
+  const img = imgPath
+    ? `<img src="${esc(imgPath)}" alt="Posible logo de tu marca" loading="lazy" style="width:96px;height:96px;object-fit:cover;border-radius:16px;display:block;margin:8px auto" onerror="this.closest('.lc-banner').remove()">`
+    : '';
+  return `<div class="chat-msg ai lc-banner" data-lc="${esc(imgPath)}" style="touch-action:manipulation">`
+    + `<div>${esc(chatStripLcMarker(text))}</div>${img}`
+    + `<div style="display:flex;gap:8px;margin-top:8px">`
+    + `<button class="lc-yes" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#1F9D55;color:#fff;font-size:15px;font-weight:700">Sí, ese es ✅</button>`
+    + `<button class="lc-no" style="flex:1;min-height:44px;touch-action:manipulation;border:none;border-radius:12px;background:#EEF0F2;color:#333;font-size:15px;font-weight:700">No ❌</button>`
+    + `</div></div>`;
+}
+
+// Confirma o rechaza el logo candidato y reemplaza el banner por texto chico.
+// Si el candidato ya no existe (404), el banner se auto-oculta.
+async function logoCandidateRespond(ok, bannerEl) {
+  try {
+    const r = await api.post(ok ? '/api/brand/logo-confirm' : '/api/brand/logo-reject', {});
+    if (!r || !r.ok) throw new Error((r && r.error) || 'fail');
+    if (bannerEl) bannerEl.outerHTML = `<div style="font-size:12px;color:var(--mut);margin:6px 0">${ok ? '✅ ¡Listo! Lo uso en todos tus diseños' : '👌 Dale, cuando quieras subí tu logo desde Mi marca'}</div>`;
+  } catch (e) { if (bannerEl) bannerEl.remove(); }
+}
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? (e.target.closest('.lc-yes') || e.target.closest('.lc-no')) : null;
+  if (!t) return;
+  try { e.preventDefault(); } catch (_) {}
+  logoCandidateRespond(t.classList.contains('lc-yes'), t.closest('.lc-banner'));
+});
+
+// Banner "¿publicamos tu primero?": 1 tap → Schedule y auto-disparo del flujo.
+// La bandera vive en sessionStorage: si ya está en Schedule, dispara directo.
+document.addEventListener('click', (e) => {
+  const t = e.target && e.target.closest ? e.target.closest('[data-fp-pub]') : null;
+  if (!t) return;
+  try { e.preventDefault(); } catch (_) {}
+  try { sessionStorage.setItem('posta_fp_auto', '1'); } catch (_) {}
+  if ((location.hash || '') === '#/app/schedule') { try { autoClickFirstPublish(); } catch (_) {} }
+  else location.hash = '#/app/schedule';
+});
+
+// Si el candidato ya no existe (confirmado/rechazado en otra sesión),
+// los banners pendientes se auto-ocultan.
+async function chatLogoBannersVerify() {
+  try {
+    const r = await api.get('/api/brand/logo-candidate');
+    if (!r || r.path) return;
+    document.querySelectorAll('.lc-banner').forEach(b => b.remove());
+  } catch (_) {}
+}
+let CHAT_FIRST_PICK = null; // sugerencia "¿Arrancamos por este? 👀" (GET /api/ideas/chat, solo primera apertura)
+
+// Fix auditoría #2: 1 tap para rearmar la semana de /prueba cuando la
+// importación trajo 0 (cache vencido). Genera en segundo plano; responde al toque.
+async function trialRebuildWeek() {
+  const b = document.getElementById('trialRebuildBtn');
+  const say = (t, dis) => { if (b) { b.textContent = t; b.disabled = !!dis; } };
+  say('⏳ Rearmándola…', true);
+  try {
+    const r = await api.post('/api/trial/rebuild-import', {});
+    if (r && r.rebuilding) {
+      say('✅ ¡En marcha! Te aviso cuando esté ✨', true);
+      const box = $('#chatBox');
+      if (box) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc('Dale, la estoy rearmando ⏳ Te aviso acá mismo cuando tu semana esté lista ✨')}</div>`);
+        chatScroll();
+      }
+    } else if (r && r.reason === 'has_drafts') {
+      say('✅ Ya tenés borradores ✨', true);
+    } else {
+      say('⚡ Rearmar mi semana', false);
+      alert('No pude arrancar la regeneración 😅 Probá de nuevo en un toque.');
+    }
+  } catch (e) {
+    say('⚡ Rearmar mi semana', false);
+    alert((e && e.message) || 'No pude arrancar la regeneración 😅 Probá de nuevo.');
+  }
+}
 
 // Trae el historial del chat del servidor (persiste entre sesiones)
 async function chatLoadHistory() {
@@ -2641,7 +2600,9 @@ async function chatLoadHistory() {
         .filter(m => m && (m.role === 'user' || m.role === 'assistant') && m.text)
         .map(m => ({ role: m.role, text: String(m.text).slice(0, 2000) }));
       const box = $('#chatBox');
-      if (box) box.innerHTML = CHAT.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+      if (box) box.innerHTML = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
+      // Auto-trigger por marcador: mensajes NUEVOS con [celebrate] festejan una sola vez.
+      chatCelebrateScan(CHAT);
       const chips = $('#chatChips');
       if (chips) chips.remove(); // con historial, los ejemplos ya no hacen falta
     }
@@ -2650,7 +2611,24 @@ async function chatLoadHistory() {
       if (box) box.insertAdjacentHTML('afterbegin', `<div class="chat-msg ai">${esc(r.welcome.trim().slice(0, 600))}</div>`);
       const chips = $('#chatChips');
       if (chips) chips.remove();
+      // Magia de primera apertura: confetti sutil + el avatar saluda.
+      // Solo si el chat está visible (este fetch también corre desde otras vistas).
+      if (box) { try { firstOpenParty(); } catch (e) {} }
     }
+    // Fix auditoría #2: si la importación de /prueba trajo 0, el welcome honesto
+    // viene con 1 tap para rearmar la semana (POST /api/trial/rebuild-import).
+    if (r && r.welcome_regen) {
+      const box = $('#chatBox');
+      if (box && !document.getElementById('trialRebuildBtn')) {
+        box.insertAdjacentHTML('beforeend',
+          `<div style="margin:10px 0 4px"><button class="btn btn-primary btn-sm" id="trialRebuildBtn">⚡ Rearmar mi semana</button></div>`);
+        const rb = document.getElementById('trialRebuildBtn');
+        if (rb) rb.onclick = trialRebuildWeek;
+      }
+    }
+    // Sugerencia de primera apertura: se cachea acá y se pinta en bindChatView
+    // (este fetch también corre desde otras vistas, donde el slot no existe).
+    try { CHAT_FIRST_PICK = (r && r.first_pick) || null; } catch (e) { CHAT_FIRST_PICK = null; }
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
       applyChatOrder(r.idea);
@@ -2660,8 +2638,21 @@ async function chatLoadHistory() {
       refreshChatCaption();
     }
     chatScroll();
+    // Banners de logo candidato que ya no existe: se auto-ocultan.
+    try { chatLogoBannersVerify(); } catch (_) {}
   } catch (e) { /* sin historial: se empieza de cero */ }
 }
+// Llegada en vivo: cuando la app vuelve a primer plano y la vista chat está activa,
+// se recarga el historial para que el festejo de una publicación llegue sin recargar
+// (el backend inserta el mensaje con [celebrate]; el scan de chatLoadHistory lo dispara).
+document.addEventListener('visibilitychange', () => {
+  try {
+    if (document.visibilityState !== 'visible') return;
+    if (!(location.hash || '').startsWith('#/app/chat')) return;
+    if (!document.getElementById('chatBox')) return;
+    if (typeof chatLoadHistory === 'function') chatLoadHistory();
+  } catch (e) {}
+});
 
 // Crea el borrador usando el ejemplo elegido.
 // Si se eligió "solo foto", se usa la foto directo sin diseño.
@@ -2683,7 +2674,11 @@ async function draftFromPreview(idea, prev) {
   // usando las fotos que mandó en el chat (si mandó). Si falla, sigue como siempre.
   const cm = $('#chatMsg');
   const cmPrev = cm ? cm.innerHTML : null;
-  if (!reuseGen && cm) cm.innerHTML = `<div class="okmsg">🎨 Creando la imagen…</div>`;
+  if (!reuseGen && cm) {
+    stopPostyThinking(document.getElementById('chatMkThinking')); // venía rotando desde "Hacerlo posteo"
+    cm.innerHTML = '<div class="okmsg"><span id="chatMkThinking"></span></div>';
+    postyThinking($('#chatMkThinking'));
+  }
   const chatRefs = CHAT_PHOTOS.filter(p => p && p.kind !== 'video' && p.file_path).slice(0, 2).map(p => p.file_path);
   const csPath = reuseGen || await aiConceptShot({
     idea,
@@ -2691,7 +2686,7 @@ async function draftFromPreview(idea, prev) {
     headline: pickHeadline(idea, caption),
     refs: chatRefs,
   });
-  if (cm && cmPrev !== null) cm.innerHTML = cmPrev;
+  if (cm && cmPrev !== null) { stopPostyThinking(document.getElementById('chatMkThinking')); cm.innerHTML = cmPrev; }
   if (csPath) {
     imagePath = csPath;
   } else if (prev && prev.kind === 'photo' && prev.path) {
@@ -2717,8 +2712,7 @@ async function draftFromPreview(idea, prev) {
 }
 
 function chatCardHTML(compact, noEditChip, bareWrap) {
-  const msgs = CHAT.map(m => `
-    <div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.text)}</div>`).join('');
+  const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
     <p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin:0 0 12px">Escribime como por WhatsApp — te armo posteos, te retoco borradores y te tiro ideas. Nada sale sin que lo veas vos primero.</p>`;
@@ -2744,7 +2738,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
       <button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>
-      <input id="chatInput" class="in" placeholder="Escribile a Posty… 💬" maxlength="2000" autocomplete="off">
+      <input id="chatInput" class="in" placeholder="Escribile a Posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">🎙</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
       <div class="chat-plus-menu" id="chatPlusMenu" hidden>
@@ -2760,7 +2754,7 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
 function chatSay(text) {
   CHAT.push({ role: 'assistant', text });
   const box = $('#chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(text)}</div>`);
+  if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   chatScroll();
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text }] }).catch(() => {}); } catch (e) {}
 }
@@ -3013,6 +3007,9 @@ function chatRenderProposal() {
   const p = $('#chatProposal');
   if (!p) return;
   p.innerHTML = proposalHTML();
+  // Placeholder de los ejemplos visuales: Posty piensa en voz alta mientras se generan
+  const pvT = document.getElementById('chatPrevThinking');
+  if (pvT) postyThinking(pvT);
   if (!CHAT_IDEA) return;
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
@@ -3021,9 +3018,21 @@ function chatRenderProposal() {
   if (mCaps0) mCaps0.onclick = chatMoreCaptions;
   const mImg0 = $('#chatMoreImg');
   if (mImg0) mImg0.onclick = chatMoreImage;
+  const dsm = $('#chatDismiss');
+  if (dsm) dsm.onclick = () => { track('chat_idea_dismissed'); chatDismissProposal(); };
   renderChatPreviews();
   renderChatStoryboard();
   chatScroll();
+}
+
+// Salir del panel de la idea (✕) y seguir chateando con Posty.
+function chatDismissProposal() {
+  CHAT_IDEA = null; CUSTOM_PAL = null;
+  CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
+  CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  chatRenderProposal();
+  chatSay('Dale, la dejamos por acá 👍 ¿Qué más hacemos?');
+  try { api.post('/api/ideas/chat/log', { clearIdea: true }).catch(() => {}); } catch (e) {}
 }
 
 // Borradores en revisión para que la IA los vea y pueda editarlos directo
@@ -3034,6 +3043,36 @@ function chatDraftsCtx() {
       .slice(0, 10)
       .map(d => ({ id: d.id, caption: String(d.caption || '').slice(0, 300), when: String(d.scheduled_at || '').slice(0, 10) }));
   } catch (e) { return []; }
+}
+
+// "Posty pensando en voz alta": mientras se genera una idea o imagen, el estado
+// rota en primera persona (voz cálida de Posty) cada ~2.5s, en vez de un ⏳ frío.
+// postyThinking(el, stages) arranca la rotación sobre `el` y devuelve stop().
+// REGLA DURA: llamar a stop (o a stopPostyThinking(el)) SIEMPRE al completar —
+// éxito o error — para no dejar intervalos zombis. Si el elemento se desconecta
+// del DOM sin stop, el intervalo se apaga solo (seguro extra, no reemplazo).
+const POSTY_THINKING = [
+  'Estoy eligiendo tu mejor foto 📸…',
+  'Escribiendo en tu tono ✍️…',
+  'Dándole los toques finales ✨…',
+];
+function postyThinking(el, stages) {
+  if (!el) return function () {};
+  stopPostyThinking(el); // nunca dos intervalos rotando sobre el mismo elemento
+  const msgs = (stages && stages.length) ? stages : POSTY_THINKING;
+  let i = 0;
+  el.textContent = msgs[0];
+  const t = setInterval(() => {
+    if (!el.isConnected) { clearInterval(t); return; }
+    i = (i + 1) % msgs.length;
+    el.textContent = msgs[i];
+  }, 2500);
+  const stop = function () { clearInterval(t); };
+  try { el._ptStop = stop; } catch (e) {}
+  return stop;
+}
+function stopPostyThinking(el) {
+  try { if (el && el._ptStop) { el._ptStop(); el._ptStop = null; } } catch (e) {}
 }
 
 async function chatSend() {
@@ -3212,7 +3251,8 @@ async function chatExchange({ text, display, extra, pushed }) {
   }
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
-  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping">⏳ …</div>`);
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping"></div>`);
+  postyThinking(document.getElementById('chatTyping'));
   chatScroll();
   postyWorking(true);
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
@@ -3222,11 +3262,12 @@ async function chatExchange({ text, display, extra, pushed }) {
   try { libThumbs = await chatLibThumbs(); } catch (e) {}
   try {
     const r = await api.post('/api/ideas/chat', Object.assign(
-      { messages: CHAT, photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx() }, extra || {}));
-    const t = $('#chatTyping'); if (t) t.remove();
+      { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
+        photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean) }, extra || {}));
+    const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
-    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(r.reply || '…')}</div>`);
+    box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
     if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
@@ -3235,6 +3276,10 @@ async function chatExchange({ text, display, extra, pushed }) {
     // La IA editó un borrador directo → refrescar la revisión y mostrar la imagen en el chat
     if (r.edit && r.edit.ok) {
       try { render(); } catch (e) {}
+      if (r.edit.photoFailed) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">No pude cambiar la foto 😅 ¿me la mandás de nuevo?</div>`);
+        chatScroll();
+      }
       if (Array.isArray(r.edit.images) && r.edit.images.length) {
         box.insertAdjacentHTML('beforeend', r.edit.images.map(u =>
           `<div class="chat-msg ai" style="max-width:100%;padding:8px"><img src="${esc(u)}" style="width:100%;border-radius:12px;display:block" alt="Borrador editado" loading="lazy"></div>`
@@ -3251,7 +3296,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     // Nunca texto sin imágenes.
     if (Array.isArray(r.showDrafts) && r.showDrafts.length) renderChatShowDrafts(r.showDrafts);
   } catch (e) {
-    const t = $('#chatTyping'); if (t) t.remove();
+    const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pudimos responder')}</div>`;
   }
   postyWorking(false);
@@ -3311,6 +3356,7 @@ async function chatMakePost(asVideo) {
   // Cupo del plan: chequear antes de crear para no perder la idea armada
   try {
     const q = await api.get('/api/quota');
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount, q); } catch (e) {}
     if (q.left <= 0) { quotaModal(q); return; }
   } catch (e) {}
   const m = $('#chatMsg');
@@ -3318,12 +3364,19 @@ async function chatMakePost(asVideo) {
   if (mkP) mkP.disabled = true;
   if (mkR) mkR.disabled = true;
   try {
-    if (m) m.innerHTML = `<div class="okmsg">⏳ Creando tu ${asVideo ? 'reel' : 'posteo'}…</div>`;
+    if (m) {
+      m.innerHTML = '<div class="okmsg"><span id="chatMkThinking"></span></div>';
+      postyThinking($('#chatMkThinking'), asVideo
+        ? ['Estoy eligiendo tu mejor foto 📸…', 'Armando las escenas de tu reel 🎬…', 'Dándole los toques finales ✨…']
+        : POSTY_THINKING);
+    }
     if (!asVideo && CHAT_PREVIEWS.length) {
       await draftFromPreview(idea, CHAT_PREVIEWS[CHAT_PREV_SEL] || CHAT_PREVIEWS[0]);
     } else {
       await draftFromIdea(idea, asVideo, 0, true);
     }
+    stopPostyThinking(document.getElementById('chatMkThinking'));
+    if (m) m.innerHTML = '<div class="okmsg">¡Listo! ✅</div>';
     CHAT_IDEA = null;
     CUSTOM_PAL = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
@@ -3333,12 +3386,15 @@ async function chatMakePost(asVideo) {
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount); } catch (e) {}
+    try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
     setTimeout(() => {
       const rc = $('#reviewCard') || $('#draftsBanner');
       if (rc) rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
   } catch (e) {
     const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
+    stopPostyThinking(document.getElementById('chatMkThinking'));
     if (m) m.innerHTML = capMsg ? `<div class="okmsg">${esc(capMsg)}</div>` : `<div class="err">Error: ${esc(e.message)}</div>`;
     if (mkP) mkP.disabled = false;
     if (mkR) mkR.disabled = false;
@@ -3468,15 +3524,19 @@ function bindChat() {
 // Vista #/app/chat: el chat a pantalla completa, con saludo proactivo y
 // las tarjetas de la semana adentro. Mi semana y Ajustes siguen como pestañas.
 async function chatView() {
+  // Orden "contenido primero": la estrella son los borradores; el chat y el
+  // checklist bajan de protagonismo (el checklist sigue 100% funcional).
   return `
   <div class="chat-home">
     <div class="chome-top">
       <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
-      <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza. Vos vendé. Yo posteo.</div></div>
+      <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza.<br>Vos vendé. Yo posteo.</div></div>
     </div>
-    ${setupChecklistHtml()}
-    ${chatCardHTML(true, true, true)}
+    <div id="firstPickSlot"></div>
     <div id="revMsg"></div>
+    <div id="nextStepCta" style="display:none"><button type="button" class="btn btn-primary" id="nextStepBtn">Revisá tu semana 👇</button></div>
+    ${chatCardHTML(true, true, true)}
+    ${setupSecondaryHtml()}
     <div id="apProg-semana"></div>
   </div>`;
 }
@@ -3485,6 +3545,7 @@ async function bindChatView() {
   bindChat();
   bindReview();
   bindScheduleAll();
+  bindAcceptAll();
   bindAutopilot();
   // El auto-arranque de la semana también aplica entrando por el chat.
   if (typeof maybeAutoStartWeek === 'function') { try { maybeAutoStartWeek(); } catch (e) {} }
@@ -3492,10 +3553,35 @@ async function bindChatView() {
   // si ya cargó antes, no hay nada que esperar.
   try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
   try { await chatGreet(); } catch (e) {}
+  // Tarjeta "¿Arrancamos por este? 👀" (solo primera apertura con borradores).
+  try { renderFirstPick(CHAT_FIRST_PICK); } catch (e) {}
+  // Un solo próximo paso: debajo de los borradores, solo si hay borradores.
+  try {
+    const nsc = document.getElementById('nextStepCta');
+    const nsb = document.getElementById('nextStepBtn');
+    if (nsc && nsb) {
+      const hasDrafts = Array.isArray(REVIEW_DRAFTS) && REVIEW_DRAFTS.length > 0;
+      nsc.style.display = hasDrafts ? '' : 'none';
+      nsb.onclick = () => {
+        // #revMsg en el chat solo recibe errores: los borradores reales viven
+        // en #/app/schedule (reviewCardHTML "📋 Revisá tu semana").
+        location.hash = '#/app/schedule';
+      };
+    }
+  } catch (e) {}
   // Nudge forzado (ej: botón "Contame de tu negocio" del festejo) o pendiente semanal.
   let forced = null;
   try { forced = sessionStorage.getItem('posty-force-nudge'); sessionStorage.removeItem('posty-force-nudge'); } catch (e) {}
   try { await maybePostyNudge(forced || undefined); } catch (e) {}
+  // 🔔 Posty te avisa: "Editar" de #/app/post/:id pre-llena el chat (el chat edita posteos hablando)
+  try {
+    const pre = sessionStorage.getItem('posty-chat-prefill');
+    if (pre) {
+      sessionStorage.removeItem('posty-chat-prefill');
+      const ci = document.getElementById('chatInput');
+      if (ci) { ci.value = pre; ci.focus({ preventScroll: true }); }
+    }
+  } catch (e) {}
 }
 
 // Nudge proactivo de Posty (~1/semana, en momentos distintos): pide por chat lo
@@ -3642,8 +3728,55 @@ async function pnVoiceSend(id, done) {
 function chatSayLocal(text) {
   try { CHAT.push({ role: 'assistant', text }); } catch (e) {}
   const box = document.getElementById('chatBox');
-  if (box) box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">${esc(text)}</div>`);
+  if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   if (typeof chatScroll === 'function') chatScroll();
+}
+
+// Tarjeta "¿Arrancamos por este? 👀": solo primera apertura con borradores.
+// first_pick llega en GET /api/ideas/chat (contrato backend). Tras responder se
+// oculta y no vuelve a aparecer (flag en sessionStorage).
+let FIRST_PICK_DONE = false;
+function renderFirstPick(fp) {
+  if (FIRST_PICK_DONE) return;
+  try { if (sessionStorage.getItem('posta_first_pick_done') === '1') { FIRST_PICK_DONE = true; return; } } catch (e) {}
+  const slot = document.getElementById('firstPickSlot');
+  if (!slot || !fp || !(fp.post_id > 0)) return;
+  const cap = String(fp.caption || '').trim();
+  const excerpt = cap.length > 140 ? cap.slice(0, 140).trimEnd() + '…' : cap;
+  slot.innerHTML = `
+  <div class="card first-pick" id="firstPickCard">
+    <div class="fp-title">¿Arrancamos por este? 👀</div>
+    ${fp.image_url ? `<img class="fp-img" src="${esc(String(fp.image_url))}" alt="Posteo sugerido" loading="lazy">` : ''}
+    ${excerpt ? `<div class="fp-cap">${esc(excerpt)}</div>` : ''}
+    ${fp.reason ? `<div class="fp-reason">📸 ${esc(String(fp.reason))}</div>` : ''}
+    <div class="fp-btns">
+      <button type="button" class="btn btn-primary btn-sm" data-fpchoice="picked">Dale, ese 👍</button>
+      <button type="button" class="btn btn-soft btn-sm" data-fpchoice="other">Prefiero otro</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-fpchoice="dismissed">Ahora no</button>
+    </div>
+  </div>`;
+  slot.querySelectorAll('[data-fpchoice]').forEach(b => {
+    b.onclick = () => firstPickAnswer(fp.post_id, b.dataset.fpchoice);
+  });
+}
+async function firstPickAnswer(postId, choice) {
+  const card = document.getElementById('firstPickCard');
+  if (card) card.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  let reply = null;
+  try {
+    const r = await api.post('/api/posty/pick-feedback', { post_id: postId, choice });
+    if (r && typeof r.reply === 'string' && r.reply.trim()) reply = r.reply.trim().slice(0, 600);
+  } catch (e) { /* endpoint aún no desplegado: igual se oculta la tarjeta */ }
+  FIRST_PICK_DONE = true;
+  try { sessionStorage.setItem('posta_first_pick_done', '1'); } catch (e) {}
+  const slot = document.getElementById('firstPickSlot');
+  if (slot) slot.innerHTML = '';
+  if (reply) { try { chatSay(reply); } catch (e) {} }
+  if (choice === 'other') {
+    // "Prefiero otro": los borradores están en Schedule, no en #revMsg
+    // (que solo recibe errores en el chat).
+    location.hash = '#/app/schedule';
+  }
 }
 
 // Saludo proactivo con el estado REAL (una sola burbuja, una vez por sesión).
@@ -3746,10 +3879,10 @@ async function refreshWeekPill() {
 // Chips de quick-reply contextuales sobre el input. Aceptan texto (manda el
 // Línea de cupo sobre los chips del chat: cuántos posteos/reels quedan esta semana.
 // El cliente lo ve sin preguntar; si se agota, Posty ya lo sabe por el contexto del chat.
-async function paintChatQuota(mount) {
+async function paintChatQuota(mount, q0) {
   if (!mount || !mount.isConnected) return;
-  let q = null;
-  try { q = await api.get('/api/quota'); } catch (e) { return; }
+  let q = q0 || null;
+  if (!q) { try { q = await api.get('/api/quota'); } catch (e) { return; } }
   if (!q || typeof q.left !== 'number' || !mount.isConnected) return;
   const r = q.reels || {};
   const st = q.stories || {};
@@ -3767,6 +3900,7 @@ async function paintChatQuota(mount) {
   const old = mount.querySelector('.chat-quota');
   if (old) old.remove();
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
+  try { mount.classList.toggle('quota-row', mount.querySelectorAll(':scope > button').length === 1); } catch (e) {}
 }
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
@@ -5025,6 +5159,120 @@ function bindFastTrack() {
     }
   };
 }
+/* ============================================================
+   "🚀 Publicar mi primero" (mejora 2026-09-30: garantizar el primer posteo)
+   Tarjeta hero en Schedule, visible SOLO cuando hay 0 posteos publicados.
+   1 tap → publica el primer borrador (publish-now, con el OK explícito de
+   siempre: imagen + cuenta destino). Si no hay borradores, primero genera UNO
+   con el flujo autopilot existente (n=1) y después lo publica. Sin gates nuevos.
+   ============================================================ */
+function firstPublishCardHTML(drafts) {
+  const list = Array.isArray(drafts) ? drafts : [];
+  const n = list.length;
+  const sub = n
+    ? (n === 1
+        ? 'Ya tenés 1 borrador listo ✨ — publicalo y miralo vivo en tu Instagram.'
+        : `Ya tenés ${n} borradores listos ✨ — publicá el primero y miralo vivo en tu Instagram.`)
+    : 'Todavía no hay borradores — tocá el botón, armo el primero al toque y lo publicamos 🚀';
+  return `
+  <div class="card" id="firstPublishCard" style="border:2px solid var(--yel);background:#FFF9EC">
+    <h3 style="margin:0 0 4px">🚀 Tu primer posteo</h3>
+    <p class="hint" style="margin:0 0 10px">${sub}</p>
+    <button type="button" class="btn btn-primary btn-block" id="btnFirstPublish" style="min-height:52px;font-size:16px;touch-action:manipulation">🚀 Publicar mi primero</button>
+    <div id="fpPubMount" style="margin-top:10px"></div>
+  </div>`;
+}
+
+// Espera liviana a que aparezca al menos 1 borrador (caso "generar primero"):
+// resuelve con los borradores o [] al agotar el timeout.
+async function fpWaitDrafts(timeoutMs) {
+  const t0 = Date.now();
+  for (;;) {
+    let posts = [];
+    try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
+    const drafts = (Array.isArray(posts) ? posts : []).filter(p => p && p.status === 'draft').sort((a, b) => a.id - b.id);
+    if (drafts.length) return drafts;
+    if (Date.now() - t0 > timeoutMs) return [];
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+async function firstPublishFlow() {
+  const btn0 = document.getElementById('btnFirstPublish');
+  if (!btn0 || btn0.disabled) return;
+  const mount = () => document.getElementById('fpPubMount');
+  const say = (t, dis) => { const b = document.getElementById('btnFirstPublish'); if (b) { b.textContent = t; b.disabled = !!dis; } };
+  // Mismo resguardo que el fast-track: sin cupo, modal de mejora (no es un gate nuevo).
+  const hasQuota = await checkQuotaOrModal();
+  if (!hasQuota) return;
+  say('⏳ Preparando…', true);
+  try {
+    // Anti-carrera: si ya publicó por otro lado, no duplicar.
+    let posts = await api.get('/api/posts').catch(() => []);
+    if ((posts || []).some(p => p && p.status === 'published')) { try { render(); } catch (e) {} return; }
+    let drafts = (posts || []).filter(p => p && p.status === 'draft').sort((a, b) => a.id - b.id);
+    if (!drafts.length) {
+      // Sin borradores: generar UNO con el flujo existente (autopilot n=1).
+      // El progreso necesita su elemento: si la tarjeta "Armemos tu semana" no
+      // está (hay programados pero 0 borradores), se crea uno temporal acá.
+      let prog = document.getElementById('apProg-schedule');
+      if (!prog) {
+        const m0 = mount();
+        if (m0) m0.innerHTML = '<div id="apProg-schedule"></div>';
+        prog = document.getElementById('apProg-schedule');
+      }
+      if (prog) prog.innerHTML = '<div class="okmsg">🎨 Armando tu primer posteo…</div>';
+      const alreadyRunning = (typeof AUTOPILOT_RUNNING !== 'undefined') && !!AUTOPILOT_RUNNING;
+      await runAutopilotSmart(1, 'schedule');
+      drafts = await fpWaitDrafts(alreadyRunning ? 90000 : 8000);
+      if (!drafts.length) {
+        // El autopilot no generó (gate de ADN → chat, o cupo): decirlo de frente.
+        say('🚀 Publicar mi primero', false);
+        const m1 = mount();
+        if (m1) m1.innerHTML = '<div class="hint">😅 No lo pude armar solo — <a href="#/app/chat" style="color:var(--cel);font-weight:700">contame de tu negocio en el chat</a> y lo hacemos juntos 👇</div>';
+        return;
+      }
+      // runAutopilot re-renderiza la vista a los ~900ms: esperar al DOM nuevo
+      // antes de publicar (el mount viejo queda descolgado).
+      await new Promise(r => setTimeout(r, 1400));
+    }
+    const m2 = mount();
+    // publishNowFlow pide el OK explícito (imagen + cuenta destino): nada sale sin ese tap.
+    const res = await publishNowFlow(drafts[0].id, m2 || document.getElementById('btnFirstPublish').parentElement);
+    if (res && res.ok) { try { render(); } catch (e) {} }
+    else say('🚀 Publicar mi primero', false);
+  } catch (e) {
+    say('🚀 Publicar mi primero', false);
+    const m3 = mount();
+    if (m3) m3.innerHTML = `<div class="err">${esc(humanError((e && e.message) || 'No se pudo'))}</div>`;
+  }
+}
+
+// Auto-disparo desde el banner del chat ("¿publicamos tu primero?"):
+// verifica que siga en 0 publicados y toca el botón.
+async function autoClickFirstPublish() {
+  const btn = document.getElementById('btnFirstPublish');
+  if (!btn || btn.disabled) return;
+  try {
+    const posts = await api.get('/api/posts').catch(() => []);
+    if ((posts || []).some(p => p && p.status === 'published')) return; // ya salió por otro lado
+  } catch (e) {}
+  const b2 = document.getElementById('btnFirstPublish');
+  if (b2 && !b2.disabled) b2.click();
+}
+
+function bindFirstPublish() {
+  const btn = document.getElementById('btnFirstPublish');
+  if (!btn) return;
+  btn.onclick = () => { firstPublishFlow(); };
+  // Llegada desde el banner del chat: auto-disparar.
+  try {
+    if (sessionStorage.getItem('posta_fp_auto') === '1') {
+      sessionStorage.removeItem('posta_fp_auto');
+      setTimeout(() => { try { autoClickFirstPublish(); } catch (e) {} }, 500);
+    }
+  } catch (e) {}
+}
 /* ---------- MI SEMANA (dashboard) ---------- */
 let SEM_NUDGES = [];
 
@@ -5086,6 +5334,11 @@ function isPlanLimitErr(e) { return !!(e && e.status === 403 && e.data && e.data
 async function checkQuotaOrModal() {
   try {
     const q = await api.get('/api/quota');
+    // Sincronizar la barrita con el dato fresco (si no, miente)
+    try {
+      const mount = document.getElementById('chatQuickChips');
+      if (mount) paintChatQuota(mount, q);
+    } catch (e) {}
     if (q.left <= 0) {
       // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
       if (ME && ME.trial_expired) { showExpiredModal(); return false; }
@@ -5101,10 +5354,10 @@ function quotaModal(q, opts = {}) {
     <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
     <h3 style="margin:12px 0 4px">¡Llegamos al tope de la semana! 🚀</h3>
     <p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b> — y los usamos todos, ¡bien ahí!</p>
-    <p class="d">Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.</p>
+    <p class="d">${(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? 'La semana que viene arrancás de cero de nuevo.' : 'Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.'}</p>
     ${left > 0 && opts.onPartial ? `<button class="btn btn-soft btn-block" id="qPartial" style="margin-top:10px">Armar solo ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
-    <button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>
-    <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Ahora no</button>`);
+    ${!(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? '<button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>' : ''}
+    <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Entendido</button>`);
   const up = document.getElementById('qUpgrade');
   if (up) up.onclick = () => { closeStreakModal(); location.hash = '#/app/ajustes?plan=1'; };
   const cl = document.getElementById('qClose');
@@ -5160,7 +5413,7 @@ async function wireCelebRef(root) {
   let link = '';
   try { const info = await pzReferral(); if (info && info.ok) link = info.link; } catch (e) {}
   const msg = root.querySelector('.celeb-ref-msg');
-  const shareMsg = `Mirá lo que hace Posta con el Instagram de mi negocio: arma la semana y la publica sola. Probalo 3 días gratis con mi link: ${link}`;
+  const shareMsg = `Mirá lo que hace Posty con el Instagram de mi negocio: arma la semana y la publica sola. Probalo gratis con mi link: ${link}`;
   root.querySelectorAll('[data-cref]').forEach(b => {
     b.onclick = async () => {
       if (!link) { if (msg) msg.textContent = 'No se pudo cargar tu link todavía.'; return; }
@@ -5539,6 +5792,7 @@ async function adsRecAction(card, opts) {
 
 // Tarjeta "a la vista" para Mi semana: los recomendados sin entrar a otra pantalla
 function adsBoostCardHTML(cfg, recs) {
+  if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return ''; // sin ventas en app nativa
   const list = (recs && recs.recommendations) || [];
   const budgets = (cfg && cfg.budget_options) || [];
   if (!list.length || !budgets.length) return '';
@@ -5639,7 +5893,12 @@ async function adsView() {
   const budgets = (cfg && cfg.budget_options) || [];
   const recCards = list.length && budgets.length
     ? `<div id="adsRecsCard">${list.map(r => adsRecCardHTML(r, budgets)).join('')}</div>`
-    : `<div class="hint" style="padding:8px 0">Todavía no hay datos suficientes. Cuando tus posteos junten alcance, te decimos acá cuáles conviene potenciar. 👆</div>`;
+    : `<div class="st-empty">
+         <div class="st-empty-ico">⭐</div>
+         <b>Las recomendaciones van a vivir acá</b>
+         <p>Cuando tus posteos junten alcance, te marcamos acá cuáles conviene potenciar.</p>
+         <a class="btn btn-primary btn-sm" href="#/app/schedule" style="margin-top:12px">📅 Ir a mi semana</a>
+       </div>`;
 
   const bl = (boosts && boosts.boosts) || [];
   const statusTxt = (b) => b.status === 'active' ? '🟢 Activa'
@@ -5651,7 +5910,12 @@ async function adsView() {
         <div style="color:var(--mut);font-size:10.5px">${b.last_reach ? `👁️ ${Number(b.last_reach).toLocaleString('es-AR')} alcance · 💸 ${fmtARSc(b.last_spend_cents)} gastados` : 'Ya la estamos poniendo en marcha'}</div>
       </div>
     </div>`).join('')
-    : `<p class="d" style="margin:0">Todavía no potenciaste ningún posteo.</p>`;
+    : `<div class="st-empty">
+         <div class="st-empty-ico">📣</div>
+         <b>Tus pautas van a vivir acá</b>
+         <p>Cuando potencies tu primer posteo, lo ves acá con su alcance y lo gastado, sin misterio.</p>
+         <button class="btn btn-soft btn-sm" id="adsBoostGoRecs" style="margin-top:12px">⭐ Ver recomendaciones</button>
+       </div>`;
 
   return `
   <div class="card" style="text-align:center">
@@ -5669,7 +5933,7 @@ async function adsView() {
       <div id="adsMsg"></div>
     ` : `<p class="d">La carga de crédito se habilita en estos días. Escribinos y la activamos para tu cuenta.</p>`}
   </div>
-  <div class="card">
+  <div class="card" id="adsRecsSec">
     <h3 style="margin:0 0 4px">⭐ Te recomendamos potenciar</h3>
     <p class="d" style="margin:0 0 10px">Elegidos por rendimiento real, no por corazonada.</p>
     ${recCards}
@@ -5706,6 +5970,12 @@ function bindAds() {
   });
   const arc = document.getElementById('adsRecsCard');
   if (arc) bindAdsRecCards(arc, { balance: (ADS_CTX && ADS_CTX.balance) || 0, minTopup: (ADS_CTX && ADS_CTX.minTopup) || 1000000, returnTo: 'ads' });
+  // Empty state "Tus pautas": el CTA lleva a la sección de recomendaciones (misma página).
+  const bgRecs = document.getElementById('adsBoostGoRecs');
+  if (bgRecs) bgRecs.onclick = () => {
+    const sec = document.getElementById('adsRecsSec');
+    if (sec && typeof sec.scrollIntoView === 'function') sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 }
 
 function showStreakCelebration(sk) {
@@ -5973,205 +6243,6 @@ async function maybeAutoStartWeek() {
 
 
 /* ---------- AJUSTES ---------- */
-function ajustesView() {
-  const p = PROFILE, s = SETTINGS;
-  const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : 'marca';
-  const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
-    : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
-  const planMsg = q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
-    : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
-    : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
-  const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
-  const bc = brandColors();
-  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
-  ${igMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
-    <div class="row2">
-      <div class="field"><label>Logo</label>
-        <div style="display:flex;gap:10px;align-items:center">
-          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
-          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
-          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
-        </div>
-        <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
-        <div class="hint" style="font-size:10.5px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
-      </div>
-    </div>
-    <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
-      <div style="font-size:10.5px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
-      <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
-          <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
-          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:88px;text-align:center;font-size:16px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
-          <div style="position:relative">
-            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:16px;font-weight:700;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:9px 30px 9px 14px;background:#F2F9FD;max-width:150px;cursor:pointer">
-              ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
-            </select>
-            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);pointer-events:none">⌄</span>
-          </div>
-        </div>`).join('')}
-      </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
-    </div>
-    <div class="field"><label>Vista previa</label>
-      <div id="brandPrev"></div>
-      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
-    </div>
-    <div class="field"><label>Foto de perfil</label>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="brand-pf" id="brandPf"></div>
-        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
-      <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
-    </div>
-    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
-  </div></div>
-  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
-    <div class="row2">
-      <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
-      <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
-    </div>
-    <div class="row2">
-      <div class="field"><label>Rubro</label><select id="s_cat">
-        ${CATS.map(([v, ico, t]) => `<option ${catSel(p.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-      <div class="field" id="s_catother_w" style="${catSel(p.category) === 'otro' ? '' : 'display:none'}"><label>¿Cuál?</label><input id="s_catother" value="${esc(catCustom(p.category))}" placeholder="Ej: veterinaria, librería..." maxlength="40"></div>
-      <div class="field"><label>Tono de la IA</label><select id="s_tone">
-        ${TONES.map(([v, ico, t]) => `<option ${p.tone === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="row2">
-      <div class="field"><label>Zona horaria <span style="color:var(--dim);font-weight:400">(para programar a la hora de tu país)</span></label><select id="s_tz">
-        ${TIMEZONES.map(([v, l]) => `<option ${s.timezone === v ? 'selected' : ''} value="${v}">${l}</option>`).join('')}
-      </select></div>
-      <div class="field"><label>Objetivo</label><select id="s_goal">
-        ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
-      <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
-      </div>
-    <div class="field"><label>Tus competidores</label>
-      <div class="comp-box" id="s_compbox"><div class="comp-chips" id="s_chips"></div><input id="s_compin" name="compinput" placeholder="＋ Agregar competidor…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')"></div>
-      <div class="hint" id="compHint" style="display:none;color:#e5484d"></div>
-      <div class="hint">Los estudiamos para crear ideas que te hagan destacar.</div></div>
-    <div class="field" style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px">
-      <label style="font-size:13px">🧬 Lo que la IA sabe de tu negocio</label>
-      <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
-      <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
-        <textarea id="s_dna_productos" rows="3" placeholder="Remera oversize — $25.000&#10;Zapatillas retro — $89.900"></textarea></div>
-      <div class="field"><label>Promos activas <span id="dnaChip_promos_activas"></span> <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
-        <textarea id="s_dna_promos" rows="2" placeholder="2x1 en remeras esta semana"></textarea></div>
-      <div class="row2">
-        <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
-        <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-soft" id="btnSaveDna">💾 Guardar datos del negocio</button> <span id="dnaMsg"></span>
-      </div>
-      <div id="webDnaZone"></div>
-      <div id="dnaFuentesZone"></div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
-      <span id="profDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
-      <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
-      <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
-    </div>
-  </div></div>
-  <div class="card ajsec${openSec==='web' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 La web de tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="webZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div id="srcStoriesCard" class="card ajsec${openSec==='stories' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📱 Tus historias recientes</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="storiesZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div id="srcFbCard" class="card ajsec${openSec==='fb' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📘 Tu página de Facebook</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="fbZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>💬 Lo que preguntan tus seguidores</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="srcCommentsCard"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div id="srcPlacesCard" class="card ajsec${openSec==='places' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>⭐ Lo que dicen tus clientes</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="placesZone"><p style="color:var(--dim)">Cargando…</p></div>
-  </div></div>
-  <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="igBanner"></div>
-    <div class="ig-checklist">
-      <div class="t">Tu Instagram está listo cuando:</div>
-      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
-      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
-      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
-    </div>
-    <div style="font-weight:800;margin-bottom:8px">Modo de publicación</div>
-    <div class="ig-modes">
-      <div class="ig-mode ${s.demo_mode ? 'sel' : ''}" id="igModeDemo" role="button" tabindex="0">
-        <div class="ig-mode-h">🧪 Demo ${s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Simulamos todo: probá el flujo completo sin conectar nada.</span>
-      </div>
-      <div class="ig-mode ${!s.demo_mode ? 'sel' : ''}" id="igModeReal" role="button" tabindex="0">
-        <div class="ig-mode-h">🚀 Real ${!s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Publicamos en tu Instagram de verdad.</span>
-      </div>
-    </div>
-    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
-    <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
-      <div class="hint" style="margin-top:6px">🔒 Posta puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
-      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
-    </div>
-    <div id="igVerifyMsg" style="margin-top:10px"></div>
-    <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
-      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
-      <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
-        <li>Abrí Instagram y andá a tu perfil</li>
-        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
-        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
-        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
-      </ol>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">📲 Abrir Instagram</a>
-        <button class="btn btn-primary btn-sm" id="btnIgRetry">🔄 Ya la hice profesional — conectar</button>
-      </div>
-      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
-    </div>
-    <div id="igMsg"></div>
-  </div></div>
-  <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
-  <div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🔔 Notificaciones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Te aviso en el celu cuando tu posteo salga publicado y cuando tu semana esté lista para revisar. Sin spam, lo prometo 🤙</p>
-    <div id="pushZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
-  <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
-    <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
-    <div class="int-block"><h4>📸 App de Meta</h4>
-      <div class="row2">
-        <div class="field"><label>Meta App ID</label><input id="s_appid" value="${esc(s.meta_app_id)}" placeholder="123456789">
-          <p class="hint">El número identificador de tu app en Meta.</p></div>
-        <div class="field"><label>Meta App Secret</label><input id="s_appsecret" type="password" value="${esc(s.meta_app_secret)}" placeholder="••••••">
-          <p class="hint">La clave secreta de tu app. Nunca la compartas.</p></div>
-      </div>
-      <p class="hint">Los encontrás en <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com</a> → tu app → Configuración.</p>
-      <div class="field" style="margin-top:10px"><button class="btn btn-ghost" id="btnTestMeta" type="button">Probar conexión</button> <span id="metaTestMsg" style="font-size:11.5px"></span></div>
-      <div class="field"><label>Instagram Embed URL</label>
-        <input id="s_igembed" value="${esc(s.ig_embed_url)}" placeholder="https://www.instagram.com/oauth/authorize?...">
-        <p class="hint">La dirección que Meta genera para conectar tu Instagram. Se copia del dashboard de Meta: caso de uso Instagram → "API setup with Instagram login".</p></div>
-    </div>
-    <button class="btn btn-primary" id="btnSaveSettings">Guardar</button> <span id="setMsg"></span>
-  </details>
-  <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">🚪 Salir</button></div>`;
-}
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
@@ -6205,7 +6276,7 @@ function maybeShowIgPopup(tab) {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <div style="font-size:46px;line-height:1">📸</div>
       <h2>Conectá tu Instagram</h2>
-      <p class="pz-exp-sub">Así Posta deja tu semana lista para publicar.</p>
+      <p class="pz-exp-sub">Así Posty deja tu semana lista para publicar.</p>
       <button class="btn btn-primary btn-block" id="igFirstGo" style="padding:15px;font-size:15px">Conectar Instagram</button>
       <div id="igFirstMsg" style="margin-top:8px;text-align:left"></div>
       <div class="hint" style="margin-top:10px">🔒 Nunca vemos ni guardamos tu contraseña.</div>
@@ -6277,6 +6348,8 @@ function handleIgResult() {
           .catch(() => {});
       }).catch(() => {});
     } catch (e) {}
+    // 🔔 Posty te avisa: tras conectar IG, pedir permiso push UNA vez (oportuno, nunca en frío)
+    try { maybeAskPushPostIg(); } catch (e) {}
   } else if (r === 'personal') {
     toast('⚠️ <b>Tu cuenta de Instagram es personal.</b><br>Para publicar necesitás una cuenta profesional (Business o Creator).');
   } else if (r === 'error') {
@@ -6547,10 +6620,23 @@ async function render() {
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado
   try {
-    const r = new URLSearchParams(location.search).get('ref');
+    const qs = new URLSearchParams(location.search);
+    const r = qs.get('ref');
     if (r) {
       const clean = String(r).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
-      if (clean) localStorage.setItem('posta_ref', clean);
+      if (clean) {
+        localStorage.setItem('posta_ref', clean);
+        // Click en link de referido: una vez por sesión (embudo completo de referidos)
+        if (!sessionStorage.getItem('ref_click_sent')) {
+          sessionStorage.setItem('ref_click_sent', '1');
+          track('ref_click', { code: clean.toLowerCase() });
+        }
+      }
+    }
+    // UTMs para CAC: se guardan y viajan con el registro
+    const us = qs.get('utm_source'), uc = qs.get('utm_campaign');
+    if (us || uc) {
+      try { localStorage.setItem('posta_utm', JSON.stringify({ source: String(us || '').slice(0, 40), campaign: String(uc || '').slice(0, 80) })); } catch (e) {}
     }
   } catch (e) {}
   const hash = location.hash || '#/';
@@ -6563,10 +6649,7 @@ async function render() {
       root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
       // Lugares reales: bajan solos con cada cliente nuevo
-      fetch('/api/capacity').then(r => r.json()).then(c => {
-        const el = document.getElementById('scarcityLine');
-        if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
-      }).catch(() => {});
+      refreshScarcity();
       // Puntitos del carrusel de planes
       const pr = document.getElementById('plansRow'), pd = document.getElementById('planDots');
       if (pr && pd) {
@@ -6595,6 +6678,7 @@ async function render() {
         if (isReg) {
           const rf = localStorage.getItem('posta_ref');
           if (rf) body.ref = rf;
+          try { const u = JSON.parse(localStorage.getItem('posta_utm') || 'null'); if (u) body.utm = u; } catch (e) {}
         } else {
           // Login viniendo de /prueba: pasamos el @ para importar su semana como borradores
           try {
@@ -6606,6 +6690,7 @@ async function render() {
         if (!isReg) { try { localStorage.removeItem('posta_trial_profile'); } catch (e) {} }
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
+        if (isReg) { try { localStorage.removeItem('posta_utm'); } catch (e) {} }
         // Puente /prueba → cuenta: si viene de la prueba, pre-cargamos el perfil con los
         // datos que ya nos dio (negocio, rubro, etc.) y se saltea el onboarding.
         // Solo si la prueba es fresca (24h): datos viejos de tests no deben volverse marca permanente.
@@ -6682,6 +6767,7 @@ async function render() {
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
+    refreshScarcity(); // número vivo de /api/capacity (fallback: 50 del template)
     return;
   }
 
@@ -6691,6 +6777,8 @@ async function render() {
   if (!ME && NET_OFFLINE) { root.innerHTML = offlineView(); bindOffline(); return; }
   if (!ME) { location.hash = '#/login'; return; }
   const tabRaw = path.split('/')[2] || '';
+  // 🔔 Posty te avisa: #/app/post/:id → el id del posteo a aprobar
+  const postId = decodeURIComponent(path.split('/')[3] || '').trim();
   // Chat-first en todas las plataformas: sin pestaña explícita se abre el
   // chat con Posty. Con pestaña explícita se respeta (navegación secundaria).
   let tab = tabRaw || 'chat';
@@ -6698,6 +6786,7 @@ async function render() {
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') content = await scheduleView();
+  else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
   else if (tab === 'video') { location.hash = '#/app/schedule'; return; } // Creador manual de video eliminado: el reel lo arma el autopilot
@@ -6705,11 +6794,17 @@ async function render() {
   else if (tab === 'onboarding') { if (!OB) OB = loadOB() || freshOB(); content = onboardingView(); }
   else if (tab === 'calendario') { location.hash = '#/app/schedule'; return; } // Calendario fusionado en Schedule
   else if (tab === 'historial') { location.hash = '#/app/schedule'; return; } // Historial fusionado en Schedule
-  else if (tab === 'ads') content = await adsView(); // 🚀 Potenciar: billetera + boost de posteos
-  else if (tab === 'admin') content = await adminView(); // 📊 Analytics (solo equipo)
-  else content = ajustesView();
+  else if (tab === 'ads') { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { location.hash = '#/app/semana'; } else content = await adsView(); } // 🚀 Potenciar: billetera + boost (solo web)
+  else if (tab === 'admin') { let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
+  else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
+  else { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
+  // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
+  try {
+    const _tbs = document.querySelectorAll('#pzTrialBanner');
+    for (let _i = 1; _i < _tbs.length; _i++) _tbs[_i].remove();
+  } catch (e) {}
   // Si vino con ?plan=1 o ?plan_sel= → la sección Mi plan queda abierta Y en pantalla (no arriba de Ajustes)
   try {
     const _pq = new URLSearchParams(location.hash.split('?')[1] || '');
@@ -6722,12 +6817,31 @@ async function render() {
   handleIgResult();    // toast del OAuth (?ig=) en cualquier pantalla
   renderIgResume(); // banner "terminar de conectar" si el OAuth quedó a medias
   if (!(PROFILE && PROFILE.ig_pending)) maybeShowIgPopup(tab); // popup de conectar Instagram (primer ingreso)
-  // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan)
+  // Modal agresivo: trial vencido (una vez por sesión; no molesta en Mi plan).
+  // En nativo (tiendas): sin modal de ventas → aviso neutro inline, sin CTA de pago.
   try {
     if (ME && ME.trial_expired && ME.plan_status === 'trial' && tab !== 'ajustes' && !sessionStorage.getItem('pz_exp_modal')) {
-      showExpiredModal();
+      if (IS_NATIVE) showExpiredNoticeNative(); else showExpiredModal();
     }
   } catch (e) {}
+}
+
+/* ---------- Aviso neutro (nativo): trial vencido, sin CTA de pago ---------- */
+function showExpiredNoticeNative() {
+  if (document.getElementById('pzExpNativeNote')) return;
+  try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} // una vez por sesión
+  const main = document.querySelector('.main');
+  if (!main) return;
+  const n = document.createElement('div');
+  n.id = 'pzExpNativeNote';
+  n.innerHTML = `
+    <div style="margin:10px 14px 0;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;color:var(--mut)">Tu prueba terminó.</div>
+      <button id="pzExpNativeX" aria-label="Cerrar" style="background:none;border:0;font-size:16px;cursor:pointer;color:var(--dim)">✕</button>
+    </div>`;
+  main.prepend(n);
+  const x = document.getElementById('pzExpNativeX');
+  if (x) x.onclick = () => n.remove();
 }
 
 /* ---------- Modal agresivo: trial vencido ---------- */
@@ -6737,9 +6851,16 @@ async function showExpiredModal() {
   let plans = [];
   try { const d = await api.get('/api/billing/plans'); plans = d.plans || []; } catch (e) {}
   const perDay = (p) => '\u2248 $' + Math.round(p.price / 30).toLocaleString('es-AR') + ' por d\u00eda';
+  const expMix = (p) => {
+    const parts = [];
+    if (p.postsPerWeek > 0) parts.push(`${p.postsPerWeek} posteo${p.postsPerWeek > 1 ? 's' : ''}`);
+    if (p.reelsPerWeek > 0) parts.push(`${p.reelsPerWeek} reel${p.reelsPerWeek > 1 ? 's' : ''}`);
+    if (p.storiesPerWeek > 0) parts.push(`${p.storiesPerWeek} historia${p.storiesPerWeek > 1 ? 's' : ''}`);
+    return parts.length ? `<small class="pz-exp-mix">${parts.join(' + ')} por semana</small>` : '';
+  };
   const rows = plans.map(p => `
     <button class="pz-exp-plan" data-exp-plan="${p.id}">
-      <span><b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small></span>
+      <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
       <span class="pz-exp-go">Elegir \u2192</span>
     </button>`).join('');
   const ov = document.createElement('div');
@@ -6749,11 +6870,11 @@ async function showExpiredModal() {
     <div class="pz-exp-modal" role="dialog" aria-modal="true">
       <button class="pz-exp-x" id="pzExpClose" aria-label="Cerrar">\u2715</button>
       <img src="ai-avatar.png" alt="Posty" style="width:74px;height:74px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
-      <h2>Tu prueba gratis termin\u00f3</h2>
-      <p class="pz-exp-sub">Elegí tu plan y seguimos publicando por vos.</p>
+      <h2>Se termin\u00f3 tu prueba 🥹</h2>
+      <p class="pz-exp-sub">Tus posteos no tienen por qu\u00e9 frenar: eleg\u00ed tu plan y el lunes tu semana est\u00e1 lista como siempre.</p>
       <div class="pz-exp-plans">${rows}</div>
       ${plans.length ? '' : '<button class="btn btn-primary btn-block" id="pzExpGo">Ver planes 🚀</button>'}
-      <button class="pz-exp-later" id="pzExpLater">Por ahora no</button>
+      <button class="pz-exp-later" id="pzExpLater">Pausar mis posteos</button>
     </div>`;
   document.body.appendChild(ov);
   const close = () => { try { sessionStorage.setItem('pz_exp_modal', '1'); } catch (e) {} ov.remove(); };
@@ -6763,6 +6884,24 @@ async function showExpiredModal() {
   const goBtn = ov.querySelector('#pzExpGo');
   if (goBtn) goBtn.onclick = () => goPlan('');
   ov.querySelectorAll('[data-exp-plan]').forEach(b => b.onclick = () => goPlan(b.dataset.expPlan));
+}
+
+/* ---------- Banner persistente: trial vencido (tab Schedule / Mi semana) ---------- */
+let PZ_TRIAL_PLANS_CACHE = null; // plan m\u00e1s barato de /api/billing/plans (fetch cacheado por sesi\u00f3n)
+async function trialExpiredBannerHTML() {
+  try { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) return ''; } catch (e) {}
+  if (!(typeof ME !== 'undefined' && ME && ME.trial_expired && ME.plan_status === 'trial')) return '';
+  if (typeof document !== 'undefined' && document.getElementById('pzExpOverlay')) return ''; // modal abierto: no competir
+  try {
+    if (!PZ_TRIAL_PLANS_CACHE) {
+      const d = await api.get('/api/billing/plans');
+      const arr = (d && d.plans) || [];
+      PZ_TRIAL_PLANS_CACHE = arr.slice().sort((a, b) => (a.price || 0) - (b.price || 0))[0] || null;
+    }
+  } catch (e) {}
+  if (!PZ_TRIAL_PLANS_CACHE || !(PZ_TRIAL_PLANS_CACHE.price > 0)) return '';
+  const perDay = '\u2248 $' + Math.round(PZ_TRIAL_PLANS_CACHE.price / 30).toLocaleString('es-AR') + '/d\u00eda';
+  return `<a id="pzTrialBanner" class="pz-trial-banner" href="#/app/ajustes">\uD83D\uDD12 Tu prueba termin\u00f3 \u2014 reactiv\u00e1 tu semana por ${perDay} \u2192</a>`;
 }
 
 /* ---------- SCHEDULE: calendario de posteos programados ---------- */
@@ -6836,10 +6975,14 @@ async function scheduleView() {
   const failed = allPosts.filter(p => p.status === 'failed');
   const slots = suggestSlots(drafts.length, schedPosts);
   const { xpStrip, expBanner } = xpStripHTML(sk, st, drafts.length);
+  const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
   const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
   const ftBlock = (!published.length && ftCandidates.length) ? fastTrackCardHTML(ftCandidates) : '';
+  // "🚀 Publicar mi primero" (mejora 2026-09-30): hero de 1 tap, visible SOLO
+  // con 0 posteos publicados. Si no hay borradores, el botón genera uno primero.
+  const fpBlock = (!published.length) ? firstPublishCardHTML(drafts) : '';
   // Fallidos: debajo de la revisión, antes del calendario.
   const failedBlock = failedCardHTML(failed);
   // "Ya salió": debajo del calendario, al fondo.
@@ -6872,7 +7015,7 @@ async function scheduleView() {
       return `${a} – ${b}`;
     } catch (e) { return ''; }
   })();
-  const cap1 = (p) => esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 70) || 'Posteo');
+  const capFull = (p) => esc(String(p.caption || p.source_topic || 'Posteo') || 'Posteo');
   const typeBadge = (p) => {
     const mt = String(p.media_type || '');
     if (mt === 'video') return '<span class="sched-badge">🎬 Reel</span>';
@@ -6911,7 +7054,7 @@ async function scheduleView() {
               : `<span class="sched-nothumb">📝</span>`}
             ${typeBadge(p)}
           </span>
-          <div class="sched-cardtxt"><b>${esc(fmtHour24(dt))}</b><span>${cap1(p)}</span></div>
+          <div class="sched-cardtxt"><b>${esc(fmtHour24(dt))}</b><span>${capFull(p)}</span></div>
         </button>`).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
       </div>
     </div>`;
@@ -6920,14 +7063,16 @@ async function scheduleView() {
   // Sin borradores ni programados: la tarjeta para armar la semana vive acá.
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   return `<div id="schedView" class="sched-wrap">
+    ${trialBanner}
     ${xpStrip}${expBanner}
+    ${fpBlock}
     ${ftBlock}
     ${reviewBlock}
     ${failedBlock}
     ${armBlock}
     <div class="sched-top">
       <div><h2 style="margin:0">📅 Schedule</h2>
-      <p class="sub" style="margin:4px 0 0">Todo lo que sale solo, día por día.</p></div>
+      <p class="sub" style="margin:4px 0 0">Los que ya aceptaste — salen solos a la hora indicada.</p></div>
       <div class="sched-nav">
         <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_WEEK_OFFSET <= 0 ? 'disabled' : ''} aria-label="Semana anterior">‹</button>
         <button class="btn btn-ghost btn-sm" id="schedToday">Esta semana</button>
@@ -6949,6 +7094,91 @@ async function scheduleView() {
     ${salioBlock}
   </div>`;
 }
+/* ---------- 📊 TUS NÚMEROS: stats reales de Instagram ---------- */
+// Números honestos: lo que trae la API de IG (o caché local). Si no hay datos,
+// el empty state lo dice de frente, sin inventar nada.
+function statsView() {
+  const cards = ['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores']
+    .map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${esc(l)}</div>${i === 0 ? '<div id="stDelta"></div>' : ''}</div>`)
+    .join('');
+  return `
+  <div class="st-wrap">
+    <div class="page-head">
+      <div class="ph-ico">📊</div>
+      <div class="ph-txt"><h1>Tus números</h1><p class="sub">Cómo viene rindiendo tu Instagram.</p></div>
+    </div>
+    <div class="st-grid" id="stGrid">${cards}</div>
+    <div id="stBest"></div>
+  </div>`;
+}
+function bindStats() {
+  const paint = async () => {
+    try {
+      const d = await api.get('/api/stats/ig');
+      const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
+      const grid = document.getElementById('stGrid');
+      const box = document.getElementById('stBest');
+      const vals = [d.reach_7d, d.reach_30d, d.interactions_30d, d.followers];
+      const hasData = vals.some((v) => Number(v) > 0) || d.best_post;
+      if (!hasData) {
+        // Sin datos no hay tarjetas: solo el empty state con vista previa.
+        if (grid) grid.style.display = 'none';
+        if (box) box.innerHTML = `<div class="card st-empty">
+          <div class="st-empty-ico">📊</div>
+          <b>Tus números van a vivir acá</b>
+          <p>Cuando publiquemos tu primera semana, vas a ver tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>
+          <div class="st-preview"><span class="st-preview-tag">Vista previa</span>
+            <div class="st-grid">
+              ${['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores'].map(l => `<div class="st-card st-skel"><div class="st-skel-num"></div><div class="st-label">${esc(l)}</div></div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+        return;
+      }
+      if (grid) grid.style.display = '';
+      vals.forEach((v, i) => {
+        const el = document.getElementById('stNum' + i);
+        if (el) { el.textContent = fmt(v); el.closest('.st-card').classList.remove('st-loading'); }
+      });
+      // Delta honesto del alcance semanal: solo si ambas cohortes tienen ≥3 posteos
+      // con datos. Con pocos datos el % es puro ruido (swings absurdos) y mezcla
+      // volumen con rendimiento: mejor el número absoluto, sin delta.
+      const cur = Number(d.reach_7d) || 0, prev = Number(d.reach_prev7d) || 0;
+      const postsCur = Number(d.posts_7d) || 0, postsPrev = Number(d.posts_prev7d) || 0;
+      const dEl = document.getElementById('stDelta');
+      if (dEl) {
+        if (postsCur >= 3 && postsPrev >= 3 && prev > 0 && cur !== prev) {
+          const pct = Math.round((cur - prev) / prev * 100);
+          dEl.innerHTML = pct > 0
+            ? `<span class="st-delta up">▲ ${pct}% vs sem. pasada</span>`
+            : `<span class="st-delta down">▼ ${Math.abs(pct)}% vs sem. pasada</span>`;
+        } else dEl.innerHTML = '';
+      }
+      if (!box) return;
+      box.innerHTML = d.best_post
+        ? `<div class="card st-best">
+            <h3>⭐ Tu mejor posteo</h3>
+            <div class="st-best-row">
+              ${d.best_post.image_url ? `<img src="${esc(d.best_post.image_url)}" alt="" loading="lazy">` : ''}
+              <div><b>${esc(d.best_post.caption_short || 'Tu posteo')}</b>
+              <p>${esc(d.best_post.metric)}</p></div>
+            </div>
+          </div>`
+        : `<div class="card st-empty"><b>Todavía no hay suficientes datos para elegir un mejor posteo 🙂</b>
+           <p>Publicá un poco más y aparece acá solito.</p></div>`;
+    } catch (e) {
+      const box = document.getElementById('stBest');
+      if (box) box.innerHTML = `<div class="card st-empty">
+        <b>Ups, no pude traer tus números ahora 😅</b>
+        <p>Probá de nuevo en un ratito.</p>
+        <button class="btn btn-primary btn-sm" id="stRetry" style="margin-top:10px">Reintentar</button>
+      </div>`;
+      const r = document.getElementById('stRetry');
+      if (r) r.onclick = () => { r.disabled = true; r.textContent = 'Cargando…'; paint(); };
+    }
+  };
+  paint();
+}
 function bindSchedule() {
   const pv = $('#schedPrev'), nx = $('#schedNext'), td = $('#schedToday');
   if (pv) pv.onclick = () => { if (SCHED_WEEK_OFFSET > 0) { SCHED_WEEK_OFFSET--; render(); } };
@@ -6962,9 +7192,12 @@ function bindSchedule() {
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
   bindScheduleAll(); // "📅 Programar mi semana →" dentro de la tarjeta de revisión
+  bindAcceptAll(); // "✅ Aceptar todos" dentro de la tarjeta de revisión
   bindAutopilot(); // tarjeta "Armemos tu semana" (estado vacío)
   // Fast-track "🚀 Tu primer posteo" (solo cuentas que nunca publicaron).
   try { if (typeof bindFastTrack === 'function') bindFastTrack(); } catch (e) {}
+  // "🚀 Publicar mi primero" (mejora 2026-09-30: 1 tap, solo 0 publicados).
+  try { if (typeof bindFirstPublish === 'function') bindFirstPublish(); } catch (e) {}
   // Reintento de fallidos: publica de nuevo vía publish-now.
   $$('#schedView [data-failed-retry]').forEach(b => b.onclick = async () => {
     const id = b.dataset.failedRetry;
@@ -6996,9 +7229,11 @@ function bindSchedule() {
 
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
-  if (tab === 'admin') bindAdmin();
+  if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
   if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
   if (tab === 'schedule') bindSchedule();
+  if (tab === 'numeros') bindStats(); // 📊 Tus números
+  if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
   pwaWire();
   // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
   if (!window.__revMoreWired) {
@@ -7020,10 +7255,7 @@ function bindApp(tab) {
   }
   $$('[data-tab]').forEach(b => b.onclick = () => { closeDrawer(); location.hash = '#/app/' + b.dataset.tab; });
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
-  const sg = $('#setupIgRow');
-  if (sg) sg.onclick = igConnectHere;
-  const sb = $('#setupBizRow');
-  if (sb) sb.onclick = () => location.hash = '#/app/ajustes';
+  bindSetupRows();
   const loA = $('#btnLogoutAj');
   if (loA) loA.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
   const bg = $('#mtopBurger');
@@ -7036,503 +7268,9 @@ function bindApp(tab) {
   const dlo = $('#drawerLogout');
   if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
 
-  if (tab === 'ajustes') bindSettings();
+  if (tab === 'ajustes' && typeof bindSettings === 'function') bindSettings(); // el chunk ya lo cargó render()
 }
 
-function bindCreator() {
-  const c = CREATOR;
-  if (c.step === 1) {
-    // 📷 Foto del producto (opcional): se sube al momento y viaja como productPhoto.
-    const renderProdBox = () => {
-      const box = $('#c_prodPhotoBox');
-      if (!box) return;
-      box.innerHTML = c.productPhoto
-        ? `<div style="display:flex;gap:10px;align-items:center">
-            <img src="${esc(c.productPhoto)}" style="width:72px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)" alt="Foto de tu producto">
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" id="btnProdPhCh" type="button">Cambiar</button>
-              <button class="btn btn-ghost btn-sm" id="btnProdPhRm" type="button">Quitar</button>
-            </div>
-          </div>`
-        : `<div style="display:flex;gap:8px;flex-wrap:wrap">
-             <button class="btn btn-ghost" id="btnProdPhAdd" type="button">📷 Agregar foto de tu producto</button>
-             ${assetPhotos().length ? `<button class="btn btn-ghost" id="btnProdPhLib" type="button">🖼️ Tus fotos</button>` : ''}
-           </div>
-           <div id="prodPhLib" style="display:none;gap:8px;flex-wrap:wrap;margin-top:10px">
-             ${assetPhotos().map(a => `<img src="${esc(a.file_path)}" data-prodpick="${esc(a.file_path)}" style="width:64px;height:80px;object-fit:cover;border-radius:10px;border:2px solid var(--line);cursor:pointer" alt="Tu foto">`).join('')}
-           </div>
-           <div id="prodPhMsg"></div>`;
-      const trig = () => $('#c_prodPhotoFile').click();
-      const bAdd = $('#btnProdPhAdd'); if (bAdd) bAdd.onclick = trig;
-      const bLib = $('#btnProdPhLib'); if (bLib) bLib.onclick = () => { const l = $('#prodPhLib'); if (l) l.style.display = l.style.display === 'none' ? 'flex' : 'none'; };
-      $$('#prodPhLib [data-prodpick]').forEach(img => img.onclick = () => { c.productPhoto = img.dataset.prodpick; renderProdBox(); });
-      const bCh = $('#btnProdPhCh'); if (bCh) bCh.onclick = trig;
-      const bRm = $('#btnProdPhRm'); if (bRm) bRm.onclick = () => { c.productPhoto = ''; renderProdBox(); };
-    };
-    const prodInput = $('#c_prodPhotoFile');
-    if (prodInput) prodInput.onchange = async () => {
-      const f = prodInput.files[0]; if (!f) return;
-      if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
-      const msg = $('#prodPhMsg');
-      if (msg) msg.innerHTML = `<div class="hint">⏳ Subiendo foto...</div>`;
-      try {
-        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
-        c.productPhoto = data.path;
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-      } catch (e) {
-        alert('No se pudo subir la foto: ' + e.message);
-      }
-      renderProdBox();
-    };
-    renderProdBox();
-    $$('[data-chip]').forEach(b => b.onclick = () => { const t = $('#c_topic'); if (t) { t.value = b.dataset.chip; t.focus(); } });
-    $('#btnGen').onclick = async () => {
-      c.topic = $('#c_topic').value.trim();
-      if (!c.topic) {
-        // Sin idea del usuario: Posta decide con los datos del negocio
-        const p = (typeof PROFILE !== 'undefined' && PROFILE) || {};
-        c.topic = [p.business_name, p.category].filter(Boolean).join(' — ') || 'Posteo para mi negocio';
-      }
-      const btn = $('#btnGen');
-      btn.disabled = true; btn.textContent = '🎨 Armándo tus 6 opciones...';
-      try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
-        if (!out || !Array.isArray(out.options) || out.options.length !== 6) throw new Error('Respuesta incompleta');
-        c.options = out.options;
-        c.detected = out.detected || null;
-        c.recommendedIndex = out.recommendedIndex || 0;
-        c.recommendedReason = out.recommendedReason || '';
-        c.feedback = '';
-        c.selected = [];
-        c.cardPhoto = {};
-        c.step = 'options'; render();
-      } catch (e) {
-        // Fallback al comportamiento viejo (pantalla de texto con caption/hashtags)
-        try {
-          const out = await api.post('/api/generate', { topic: c.topic });
-          c.caption = out.caption; c.hashtags = out.hashtags;
-          $('#genErr').innerHTML = '';
-          $('#genOut').style.display = 'block';
-          $('#c_caption').value = c.caption; $('#c_tags').value = c.hashtags;
-        } catch (e2) { $('#genErr').innerHTML = `<div class="err">${esc(e2.message)}</div>`; }
-        btn.disabled = false; btn.textContent = '✨ Armar mi posteo';
-      }
-    };
-    const toDesign = $('#btnToDesign');
-    if (toDesign) toDesign.onclick = () => {
-      c.caption = $('#c_caption').value; c.hashtags = $('#c_tags').value;
-      if (!c.title) c.title = c.topic.split(' ').slice(0, 4).join(' ').toUpperCase();
-      if (!c.palTouched) c.pal = defaultPal();
-      c.step = 2; render();
-    };
-  }
-  if (c.step === 2) {
-    const cv = $('#postCanvas');
-    const redraw = async () => {
-      const pi = await photoImg(c.photo);
-      const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-      drawPost(cv, { tpl: c.tpl, pal: c.pal, title: $('#d_title').value, subtitle: $('#d_sub').value, handle: $('#d_handle').value, photoImg: pi, logoImg: logo });
-    };
-    ['d_title', 'd_sub', 'd_handle'].forEach(id => $('#' + id).oninput = () => {
-      c.title = $('#d_title').value; c.subtitle = $('#d_sub').value; c.handle = $('#d_handle').value; redraw();
-    });
-    $$('.tpl').forEach(t => t.onclick = () => { c.tpl = t.dataset.tpl; render(); });
-    $$('.pal').forEach(p => p.onclick = () => { c.pal = +p.dataset.pal; c.palTouched = true; render(); });
-    const fp = $('#d_photo');
-    if (fp) {
-      const pick = () => fp.click();
-      const bAdd = $('#btnPhotoAdd'); if (bAdd) bAdd.onclick = pick;
-      const bCh = $('#btnPhotoCh'); if (bCh) bCh.onclick = pick;
-      const bRm = $('#btnPhotoRm'); if (bRm) bRm.onclick = () => { c.photo = ''; render(); };
-      const bLib = $('#btnPhotoLib');
-      if (bLib) bLib.onclick = () => { const z = $('#photoLib'); z.style.display = z.style.display === 'none' ? 'flex' : 'none'; };
-      $$('#photoLib [data-lib]').forEach(im => im.onclick = () => { c.photo = im.dataset.lib; render(); });
-      // Modo carrusel: multi-selección de 2 a 10 fotos con numerito de orden
-      const bCar = $('#btnCarousel');
-      if (bCar) bCar.onclick = () => { c.carouselMode = true; c.carouselPhotos = []; render(); };
-      const bCarOff = $('#btnCarouselOff');
-      if (bCarOff) bCarOff.onclick = () => { c.carouselMode = false; c.carouselPhotos = []; render(); };
-      $$('#photoLib [data-carlib]').forEach(el => el.onclick = () => {
-        const p = el.dataset.carlib;
-        const i = c.carouselPhotos.indexOf(p);
-        if (i >= 0) c.carouselPhotos.splice(i, 1);
-        else { if (c.carouselPhotos.length >= 10) return; c.carouselPhotos.push(p); }
-        render();
-      });
-      fp.onchange = () => {
-        const f = fp.files[0]; if (!f) return;
-        if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
-        const r = new FileReader();
-        r.onload = () => { c.photo = r.result; render(); };
-        r.readAsDataURL(f);
-      };
-    }
-    c.title = $('#d_title').value; c.subtitle = $('#d_sub').value; c.handle = $('#d_handle').value;
-    redraw();
-    $('#btnBack1').onclick = () => { c.step = 1; render(); };
-    $('#btnSaveDesign').onclick = async () => {
-      // Modo carrusel: sin diseño canvas, las fotos van directo como slides
-      if (c.carouselMode) {
-        if (c.carouselPhotos.length < 2) {
-          const e = $('#carErr');
-          if (e) e.innerHTML = `<div class="err" style="margin-top:8px">Elegí al menos 2 fotos para el carrusel.</div>`;
-          return;
-        }
-        c.imagePath = c.carouselPhotos[0]; c.isCarousel = true; c.step = 3; render(); return;
-      }
-      $('#btnSaveDesign').disabled = true; $('#btnSaveDesign').textContent = '⏳ Guardando...';
-      try {
-        const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-        const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error);
-        c.imagePath = data.path; c.fromOptions = false; c.step = 3; render();
-      } catch (e) { alert('Error: ' + e.message); $('#btnSaveDesign').disabled = false; $('#btnSaveDesign').textContent = 'Guardar diseño →'; }
-    };
-  }
-  if (c.step === 'options') {
-    $$('.opt-use').forEach(b => b.onclick = () => {
-      const o = c.options[+b.dataset.use]; if (!o) return;
-      c.imagePath = o.image; c.caption = o.caption || ''; c.hashtags = o.hashtags || '';
-      c.fromOptions = true;
-      c.step = 3; render();
-    });
-    $$('.opt-customlink').forEach(b => b.onclick = () => {
-      const o = c.options[+b.dataset.custom]; if (!o) return;
-      c.title = o.title || ''; c.subtitle = o.subtitle || ''; c.caption = o.caption || '';
-      c.hashtags = o.hashtags || ''; c.photo = o.image || '';
-      c.tpl = 'gradiente'; c.pal = defaultPal(); c.palTouched = false;
-      c.step = 2; render();
-    });
-    const applyOptions = (out) => {
-      c.options = out.options; c.detected = out.detected || null;
-      c.recommendedIndex = out.recommendedIndex || 0;
-      c.recommendedReason = out.recommendedReason || '';
-      c.selected = []; c.cardPhoto = {};
-      render();
-    };
-    // ---- Selección múltiple ----
-    function updateMultiBar() {
-      const n = c.selected.length;
-      const bar = $('#multiBar');
-      if (!bar) return;
-      bar.style.display = n ? 'flex' : 'none';
-      $('#multiCount').textContent = `✅ ${n} elegido${n === 1 ? '' : 's'}`;
-      $('#btnMultiSched').textContent = `Programar (${n})`;
-    }
-    $$('.opt-selbox').forEach(ch => ch.onchange = () => {
-      const i = +ch.dataset.sel;
-      c.selected = c.selected.filter(x => x !== i);
-      if (ch.checked) { c.selected.push(i); c.selected.sort((a, b) => a - b); }
-      const card = document.querySelector(`[data-card="${i}"]`);
-      if (card) card.classList.toggle('selected', ch.checked);
-      updateMultiBar();
-    });
-    // ---- Detalle en grande (tap en la imagen) ----
-    $$('.opt-img').forEach(im => im.onclick = () => {
-      const o = c.options[+im.dataset.optimg]; if (!o) return;
-      $('#optLightImg').src = o.image;
-      $('#optLightCap').textContent = (o.caption || '') + (o.hashtags ? '\n\n' + o.hashtags : '');
-      $('#optLight').style.display = 'flex';
-    });
-    const closeLight = () => { const l = $('#optLight'); if (l) l.style.display = 'none'; };
-    $('#btnLightClose').onclick = closeLight;
-    $('#optLight').onclick = (e) => { if (e.target.id === 'optLight') closeLight(); };
-    // ---- "📷 Mi foto" por tarjeta ----
-    let pickIdx = null;
-    function openMyPhotoPicker(idx) {
-      pickIdx = idx;
-      const o = c.options[idx]; if (!o) return;
-      const lib = assetPhotos();
-      $('#pickLib').innerHTML = lib.length
-        ? lib.map(a => `<img src="${esc(a.file_path)}" data-pick="${esc(a.file_path)}" class="mp-thumb" alt="Tu foto">`).join('')
-        : `<span class="mut">Todavía no subiste fotos.</span>`;
-      const stock = (o.photoCandidates || []).filter(u => !lib.some(a => a.file_path === u)).slice(0, 6);
-      $('#pickStock').innerHTML = stock.length
-        ? stock.map(u => `<img src="${esc(u)}" data-pick="${esc(u)}" class="mp-thumb" alt="Foto del banco">`).join('')
-        : `<span class="mut">Sin alternativas.</span>`;
-      $('#pickMsg').innerHTML = '';
-      $('#photoPickModal').style.display = 'flex';
-    }
-    async function applyCardPhoto(idx, photoUrl) {
-      const o = c.options[idx]; if (!o) return;
-      $('#pickMsg').innerHTML = `<div class="hint">⏳ Actualizando diseño...</div>`;
-      try {
-        const r = await api.post('/api/creator/rerender', {
-          style: o.style, photo: photoUrl, headline: o.title, subline: o.subtitle,
-          pill: o.pill, bar: o.bar, cta: o.cta, colors: o.colors,
-        });
-        if (!r || !r.image) throw new Error('Sin imagen');
-        o.image = r.image;
-        c.cardPhoto[idx] = photoUrl;
-        if (o.photoCandidates && !o.photoCandidates.includes(photoUrl)) o.photoCandidates.unshift(photoUrl);
-        const img = document.querySelector(`img[data-optimg="${idx}"]`);
-        if (img) img.src = r.image;
-        $('#photoPickModal').style.display = 'none';
-      } catch (e) {
-        $('#pickMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-      }
-    }
-    $$('.opt-myphoto').forEach(b => b.onclick = () => openMyPhotoPicker(+b.dataset.mp));
-    $('#photoPickModal').onclick = async (e) => {
-      const t = e.target;
-      if (t.id === 'photoPickModal' || t.id === 'btnPickClose') { $('#photoPickModal').style.display = 'none'; return; }
-      if (t.id === 'btnPickUpload') { $('#pickFile').click(); return; }
-      const pk = t.dataset && t.dataset.pick;
-      if (pk && pickIdx !== null) await applyCardPhoto(pickIdx, pk);
-    };
-    $('#pickFile').onchange = async () => {
-      const f = $('#pickFile').files[0]; if (!f || pickIdx === null) return;
-      if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
-      $('#pickMsg').innerHTML = `<div class="hint">⏳ Subiendo foto...</div>`;
-      try {
-        const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-        await applyCardPhoto(pickIdx, data.path);
-      } catch (e) {
-        $('#pickMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-      }
-      $('#pickFile').value = '';
-    };
-    // ---- Subir fotos a la librería (arriba de las opciones) ----
-    $('#btnUploadPhotos').onclick = () => $('#mpFiles').click();
-    // ---- Borrar foto de la librería: no se usa más en posteos nuevos ----
-    $$('#mpRow [data-mpdel]').forEach(b => b.onclick = async (ev) => {
-      ev.stopPropagation();
-      if (!confirm('¿Borrar esta foto? No se va a usar más en tus posteos nuevos.')) return;
-      try {
-        await api.delete('/api/assets/' + b.dataset.mpdel);
-        ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-        render(); // refresca el creador y la tira de Mis fotos
-      } catch (e) { alert('No se pudo borrar: ' + (e.message || e)); }
-    });
-    $('#mpFiles').onchange = async () => {
-      const files = Array.from($('#mpFiles').files || []).filter(f => f.type.startsWith('image/'));
-      if (!files.length) return;
-      const msg = $('#mpMsg');
-      msg.innerHTML = `<div class="hint">⏳ Subiendo ${files.length} ${files.length === 1 ? 'foto' : 'fotos'}...</div>`;
-      let ok = 0;
-      for (const f of files) {
-        try {
-          const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
-          const data = await r.json();
-          if (r.ok) ok++;
-          else if (msg) msg.innerHTML = `<div class="err">${esc(data.error || 'Error')}</div>`;
-        } catch (e) { msg.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-      }
-      $('#mpFiles').value = '';
-      ASSETS = await api.get('/api/assets').catch(() => ASSETS);
-      if (ok) {
-        msg.innerHTML = `<div class="hint">✅ ¡Listo! Regenerando con tus fotos...</div>`;
-        try {
-          const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
-          if (out && Array.isArray(out.options) && out.options.length) { applyOptions(out); return; }
-        } catch (e) { /* queda el mensaje de abajo */ }
-        msg.innerHTML = `<div class="hint">✅ ¡Listo! Tocá "🔄 Regenerar opciones" para usarlas.</div>`;
-      }
-    };
-    // ---- Programar N ----
-    async function openSchedModal() {
-      if (!c.selected.length) return;
-      const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
-      let scheduled = [];
-      try { scheduled = await api.get('/api/posts?status=scheduled'); } catch (e) { scheduled = []; }
-      const taken = new Set((scheduled || []).map(p => tzDayKey(p.scheduled_at, tz)).filter(Boolean));
-      let off = 0;
-      const rows = c.selected.map(idx => {
-        let iso = slotDate19(0, tz);
-        let guard = 0;
-        while (guard++ < 90) {
-          iso = slotDate19(off, tz); off++;
-          const k = tzDayKey(iso, tz);
-          if (k && !taken.has(k)) { taken.add(k); break; }
-        }
-        return { idx, iso };
-      });
-      $('#schedRows').innerHTML = rows.map(r => {
-        const o = c.options[r.idx];
-        return `<div class="sched-row" data-row="${r.idx}">
-          <img src="${esc(o.image)}" class="sched-thumb" alt="">
-          <div class="sched-info"><b>${esc(o.title || 'Diseño')}</b><span class="mut">${esc((o.caption || '').slice(0, 60))}…</span></div>
-          <input type="datetime-local" data-swhen="${r.idx}" value="${isoToLocalInput(r.iso)}">
-          <button class="btn btn-soft btn-sm sched-now" data-now="${r.idx}" title="Publicar ahora en Instagram">⚡ Postear ahora</button>
-        </div>
-        <div class="pubnow-mount" data-mount="${r.idx}"></div>`;
-      }).join('');
-      $('#schedMsg').innerHTML = '';
-      // "⚡ Postear ahora" por fila: crea el post y lo publica al instante
-      $$('#schedRows [data-now]').forEach(b => b.onclick = async () => {
-        const idx = +b.dataset.now;
-        const o = c.options[idx]; if (!o) return;
-        b.disabled = true;
-        const mount = document.querySelector(`#schedRows [data-mount="${idx}"]`);
-        const row = document.querySelector(`#schedRows [data-row="${idx}"]`);
-        try {
-          const r = await api.post('/api/creator/schedule', { items: [{ image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date().toISOString() }] });
-          if (!r.ids || !r.ids.length) throw new Error('Ya hay un posteo igual creado hoy');
-          const res = await publishNowFlow(r.ids[0], mount);
-          if (res && res.ok) {
-            // ya salió (o está saliendo): sacarlo de la selección para no duplicarlo al confirmar
-            c.selected = c.selected.filter(x => x !== idx);
-            const ch = document.querySelector(`.opt-selbox[data-sel="${idx}"]`);
-            if (ch) ch.checked = false;
-            const card = document.querySelector(`[data-card="${idx}"]`);
-            if (card) card.classList.remove('selected');
-            updateMultiBar();
-            const inp = row ? row.querySelector('input[data-swhen]') : null;
-            if (inp) inp.disabled = true;
-            if (row) row.style.opacity = '.55';
-            b.textContent = '✅ Posteado';
-          } else {
-            b.disabled = false;
-          }
-        } catch (e) {
-          if (mount) mount.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-          b.disabled = false;
-        }
-      });
-      $('#schedModal').style.display = 'flex';
-    }
-    $('#btnMultiSched').onclick = openSchedModal;
-    $('#btnSchedCancel').onclick = () => { $('#schedModal').style.display = 'none'; };
-    $('#schedModal').onclick = (e) => { if (e.target.id === 'schedModal') $('#schedModal').style.display = 'none'; };
-    $('#btnSchedConfirm').onclick = async () => {
-      const btn = $('#btnSchedConfirm');
-      btn.disabled = true; btn.textContent = '⏳ Programando...';
-      try {
-        const items = c.selected.map(idx => {
-          const o = c.options[idx];
-          const inp = document.querySelector(`input[data-swhen="${idx}"]`);
-          const v = inp && inp.value;
-          if (!v) throw new Error('Elegí fecha y hora para todos los diseños');
-          return { image: o.image, caption: o.caption || '', hashtags: o.hashtags || '', scheduled_at: new Date(v).toISOString() };
-        });
-        const r = await api.post('/api/creator/schedule', { items });
-        $('#schedMsg').innerHTML = `<div class="okmsg">✅ ${r.count} ${r.count === 1 ? 'posteo programado' : 'posteos programados'} — <a href="#/app/schedule">ver en Schedule</a></div>`;
-        c.selected = [];
-        $$('.opt-selbox').forEach(ch => { ch.checked = false; });
-        $$('.opt-card').forEach(cd => cd.classList.remove('selected'));
-        updateMultiBar();
-        setTimeout(() => { $('#schedModal').style.display = 'none'; location.hash = '#/app/schedule'; }, 1800);
-      } catch (e) {
-        $('#schedMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-        btn.disabled = false; btn.textContent = '✅ Confirmar';
-      }
-    };
-    $('#btnRegen').onclick = async () => {
-      if (!confirm('¿Genero 6 opciones nuevas? Las actuales se reemplazan.')) return;
-      const btn = $('#btnRegen');
-      btn.disabled = true; btn.textContent = '🎨 Generando nuevas opciones...';
-      try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, productPhoto: c.productPhoto || undefined });
-        if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
-        // Motor de imágenes nivel agencia: intenta primero un concept shot por opción
-        // con la foto del producto y las de la librería (máx 2). Si alguna falla,
-        // esa opción queda con su imagen canvas de siempre — nada se rompe.
-        const libRefs = (c.productPhoto ? [c.productPhoto] : [])
-          .concat(assetPhotos().slice(0, 2).map(a => a.file_path)).slice(0, 2);
-        const csTipo = tipoFromText(c.topic);
-        await Promise.all(out.options.map(async (o) => {
-          const p = await aiConceptShot({
-            idea: c.topic || o.title || '',
-            tipo: csTipo,
-            headline: pickHeadline({ titulo: o.title }, o.caption),
-            refs: libRefs,
-          });
-          if (p) o.image = p;
-        }));
-        applyOptions(out);
-      } catch (e) {
-        const capMsg = (e && e.aiCap) ? (e.message || 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana 💪') : null;
-        $('#optErr').innerHTML = `<div class="${capMsg ? 'okmsg' : 'err'}">${esc(capMsg || e.message)}</div>`;
-        btn.disabled = false; btn.textContent = '🔄 Regenerar opciones';
-      }
-    };
-    $('#btnFeedback').onclick = async () => {
-      const inp = $('#fb_input');
-      const fb = inp.value.trim();
-      const msg = $('#feedbackMsg');
-      if (!fb) { msg.innerHTML = `<div class="hint" style="margin:10px 0 0">Contame qué querés cambiar 👇</div>`; return; }
-      const btn = $('#btnFeedback');
-      btn.disabled = true; btn.textContent = '🔧 Arreglándolo...';
-      try {
-        const out = await api.post('/api/creator/options', { topic: c.topic, feedback: fb, productPhoto: c.productPhoto || undefined });
-        if (!out || !Array.isArray(out.options) || !out.options.length) throw new Error('No llegaron opciones, probá de nuevo');
-        c.feedback = fb; applyOptions(out);
-      } catch (e) {
-        msg.innerHTML = `<div class="err">${esc(e.message)}</div>`;
-        btn.disabled = false; btn.textContent = 'Arreglar';
-      }
-    };
-    $('#btnBackOptions').onclick = () => { c.step = 1; render(); };
-  }
-  if (c.step === 3) {
-    const resetCreator = () => {
-      CREATOR_OPEN = false;
-      CREATOR = { step: 1, topic: '', caption: '', hashtags: '', tpl: 'gradiente', pal: 0, palTouched: false, title: '', subtitle: '', handle: '', imagePath: '', photo: '', options: null, detected: null, recommendedIndex: 0, recommendedReason: '', feedback: '', productPhoto: '', selected: [], cardPhoto: {}, carouselMode: false, carouselPhotos: [], isCarousel: false };
-    };
-    const done = (msg, hash) => {
-      $('#pubMsg').innerHTML = `<div class="okmsg">${msg}</div>`;
-      resetCreator();
-      setTimeout(() => location.hash = hash || '#/app/schedule', 1400);
-    };
-    const carPayload = () => {
-      const p = { image_path: c.imagePath, caption: c.caption, hashtags: c.hashtags };
-      if (c.isCarousel) { p.media_type = 'carousel'; p.carousel_paths = c.carouselPhotos; }
-      return p;
-    };
-    $('#btnSchedule').onclick = async () => {
-      const when = $('#p_when').value;
-      if (!when) { $('#pubMsg').innerHTML = `<div class="err">Elegí fecha y hora</div>`; return; }
-      if (!(await checkQuotaOrModal())) return;
-      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
-      try {
-        await api.post('/api/posts', { ...carPayload(), scheduled_at: new Date(when).toISOString() });
-        done('✅ Post programado. Se publica solo a la hora indicada.');
-      } catch (e) { $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-    };
-    $('#btnNow').onclick = async () => {
-      const btn = $('#btnNow');
-      if (!(await checkQuotaOrModal())) return;
-      btn.disabled = true; // bloquea el doble tap
-      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
-      try {
-        const { id } = await api.post('/api/posts', carPayload());
-        $('#pubMsg').innerHTML = '<div class="pubnow-mount"></div>';
-        const r = await publishNowFlow(id, $('#pubMsg .pubnow-mount'));
-        if (r && r.ok && r.permalink) {
-          // publishNowFlow ya mostró "¡Publicado! Ver en IG ↗"
-          resetCreator();
-          setTimeout(() => location.hash = '#/app/schedule', 8000);
-        } else if (r && r.ok) {
-          done('⏳ Se está publicando… lo ves en Mi semana en un minuto.');
-        }
-        // si falló, publishNowFlow ya mostró el error con botón Reintentar
-      } catch (e) {
-        if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
-        $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;
-      }
-    };
-    $('#btnDraft').onclick = async () => {
-      const btn = $('#btnDraft');
-      // Guardar borrador no consume cupo: el plan limita las publicaciones, no la creación.
-      btn.disabled = true;
-      c.caption = $('#p_caption').value; c.hashtags = $('#p_tags').value;
-      try {
-        await api.post('/api/posts', carPayload());
-        done('💾 Guardado como borrador. Lo revisás en Schedule.', '#/app/schedule');
-      } catch (e) {
-        if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); btn.disabled = false; return; }
-        $('#pubMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`; btn.disabled = false;
-      }
-    };
-    $('#btnBack2').onclick = () => { c.step = c.fromOptions ? 'options' : 2; render(); };
-  }
-}
 
 function igConnect(next) {
   const nx = (typeof next === 'string' && next.startsWith('/#/')) ? next : '';
@@ -7564,1261 +7302,208 @@ function renderIgResume() {
   document.body.appendChild(b);
   b.querySelector('#igResumeGo').onclick = () => igConnect();
 }
-function bindSettings() {
-  // Acordeón de secciones en móvil
-  $$('.ajsec-h').forEach(h => {
-    const tg = () => h.parentElement.classList.toggle('open');
-    h.onclick = tg;
-    h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
-  });
-  // Notificaciones push: pinta la sección 🔔 según el estado del permiso.
-  try { pushRenderZone(); } catch (e) { /* nunca bloquear ajustes */ }
-  const sCat = $('#s_cat');
-  if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
-  const sDesc = $('#s_desc');
-  if (sDesc) sDesc.oninput = () => { $('#s_desc_n').textContent = sDesc.value.length; };
-  // --- competidores como chips ---
-  let compChips = String((PROFILE && PROFILE.competitors) || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
-  let compPics = {};
-  const compBox = $('#s_chips');
-  const renderChips = () => {
-    compBox.innerHTML = compChips.map((c, i) => {
-      const pic = compPics[c.toLowerCase()];
-      const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : `<span class="comp-av comp-av-fb">📷</span>`;
-      return `<span class="comp-chip">${av}${esc(c)}<b data-ci="${i}" style="cursor:pointer;margin-left:6px">×</b></span>`;
-    }).join('');
-    compBox.querySelectorAll('[data-ci]').forEach(x => x.onclick = () => { compChips.splice(+x.dataset.ci, 1); renderChips(); markDirty(); });
-  };
-  const fetchPic = async (name) => {
-    const k = name.toLowerCase();
-    if (compPics[k] !== undefined) return;
-    compPics[k] = null;
-    try {
-      const r = await api.get('/api/ig/avatar?u=' + encodeURIComponent(name));
-      if (r && r.pic_url) { compPics[k] = r.pic_url; renderChips(); }
-    } catch (e) {}
-  };
-  const addChip = () => {
-    const v = $('#s_compin').value.trim().replace(/^@+/, '');
-    const cHint = $('#compHint');
-    if (!v) return;
-    if (v.includes('@')) {
-      if (cHint) { cHint.textContent = 'Eso parece un email — poné el nombre o el usuario de Instagram del competidor.'; cHint.style.display = ''; }
-      $('#s_compin').value = '';
-      return;
-    }
-    if (cHint) cHint.style.display = 'none';
-    if (compChips.length >= 10) { $('#s_compin').value = ''; return; }
-    if (!compChips.some(c => c.toLowerCase() === v.toLowerCase())) { compChips.push(v); fetchPic(v); }
-    $('#s_compin').value = ''; renderChips(); markDirty();
-  };
-  renderChips();
-  compChips.forEach(fetchPic);
-  $('#s_compin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addChip(); } });
-  $('#s_compbox').addEventListener('click', e => { if (e.target.id !== 's_compin') $('#s_compin').focus(); });
-  // --- cambios sin guardar ---
-  let profDirty = false;
-  const dirtyEl = $('#profDirty');
-  function markDirty() { if (!profDirty) { profDirty = true; if (dirtyEl) dirtyEl.style.display = ''; } }
-  ['s_biz', 's_iguser', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_desc'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('input', markDirty);
-    if (el) el.addEventListener('change', markDirty);
-  });
-  $('#btnSaveProfile').onclick = async () => {
-    if (!$('#s_biz').value.trim()) { $('#profMsg').innerHTML = '<div class="err">Poné el nombre de tu negocio</div>'; return; }
-    const catOther = $('#s_catother').value.trim();
-    await api.put('/api/profile', {
-      business_name: $('#s_biz').value, ig_username: $('#s_iguser').value.replace('@', ''),
-      category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
-      tone: $('#s_tone').value, description: $('#s_desc').value,
-      competitors: compChips.join(', '), goal: $('#s_goal').value,
-    });
-    await api.put('/api/settings', { timezone: $('#s_tz').value });
-    $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-    profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
-    PROFILE = await api.get('/api/profile');
-    SETTINGS = await api.get('/api/settings');
-  };
-  // --- ADN del negocio (GET/PUT /api/dna): listas simples, sin fricción ---
-  const dnaEls = { productos: $('#s_dna_productos'), promos: $('#s_dna_promos'), horarios: $('#s_dna_horarios'), ubicacion: $('#s_dna_ubicacion') };
-  const splitNamePrice = (line) => {
-    const m = String(line || '').match(/^(.*?)\s+[—–-]\s+(.*)$/);
-    if (!m) return { nombre: String(line || '').trim(), precio: '' };
-    return { nombre: m[1].trim(), precio: m[2].trim() };
-  };
-  const dnaArrLine = (it) => {
-    if (typeof it === 'string') return it;
-    const a = (it.nombre || it.titulo || '').trim();
-    const b = (it.precio || it.detalle || '').trim();
-    return b ? `${a} — ${b}` : a;
-  };
-  const paintDna = (dna) => {
-    const d = dna || {};
-    if (dnaEls.productos) dnaEls.productos.value = (Array.isArray(d.productos) ? d.productos : []).map(dnaArrLine).filter(Boolean).join('\n');
-    if (dnaEls.promos) dnaEls.promos.value = (Array.isArray(d.promos_activas) ? d.promos_activas : []).map(dnaArrLine).filter(Boolean).join('\n');
-    if (dnaEls.horarios) dnaEls.horarios.value = d.horarios || '';
-    if (dnaEls.ubicacion) dnaEls.ubicacion.value = d.ubicacion || '';
-    paintSrcChips(d);
-  };
-  // --- chips de fuente por bloque (Expertos en información): dna.fuentes = { campo: 'etiqueta' } ---
-  // Si un campo no tiene fuente registrada, se muestra sin chip (defensivo).
-  const DNA_SRC_STYLE = 'font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap';
-  const dnaSrcChip = (fuentes, field) => {
-    const t = (fuentes && typeof fuentes === 'object' && fuentes[field]) || '';
-    return t ? `<span style="${DNA_SRC_STYLE}">${esc(String(t))}</span>` : '';
-  };
-  const paintSrcChips = (dna) => {
-    const d = dna || {};
-    for (const f of ['productos', 'promos_activas', 'horarios', 'ubicacion']) {
-      const el = document.getElementById('dnaChip_' + f);
-      if (el) el.innerHTML = dnaSrcChip(d.fuentes, f);
-    }
-  };
-  // --- datos de la web dentro del ADN: read-only, con etiqueta "de tu web" ---
-  const webDnaZone = $('#webDnaZone');
-  const webArrOf = (v) => {
-    if (v == null) return [];
-    if (Array.isArray(v)) return v.filter(x => x && String(typeof x === 'string' ? x : (x.nombre || x.titulo || '')).trim());
-    return [v];
-  };
-  const paintWebDna = (dna) => {
-    if (!webDnaZone) return;
-    const d = dna || {};
-    const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
-    const w = isObj(d.website) ? d.website : (isObj(d.web_data) ? d.web_data : {});
-    const prods = webArrOf(w.productos || d.website_productos || d.web_productos);
-    const precios = webArrOf(w.precios || d.website_precios || d.web_precios);
-    const promos = webArrOf(w.promos || d.website_promos || d.web_promos);
-    const groups = [['🛍️ Productos', prods], ['💲 Precios', precios], ['🎉 Promos', promos]].filter(([, a]) => a.length);
-    if (!groups.length) { webDnaZone.innerHTML = ''; return; }
-    const tag = '<span style="font-size:10px;font-weight:700;background:#E7F4FB;color:#166E9C;border-radius:999px;padding:2px 9px;white-space:nowrap">🌐 de tu web</span>';
-    webDnaZone.innerHTML = `
-      <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">🌐 Lo que encontramos en tu web</div>
-        ${groups.map(([t, arr]) => `
-          <div class="field" style="margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${t} ${tag}</label>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${arr.map(it => `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`).join('')}</div>
-          </div>`).join('')}
-        <div class="hint">Se actualiza solo cuando volvés a analizar tu web en "🌐 La web de tu negocio".</div>
-      </div>`;
-  };
-  const refreshWebDna = () => { api.get('/api/dna').then(r => paintWebDna(r && r.dna)).catch(() => {}); };
-  // --- 📚 Datos de otras fuentes: bloques de solo lectura con su chip de fuente ---
-  // Cada track (comentarios IG, Facebook, Google, MercadoLibre, historias) guarda sus campos
-  // en el ADN con su etiqueta en dna.fuentes. Campos nuevos de otros tracks que todavía no
-  // existan se cablean defensivo (título generado desde el nombre del campo).
-  const DNA_INFO_BLOCKS = [
-    ['producto_estrella', '⭐ Producto estrella'], ['cliente_ideal', '🎯 Cliente ideal'],
-    ['diferencial', '✨ Diferencial'], ['servicios', '🛠️ Servicios'], ['promos', '🎉 Promos'],
-    ['precio_rango', '💲 Rango de precios'], ['preguntas_frecuentes', '❓ Preguntas frecuentes'],
-    ['objeciones', '🚧 Objeciones'], ['deseos', '💭 Deseos de tus clientes'],
-    ['testimonios', '💬 Testimonios'], ['puntos_fuertes', '💪 Puntos fuertes'],
-    ['descripcion_fb', '📘 Descripción de Facebook'], ['reviews_fb', '📘 Reviews de Facebook'],
-    ['anuncios', '📣 Anuncios'], ['tono_ejemplos', '🗣️ Frases del dueño'],
-  ];
-  // Campos que ya tienen UI propia en esta tarjeta o no son mostrables.
-  const DNA_INFO_SKIP = new Set(['fuentes', 'productos', 'promos_activas', 'horarios', 'ubicacion',
-    'website', 'web_data', 'inspo', 'tono', 'series', 'paused_tipos', 'paused_series',
-    'website_url', 'website_analyzed_at', 'website_partial', 'resumen']);
-  const dnaHas = (v) => {
-    if (v == null) return false;
-    if (typeof v === 'string') return !!v.trim();
-    if (Array.isArray(v)) return v.some(x => x && (typeof x === 'string' ? x.trim() : String(x.nombre || x.titulo || x.pregunta || x.texto || '').trim()));
-    return true;
-  };
-  const dnaInfoLine = (it) => {
-    if (it && typeof it === 'object') {
-      const q = String(it.pregunta || '').trim();
-      const a = String(it.respuesta || '').trim();
-      if (q) return `<div style="margin:6px 0"><div style="font-weight:700;font-size:12.5px">❓ ${esc(q)}</div>${a ? `<div style="color:var(--mut);font-size:11.5px">💬 ${esc(a)}</div>` : ''}</div>`;
-    }
-    return `<span class="comp-chip">${esc(dnaArrLine(it))}</span>`;
-  };
-  const paintFuentesDna = (dna) => {
-    const zone = $('#dnaFuentesZone');
-    if (!zone) return;
-    const d = dna || {};
-    const isObj = (o) => o && typeof o === 'object' && !Array.isArray(o);
-    const fuentes = isObj(d.fuentes) ? d.fuentes : {};
-    const known = new Set(DNA_INFO_BLOCKS.map(([f]) => f));
-    const blocks = [];
-    for (const [field, title] of DNA_INFO_BLOCKS) {
-      if (dnaHas(d[field])) blocks.push([field, title, d[field]]);
-    }
-    for (const field of Object.keys(fuentes)) {
-      if (known.has(field) || DNA_INFO_SKIP.has(field) || !dnaHas(d[field])) continue;
-      const title = '🧩 ' + field.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      blocks.push([field, title, d[field]]);
-    }
-    if (!blocks.length) { zone.innerHTML = ''; return; }
-    zone.innerHTML = `
-      <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:16px">
-        <div style="font-weight:800;font-size:12.5px;margin-bottom:10px">📚 Datos de otras fuentes</div>
-        ${blocks.map(([field, title, v]) => `
-          <div class="field" style="margin-bottom:10px">
-            <label style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${esc(title)} ${dnaSrcChip(fuentes, field)}</label>
-            <div style="margin-top:6px">${Array.isArray(v)
-              ? v.slice(0, 6).map(dnaInfoLine).join('') + (v.length > 6 ? `<div class="hint">…y ${v.length - 6} más</div>` : '')
-              : `<div style="font-size:12.5px">${esc(String(v))}</div>`}</div>
-          </div>`).join('')}
-        <div class="hint">La IA usa estos datos para crear posteos que venden de verdad.</div>
-      </div>`;
-  };
-  if (dnaEls.productos) {
-    api.get('/api/dna').then(r => { paintDna(r && r.dna); paintWebDna(r && r.dna); paintFuentesDna(r && r.dna); }).catch(() => {});
-    const bDna = $('#btnSaveDna');
-    if (bDna) bDna.onclick = async () => {
-      const msg = $('#dnaMsg');
-      try {
-        const productos = dnaEls.productos.value.split('\n').map(splitNamePrice).filter(p => p.nombre).map(p => ({ nombre: p.nombre, precio: p.precio }));
-        const promos_activas = dnaEls.promos.value.split('\n').map(l => { const s = splitNamePrice(l); return s.nombre ? { titulo: s.nombre, detalle: s.precio } : null; }).filter(Boolean);
-        const r = await api.put('/api/dna', {
-          productos, promos_activas,
-          horarios: dnaEls.horarios.value.trim(),
-          ubicacion: dnaEls.ubicacion.value.trim(),
-        });
-        paintDna(r && r.dna);
-        if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-      } catch (e) {
-        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
-      }
-    };
+
+
+/* ============================================================
+   🔔 POSTY TE AVISA — aprobación de posteos por notificación
+   Ruta #/app/post/:id. Todo nuevo con prefijo apv-. No toca
+   pushEnableFlow/pushSupported/pushPerm ni el sw.
+   ============================================================ */
+function apvTz() {
+  try { return (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires'; } catch (e) { return 'America/Argentina/Buenos_Aires'; }
+}
+// Misma convención de parseo que el Schedule: ISO UTC con ' ' o 'T'.
+function apvParse(iso) {
+  const s0 = String(iso || '');
+  let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
+  if (s0.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+  return new Date(s);
+}
+function apvDayKey(d, tz) { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } }
+function apvHM(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
+// "Sale hoy 18:00" / "Sale mañana 18:00" / "Sale el jueves 2 de octubre a las 18:00"
+function apvWhenText(d, tz) {
+  const hm = apvHM(d, tz), k = apvDayKey(d, tz);
+  if (k === apvDayKey(new Date(), tz)) return `Sale hoy ${hm}`;
+  if (k === apvDayKey(new Date(Date.now() + 864e5), tz)) return `Sale mañana ${hm}`;
+  let dl = '';
+  try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }); } catch (e) {}
+  return dl ? `Sale el ${dl} a las ${hm}` : 'Sale pronto';
+}
+// Cuenta regresiva corta para el pill de pendiente: "en 2 h 15 min".
+function apvCountdown(d) {
+  const ms = d.getTime() - Date.now();
+  if (!(ms > 0)) return 'en cualquier momento';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `en ${mins} min`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h < 48) return `en ${h} h${m ? ` ${m} min` : ''}`;
+  const days = Math.floor(h / 24);
+  return `en ${days} día${days > 1 ? 's' : ''}`;
+}
+function apvPill(p, d, dOk) {
+  const ap = String(p.approval || ''), st = String(p.status || '');
+  const tz = apvTz();
+  if (st === 'published') {
+    const link = p.permalink || p.ig_permalink || p.url || '';
+    return `<span class="apv-pill apv-pill-ok">✅ Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ↗</a>` : ''}`;
   }
-  // --- 🌐 La web de tu negocio (GET /api/website/status · POST /api/website/analyze) ---
-  let webStatus = null;
-  const webZone = $('#webZone');
-  const fmtWebAt = (at) => {
-    try {
-      let s = String(at || '').trim().replace(' ', 'T');
-      if (!s) return '';
-      if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'; // datetimes de SQLite vienen en UTC
-      const d = new Date(s);
-      if (isNaN(d)) return String(at);
-      return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch (e) { return String(at || ''); }
-  };
-  const normWebUrl = (u) => {
-    let s = String(u || '').trim();
-    if (!s) return '';
-    if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
-    return s;
-  };
-  const paintWebZone = (st, errMsg) => {
-    if (st) webStatus = st;
-    if (!webZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!webStatus) { webZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tu web. Probá recargar la página.</div>'; return; }
-    if (webStatus.ok) {
-      webZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(webStatus.url || 'Tu web')}</b><br>Analizada el ${esc(fmtWebAt(webStatus.analyzed_at))}${webStatus.partial ? ' <b>(parcial:</b> no pudimos leer todas las páginas)' : ''}</div>
-        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">Sacamos de tu web productos, precios y promos para que la IA cree posteos que venden.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnWebRe">🔄 Analizar de nuevo</button> <span id="webMsg"></span>
-        </div>${err}`;
-      const b = $('#btnWebRe');
-      if (b) b.onclick = () => runWebAnalyze({ force: true });
-    } else {
-      const det = String(webStatus.url || '').trim();
-      webZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${det ? `Detectamos esta web en tu bio de Instagram 👇` : '¿Tenés web? La estudiamos y sacamos productos, precios y promos para que la IA cree posteos que venden.'}</p>
-        <div class="field" style="margin-bottom:10px"><label>URL de tu web o publicación</label>
-          <input id="s_weburl" value="${esc(det)}" placeholder="https://tuweb.com" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnWebGo">🔍 Analizar mi web</button> <span id="webMsg"></span>
-        </div>
-        <p class="hint" style="margin-top:10px">🛒 <b>¿Vendés en MercadoLibre?</b> Pegá el link de tu publicación (articulo.mercadolibre.com…) y sacamos título, precio y descripción para tus posteos.</p>${err}`;
-      const b = $('#btnWebGo');
-      if (b) b.onclick = () => {
-        const u = normWebUrl(($('#s_weburl') || {}).value);
-        if (!u) { const m = $('#webMsg'); if (m) m.innerHTML = '<span style="color:#B3402E;font-size:12.5px">Pegá la URL de tu web</span>'; return; }
-        runWebAnalyze({ url: u });
-      };
-    }
-  };
-  const runWebAnalyze = async (body) => {
-    if (!webZone) return;
-    webZone.innerHTML = '<div class="hint">⏳ Analizando tu web… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
-    try {
-      await api.post('/api/website/analyze', body, { timeout: 240000 });
-      try { webStatus = await api.get('/api/website/status'); } catch (e) { /* queda el anterior */ }
-      paintWebZone(webStatus);
-      refreshWebDna();
-      toast('✅ <b>Ya estudiamos tu web.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintWebZone(webStatus, (e && e.message) || 'No se pudo analizar tu web');
-    }
-  };
-  if (webZone) {
-    api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => paintWebZone(null));
-    // refresco invocable desde el auto-análisis post-OAuth (?ig=ok)
-    PZ_WEB_REFRESH = () => {
-      api.get('/api/website/status').then(st => paintWebZone(st)).catch(() => {});
-      refreshWebDna();
-    };
+  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">⚠️ No salió: sin aprobación a tiempo</span>';
+  if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">❌ Rechazado — no se publica</span>';
+  if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">🤖 Salió solo (no lo viste a tiempo)</span>';
+  if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">✅ Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
+  if (ap === 'pending' && st === 'scheduled' && dOk && d.getTime() > Date.now()) return `<span class="apv-pill apv-pill-pend">⏳ Pendiente — sale ${esc(apvCountdown(d))} (o antes si lo aprobás)</span>`;
+  return '<span class="apv-pill apv-pill-pend">⏳ Pendiente</span>';
+}
+function apvNotFound() {
+  return `<div class="apv-wrap"><div class="card" style="text-align:center">
+    <img src="ai-avatar.png" alt="Posty" style="width:72px;height:72px;border-radius:50%">
+    <h3 style="margin:12px 0 6px">Ese posteo no existe 😅</h3>
+    <p class="hint">Capaz se borró o el link está mal.</p>
+    <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Volver a Schedule</a>
+  </div></div>`;
+}
+// Mensaje pre-llenado del chat para "Editar": el usuario completa qué cambiar.
+function apvEditPrompt(d, tz) {
+  const hm = apvHM(d, tz), k = apvDayKey(d, tz);
+  if (k === apvDayKey(new Date(), tz)) return `Quiero editar el posteo que sale hoy a las ${hm}`;
+  if (k === apvDayKey(new Date(Date.now() + 864e5), tz)) return `Quiero editar el posteo que sale mañana a las ${hm}`;
+  let dl = '';
+  try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) {}
+  return dl ? `Quiero editar el posteo que sale el ${dl} a las ${hm}` : 'Quiero editar ese posteo';
+}
+async function approvalPostView(id) {
+  if (!id) return apvNotFound();
+  let p = null, is404 = false, loadErr = false;
+  try {
+    const r = await api.get('/api/posts/' + encodeURIComponent(id));
+    // El endpoint existente devuelve {post:{...}}; si el backend lo aplana, también sirve.
+    p = (r && r.post) ? r.post : r;
   }
-  // --- 📱 Tus historias recientes (GET /api/ig/stories-status · POST /api/ig/mine-stories) ---
-  // Lee las historias de las últimas 24h y la IA saca promos y anuncios del texto visible.
-  // Solo lee: nunca publica nada. Ojo: Instagram no da el archivo, solo las últimas 24h.
-  let storiesStatus = null;
-  const storiesZone = $('#storiesZone');
-  const paintStoriesZone = (st, errMsg) => {
-    if (st) storiesStatus = st;
-    if (!storiesZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!storiesStatus) { storiesZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tus historias. Probá recargar la página.</div>'; return; }
-    if (storiesStatus.ok) {
-      const n = (storiesStatus.promos || 0) + (storiesStatus.anuncios || 0);
-      storiesZone.innerHTML = `
-        <div class="okmsg">✅ <b>Historias analizadas el ${esc(fmtWebAt(storiesStatus.analyzed_at))}</b><br>${n ? `Sacamos ${n} dato${n === 1 ? '' : 's'} de tus historias (promos y anuncios): la IA los usa para crear posteos al día.` : 'No encontramos texto en tus historias recientes: si publicás una promo o un anuncio, volvé a analizarlas.'}</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
-          <button class="btn btn-soft btn-sm" id="btnStoriesGo">🔄 Analizar de nuevo</button> <span id="storiesMsg"></span>
-        </div>${err}`;
-      const b = $('#btnStoriesGo');
-      if (b) b.onclick = runStoriesAnalyze;
-    } else {
-      storiesZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Leemos tus historias de las últimas 24h y sacamos las promos y anuncios que publicaste, para que la IA cree posteos al día. <b>Ojo:</b> Instagram solo nos deja ver las de las últimas 24 horas, no el archivo.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnStoriesGo">📱 Analizar historias</button> <span id="storiesMsg"></span>
-        </div>${err}`;
-      const b = $('#btnStoriesGo');
-      if (b) b.onclick = runStoriesAnalyze;
-    }
-  };
-  const runStoriesAnalyze = async () => {
-    if (!storiesZone) return;
-    storiesZone.innerHTML = '<div class="hint">⏳ Leyendo tus historias de las últimas 24h… las analizamos una por una, puede tardar un ratito.</div>';
-    try {
-      await api.post('/api/ig/mine-stories', {}, { timeout: 240000 });
-      try { storiesStatus = await api.get('/api/ig/stories-status'); } catch (e) { /* queda el anterior */ }
-      paintStoriesZone(storiesStatus);
-      refreshWebDna();
-      toast('✅ <b>Ya leímos tus historias.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintStoriesZone(storiesStatus, (e && e.message) || 'No se pudieron analizar tus historias');
-    }
-  };
-  if (storiesZone) {
-    api.get('/api/ig/stories-status').then(st => paintStoriesZone(st)).catch(() => paintStoriesZone(null));
+  catch (e) {
+    if (e && e.status === 404) is404 = true;
+    else loadErr = true;
   }
-  // --- 💬 Lo que preguntan tus seguidores (GET /api/ig/comments-status · POST /api/ig/mine-comments) ---
-  // Lee los últimos ~20 posteos + comentarios y la IA saca preguntas frecuentes, objeciones y deseos.
-  // Solo lee: nunca publica ni comenta nada. Conectá IG para usarlo.
-  let srcCommentsStatus = null;
-  const srcCommentsCard = $('#srcCommentsCard');
-  const fmtSrcAt = (at) => {
+  if (is404 || (!loadErr && (!p || p.id == null))) return apvNotFound();
+  if (loadErr) return `<div class="apv-wrap"><div class="card" style="text-align:center">
+    <h3 style="margin:0 0 6px">😅 Uh, no pude cargar el posteo</h3>
+    <p class="hint">Revisá tu conexión y probá de nuevo.</p>
+    <button class="btn btn-soft" id="apvRetry" style="margin-top:10px">Reintentar</button>
+  </div></div>`;
+  try { track('apv_view', { id: p.id }); } catch (e) {}
+  const tz = apvTz();
+  const d = apvParse(p.scheduled_at), dOk = !isNaN(d);
+  const st = String(p.status || ''), ap = String(p.approval || '');
+  // Acciones solo mientras todavía hay algo que decidir.
+  const canAct = st === 'scheduled' && (ap === 'pending' || ap === 'approved');
+  const isVideo = String(p.media_type || '') === 'video';
+  const media = p.image_path
+    ? `<div class="apv-media">${isVideo
+      ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
+      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager">`}</div>`
+    : '';
+  const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
+  const tags = String(p.hashtags || '').trim();
+  const editPrompt = dOk ? apvEditPrompt(d, tz) : 'Quiero editar ese posteo';
+  const actions = canAct ? `
+    <div class="apv-actions" id="apvActions">
+      <button class="btn btn-primary" id="apvAccept" data-apvid="${esc(String(p.id))}">Aceptar ✅</button>
+      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ✏️</button>
+      <button class="btn btn-danger" id="apvReject">Rechazar ❌</button>
+    </div>
+    <div class="apv-confirm" id="apvConfirm" hidden>
+      <p><b>¿Seguro?</b> No se va a publicar.</p>
+      <div class="apv-actions">
+        <button class="btn btn-danger" id="apvRejectYes" data-apvid="${esc(String(p.id))}">Sí, rechazar</button>
+        <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
+      </div>
+    </div>` : '';
+  return `<div class="apv-wrap">
+    <a class="apv-back" href="#/app/schedule">← Schedule</a>
+    ${media}
+    <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
+    ${dOk ? `<div class="apv-when">⏰ ${esc(apvWhenText(d, tz))}</div>` : ''}
+    <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
+    ${actions}
+  </div>`;
+}
+function bindApprovalPost() {
+  const rt = document.getElementById('apvRetry');
+  if (rt) rt.onclick = () => render();
+  const acc = document.getElementById('apvAccept');
+  if (acc) acc.onclick = async () => {
+    acc.disabled = true; acc.textContent = 'Aprobando…';
     try {
-      let s = String(at || '').trim().replace(' ', 'T');
-      if (!s) return '';
-      if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
-      const d = new Date(s);
-      if (isNaN(d)) return String(at);
-      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    } catch (e) { return String(at || ''); }
+      await api.post('/api/posts/' + encodeURIComponent(acc.dataset.apvid) + '/approve');
+      try { track('apv_approve', { id: acc.dataset.apvid }); } catch (e) {}
+      toast('✅ <b>¡Aprobado!</b> Sale a la hora indicada 🙌');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo aprobar')); }
+    render(); // re-render sin recargar la página
   };
-  const paintSrcComments = (st, errMsg) => {
-    if (st) srcCommentsStatus = st;
-    if (!srcCommentsCard) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!srcCommentsStatus) { srcCommentsCard.innerHTML = '<div class="err">❌ No pudimos cargar el estado de los comentarios. Probá recargar la página.</div>'; return; }
-    if (srcCommentsStatus.ok) {
-      const c = srcCommentsStatus.counts || {};
-      const n = Number(c.comments || 0);
-      srcCommentsCard.innerHTML = `
-        <div class="okmsg">✅ <b>${n} comentarios</b> analizados${c.posts ? ` de ${c.posts} posteos` : ''}<br><span style="color:var(--dim);font-size:11.5px">Último análisis: ${esc(fmtSrcAt(srcCommentsStatus.analyzed_at))}</span></div>
-        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">La IA leyó lo que te preguntan tus seguidores y lo usa para crear posteos que responden antes de que pregunten.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnSrcCommentsRe">🔄 Analizar de nuevo</button> <span id="srcCommentsMsg"></span>
-        </div>${err}`;
-      const b = $('#btnSrcCommentsRe');
-      if (b) b.onclick = () => runCommentsMine({ force: true });
-    } else {
-      srcCommentsCard.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Leemos los comentarios de tus últimos posteos y la IA saca <b>qué te preguntan</b>, <b>qué objeciones tienen</b> y <b>qué desean</b> — sin pedirte nada más. Esos datos entrenan a la IA para vender mejor.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnSrcCommentsGo">💬 Analizar comentarios</button> <span id="srcCommentsMsg"></span>
-        </div>${err}`;
-      const b = $('#btnSrcCommentsGo');
-      if (b) b.onclick = () => runCommentsMine({});
-    }
+  const rej = document.getElementById('apvReject');
+  if (rej) rej.onclick = () => {
+    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions');
+    if (c) c.hidden = false;
+    if (a) a.style.display = 'none';
   };
-  const runCommentsMine = async (body) => {
-    if (!srcCommentsCard) return;
-    srcCommentsCard.innerHTML = '<div class="hint">⏳ Analizando comentarios… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
+  const rno = document.getElementById('apvRejectNo');
+  if (rno) rno.onclick = () => {
+    const c = document.getElementById('apvConfirm'), a = document.getElementById('apvActions');
+    if (c) c.hidden = true;
+    if (a) a.style.display = '';
+  };
+  const ryes = document.getElementById('apvRejectYes');
+  if (ryes) ryes.onclick = async () => {
+    ryes.disabled = true; ryes.textContent = 'Rechazando…';
     try {
-      await api.post('/api/ig/mine-comments', body, { timeout: 240000 });
-      try { srcCommentsStatus = await api.get('/api/ig/comments-status'); } catch (e) { /* queda el anterior */ }
-      paintSrcComments(srcCommentsStatus);
-      toast('✅ <b>Ya analizamos tus comentarios.</b><br>La IA ahora sabe qué te preguntan tus seguidores.');
-    } catch (e) {
-      paintSrcComments(srcCommentsStatus, (e && e.message) || 'No se pudieron analizar los comentarios');
-    }
+      await api.post('/api/posts/' + encodeURIComponent(ryes.dataset.apvid) + '/reject');
+      try { track('apv_reject', { id: ryes.dataset.apvid }); } catch (e) {}
+      toast('❌ <b>Rechazado.</b> No se va a publicar.');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo rechazar')); }
+    render(); // re-render sin recargar la página
   };
-  if (srcCommentsCard) {
-    api.get('/api/ig/comments-status').then(st => paintSrcComments(st)).catch(() => paintSrcComments(null));
-  }
-  // --- ⭐ Lo que dicen tus clientes (GET /api/places/status · POST /api/places/analyze) ---
-  let placesStatus = null;
-  const placesZone = $('#placesZone');
-  const paintPlacesZone = (st, errMsg) => {
-    if (st) placesStatus = st;
-    if (!placesZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!placesStatus) { placesZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado. Probá recargar la página.</div>'; return; }
-    // Sin key: explicación + cómo conseguirla.
-    if (!placesStatus.has_key) {
-      placesZone.innerHTML = `
-        <div class="hint" style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12.5px">
-          🔑 <b>Todavía no conectamos Google.</b><br>
-          Para leer las reseñas de tu negocio necesitás una clave de Google Places API: entrás a
-          <b>console.cloud.google.com</b> → activás la API <b>"Places API"</b> → creás una API key.
-          Pasanos la key y la activamos por vos.
-        </div>
-        <p style="color:var(--mut);font-size:12.5px;margin:0 0 12px">Con eso sacamos lo que repiten tus clientes (atención, precios, calidad) y testimonios reales que la IA puede usar en los posteos.</p>${err}`;
-      return;
-    }
-    if (placesStatus.ok) {
-      const chips = (placesStatus.puntos_fuertes || []).map(x => `<span style="display:inline-block;background:#FFF6E3;border:1px solid #F5D98B;color:#8a6d1a;border-radius:999px;padding:4px 12px;margin:0 6px 6px 0;font-size:11.5px;font-weight:700">${esc(x)}</span>`).join('');
-      const tests = (placesStatus.testimonios || []).map(t => `<div style="border-left:3px solid #2793C8;padding:6px 12px;margin:0 0 10px;font-size:12.5px;color:var(--txt)">"${esc(t.cita || '')}"${t.autor ? ` <b style="color:var(--dim)">— ${esc(t.autor)}</b>` : ''}</div>`).join('');
-      placesZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(placesStatus.place_name || 'Tu negocio')}</b>${placesStatus.rating ? ` <span style="color:#f5a623">★</span> ${esc(String(placesStatus.rating))}` : ''}${placesStatus.total_ratings ? ` <span style="color:var(--dim);font-weight:400">(${esc(String(placesStatus.total_ratings))} reseñas)</span>` : ''}<br><span style="font-size:11.5px;color:var(--mut)">Analizado el ${esc(fmtWebAt(placesStatus.analyzed_at))}${placesStatus.partial ? ' (parcial)' : ''}</span></div>
-        ${chips ? `<div style="font-weight:800;margin:12px 0 6px;font-size:12.5px">Lo que más repiten tus clientes</div><div>${chips}</div>` : ''}
-        ${tests ? `<div style="font-weight:800;margin:12px 0 6px;font-size:12.5px">Testimonios reales</div><div>${tests}</div>` : '<p style="color:var(--mut);font-size:12.5px;margin:12px 0 0">Todavía no encontramos reseñas para citar.</p>'}
-        <p style="color:var(--mut);font-size:11.5px;margin:12px 0">Los puntos fuertes y testimonios quedan en "🧬 Lo que la IA sabe" para que la IA los use.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnPlacesRe">🔄 Buscar de nuevo</button> <span id="placesMsg"></span>
-        </div>${err}`;
-      const b = $('#btnPlacesRe');
-      if (b) b.onclick = () => runPlacesAnalyze({ force: true });
-    } else {
-      placesZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Buscamos tu negocio en Google, leemos las reseñas y sacamos lo que más repiten tus clientes + testimonios reales que la IA usa para vender.</p>
-        <div class="field" style="margin-bottom:10px"><label>Nombre de tu negocio en Google <span style="color:var(--dim);font-weight:400">(opcional: si lo dejás vacío usamos tu perfil)</span></label>
-          <input id="s_placesq" style="font-size:16px" placeholder="Ej: Pizzería Lo de Juan" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnPlacesGo">⭐ Buscar mi negocio</button> <span id="placesMsg"></span>
-        </div>${err}`;
-      const b = $('#btnPlacesGo');
-      if (b) b.onclick = () => runPlacesAnalyze({ query: (($('#s_placesq') || {}).value || '').trim() });
-    }
+  const ed = document.getElementById('apvEdit');
+  if (ed) ed.onclick = () => {
+    // La edición vive en el chat (ahí Posty edita posteos hablando): se pre-llena el mensaje.
+    try { sessionStorage.setItem('posty-chat-prefill', ed.dataset.apvedit || 'Quiero editar ese posteo'); } catch (e) {}
+    location.hash = '#/app/chat';
   };
-  const runPlacesAnalyze = async (body) => {
-    if (!placesZone) return;
-    placesZone.innerHTML = '<div class="hint">⏳ Buscando tu negocio en Google… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
-    try {
-      await api.post('/api/places/analyze', body, { timeout: 240000 });
-      try { placesStatus = await api.get('/api/places/status'); } catch (e) { /* queda el anterior */ }
-      paintPlacesZone(placesStatus);
-      toast('✅ <b>Ya leímos tus reseñas.</b><br>Los testimonios quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintPlacesZone(placesStatus, (e && e.message) || 'No se pudo buscar tu negocio');
-    }
-  };
-  if (placesZone) {
-    api.get('/api/places/status').then(st => paintPlacesZone(st)).catch(() => paintPlacesZone(null));
-  }
-  // --- 📘 Tu página de Facebook (GET /api/fb/status · POST /api/fb/analyze) ---
-  let fbStatus = null;
-  const fbZone = $('#fbZone');
-  const paintFbZone = (st, errMsg) => {
-    if (st) fbStatus = st;
-    if (!fbZone) return;
-    const err = errMsg ? `<div class="err" style="margin-top:10px">❌ ${esc(errMsg)}</div>` : '';
-    if (!fbStatus) { fbZone.innerHTML = '<div class="err">❌ No pudimos cargar el estado de tu página. Probá recargar la página.</div>'; return; }
-    if (fbStatus.ok) {
-      fbZone.innerHTML = `
-        <div class="okmsg">✅ <b>${esc(fbStatus.page || 'Tu página')}</b><br>Analizada el ${esc(fmtWebAt(fbStatus.analyzed_at))}${fbStatus.partial ? ' <b>(parcial:</b> tu página tiene poquitos datos)' : ''}</div>
-        <p style="color:var(--mut);font-size:12.5px;margin:10px 0 14px">Sacamos de tu página horarios, ubicación, descripción y lo que dicen tus clientes para que la IA hable de tu negocio con datos reales.</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-soft btn-sm" id="btnFbRe">🔄 Analizar de nuevo</button> <span id="fbMsg"></span>
-        </div>${err}`;
-      const b = $('#btnFbRe');
-      if (b) b.onclick = () => runFbAnalyze({ force: true });
-    } else {
-      fbZone.innerHTML = `
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Tenés página de Facebook? La estudiamos: horarios, ubicación, descripción y opiniones de tus clientes. Si tu Instagram está conectado la detectamos sola 👇</p>
-        <div class="field" style="margin-bottom:6px"><label>URL o ID de tu página de Facebook</label>
-          <input id="s_fbpage" placeholder="https://www.facebook.com/tu-negocio" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-        </div>
-        <div class="hint" style="margin-bottom:14px">Cómo pegarla: abrí tu página en Facebook y copiá lo que dice la barra de direcciones (ej: facebook.com/tu-negocio). Podés dejarlo vacío si tu Instagram está conectado.</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" id="btnFbGo">📘 Analizar mi página</button> <span id="fbMsg"></span>
-        </div>${err}`;
-      const b = $('#btnFbGo');
-      if (b) b.onclick = () => runFbAnalyze({ page: (($('#s_fbpage') || {}).value || '').trim() });
-    }
-  };
-  const runFbAnalyze = async (body) => {
-    if (!fbZone) return;
-    fbZone.innerHTML = '<div class="hint">⏳ Analizando tu página de Facebook… esto puede tardar un ratito. Podés seguir usando la app, nosotros te avisamos acá.</div>';
-    try {
-      await api.post('/api/fb/analyze', body, { timeout: 120000 });
-      try { fbStatus = await api.get('/api/fb/status'); } catch (e) { /* queda el anterior */ }
-      paintFbZone(fbStatus);
-      refreshWebDna();
-      toast('✅ <b>Ya estudiamos tu página de Facebook.</b><br>Los datos quedaron en "🧬 Lo que la IA sabe".');
-    } catch (e) {
-      paintFbZone(fbStatus, (e && e.message) || 'No se pudo analizar tu página');
-    }
-  };
-  if (fbZone) {
-    api.get('/api/fb/status').then(st => paintFbZone(st)).catch(() => paintFbZone(null));
-  }
-  const bOnb = $('#btnOnb');
-  if (bOnb) bOnb.onclick = () => { OB = loadOB() || freshOB(); location.hash = '#/app/onboarding'; };
-  const bPrev = $('#btnPreview');
-  if (bPrev) bPrev.onclick = openPreview;
-  function openPreview() {
-    const catV = $('#s_cat').value;
-    const catE = CATS.find(c => c[0] === catV) || ['otro', '🏷️', 'Otro'];
-    const catTxt = catV === 'otro' ? ($('#s_catother').value.trim() || 'Otro') : catE[2];
-    const toneE = TONES.find(t => t[0] === $('#s_tone').value) || ['', '🎭', '—'];
-    const goalE = GOALS.find(g => g[0] === $('#s_goal').value) || ['', '🎯', '—', ''];
-    const tzE = TIMEZONES.find(z => z[0] === $('#s_tz').value) || [];
-    const biz = $('#s_biz').value.trim();
-    const igu = $('#s_iguser').value.trim().replace(/^@+/, '');
-    const desc = $('#s_desc').value.trim();
-    const row = (ico, lbl, val) => `<div class="pv-row"><span class="pv-ico">${ico}</span><div><div class="pv-lbl">${lbl}</div><div class="pv-val">${val}</div></div></div>`;
-    const chips = compChips.length
-      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">` + compChips.map(c => {
-          const pic = compPics[c.toLowerCase()];
-          const av = pic ? `<img src="${esc(pic)}" class="comp-av" onerror="this.remove()">` : '';
-          return `<span class="comp-chip">${av}${esc(c)}</span>`;
-        }).join('') + `</div>`
-      : `<span class="pv-warn">Todavía no sumaste competidores.</span>`;
-    const tips = [];
-    if (!desc) tips.push('una descripción de tu negocio');
-    if (!compChips.length) tips.push('al menos un competidor');
+}
+/* ---------- Pedido de permiso push oportuno: solo tras conectar IG ---------- */
+// Se muestra UNA vez (flag localStorage 'push-ask-ig'). Nunca en frío al abrir la app.
+function maybeAskPushPostIg() {
+  try {
+    if (localStorage.getItem('push-ask-ig')) return;
+    localStorage.setItem('push-ask-ig', '1'); // consumido aunque no se muestre (p.ej. sin soporte)
+  } catch (e) { return; }
+  if (!pushSupported() || pushPerm() !== 'default') return; // sin soporte, bloqueado o ya dado: no molestar
+  setTimeout(() => {
+    if (document.getElementById('apvPushOv')) return;
     const ov = document.createElement('div');
-    ov.className = 'modal-ov';
+    ov.id = 'apvPushOv';
+    ov.className = 'pz-exp-overlay';
     ov.innerHTML = `
-      <div class="modal-card" style="max-width:440px" role="dialog" aria-modal="true">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <h3 style="margin:0">🤖 Cómo me ve la IA</h3>
-          <button class="btn btn-ghost btn-sm" id="pvX">✕</button>
-        </div>
-        <p style="color:var(--mut);font-size:11.5px;margin:0 0 8px">Con estos datos creamos tus ideas y posteos:</p>
-        ${row('🏪', 'Negocio', esc(biz) || '<span class="pv-warn">Falta el nombre</span>')}
-        ${row('📸', 'Instagram', igu ? '@' + esc(igu) : '<span class="pv-warn">Sin usuario</span>')}
-        ${row(catE[1], 'Rubro', esc(catTxt))}
-        ${row(toneE[1], 'Tono de la IA', esc(toneE[2]))}
-        ${row(goalE[1], 'Objetivo', esc(goalE[2]) + (goalE[3] ? `<br><span style="font-weight:400;color:var(--mut);font-size:11.5px">${esc(goalE[3])}</span>` : ''))}
-        ${row('🕐', 'Zona horaria', esc(tzE[1] || '—'))}
-        ${row('📝', 'Descripción', desc ? esc(desc.length > 160 ? desc.slice(0, 160) + '…' : desc) : '<span class="pv-warn">Sin descripción.</span>')}
-        ${row('⚔️', 'Competidores', chips)}
-        ${tips.length ? `<div class="pv-tip">💡 <b>Tip:</b> sumá ${tips.join(' y ')} para ideas mucho mejores.</div>` : `<div class="pv-tip">✅ <b>Perfil completo:</b> la IA tiene todo lo que necesita.</div>`}
-        <button class="btn btn-primary btn-block" id="pvOk" style="margin-top:12px">Entendido</button>
+      <div class="pz-exp-modal" role="dialog" aria-modal="true">
+        <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
+        <h2>¿Te aviso antes de cada posteo? 👀</h2>
+        <p class="pz-exp-sub">Te lo muestro 3 horas antes y lo aprobás con un toque.</p>
+        <button class="btn btn-primary btn-block" id="apvPushYes">Sí, avisame</button>
+        <button class="btn btn-soft btn-block" id="apvPushNo" style="margin-top:8px">Ahora no</button>
       </div>`;
     document.body.appendChild(ov);
-    const close = () => { document.removeEventListener('keydown', onKey); ov.remove(); };
-    const onKey = e => { if (e.key === 'Escape') close(); };
-    document.addEventListener('keydown', onKey);
-    ov.addEventListener('click', e => { if (e.target === ov) close(); });
-    ov.querySelector('#pvX').onclick = close;
-    ov.querySelector('#pvOk').onclick = close;
-  }
-  // Mi plan
-  (async () => {
-    const z = $('#planZone');
-    if (!z) return;
-    // Carga de planes con reintento: es la pantalla de pago, no puede fallar en silencio.
-    const loadPlans = async () => {
-      let lastErr = null;
-      for (let i = 0; i < 2; i++) {
-        try { return await api.get('/api/billing/plans'); }
-        catch (e) { lastErr = e; console.error('[planes] intento ' + (i + 1) + ':', e.message); }
-      }
-      throw lastErr;
-    };
-    const showPlansError = (err) => {
-      const detail = err && err.message ? `<br><small style="opacity:.65;font-size:11px">Motivo: ${esc(String(err.message)).slice(0, 160)}</small>` : '';
-      z.innerHTML = `<div class="err">No se pudieron cargar los planes. Revisá tu conexión.${detail}<br><button class="btn btn-soft btn-sm" id="plansRetry" style="margin-top:8px">🔄 Reintentar</button></div>`;
-      const rb = document.getElementById('plansRetry');
-      if (rb) rb.onclick = () => { z.innerHTML = '<p style="color:var(--dim)">Cargando...</p>'; run(); };
-    };
-    const run = async () => {
-    try {
-      const { plans, mp_configured } = await loadPlans();
-      const cur = (ME && ME.plan) || 'esencial';
-      const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
-      const pcm = document.getElementById('planConfirmMsg');
-      if (pcm) pcm.innerHTML = hasActive
-        ? '✅ ¡Pago recibido! Tu plan ya está activo.'
-        : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.';
-      const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
-      const trialLeft = (ME && ME.trial_days_left) || 0;
-      // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
-      let refInfo = null;
-      try { refInfo = await pzReferral(); } catch (e) {}
-      let trialBanner = '';
-      if (!hasActive && ME && ME.plan_status === 'trial') {
-        if (ME.trial_expired) trialBanner = `<div class="pz-trial-exp">🔒 <b>Se terminó la prueba.</b> Elegí tu plan y seguimos publicando juntos 🥹</div>`;
-        else if (trialLeft > 0) trialBanner = trialLeft <= 3
-          ? `<div class="pz-trial-warn">⏰ <b>¡Te ${trialLeft === 1 ? 'queda 1 día' : `quedan ${trialLeft} días`} de prueba!</b> Suscribite para no frenar tus posteos.</div>`
-          : `<div class="pz-trial-ok">🎁 Estás en tu prueba gratis: te quedan <b>${trialLeft} días</b>.</div>`;
-      }
-      const pmMixTxt = (pl) => [pl.postsPerWeek > 0 && `${pl.postsPerWeek} posteos`, pl.reelsPerWeek > 0 && `${pl.reelsPerWeek} reels`, pl.storiesPerWeek > 0 && `${pl.storiesPerWeek} historias`].filter(Boolean).join(' + ');
-      const curPlan = plans.find(p => p.id === cur) || plans[0];
-      // Mix semanal con iconos (solo lo que el plan incluye) + features sin duplicar el mix.
-      const pmMixItem = (icon, n, label) => n > 0 ? `<span>${icon} <b>${n}</b> ${label}</span>` : '';
-      const pmMixHTML = (p) => {
-        const items = [
-          pmMixItem('📝', p.postsPerWeek, p.postsPerWeek === 1 ? 'posteo' : 'posteos'),
-          pmMixItem('🎬', p.reelsPerWeek, p.reelsPerWeek === 1 ? 'reel' : 'reels'),
-          pmMixItem('📸', p.storiesPerWeek, p.storiesPerWeek === 1 ? 'historia' : 'historias'),
-        ].filter(Boolean).join('');
-        return items ? `<div class="pm-mix">${items}</div>` : '';
-      };
-      const pmMixDup = /(\d+\s*(posts?|reels|historias)\b|historias todos los días)/i;
-      const pmSym = (p.currency === 'UYU' ? '$U ' : '$');
-      const planCard = (p) => {
-        const feats = (p.features || []).filter(f => !pmMixDup.test(f)).slice(0, 6);
-        return `
-          <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}${p.highlighted ? ' rec' : ''}">
-            ${p.highlighted ? '<div class="pm-flag">EL MÁS ELEGIDO</div>' : ''}
-            <div class="pm-top"><b>${esc(p.name)}</b>${p.id === cur && hasActive ? '<span class="pm-cur-tag">Tu plan</span>' : ''}</div>
-            ${p.tagline ? `<p class="pm-tagline">${esc(p.tagline)}</p>` : ''}
-            <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>
-            <div class="pm-perday">≈ ${pmSym}${Math.round(p.price / 30).toLocaleString('es-AR')} por día</div>
-            ${pmMixHTML(p)}
-            <ul class="pm-feats">${feats.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
-            <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
-          </div>`;
-      };
-      const bindSub = () => {
-        $$('#planList [data-sub]').forEach(b => b.onclick = () => {
-          track('plan_select', { plan: b.dataset.sub });
-          if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía.</div>`; return; }
-          // Paso 1: pedir el email de la cuenta de MercadoPago (debe coincidir con la que paga)
-          const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
-          const subPlan = plans.find(p => p.id === b.dataset.sub) || curPlan;
-          const discLine = (refInfo && refInfo.discount_active)
-            ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>50% off</b> por referidos: este plan te queda en <b>$${Math.round(subPlan.price / 2).toLocaleString('es-AR')}/mes</b>.</div>`
-            : (refInfo && refInfo.invited)
-              ? `<div class="pz-disc" style="margin:0 0 10px">🎉 Tenés <b>20% off</b> de invitado: este plan te queda en <b>$${Math.round(subPlan.price * 0.8).toLocaleString('es-AR')}/mes</b>.</div>`
-              : '';
-          $('#planMsg').innerHTML = `
-            <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:12px">
-              ${discLine}
-              <div style="font-weight:800;margin-bottom:6px">Un paso más 💳</div>
-              <div style="font-size:12.5px;color:var(--mut);margin-bottom:10px">Ingresá el <b>email de tu cuenta de MercadoPago</b>.</div>
-              <div style="font-size:11.5px;background:#FFF7E6;border:1px solid #FEC14D;border-radius:10px;padding:10px 12px;margin-bottom:10px">El comprobante de pago te va a llegar a <b>ese email</b>: fijate que sea el de tu cuenta de MercadoPago.</div>
-              <div class="field"><input id="mpEmail" type="email" placeholder="tu@email.com" value="${preset}" autocomplete="email"></div>
-              <button class="btn btn-primary btn-block" id="btnGoMP">Continuar al pago</button>
-            </div>`;
-          const emInput = $('#mpEmail');
-          if (emInput) emInput.focus();
-          $('#btnGoMP').onclick = async () => {
-            const em = ($('#mpEmail').value || '').trim();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-              $('#planMsg').innerHTML = `<div class="err">Ingresá un email válido.</div>`;
-              return;
-            }
-            const btn = $('#btnGoMP');
-            btn.disabled = true; btn.textContent = '⏳ Redirigiendo a MercadoPago...';
-            try {
-              const { init_point } = await api.post('/api/billing/subscribe', { plan: b.dataset.sub, payer_email: em });
-              track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
-              location.href = init_point;
-            } catch (e) {
-              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-            }
-          };
-        });
-      };
-      if (!hasActive) {
-        z.innerHTML = `
-        <div style="margin-bottom:16px">
-          <div style="font-size:11.5px;color:var(--dim)">Plan actual</div>
-          <div style="font-size:17.5px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
-        </div>
-        ${trialBanner}
-        <div style="font-size:14px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
-        <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
-        <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
-        bindSub();
-      } else if (ME && ME.plan === 'free') {
-        z.innerHTML = `
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div class="plan-cur">
-            <div class="pc-label">Plan actual</div>
-            <div class="pc-name">Founder 🚀</div>
-            <div class="pc-det">Gratis para siempre · 7 posteos + 5 reels + 7 historias/semana</div>
-          </div>
-        </div>
-        <div id="planMsg" style="margin-top:10px"></div>`;
-      } else {
-        z.innerHTML = `
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <div class="plan-cur">
-            <div class="pc-label">Plan actual</div>
-            <div class="pc-name">${esc(curPlan.name)}</div>
-            <div class="pc-det">${esc(curPlan.price_label)}/mes · ${pmMixTxt(curPlan)}/semana · se renueva solo cada mes</div>
-          </div>
-          <button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>
-        </div>
-        <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:11.5px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
-        $('#btnCancelSub').onclick = async () => {
-          if (!confirm('¿Cancelar tu suscripción? Mantenés tu plan hasta el fin del período ya pago.')) return;
-          const b = $('#btnCancelSub'); b.disabled = true; b.textContent = 'Cancelando...';
-          try {
-            await api.post('/api/billing/cancel');
-            await refreshSession(); render();
-          } catch (e) {
-            $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
-            b.disabled = false; b.textContent = 'Cancelar suscripción';
-          }
-        };
-      }
-      // 🎁 50% off por referidos: se aplica automáticamente al suscribirte
+    const close = () => { try { ov.remove(); } catch (e) {} };
+    ov.querySelector('#apvPushYes').onclick = async () => {
+      close();
+      // pushDoSubscribe = segunda mitad de pushEnableFlow (permiso → suscripción),
+      // sin repetir la tarjeta genérica: esta tarjeta YA fue el pedido amable.
       try {
-        if (refInfo && refInfo.discount_active) {
-          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎁 <b>50% off por referidos</b>: se aplica automáticamente al suscribirte.</div>`);
-        } else if (refInfo && refInfo.invited && !hasActive) {
-          z.insertAdjacentHTML('afterbegin', `<div class="pz-disc">🎉 <b>Tenés 20% off de invitado</b>: se aplica automáticamente al suscribirte, todos los meses.</div>`);
-        }
+        const r = await pushDoSubscribe();
+        if (r && r.ok) toast('🔔 <b>¡Listo!</b> Te aviso antes de cada posteo 🙌');
       } catch (e) {}
-      // Plan preseleccionado desde /prueba (?plan_sel=): click programático UNA vez
-      if (!PZ_AUTO_PLAN && !hasActive) {
-        const pq = new URLSearchParams(location.hash.split('?')[1] || '');
-        const sel = (pq.get('plan_sel') || '').replace(/[^a-z]/g, '');
-        if (sel) {
-          PZ_AUTO_PLAN = true;
-          try { history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {}
-          localStorage.removeItem('posta_chosen_plan');
-          const btn = document.querySelector(`#planList [data-sub="${sel}"]`);
-          if (btn && !btn.disabled) btn.click();
-        }
-      }
-    } catch (e) {
-      console.error('[planes] error final:', e);
-      showPlansError(e);
-    }
     };
-    run();
-  })();
-  // 🎁 Referidos
-  (async () => {
-    const z = $('#refZone');
-    if (!z) return;
-    const info = await pzReferral();
-    if (!info || !info.ok) { z.innerHTML = `<p style="color:var(--dim)">No se pudo cargar tu link de referidos.</p>`; return; }
-    const n = info.referred_count || 0, need = info.needed || 2;
-    const pct = Math.min(100, Math.round(n / need * 100));
-    const missing = Math.max(0, need - n);
-    // Precio concreto según el plan actual (o el del trial)
-    let planPrice = 0;
-    try {
-      const pd = await api.get('/api/billing/plans');
-      const pl = (pd.plans || []).find(x => x.id === ((ME && ME.plan) || 'esencial')) || (pd.plans || [])[0];
-      if (pl) planPrice = pl.price || 0;
-    } catch (e) {}
-    const fmt$ = (v) => '$' + Math.round(v).toLocaleString('es-AR');
-    const half$ = planPrice ? fmt$(planPrice / 2) : null;
-    const shareMsg = `Uso Posta para el Instagram de mi negocio: crea y publica el contenido por mí. Con mi link ahorrás hasta $25.980 por mes en tu plan: ${info.link}`;
-    const slots = Array.from({ length: need }, (_, i) =>
-      `<span class="pz-slot${i < n ? ' on' : ''}">${i < n ? '\u2713' : (i + 1)}</span>`).join('');
-    z.innerHTML = `
-      <div class="pz-ref-hero">
-        <div class="pz-ref-hero-t">🎁 Pagás la mitad, todos los meses</div>
-        ${half$ ? `<div class="pz-ref-hero-p">Pasás de <s>${fmt$(planPrice)}</s> a <b>${half$}</b>/mes con ${need} referidos suscriptos.</div>`
-          : `<div class="pz-ref-hero-p">Con <b>${need} referidos</b> suscriptos, tu plan te sale <b>la mitad</b>.</div>`}
-      </div>
-      <div class="pz-ref-steps">
-        <div><span>1️⃣</span>Compartí tu link</div>
-        <div><span>2️⃣</span>Ellos se suscriben con <b>20% off todos los meses</b></div>
-        <div><span>3️⃣</span>Vos pagás la mitad mientras sigan suscriptos</div>
-      </div>
-      <div class="pz-ref-share">
-        <button class="btn btn-wa btn-sm" data-share="wa">WhatsApp</button>
-        <button class="btn btn-ig btn-sm" data-share="ig">Instagram</button>
-        <button class="btn btn-x btn-sm" data-share="x">X</button>
-        <button class="btn btn-primary btn-sm" id="pzRefNative" style="display:none">📤 Compartir</button>
-        <button class="btn btn-ghost btn-sm" id="pzRefCopy">Copiar link</button>
-        <button class="btn btn-ghost btn-sm" id="pzRefCopyMsg">Copiar mensaje</button>
-      </div>
-      <div class="pz-refrow">
-        <input id="pzRefLink" readonly value="${esc(info.link)}" onclick="this.select()">
-      </div>
-      <details style="font-size:11.5px;color:var(--mut);margin:0 0 12px"><summary style="cursor:pointer;font-weight:700">👀 Vista previa del mensaje</summary><p style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0 0">${esc(shareMsg)}</p></details>
-      <div class="pz-ref-slots">${slots}</div>
-      <div class="pz-refbar"><div style="width:${pct}%"></div></div>
-      <p style="font-size:12.5px;color:var(--mut)"><b>${n}/${need}</b> referidos</p>
-      ${(info.joined && info.joined.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">Se unieron con tu link 🎉</div>${info.joined.map(nm => `<div class="pz-ref-join">✓ ${esc(nm)}</div>`).join('')}</div>` : ''}
-      ${(info.pending && info.pending.length) ? `<div class="pz-ref-joined"><div class="pz-ref-joined-t">En camino 🚶</div><div class="pz-ref-pending-sub">Se registraron con tu link y están en prueba. Un mensaje tuyo los convierte 👇</div>${info.pending.map((p, i) => `<div class="pz-ref-join">⏳ ${esc(p.name)}${p.days_left > 0 ? `<span class="pz-ref-days"> · le quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba</span>` : ''} <button class="btn btn-ghost btn-sm" data-nudge="${i}" style="margin-left:6px">📋 Copiar mensaje</button></div>`).join('')}</div>` : ''}
-      ${info.discount_active
-        ? `<div class="pz-disc">✅ Tenés <b>50% off activo</b>${half$ ? ` en tu suscripción: pagás <b>${half$}/mes</b>` : ' en tu suscripción'}.</div>`
-        : `<p style="font-size:12.5px">${missing === 1 ? 'Nos falta <b>1</b> referido' : `Nos faltan <b>${missing}</b> referidos`}: cuando se suscriban con tu link, pagás la mitad.</p>`}
-      <p class="pz-ref-auto">⚡ El descuento se aplica solo a tu suscripción, sin hacer nada.</p>
-      <span id="pzRefMsg" style="font-size:11.5px"></span>`;
-    const say = (t) => { const m = $('#pzRefMsg'); if (m) m.innerHTML = `<span style="color:var(--cel)">${t}</span>`; };
-    const copyLink = async (okMsg) => {
-      const v = $('#pzRefLink').value;
-      try { await navigator.clipboard.writeText(v); }
-      catch (e) {
-        const t = document.createElement('textarea'); t.value = v; document.body.appendChild(t); t.select();
-        try { document.execCommand('copy'); } catch (e2) {}
-        t.remove();
-      }
-      say(okMsg || '✅ Link copiado');
-    };
-    $('#pzRefCopy').onclick = () => copyLink();
-    const copyText = async (t, okMsg) => {
-      try { await navigator.clipboard.writeText(t); }
-      catch (e) {
-        const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); } catch (e2) {}
-        ta.remove();
-      }
-      say(okMsg || '✅ Copiado');
-    };
-    $('#pzRefCopyMsg').onclick = () => copyText(shareMsg, '✅ Mensaje copiado: pegalo donde quieras');
-    z.querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => {
-      const p = info.pending[Number(b.dataset.nudge)];
-      if (!p) return;
-      const who = (p.name && p.name !== 'Un referido') ? ` ${p.name}` : '';
-      copyText(`Che${who}! Vi que empezaste tu prueba de Posta con mi link 🚀 Si te suscribís${p.days_left > 0 ? ` (te quedan ${p.days_left} día${p.days_left === 1 ? '' : 's'} de prueba)` : ''}, mantenés el 20% off todos los meses. Cualquier cosa me preguntás 👍`, '✅ Mensaje copiado: pegalo en WhatsApp');
-    });
-    const nativeBtn = $('#pzRefNative');
-    if (nativeBtn && navigator.share) {
-      nativeBtn.style.display = '';
-      nativeBtn.onclick = async () => { try { await navigator.share({ title: 'Posta', text: shareMsg }); } catch (e) {} };
-    }
-    z.querySelectorAll('[data-share]').forEach(b => b.onclick = () => {
-      const k = b.dataset.share;
-      if (k === 'wa') window.open('https://wa.me/?text=' + encodeURIComponent(shareMsg), '_blank');
-      else if (k === 'x') window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(shareMsg), '_blank');
-      else if (k === 'ig') copyLink('✅ Link copiado: pegalo en tu historia o por DM');
-    });
-  })();
-  // Marca
-  const bBlog = $('#btnBrandLogo');
-  if (bBlog) bBlog.onclick = () => $('#s_logofile').click();
-  $$('[data-lightbox]').forEach(el => el.onclick = () => openLightbox(el.dataset.lightbox, el.dataset.video === '1'));
-  // Si el creador ya tenía 6 opciones generadas, las regenera con los colores
-  // nuevos para que el cambio se vea al instante (cero pasos extra).
-  async function refreshCreatorWithNewColors(msgEl) {
-    try {
-      const cc = (typeof CREATOR !== 'undefined' && CREATOR) || null;
-      if (!cc || !Array.isArray(cc.options) || cc.options.length !== 6 || !cc.topic) return false;
-      if (msgEl) msgEl.innerHTML = '<span style="font-size:12.5px;color:var(--cel)">🎨 Actualizando tus diseños…</span>';
-      const out = await api.post('/api/creator/options', { topic: cc.topic, productPhoto: cc.productPhoto || undefined });
-      if (out && Array.isArray(out.options) && out.options.length === 6) {
-        cc.options = out.options; cc.detected = out.detected || null;
-        cc.recommendedIndex = out.recommendedIndex || 0;
-        cc.recommendedReason = out.recommendedReason || '';
-        cc.selected = []; cc.cardPhoto = {};
-        return true;
-      }
-    } catch (e) { /* no bloquea el guardado */ }
-    return false;
-  }
-  const slf = $('#s_logofile');
-  if (slf) slf.onchange = async () => {
-    const orig = slf.files[0]; slf.value = '';
-    if (!orig) return;
-    try {
-      const nm = (orig.name || '').toLowerCase();
-      if (nm.endsWith('.pdf') || nm.endsWith('.docx')) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--dim)">⏳ Convirtiendo tu archivo a imagen…</span>';
-      const f = await logoFileToImage(orig);
-      await uploadAssetFile(f, 'logo');
-      try {
-        const img = await loadImageFile(f);
-        const cols = extractTopColors(img, 3);
-        if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
-      } catch (e) { /* el logo quedó; los colores se eligen a mano */ }
-      SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
-      const refreshed = await refreshCreatorWithNewColors($('#brandMsg'));
-      if (refreshed) $('#brandMsg').innerHTML = '<span style="font-size:12.5px;color:var(--cel)">✅ Colores actualizados en tus diseños</span>';
-      render();
-    }
-    catch (e) { $('#brandMsg').innerHTML = (e && e.cancelled) ? '' : `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`; }
-  };
-  // --- vista previa de marca ---
-  const lumInk = (hex) => {
-    const n = parseInt(String(hex).slice(1), 16);
-    const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-    return lum > 0.6 ? '#0A1E33' : '#FFFFFF';
-  };
-  function renderBrandPrev() {
-    const logo = assetLogo();
-    const pf = $('#brandPf');
-    if (pf) pf.innerHTML = logo ? `<img src="${logo.file_path}" alt="logo">` : '';
-    const box = $('#brandPrev');
-    if (!box) return;
-    const c = [$('#s_c0') && $('#s_c0').value, $('#s_c1') && $('#s_c1').value, $('#s_c2') && $('#s_c2').value].filter(Boolean);
-    if (!c.length) { box.innerHTML = ''; return; }
-    const biz = (PROFILE && PROFILE.business_name) || 'Tu negocio';
-    const ink = lumInk(c[0]);
-    box.innerHTML = `
-      <div class="bp-card" style="background:linear-gradient(135deg,${c[0]},${c[1] || c[0]})">
-        <div class="bp-head">${logo ? `<img src="${logo.file_path}">` : ''}<span style="color:${ink}">${esc(biz)}</span></div>
-        <div class="bp-title" style="color:${ink}">¡NUEVA<br>COLECCIÓN!</div>
-        <div><span class="bp-cta" style="background:${c[2] || c[1] || c[0]};color:${lumInk(c[2] || c[1] || c[0])}">Ver más →</span></div>
-      </div>`;
-  }
-  let brandDirty = false;
-  const bDirtyEl = $('#brandDirty');
-  function markBrandDirty() { if (!brandDirty) { brandDirty = true; if (bDirtyEl) bDirtyEl.style.display = ''; } }
-  const normHex = (v) => {
-    let h = String(v || '').trim().replace(/^#/, '');
-    if (/^[0-9a-fA-F]{3}$/.test(h)) h = h.split('').map(c => c + c).join('');
-    return /^[0-9a-fA-F]{6}$/.test(h) ? '#' + h.toUpperCase() : null;
-  };
-  const syncHexFromPicker = (i) => { const hx = $('#s_h' + i); const pk = $('#s_c' + i); if (hx && pk) hx.value = pk.value.toUpperCase(); };
-  ['s_c0', 's_c1', 's_c2'].forEach((id, i) => {
-    const pick = document.getElementById(id);
-    const hex = document.getElementById('s_h' + i);
-    if (pick) pick.addEventListener('input', () => { syncHexFromPicker(i); markBrandDirty(); renderBrandPrev(); });
-    if (hex && pick) {
-      hex.addEventListener('input', () => {
-        const n = normHex(hex.value);
-        if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
-      });
-      hex.addEventListener('change', () => {
-        const n = normHex(hex.value);
-        hex.value = n || pick.value.toUpperCase();
-        if (n) { pick.value = n; markBrandDirty(); renderBrandPrev(); }
-      });
-    }
-  });
-  // Reordenar roles: el menú de cada color permite elegir Principal/Secundario/Acento;
-  // los colores se intercambian de lugar solos. El rol es posicional: el menú vuelve a su lugar.
-  const swapBrandColors = (a, b) => {
-    const pa = document.getElementById('s_c' + a), pb = document.getElementById('s_c' + b);
-    if (!pa || !pb) return;
-    const va = pa.value;
-    pa.value = pb.value; pb.value = va;
-    syncHexFromPicker(a); syncHexFromPicker(b);
-    markBrandDirty(); renderBrandPrev();
-  };
-  [0, 1, 2].forEach((i) => {
-    const sel = document.getElementById('s_r' + i);
-    if (sel) sel.addEventListener('change', () => {
-      const to = parseInt(sel.value, 10);
-      sel.value = String(i);
-      if (Number.isInteger(to) && to >= 0 && to <= 2 && to !== i) swapBrandColors(i, to);
-    });
-  });
-  renderBrandPrev();
-  const bBlogDel = $('#btnBrandLogoDel');
-  if (bBlogDel) bBlogDel.onclick = async () => {
-    if (!confirm('¿Quitar el logo de tu marca?')) return;
-    const logo = assetLogo();
-    if (logo && logo.id) { try { await api.del('/api/assets/' + logo.id); } catch (e) {} }
-    ASSETS = await api.get('/api/assets').catch(() => []);
-    render();
-  };
-  // Si hay logo pero no colores de marca: detectarlos del logo automáticamente
-  (async () => {
-    try {
-      if (brandColors().length >= 2) return;
-      const logo = assetLogo();
-      if (!logo) return;
-      const img = await loadImageUrl(logo.file_path);
-      const cols = extractTopColors(img, 3);
-      let filled = 0;
-      cols.forEach((c, i) => { const inp = $('#s_c' + i); if (inp && c) { inp.value = c; syncHexFromPicker(i); filled++; } });
-      if (filled >= 2) $('#brandMsg').innerHTML = '<span style="color:var(--mut);font-size:12.5px">🎨 Detectamos tus colores del logo — tocá Guardar marca para confirmar.</span>';
-    } catch (e) { /* quedan los valores actuales */ }
-  })();
-  $('#btnSaveBrand').onclick = async () => {
-    const colors = [$('#s_c0').value, $('#s_c1').value, $('#s_c2').value].filter((c, i, a) => a.indexOf(c) === i);
-    const untouched = NEUTRAL_TRIO.every((d, i) => (colors[i] || '').toUpperCase() === d);
-    if (untouched && !assetLogo()) { $('#brandMsg').innerHTML = `<span style="color:var(--red);font-size:12.5px">Subí tu logo o elegí tus colores 🙂</span>`; return; }
-    await api.put('/api/settings', { brand_colors: colors });
-    const brandMsgEl = $('#brandMsg');
-    brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada</span>';
-    brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
-    SETTINGS = await api.get('/api/settings');
-    if (await refreshCreatorWithNewColors(brandMsgEl))
-      brandMsgEl.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Marca guardada — diseños actualizados</span>';
-  };
-  // Reiniciar todo: marca (logo, colores, nombre) + posteos pendientes (borradores y
-  // programados). Para cuando se cambió de negocio/cuenta. El historial publicado no se toca.
-  const btnResetBrand = $('#btnResetBrand');
-  if (btnResetBrand) btnResetBrand.onclick = async () => {
-    if (!confirm('¿Reiniciar todo? Se borran el logo, los colores, el nombre del negocio y los posteos pendientes (borradores y programados). El historial publicado no se toca.')) return;
-    const brandMsgEl = $('#brandMsg');
-    try {
-      brandMsgEl.innerHTML = '<span style="color:var(--mut);font-size:12.5px">⏳ Reiniciando…</span>';
-      await api.post('/api/brand/reset', {});
-      ASSETS = await api.get('/api/assets').catch(() => []);
-      SETTINGS = await api.get('/api/settings').catch(() => SETTINGS);
-      await refreshSession();
-      brandDirty = false; if (bDirtyEl) bDirtyEl.style.display = 'none';
-      render();
-    } catch (e) {
-      brandMsgEl.innerHTML = `<span style="color:var(--red);font-size:12.5px">${esc(e.message)}</span>`;
-    }
-  };
-  $('#btnSaveSettings').onclick = async () => {
-    await api.put('/api/settings', {
-      meta_app_id: $('#s_appid').value,
-      meta_app_secret: $('#s_appsecret').value, ig_embed_url: $('#s_igembed').value,
-    });
-    $('#setMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-  };
-  const btm = $('#btnTestMeta');
-  if (btm) btm.onclick = async () => {
-    const msg = $('#metaTestMsg');
-    const appId = $('#s_appid').value.trim(), appSecret = $('#s_appsecret').value.trim();
-    if (!appId || !appSecret) { msg.innerHTML = '<span style="color:var(--red)">Completá App ID y App Secret primero</span>'; return; }
-    msg.textContent = 'Probando…';
-    try {
-      const r = await api.post('/api/settings/test-meta', { app_id: appId, app_secret: appSecret });
-      msg.innerHTML = r.ok
-        ? `<span style="color:var(--green-d)">✅ App válida: <b>${esc(r.app_name)}</b></span>`
-        : `<span style="color:var(--red)">❌ ${esc(r.error)}</span>`;
-    } catch (e) { msg.innerHTML = `<span style="color:var(--red)">❌ ${esc(e.message)}</span>`; }
-  };
-  const setDemoMode = async (v) => {
-    await api.put('/api/settings', { demo_mode: v });
-    IG_MODE_WARN = (!v && !(PROFILE && PROFILE.ig_connected));
-    render();
-  };
-  const md = $('#igModeDemo'); if (md) { md.onclick = () => setDemoMode(true); md.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(true); } }; }
-  const mr = $('#igModeReal'); if (mr) { mr.onclick = () => setDemoMode(false); mr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(false); } }; }
-  const bc = $('#btnIgConn');
-  if (bc) bc.onclick = igConnect;
-  const bd = $('#btnIgDisc');
-  if (bd) bd.onclick = async () => {
-    const u = (PROFILE && PROFILE.ig_username) ? '@' + PROFILE.ig_username : 'tu cuenta';
-    if (!confirm(`¿Desconectar ${u} de Posta?\n\nTus posteos programados se pausarán hasta que vuelvas a conectar.`)) return;
-    track('ig_disconnect'); trackBeacon();
-    await api.post('/api/ig/disconnect'); render();
-  };
-  const stampVerified = () => {
-    const d = new Date();
-    IG_VERIFIED_AT = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  };
-  const bv = $('#btnIgVerify');
-  if (bv) bv.onclick = async () => {
-    const vm = $('#igVerifyMsg');
-    if (vm) vm.innerHTML = '<div class="hint">🔍 Verificando tu conexión con Instagram…</div>';
-    try {
-      const r = await api.get('/api/ig/sync');
-      if (r && r.username) {
-        PROFILE.ig_username = r.username;
-        stampVerified();
-        render();
-      } else if (vm) {
-        vm.innerHTML = `<div class="err">❌ No se pudo verificar: ${esc((r && r.error) || 'respuesta vacía')}</div>`;
-      }
-    } catch (e) {
-      if (vm) vm.innerHTML = `<div class="err">❌ La verificación falló: ${esc(e.message)}</div>`;
-    }
-  };
-  const igProLink = $('#igProLink');
-  if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
-  const igRetry = $('#btnIgRetry');
-  if (igRetry) igRetry.onclick = () => igConnect();
-  // Si está conectado pero el username quedó vacío: sincronizar solo (reintenta una vez a los 10s)
-  if (PROFILE && PROFILE.ig_connected && !PROFILE.ig_username) {
-    const doIgSync = async (isRetry) => {
-      const m = $('#igMsg');
-      const bindRetry = () => {
-        const rb = $('#igSyncRetry');
-        if (rb) rb.onclick = (ev) => { ev.preventDefault(); doIgSync(false); };
-      };
-      try {
-        const r = await api.get('/api/ig/sync');
-        if (r && r.username) { PROFILE.ig_username = r.username; render(); return; }
-        throw new Error((r && r.error) || 'respuesta vacía');
-      } catch (e) {
-        if (!isRetry) {
-          if (m) m.innerHTML = `<div class="hint">🔄 Sincronizando tu cuenta de Instagram…</div>`;
-          setTimeout(() => doIgSync(true), 10000);
-        } else {
-          if (m) m.innerHTML = `<div class="err">⚠️ No se pudo leer tu @ de Instagram: ${esc(e.message)} <a href="#" id="igSyncRetry" style="color:var(--cel);font-weight:700">Reintentar</a></div>`;
-          bindRetry();
-        }
-      }
-    };
-    doIgSync(false);
-  }
-  // Verificación silenciosa: conectado con username → tildar el checklist sin pedir taps
-  if (PROFILE && PROFILE.ig_connected && PROFILE.ig_username && !IG_VERIFIED_AT) {
-    (async () => {
-      try {
-        const r = await api.get('/api/ig/sync');
-        if (r && r.username) { PROFILE.ig_username = r.username; stampVerified(); render(); }
-      } catch (e) { /* queda sin verificar; el botón manual sigue disponible */ }
-    })();
-  }
-}
-
-/* ---------- 📊 Panel de analytics (solo equipo Posta) ---------- */
-// Ruta oculta #/app/admin. Gate: token de admin (el mismo ADMIN_TOKEN del servidor).
-function adminToken() { try { return localStorage.getItem('posta_admin_token') || ''; } catch (e) { return ''; } }
-function adminApi(path, method, data) {
-  const t = adminToken();
-  const url = '/api/admin/' + path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t);
-  if (method === 'POST') return api.post(url, data || {});
-  return api.get(url);
-}
-async function adminView() {
-  return `<div class="page-head"><div class="ph-ico">📊</div><div class="ph-txt"><h1>Analytics</h1><p class="sub">Cómo se usa Posta — solo equipo</p></div></div>
-  <div class="card" id="adminCard"><div class="d">⏳ Cargando…</div></div>`;
-}
-async function bindAdmin() {
-  const card = $('#adminCard'); if (!card) return;
-  if (!adminToken()) {
-    card.innerHTML = `<h3 style="margin:0 0 8px">🔒 Acceso restringido</h3>
-      <p class="d">Pegá el token de admin del servidor (ADMIN_TOKEN).</p>
-      <div class="field"><input id="adTok" type="password" placeholder="token" style="width:100%;font-size:16px"></div>
-      <button class="btn btn-primary" id="adTokGo">Entrar</button>
-      <div id="adTokMsg" style="margin-top:8px"></div>`;
-    $('#adTokGo').onclick = async () => {
-      const v = ($('#adTok').value || '').trim();
-      if (!v) return;
-      try { localStorage.setItem('posta_admin_token', v); } catch (e) {}
-      try { await adminApi('funnel?days=7'); bindAdmin(); }
-      catch (e) {
-        try { localStorage.removeItem('posta_admin_token'); } catch (ee) {}
-        $('#adTokMsg').innerHTML = `<div class="err">Token inválido.</div>`;
-      }
-    };
-    return;
-  }
-  card.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
-      <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
-      <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
-      <button class="btn btn-soft btn-sm" data-atab="review">✨ Revisión</button>
-      <select id="adDays" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px">
-        <option value="7">7 días</option><option value="30" selected>30 días</option>
-      </select>
-    </div>
-    <div id="adBody"><div class="d">⏳ Cargando…</div></div>`;
-  const body = $('#adBody');
-  const days = () => ($('#adDays') && $('#adDays').value) || '30';
-  const bar = (pct) => `<div style="height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.max(1, Math.min(100, pct))}%;background:var(--cel);border-radius:99px"></div></div>`;
-  async function showFunnel() {
-    body.innerHTML = `<div class="d">⏳ Cargando funnel…</div>`;
-    let r;
-    try { r = await adminApi('funnel?days=' + days()); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar. Revisá el token.</div>`; return; }
-    const f = r.funnel || [];
-    body.innerHTML = f.map((s, i) => `
-      <div style="padding:12px 0;border-bottom:1px solid var(--line)">
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <b>${i + 1}. ${esc(s.label)}</b>
-          <span style="font-size:17.5px;font-weight:800">${s.users}</span>
-        </div>
-        ${bar(s.pct_first)}
-        <div style="font-size:11.5px;color:var(--mut);margin-top:4px">${s.pct_prev}% del paso anterior · ${s.pct_first}% del inicio</div>
-      </div>`).join('') || `<div class="d">Todavía no hay datos.</div>`;
-  }
-  async function showActivity() {
-    body.innerHTML = `<div class="d">⏳ Cargando actividad…</div>`;
-    let r;
-    try { r = await adminApi('activity?days=' + days()); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const dau = (r.dau || []).slice(0, 14).reverse();
-    const maxD = Math.max(1, ...dau.map(x => x.n));
-    const tops = Object.entries(r.totals || {}).slice(0, 20);
-    body.innerHTML = `
-      <h4 style="margin:0 0 8px">Usuarios activos por día</h4>
-      <div style="display:flex;align-items:flex-end;gap:4px;height:90px;margin-bottom:16px">
-        ${dau.map(x => `<div title="${esc(x.d)}: ${x.n}" style="flex:1;background:var(--cel);border-radius:4px 4px 0 0;height:${Math.max(3, x.n / maxD * 88)}px;min-width:8px"></div>`).join('')}
-      </div>
-      <h4 style="margin:0 0 8px">Eventos más comunes</h4>
-      ${tops.map(([k, v]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-family:monospace;font-size:11.5px">${esc(k)}</span><b>${v}</b></div>`).join('') || '<div class="d">Sin datos.</div>'}`;
-  }
-  async function showUsers() {
-    body.innerHTML = `
-      <div class="field" style="display:flex;gap:8px"><input id="adQ" placeholder="email del usuario…" style="flex:1;font-size:16px"><button class="btn btn-primary btn-sm" id="adQGo">Buscar</button></div>
-      <div id="adUsers"></div><div id="adTimeline" style="margin-top:12px"></div>`;
-    const go = async () => {
-      const q = ($('#adQ').value || '').trim();
-      if (!q) return;
-      $('#adUsers').innerHTML = `<div class="d">⏳ Buscando…</div>`;
-      let r;
-      try { r = await adminApi('users?q=' + encodeURIComponent(q)); }
-      catch (e) { $('#adUsers').innerHTML = `<div class="err">Error.</div>`; return; }
-      $('#adUsers').innerHTML = (r.users || []).map(u => `
-        <button class="btn btn-ghost btn-block" data-uid="${u.id}" style="text-align:left;margin-bottom:6px">
-          <b>${esc(u.email)}</b><br><span style="font-size:10.5px;color:var(--mut)">${esc(u.plan || '')} · ${esc(u.plan_status || '')} · desde ${esc((u.created_at || '').slice(0, 10))}</span>
-        </button>`).join('') || `<div class="d">Sin resultados.</div>`;
-      $$('#adUsers [data-uid]').forEach(b => b.onclick = async () => {
-        $('#adTimeline').innerHTML = `<div class="d">⏳ Cargando línea de tiempo…</div>`;
-        let t;
-        try { t = await adminApi('events?user_id=' + b.dataset.uid + '&days=' + days() + '&limit=200'); }
-        catch (e) { $('#adTimeline').innerHTML = `<div class="err">Error.</div>`; return; }
-        $('#adTimeline').innerHTML = `<h4 style="margin:0 0 8px">Línea de tiempo</h4>` + ((t.events || []).map(e => {
-          let pr = '';
-          try { const o = JSON.parse(e.props || '{}'); const ks = Object.keys(o).slice(0, 4); if (ks.length) pr = ' <span style="color:var(--mut)">(' + ks.map(k => k + ': ' + String(o[k]).slice(0, 24)).join(', ') + ')</span>'; } catch (ee) {}
-          return `<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--mut);font-size:10.5px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:11.5px">${esc(e.name)}</b>${pr}</div>`;
-        }).join('') || `<div class="d">Sin eventos.</div>`);
-      });
-    };
-    $('#adQGo').onclick = go;
-    $('#adQ').onkeydown = (e) => { if (e.key === 'Enter') go(); };
-  }
-  // Cola de revisión de la "primera semana con rueditas": borradores con
-  // needs_review=1. Aprobar → visible al cliente + golden example. Editar →
-  // aplica caption, aprueba y guarda el golden con lo final. Rechazar → nota
-  // que alimenta el aprendizaje y regenera el borrador con otro enfoque.
-  async function showReview() {
-    body.innerHTML = `<div class="d">⏳ Cargando cola de revisión…</div>`;
-    let r;
-    try { r = await adminApi('review-queue'); }
-    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar.</div>`; return; }
-    const q = r.queue || [];
-    if (!q.length) { body.innerHTML = `<div class="d">✨ Nada pendiente. La cola está vacía.</div>`; return; }
-    body.innerHTML = `<div style="margin-bottom:10px;font-size:13px;color:var(--mut)">${q.length} borrador${q.length > 1 ? 'es' : ''} esperando revisión</div>` +
-      q.map(p => `
-      <div data-rev="${p.id}" style="border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px">
-          <b style="font-size:14px">${esc(p.business_name || p.email || ('Usuario ' + p.user_id))}</b>
-          <span style="font-size:11px;color:var(--mut)">${esc((p.created_at || '').slice(0, 16))} · ${esc(p.tipo || p.media_type || '')}</span>
-        </div>
-        ${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;border-radius:10px;margin-bottom:8px" loading="lazy">` : ''}
-        <div style="font-size:13.5px;white-space:pre-wrap;margin-bottom:4px">${esc(p.caption || '')}</div>
-        <div style="font-size:12px;color:var(--mut);margin-bottom:10px">${esc(p.hashtags || '')}</div>
-        <textarea data-rev-note rows="2" placeholder="Nota para el rechazo (¿qué hay que cambiar?)" style="font-size:16px;width:100%;border:2px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px"></textarea>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" data-rev-approve="${p.id}">✅ Aprobar</button>
-          <button class="btn btn-soft btn-sm" data-rev-edit="${p.id}">✏️ Aprobar con edición</button>
-          <button class="btn btn-soft btn-sm" data-rev-reject="${p.id}">🔄 Rechazar y regenerar</button>
-        </div>
-      </div>`).join('');
-    body.querySelectorAll('[data-rev-approve]').forEach(b => b.onclick = async () => {
-      b.disabled = true;
-      try { await adminApi('review/' + b.dataset.revApprove + '/approve', 'POST'); showReview(); }
-      catch (e) { alert('No se pudo aprobar'); b.disabled = false; }
-    });
-    body.querySelectorAll('[data-rev-edit]').forEach(b => b.onclick = async () => {
-      const orig = (q.find(x => String(x.id) === String(b.dataset.revEdit)) || {});
-      const cap = prompt('Caption final:', orig.caption || '');
-      if (cap === null) return;
-      b.disabled = true;
-      try { await adminApi('review/' + b.dataset.revEdit + '/edit', 'POST', { caption: cap }); showReview(); }
-      catch (e) { alert('No se pudo guardar'); b.disabled = false; }
-    });
-    body.querySelectorAll('[data-rev-reject]').forEach(b => b.onclick = async () => {
-      const card = body.querySelector(`[data-rev="${b.dataset.revReject}"]`);
-      const note = card && card.querySelector('[data-rev-note]') ? card.querySelector('[data-rev-note]').value.trim() : '';
-      if (!note) { alert('Escribí una nota: ¿qué hay que cambiar?'); return; }
-      b.disabled = true;
-      try { await adminApi('review/' + b.dataset.revReject + '/reject', 'POST', { note }); showReview(); }
-      catch (e) { alert('No se pudo rechazar'); b.disabled = false; }
-    });
-  }
-  $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
-    $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
-    b.classList.add('btn-primary');
-    ({ funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview })[b.dataset.atab]();
-  });
-  const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
-  const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
+    ov.querySelector('#apvPushNo').onclick = close;
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  }, 2500);
 }
 
 window.addEventListener('hashchange', render);

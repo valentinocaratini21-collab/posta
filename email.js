@@ -179,7 +179,9 @@ function emptyWeekEmail(user, baseUrl) {
 
 // Aviso "ya salió": cada vez que un posteo se publica, el cliente recibe la prueba
 // de que Posta cumple "se publica solo". Corto, con link al posteo.
-function publishedEmail(user, post, baseUrl, permalink, isFirst) {
+// referralLink (opcional): si viene, se suma un bloque discreto de referido
+// (solo se pasa cuando el usuario tiene <2 referidos activos).
+function publishedEmail(user, post, baseUrl, permalink, isFirst, referralLink) {
   const name = (user.name || '').trim();
   const isVideo = post.media_type === 'video';
   const subject = `✅ Tu ${isVideo ? 'reel' : 'posteo'} ya salió en Instagram`;
@@ -193,6 +195,10 @@ function publishedEmail(user, post, baseUrl, permalink, isFirst) {
     </p>
     ${permalink ? `<p style="text-align:center;margin:0 0 8px">
       <a href="${permalink}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Ver en Instagram</a>
+    </p>` : ''}
+    ${referralLink ? `<p style="font-size:13px;line-height:1.6;margin:14px 0 0;color:#7B93A9;text-align:center">
+      💛 ¿Conocés a alguien con negocio? Si entra con tu link, los dos ganan 50% off 👇<br>
+      <a href="${referralLink}" style="color:#2793C8;text-decoration:underline">${referralLink}</a>
     </p>` : ''}`);
   return sendEmail({ to: user.email, subject, html });
 }
@@ -254,6 +260,35 @@ function trialExpiryEmail(user, baseUrl) {
   return sendEmail({ to: user.email, subject, html });
 }
 
+// Email día 2 "publicá tu primero" (2026-09-30, mejora "garantizar el primer posteo").
+// Solo a usuarios con 0 posteos publicados (el scheduler lo garantiza).
+// CTA directo a publicar el primer borrador en la app (Schedule muestra el
+// botón "🚀 Publicar mi primero"; si no hay borradores, el botón lo genera).
+// El copy es honesto: cambia según haya borradores listos o no.
+function firstPublishNudgeEmail(user, baseUrl) {
+  const name = String(user.name || '').trim();
+  const n = Number(user.drafts) || 0;
+  const cta = `${baseUrl}/#/app/schedule`;
+  const subject = 'Tu primer posteo está listo para salir 🚀';
+  const body = n > 0
+    ? `Ya dejé tus posteos armados con tu marca y tu estilo. Falta lo mejor:
+      ver el primero <b>vivo en tu Instagram</b> 🚀<br>
+      Publicalo con 1 tap — yo me ocupo del resto.`
+    : `Tu prueba sigue corriendo y todavía no salió tu primer posteo — vamos a
+      cambiar eso ya 🚀<br>
+      Tocá el botón: armo tu primer posteo al toque y lo publicamos juntos, en 1 tap.`;
+  const html = emailShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      ${body}<br>
+      <span style="font-size:13px">Te lo dice <b>Posty</b>, tu community manager 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">🚀 Publicar mi primero</a>
+    </p>`);
+  return sendEmail({ to: user.email, subject, html });
+}
+
 // Magic link: entrar sin contraseña (vale 15 minutos, un solo uso).
 function magicLinkEmail(email, link) {
   const subject = 'Entrá a Posty sin contraseña ✨';
@@ -268,4 +303,4 @@ function magicLinkEmail(email, link) {
   return sendEmail({ to: email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail };
+module.exports = { emailConfigured, sendEmail, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail };

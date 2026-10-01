@@ -24,7 +24,46 @@ const { analyzeFbPage, extractPageId } = require('./fb-page');
 const { mineComments, buildDnaPatch } = require('./ig-comments');
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
+const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
+// Style Lock visual: contrato de Worker 1 (style-visual.js). Si el módulo aún no
+// existe, los fallbacks garantizan que nada se rompa: analyzeVisualStyle resuelve
+// {ok:false}, getVisualStyle devuelve null y visualStyleBlock ''.
+let analyzeVisualStyle = () => Promise.resolve({ ok: false, error: 'módulo no disponible' });
+let getVisualStyle = () => null;
+let visualStyleBlock = () => '';
+try { ({ analyzeVisualStyle, getVisualStyle, visualStyleBlock } = require('./style-visual')); }
+catch (e) { console.error('[init] style-visual no disponible:', e.message); }
+// Caption Style Lock (caption-style.js): perfil de escritura del cliente desde su IG.
+// Mismo patrón defensivo: sin módulo, todo resuelve vacío y nada se rompe.
+let analyzeCaptionStyle = () => Promise.resolve({ ok: false, error: 'módulo no disponible' });
+let getCaptionStyle = () => null;
+let captionStyleBlock = () => '';
+let captionPromptExtras = () => '';
+let CAPTION_CHECKLIST = '';
+try { ({ analyzeCaptionStyle, getCaptionStyle, captionStyleBlock, captionPromptExtras, CAPTION_CHECKLIST } = require('./caption-style')); }
+catch (e) { console.error('[init] caption-style no disponible:', e.message); }
+// Extras para el system prompt de captions de un usuario: checklist anti-genérico
+// SIEMPRE + bloque "ESCRIBÍ COMO EL CLIENTE" si su IG fue analizado. Nunca lanza.
+function captionExtrasFor(uid) {
+  try { return (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || ''; }
+  catch (e) { return ''; }
+}
+// Niveles que se sienten (level-boosts.js): el nivel del usuario cambia REALMENTE
+// el payload que recibe el modelo, en TODOS los caminos de generación.
+// Nunca lanza: ante cualquier falla devuelve el payload original (baseline idéntico).
+function levelBoosted(uid, kind, payload) {
+  try {
+    const { applyLevelBoosts } = require('./level-boosts');
+    const lvl = postyLevel(db, uid).level;
+    const r = applyLevelBoosts(db, uid, lvl, kind, payload);
+    if (r.applied.length) console.log(`[level-boosts] ${kind} uid=${uid} nivel=${lvl}:`, r.applied.map((a) => a.boost).join(', '));
+    return r.payload;
+  } catch (e) {
+    console.error('[level-boosts]:', e.message);
+    return payload;
+  }
+}
 const TRIAL_DAYS = 3;
 // "Primera semana con rueditas": los primeros borradores de cada cliente pasan
 // por revisión (humana o por agente) antes de ser visibles. TRAINING_WHEELS=0 lo
@@ -398,6 +437,49 @@ app.get('/api/dna', requireAuth, (req, res) => {
   res.json({ dna: readDna(req.session.userId) });
 });
 
+// ---------- 🧠 Nivel de conocimiento de Posty (GET /api/posty/level) ----------
+// Calcula el nivel con datos reales (posty-level.js). El level-up se festeja
+// UNA sola vez: se compara con users.posty_level; la primera vez se guarda
+// en silencio, y cuando sube se inserta el mensaje en el chat del usuario.
+app.get('/api/posty/level', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const computed = postyLevel(db, uid);
+    let saved = 0;
+    try {
+      const r = db.prepare('SELECT posty_level FROM users WHERE id = ?').get(uid);
+      saved = (r && r.posty_level) ? Number(r.posty_level) : 0;
+    } catch (e) { saved = 0; }
+    let leveled_up = false;
+    let level_message = null;
+    const persist = () => {
+      try { db.prepare('UPDATE users SET posty_level = ? WHERE id = ?').run(computed.level, uid); } catch (e) { /* no bloquea */ }
+    };
+    if (saved <= 0) {
+      persist(); // primera vez: guardar silencioso
+    } else if (computed.level > saved) {
+      const msg = LEVEL_UP_MSGS[computed.level] || null;
+      persist();
+      if (msg) {
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg);
+        leveled_up = true;
+        level_message = msg;
+      }
+    }
+    res.json({
+      ok: true,
+      level: computed.level,
+      level_name: computed.level_name,
+      progress_pct: computed.progress_pct,
+      next_missing: computed.next_missing,
+      leveled_up,
+      level_message,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message || 'No se pudo calcular el nivel' });
+  }
+});
+
 app.put('/api/dna', requireAuth, (req, res) => {
   try {
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
@@ -581,9 +663,33 @@ function maskSettings(s) {
 }
 
 // ---------- Auth ----------
+// ¿El posteo i-ésimo de la prueba usa una FOTO REAL del cliente?
+// En /prueba la imagen final se renderiza (PNG), así que la marca de "foto
+// real" vive en el spec guardado (out.design.posts[i].photo), paralelo a
+// out.posts[i]:
+//   - {userPhoto:true}  → foto subida en el formulario de /prueba
+//   - "data:image/..."   → foto subida después por rediseño (va en el cache)
+//   - ruta de archivo    → foto de stock (no es del cliente)
+// En payloads viejos sin design: si subió foto (out.screenshot), TODOS los
+// posteos la usan (buildDemoSpec marca {userPhoto:true} en cada uno).
+function trialPostUsesClientPhoto(out, i) {
+  try {
+    const sp = (out.design && Array.isArray(out.design.posts) && out.design.posts[i]) || null;
+    if (sp) {
+      const ph = sp.photo;
+      if (ph && typeof ph === 'object' && ph.userPhoto) return true;
+      if (typeof ph === 'string' && ph.indexOf('data:image/') === 0) return true;
+      return false;
+    }
+  } catch (e) {}
+  return !!(out && out.screenshot);
+}
+
 // Importa la semana generada en /prueba a la cuenta nueva: los posteos quedan
 // como borradores (nada se publica sin su OK). Lee del trial_cache por @,
 // así no se re-suben los archivos desde el navegador.
+// Marca source='trial' (marcador confiable de "semana importada de la prueba")
+// y client_photo=1 en los posteos que usan fotos reales del cliente.
 function importTrialWeek(userId, igRaw) {
   const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
   if (!ig) return 0;
@@ -595,7 +701,9 @@ function importTrialWeek(userId, igRaw) {
   if (!posts.length) return 0;
   if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
   let n = 0;
+  let idx = -1;
   for (const p of posts.slice(0, 7)) {
+    idx++;
     try {
       const isVideo = p.type === 'video' && p.video;
       const m = /^data:(image\/(png|jpeg|webp)|video\/mp4);base64,([\s\S]+)$/.exec(String(isVideo ? p.video : p.image || ''));
@@ -605,9 +713,10 @@ function importTrialWeek(userId, igRaw) {
       if (!buf.length || buf.length > 15 * 1024 * 1024) continue;
       const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
       fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
+      const clientPhoto = trialPostUsesClientPhoto(out, idx) ? 1 : 0;
       db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review) VALUES (?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', trainingWheelsActive(userId) ? 1 : 0);
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo) VALUES (?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', trainingWheelsActive(userId) ? 1 : 0, 'trial', clientPhoto);
       n++;
     } catch (e) { /* un posteo fallido no frena los demás */ }
   }
@@ -622,6 +731,25 @@ function streakFromTrialImport(userId, nImp) {
     const tz = userTz(userId);
     streaks.recordWeekArmed(db, userId, streaks.mondayKeyOf(streaks.tzToday(tz)));
   } catch (e) { console.error('[posta] streak trial:', e.message); }
+}
+
+// Fix auditoría #2 (2026-09-30): registra el resultado REAL de importTrialWeek
+// (el conteo que devuelve, no una suposición).
+//   NULL  = no vino de /prueba con @        → welcome actual
+//   0     = vino pero la importación trajo 0 (cache vencido / payload roto)
+//           → welcome honesto + 1 tap para rearmar
+//   >0    = posteos importados              → welcome de continuidad
+// No pisa un éxito previo con un 0 posterior: si el usuario ya tenía posteos,
+// el import no se intentó (hadPostsBefore) y no se registra nada.
+function recordTrialImport(userId, trialIg, nImp, hadPostsBefore) {
+  const ig = String(trialIg || '').trim().replace(/^@/, '');
+  if (!ig || hadPostsBefore) return;
+  try {
+    db.prepare(`UPDATE users SET trial_import_n = CASE
+      WHEN ? > 0 THEN ?
+      WHEN trial_import_n IS NULL THEN 0
+      ELSE trial_import_n END WHERE id = ?`).run(nImp, nImp, userId);
+  } catch (e) { console.error('[posta] recordTrialImport:', e.message); }
 }
 
 app.post('/api/auth/register', (req, res) => {
@@ -646,6 +774,7 @@ app.post('/api/auth/register', (req, res) => {
     try {
       const nImp = importTrialWeek(r.lastInsertRowid, trial_ig);
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
+      recordTrialImport(r.lastInsertRowid, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
       streakFromTrialImport(r.lastInsertRowid, nImp);
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     track(r.lastInsertRowid, 'registered');
@@ -664,9 +793,12 @@ app.post('/api/auth/login', (req, res) => {
   req.session.userId = user.id;
   // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
   try {
-    const nImp = importTrialWeek(user.id, trial_ig);
-    if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${user.id}`);
-    streakFromTrialImport(user.id, nImp);
+    const uidL = user.id;
+    const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uidL).c || 0) > 0;
+    const nImp = importTrialWeek(uidL, trial_ig);
+    if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${uidL}`);
+    recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
+    streakFromTrialImport(uidL, nImp);
   } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
   res.json({ ok: true });
 });
@@ -770,6 +902,7 @@ app.get('/api/auth/magic', (req, res) => {
       try {
         const nImp = importTrialWeek(userId, payload.trial_ig);
         if (nImp) console.log(`[posta] semana de prueba importada (magic): ${nImp} borradores → usuario ${userId}`);
+        recordTrialImport(userId, payload.trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
         streakFromTrialImport(userId, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
       applyTrialProfile(userId, payload.trial_profile);
@@ -779,8 +912,10 @@ app.get('/api/auth/magic', (req, res) => {
     } else {
       req.session.userId = user.id;
       try {
+        const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(user.id).c || 0) > 0;
         const nImp = importTrialWeek(user.id, payload.trial_ig);
         if (nImp) console.log(`[posta] semana de prueba importada (magic, login): ${nImp} borradores → usuario ${user.id}`);
+        recordTrialImport(user.id, payload.trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
         streakFromTrialImport(user.id, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     }
@@ -1208,6 +1343,20 @@ app.post('/api/settings/test-meta', requireAuth, async (req, res) => {
   }
 });
 
+// Style Lock visual: re-analiza la estética del feed de Instagram del cliente.
+// Nunca devuelve 500: errores → {ok:false, reason}.
+app.post('/api/style-visual/analyze', requireAuth, async (req, res) => {
+  try { const r = await analyzeVisualStyle(db, req.session.userId); res.json(r); }
+  catch (e) { res.json({ ok:false, error: e.message }); }
+});
+
+// Caption Style Lock: re-analiza cómo escribe el cliente en su Instagram.
+// Nunca devuelve 500: errores → {ok:false, error}.
+app.post('/api/caption-style/analyze', requireAuth, async (req, res) => {
+  try { const r = await analyzeCaptionStyle(db, req.session.userId); res.json(r); }
+  catch (e) { res.json({ ok:false, error: e.message }); }
+});
+
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const { topic, n, seed, tipo } = req.body || {};
@@ -1311,6 +1460,22 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
 // ---------- Ideas: nosotros pensamos el contenido por el cliente ----------
 // ---------- Chat consultor de ideas: el cliente trae su idea, la pulen juntos ----------
 // Hasta que la idea no queda exactamente como quiere el cliente, no se manda nada.
+// FM #5: si el publish quedó en revisión o falló, el festejo del modelo
+// ("¡ya está saliendo!") no puede quedar: se corrige el reply ANTES de responder.
+// (El reply se arma después de procesar los bloques, justo antes del res.json.)
+function fixPublishReply(reply, publishApplied) {
+  if (!publishApplied) return reply;
+  const inR = (publishApplied.inReview || []).length;
+  const fail = (publishApplied.failed || []).length;
+  if (!inR && !fail) return reply;
+  const ok = (publishApplied.ok || []).length;
+  if (!ok) {
+    return inR
+      ? 'Quedó en revisión antes de salir — lo reviso y te aviso en cuanto se publique 🙏'
+      : 'No llegó a salir a Instagram — reviso qué pasó y te aviso 🙏';
+  }
+  return String(reply || '') + (inR ? ' (uno quedó en revisión, te aviso cuando salga)' : ' (uno no pudo salir, lo reviso y te aviso)');
+}
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
   const { messages, photos, library, drafts, audio } = req.body || {};
   const uidChat = req.session.userId;
@@ -1323,7 +1488,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
   const clean = (Array.isArray(messages) ? messages : [])
-    .slice(-10)
+    .slice(-16)
     .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
     .filter(m => m.text.trim());
   // Nota de voz: transcribir con Whisper y usar el texto como mensaje del usuario.
@@ -1417,16 +1582,20 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
   // después lo que necesita atención (publicando/fallido), después lo ya publicado.
   let cleanDrafts = [];
   try {
-    const rows = db.prepare(`SELECT id, caption, scheduled_for, status, media_type FROM posts
+    const rows = db.prepare(`SELECT id, caption, scheduled_for, scheduled_at, status, media_type, needs_review FROM posts
       WHERE user_id = ? AND status IN ('draft','scheduled','publishing','failed','published')
       ORDER BY CASE status WHEN 'draft' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'publishing' THEN 2 WHEN 'failed' THEN 3 ELSE 4 END,
         COALESCE(scheduled_for, created_at) DESC LIMIT 12`).all(uidChat) || [];
+    // FM #6/C7: el modelo necesita fecha+HORA local ("AAAA-MM-DD HH:MM"), no solo fecha,
+    // y el flag needs_review (si no lo ve, no puede avisar que algo sigue en revisión).
+    const chatTz = userTz(uidChat);
     cleanDrafts = rows.map(r => ({
       id: r.id,
       caption: String(r.caption || '').slice(0, 300),
-      when: String(r.scheduled_for || '').slice(0, 10),
+      when: wallInTz(r.scheduled_at || r.scheduled_for, chatTz),
       status: r.status,
       media_type: r.media_type || 'image',
+      needs_review: !!r.needs_review,
     }));
   } catch (e) { console.error('[chat] drafts ctx:', e.message); }
   try {
@@ -1500,7 +1669,8 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       needMediaAsk = lastAsk < Date.now() - 7 * 24 * 3600 * 1000 && freshCount === 0;
     } catch (e) {}
     const out = await chatIdea(
-      { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk },
+      // Niveles que se sienten: el nivel cambia REALMENTE el payload del chat.
+      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0) }),
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     );
     const uid = req.session.userId;
@@ -1560,9 +1730,12 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       // regenera vía concept-shot para acompañar. Solo se salta si el usuario pidió
       // cambio explícito de texto ("cambiá el caption", "cambiá el texto").
       const lastUserMsg = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
-      const textOnlyEdit = /cambi[aá]\s+(el\s+)?(caption|texto|copy|palabras)|cambiame\s+(el\s+)?(texto|caption)|solo\s+(el\s+)?texto/i.test(lastUserMsg);
+      // C5/FM #2: cambios quirúrgicos de texto (título, emojis, acortar, sacar algo)
+      // NO regeneran la imagen — solo los cambios de concepto la regeneran.
+      const textOnlyEdit = /cambi[aá]\s+(el\s+)?(caption|texto|copy|palabras|t[ií]tulo)|cambiame\s+(el\s+)?(texto|caption|t[ií]tulo)|solo\s+(el\s+)?texto|m[aá]s\s+corto|acort[aá]|s[aá]cale|sac[aá]les?|quit[aá](le|les)?|emojis?/i.test(lastUserMsg);
       let n = 0, imgRegen = 0;
       const editedIds = [];
+      const regenJobs = [];
       for (const ed of out.edits) {
         if (!(ed.draft >= 1 && ed.draft <= cleanDrafts.length)) continue;
         if (ed.caption === undefined && ed.hashtags === undefined && ed.photo_index === undefined && ed.when === undefined) continue;
@@ -1605,18 +1778,25 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         }
         // Palanca 7: cambió el concepto → regenerar la imagen para que acompañe.
         // (Si el usuario eligió su propia foto, o pidió solo texto, se respeta.)
+        // FM #2: las regens NO van secuenciales dentro del loop — se juntan los
+        // trabajos y corren en paralelo después, para no multiplicar la latencia por N.
         if (captionChanged && !textOnlyEdit && !pickedOwnPhoto) {
-          try {
-            const headline = makeHeadline(String(newCaption).split('\n')[0], 6) || makeHeadline(String(newCaption), 5);
-            const newPath = await conceptShotGenerate({ uid, idea: String(newCaption), tipo: post.tipo || '', headline, refs: [] });
-            if (newPath) {
-              db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id);
-              imgRegen++;
+          const capForImg = String(newCaption);
+          const tipoForImg = post.tipo || '';
+          regenJobs.push((async () => {
+            try {
+              const headline = makeHeadline(capForImg.split('\n')[0], 6) || makeHeadline(capForImg, 5);
+              const newPath = await conceptShotGenerate({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [] });
+              if (newPath) {
+                db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id);
+                return true;
+              }
+            } catch (e) {
+              // Si falla (incluido kill-switch), se mantiene la imagen vieja: nunca se rompe el flujo.
+              console.error('[chat-edit] regen imagen:', e.message);
             }
-          } catch (e) {
-            // Si falla (incluido kill-switch), se mantiene la imagen vieja: nunca se rompe el flujo.
-            console.error('[chat-edit] regen imagen:', e.message);
-          }
+            return false;
+          })());
         }
         // Reprogramar: "AAAA-MM-DD HH:MM" en hora local del cliente → UTC. Solo futuro.
         if (typeof ed.when === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(ed.when.trim())) {
@@ -1628,6 +1808,12 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
         n++;
         editedIds.push(post.id);
+      }
+      // FM #2: correr las regeneraciones en paralelo (no secuencial puro) —
+      // N borradores ya no multiplican la latencia del turno por N.
+      if (regenJobs.length) {
+        const done = await Promise.all(regenJobs);
+        imgRegen = done.filter(Boolean).length;
       }
       if (n) {
         // Devolver las imágenes de los borradores editados para mostrarlas en el chat.
@@ -1720,6 +1906,10 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         out.reply = 'Todavía no armé nada — ¿la armamos? 🚀';
       }
     }
+    // FM #5: si el publish quedó en revisión o falló, el festejo del modelo
+    // ("¡ya está saliendo!") no puede quedar: se corrige el reply acá,
+    // después de procesar los bloques y antes de responder.
+    out.reply = fixPublishReply(out.reply, publishApplied);
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
   } catch (e) {
     console.error('[chat]', e.message);
@@ -2364,7 +2554,7 @@ app.get('/api/stats/ig', requireAuth, async (req, res) => {
     res.json(s);
   } catch (e) {
     console.error('[stats/ig]', e.message);
-    res.json({ reach_7d: 0, reach_30d: 0, interactions_30d: 0, followers: 0, best_post: null });
+    res.json({ reach_7d: 0, reach_30d: 0, interactions_30d: 0, followers: 0, reach_prev7d: 0, posts_7d: 0, posts_prev7d: 0, best_post: null });
   }
 });
 
@@ -2667,6 +2857,22 @@ app.post('/api/comments/:id/dismiss', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Sugerencia de arranque (first_pick): qué posteo mirar primero.
+// Determinista y explicable:
+//   1. borrador cuya imagen usa una FOTO REAL del cliente (client_photo=1,
+//      marcado por importTrialWeek) → la gente no odia sus propias fotos;
+//   2. fallback: primer borrador de la semana (orden id ASC).
+// El reason es SUGERENCIA, nunca veredicto: fundamento seguro
+// ("usa una de tus fotos 📸", "tiene los colores de tu marca 🎨"), jamás
+// "mi favorito".
+function firstPickFrom(drafts) {
+  if (!drafts || !drafts.length) return null;
+  let pick = drafts.find((d) => Number(d.client_photo) === 1) || null;
+  let reason = 'usa una de tus fotos 📸';
+  if (!pick) { pick = drafts[0]; reason = 'tiene los colores de tu marca 🎨'; }
+  return { post_id: pick.id, image_url: pick.image_path, caption: String(pick.caption || ''), reason };
+}
+
 // Historial del chat consultor (persiste entre sesiones) + idea cerrada pendiente
 app.get('/api/ideas/chat', requireAuth, (req, res) => {
   const uid = req.session.userId;
@@ -2674,29 +2880,89 @@ app.get('/api/ideas/chat', requireAuth, (req, res) => {
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
-  // Bienvenida proactiva: SOLO el primer ingreso. Posty se presenta y cuenta qué
-  // está haciendo AHORA por sus posteos (solo cosas reales según su estado).
+  // Bienvenida proactiva: SOLO el primer ingreso. Si el usuario trae semana
+  // importada de /prueba (marcador: source='trial', o prefijo legacy
+  // '/media/trial-' para imports anteriores a la migración), continuidad:
+  // la semana YA está acá, no se dice "estoy laburando". Si no, el flujo
+  // actual (Posty contando qué está haciendo AHORA por sus posteos).
+  // Además: first_pick = sugerencia del primer posteo a mirar (solo si hay
+  // borradores y es primera apertura, mismo gate que welcome).
   let welcome = null;
+  let first_pick = null;
+  let welcome_regen = false;
   try {
-    const w = db.prepare('SELECT posty_welcomed, client_name FROM users WHERE id = ?').get(uid) || {};
+    const w = db.prepare('SELECT posty_welcomed, client_name, trial_import_n FROM users WHERE id = ?').get(uid) || {};
     if (!w.posty_welcomed) {
-      const bits = [];
-      try { if ((db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE user_id = ? AND kind = 'photo'`).get(uid) || {}).n > 0) bits.push('mirando tus fotos \uD83D\uDCF8'); } catch (e) {}
-      try { const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (dr && dr.dna_json) bits.push('conociendo tu negocio'); } catch (e) {}
-      try { const pf = db.prepare('SELECT ig_connected FROM profiles WHERE user_id = ?').get(uid); if (pf && pf.ig_connected) bits.push('analizando tu Instagram'); } catch (e) {}
-      bits.push('buscando los mejores horarios para publicar \u23F0');
-      const haciendo = bits.length > 1 ? bits.slice(0, -1).join(', ') + ' y ' + bits[bits.length - 1] : bits[0];
       const _cn = ((w.client_name || '').trim().split(/\s+/)[0]) || '';
-      welcome = (_cn ? `\u00A1Hola ${_cn}! Soy Posty, tu community manager \uD83C\uDF89\n`
-                      : '\u00A1Hola! Soy Posty, tu community manager \uD83C\uDF89\n') +
-        `Ya estoy laburando en tus posteos: ${haciendo}.\n` +
-        'Yo armo los dise\u00F1os, textos y horarios \u2014 vos solo aprob\u00E1s \uD83D\uDC4C\n' +
-        'Te aviso cuando tu semana est\u00E9 lista \u2728' +
-        (_cn ? '' : '\n\u00BFC\u00F3mo te llamo? \uD83D\uDE04');
+      const draftSel = 'id, image_path, caption, COALESCE(client_photo, 0) AS client_photo FROM posts WHERE user_id = ? AND status = \'draft\'';
+      const trialDrafts = db.prepare(
+        `SELECT ${draftSel} AND (COALESCE(source, '') = 'trial' OR image_path LIKE '/media/trial-%') ORDER BY id ASC`
+      ).all(uid);
+      // Fix auditoría #2: la rama de continuidad SOLO si la semana importada
+      // existe de verdad. Si vino de /prueba con @ pero la importación trajo 0
+      // (cache vencido / payload roto → trial_import_n = 0), se dice la verdad
+      // y se ofrece rearmarla en 1 tap. NULL = no vino de /prueba (welcome actual).
+      const importMissed = w.trial_import_n === 0;
+      if (trialDrafts.length) {
+        welcome = (_cn ? `\u00A1${_cn}! \uD83C\uDF89 Tu semana ya est\u00E1 ac\u00E1 \u2014 la que armamos juntos en la prueba \u2728`
+                      : '\u00A1Hola! \uD83C\uDF89 Tu semana ya est\u00E1 ac\u00E1 \u2014 la que armamos juntos en la prueba \u2728');
+        first_pick = firstPickFrom(trialDrafts);
+      } else if (importMissed) {
+        // La semana de /prueba no llegó adentro: decir la verdad con voz de
+        // Posty y 1 tap para rearmarla (welcome_regen → botón en el frontend).
+        welcome = (_cn ? `\u00A1${_cn}! ` : '\u00A1Hola! ') +
+          'No encontr\u00E9 tu semana de prueba \uD83D\uDE05 \u2014 te la rearmo en 1 minuto \uD83D\uDC47';
+        welcome_regen = true;
+      } else {
+        const bits = [];
+        try { if ((db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE user_id = ? AND kind = 'photo'`).get(uid) || {}).n > 0) bits.push('mirando tus fotos \uD83D\uDCF8'); } catch (e) {}
+        try { const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (dr && dr.dna_json) bits.push('conociendo tu negocio'); } catch (e) {}
+        try { const pf = db.prepare('SELECT ig_connected FROM profiles WHERE user_id = ?').get(uid); if (pf && pf.ig_connected) bits.push('analizando tu Instagram'); } catch (e) {}
+        bits.push('buscando los mejores horarios para publicar \u23F0');
+        const haciendo = bits.length > 1 ? bits.slice(0, -1).join(', ') + ' y ' + bits[bits.length - 1] : bits[0];
+        welcome = (_cn ? `\u00A1Hola ${_cn}! Soy Posty, tu community manager \uD83C\uDF89\n`
+                        : '\u00A1Hola! Soy Posty, tu community manager \uD83C\uDF89\n') +
+          `Ya estoy laburando en tus posteos: ${haciendo}.\n` +
+          'Yo armo los dise\u00F1os, textos y horarios \u2014 vos solo aprob\u00E1s \uD83D\uDC4C\n' +
+          'Te aviso cuando tu semana est\u00E9 lista \u2728' +
+          (_cn ? '' : '\n\u00BFC\u00F3mo te llamo? \uD83D\uDE04');
+        try {
+          const otherDrafts = db.prepare(`SELECT ${draftSel} ORDER BY id ASC`).all(uid);
+          first_pick = firstPickFrom(otherDrafts);
+        } catch (e) {}
+      }
       db.prepare('UPDATE users SET posty_welcomed = 1 WHERE id = ?').run(uid);
     }
   } catch (e) { console.error('[chat] welcome:', e.message); }
-  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome });
+  res.json({ messages: msgs, idea: idea && idea.titulo ? idea : null, welcome, first_pick, welcome_regen });
+});
+
+// Feedback de la sugerencia de arranque (first_pick): el usuario elige el
+// posteo sugerido, otro, o la descarta. Es la PRIMERA señal de taste del
+// usuario → se guarda en post_signals ('picked'→'approved',
+// 'other'/'dismissed'→'rejected').
+// Idempotente por (user_id, post_id): ON CONFLICT DO NOTHING — no duplica ni
+// pisa una señal anterior si reintentan.
+app.post('/api/posty/pick-feedback', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const { post_id, choice } = req.body || {};
+    const pid = parseInt(post_id, 10);
+    if (!Number.isInteger(pid) || pid <= 0) return res.status(400).json({ error: 'post_id inválido' });
+    if (!['picked', 'other', 'dismissed'].includes(choice)) return res.status(400).json({ error: 'choice inválido' });
+    const post = db.prepare('SELECT id, caption, hashtags, scheduled_at, week_key FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+    if (!post) return res.status(404).json({ error: 'Posteo no encontrado' });
+    const signal = choice === 'picked' ? 'approved' : 'rejected';
+    db.prepare(`
+      INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, client_signal, week_key, updated_at)
+      VALUES (?,?,?,?,?,?,?,datetime('now'))
+      ON CONFLICT(user_id, post_id) DO NOTHING
+    `).run(uid, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', signal, post.week_key || '');
+    const reply = choice === 'picked'
+      ? '¡Buena elección! 👌 Lo dejamos primero en tu semana ✨'
+      : 'Anotado ✍️ — la próxima apunto mejor 💪';
+    res.json({ ok: true, reply });
+  } catch (e) { console.error('[posty] pick-feedback:', e.message); res.status(500).json({ error: 'No pude anotarlo 😅 Probá de nuevo' }); }
 });
 
 // Log de eventos locales del chat (confirmaciones de edición, fotos) y limpieza de la idea
@@ -2734,7 +3000,8 @@ function ideasInputFor(uid) {
   } catch (e) { /* sin historial: no se filtra nada */ }
   let styleRules = [];
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
-  return {
+  // Niveles que se sienten: el nivel cambia REALMENTE el payload de ideas.
+  return levelBoosted(uid, 'ideas', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
     category: profile.category,
@@ -2751,7 +3018,7 @@ function ideasInputFor(uid) {
     excluded: excludedTopicsLine(uid),
     approved: approvedTopicsLine(uid),
     outcome: outcomeBrief(uid),
-  };
+  });
 }
 function contentInputFor(uid, topic, tipo, seed) {
   const profile = getProfile(uid);
@@ -2759,7 +3026,8 @@ function contentInputFor(uid, topic, tipo, seed) {
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
   let voice = '';
   try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
-  return {
+  // Niveles que se sienten: el nivel cambia REALMENTE el payload de captions.
+  return levelBoosted(uid, 'caption', {
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
     category: profile.category,
@@ -2776,7 +3044,8 @@ function contentInputFor(uid, topic, tipo, seed) {
     voice,
     seedBase: parseInt(seed, 10) || 0,
     golden: goldenExamples(uid), // "rueditas": posteos aprobados como few-shot ("así o parecido")
-  };
+    captionExtras: captionExtrasFor(uid), // checklist anti-genérico + voz real del cliente (Caption Style Lock)
+  });
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   const uidIdeas = req.session.userId;
@@ -2854,6 +3123,68 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
   }
   const r = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind);
   res.json({ ok: true, id: r.lastInsertRowid, path: filePath, kind });
+});
+
+// Logo auto-extraído (ver extractLogoCandidate en style-visual.js).
+// GET: devuelve la candidata pendiente, o path:null si no hay (o el archivo ya no existe).
+app.get('/api/brand/logo-candidate', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const cand = String((getSettings(uid) || {}).logo_candidate || '').trim();
+    if (!cand) return res.json({ ok: true, path: null });
+    if (!fs.existsSync(path.join(MEDIA_DIR, path.basename(cand)))) {
+      try { db.prepare('UPDATE settings SET logo_candidate = ? WHERE user_id = ?').run('', uid); } catch (_) {}
+      return res.json({ ok: true, path: null });
+    }
+    res.json({ ok: true, path: cand });
+  } catch (e) {
+    console.error('[logo] candidate:', e.message);
+    res.status(500).json({ ok: false, error: 'No pude ver la candidata 😅' });
+  }
+});
+
+// POST: confirma la candidata → pasa a ser el logo de marca (asset kind='logo'),
+// reemplazando el anterior si existe. Mismo patrón que el upload de logo del
+// brand kit: DELETE previos (borrando archivos) + INSERT nuevo.
+app.post('/api/brand/logo-confirm', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const s = getSettings(uid);
+    const cand = String((s || {}).logo_candidate || '').trim();
+    if (!cand || !fs.existsSync(path.join(MEDIA_DIR, path.basename(cand)))) {
+      try { db.prepare('UPDATE settings SET logo_candidate = ? WHERE user_id = ?').run('', uid); } catch (_) {}
+      return res.status(404).json({ ok: false, error: 'La candidata ya no está' });
+    }
+    // Reemplaza el anterior (un solo logo por marca), como el upload del brand kit.
+    const olds = db.prepare(`SELECT id, file_path FROM assets WHERE user_id = ? AND kind = 'logo'`).all(uid);
+    for (const o of olds) {
+      try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(o.file_path))); } catch (_) {}
+    }
+    db.prepare(`DELETE FROM assets WHERE user_id = ? AND kind = 'logo'`).run(uid);
+    db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(uid, cand, 'logo');
+    // Limpiar la candidata después de confirmarla.
+    try { db.prepare('UPDATE settings SET logo_candidate = ? WHERE user_id = ?').run('', uid); } catch (_) {}
+    db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)')
+      .run(uid, 'assistant', '¡Listo! 🎉 Tu logo va a salir idéntico en todos tus posteos');
+    res.json({ ok: true, path: cand });
+  } catch (e) {
+    console.error('[logo] confirm:', e.message);
+    res.status(500).json({ ok: false, error: 'No pude confirmar el logo 😅 Probá de nuevo' });
+  }
+});
+
+// POST: rechaza la candidata → borra el archivo, limpia y marca descartada (no se vuelve a ofrecer).
+app.post('/api/brand/logo-reject', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const cand = String((getSettings(uid) || {}).logo_candidate || '').trim();
+    if (cand) { try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(cand))); } catch (_) {} }
+    db.prepare('UPDATE settings SET logo_candidate = ?, logo_candidate_dismissed = 1 WHERE user_id = ?').run('', uid);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[logo] reject:', e.message);
+    res.status(500).json({ ok: false, error: 'No pude descartarlo 😅' });
+  }
 });
 
 app.delete('/api/assets/:id', requireAuth, (req, res) => {
@@ -3039,6 +3370,36 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/posts/:id/reject-reason  body {reason}
+// El cliente cuenta QUÉ no le gustó de un borrador: se guarda la señal +
+// una regla NEGATIVA en style_rules (entra al prompt sola vía Track D).
+const REJECT_REASONS = {
+  generico: 'NUNCA: diseños genéricos de stock — siempre escena concreta y específica del negocio, nunca banco de imágenes',
+  estilo: 'NUNCA: desviarse de la línea visual del cliente definida en LÍNEA VISUAL DEL CLIENTE',
+  avatar: 'NUNCA: deformar, redibujar ni reinterpretar el logo de tu marca — debe salir idéntico a la referencia',
+  representa: 'NUNCA: contenido que no parezca del negocio real del cliente (su local, sus productos, su gente)',
+};
+app.post('/api/posts/:id/reject-reason', requireAuth, express.json(), (req, res) => {
+  try {
+    const reason = String(((req.body || {}).reason) || '').trim();
+    if (!REJECT_REASONS[reason]) return res.status(400).json({ ok: false, error: 'Motivo inválido' });
+    const uid = req.session.userId;
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    const rule = REJECT_REASONS[reason];
+    try { recordSignal(uid, post, 'rejected'); } catch (e) {}
+    try {
+      db.prepare(`INSERT INTO style_rules (user_id, rule_key, rule_text, hits, active) VALUES (?, ?, ?, 1, 1)
+        ON CONFLICT(user_id, rule_key) DO UPDATE SET rule_text=excluded.rule_text, active=1, hits=hits+1`)
+        .run(uid, 'neg:' + reason, rule);
+    } catch (e) { return res.status(500).json({ ok: false, error: 'db' }); }
+    res.json({ ok: true, rule });
+  } catch (e) {
+    console.error('[reject-reason]:', e.message);
+    res.status(500).json({ ok: false, error: 'No pude guardar tu motivo 😅' });
+  }
+});
+
 app.delete('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (post) recordSignal(req.session.userId, post, 'rejected'); // lo eliminó = no le gustó
@@ -3094,6 +3455,27 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
   res.json({ ok: true, emptied: drafts.length, week_key: wk, ...r });
 });
 
+// Fix auditoría #2 (2026-09-30): "⚡ Rearmar mi semana" del welcome honesto.
+// La importación de /prueba trajo 0 (cache vencido / payload roto, marcado en
+// users.trial_import_n): se genera la semana de nuevo en segundo plano con el
+// perfil que ya quedó aplicado al registrarse. Responde al toque; el push
+// "Tu semana está lista ✨" avisa cuando los borradores aparecen.
+app.post('/api/trial/rebuild-import', requireAuth, requireTrialValid, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const u = db.prepare('SELECT trial_import_n FROM users WHERE id = ?').get(uid) || {};
+    if (u.trial_import_n !== 0) return res.json({ ok: true, rebuilding: false, reason: 'not_needed' });
+    const drafts = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft'`).get(uid).n || 0;
+    if (drafts > 0) return res.json({ ok: true, rebuilding: false, reason: 'has_drafts' });
+    const r = maybeStartRebuild(uid);
+    console.log(`[trial-rebuild] usuario ${uid}: rebuilding=${r.rebuilding} (${r.reason || 'ok'})`);
+    return res.json({ ok: true, rebuilding: !!r.rebuilding, reason: r.reason || null });
+  } catch (e) {
+    console.error('[trial-rebuild]:', e.message);
+    return res.status(500).json({ error: 'No pude arrancar la regeneración 😅 Probá de nuevo.' });
+  }
+});
+
 // Estado de un posteo (para el seguimiento en vivo de "Publicar ahora")
 app.get('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare(
@@ -3105,7 +3487,7 @@ app.get('/api/posts/:id', requireAuth, (req, res) => {
 
 // Publicar AHORA de forma inmediata: no espera al scheduler.
 // Idempotente: si ya se está publicando o ya salió, no lo duplica.
-app.post('/api/posts/:id/publish-now', requireAuth, (req, res) => {
+app.post('/api/posts/:id/publish-now', requireAuth, requireTrialValid, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   if (post.status === 'publishing') return res.json({ ok: true, status: 'publishing' });
@@ -3386,6 +3768,19 @@ function shiftDays(ymd, n) {
 function userTz(userId) {
   try { return getSettings(userId).timezone || 'America/Argentina/Buenos_Aires'; }
   catch { return 'America/Argentina/Buenos_Aires'; }
+}
+// UTC ISO → "AAAA-MM-DD HH:MM" en la zona del cliente (para la agenda que ve el chat).
+function wallInTz(iso, tz) {
+  if (!iso) return '';
+  try {
+    const s = String(iso);
+    const d = new Date(s.length === 16 ? s : s.replace(' ', 'T'));
+    if (isNaN(d)) return '';
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    const p = Object.fromEntries(fmt.formatToParts(d).map(x => [x.type, x.value]));
+    const hh = p.hour === '24' ? '00' : p.hour;
+    return `${p.year}-${p.month}-${p.day} ${hh}:${p.minute}`;
+  } catch { return ''; }
 }
 // "2026-09-30 18:00" como hora local en tz → ISO UTC. null si es inválido.
 function zonedWallToUtc(s, tz) {
@@ -4130,6 +4525,12 @@ app.get('/api/ig/callback', async (req, res) => {
         })
         .catch(e => console.error('[ig] analyze:', e.message));
     } catch (e) { console.error('[ig] analyze:', e.message); }
+    // Style Lock visual: analiza la estética del feed en background. Nunca bloquea la conexión.
+    try { analyzeVisualStyle(db, req.session.userId).catch(e => console.error('[ig] style-visual:', e.message)); }
+    catch (e) { console.error('[ig] style-visual:', e.message); }
+    // Caption Style Lock: analiza cómo escribe en su IG en background. Nunca bloquea la conexión.
+    try { analyzeCaptionStyle(db, req.session.userId).catch(e => console.error('[ig] caption-style:', e.message)); }
+    catch (e) { console.error('[ig] caption-style:', e.message); }
     track(req.session.userId, 'ig_connected');
     evTrack(req.session.userId, 'ig_connect', {});
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
@@ -4393,6 +4794,16 @@ app.get('/api/billing/plans', (req, res) => {
 // ---------- Cuenta gratis (fundador / cortesías) ----------
 // Solo con la llave del dueño (TRIAL_TEST_KEY, vive en Railway). Otorga el plan
 // "free": límites del Total, sin MercadoPago, sin vencimiento.
+// Reactivación de plan (fix auditoría #1): los posteos pausados por trial
+// vencido vuelven a 'scheduled' — "reactivá tu plan y siguen solos ✨" — y
+// se resetea el aviso, por si el usuario vuelve a vencer alguna vez.
+function reactivatePausedPosts(uid) {
+  try {
+    db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE user_id=? AND status='paused'`).run(uid);
+    db.prepare(`UPDATE users SET trial_pause_notified=0 WHERE id=?`).run(uid);
+  } catch (e) { console.error('[posta] reactivatePausedPosts:', e.message); }
+}
+
 app.all('/api/admin/grant-free', (req, res) => {
   const k = process.env.TRIAL_TEST_KEY || '';
   const given = String((req.query && req.query.test_key) || (req.body && req.body.test_key) || '');
@@ -4403,6 +4814,7 @@ app.all('/api/admin/grant-free', (req, res) => {
   if (!u) return res.status(404).json({ error: 'Ese email no tiene cuenta en Posta' });
   db.prepare(`UPDATE users SET plan='free', plan_status='active', email_verified=1 WHERE id=?`).run(u.id);
   db.prepare('DELETE FROM email_tokens WHERE user_id = ?').run(u.id);
+  reactivatePausedPosts(u.id);
   console.log(`[posta] cuenta gratis otorgada a ${email}`);
   res.json({ ok: true, email });
 });
@@ -4480,6 +4892,7 @@ app.post('/api/billing/webhook', async (req, res) => {
     if (sub.status === 'authorized') {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
+      reactivatePausedPosts(Number(userId));
       track(Number(userId), 'subscribed', planId);
       evTrack(Number(userId), 'payment_ok', { plan: planId });
       console.log(`[posta] ✅ Plan ${planId} activado para el usuario ${userId} (MP ${mpId})`);
@@ -5029,6 +5442,7 @@ app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
           taste: tasteProfile(uid),
           tipo: TIPOS_VALIDOS.includes(old.tipo) ? old.tipo : '',
           performance: performanceBrief(db, uid),
+          captionExtras: captionExtrasFor(uid),
         }, apiKey);
         caption = (out && out.caption) || ''; hashtags = (out && out.hashtags) || '';
       } catch (e) { console.error('[recycle] generate:', e.message); }
@@ -5252,13 +5666,26 @@ function learningsLineOf(learnings) {
 // expandido listo para gpt-image-1. REGLA DURA: jamás inventar datos del negocio
 // (precios, direcciones, promos, teléfonos) en el texto de la imagen: solo el
 // headline provisto, tal cual, o ningún texto si viene vacío.
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules }, apiKey) {
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock }, apiKey) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
   // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
   // precio" cambian lo que la imagen puede mostrar/decir.
-  const styleBrief = (Array.isArray(styleRules) && styleRules.length)
-    ? `\nReglas de estilo del cliente (respetalas en la estética y en cualquier texto de la imagen):\n${styleRules.map(r => `- ${r}`).join('\n')}`
+  // Niveles que se sienten (level-boosts, N3+): tasteBlock reemplaza la formulación
+  // suave por el bloque OBLIGATORIO de gusto + NUNCA:. Sin tasteBlock, byte-idéntico.
+  const styleBrief = tasteBlock
+    ? `\n${tasteBlock}\n(Estas reglas también valen para la estética y cualquier texto de la imagen: son OBLIGATORIAS.)`
+    : (Array.isArray(styleRules) && styleRules.length)
+      ? `\nReglas de estilo del cliente (respetalas en la estética y en cualquier texto de la imagen):\n${styleRules.map(r => `- ${r}`).join('\n')}`
+      : '';
+  // ===== Style Lock visual — el feed del cliente ya tiene una estética definida:
+  // las imágenes generadas deben parecer del MISMO feed (bloque delimitado).
+  // Pesa FUERTE: el bloque viaja PRIMERO en el mensaje al director de arte (los
+  // modelos ponderan el inicio) y el system le ordena abrir el prompt generado
+  // con él + cerrarlo con la línea de supremacía. Sin perfil → '' y el mensaje
+  // queda byte-idéntico al baseline. =====
+  const visualBrief = (visualStyle && String(visualStyle).trim())
+    ? `LÍNEA VISUAL OBLIGATORIA — el cliente ya tiene un Instagram con una estética definida y TUS imágenes deben parecer del MISMO feed:\n${String(visualStyle).trim()}`
     : '';
   const fam = CONCEPT_FAMILIES[tipo] || 'contenido visual atractivo de alto nivel';
   const textRule = headline
@@ -5288,11 +5715,14 @@ El prompt DEBE exigir:
 - Si el brief trae un ángulo estratégico, la escena tiene que EXPRESARLO visualmente (no describirlo con texto).
 - IDENTIDAD PROPIA (draft 76, revisión 2026-09-29): la estética es del RUBRO del cliente con SU paleta — NUNCA imites el estilo visual de marcas famosas (nada de estética "Netflix"/streaming, Spotify, McDonald's, Apple...). Prohibido el fondo negro-rojo cinematográfico genérico y cualquier look que parezca otra marca.
 - Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
+- ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
+- PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
+- BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible en la imagen — el ÚNICO texto permitido es el titular intencional, renderizado perfecto e íntegro; marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
 - Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
 - Si la escena incluye pantallas, carteles, vidrieras, interfaces o celulares (draft 75): TODO texto visible tiene que ser LEGIBLE y tener SENTIDO — palabras reales del negocio, nunca lorem ipsum, palabras garbled, truncadas ni texto inventado.
 REGLA DURA: JAMÁS inventes datos del negocio (precios, direcciones, promos, teléfonos, nombres de producto que no se provean). Solo el titular provisto, tal cual.` },
         { role: 'user', content:
-`Negocio: ${businessName || 'sin nombre'}${category ? ` (${category})` : ''}
+`${visualBrief ? `${visualBrief}\n` : ''}Negocio: ${businessName || 'sin nombre'}${category ? ` (${category})` : ''}
 Familia visual: ${fam}
 ${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
 ${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
@@ -5385,6 +5815,53 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
     return null; // QA silencioso: no bloquea la entrega de la imagen
   }
 }
+// ---------- Chequeo automático de marca (Style Lock) ----------
+// Visión post-generación con gpt-4o (el usuario lo pidió explícito, no mini):
+// verifica paleta integrada, logo idéntico y línea visual. Nunca lanza:
+// devuelve null ante cualquier falla (red, API, JSON ilegible) y el flujo
+// acepta la imagen en vez de bloquear.
+async function qaBrandB64(b64, { paletteHex, logoPresent, visualBlock }, apiKey) {
+  try {
+    const hexes = Array.isArray(paletteHex) ? paletteHex : [];
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        temperature: 0.2,
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content:
+`Sos el guardián de marca. Mirás la imagen generada para el Instagram de un negocio y verificás:
+1) paleta_ok: ¿aparecen los colores de la marca INTEGRADOS en la escena? Colores: ${hexes.join(', ') || 'no definidos'}.
+2) logo_ok: ${logoPresent ? '¿aparece el logo de marca IDÉNTICO al de referencia, sin rediseños ni deformaciones?' : 'sin logo definido → true'}.
+3) linea_ok: ¿respeta la línea visual del cliente? ${visualBlock ? visualBlock : 'sin perfil definido → true'}.
+Respondé SOLO JSON: {paleta_ok, logo_ok, linea_ok, detalle}.` },
+          { role: 'user', content: [
+            { type: 'text', text: 'Verificá esta imagen contra la marca del cliente.' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
+          ] },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'brand-check', model: 'gpt-4o', json: j });
+    const raw = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+    const parsed = parseLooseJson(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      paleta_ok: parsed.paleta_ok !== false,
+      logo_ok: parsed.logo_ok !== false,
+      linea_ok: parsed.linea_ok !== false,
+      detalle: String(parsed.detalle || '').slice(0, 140),
+    };
+  } catch (e) {
+    return null; // el brand check nunca bloquea: ante falla se acepta la imagen
+  }
+}
 // ---------- QA visual extendido (tanda D, casos 83-91) ----------
 // Reglas duras del director/QA que aplican a toda pieza antes de mostrarse:
 // - resolución mínima para feed: si la imagen no la cumple, se avisa en 1
@@ -5433,12 +5910,12 @@ function qaDedupe7d(uid, headline) {
 }
 // Llama a gpt-image-1 con refs (edits) o sin refs (generations). Devuelve el b64.
 // Lanza Error con el mensaje de OpenAI recortado si falla.
-async function genConceptImage(apiKey, prompt, absRefs) {
+async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
   let r;
   if (absRefs.length) {
     const form = new FormData();
     form.append('model', 'gpt-image-1');
-    form.append('prompt', prompt + ' IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.');
+    form.append('prompt', prompt + ' ' + (refNote || 'IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.'));
     for (const p of absRefs) {
       const buf = fs.readFileSync(p);
       const ext = path.extname(p).toLowerCase();
@@ -5487,7 +5964,10 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
     if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
     let styleRules = [];
     try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
-    const prompt = await expandArtBrief({
+    // Style Lock visual: línea estética del feed del cliente (si existe).
+    let visualStyle = '';
+    try { const vp = getVisualStyle(db, uid); visualStyle = visualStyleBlock(vp); } catch (e) {}
+    const prompt = await expandArtBrief(levelBoosted(uid, 'image', {
       headline: String(headline || '').trim(),
       tipo: String(tipo || ''),
       angle: ideaObj.porque || ideaObj.angulo || '',
@@ -5498,7 +5978,8 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
       dnaBits: dnaBitsLine(readDna(uid)),
       learningsLine: learningsLineOf(getContentLearnings(uid)),
       styleRules,
-    }, apiKey);
+      visualStyle,
+    }), apiKey);
     res.json({ prompt });
   } catch (e) {
     console.error('[image-brief]', e.message);
@@ -5527,6 +6008,17 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
   // Track D: style_rules también pesan en la estética (bloque delimitado en expandArtBrief).
   let styleRules = [];
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
+  // Style Lock visual: perfil estético del feed del cliente (si ya se analizó).
+  let visualStyle = '', visualProfile = null;
+  try { visualProfile = getVisualStyle(db, uid); visualStyle = visualStyleBlock(visualProfile); } catch (e) {}
+  // Fallback automático: sin perfil y con IG conectado → analizar en background
+  // (sin await, no bloquea la generación actual).
+  if (!visualStyle) {
+    try {
+      const { getCreds } = require('./insights');
+      if (getCreds(db, uid)) analyzeVisualStyle(db, uid).catch(() => {});
+    } catch (e) {}
+  }
   const briefBase = {
     headline: cleanHeadline,
     tipo: String(tipo || ''),
@@ -5538,20 +6030,67 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
     dnaBits: dnaBitsLine(dna),
     learningsLine: learningsLineOf(getContentLearnings(uid)),
     styleRules,
+    visualStyle,
   };
+  // Niveles que se sienten (level-boosts): el nivel del usuario cambia REALMENTE
+  // el payload que recibe el modelo. N1 = briefBase idéntico (baseline).
+  const brief = levelBoosted(uid, 'image', briefBase);
   let prompt;
   try {
-    prompt = await expandArtBrief(briefBase, key);
+    prompt = await expandArtBrief(brief, key);
   } catch (e) {
     console.error('[concept-shot] brief:', e.message);
     throw new Error('No se pudo expandir el brief: ' + e.message);
   }
-  const absRefs = (refs || []).slice(0, 2)
+  // N4+: el Style Lock visual se verifica en el prompt de imagen (si la
+  // generación lo ignora, el brand-check post-generación entra en retry).
+  if (brief.styleLockVerify) prompt = `${prompt}\n\n${brief.styleLockVerify}`;
+  let absRefs = (refs || []).slice(0, 2)
     .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
     .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+  const userRefCount = absRefs.length;
+  // Style Lock: logo de marca del cliente — se sube UNA vez (asset kind='logo') y
+  // va SIEMPRE como primera referencia: la marca sale idéntica en todos los posteos.
+  let refNote;
+  let logoPresent = false;
+  try {
+    const logoRow = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'logo' ORDER BY id ASC LIMIT 1`).get(uid);
+    const lfp = logoRow && String(logoRow.file_path || '').trim();
+    if (lfp) {
+      const lp = path.join(MEDIA_DIR, path.basename(lfp));
+      if (fs.existsSync(lp) && fs.statSync(lp).isFile()) {
+        absRefs = [lp, ...absRefs].slice(0, 3); // el logo va PRIMERO, máx 3 refs totales
+        logoPresent = true;
+      }
+    }
+  } catch (e) {}
+  // Boost N2 (level-boosts): si el llamador no pasó refs explícitas, las fotos
+  // REALES del cliente tienen prioridad como referencia (no banco genérico).
+  // El logo de marca sigue primero (Style Lock); las fotos van después.
+  if (!userRefCount && brief.photoRefs && brief.photoRefs.length && absRefs.length < 3) {
+    const fill = brief.photoRefs
+      .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
+      .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+    if (fill.length) {
+      absRefs = [...absRefs, ...fill].slice(0, 3);
+      if (!refNote) refNote = 'IMPORTANT: the reference photos are the client\'s REAL photos — keep the same products, people and places recognizable (same look, same photographic style), in a new scene. Never a generic stock look.';
+    }
+  }
+  if (logoPresent) {
+    refNote = 'IMPORTANT: the FIRST reference image is the client\'s brand logo — it must appear IDENTICAL (same design, same colors, same art style), as the protagonist or clearly visible, in a new scene. Do NOT redesign or reinterpret it.';
+  } else if (visualProfile && visualProfile.subject_always_present && Array.isArray(visualProfile.ref_paths) && visualProfile.ref_paths.length && absRefs.length < 3) {
+    // Style Lock visual: si un sujeto/personaje aparece en todos los posteos del
+    // feed, sumar refs del feed (hasta completar 3 refs totales) para que el
+    // generador lo mantenga reconocible en la nueva escena.
+    const feedRefs = visualProfile.ref_paths.filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+    if (feedRefs.length) {
+      absRefs = [...absRefs, ...feedRefs].slice(0, 3);
+      refNote = 'IMPORTANT: keep the SAME recurring subject/character from the reference photos (it appears in every post of this client), recognizable and consistent, in a new scene.';
+    }
+  }
   let b64;
   try {
-    b64 = await genConceptImage(key, prompt, absRefs);
+    b64 = await genConceptImage(key, prompt, absRefs, refNote, uid);
   } catch (e) {
     console.error('[concept-shot] openai:', e.message);
     throw new Error('OpenAI no pudo generar la imagen: ' + e.message);
@@ -5572,7 +6111,7 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
     if (!qa.texto_ok && cleanHeadline) {
       // El texto salió mal → regenerar SIN texto en la imagen.
       try {
-        retryPrompt = await expandArtBrief({ ...briefBase, headline: '' }, key);
+        retryPrompt = await expandArtBrief({ ...brief, headline: '' }, key);
       } catch (e) { retryPrompt = null; }
     } else if (!qa.headline_complete && cleanHeadline) {
       // El titular se ve cortado a mitad de oración → reintentar CON el titular
@@ -5586,12 +6125,38 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, no famous-brand lookalike (never a Netflix/streaming-style red-on-black cinematic look — the design must have its OWN visual identity for this business category), and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
     }
     if (retryPrompt) {
+      // N4+: el reintento también lleva la verificación de style lock.
+      if (brief.styleLockVerify && !String(retryPrompt).includes('STYLE LOCK CHECK')) retryPrompt = `${retryPrompt}\n\n${brief.styleLockVerify}`;
       try {
-        b64 = await genConceptImage(key, retryPrompt, absRefs); // el reintento no pasa por QA
+        b64 = await genConceptImage(key, retryPrompt, absRefs, refNote, uid); // el reintento no pasa por QA
         console.log('[concept-shot] reintento QA generado');
       } catch (e) {
         console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
       }
+    }
+  }
+  // Chequeo automático de marca (Style Lock): gpt-4o verifica paleta, logo y
+  // línea visual. Si algún flag es false → regenerar pidiendo explícitamente lo
+  // que falló (máx 2 reintentos). Si el chequeo falla por red/API → se acepta
+  // la imagen (nunca bloquea). refNote viaja en las regeneraciones igual que el QA.
+  for (let bcTry = 0; bcTry < 2; bcTry++) {
+    let bc = null;
+    try {
+      bc = await qaBrandB64(b64, { paletteHex: hexes, logoPresent, visualBlock: visualStyle }, key);
+    } catch (e) { console.error('[brand-check] error:', e.message); }
+    if (!bc) break; // fallo de red/API o JSON ilegible: se acepta la imagen, no bloquea
+    console.log('[brand-check]', JSON.stringify(bc));
+    if (bc.paleta_ok && bc.logo_ok && bc.linea_ok) break;
+    const fixes = [];
+    if (!bc.paleta_ok) fixes.push(`use EXACTLY these brand colors (${hexes.join(', ') || 'the client palette'}) INTEGRATED into the scene (props, wardrobe, packaging, environment details) — never as a flat background`);
+    if (!bc.logo_ok) fixes.push('the client\'s brand logo (FIRST reference image) must appear IDENTICAL — same design, same colors, same art style, no deformations, no redesign, no reinterpretation');
+    if (!bc.linea_ok) fixes.push(`respect the client's visual line exactly${visualStyle ? ': ' + String(visualStyle).slice(0, 200) : ''}`);
+    try {
+      b64 = await genConceptImage(key, prompt + `\nIMPORTANT FIX (brand check failed: ${bc.detalle || 'brand mismatch'}): ${fixes.join(' ')}. Regenerate fixing exactly that, keeping everything else the same.`, absRefs, refNote, uid);
+      console.log(`[brand-check] regeneración ${bcTry + 1} generada`);
+    } catch (e) {
+      console.error('[brand-check] regeneración falló, devuelvo la última imagen:', e.message);
+      break;
     }
   }
   // QA visual extendido (tanda D): resolución mínima, aspect ratio = contrato y
@@ -5599,16 +6164,16 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
   // si la regeneración falla, se entrega la última imagen (no se pierde el trabajo).
   if (!qaResolutionOk(b64)) {
     console.log('[concept-shot] resolución bajo el mínimo: aviso en 1 línea y ofrezco alternativa (regenerar)');
-    try { b64 = await genConceptImage(key, prompt, absRefs); } catch (e) { console.error('[concept-shot] regen resolución:', e.message); }
+    try { b64 = await genConceptImage(key, prompt, absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen resolución:', e.message); }
   }
   if (!qaAspectOk(b64, QA_ASPECT_45)) {
     console.log('[concept-shot] aspect ratio distinto al formato pedido (4:5): regenero');
-    try { b64 = await genConceptImage(key, prompt + '\nIMPORTANT: strict vertical 4:5 aspect ratio.', absRefs); } catch (e) { console.error('[concept-shot] regen aspecto:', e.message); }
+    try { b64 = await genConceptImage(key, prompt + '\nIMPORTANT: strict vertical 4:5 aspect ratio.', absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen aspecto:', e.message); }
   }
   const dedupe = qaDedupe7d(uid, cleanHeadline || theme);
   if (!dedupe.ok) {
     console.log(`[concept-shot] comparación visual: posible duplicado de los últimos 7 días ("${dedupe.caption}"), cambio la propuesta`);
-    try { b64 = await genConceptImage(key, prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`, absRefs); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
+    try { b64 = await genConceptImage(key, prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`, absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
   }
   return `/media/${saveImageB64(b64)}`;
 }
@@ -5668,12 +6233,15 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
 
   const ip = demo.clientIp(req);
-  const rl = demo.checkRateLimit(ip);
-  if (!rl.allowed) {
+  // Anti-spam honesto: el intento se RESERVA al arrancar (atómico: 2 requests
+  // simultáneos no pueden pasar de 5) y se REEMBOLSA si la generación falla.
+  const rl = demo.consumeTrialAttempt(ip);
+  if (!rl.ok) {
     return res.status(429).json({ error: 'Llegaste al límite de 5 demos por día. Volvé mañana 🚀' });
   }
 
   let photoPath = null;
+  let ok = false;
   try {
     if (file) {
       const kind = demo.validImageKind(file);
@@ -5682,11 +6250,13 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
       fs.writeFileSync(photoPath, file.buffer);
     }
     const { posts } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn });
+    ok = true;
     res.json({ ok: true, posts, remaining: rl.remaining });
   } catch (e) {
     console.error('[posta] Error en demo pública:', e.message);
     res.status(500).json({ error: 'Me trabé armando tu demo 😅 Probá de nuevo en unos minutos' });
   } finally {
+    if (!ok) demo.refundTrialAttempt(ip); // falló (o archivo inválido): no se consume
     if (photoPath) {
       try { fs.unlinkSync(photoPath); } catch (_) {}
     }
@@ -5794,15 +6364,20 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
     } catch (e) { /* si falla el cache, se genera igual */ }
   }
-  // Anti-spam: 5 pruebas por día por IP (antes: 1 prueba por IP para siempre)
+  // Anti-spam honesto: 5 pruebas por día por IP. El intento se RESERVA al
+  // arrancar (atómico: 2 requests simultáneos no pueden pasar de 5) y se
+  // REEMBOLSA si la generación falla — un error nunca quita un intento.
+  let charged = false;
   if (!testMode) {
-    const rl = demo.checkRateLimit(ip);
-    if (!rl.allowed) {
+    const rl = demo.consumeTrialAttempt(ip);
+    if (!rl.ok) {
       return res.status(429).json({ error: 'Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀' });
     }
+    charged = true;
   }
 
   let photoPath = null;
+  let ok = false;
   try {
     if (file) {
       const kind = demo.validImageKind(file);
@@ -5845,13 +6420,290 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
     track(null, 'prueba_done', igKey);
+    ok = true;
     res.json(out);
   } catch (e) {
     console.error('[posta] Error en prueba completa:', e.message);
     res.status(500).json({ error: 'No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.' });
   } finally {
+    if (charged && !ok) demo.refundTrialAttempt(ip); // falló: no se consume
     if (photoPath) {
       try { fs.unlinkSync(photoPath); } catch (_) {}
+    }
+  }
+});
+
+// ---------- Prueba en 1 campo: prefill por @ de Instagram ----------
+// Con solo el @ completamos nombre + rubro (+ colores y foto si se puede).
+// Rate limit liviano propio: 30 por hora por IP (NO el de 5/día, que es para generar).
+try { db.exec('CREATE TABLE IF NOT EXISTS trial_prefill_usage (ip TEXT, hour TEXT, count INTEGER DEFAULT 0, PRIMARY KEY (ip, hour))'); } catch (e) {}
+function trialPrefillAllowed(ip) {
+  const hour = new Date().toISOString().slice(0, 13); // "2026-09-30T20"
+  try {
+    if (Math.random() < 0.05) db.exec(`DELETE FROM trial_prefill_usage WHERE hour < strftime('%Y-%m-%dT%H', 'now', '-48 hours')`);
+    const row = db.prepare('SELECT count FROM trial_prefill_usage WHERE ip = ? AND hour = ?').get(ip, hour);
+    if (row && row.count >= 30) return { ok: false, remaining: 0 };
+    db.prepare('INSERT INTO trial_prefill_usage (ip, hour, count) VALUES (?, ?, 1) ON CONFLICT(ip, hour) DO UPDATE SET count = count + 1').run(ip, hour);
+    return { ok: true, remaining: Math.max(0, 30 - (row ? row.count + 1 : 1)) };
+  } catch (e) { return { ok: true, remaining: 30 }; }
+}
+app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  if (!trialPrefillAllowed(ip).ok) return res.status(429).json({ ok: false, error: 'Demasiados intentos, probá en un rato' });
+  // Misma sanitización del handle que en /api/trial/generate
+  const ig = String((req.body || {}).ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  if (!ig) return res.json({ ok: false, error: 'Pasame tu @ de Instagram' });
+  let html = null;
+  try { html = await demo.fetchIgEmbedHtml(ig); } catch (e) { html = null; }
+  if (!html) return res.json({ ok: false, error: 'No encontramos ese Instagram (puede ser privado o no existir)' });
+  const bio = demo.extractIgBiography(html);
+  // Perfil real (best-effort): foto + nombre. Si falla, igual respondemos
+  // con lo que sacamos de la bio.
+  let prof = null;
+  try { prof = await demo.fetchIgProfile(ig); } catch (e) { prof = null; }
+  const name = (prof && prof.name) || '';
+  const category = demo.categoryFromText((bio ? bio + ' ' : '') + name);
+  res.json({
+    ok: true,
+    ig,
+    name,
+    category,
+    photo: (prof && prof.pic) || null, // dataURL de la foto de perfil
+  });
+});
+
+// ---------- Prueba en 1 campo: generación con streaming (SSE) ----------
+// Acepta el MISMO multipart que /api/trial/generate y emite:
+//   event: status → {step, text} (tracker en primera persona)
+//   event: post   → {index, day, date, post} (uno por posteo, en orden; el
+//                   videoIdx sale primero como imagen y de nuevo como video
+//                   cuando está listo)
+//   event: done   → {out} (payload IDÉNTICO al de /api/trial/generate)
+//   event: error  → {error}
+// Mismas reglas que /api/trial/generate: anti-spam 5/día por IP, cache 72h
+// por @ (hit → done directo) y TRIAL_TEST_KEY. /api/trial/generate queda
+// intacto como fallback.
+app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  if (res.flushHeaders) res.flushHeaders();
+  let closed = false;
+  // OJO: req 'close' se dispara cuando el body del POST termina de llegar
+  // (al instante); el que indica desconexión del cliente es res 'close'.
+  res.on('close', () => { closed = true; });
+  const send = (event, data) => {
+    if (closed) return;
+    try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch (e) {}
+  };
+  const finish = () => { if (!closed) { try { res.end(); } catch (e) {} } };
+  const fail = (msg) => { send('error', { error: msg }); finish(); };
+
+  let fields, file;
+  try {
+    ({ fields, file } = demo.parseMultipart(req, req.body));
+  } catch (e) {
+    return fail(e.message || 'Formulario inválido');
+  }
+  // Mismo parseo y sanitización que /api/trial/generate
+  const business = String(fields.business || '').trim().slice(0, 60);
+  const ig = String(fields.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  const category = String(fields.category || '').trim();
+  const country = String(fields.country || '').trim().toUpperCase();
+  const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
+  const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
+  const goal_key = ['vender', 'seguidores', 'lanzamiento', 'fidelizar'].includes(String(fields.goal_key || '').trim())
+    ? String(fields.goal_key).trim() : '';
+  const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
+  const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
+  const richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
+  const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
+  const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
+  let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
+  let btn = hexOk(fields.btn) ? String(fields.btn).trim().toUpperCase() : pal[1];
+  let colorSource = 'rubro';
+  let igPic = null, igName = '';
+  if (ig) {
+    try {
+      const prof = await demo.fetchIgProfile(ig);
+      if (prof) {
+        igPic = prof.pic; igName = prof.name;
+        if (!hexOk(fields.accent) && prof.colors && prof.colors[0]) {
+          accent = prof.colors[0];
+          if (prof.colors[1]) btn = prof.colors[1];
+          colorSource = 'instagram';
+        }
+      }
+    } catch (e) { /* fallback silencioso */ }
+  }
+  if (!business) return fail('Contanos el nombre de tu negocio');
+  if (!demo.CATEGORIES.includes(category)) return fail('Rubro inválido');
+  if (!demo.COUNTRIES.includes(country)) return fail('País inválido');
+  if (!['vos', 'tu'].includes(tone)) return fail('Tono inválido');
+
+  const ip = demo.clientIp(req);
+  const testMode = trialTestMode(req);
+  const igKey = ig.toLowerCase();
+  // Cache por @ 72h: hit → done directo, sin regenerar
+  if (!testMode && igKey) {
+    try {
+      const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
+      if (hit && Date.now() - hit.created_at < 72 * 3600 * 1000) {
+        const out = JSON.parse(hit.payload);
+        out.cached = true;
+        out.spots_left = spotsLeft();
+        out.week = buildTrialWeek((out.posts || []).length);
+        track(null, 'prueba_done', igKey + '|cached');
+        send('done', { out });
+        return finish();
+      }
+      if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
+    } catch (e) { /* si falla el cache, se genera igual */ }
+  }
+  // Anti-spam honesto: igual que /api/trial/generate (reserva atómica +
+  // reembolso si falla). Si el cliente corta el stream antes de recibir
+  // 'done', tampoco se consume (doneSent=false → reembolso en finally).
+  let charged = false;
+  if (!testMode) {
+    const rl = demo.consumeTrialAttempt(ip);
+    if (!rl.ok) {
+      return fail('Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀');
+    }
+    charged = true;
+  }
+
+  let photoPath = null;
+  let runDir = null;
+  let doneSent = false;
+  try {
+    if (file) {
+      const kind = demo.validImageKind(file);
+      if (!kind) return fail('La imagen tiene que ser JPG, PNG o WebP');
+      photoPath = path.join(os.tmpdir(), `posta-trial-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
+      fs.writeFileSync(photoPath, file.buffer);
+    }
+    // 1) Ideas (van en el payload final; el tracker muestra el progreso)
+    send('status', { step: 'empezando', text: 'Dale, estoy armando tu prueba…' });
+    send('status', { step: 'ideas', text: `Estoy pensando ideas para ${business}…` });
+    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors }, null);
+
+    // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
+    // el payload final sea idéntico al de /api/trial/generate)
+    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5 });
+    const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
+    const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
+    const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
+    const withPhotos = specPosts.map((p) => (
+      (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
+    ));
+    // Captions gateados igual que en demo.generateDemo (mismo armado).
+    const made = topics.map((t, i) => {
+      const r = demo.resolveTrialCaption(topics, cat, {
+        business, tone, country, idx: i, goalLine,
+      });
+      return {
+        caption: r.caption,
+        hashtags: r.hashtags,
+        headline: specPosts[i].headline,
+      };
+    });
+    const posts = new Array(n).fill(null);
+    // 3) Render con streaming: cada PNG que aparece se emite como post imagen
+    send('status', { step: 'diseno', text: 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
+    const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn }, async (i, buf) => {
+      posts[i] = {
+        type: 'image',
+        image: 'data:image/png;base64,' + buf.toString('base64'),
+        caption: made[i].caption,
+        hashtags: made[i].hashtags,
+        headline: made[i].headline,
+      };
+      send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
+    });
+    runDir = streamed.runDir;
+    const bufs = streamed.bufs;
+
+    // 4) El video: igual que generateDemo (renderVideoB64 reintenta solo)
+    send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' });
+    const vpath = path.join(runDir, `post-${videoIdx}.png`);
+    try { fs.writeFileSync(vpath, bufs[videoIdx]); } catch (e) {}
+    const videoB64 = await demo.renderVideoB64(vpath, runDir, videoIdx);
+    if (videoB64) {
+      posts[videoIdx] = {
+        type: 'video',
+        video: 'data:video/mp4;base64,' + videoB64,
+        caption: made[videoIdx].caption,
+        hashtags: made[videoIdx].hashtags,
+        headline: made[videoIdx].headline,
+      };
+    } else {
+      posts[videoIdx] = {
+        type: 'image',
+        image: 'data:image/png;base64,' + bufs[videoIdx].toString('base64'),
+        caption: made[videoIdx].caption,
+        hashtags: made[videoIdx].hashtags,
+        headline: made[videoIdx].headline,
+      };
+    }
+    send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, post: posts[videoIdx] });
+
+    const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
+    if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
+
+    let screenshot = null;
+    if (photoPath) {
+      const ext = photoPath.split('.').pop().toLowerCase();
+      screenshot = `data:${TRIAL_IMG_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64');
+    }
+    // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
+    const out = {
+      ok: true,
+      business, ig, category,
+      accent, btn, color_source: colorSource,
+      ig_pic: igPic, ig_name: igName,
+      ideas: ideas.slice(0, 6),
+      posts,
+      design: {
+        posts: specPosts,
+        styles: spec.styles,
+        photos: spec.photos,
+        videoIdx, count: n,
+      },
+      week, // día/fecha por posteo (el mismo que viaja en los eventos post)
+      screenshot,
+      spots_left: spotsLeft(),
+      video_ok: videoOk,
+    };
+    // Cache 72h por @, igual que /api/trial/generate
+    if (!testMode && igKey) {
+      try {
+        const payload = JSON.stringify(out);
+        if (payload.length < 12 * 1024 * 1024) {
+          db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+            ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`).run(igKey, payload, Date.now());
+        }
+      } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
+    }
+    track(null, 'prueba_done', igKey);
+    if (!closed) { send('done', { out }); doneSent = true; }
+    finish();
+  } catch (e) {
+    console.error('[posta] Error en prueba streaming:', e.message);
+    fail('No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.');
+  } finally {
+    // Falló la generación o el stream se cortó a mitad (el cliente nunca
+    // recibió 'done'): el intento se reembolsa, no se consume.
+    if (charged && !doneSent) demo.refundTrialAttempt(ip);
+    if (photoPath) {
+      try { fs.unlinkSync(photoPath); } catch (_) {}
+    }
+    if (runDir) {
+      try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
     }
   }
 });
@@ -5914,7 +6766,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
     'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $39.900/mes (3 posteos/sem), Pro $79.900/mes (5/sem, el más elegido), Total $129.900/mes (menos de $1.500 por día). ' +
     'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
-    'Si dice que no, no insistas. Objeciones: "es caro" → menos de $1.500 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → 3 días gratis, sin tarjeta.';
+    'Si dice que no, no insistas. Objeciones: "es caro" → menos de $1.500 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
+    // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
+    (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
   try {
     const ai = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',

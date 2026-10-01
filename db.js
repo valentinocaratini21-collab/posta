@@ -83,9 +83,27 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_embed_url TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN preferred_palette INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN pexels_key TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Style Lock: logo de marca fijo del cliente (asset kind='logo', se sube una vez,
+// referencia en todo lo generado). Refactor 2026-09-30: antes vivía en settings
+// (mascot_path / mascot_candidate / mascot_candidate_dismissed); ahora el logo
+// confirmado es un asset y la candidata pendiente vive en logo_candidate.
+// Para DBs existentes que ya tengan las columnas viejas: DROP COLUMN (SQLite
+// ≥3.35); si falla se ignora — las columnas huérfanas no se usan.
+try { db.exec(`ALTER TABLE settings DROP COLUMN mascot_path`); } catch (e) { /* no existe / no soportado */ }
+try { db.exec(`ALTER TABLE settings DROP COLUMN mascot_candidate`); } catch (e) { /* no existe / no soportado */ }
+try { db.exec(`ALTER TABLE settings DROP COLUMN mascot_candidate_dismissed`); } catch (e) { /* no existe / no soportado */ }
+// Logo auto-extraído: candidata descargada sola de la foto de perfil del IG (style-visual.js)
+try { db.exec(`ALTER TABLE settings ADD COLUMN logo_candidate TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN logo_candidate_dismissed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'trial'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN plan_status TEXT DEFAULT 'trial'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// 🧠 Niveles de conocimiento de Posty (posty-level.js): último nivel festejado
+// y marca de agua del resumen semanal de aprendizaje.
+try { db.exec(`ALTER TABLE users ADD COLUMN posty_level INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN posty_digest_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Para detectar "reglas de estilo recién activadas" en el resumen semanal.
+try { db.exec(`ALTER TABLE style_rules ADD COLUMN created_at TEXT DEFAULT (datetime('now'))`); } catch (e) { /* ya existe */ }
 // Todo-en-uno v2: métricas, mejor horario, funnel y comentarios
 try { db.exec(`ALTER TABLE posts ADD COLUMN ig_media_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN carousel_paths TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
@@ -382,6 +400,16 @@ CREATE TABLE IF NOT EXISTS style_rules (
   active INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, rule_key)
 );
+CREATE TABLE IF NOT EXISTS ig_visual_style (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  profile_json TEXT NOT NULL DEFAULT '',
+  analyzed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS ig_caption_style (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  profile_json TEXT NOT NULL DEFAULT '',
+  analyzed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS ig_analysis (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   summary TEXT NOT NULL DEFAULT '',
@@ -490,6 +518,11 @@ try { db.exec(`ALTER TABLE users ADD COLUMN training_wheels INTEGER DEFAULT 1`);
 try { db.exec(`ALTER TABLE users ADD COLUMN posty_welcomed INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN client_name TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN media_asked_at INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Fix auditoría #2 (2026-09-30): cuántos posteos trajo la importación de la
+// semana de /prueba. NULL = el usuario no vino de /prueba con @; 0 = vino pero
+// la importación trajo 0 (cache vencido / payload roto → el welcome dice la
+// verdad y ofrece rearmarla en 1 tap); >0 = posteos importados (continuidad).
+try { db.exec(`ALTER TABLE users ADD COLUMN trial_import_n INTEGER`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN cancel_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN utm_source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN utm_campaign TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
@@ -533,6 +566,9 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN approval TEXT DEFAULT 'pending'`); }
 try { db.exec(`ALTER TABLE posts ADD COLUMN approved_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // "Posty festeja tus wins" (2026-09-30): 1 = este posteo ya fue festejado (no repetir).
 try { db.exec(`ALTER TABLE posts ADD COLUMN celebrated INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// 🎉 Festejo de wins EN EL CHAT (2026-09-30): 1 = este posteo ya recibió su
+// festejo de win en el chat (celebrateWinsChat en scheduler.js). No repetir jamás.
+try { db.exec(`ALTER TABLE posts ADD COLUMN win_celebrated INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // 📊 Tus números (2026-09-30): último conteo de seguidores traído de IG
 // (si la API falla, se muestra este caché en vez de un cero mentiroso).
 try { db.exec(`ALTER TABLE users ADD COLUMN ig_followers INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
@@ -542,6 +578,28 @@ try { db.exec(`ALTER TABLE users ADD COLUMN first_post_at TEXT DEFAULT ''`); } c
 // Paywall (2026-09-30): email "mañana se termina tu prueba" — 1 = ya enviado
 // (un solo intento; el cron lo setea ANTES de enviar, anti-spam).
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_expiry_email_sent INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Paywall (2026-09-30, fix auditoría #1): el scheduler pausa los posteos de
+// quien no tiene plan activo ni trial vigente y avisa UNA vez en el chat.
+// trial_pause_notified = 1 → ya avisado (se setea ANTES de insertar el mensaje,
+// anti-spam ante doble corrida); se resetea a 0 cuando reactiva su plan, por
+// si vuelve a vencer alguna vez.
+try { db.exec(`ALTER TABLE users ADD COLUMN trial_pause_notified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Magia de primera apertura (2026-09-30):
+// - source: origen del posteo ('trial' = importado de /prueba por importTrialWeek).
+//   Es el marcador confiable de "semana importada de la prueba" (antes no
+//   había columna de origen; importTrialWeek solo dejaba el prefijo
+//   image_path '/media/trial-').
+// - client_photo: 1 = el diseño de este posteo usa una FOTO REAL del cliente
+//   (subida en /prueba o por rediseño), detectado en el import desde
+//   out.design.posts[i].photo ({userPhoto:true} o dataURL); 0 = foto de stock
+//   o generado. Sirve la heurística de first_pick.
+try { db.exec(`ALTER TABLE posts ADD COLUMN source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN client_photo INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Backfill: filas importadas antes de esta migración (source='') se marcan
+// 'trial' por el prefijo de image_path que solo escribe importTrialWeek.
+// client_photo queda en 0 para esas filas (no se puede determinar a posteriori
+// con confianza: el trial_cache expira a las 72h y no está linkeado al user).
+try { db.exec(`UPDATE posts SET source = 'trial' WHERE (source IS NULL OR source = '') AND image_path LIKE '/media/trial-%'`); } catch (e) { /* columna aún no existe */ }
 // Magic link (login sin contraseña, 2026-09-30): tokens de un solo uso,
 // 15 minutos de vida. payload = JSON con trial_ig, ref, utm y trial_profile.
 db.exec(`CREATE TABLE IF NOT EXISTS magic_tokens (

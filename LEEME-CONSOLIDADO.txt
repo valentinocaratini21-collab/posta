@@ -1,0 +1,50 @@
+POSTA — ZIP CONSOLIDADO NOCHE 30/09/2026
+==========================================
+UN SOLO ZIP para subir esta noche. Reemplaza a TODOS estos (NO subirlos):
+  - posta-niveles.zip
+  - posta-style-lock.zip
+  - posta-activacion.zip
+  - posta-primera-magia.zip
+  - posta-festejos.zip
+  - posta-logo-unificado.zip
+
+Contiene todo lo de hoy en un solo paquete:
+  1. Style Lock visual (línea del IG de cada cliente)
+  2. Logo de tu marca auto-extraído (1 tap en el chat)
+  3. Chequeo automático de marca + "No me gusta" con motivo
+  4. Niveles de Posty por conocimiento (5 niveles)
+  5. Magia de primera apertura
+  6. Festejos + coreografía de malabares 🤹
+  7. Prueba en 1 campo (/prueba: solo @instagram, sneak peeks, mockup feed)
+  8. 5 quick wins de auditoría (trial no publica vencido, welcome honesto,
+     links en chat, delta honesto, 50 lugares)
+  9. Posteos mejores (Caption Style Lock, anti-genérico, brief reforzado)
+  10. Referidos en pico de dopamina, anti-spam honesto, empty states,
+      app.js -29% (chunks lazy-load)
+  11. Captions de /prueba reescritos (150 plantillas, gate de calidad)
+  12. Primer posteo garantizado (nudge + email día 2 + botón 1 tap)
+  13. Niveles que se sienten (cada nivel cambia el payload real)
+
+ARCHIVOS → DESTINO
+------------------
+Raíz del repo:
+  server.js, db.js, scheduler.js, stats.js, generator.js, email.js, wins.js
+  posty-level.js (nuevo), style-visual.js (nuevo), activation-nudge.js (nuevo),
+  demo.js, caption-style.js (nuevo), demo-captions.js (nuevo),
+  first-publish-nudge.js (nuevo), level-boosts.js (nuevo)
+Carpeta public/:
+  app.js, styles.css, index.html, prueba.html
+Carpeta public/js/ (nueva — crearla si no existe):
+  chunk-ajustes.js, chunk-admin.js, chunk-creator.js
+
+NO subir este LEEME al repo.
+
+ANTES DE SUBIR (en iPhone, GitHub web):
+  1. Verificar que cada archivo se llame EXACTO (iOS renombra duplicados: "server 2.js").
+  2. Si GitHub muestra "server 2.js" o similar: borrar el duplicado y renombrar.
+  3. Subir los 23 archivos a sus carpetas (incluye crear public/js/).
+
+DESPUÉS DE SUBIR:
+  - Esperar ~3 minutos (Railway).
+  - Verificar en producción: ver código fuente → app.js?v=20260930-post
+  - Probar: abrir el chat (welcome), Ajustes (niveles, logo), publicar un borrador (festejo).

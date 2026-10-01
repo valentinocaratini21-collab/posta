@@ -49,6 +49,19 @@ function appBaseUrl() {
   return (process.env.APP_URL || process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
 }
 
+// Línea discreta de referido para los momentos de dopamina (testeable).
+// Devuelve '' si el usuario ya tiene >=2 referidos activos (no hay nada que ofrecer)
+// o no tiene código. Activo = referred_by con plan_status 'active' (igual que referralStats).
+function referralWinLine(db, userId, referralCode, baseUrl) {
+  if (!referralCode) return '';
+  try {
+    const rr = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND plan_status = 'active'`).get(userId);
+    if (rr && rr.n >= 2) return '';
+  } catch (e) { return ''; }
+  const base = String(baseUrl || '').replace(/\/$/, '');
+  return `\n¿Conocés a alguien con negocio? Los dos ganan 50% off 👇\n${base}/?ref=${referralCode}`;
+}
+
 async function celebrateWins(db) {
   const { getCreds, fetchMediaInsights } = require('./insights');
   const { sendPush } = require('./push');
@@ -60,6 +73,7 @@ async function celebrateWins(db) {
   try {
     cands = db.prepare(`
       SELECT p.*, u.email AS uemail, u.name AS uname,
+             u.referral_code AS referral_code,
              COALESCE(u.email_opt_out, 0) AS email_opt_out,
              COALESCE(u.last_win_at, '') AS last_win_at
       FROM posts p JOIN users u ON u.id = p.user_id
@@ -111,7 +125,9 @@ async function celebrateWins(db) {
       }
       const title = '🔥 Tu posteo la está rompiendo';
       // El festejo vive en el chat: Posty se lo dice ahí con su voz.
-      const chatText = `🔥 ¡Tu posteo la está rompiendo! ${body} Seguí así que vamos bien 👌`;
+      // Pico de dopamina: una línea discreta de referido si le falta (<2 activos).
+      const refLine = referralWinLine(db, p.user_id, p.referral_code, base);
+      const chatText = `🔥 ¡Tu posteo la está rompiendo! ${body} Seguí así que vamos bien 👌${refLine}`;
       let chatOk = false;
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(p.user_id, 'assistant', chatText.slice(0, 2000));
@@ -167,4 +183,4 @@ async function celebrateWins(db) {
   return { celebrated };
 }
 
-module.exports = { celebrateWins, winDecision, scoreOf, WIN_FACTOR, WIN_MIN_REACH, WIN_MIN_ENGAGEMENT };
+module.exports = { celebrateWins, winDecision, scoreOf, referralWinLine, WIN_FACTOR, WIN_MIN_REACH, WIN_MIN_ENGAGEMENT };

@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { publishPost, publishVideo, publishStory, publishCarousel } = require('./instagram');
 const approval = require('./approval');
+const { activationNudge } = require('./activation-nudge');
+const { firstPublishNudge } = require('./first-publish-nudge');
 
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   const file = path.basename(imagePath);
@@ -19,6 +21,18 @@ function getSettings(db, userId) {
 }
 
 async function publishSinglePost(db, post) {
+  // Red de seguridad FINAL: ningún camino (endpoint, chat, scheduler, links de
+  // aprobación) puede publicar si la prueba del usuario venció. El posteo se
+  // pausa con mensaje amable en vez de publicarse gratis.
+  try {
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(post.user_id);
+    if (u && u.plan_status === 'trial' && trialExpiryEffectiveEnd(u, Date.now()) <= Date.now()) {
+      db.prepare(`UPDATE posts SET status = 'paused', error = ? WHERE id = ?`)
+        .run('Se terminó tu prueba gratis 😢 Elegí tu plan y seguimos publicando juntos.', post.id);
+      console.log(`[posta] publishSinglePost bloqueado: trial vencido (user ${post.user_id}, post ${post.id})`);
+      return { blocked: 'trial_expired' };
+    }
+  } catch (e) { /* ante la duda, seguir como antes */ }
   const settings = getSettings(db, post.user_id) || {};
   const demoMode = settings.demo_mode !== 0;
   db.prepare(`UPDATE posts SET status = 'publishing', error = '' WHERE id = ?`).run(post.id);
@@ -91,7 +105,15 @@ async function publishSinglePost(db, post) {
         if (u && u.email && !u.oo) {
           const { publishedEmail } = require('./email');
           const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
-          await publishedEmail(u, post, base, result.permalink || '', isFirstPost);
+          // Referido en el pico de dopamina: bloque discreto SOLO si le falta
+          // (<2 referidos activos; activo = referred_by con plan_status 'active').
+          let referralLink = '';
+          try {
+            const rc = db.prepare('SELECT referral_code FROM users WHERE id = ?').get(post.user_id);
+            const rr = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND plan_status = 'active'`).get(post.user_id);
+            if (rc && rc.referral_code && (rr ? rr.n : 0) < 2) referralLink = `${base}/?ref=${rc.referral_code}`;
+          } catch (e) { console.error('[email ya-salió] ref:', e.message); }
+          await publishedEmail(u, post, base, result.permalink || '', isFirstPost, referralLink);
         }
       }
     } catch (e) { console.error('[email ya-salió]', e.message); }
@@ -113,6 +135,21 @@ async function publishSinglePost(db, post) {
         }
       }
     } catch (e) { console.error('[push ya-salió]', e.message); }
+    // 🎉 Fiesta al publicar en el chat: Posty festeja cada posteo que sale
+    // de VERDAD. Nunca en demo (ahí el post no está realmente en IG:
+    // festejar sería mentirle al cliente).
+    // El frontend detecta el marcador [celebrate] y dispara confetti+coreografía.
+    // La URL del permalink va en texto plano (el chat no renderiza links cliqueables).
+    // Es naturalmente idempotente: este bloque corre una sola vez, al publicar.
+    try {
+      if (!result.demo) {
+        const fiesta = isFirstPost
+          ? '¡Tu primer posteo con Posty ya está vivo! 🎉 Esto funciona de verdad 💪 [celebrate]'
+          : '¡Ya está en tu Instagram! 🎉 [celebrate]';
+        const msg = result.permalink ? `${fiesta}\n${result.permalink}` : fiesta;
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(post.user_id, 'assistant', msg);
+      }
+    } catch (e) { console.error('[chat fiesta]', e.message); }
     return { ok: true, permalink: result.permalink || '' };
   } catch (e) {
     const msg = String(e.message).slice(0, 500);
@@ -120,6 +157,34 @@ async function publishSinglePost(db, post) {
     console.error(`[posta] Post #${post.id} falló:`, e.message);
     return { ok: false, error: msg };
   }
+}
+
+// 🔴 Fix auditoría #1 (2026-09-30): el cron NO publica para quien no tiene
+// plan activo ni trial vigente. Criterio = requireTrialValid de server.js:
+// plan_status 'active' O fin efectivo del trial en el futuro.
+function schedCanPublish(db, userId) {
+  try {
+    const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(userId);
+    if (!u) return true;
+    if (u.plan_status === 'active') return true;
+    return trialExpiryEffectiveEnd(u, Date.now()) > Date.now();
+  } catch (e) { return true; } // ante la duda, no frenar el scheduler (paridad con requireTrialValid)
+}
+
+// Marca el posteo como 'paused' (status en TEXT libre, no requiere migración)
+// y avisa UNA sola vez en el chat (users.trial_pause_notified se setea ANTES
+// de insertar el mensaje, como win_celebrated en posts).
+function pausePostTrialExpired(db, post) {
+  try {
+    db.prepare(`UPDATE posts SET status='paused', error='trial vencido' WHERE id=? AND status='scheduled'`).run(post.id);
+    const u = db.prepare('SELECT trial_pause_notified FROM users WHERE id=?').get(post.user_id) || {};
+    if (!u.trial_pause_notified) {
+      db.prepare('UPDATE users SET trial_pause_notified=1 WHERE id=?').run(post.user_id);
+      const msg = 'Tus posteos se pausaron porque terminó tu prueba 🥹 — reactivá tu plan y siguen solos ✨';
+      db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(post.user_id, 'assistant', msg);
+    }
+    console.log(`[posta] Post #${post.id} pausado: trial vencido (usuario ${post.user_id})`);
+  } catch (e) { console.error('[posta] pause trial:', e.message); }
 }
 
 async function processDuePosts(db) {
@@ -138,6 +203,12 @@ async function processDuePosts(db) {
     .all(now);
 
   for (const post of due) {
+    // 🔴 Fix auditoría #1: sin plan activo ni trial vigente, el posteo se
+    // pausa en vez de publicarse (fuga de revenue).
+    if (!schedCanPublish(db, post.user_id)) {
+      pausePostTrialExpired(db, post);
+      continue;
+    }
     const ap = post.approval || 'pending';
     if (ap === 'rejected') {
       // Candado: el cliente lo rechazó → cancelado, nunca se publica.
@@ -198,6 +269,72 @@ async function processApprovalNotifications(db) {
   return { sent };
 }
 
+// 🎉 Festejo de wins EN EL CHAT (2026-09-30).
+// Reglas duras (las pide la spec, literal):
+//  - Para cada usuario con IG: posteos publicados en los últimos 7 días con
+//    métricas en post_metrics (reach > 0).
+//  - Se requieren >= 3 posteos con métricas para un promedio meaningful;
+//    si no hay datos suficientes → SILENCIO TOTAL (ningún mensaje, para nadie).
+//  - Gana si reach >= 1.4x el promedio del usuario Y reach >= 100.
+//  - Mensaje: "Tu posteo del [día] llegó a [reach] — [X]% más que tu promedio 🚀 [celebrate]".
+//  - Una vez por posteo (posts.win_celebrated); el flag se marca ANTES de
+//    insertar el mensaje (anti-spam: nunca repetir, pase lo que pase).
+//  - NUNCA se inventan números: todo sale de post_metrics. Sin datos → silencio.
+const WIN_CHAT_FACTOR = 1.4;  // reach >= 1.4x el promedio del usuario
+const WIN_CHAT_MIN_REACH = 100; // y reach >= 100
+const WIN_CHAT_MIN_POSTS = 3; // promedio meaningful: >= 3 posteos con métricas
+const DIAS_SEMANA_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const fmtMilesAR = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+async function celebrateWinsChat(db) {
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT DISTINCT p.user_id AS id
+      FROM posts p
+      JOIN settings s ON s.user_id = p.user_id
+      WHERE p.status = 'published'
+        AND datetime(p.published_at) >= datetime('now', '-7 days')
+        AND s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+    `).all().map((r) => r.id);
+  } catch (e) { console.error('[wins-chat] usuarios:', e.message); return { celebrated: 0 }; }
+  let celebrated = 0;
+  for (const uid of users) {
+    try {
+      // Baseline: últimos 7 días con reach > 0 (el flag win_celebrated NO entra
+      // en el promedio: el promedio tiene que reflejar todos los posteos).
+      const rows = db.prepare(`
+        SELECT p.id,
+               COALESCE(p.win_celebrated, 0) AS wc,
+               CAST(strftime('%w', datetime(p.published_at, '-3 hours')) AS INTEGER) AS dow,
+               pm.reach
+        FROM posts p
+        JOIN post_metrics pm ON pm.post_id = p.id
+        WHERE p.user_id = ? AND p.status = 'published'
+          AND datetime(p.published_at) >= datetime('now', '-7 days')
+          AND pm.reach > 0
+        ORDER BY p.published_at DESC
+      `).all(uid);
+      if (rows.length < WIN_CHAT_MIN_POSTS) continue; // sin datos suficientes → silencio
+      const avg = rows.reduce((a, r) => a + Number(r.reach), 0) / rows.length;
+      for (const r of rows) {
+        if (r.wc) continue; // ya festejado
+        const reach = Number(r.reach);
+        if (!(reach >= WIN_CHAT_FACTOR * avg && reach >= WIN_CHAT_MIN_REACH)) continue;
+        const pct = Math.round((reach / avg - 1) * 100);
+        const dia = DIAS_SEMANA_ES[Number(r.dow)] || '';
+        const msg = `Tu posteo del ${dia} llegó a ${fmtMilesAR(reach)} — ${pct}% más que tu promedio 🚀 [celebrate]`;
+        // Marcar ANTES de insertar (anti-spam: nunca repetir aunque algo falle).
+        db.prepare('UPDATE posts SET win_celebrated = 1 WHERE id = ?').run(r.id);
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg);
+        celebrated++;
+      }
+    } catch (e) { console.error('[wins-chat] usuario', uid, e.message); }
+  }
+  if (celebrated) console.log(`[wins-chat] festejos de chat enviados: ${celebrated}`);
+  return { celebrated };
+}
+
 function startScheduler(db) {
   // Cada minuto: publicar vencidos + avisar aprobaciones pendientes (mismo tick)
   cron.schedule('* * * * *', () => {
@@ -219,6 +356,17 @@ function startScheduler(db) {
     console.log('[posta] Recordatorio semanal por email: lunes 10:00 (Buenos Aires)');
   } catch (e) {
     console.error('[email semanal] no se pudo programar:', e.message);
+  }
+  // 🧠 Resumen semanal de conocimiento de Posty: lunes 09:00 (Buenos Aires).
+  // Cuenta lo que Posty aprendió de cada usuario en la semana y se lo cuenta
+  // en el chat. Si no hay nada nuevo: silencio total.
+  try {
+    cron.schedule('0 9 * * 1', () => {
+      postyWeeklyDigest(db).catch((e) => console.error('[posty-digest]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Resumen semanal de Posty: lunes 09:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[posty-digest] no se pudo programar:', e.message);
   }
   // Email "tu semana te está esperando" (abandono de trial): todos los días
   // 10:00 (Buenos Aires). Solo leads NO registrados con email, 24-30h después
@@ -251,6 +399,41 @@ function startScheduler(db) {
     console.log('[posta] Nudge de contenido por email: todos los días 10:30 (Buenos Aires)');
   } catch (e) {
     console.error('[nudges] no se pudo programar:', e.message);
+  }
+  // Nudge proactivo de activación día 2: todos los días 11:00 (Buenos Aires).
+  // Si a las ~48h el usuario no completó el paso de mayor impacto, Posty le
+  // manda UN mensaje en el chat. Una sola vez por usuario (activation_nudged).
+  try {
+    cron.schedule('0 11 * * *', () => {
+      activationNudge(db);
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Nudge de activación día 2: 11:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[nudge-activacion] no se pudo programar:', e.message);
+  }
+  // Nudge "¿publicamos tu primero?": todos los días 12:00 (Buenos Aires).
+  // Solo a usuarios con trial activo y 0 posteos publicados, 24h+ de creados
+  // (saltea la ventana 36-60h del nudge de activación: no dos mensajes el
+  // mismo día). Una sola vez por usuario (first_publish_nudged).
+  try {
+    cron.schedule('0 12 * * *', () => {
+      firstPublishNudge(db);
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Nudge primer posteo: 12:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[nudge-primer-posteo] no se pudo programar:', e.message);
+  }
+  // Email día 2 "publicá tu primero": todos los días 14:00 (Buenos Aires).
+  // Solo a usuarios con 0 posteos publicados, con CTA directo a publicar el
+  // primer borrador en la app. Un solo email por cuenta (nudges.kind =
+  // 'first_publish', se inserta ANTES de enviar).
+  try {
+    cron.schedule('0 14 * * *', () => {
+      sendFirstPublishEmails(db).catch((e) => console.error('[primer-posteo]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Email día 2 "publicá tu primero": 14:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[primer-posteo] no se pudo programar:', e.message);
   }
   // Conciliación de descuentos con MercadoPago: cada 12 horas
   try {
@@ -286,6 +469,19 @@ function startScheduler(db) {
     console.log('[posta] Festejo de wins: todos los días 11:00 (Buenos Aires)');
   } catch (e) {
     console.error('[wins] no se pudo programar:', e.message);
+  }
+  // 🎉 Festejo de wins en el chat: todos los días 18:00 (Buenos Aires).
+  // Si un posteo publicado en los últimos 7 días rinde >= 1.4x el promedio
+  // del usuario (reach >= 100, con al menos 3 posteos con métricas), Posty lo
+  // festeja EN EL CHAT con el marcador [celebrate]. Silencio total si no hay
+  // datos suficientes. No pisa el festejo de wins.js (11:00, push+email).
+  try {
+    cron.schedule('0 18 * * *', () => {
+      celebrateWinsChat(db).catch((e) => console.error('[wins-chat]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Festejo de wins en el chat: todos los días 18:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[wins-chat] no se pudo programar:', e.message);
   }
   // Comentarios de Instagram: 9:00 y 17:00 (Buenos Aires).
   // Baja comentarios nuevos y deja la respuesta sugerida lista en la cola.
@@ -648,6 +844,60 @@ async function sendTrialExpiryEmails(db) {
   return { sent, skipped };
 }
 
+// Email día 2 "publicá tu primero" (2026-09-30, mejora "garantizar el primer posteo").
+// Candidatos: cuenta creada hace 20-52h, con email, sin opt-out, trial o plan
+// activo (y trial EFECTIVAMENTE vigente vía schedCanPublish), con 0 posteos
+// publicados. UN solo email por cuenta: la fila nudges(kind='first_publish')
+// se inserta ANTES de enviar (idempotencia ante doble corrida del cron) y de
+// paso frena 3 días los nudges de contenido (anti-spam).
+// Se saltea a quien recibió el nudge de chat hace menos de 24h
+// (first_publish_nudged_at): no queremos el mismo "publicá tu primero" dos
+// veces en el mismo día por dos canales.
+async function sendFirstPublishEmails(db) {
+  const { emailConfigured, firstPublishNudgeEmail } = require('./email');
+  if (!emailConfigured()) {
+    console.log('[primer-posteo] sin RESEND_API_KEY: no se envía nada');
+    return { sent: 0, skipped: 0 };
+  }
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT id, email, client_name AS name, created_at
+      FROM users
+      WHERE email IS NOT NULL AND email != ''
+        AND COALESCE(email_opt_out, 0) = 0
+        AND COALESCE(plan_status, 'trial') IN ('trial', 'active')
+        AND datetime(created_at) >= datetime('now', '-52 hours')
+        AND datetime(created_at) <= datetime('now', '-20 hours')
+        AND (COALESCE(first_publish_nudged_at, '') = ''
+             OR datetime(first_publish_nudged_at) <= datetime('now', '-1 day'))
+        AND NOT EXISTS (SELECT 1 FROM nudges WHERE user_id = users.id AND kind = 'first_publish')
+        AND NOT EXISTS (SELECT 1 FROM posts WHERE user_id = users.id AND status = 'published')
+    `).all();
+  } catch (e) { console.error('[primer-posteo] candidatos:', e.message); return { sent: 0, skipped: 0 }; }
+  let sent = 0, skipped = 0;
+  for (const u of users) {
+    try {
+      // Trial vencido de verdad → no molestar (el aviso de pausa ya salió).
+      if (!schedCanPublish(db, u.id)) { skipped++; continue; }
+      let drafts = 0;
+      try { drafts = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft'`).get(u.id).n || 0; } catch (e) {}
+      // Idempotencia: marcar ANTES de enviar.
+      db.prepare(`INSERT INTO nudges (user_id, kind) VALUES (?, 'first_publish')`).run(u.id);
+      const nm = String(u.name || '').trim() || String(u.email || '').split('@')[0];
+      const r = await firstPublishNudgeEmail({ email: u.email, name: nm, drafts }, base);
+      if (r && r.ok) { sent++; console.log(`[primer-posteo] email enviado a ${u.email}`); }
+      else console.error('[primer-posteo] no se pudo enviar a', u.email);
+    } catch (e) {
+      console.error('[primer-posteo] usuario', u.id, e.message);
+    }
+    await new Promise((r) => setTimeout(r, 400)); // no saturar el proveedor
+  }
+  if (sent || skipped || users.length) console.log(`[primer-posteo] enviados: ${sent}, omitidos (trial vencido): ${skipped}, candidatos: ${users.length}`);
+  return { sent, skipped };
+}
+
 // Reporte semanal de resultados (domingo 19:30 Buenos Aires).
 // A cada usuario con posteos publicados en los últimos 7 días: alcance, likes
 // y mejor posteo. La prueba visible de que Posta funciona.
@@ -883,4 +1133,96 @@ function writeDnaSync(db, userId, obj) {
     ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
 }
 
-module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily };
+// ---------- 🧠 Resumen semanal de conocimiento de Posty ----------
+// Lunes 09:00 (Buenos Aires). Para cada usuario con posty_level ≥ 1 cuenta el
+// conocimiento NUEVO desde users.posty_digest_at: fotos del brand kit,
+// señales 👍/👎, reglas de estilo activadas y fuentes del ADN analizadas.
+// Si hay ≥1 item → mensaje en el chat ("🧠 Mirá lo que aprendí esta semana:"
+// + 2-3 items concretos). Si no hay nada nuevo → silencio total (nunca un
+// mensaje genérico). La marca de agua se actualiza siempre.
+const normTs = (s) => String(s || '').trim().replace('T', ' ').slice(0, 19);
+
+function ruleTextToVoseo(t) {
+  let s = String(t || '').trim()
+    .replace(/^El cliente prefiere /i, 'preferís ')
+    .replace(/^Al cliente le sirve /i, 'te sirve ')
+    .replace(/^El cliente /i, 'vos ');
+  if (!s) return s;
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
+
+const DIGEST_SOURCE_PHRASES = [
+  ['website_analyzed_at', 'tu web 🌐'],
+  ['stories_analyzed_at', 'tus historias 📱'],
+  ['fb_analyzed_at', 'tu página de Facebook 📘'],
+  ['comments_analyzed_at', 'los comentarios de tu Instagram 💬'],
+  ['places_analyzed_at', 'las reseñas de Google ⭐'],
+];
+
+function newSourcesSince(db, userId, since) {
+  const dna = readDnaSync(db, userId);
+  const out = [];
+  for (const [field, phrase] of DIGEST_SOURCE_PHRASES) {
+    const at = normTs(dna[field]);
+    if (at && at > since) out.push(`estudié ${phrase}`);
+  }
+  return out;
+}
+
+async function postyWeeklyDigest(db) {
+  let users = [];
+  try {
+    users = db.prepare(
+      "SELECT id, COALESCE(posty_digest_at, '') AS digest_at FROM users WHERE COALESCE(posty_level, 0) >= 1"
+    ).all();
+  } catch (e) { console.error('[posty-digest]', e.message); return; }
+  const nowIso = new Date().toISOString();
+  const fallbackSince = normTs(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString());
+  for (const u of users) {
+    try {
+      const since = normTs(u.digest_at) || fallbackSince;
+      const items = [];
+      // 1) Fotos nuevas del brand kit
+      let nPhotos = 0;
+      try {
+        nPhotos = db.prepare(
+          "SELECT COUNT(*) AS n FROM assets WHERE user_id = ? AND kind = 'photo' AND datetime(created_at) > datetime(?)"
+        ).get(u.id, since).n || 0;
+      } catch (e) { /* tabla sin created_at viejo: se ignora */ }
+      if (nPhotos > 0) items.push(nPhotos === 1 ? 'tu foto nueva del negocio 📷' : `tus ${nPhotos} fotos nuevas del negocio 📷`);
+      // 2) Señales nuevas (👍/👎)
+      let nSig = 0;
+      try {
+        nSig = db.prepare(
+          "SELECT COUNT(*) AS n FROM post_signals WHERE user_id = ? AND client_signal IN ('approved','rejected') AND datetime(created_at) > datetime(?)"
+        ).get(u.id, since).n || 0;
+      } catch (e) {}
+      if (nSig > 0) items.push(nSig === 1
+        ? 'el posteo que marcaste 👍/👎 — ya sé más de tu gusto'
+        : `los ${nSig} posteos que marcaste 👍/👎 — ya sé más de tu gusto`);
+      // 3) Reglas de estilo recién activadas (concretas, en voseo)
+      let newRules = [];
+      try {
+        newRules = db.prepare(
+          'SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1 AND created_at IS NOT NULL AND datetime(created_at) > datetime(?)'
+        ).all(u.id, since);
+      } catch (e) {}
+      for (const r of newRules.slice(0, 2)) {
+        const t = ruleTextToVoseo(r.rule_text);
+        if (t) items.push('que ' + t);
+      }
+      // 4) Fuentes del ADN analizadas esta semana
+      for (const s of newSourcesSince(db, u.id, since).slice(0, 2)) items.push(s);
+      // Mensaje solo si hay algo concreto que contar.
+      if (items.length > 0) {
+        const shown = items.slice(0, 3);
+        let msg = '🧠 Mirá lo que aprendí esta semana:\n' + shown.map((i) => '• ' + i).join('\n');
+        if (items.length > 3) msg += `\n• …y ${items.length - 3} más`;
+        db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(u.id, 'assistant', msg);
+      }
+    } catch (e) { console.error('[posty-digest] usuario', u.id, e.message); }
+    try { db.prepare('UPDATE users SET posty_digest_at = ? WHERE id = ?').run(nowIso, u.id); } catch (e) { /* no bloquea */ }
+  }
+}
+
+module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };

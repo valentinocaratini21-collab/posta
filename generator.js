@@ -839,7 +839,7 @@ function goldenLine(golden) {
   return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -855,6 +855,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
           content:
             'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
             CAPTION_CRAFT +
+            (captionExtras ? '\n' + captionExtras : '') +
             '\nREGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta" (prohibido "Con Posta", "Posta te ayuda", "probá Posta"). Si el negocio es Posta, escribí sobre "Posty" en primera persona del singular ("yo te lo armo", "escribime"), nunca en plural ("nosotros", "escribinos", "te ayudamos"). ' +
             '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "suboverlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
             '"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis. ' +
@@ -869,7 +870,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
             (feedback ? `\nAjuste de calidad (OBEDECELO al regenerar): ${feedback}` : '') +
             (voice ? `\n${voice}` : '') +
-            (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '') +
+            (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
             goldenLine(golden) +
             `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
@@ -914,7 +915,7 @@ async function generateContent(input, apiKey) {
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
-async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden }, n, apiKey) {
+async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -925,7 +926,7 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
       model: 'gpt-4o-mini',
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: ENERGY_SYSTEM(n) },
+        { role: 'system', content: ENERGY_SYSTEM(n) + (captionExtras ? '\n' + captionExtras : '') },
         {
           role: 'user',
           content:
@@ -935,7 +936,7 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
             (taste ? `\n${taste}` : '') +
             (performance ? `\nRendimiento real de tu cuenta:\n${performance}` : '') +
             (voice ? `\n${voice}` : '') +
-            (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '') +
+            (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
             goldenLine(golden) +
             `\nGenerá los ${n} captions y los hashtags.`,
         },
@@ -1090,7 +1091,7 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance, learnings, styleRules, excluded, approved, outcome }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance, learnings, styleRules, excluded, approved, outcome, tasteBlock, styleLockExtras }, apiKey) {
   const ephLine = ephemeris
     ? `\n⚠️ EFEMÉRIDE CERCA: ${ephemeris.emoji} ${ephemeris.name} es el ${ephemeris.date} (en ${ephemeris.daysLeft} días). La idea N°1 TIENE que ser sobre eso (enfoque: ${ephemeris.angle}). Es una fecha que vende mucho: no la ignores.`
     : '';
@@ -1102,9 +1103,11 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
   const approvedLine = approved
     ? `\nTemas y tipos que el cliente APROBÓ y le gustaron (priorizalos con variación y ángulos nuevos): ${approved}`
     : '';
-  const rulesLine = (Array.isArray(styleRules) && styleRules.length)
-    ? `\nReglas de estilo del cliente (OBEDECELAS siempre, también en el titular y el ángulo):\n${styleRules.map(r => `- ${r}`).join('\n')}`
-    : '';
+  const rulesLine = tasteBlock
+    ? `\n${tasteBlock}`
+    : ((Array.isArray(styleRules) && styleRules.length)
+      ? `\nReglas de estilo del cliente (OBEDECELAS siempre, también en el titular y el ángulo):\n${styleRules.map(r => `- ${r}`).join('\n')}`
+      : '');
   // Ángulo "web": si el negocio tiene web estudiada, el generador puede proponer
   // (CON CRITERIO: orientativo ~1 de cada 6-8 ideas, no siempre) posteos que
   // lleven tráfico a la web con CTA "link en bio" / "mirá todos los detalles en la web".
@@ -1129,7 +1132,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${rulesLine}\nGenerá las 6 ideas.`,
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\nGenerá las 6 ideas.`,
         },
       ],
       max_tokens: 1200,
@@ -1240,7 +1243,7 @@ async function generatePillars({ business, category, description, performance },
 // Modelo del chat consultor: el cerebro de la conversación con el cliente.
 // gpt-4o (no mini): el chat es la cara del producto y necesita el modelo más capaz.
 const CHAT_MODEL = 'gpt-4o';
-async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk }, apiKey) {
+async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey) {
   const p = profile || {};
   const cleanPhotos = Array.isArray(photos) ? photos.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 4) : [];
   const libPhotos = Array.isArray(library) ? library.filter(u => typeof u === 'string' && u.startsWith('data:image/')).slice(0, 6) : [];
@@ -1262,12 +1265,21 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'concretamente cómo mejorarla (ángulo, hook, formato). Si es buena, decilo y pulila igual: ' +
     'siempre se puede vender más. Hacé preguntas cortas cuando te falte contexto (producto, objetivo). ' +
     'Nunca seas chupamedias: tu valor es decir la posta, como un amigo, no lo que el cliente quiere escuchar. ' +
+    'OPINIÓN PROPIA: tenés gusto y lo decís sin que te lo pidan, como un amigo que quiere que vendas. Cuando veas algo, tirá tu take honesto en 1-2 líneas, voseo, cero markdown. Patrones: ' +
+    '"ese ángulo está bueno pero el hook llega tarde — yo lo abriría con el precio" / ' +
+    '"esta foto vende sola, no le pondría ni texto encima" / ' +
+    '"ese caption está largo para un lunes, lo cortaría a la mitad" / ' +
+    '"si lo publicás hoy a las 19 te agarra el pico de tu gente, yo no lo dejaría para mañana". ' +
+    'INICIATIVA: proponé vos el siguiente paso sin que te lo pidan ("te lo dejo en borradores y lo revisamos", "¿querés que lo programe para mañana a las 18?"). ' +
+    'La iniciativa va en tu MENSAJE; los bloques (```idea, ```edit, ```publish) solo salen cuando el protocolo los pide: opinar y proponer no es cerrar. ' +
     'REGLA CRÍTICA: jamás inventes productos, precios, promociones ni datos del negocio que no te dieron: si no sabés qué vende, preguntá o hablá en general, nunca inventes. ' +
     'Los datos de la web del negocio (si aparecen en el contexto) son REALES: citalos tal cual, precios y promos incluidos. ' +
     'MODO PEDIDO: muchos clientes no quieren brainstormear, quieren PEDIRTE un posteo concreto ' +
     '("necesito un posteo de la promo 2x1", "quiero vender mis buzos nuevos", "haceme algo que diga X"). ' +
     'Cuando detectes un pedido: NO interrogues ni devuelvas preguntas, armá la idea directo con lo que te ' +
-    'dieron y cerrala con el bloque. Si te dictan el texto ("que diga: ..."), copialo TAL CUAL en el campo ' +
+    'dieron y cerrala con el bloque. TRIAGE DE CONTEXTO: el "no preguntar" del MODO PEDIDO rige SOLO cuando ya sabés qué vende el negocio. ' +
+    'Si no tenés datos mínimos del negocio (qué vende), NO cierres con un bloque inventado: hacé UNA pregunta corta y cálida para saber qué vende, y recién ahí armás. Nunca inventes el negocio. ' +
+    'Si te dictan el texto ("que diga: ..."), copialo TAL CUAL en el campo ' +
     'caption: jamás reescribas sus palabras con tu estilo. Si nombran una foto ("la del asado", "la segunda"), ' +
     'identificá su índice en las fotos guardadas que te muestro (0 = la más nueva) y ponelo en photo_index. ' +
     'Si piden colores ("en rojo", "con azul"), normalizalos a hex en colors (máximo 3). ' +
@@ -1277,7 +1289,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       ? 'El cliente adjuntó fotos de sus productos: MIRALAS con atención y opiná sobre lo que ves en ellas (qué producto conviene mostrar, calidad de la foto, qué ángulo vendería más). Referite a lo concreto que ves, nada de comentarios genéricos. '
       : '') +
     (libPhotos.length
-      ? `El cliente tiene ${libPhotos.length} fotos guardadas: son las PRIMERAS ${libPhotos.length} imágenes que ves, en orden (índice 0 = la más nueva). Las que vienen después son las que adjuntó recién en este chat. Si te pide usar una guardada ("la del asado", "la segunda"), elegí el índice correcto mirándolas. `
+      ? `El cliente tiene ${libPhotos.length} fotos guardadas. REGLA DE ÍNDICES ÚNICA: índice 0 = la más nueva de TODAS las que ves — primero las guardadas (en orden), después las que adjuntó recién en este chat. Si te pide usar una guardada ("la del asado", "la segunda"), elegí el índice correcto mirándolas. `
       : '') +
     ((cleanPhotos.length || libPhotos.length)
       ? 'Como director de fotografía: opiná brevemente sobre la calidad de cada foto que ves (luz, foco, encuadre) y recomendá cuál conviene usar como protagonista y por qué. Si alguna está oscura o borrosa, decilo sin vueltas. '
@@ -1288,12 +1300,15 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'Solo incluí ese bloque cuando la idea esté cerrada y aprobada. Nunca lo incluyas antes.' +
     'Si un mensaje del cliente no te cierra, preguntá corto en voseo qué quiso decir. ' +
     'PROHIBIDO responder "no puedo ayudarte con eso" o cualquier rechazo genérico: siempre hay algo útil para hacer o proponer. ' +
-    'FORMATO: el chat muestra texto plano. PROHIBIDO markdown (**negrita**, #títulos, listas con guiones): se ve crudo, escribí natural.';
+    'FORMATO: el chat muestra texto plano. PROHIBIDO markdown (**negrita**, #títulos, listas con guiones): se ve crudo, escribí natural.' +
+    // Cuando escribas o edites captions (bloques ```idea / ```edit): checklist anti-genérico
+    // + voz real del cliente si su IG fue analizado. El dictado del cliente se copia TAL CUAL.
+    (captionExtras ? '\n' + captionExtras : '');
   // Posty ve TODO: borradores, programados, publicados y fallidos. NUNCA digas que no hay
   // nada si esta lista tiene items. Si preguntan "cómo viene la semana", respondé con la posta.
   const stLabel = (s) => s === 'scheduled' ? 'PROGRAMADO' : s === 'published' ? 'publicado' : s === 'publishing' ? 'PUBLICANDO' : s === 'failed' ? 'FALLIDO' : 'borrador';
   const draftList = (Array.isArray(drafts) ? drafts : [])
-    .map((d, i) => `${i + 1}. [${stLabel(d.status)} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
+    .map((d, i) => `${i + 1}. [${stLabel(d.status)}${d.needs_review ? ' · EN REVISIÓN' : ''} ${d.when || 'sin fecha'}] "${String(d.caption || '').slice(0, 160)}"`)
     .join('\n');
   const draftsGuide = draftList
     ? 'TODO lo del cliente en Instagram (borradores + programados + publicados + fallidos):\n' + draftList + '\n' +
@@ -1306,10 +1321,10 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'Para REPROGRAMAR ("el segundo pasalo para mañana a las 18", "el viernes a la mañana el tercero"): agregá "when" con formato exacto "AAAA-MM-DD HH:MM" en hora local del cliente ' +
       '(usá la fecha actual del contexto para calcular el día; si dice "a la mañana" usá 10:00, "al mediodía" 13:00, "a la tarde" 17:00, "a la noche" 20:00). ' +
       'El "when" SIEMPRE es futuro: JAMÁS emitas una fecha/hora pasada. ' +
-      'Confirmá siempre el día y la hora en tu mensaje ("listo, el segundo sale mañana miércoles a las 18"). ' +
+      'Confirmá siempre el día y la hora en tu mensaje (ej: "listo, el segundo sale mañana a las 18"). Usá la fecha real del contexto para el nombre del día de la semana: nunca lo escribas de memoria. ' +
       'Si te pide cambiar la FOTO ("poné la del local", "usá otra foto", "la del producto"): mirá sus fotos guardadas ' +
       '(las PRIMERAS imágenes que ves, índice 0 = la más nueva) y elegí la que mejor calce con lo que pide, ' +
-      'devolviendo su índice en el bloque: ```edit\\n{\"draft\": 2, \"photo_index\": 3}\\n``` ' +
+      'devolviendo su índice en el bloque: ```edit\n{"draft": 2, "photo_index": 3}\n``` ' +
       'Solo cambiá la foto si te lo piden explícito o si la actual no tiene nada que ver con el tema. ' +
       'Si te pide una foto que no ves entre sus guardadas, NO adivines: decilo en 1 línea con onda y pedile que la suba. ' +
       'El cambio se aplica solo al borrador, sin más pasos ni preguntas. Después del bloque, confirmá en 1 línea con onda qué cambiaste. ' +
@@ -1360,10 +1375,15 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const lastUserMsg = (messages[messages.length - 1] || {}).text || '';
   // Confirmaciones peladas: palabra sola O combinación natural ("sí, dale", "ok dale", "bueno dale").
   // Principio: mensaje corto donde todo es afirmativo — 1-2 tokens de acuerdo, opcionalmente con suavizante.
+  // FM #4: "dale" tras una PREGUNTA del asistente no confirma nada — responde la pregunta.
+  // STRONG solo si el último mensaje del asistente NO termina en "?".
+  const lastAssistantMsg = [...messages].reverse().find(m => m && m.role === 'assistant');
+  const assistantAsked = /[?¿]\s*$/.test(String((lastAssistantMsg || {}).text || '').trim());
   const confirmNorm = lastUserMsg.trim().toLowerCase().replace(/[.!…?¿,;]+/g, '').replace(/\s+/g, ' ').trim();
-  const STRONG = '(dale|sí|si|sip|ok|okay|genial|perfecto|joya|buenísimo|buenisimo|listo|va|me gusta|me encanta|de una|hacelo|hacela)';
-  const SOFT = '(bueno|sí|si|ok)';
-  const isConfirm = confirmNorm.length > 0 && confirmNorm.length < 25 &&
+  // "si" sin tilde sale de los matches (el condicional "si me gusta" no es confirmación); queda "sí".
+  const STRONG = '(dale|sí|sip|ok|okay|genial|perfecto|joya|buenísimo|buenisimo|listo|va|me gusta|me encanta|de una|hacelo|hacela)';
+  const SOFT = '(bueno|sí|ok)';
+  const isConfirm = !assistantAsked && confirmNorm.length > 0 && confirmNorm.length < 25 &&
     new RegExp(`^(${SOFT} )?${STRONG}( ${STRONG})?$`).test(confirmNorm);
   const confirmGuide = isConfirm
     ? 'El cliente acaba de CONFIRMAR tu propuesta con un "dale"/"sí"/"ok": NO hagas preguntas, NO digas que no podés ayudar, cerrá la idea AHORA MISMO con el bloque ```idea. ' +
@@ -1400,8 +1420,9 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // FOTO EN CHAT (ronda 4): la foto que acaba de mandar el cliente.
   const fotoChatGuide =
     'FOTO EN CHAT: si manda una foto y dice "usala" ("usá esta foto para el posteo de mañana", "con esta foto armame algo", "esta va para el segundo"): ' +
-    'la foto que acaba de mandar es el índice 0 (la más nueva). Confirmá en 1 línea qué borrador la va a usar y emití el bloque correspondiente ' +
-    '(```edit {"draft": N, "photo_index": 0} si es un borrador existente, o ```idea con photo_index: 0 si es un posteo nuevo). ' +
+    'vale la REGLA DE ÍNDICES ÚNICA (índice 0 = la más nueva de TODAS: primero las guardadas, después las del chat) — ' +
+    'la foto que acaba de mandar va DESPUÉS de las guardadas (su índice = cantidad de fotos guardadas que ves). Confirmá en 1 línea qué borrador la va a usar y emití el bloque correspondiente ' +
+    '(```edit {"draft": N, "photo_index": <índice real>} si es un borrador existente, o ```idea con ese photo_index si es un posteo nuevo). ' +
     'JAMÁS digas "ya la guardé" sin hacer nada, JAMÁS generes un posteo nuevo cuando pidió cambiar uno existente, ' +
     'y JAMÁS ignores la foto y armes con una generada. ';
   // PEDIDO DE FOTOS/VIDEO (ronda 5): una sola vez por cliente, al entregar un posteo.
@@ -1480,7 +1501,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'INSTAGRAM TRABADO: "no me deja conectar" / "me pide algo de facebook" → 2-3 pasos en criollo: 1) tocá "Conectar Instagram" en tu cuenta, 2) iniciá sesión con el Facebook dueño de la cuenta, 3) aceptá los permisos. Ofrecé reintentar; si no sale, decí qué va a pasar ("lo reviso y te aviso 👍"). JAMÁS le tires un link a Meta developers. ' +
     'AGENDA: si pregunta qué sale esta semana o a qué hora sale algo: respondé la agenda ACÁ en el chat (día, hora, título, con la lista de borradores del contexto). JAMÁS lo mandes a "fijate en Mi semana". ' +
     'TEMA ACTIVO: si pide un tema puntual ("quiero un posteo por el día de la madre"): ese es el TEMA ACTIVO — generá ya sobre eso y la semana respeta ese tema salvo que pida otra cosa. JAMÁS generes algo genérico que ignore el pedido. ' +
-    'FOTO-DIRECTOR: mirá la foto de verdad y DECIDÍ como director. Foto BUENA (producto visible, luz y foco aceptables) + "haceme un posteo con esta foto" → USALA TAL CUAL como protagonista y cerrá la idea EN EL ACTO con ```idea (photo_index: 0): CERO preguntas, JAMÁS "¿querés que agreguemos algo especial?". La foto real del cliente siempre le gana a la generada. Foto MALA (oscura, borrosa, desordenada) → decilo sin vueltas en 1-2 líneas y NUNCA la publiques así: ofrecé EXACTAMENTE 2 caminos para que elija: (a) te genero una inspirada en tu producto, o (b) 2-3 tips rápidos para sacarla de nuevo. EXCEPCIÓN MOMENTO IRREPETIBLE: si la foto captura algo irrepetible (movida y borrosa pero con energía real), se publica en formato efímero: el momento vale más que la nitidez. JAMÁS "si no hay otra, la uso igual". Foto que NO ES del negocio → no la uses, decilo simple. "MEJORALA" sin detalle → decidí VOS qué está mal (luz, encuadre, fondo) y arreglalo manteniendo EL MISMO producto; JAMÁS preguntes "¿qué le mejoro?" ni cambies el producto ni inventes elementos. ' +
+    'FOTO-DIRECTOR: mirá la foto de verdad y DECIDÍ como director. Foto BUENA (producto visible, luz y foco aceptables) + "haceme un posteo con esta foto" → USALA TAL CUAL como protagonista y cerrá la idea EN EL ACTO con ```idea (photo_index: 0): CERO preguntas, JAMÁS "¿querés que agreguemos algo especial?". La foto real del cliente siempre le gana a la generada. Foto MALA (oscura, borrosa, desordenada) → decilo sin vueltas en 1-2 líneas y ofrecé EXACTAMENTE 2 caminos para que elija: (a) te genero una inspirada en tu producto, o (b) 2-3 tips rápidos para sacarla de nuevo. REGLA ÚNICA ANTE INSISTENCIA: si el cliente insiste explícitamente ("usala igual", "no me importa que salga oscura"), usala avisando el riesgo en 1 línea; jamás en silencio ni peleando. EXCEPCIÓN MOMENTO IRREPETIBLE: si la foto captura algo irrepetible (movida y borrosa pero con energía real), se publica en formato efímero: el momento vale más que la nitidez. JAMÁS "si no hay otra, la uso igual". Foto que NO ES del negocio → no la uses, decilo simple. "MEJORALA" sin detalle → decidí VOS qué está mal (luz, encuadre, fondo) y arreglalo manteniendo EL MISMO producto; JAMÁS preguntes "¿qué le mejoro?" ni cambies el producto ni inventes elementos. ' +
     'FOTO-DIRECTOR EN EDICIÓN: CADA foto que entra — nueva o reemplazo — pasa por el director. Si te pide cambiar la foto de un borrador ("y con esta otra foto", "poné esta en el segundo") y la nueva es mala: decilo sin vueltas y ofrecé los 2 caminos ANTES de emitir el ```edit. JAMÁS aceptar una foto mala en silencio en edición ("✅ Cambié la foto" sin evaluar). ' +
     'ADJUNTO-MANDA: si el mensaje trae foto o video adjunto, tu respuesta SIEMPRE parte de lo que se ve en ese archivo: describí lo concreto que ves y decidí sobre ESO. JAMÁS respondas solo al texto ignorando el adjunto (nada de "Perfecto, con lo que me contaste..." cuando te mandaron una foto: no te contaron nada, te mostraron). Si cerrás ```idea con foto adjunta, el photo_index es obligatorio. ' +
     'VIDEO-HONESTO: del video solo ves un thumbnail: describí ÚNICAMENTE lo que se ve en esa imagen, nunca inventes lo que pasa en el resto. JAMÁS digas que aparece una persona por su nombre ni uses datos del perfil (nombre del dueño, etc.) como si estuvieran en el video. Evaluá si sirve como reel: hook en los primeros 3 segundos, luz, duración. Video malo (oscuro, movido, aburrido) → decilo y sugerí qué filmar; video bueno → proponelo como reel con guion y portada. ' +
@@ -1569,7 +1590,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const zapatosGuide5 =
     'REFERENCIAS-TRAMPA: referencias que parecen simples pero no lo son. "cambiá ese" con CERO borradores → decí que no hay ningún borrador para cambiar y preguntá cuál; JAMÁS inventes un borrador. "el de mañana" / "el de las 18" → resolvé por fecha de publicación y por HORA, nombrando el borrador. "el último" → el último VISIBLE de la lista actual. "no, el otro" después de tocar varios en cascada → es el anterior al último que tocaste; si hay duda, DECÍ cuál entendiste. "haceme lo mismo de ayer" cuando ayer no salió bien → no repitas el error: "ayer no salió bien, te propongo distinto". Referencia a otro canal ("por mail") → honestidad: no ves otros canales, solo este chat. Contradicción dentro del mismo mensaje ("cambiá el título del de la promo... no, del otro") → la última versión del mensaje manda. "volvé al primero" cuando ya está en esa versión → decilo ("ya está en esa versión 👍"). "ese" con 5 borradores y ninguno obvio → mostrá títulos numerados para elegir; JAMÁS adivines. Si la lista cambió desde que lo nombró ("el segundo" y ya no hay segundo) → avisá que la lista cambió y re-confirmá cuál. "el que te dije" sin registro en este chat → no hay registro: pedí que lo señale. "hacelo como el del lunes" y hubo dos el lunes → mostrá cuál de los dos. "el anterior" sin historial → no hay anterior, decilo simple. "dejalo como estaba antes de ayer" (revert profundo) → límite honesto: solo podés volver a la última versión guardada. ' +
     'RUBROS-MOMENTOS-TRAMPA: cuando el rubro o el momento tienta a inventar. SALUD: nutricionista/psicólogo que pide prometer resultados ("bajá 5 kilos", "curá la depresión") → JAMÁS prometas resultados de salud; tono cuidado, sin diagnósticos: derivá al profesional. Odontólogo con antes/después → solo con consentimiento confirmado del paciente. Contador con vencimiento → fecha real verificable o no la pongas. PROFESIONALES: abogado ("ganamos todos los casos") → resultados inventados jamás; versión real. B2B: mayorista que pide tono de consumidor final ("que vengan las mamás") → mantené el giro B2B, no lo pases a B2C. Food truck ("poné dónde estamos hoy") → ubicación real o nada: JAMÁS inventes dónde está. MOMENTOS: rumor ("salió en el diario que cerramos") → no reacciones al rumor como verdad: verificá antes de comunicar. Hito ("vino un famoso") → hito verificado o no se publica. Disculpa con promo que no existe → pedí disculpa sin inventar promo. Aumento de alquiler/mudanza → comunicalo con fecha, sin culpar a nadie. Oportunidad ajena (feria donde no participás) → si no es lo tuyo, no te sumes: honestidad. Día del trabajador y el local abre ese día → comunicá el horario, no un saludo genérico. Remodelación con fecha incierta → no inventes la fecha: "avisamos la fecha ni bien la tengamos". Proveedor que falló → comunicá el retraso sin culpar en público. ' +
-    'FOTO-DECISION: el director decide SIEMPRE, también en los casos bordes. Foto buena + "mirá" (sin pedido claro) → interpretá y cerrá: proponé el posteo con ```idea, JAMÁS "¿qué hago con esta foto?". Foto buena + "haceme algo" → CERRÁ en el acto, cero preguntas. Foto mala e insiste ("usala igual, dale") → mantené la postura con calidez: repetí los 2 caminos; JAMÁS cedas en silencio. Foto mala con consentimiento explícito ("usala igual, no me importa que salga oscura") → usala avisando el riesgo en 1 línea: el cliente decide informado. Reemplazo en edición ("poné esta otra en el segundo") → la foto nueva pasa por el director ANTES del ```edit: si es mala, ofrecé los 2 caminos primero. Foto con texto que contradice el ADN (la vidriera dice otro nombre) → leé el texto real y avisá la contradicción. 5 fotos → elegí UNA y decí por qué en 1 línea. Foto rescatable → ofrecé retoque antes que re-sacar. Video de 5 segundos → no alcanza para reel: decilo y pedí más material o proponé posteo con un frame. Video donde no se ve el producto → honestidad: "con esto no armo un reel que venda". Video con ruido de fondo → avisá que igual se entiende sin sonido (texto en pantalla). Referencia de otro negocio + "hacé EXACTAMENTE esto" → inspiración sí, copia jamás. Foto desactualizada (se nota vieja) → avisá y sugerí actualizar. Foto con caras visibles que va a publicarse → pedí permiso en 1 línea. Foto vertical mala para reel → el formato no salva la calidad: 2 caminos. "mejorá" vago → decidí vos qué mejorar (luz, encuadre, fondo); JAMÁS preguntes "¿qué le mejoro?". Foto del competidor "para ver el nivel" → mirala, no la copies: proponé superarlo con lo propio. "no quiero que se vea mi cara" → respetá: recorte o encuadre que la evite. Para vender, producto protagonista aunque la luz sea peor que la del local: retoque, no cambio de objetivo. Video que no pudiste ver → decí que no lo viste; JAMÁS describas lo que no viste. ' +
+    'FOTO-DECISION: el director decide SIEMPRE, también en los casos bordes. Foto buena + "mirá" (sin pedido claro) → interpretá y cerrá: proponé el posteo con ```idea, JAMÁS "¿qué hago con esta foto?". Foto buena + "haceme algo" → CERRÁ en el acto, cero preguntas. Foto mala e insiste explícitamente ("usala igual, dale") → usala avisando el riesgo en 1 línea (el cliente decide informado); jamás en silencio ni peleando. Foto mala con consentimiento explícito ("usala igual, no me importa que salga oscura") → usala avisando el riesgo en 1 línea: el cliente decide informado. Reemplazo en edición ("poné esta otra en el segundo") → la foto nueva pasa por el director ANTES del ```edit: si es mala, ofrecé los 2 caminos primero. Foto con texto que contradice el ADN (la vidriera dice otro nombre) → leé el texto real y avisá la contradicción. 5 fotos → elegí UNA y decí por qué en 1 línea. Foto rescatable → ofrecé retoque antes que re-sacar. Video de 5 segundos → no alcanza para reel: decilo y pedí más material o proponé posteo con un frame. Video donde no se ve el producto → honestidad: "con esto no armo un reel que venda". Video con ruido de fondo → avisá que igual se entiende sin sonido (texto en pantalla). Referencia de otro negocio + "hacé EXACTAMENTE esto" → inspiración sí, copia jamás. Foto desactualizada (se nota vieja) → avisá y sugerí actualizar. Foto con caras visibles que va a publicarse → pedí permiso en 1 línea. Foto vertical mala para reel → el formato no salva la calidad: 2 caminos. "mejorá" vago → decidí vos qué mejorar (luz, encuadre, fondo); JAMÁS preguntes "¿qué le mejoro?". Foto del competidor "para ver el nivel" → mirala, no la copies: proponé superarlo con lo propio. "no quiero que se vea mi cara" → respetá: recorte o encuadre que la evite. Para vender, producto protagonista aunque la luz sea peor que la del local: retoque, no cambio de objetivo. Video que no pudiste ver → decí que no lo viste; JAMÁS describas lo que no viste. ' +
     'CALIDAD-LIMITE: trampas finas de calidad y de límites. Multiplicador en palabras ("cinco veces más alcance") → el crítico lo rechaza igual que con dígitos: sin dato real medido, no hay número. Testimonio con nombre real del ADN pero cita inventada → sin captura o fuente no se cita textual: pedí la captura. Promo con % real pero aplicada a un producto que no existe → el % real solo vale para lo real. mención con formato creíble (@cliente_feliz_2024) → el crítico la rechaza igual: solo @ reales. Estética "a lo Apple" → identidad propia del negocio, no imitar marcas famosas ni sutilmente. Titular cortado a mitad de palabra → jamás: reescribí completo. Imagen con texto de menú/vidriera → solo precios reales del ADN; nada inventado. 13 emojis (borde del gate) → el crítico rechaza: más de 12 es griterío. #love mezclado con hashtags reales → el crítico rechaza el irrelevante. "Envíos a todo el país" sin dato → cobertura: dato desconocido, no inventes; preguntá o hablá en general. Sorteo donde el cliente quiere elegir al ganador → solo sorteos reales con mecánica clara. ("como si fuera yo") → transparencia: proponés, él manda. "¿Es legal?" en segunda vuelta ("pero vos qué opinás?") → seguí sin opinar: no sos abogado, derivá. Precio sin moneda → moneda explícita siempre ($ + país si hay audiencia mixta). "Link en bio" → verificá que sea el suyo antes de prometerlo. ' +
     'VOZ-OPERATIVA: voz y operativa en los bordes. "Aprobá todo" con CERO borradores → decí que no hay nada para aprobar; JAMÁS ```publish vacío. "Pausá todo" + "igual el de hoy publicalo" → el último manda: pausás todo menos el de hoy, y decí "solo el de hoy". Duplicar un borrador que fue rechazado por defecto → no dupliques defectos: avisá y proponé la versión corregida. "Guardame para diciembre" sin fecha → proponé fecha tentativa dicha en voz alta ("¿el 15/12?") y guardala con ```rule. "¿Cuál anduvo mejor?" sin datos → decilo simple: "todavía no tengo datos de rendimiento". "Hacé más como ese" y ese anduvo MAL (dato real) → avisá con datos antes de obedecer: "ese anduvo flojo, ¿probamos distinto?". ("3 por día") → estrategia + límite honesto: Instagram castiga el spam. Decir que no a un cliente fiel → calidez primero, alternativa después. Posteo que falló al publicarse → decilo primero, simple, con plan B. "No sé" cuando el dato está en el ADN (horario, dirección) → miralo en el ADN antes de decir "no sé". Cliente que manda un testamento → espejá ordenado: lo esencial en limpio, sin copiarlo. "¿Me conviene cerrar los lunes?" → decisión de negocio: no decidas por él; dale el marco, él decide. "borrá todo" → confirmá el alcance ("¿los 5 borradores?") antes de tocar nada. "¿Por qué anduvo mejor?" y fue por el sorteo → honestidad con datos: "fue por el sorteo, no por el contenido". Cierre de noche ("3am") → cálido sin presionar, y lo que se programe sale en horario público. ' +
     'SALTO-CREATIVO: Posty también sorprende, con criterio. se cayó Instagram → posteo post-caída con humor ("volvimos, ¿nos extrañaron?"), sin inventar nada. Aniversario en duelo → celebrá con respeto, sin euforia forzada. Idioma pedido (guaraní, portugués) → escribí en ese idioma. pedido de disculpa por un posteo que salió mal → breve y humano, con el dato corregido. Cliente que quiere agradecer a Posty en su Instagram → aceptalo con calidez, sin agrandarte. Aumento de precios → honesto y simple; con humor solo si el tono del negocio lo permite. ("no vendimos nada", sin lástima ni dramatismo) → posteo honesto que conecta. El perro como "encargado" del local → jugá con la idea si el tono lo permite. lluvia y frío → plan B concreto (delivery, DM). efeméride doble (aniversario + barrio) → un posteo que festeje las dos. sortear lo que no existe (llega la semana que viene) → no: el sorteo es con stock real. "Posteo para mis haters" → jamás bardear: convertilo en contenido positivo. Cliente conocido que quiere perfil bajo → discreción total. pedido de "no venda nada", solo sonrisas → conectar puro está permitido: hacelo memorable. bilingüe → los dos idiomas, bien escritos, sin mezclar mal. día del rubro → sumate con un dato real del oficio. "Algo distinto a todo" → revisá el historial y rompé el patrón de verdad (formato, ángulo y tono nuevos). "volvimos" tras meses de silencio → relanzamiento suave, sin excusas largas. La hija ayuda con el Instagram → incluila con buena onda ("¡bienvenida al equipo!"). pedido de "el mejor posteo" → decidí solo con el ADN y POSTEO-BAMBOO: proponé sin devolver la pregunta. ';
@@ -1651,9 +1672,11 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
-  const rulesCtx = (Array.isArray(styleRules) && styleRules.length)
-    ? `Reglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}\n`
-    : '';
+  const rulesCtx = tasteBlock
+    ? `${tasteBlock}\n`
+    : ((Array.isArray(styleRules) && styleRules.length)
+      ? `Reglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}\n`
+      : '');
   // Fecha y hora actual (hora local del cliente): para "mañana", "el viernes", "esta semana" y reprogramar.
   const nowLine = (() => {
     try {
@@ -1675,6 +1698,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     (igAnalysis ? `Análisis de tu Instagram actual:\n${igAnalysis}\n` : '') +
     (voice ? `${voice}\n` : '') +
     rulesCtx +
+    (photoPriorityLine ? `\n${photoPriorityLine}\n` : '') +
     (goldenLine(golden) ? `\n${goldenLine(golden)}\n` : '') +
     (note ? `\n${note}\n` : '') +
     'Charlemos la idea del cliente.';
@@ -1711,9 +1735,12 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
         { role: 'user', content: ctx },
         ...omsgs,
       ],
-      max_tokens: 500,
+      max_tokens: 1000,
       temperature: 0.7,
     }),
+    // El cliente aborta a los 30s: el fetch principal no puede quedar sin timeout
+    // (sin esto, turnos huérfanos: el servidor sigue aplicando lo que el usuario nunca vio).
+    signal: AbortSignal.timeout(25000),
   });
   if (!res.ok) throw new Error('OpenAI chat: ' + res.status);
   const data = await res.json();
@@ -1805,7 +1832,10 @@ function parseIdeaJson(raw) {
   const j = JSON.parse(raw);
   if (!j || !j.titulo) return null;
   const idea = { titulo: postyNameFix(String(j.titulo).slice(0, 120)), angulo: postyNameFix(String(j.angulo || '').slice(0, 280)) };
-  if (typeof j.caption === 'string' && j.caption.trim()) idea.caption = cortar(postyNameFix(j.caption.trim()), 900);
+  // El caption puede ser texto DICTADO por el cliente ("copialo TAL CUAL"): el fix de marca
+  // (Posta→Posty) aplica a título/ángulo, NUNCA al caption — es verbatim del cliente.
+  // Tampoco se le quitan asteriscos: si los dictó, quedan.
+  if (typeof j.caption === 'string' && j.caption.trim()) idea.caption = cortar(j.caption.trim(), 900);
   if (Number.isInteger(j.photo_index) && j.photo_index >= 0 && j.photo_index < 8) idea.photo_index = j.photo_index;
   if (Array.isArray(j.colors)) {
     const hexes = j.colors.map(c => String(c).trim())
@@ -1885,11 +1915,66 @@ async function repairIdeaJson(brokenRaw, apiKey) {
   return idea;
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk }, apiKey) {
+// Normaliza el "when" antes de validarlo: el modelo a veces emite ISO con T
+// ("2026-10-01T18:00") o con segundos ("2026-10-01 18:00:00"). Solo se descarta
+// lo realmente inválido o pasado, nunca un formato válido.
+function normalizeWhen(raw) {
+  let w = String(raw || '').trim().slice(0, 32);
+  w = w.replace(/^(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2})(?::\d{2})?$/, '$1 $2');
+  w = w.replace(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}):\d{2}$/, '$1');
+  return w;
+}
+
+// Parsea UN bloque ```edit (cerrado o rescatado): devuelve el objeto edit o null.
+// Lanza si el JSON está roto (el llamador decide si intenta rescatarlo).
+function parseEditBlock(raw, tz) {
+  const j = JSON.parse(raw);
+  if (!j || !Number.isInteger(j.draft) || j.draft < 1) return null;
+  const e = { draft: j.draft };
+  if (typeof j.caption === 'string' && j.caption.trim()) e.caption = cortar(j.caption.trim(), 900);
+  if (typeof j.hashtags === 'string' && j.hashtags.trim()) e.hashtags = cortar(j.hashtags.trim(), 300);
+  if (Number.isInteger(j.photo_index) && j.photo_index >= 0) e.photo_index = j.photo_index;
+  if (typeof j.when === 'string' && j.when.trim()) {
+    const w = normalizeWhen(j.when);
+    // Solo futuro (hora local del cliente): el pasado se descarta, no se reprograma
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(w) && w > clientNowStr(tz)) e.when = w;
+  }
+  return e;
+}
+
+// El modelo emitió el bloque ```edit con JSON roto o truncado: un único reintento
+// pidiendo solo el JSON. Si también falla, lanza (el llamador decide).
+async function repairEditJson(brokenRaw, apiKey, tz) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      messages: [
+        { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```edit, sin ningún otro texto. El JSON debe tener "draft" (entero ≥ 1); opcionalmente "caption", "hashtags", "photo_index" (entero ≥ 0) y "when" ("AAAA-MM-DD HH:MM").' },
+        { role: 'user', content: 'Corregí este JSON para que sea válido:\n' + String(brokenRaw || '').slice(0, 2000) },
+      ],
+      max_tokens: 300,
+      temperature: 0,
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error('repair edit: ' + res.status);
+  const data = await res.json();
+  trackUsage({ feature: 'chat-repair', model: CHAT_MODEL, json: data });
+  const out = String((data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
+  const mm = out.match(/```edit\s*([\s\S]*?)```/) || out.match(/(\{[\s\S]*\})/);
+  if (!mm) throw new Error('repair edit sin JSON');
+  const edit = parseEditBlock(mm[1], tz);
+  if (!edit) throw new Error('repair edit sin draft');
+  return edit;
+}
+
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey) {
   let text;
   if (apiKey) {
     try {
-      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk }, apiKey);
+      text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey);
     } catch (e) {
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
@@ -1945,21 +2030,30 @@ async function chatIdea({ messages, profile, taste, photos, library, drafts, per
   let edits = [];
   for (const me of String(text).matchAll(/```edit\s*([\s\S]*?)```/g)) {
     try {
-      const j = JSON.parse(me[1]);
-      if (j && Number.isInteger(j.draft) && j.draft >= 1) {
-        const e = { draft: j.draft };
-        if (typeof j.caption === 'string' && j.caption.trim()) e.caption = cortar(j.caption.trim(), 900);
-        if (typeof j.hashtags === 'string' && j.hashtags.trim()) e.hashtags = cortar(j.hashtags.trim(), 300);
-        if (Number.isInteger(j.photo_index) && j.photo_index >= 0) e.photo_index = j.photo_index;
-        if (typeof j.when === 'string' && j.when.trim()) {
-          const w = j.when.trim().slice(0, 32);
-          // Solo futuro (hora local del cliente): el pasado se descarta, no se reprograma
-          if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(w) && w > clientNowStr(tz)) e.when = w;
-        }
-        edits.push(e);
-      }
+      const e = parseEditBlock(me[1], tz);
+      if (e) edits.push(e);
     } catch (e) { /* bloque inválido: se ignora */ }
     text = String(text).replace(me[0], '').trim();
+  }
+  // Bloque ```edit SIN cerrar (el modelo a veces no cierra la cerca por el límite de
+  // tokens): se intenta salvar igual que el ```idea — parse directo, rescate del JSON
+  // balanceado o reparación con el modelo. Si es irrecuperable, el bloque crudo se
+  // elimina igual para que ningún ``` llegue al usuario.
+  {
+    const mu = String(text).match(/```edit\s*([\s\S]*)$/);
+    if (mu) {
+      let parsed = null;
+      try { parsed = parseEditBlock(mu[1], tz); } catch (e) {}
+      if (!parsed) {
+        const salvaged = extractBalancedJson(mu[1]);
+        if (salvaged) { try { parsed = parseEditBlock(salvaged, tz); } catch (e) {} }
+      }
+      if (!parsed && apiKey) {
+        try { parsed = await repairEditJson(mu[1], apiKey, tz); } catch (e) {}
+      }
+      if (parsed) edits.push(parsed);
+      text = String(text).replace(mu[0], '').trim();
+    }
   }
   // ADN del negocio (```dna)
   let dnaOut = null;

@@ -61,7 +61,7 @@ async function refreshMetrics(db, userId) {
 // Resumen agregado SOLO del usuario dado (post_metrics no tiene user_id: se filtra
 // por posts.user_id). Devuelve ceros + best_post null si no hay nada.
 function buildSummary(db, userId) {
-  const zero = { reach_7d: 0, reach_30d: 0, interactions_30d: 0, followers: 0, best_post: null };
+  const zero = { reach_7d: 0, reach_30d: 0, interactions_30d: 0, followers: 0, reach_prev7d: 0, posts_7d: 0, posts_prev7d: 0, best_post: null };
   let rows = [];
   try {
     rows = db.prepare(`
@@ -78,12 +78,10 @@ function buildSummary(db, userId) {
   if (!withMetrics.length) return zero;
 
   const at = (r) => String(r.at || '');
-  const recent = (days) => {
-    const d = new Date(); d.setDate(d.getDate() - days);
-    const cut = d.toISOString().slice(0, 19).replace('T', ' ');
-    return withMetrics.filter((r) => at(r) >= cut);
-  };
-  const r7 = recent(7), r30 = recent(30);
+  const cut = (days) => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().slice(0, 19).replace('T', ' '); };
+  const r7 = withMetrics.filter((r) => at(r) >= cut(7));
+  const rPrev7 = withMetrics.filter((r) => at(r) < cut(7) && at(r) >= cut(14));
+  const r30 = withMetrics.filter((r) => at(r) >= cut(30));
   const sum = (list, f) => list.reduce((a, r) => a + (Number(f(r)) || 0), 0);
 
   // Mejor posteo: el de mayor puntaje entre los publicados.
@@ -119,6 +117,10 @@ function buildSummary(db, userId) {
     reach_30d: Math.round(sum(r30, (r) => r.reach)),
     interactions_30d: Math.round(sum(r30, (r) => r.likes + r.comments + r.saved)),
     followers,
+    reach_prev7d: Math.round(sum(rPrev7, (r) => r.reach)),
+    // Conteos por cohorte: el frontend solo muestra el delta si ambas tienen ≥3.
+    posts_7d: r7.length,
+    posts_prev7d: rPrev7.length,
     best_post: bestPost,
   };
 }
