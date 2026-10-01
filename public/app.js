@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261001-v13'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261001-v14'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2740,20 +2740,14 @@ async function chatMoreCaptions() {
   if (b2) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Probar otros textos'; }
 }
 
-// "🔄 Otra imagen": regenera los ejemplos visuales. Sin foto: genera una imagen nueva
-// con IA. Con foto: rota al siguiente par de estilos. Se puede tocar todas las veces
-// que quiera — cada tap da opciones nuevas.
+// "🔄 Otra imagen": genera una imagen nueva con OTRO estilo de la librería
+// (los prompts subidos). Cada tap da una opción nueva, sin repetir estilo.
 async function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
   if (b) { b.disabled = true; postyThinking(b); }
   try {
-    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
-    if (lib.length) {
-      const n = Math.max(2, chatStyles().length);
-      CHAT_STYLE_IDX = (CHAT_STYLE_IDX + 2) % n;
-    }
     await renderChatPreviews();
     if (CHAT_IDEA !== idea) return;
     renderChatStoryboard();
@@ -2857,98 +2851,86 @@ async function renderChatStoryboard() {
 // Genera 2 ejemplos visuales reales + opción "solo foto" de la idea con el diseñador,
 // para que el cliente vea qué va a postear antes de crearlo.
 // Usa las fotos subidas al chat (o las de la librería) y el estilo actual.
+// Estilos ya usados para la idea actual ("Otra imagen" no repite estilo).
+let CHAT_STYLE_USED = [];
+
+// Igual que aiConceptShot pero devuelve también el estilo usado (para no repetirlo).
+async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 120000 });
+      if (r && r.ok === false && r.capped) throw { aiCap: true, message: r.error || '' };
+      if (r && r.path) return { path: r.path, style: r.style || null, styleName: r.styleName || '' };
+    } catch (e) {
+      if (e && e.aiCap) throw e;
+      console.warn('[concept-shot] intento ' + (attempt + 1) + ' falló:', (e && e.message) || e);
+      if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  console.warn('[concept-shot] no disponible tras reintento');
+  return null;
+}
+
+// Preview de la tarjeta "IDEA LISTA": UNA imagen real generada con IA usando
+// los prompts de la librería de estilos. Lo que ves es EXACTAMENTE lo que sale
+// al tocar "Hacerlo posteo" (se reutiliza la misma imagen, no se regenera).
+// "Otra imagen" genera una nueva con OTRO estilo (sin repetir).
 async function renderChatPreviews() {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
-  // Detiene la rotación "Posty pensando" del placeholder de ejemplos (si sigue viva)
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
+  box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
+  postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Aplicando tu estilo ✨…']);
   try {
     const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
-    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-    const handle = (PROFILE || {}).ig_username || '';
-    const title = makeHeadline(idea.titulo || 'NOVEDAD', 5).toUpperCase() || 'NOVEDAD';
-    // Bajada con copy real (primera línea del caption elegido); el ángulo es un brief y nunca se imprime.
-    const cap0 = (CHAT_CAPTIONS[CHAT_CAP_SEL] || '');
-    const subtitle = cortar(String(cap0 || idea.titulo || '').split('\n')[0], 90);
-    const styles = chatStyles();
-    const pair = [styles[CHAT_STYLE_IDX % styles.length], styles[(CHAT_STYLE_IDX + 1) % styles.length]];
-    const phEntry = lib.length ? lib[CHAT_PHOTO_IDX % lib.length] : null;
-    const ph = phEntry ? await photoImg(phEntry.file_path) : null;
+    const refs = lib.slice(0, 2).map(p => p.file_path || '').filter(Boolean);
+    const gen = await aiConceptShotFull({
+      idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
+      tipo: idea.tipo || tipoFromText(idea.titulo),
+      headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
+      refs,
+      excludeStyles: CHAT_STYLE_USED,
+    });
     if (CHAT_IDEA !== idea) return;
-    if (ph && phEntry) {
-      const mk = (tpl, pal) => {
-        const cv = document.createElement('canvas');
-        drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
-        return cv;
-      };
-      CHAT_PREVIEWS = pair.map(([tpl, pal]) => ({ kind: 'design', cv: mk(tpl, pal) }));
-      // Tercera opción: la foto sola, sin diseño encima (cuando la foto vende sola)
-      const cv = document.createElement('canvas');
-      cv.width = 1080; cv.height = 1350;
-      drawCover(cv.getContext('2d'), ph, 0, 0, 1080, 1350);
-      CHAT_PREVIEWS.push({ kind: 'photo', cv, path: phEntry.file_path });
-    } else {
-      // SIN FOTO: PROHIBIDO el bloque de color plano (se ve malísimo). Se genera la
-      // imagen REAL con IA — es exactamente la que va a salir al crear el posteo.
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)" id="chatPrevThinking"></div>';
-      postyThinking($('#chatPrevThinking'));
-      let genPath = null;
-      try {
-        genPath = await aiConceptShot({
-          idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
-          tipo: idea.tipo || tipoFromText(idea.titulo),
-          headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
-          refs: [],
-        });
-      } catch (e) {
-        if (isAiCapErr(e)) {
-          stopPrevThinking();
-          box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
-          CHAT_PREVIEWS = [];
-          return;
-        }
-      }
-      if (CHAT_IDEA !== idea) return;
-      if (!genPath) {
-        stopPrevThinking();
-        box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora, pero tocá ✨ Hacerlo posteo y la creo en el momento 👇</div>';
-        CHAT_PREVIEWS = [];
-        return;
-      }
-      const gImg = await photoImg(genPath);
-      if (CHAT_IDEA !== idea) return;
-      const cv = document.createElement('canvas');
-      cv.width = 1080; cv.height = 1350;
-      drawCover(cv.getContext('2d'), gImg, 0, 0, 1080, 1350);
-      CHAT_PREVIEWS = [{ kind: 'generated', cv, path: genPath }];
-      renderChatStoryboard();
+    if (!gen || !gen.path) {
+      stopPrevThinking();
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
+      CHAT_PREVIEWS = [];
+      return;
     }
+    if (gen.style && !CHAT_STYLE_USED.includes(gen.style)) CHAT_STYLE_USED.push(gen.style);
+    CHAT_PREVIEWS = [{ kind: 'generated', cv: null, path: gen.path, style: gen.style, styleName: gen.styleName }];
     CHAT_PREV_SEL = 0;
     stopPrevThinking();
     box.innerHTML = '';
-    CHAT_PREVIEWS.forEach((pv, i) => {
-      const d = document.createElement('div');
-      d.className = 'chat-prev' + (i === CHAT_PREV_SEL ? ' sel' : '');
-      d.appendChild(pv.cv);
-      if (pv.kind === 'photo') {
-        const tag = document.createElement('span');
-        tag.className = 'pv-tag';
-        tag.textContent = '📷 Solo foto';
-        d.appendChild(tag);
-      }
-      d.onclick = () => {
-        CHAT_PREV_SEL = i;
-        box.querySelectorAll('.chat-prev').forEach((el, j) => el.classList.toggle('sel', j === i));
-      };
-      box.appendChild(d);
-    });
+    const pv = CHAT_PREVIEWS[0];
+    const d = document.createElement('div');
+    d.className = 'chat-prev sel chat-prev-single';
+    const img = document.createElement('img');
+    img.src = pv.path;
+    img.alt = 'Imagen del posteo';
+    d.appendChild(img);
+    if (pv.styleName) {
+      const tag = document.createElement('span');
+      tag.className = 'pv-tag';
+      tag.textContent = '\u2728 ' + pv.styleName;
+      d.appendChild(tag);
+    }
+    box.appendChild(d);
+    renderChatStoryboard();
   } catch (e) {
+    if (CHAT_IDEA !== idea) return;
     stopPrevThinking();
-    box.innerHTML = `<div style="font-size:11.5px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
+    if (isAiCapErr(e)) {
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
+    } else {
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora 😅 Probá tocando ↻ Otra imagen.</div>';
+    }
     CHAT_PREVIEWS = [];
   }
 }
+
 
 let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
 
@@ -3133,6 +3115,7 @@ async function chatLoadHistory() {
     try { CHAT_FIRST_PICK = (r && r.first_pick) || null; } catch (e) { CHAT_FIRST_PICK = null; }
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
+      CHAT_STYLE_USED = [];
       applyChatOrder(r.idea);
       chatRenderProposal();
       const ta0 = $('#chatCaption');
@@ -3492,8 +3475,7 @@ function chatEditCommand(text) {
   }
   // — Cambiar el estilo —
   if (/\botro\s+(estilo|diseño|fondo)\b/i.test(t) || /\b(cambi[ae]|ponele)\s+(otro\s+)?(fondo|estilo|diseño)\b/i.test(t) || /\bm[aá]s\s+(claro|oscuro)\b/i.test(t)) {
-    CHAT_STYLE_IDX++;
-    chatSay('✅ Probá con este estilo 👇');
+    chatSay('✅ Generando con otro estilo 👇');
     renderChatPreviews();
     renderChatStoryboard();
     return true;
@@ -3701,6 +3683,7 @@ function bindChatComments() {
 // Acepta la idea elegida: es el flujo EXACTO del de una sola idea (no se duplica lógica).
 function chatAcceptIdea(idea) {
   CHAT_IDEA = idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  CHAT_STYLE_USED = [];
   applyChatOrder(idea); // foto elegida + colores del pedido
   chatRenderProposal();
   // Texto dictado por el cliente: va tal cual al textarea y se respeta (touched)

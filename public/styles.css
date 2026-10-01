@@ -1778,3 +1778,7 @@ textarea.in{resize:vertical;min-height:96px}
 /* Pill de racha en el header del Schedule (abre el modal de racha) */
 .sched-streak{background:#FFF9EC;border:1.5px solid #FEC14D;color:#0A1E33;border-radius:999px;padding:7px 13px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(254,193,77,.35);font-family:inherit}
 .sched-streak:active{transform:scale(.95)}
+/* Preview único de la tarjeta IDEA LISTA: la imagen real generada con IA */
+.chat-prev-single{cursor:default;max-width:280px}
+.chat-prev-single img{width:100%;height:auto;display:block}
+.chat-prev-loading{min-height:120px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--mut);background:var(--bg-soft);border-radius:14px;flex:1}
