@@ -6325,6 +6325,7 @@ async function conceptShotGenerate({ uid, idea, tipo, intent = null, headline, r
       if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
       if (styleOut) {
         styleOut.code = stylePick.style.code;
+        styleOut.name = stylePick.style.name || '';
         styleOut.reason = stylePick.reason;
         styleOut.intent = stylePick.intent || '';
       }
@@ -6575,10 +6576,11 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
-    const { idea = '', tipo = '', headline = '', refs = [], style = '' } = req.body || {};
-    const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null });
-    console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length})`);
-    res.json({ ok: true, path: imagePath });
+    const { idea = '', tipo = '', headline = '', refs = [], style = '', excludeStyles = [] } = req.body || {};
+    const styleOut = {};
+    const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut });
+    console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length}, estilo=${styleOut.code || '-'})`);
+    res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null });
   } catch (e) {
     console.error('[concept-shot]', e.message);
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
@@ -8113,7 +8115,7 @@ app.get('/api/ig/stories-status', requireAuth, (req, res) => {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v13';
+const BUILD_ID = '20261001-v14';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID }));
 

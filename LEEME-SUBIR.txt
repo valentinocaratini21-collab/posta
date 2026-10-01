@@ -18,7 +18,7 @@ CÓMO SUBIR ESTE ZIP A GITHUB (desde el iPhone) — 5 pasos
 
 5) VERIFICÁ que tomó el código nuevo, abrí en el navegador:
      https://postyhacetodo.com/api/version
-   Tiene que decir: {"ok":true,"build":"20261001-v13"}
+   Tiene que decir: {"ok":true,"build":"20261001-v14"}
    Si dice un build más viejo, algún archivo se subió duplicado:
    volvé al paso 2.
 
