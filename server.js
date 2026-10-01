@@ -10,6 +10,19 @@ const costs = require('./costs');
 costs.initCosts(db); // medición de gasto de IA (api_costs) + kill-switch diario
 const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
+const dogfood = require('./dogfood');
+dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
+// MIGRACION kind=design — diseños fantasma 2026-09-30
+// Los diseños generados por "✨ Otro diseño" se subían por /api/media y quedaban
+// registrados como kind='photo': al regenerar, assetPhotos() podía elegir el
+// diseño anterior como fondo y su texto se transparentaba detrás del nuevo.
+// Reclasifica a kind='design' todo asset 'photo' cuyo archivo sea la imagen de
+// algún post (image_path LIKE '/media/%'). Idempotente: correrla N veces solo
+// vuelve a poner 'design' donde ya lo es (0 filas afectadas la 2da vez).
+try {
+  const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
+  if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
+} catch (e) { console.error('[migracion] kind=design:', e.message); }
 const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples } = require('./generator');
 const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
@@ -43,10 +56,47 @@ let captionPromptExtras = () => '';
 let CAPTION_CHECKLIST = '';
 try { ({ analyzeCaptionStyle, getCaptionStyle, captionStyleBlock, captionPromptExtras, CAPTION_CHECKLIST } = require('./caption-style')); }
 catch (e) { console.error('[init] caption-style no disponible:', e.message); }
-// Extras para el system prompt de captions de un usuario: checklist anti-genérico
-// SIEMPRE + bloque "ESCRIBÍ COMO EL CLIENTE" si su IG fue analizado. Nunca lanza.
+// Brief Unificado del Cliente (client-brief.js): UNA sola fuente de verdad —
+// NEGOCIO + VOZ + VISUAL + MARCA en un bloque compacto. Mismo patrón defensivo.
+let refreshClientBrief = () => Promise.resolve({ ok: false, error: 'módulo no disponible' });
+let briefBlockFor = () => '';
+try { ({ refreshClientBrief, briefBlockFor } = require('./client-brief')); }
+catch (e) { console.error('[init] client-brief no disponible:', e.message); }
+// Estilos de imagen curados (image-styles.js): "secret codes" para gpt-image-1
+// (/food, /flatlay, /legoify...). Auto-pick por intención del posteo.
+// Mismo patrón defensivo: sin módulo, pickStyle devuelve null y nada cambia.
+let getStyle = () => null;
+let pickStyle = () => null;
+let styleFragment = () => '';
+let listStyles = () => [];
+let intentFromTipo = () => null;
+let resolveExplicitIntent = () => ({ intent: null, source: null });
+try { ({ getStyle, pickStyle, styleFragment, listStyles, intentFromTipo, resolveExplicitIntent } = require('./image-styles')); }
+catch (e) { console.error('[init] image-styles no disponible:', e.message); }
+// Cadena de fallback de imagen (image-fallback.js): INVARIANTE — todo posteo
+// sale con imagen, nunca solo palabras. Mismo patrón defensivo.
+let fallbackImage = null;
+let brandCardPng = null;
+try { ({ fallbackImage, brandCardPng } = require('./image-fallback')); }
+catch (e) { console.error('[init] image-fallback no disponible:', e.message); }
+// Scroll-stop QA (scrollstop.js) + carousels (carousel.js). Patrón defensivo.
+let scoreCanvasCover = null, qaScrollStopB64 = null, SCROLLSTOP_MIN = 60;
+try { ({ scoreCanvasCover, qaScrollStopB64, SCROLLSTOP_MIN } = require('./scrollstop')); }
+catch (e) { console.error('[init] scrollstop no disponible:', e.message); }
+let splitCarouselSlides = null, buildCarouselCaption = (c) => String(c || '');
+try { ({ splitCarouselSlides, buildCarouselCaption } = require('./carousel')); }
+catch (e) { console.error('[init] carousel no disponible:', e.message); }
+// Extras para el system prompt de captions de un usuario: PRIMERO el brief unificado
+// (contexto de quién es el cliente), después checklist anti-genérico + voz real.
+// Nunca lanza.
 function captionExtrasFor(uid) {
-  try { return (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || ''; }
+  try {
+    const parts = [];
+    try { const bb = (typeof briefBlockFor === 'function' && briefBlockFor(db, uid)) || ''; if (bb) parts.push(bb); } catch (e) {}
+    const rest = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || '';
+    if (rest) parts.push(rest);
+    return parts.join('\n\n');
+  }
   catch (e) { return ''; }
 }
 // Niveles que se sienten (level-boosts.js): el nivel del usuario cambia REALMENTE
@@ -109,6 +159,7 @@ function maybeGraduate(uid) {
 }
 const mp = require('./mercadopago');
 const demo = require('./demo');
+const feedAudit = require('./feed-audit');
 const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
 const streaks = require('./streaks');
@@ -1357,6 +1408,13 @@ app.post('/api/caption-style/analyze', requireAuth, async (req, res) => {
   catch (e) { res.json({ ok:false, error: e.message }); }
 });
 
+// Brief Unificado: re-mina la bio del IG y reconstruye el brief del cliente
+// (NEGOCIO + VOZ + VISUAL + MARCA). Nunca devuelve 500.
+app.post('/api/client-brief/refresh', requireAuth, async (req, res) => {
+  try { const r = await refreshClientBrief(db, req.session.userId); res.json(r); }
+  catch (e) { res.json({ ok:false, error: e.message }); }
+});
+
 // ---------- Generador ----------
 app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const { topic, n, seed, tipo } = req.body || {};
@@ -1367,9 +1425,11 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
     const key = openaiKeyFor(req.session.userId);
     if (count > 1) {
       const out = await generateCaptions(input, count, key);
+      (out.hookIds || []).forEach(h => recordHookUse(req.session.userId, h));
       return res.json(out); // { captions: [...], hashtags }
     }
     const out = await generateContent(input, key);
+    recordHookUse(req.session.userId, out && out.hookId);
     res.json(out);
   } catch (e) {
     res.status(500).json({ error: 'Se me trabó la creatividad 😅 Probá de nuevo que esta sale' });
@@ -2510,19 +2570,47 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, 0), key);
   const caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
+  recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
   const hashtags = String((content && content.hashtags) || '');
   const headline = makeHeadline(caption.split('\n')[0], 6) || makeHeadline(idea.titulo, 5);
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
-  const imagePath = await conceptShotGenerate({
-    uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
-    tipo: idea.tipo, headline, refs, apiKey: key,
-  });
+  const styleOut2 = {};
+  // INVARIANTE: todo borrador sale con imagen. Si la IA falla, fallback
+  // (tarjeta de marca PIL → sólido color de marca). Nunca solo palabras.
+  let imagePath = null;
+  // Reference lock: la primera foto de producto de la semana (misma que el
+  // pipeline) para que el producto se vea idéntico.
+  let regenProductRef = null;
+  try {
+    const r = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND week_key = ?
+      AND intent = 'producto' AND image_path LIKE '/media/%' AND status != 'cancelled'
+      ORDER BY id ASC LIMIT 1`).get(uid, weekKey || '');
+    const p = r && String(r.image_path || '');
+    if (p && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) regenProductRef = p;
+  } catch (e) {}
+  try {
+    imagePath = await conceptShotGenerate({
+      uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
+      tipo: idea.tipo, headline, refs, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
+    });
+  } catch (e) { console.error('[review] IA imagen falló, fallback:', e.message); }
+  if (!imagePath && fallbackImage) {
+    try {
+      const prof = getProfile(uid) || {};
+      const fb = await fallbackImage({
+        generateFn: null, headline, bgHex: primaryBrandHex(uid), textHex: '#FFFFFF',
+        business: prof.business_name || '', logoAbs: logoAbsPath(uid), photoAbs: null, outDir: MEDIA_DIR,
+      });
+      if (fb.path) { imagePath = fb.path; styleOut2.code = 'fallback'; styleOut2.reason = `imagen de respaldo (${fb.source})`; }
+    } catch (e) { console.error('[review] fallback imagen:', e.message); }
+  }
   if (!imagePath) return { ok: false, reason: 'no_image' };
-  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review)
-    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?)`)
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
-      String(idea.porque || '').slice(0, 500), weekKey || '', trainingWheelsActive(uid) ? 1 : 0);
+      String(idea.porque || '').slice(0, 500), weekKey || '', trainingWheelsActive(uid) ? 1 : 0,
+      String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''));
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
   return { ok: true, id: r.lastInsertRowid };
 }
@@ -3020,6 +3108,17 @@ function ideasInputFor(uid) {
     outcome: outcomeBrief(uid),
   });
 }
+// Hook engine: rotación de 8 semanas por cliente (hooks.js).
+// Nunca rompe: errores → sin rotación (el motor igual elige).
+function recentHookIds(uid) {
+  try {
+    return db.prepare(`SELECT DISTINCT hook_id FROM hook_usage WHERE user_id = ? AND used_at > datetime('now','-56 days')`).all(uid).map(r => r.hook_id).filter(Boolean);
+  } catch (e) { return []; }
+}
+function recordHookUse(uid, hookId) {
+  if (!uid || !hookId) return;
+  try { db.prepare(`INSERT INTO hook_usage (user_id, hook_id) VALUES (?,?)`).run(uid, hookId); } catch (e) {}
+}
 function contentInputFor(uid, topic, tipo, seed) {
   const profile = getProfile(uid);
   let styleRules = [];
@@ -3028,6 +3127,8 @@ function contentInputFor(uid, topic, tipo, seed) {
   try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
   // Niveles que se sienten: el nivel cambia REALMENTE el payload de captions.
   return levelBoosted(uid, 'caption', {
+    userId: uid, // hook engine: rotación de hooks por cliente
+    usedHookIds: recentHookIds(uid), // hooks usados en las últimas 8 semanas
     business: profile.business_name,
     ig_username: profile.ig_username || '', // el crítico permite mencionar la cuenta propia (draft 74)
     category: profile.category,
@@ -3081,8 +3182,14 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   const filePath = `/media/${name}`;
   // La foto subida en el chat también queda en su librería: así el servidor
   // puede resolverla cuando Posty la elige (photo_index) en un ```edit.
+  // FIX-FANTASMA: ?kind=design para diseños generados (renderDesignImage), que
+  // NO deben mezclarse con las fotos reales en assetPhotos(). Default 'photo'
+  // por compatibilidad (el chat sube fotos reales por este endpoint sin kind).
+  // Cualquier valor distinto de 'design' cae a 'photo'.
+  const qk = req.query.kind;
+  const kind = qk === 'design' ? 'design' : 'photo';
   try {
-    db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, 'photo');
+    db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(req.session.userId, filePath, kind);
   } catch (e) { console.error('[media] assets insert:', e.message); }
   res.json({ path: filePath });
 });
@@ -3970,6 +4077,22 @@ function nextWeekEligible(uid, weekKey) {
   if (!pipelineAliveRecently(uid)) return { ok: false, reason: 'paused_14d' };
   return { ok: true };
 }
+// Helpers para la cadena de fallback de imagen (image-fallback.js).
+// Logo del cliente como archivo absoluto (o null si no hay).
+function logoAbsPath(uid) {
+  try {
+    const row = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'logo' ORDER BY id ASC LIMIT 1`).get(uid);
+    const p = row && path.join(MEDIA_DIR, path.basename(String(row.file_path || '')));
+    return (p && fs.existsSync(p)) ? p : null;
+  } catch (e) { return null; }
+}
+// Primer color de marca del cliente (o default Posty).
+function primaryBrandHex(uid) {
+  try {
+    const hexes = parseBrandHexes((getSettings(uid) || {}).brand_colors);
+    return (hexes && hexes[0]) || '#0A1E33';
+  } catch (e) { return '#0A1E33'; }
+}
 // Genera los borradores de una semana (week_key = lunes 'YYYY-MM-DD').
 // Idempotente por (usuario, semana): si ya existen, no hace nada.
 async function generateWeekDrafts(uid, { weekKey, tag }) {
@@ -3997,21 +4120,47 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
     const picks = ideas.slice(0, ppw);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
-    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?)`);
+    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`);
     const needRev = trainingWheelsActive(uid) ? 1 : 0;
     let created = 0;
+    // Estilos de imagen: un solo tracker por semana para no repetir estilo
+    // entre borradores (lo comparten los 3 workers del pool).
+    const usedStyles = [];
     // Pool de 3 en paralelo (igual que el autopilot del browser).
     let nextIdx = 0;
+    // Carousel automático: como máximo 1 por semana, para la idea más
+    // carousel-friendly (tips/educativo). El claim es sincrónico: sin race
+    // entre los 3 workers.
+    let carouselClaimed = false;
+    // Reference lock: la primera foto de producto de la semana (si ya existe)
+    // viaja como referencia para que el producto se vea idéntico en todos
+    // los posteos. Se resuelve por worker justo antes de generar.
+    function weekProductRef() {
+      try {
+        const r = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND week_key = ?
+          AND intent = 'producto' AND image_path LIKE '/media/%' AND status != 'cancelled'
+          ORDER BY id ASC LIMIT 1`).get(uid, weekKey);
+        const p = r && String(r.image_path || '');
+        if (p) { try { return fs.existsSync(path.join(MEDIA_DIR, path.basename(p))) ? p : null; } catch (e) { return null; } }
+      } catch (e) {}
+      return null;
+    }
     async function worker() {
       while (true) {
         const i = nextIdx++;
         if (i >= picks.length) return;
         const idea = picks[i];
+        let isCarousel = false;
+        try {
+          const ri = resolveExplicitIntent({ tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '' });
+          if (!carouselClaimed && (ri.intent === 'tips' || ri.intent === 'educativo')) { carouselClaimed = true; isCarousel = true; }
+        } catch (e) {}
         try {
           const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i), key);
           const caption = String((content && content.caption) || '').trim();
           const hashtags = String((content && content.hashtags) || '');
           if (!caption) throw new Error('caption vacío');
+          recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
           if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); continue; }
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
@@ -4019,13 +4168,64 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
             || makeHeadline(idea.titulo, 5);
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
-          // Sin fallback de canvas en el servidor: si la imagen falla, el borrador
-          // se saltea (no se inventa nada) y la semana sigue con los demás.
-          const imagePath = await conceptShotGenerate({
-            uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
-          });
+          // INVARIANTE: todo borrador sale con imagen, nunca solo palabras.
+          // Si la IA falla, cadena de fallback (tarjeta de marca PIL → sólido
+          // color de marca). El borrador se crea igual: nunca solo palabras.
+          const styleOut = {};
+          let imagePath = null;
+          let carouselGen = null;
+          // Reference lock: la primera foto de producto de la semana viaja como
+          // referencia para que el producto se vea idéntico en todos los posteos.
+          const productRef = weekProductRef();
+          if (isCarousel) {
+            // Carousel automático: portada scroll-stop + 3 placas IA.
+            try {
+              carouselGen = await generateCarouselSet({
+                uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
+                tipo: idea.tipo, caption, key, usedStyles,
+              });
+              console.log(`[pipeline:${tag}] carousel para "${idea.titulo || i}": ${carouselGen.slidePaths.length} placas`);
+            } catch (e) {
+              console.error(`[pipeline:${tag}] carousel falló, caigo a imagen simple:`, e.message);
+              carouselGen = null; isCarousel = false;
+            }
+          }
+          if (!isCarousel) {
+          try {
+            imagePath = await conceptShotGenerate({
+              uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
+              usedStyles, styleOut, productRef,
+            });
+          } catch (e) { console.error(`[pipeline:${tag}] IA imagen falló, fallback:`, e.message); }
+          }
+          let finalCode = String(styleOut.code || ''), finalReason = String(styleOut.reason || ''), finalIntent = String(styleOut.intent || '');
+          const finalProductRef = String(productRef || '');
+          const finalHookId = String((content && content.hookId) || '');
+          if (!isCarousel) {
+          if (!imagePath && fallbackImage) {
+            try {
+              const fb = await fallbackImage({
+                generateFn: null, headline, bgHex: primaryBrandHex(uid), textHex: '#FFFFFF',
+                business: (profile && profile.business_name) || '', logoAbs: logoAbsPath(uid), photoAbs: null, outDir: MEDIA_DIR,
+              });
+              if (fb.path) { imagePath = fb.path; finalCode = 'fallback'; finalReason = `imagen de respaldo (${fb.source})`; }
+            } catch (e) { console.error(`[pipeline:${tag}] fallback imagen:`, e.message); }
+          }
           if (!imagePath) throw new Error('sin imagen');
-          insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev);
+          insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
+          } else {
+            // El carousel se guarda como UN post con media_type='carousel'.
+            const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 5);
+            db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
+              carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review,
+              style_code, style_reason, intent, product_ref, hook_id)
+              VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?)`)
+              .run(uid, carouselGen.coverPath, carouselGen.caption, hashtags, JSON.stringify(paths),
+                idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500),
+                weekKey, (needRev || carouselGen.needsReview) ? 1 : 0,
+                'carousel', `carousel automático (${carouselGen.slidePaths.length} placas)`,
+                finalIntent || 'tips', finalProductRef, finalHookId);
+          }
           created++;
         } catch (e) {
           console.error(`[pipeline:${tag}] borrador "${idea.titulo || i}" falló:`, e.message);
@@ -4525,12 +4725,20 @@ app.get('/api/ig/callback', async (req, res) => {
         })
         .catch(e => console.error('[ig] analyze:', e.message));
     } catch (e) { console.error('[ig] analyze:', e.message); }
-    // Style Lock visual: analiza la estética del feed en background. Nunca bloquea la conexión.
-    try { analyzeVisualStyle(db, req.session.userId).catch(e => console.error('[ig] style-visual:', e.message)); }
-    catch (e) { console.error('[ig] style-visual:', e.message); }
-    // Caption Style Lock: analiza cómo escribe en su IG en background. Nunca bloquea la conexión.
-    try { analyzeCaptionStyle(db, req.session.userId).catch(e => console.error('[ig] caption-style:', e.message)); }
-    catch (e) { console.error('[ig] caption-style:', e.message); }
+    // Style Lock visual + Caption Style Lock + Brief unificado: analizan el IG en
+    // background al conectar. El brief se reconstruye cuando terminan ambos
+    // análisis (los resume en una sola fuente de verdad). Nunca bloquea la conexión.
+    try {
+      const uidCb = req.session.userId;
+      const vP = analyzeVisualStyle(db, uidCb);
+      vP.catch(e => console.error('[ig] style-visual:', e.message));
+      const cP = analyzeCaptionStyle(db, uidCb);
+      cP.catch(e => console.error('[ig] caption-style:', e.message));
+      Promise.allSettled([vP, cP]).then(() => {
+        try { refreshClientBrief(db, uidCb).catch(e => console.error('[ig] client-brief:', e.message)); }
+        catch (e) { console.error('[ig] client-brief:', e.message); }
+      });
+    } catch (e) { console.error('[ig] client-brief:', e.message); }
     track(req.session.userId, 'ig_connected');
     evTrack(req.session.userId, 'ig_connect', {});
     delete req.session.igAttemptAt; // conectado: no más banner pendiente
@@ -5435,6 +5643,7 @@ app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
     if (apiKey) {
       try {
         const out = await generateContent({
+          userId: uid, usedHookIds: recentHookIds(uid),
           business: profile.business_name, category: profile.category, tone: profile.tone,
           description: profile.description, dna: readDna(uid),
           topic: `Reescribí este posteo que funcionó muy bien, con texto fresco y otro ángulo. NO lo copies: hacelo nuevo sobre la misma idea. Idea original: "${String(old.caption || '').slice(0, 300)}"`,
@@ -5445,6 +5654,7 @@ app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
           captionExtras: captionExtrasFor(uid),
         }, apiKey);
         caption = (out && out.caption) || ''; hashtags = (out && out.hashtags) || '';
+        recordHookUse(uid, out && out.hookId);
       } catch (e) { console.error('[recycle] generate:', e.message); }
     }
     if (!String(caption).trim()) caption = String(old.caption || '').slice(0, 500);
@@ -5555,11 +5765,24 @@ app.get('/api/photo-mission', requireAuth, async (req, res) => {
 // Product shot con IA: si el cliente no subió fotos ESTA semana pero tiene de
 // antes, la IA genera una variación nueva BASADA en sus fotos reales (referencia).
 // Así el sistema "aprende" cómo se ve su producto y no repite las mismas fotos.
+// Helper: fragmento de estilo para product-shot (estilo manual o auto-pick
+// por tema/rubro). Va AL FINAL del prompt, con supremacía de paleta.
+// Devuelve '' si el módulo no está. Nunca lanza.
+function styleFragFor(styleCode, settings, profile) {
+  try {
+    const st = styleCode
+      ? getStyle(styleCode)
+      : ((pickStyle({ theme: '', rubro: (profile && profile.category) || '' }) || {}).style || null);
+    if (!st) return '';
+    const hexes = (typeof parseBrandHexes === 'function' && settings) ? parseBrandHexes(settings.brand_colors) : [];
+    return '\n' + styleFragment(st, hexes);
+  } catch (e) { return ''; }
+}
 app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     try { costs.assertAiOk(req.session.userId); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
-    const { refs = [], idea = '', angle = '' } = req.body || {};
+    const { refs = [], idea = '', angle = '', style = '' } = req.body || {};
     const profile = getProfile(req.session.userId);
     const settings = getSettings(req.session.userId);
     const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
@@ -5574,7 +5797,8 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       `INSPIRADA EN las fotos de referencia: el MISMO producto, los MISMOS colores, la MISMA estética y estilo fotográfico. ` +
       `Tiene que parecer sacada en el mismo lugar, otro momento. ` +
       `Tema del posteo: ${idea || 'novedad'}. ${angle || ''} ` +
-      `Sin texto, sin letras, sin logos, sin marcas de agua. Calidad de fotografía comercial profesional.`;
+      `Sin texto, sin letras, sin logos, sin marcas de agua. Calidad de fotografía comercial profesional.` +
+      styleFragFor(style, settings, profile);
     const form = new FormData();
     form.append('model', 'gpt-image-1');
     form.append('prompt', prompt);
@@ -5993,7 +6217,7 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
 // Motor de concept-shot como función reusable: brief expandido + imagen con
 // gpt-image-1 + QA de visión (máx 1 reintento) + guardado. Devuelve el path
 // público (/media/...). Lanza si falla (el llamador decide el status HTTP).
-async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) {
+async function conceptShotGenerate({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -6045,13 +6269,57 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
   // N4+: el Style Lock visual se verifica en el prompt de imagen (si la
   // generación lo ignora, el brand-check post-generación entra en retry).
   if (brief.styleLockVerify) prompt = `${prompt}\n\n${brief.styleLockVerify}`;
+  // Estilos de imagen (image-styles.js): la INTENCIÓN viaja EXPLÍCITA desde el
+  // generador. resolveExplicitIntent() la resuelve de lo que el generador YA
+  // SABE (tipo determinista + refinamiento por keywords); el caller puede
+  // pasar `intent` directo para forzarla. Precedencia en pickStyle: intent
+  // explícito > keywords del tema/ángulo > intent desde tipo > default. El
+  // fragmento va AL FINAL del prompt, DESPUÉS del Style Lock visual — la
+  // paleta manda. Las reglas NEVER_STYLES filtran combinaciones prohibidas.
+  let stylePick = null, styleFrag = '';
+  // Learning loop: lo que rinde para ESTE cliente sube en el ranking
+  // (solo reordena dentro de lo válido; jamás rompe brandSafe/NEVER_STYLES).
+  let learnBoosts = {};
+  try { learnBoosts = require('./learning').getClientBoosts(db, uid) || {}; } catch (e) {}
+  try {
+    const { INTENT_STYLES: IS, resolveExplicitIntent: rei } = require('./image-styles');
+    const known = rei({ tipo: String(tipo || ''), theme, angle });
+    const explicitIntent = (intent && IS[intent]) ? { intent, source: 'forced' } : known;
+    stylePick = style
+      ? { style: getStyle(style), reason: `estilo elegido manualmente (${style})`, intent: explicitIntent.intent || '', intentSource: explicitIntent.source === 'forced' ? 'explicit' : 'manual' }
+      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts });
+    if (stylePick && stylePick.style) {
+      styleFrag = styleFragment(stylePick.style, hexes);
+      if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
+      if (styleOut) {
+        styleOut.code = stylePick.style.code;
+        styleOut.reason = stylePick.reason;
+        styleOut.intent = stylePick.intent || '';
+      }
+      console.log(`[style] ${stylePick.style.code} — ${stylePick.reason} (intent: ${stylePick.intent || '-'}${stylePick.intentSource ? `, src: ${stylePick.intentSource}` : ''})`);
+    } else stylePick = null;
+  } catch (e) { console.error('[style] pick falló:', e.message); stylePick = null; styleFrag = ''; }
+  const withStyle = (p) => (styleFrag ? `${p}\n\n${styleFrag}` : p) + (extraPrompt ? `\n\n${extraPrompt}` : '');
   let absRefs = (refs || []).slice(0, 2)
     .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
     .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
   const userRefCount = absRefs.length;
+  // Reference lock (producto consistente): la primera foto de producto de la
+  // semana viaja como referencia para que el producto se vea IDÉNTICO en todos
+  // los posteos. Solo si el caller no pasó refs propias.
+  let refNote;
+  if (productRef && !userRefCount) {
+    const prp = path.join(MEDIA_DIR, path.basename(String(productRef)));
+    try {
+      if (fs.existsSync(prp) && fs.statSync(prp).isFile()) {
+        absRefs = [prp, ...absRefs].slice(0, 3);
+        refNote = 'IMPORTANT: the reference photo shows the client\'s REAL product — it must appear IDENTICAL in the new image (same shape, same colors, same packaging, same labels, same proportions). Do NOT redesign or reinterpret the product. Only change the scene/style around it.';
+      }
+    } catch (e) {}
+  }
   // Style Lock: logo de marca del cliente — se sube UNA vez (asset kind='logo') y
   // va SIEMPRE como primera referencia: la marca sale idéntica en todos los posteos.
-  let refNote;
+  // (refNote ya declarado arriba: el reference-lock de producto puede haberlo seteado.)
   let logoPresent = false;
   try {
     const logoRow = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'logo' ORDER BY id ASC LIMIT 1`).get(uid);
@@ -6088,9 +6356,17 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       refNote = 'IMPORTANT: keep the SAME recurring subject/character from the reference photos (it appears in every post of this client), recognizable and consistent, in a new scene.';
     }
   }
+  // MODO RESTYLE: la foto del cliente es la protagonista — el MISMO producto,
+  // solo cambia el estilo. Pisa cualquier refNote anterior (incluso el logo:
+  // en restyle la foto base manda).
+  if (restyle) {
+    refNote = refNoteOverride || 'IMPORTANT: keep the EXACT same product/subject from the reference photo — identical shape, colors, packaging, labels, details and proportions. Do NOT invent a different product, do NOT redesign it. ONLY change the photographic style, lighting and scene as directed.';
+  } else if (refNoteOverride) {
+    refNote = refNoteOverride;
+  }
   let b64;
   try {
-    b64 = await genConceptImage(key, prompt, absRefs, refNote, uid);
+    b64 = await genConceptImage(key, withStyle(prompt), absRefs, refNote, uid);
   } catch (e) {
     console.error('[concept-shot] openai:', e.message);
     throw new Error('OpenAI no pudo generar la imagen: ' + e.message);
@@ -6128,7 +6404,7 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
       // N4+: el reintento también lleva la verificación de style lock.
       if (brief.styleLockVerify && !String(retryPrompt).includes('STYLE LOCK CHECK')) retryPrompt = `${retryPrompt}\n\n${brief.styleLockVerify}`;
       try {
-        b64 = await genConceptImage(key, retryPrompt, absRefs, refNote, uid); // el reintento no pasa por QA
+        b64 = await genConceptImage(key, withStyle(retryPrompt), absRefs, refNote, uid); // el reintento no pasa por QA
         console.log('[concept-shot] reintento QA generado');
       } catch (e) {
         console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
@@ -6152,7 +6428,7 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
     if (!bc.logo_ok) fixes.push('the client\'s brand logo (FIRST reference image) must appear IDENTICAL — same design, same colors, same art style, no deformations, no redesign, no reinterpretation');
     if (!bc.linea_ok) fixes.push(`respect the client's visual line exactly${visualStyle ? ': ' + String(visualStyle).slice(0, 200) : ''}`);
     try {
-      b64 = await genConceptImage(key, prompt + `\nIMPORTANT FIX (brand check failed: ${bc.detalle || 'brand mismatch'}): ${fixes.join(' ')}. Regenerate fixing exactly that, keeping everything else the same.`, absRefs, refNote, uid);
+      b64 = await genConceptImage(key, withStyle(prompt + `\nIMPORTANT FIX (brand check failed: ${bc.detalle || 'brand mismatch'}): ${fixes.join(' ')}. Regenerate fixing exactly that, keeping everything else the same.`), absRefs, refNote, uid);
       console.log(`[brand-check] regeneración ${bcTry + 1} generada`);
     } catch (e) {
       console.error('[brand-check] regeneración falló, devuelvo la última imagen:', e.message);
@@ -6164,18 +6440,102 @@ async function conceptShotGenerate({ uid, idea, tipo, headline, refs, apiKey }) 
   // si la regeneración falla, se entrega la última imagen (no se pierde el trabajo).
   if (!qaResolutionOk(b64)) {
     console.log('[concept-shot] resolución bajo el mínimo: aviso en 1 línea y ofrezco alternativa (regenerar)');
-    try { b64 = await genConceptImage(key, prompt, absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen resolución:', e.message); }
+    try { b64 = await genConceptImage(key, withStyle(prompt), absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen resolución:', e.message); }
   }
   if (!qaAspectOk(b64, QA_ASPECT_45)) {
     console.log('[concept-shot] aspect ratio distinto al formato pedido (4:5): regenero');
-    try { b64 = await genConceptImage(key, prompt + '\nIMPORTANT: strict vertical 4:5 aspect ratio.', absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen aspecto:', e.message); }
+    try { b64 = await genConceptImage(key, withStyle(prompt + '\nIMPORTANT: strict vertical 4:5 aspect ratio.'), absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen aspecto:', e.message); }
   }
   const dedupe = qaDedupe7d(uid, cleanHeadline || theme);
   if (!dedupe.ok) {
     console.log(`[concept-shot] comparación visual: posible duplicado de los últimos 7 días ("${dedupe.caption}"), cambio la propuesta`);
-    try { b64 = await genConceptImage(key, prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`, absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
+    try { b64 = await genConceptImage(key, withStyle(prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`), absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
   }
   return `/media/${saveImageB64(b64)}`;
+}
+
+// generateCarouselSet — carousel automático: portada canvas (scroll-stop) +
+// 3 placas IA (una idea cada una). La portada usa brand-card.py (gratis,
+// instantánea) con QA determinístico de contraste/miniatura; cada placa pasa
+// scroll-stop QA de visión con 1 reintento. Devuelve
+// { coverPath, slidePaths, caption, scrollScore, needsReview }.
+// Lanza si no se puede armar (el llamador cae a imagen simple).
+async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }) {
+  if (!splitCarouselSlides) throw new Error('carousel no disponible');
+  costs.assertAiOk(uid);
+  const settings = getSettings(uid);
+  const profile = getProfile(uid) || {};
+  const apiKey = key || settings.openai_key || process.env.OPENAI_API_KEY || '';
+  if (!apiKey) throw new Error('Sin clave de OpenAI');
+  const titulo = String(idea.titulo || idea.tema || '');
+  const porque = String(idea.porque || idea.angulo || '');
+  const split = await splitCarouselSlides({ titulo, porque, caption }, apiKey);
+  if (!split) throw new Error('no se pudo partir la idea en placas');
+  const bgHex = primaryBrandHex(uid) || '#0A1E33';
+  const business = profile.business_name || '';
+  let logoAbs = null;
+  try { logoAbs = logoAbsPath(uid); } catch (e) {}
+  let needsReview = false;
+  // --- Portada: brand-card.py + QA determinístico (contraste + miniatura) ---
+  let coverPath = null, coverTries = 0, coverBg = bgHex, coverText = '#FFFFFF';
+  while (coverTries < 3 && !coverPath) {
+    coverTries++;
+    try {
+      const abs = brandCardPng({ headline: split.cover, bgHex: coverBg, textHex: coverText, business, logoAbs, photoAbs: null, outDir: MEDIA_DIR });
+      const words = split.cover.trim().split(/\s+/).length;
+      const fontEst = words <= 4 ? 104 : words <= 7 ? 80 : 56;
+      const qa = scoreCanvasCover ? scoreCanvasCover({ headline: split.cover, textHex: coverText, bgHex: coverBg, fontPx: fontEst, canvasW: 1080 }) : { score: 100, pass: true, fixes: [] };
+      console.log(`[carousel] portada QA determinístico: score=${qa.score} (intento ${coverTries})`);
+      if (qa.pass || coverTries >= 3) {
+        if (!qa.pass) { needsReview = true; console.log('[carousel] portada bajo el mínimo tras 3 intentos → needs_review'); }
+        coverPath = '/media/' + path.basename(abs);
+      } else {
+        // Ajuste: forzar máximo contraste (texto blanco sobre navy).
+        coverBg = '#0A1E33'; coverText = '#FFFFFF';
+      }
+    } catch (e) { console.error('[carousel] portada falló:', e.message); }
+  }
+  if (!coverPath) throw new Error('no se pudo renderizar la portada');
+  // --- Placas: una foto IA por punto, con scroll-stop QA de visión ---
+  const slidePaths = [];
+  let coverScoreSum = 0;
+  const slideJobs = split.slides.map((s, idx) => (async () => {
+    const styleOut = {};
+    let extraPrompt = '';
+    let p = null, sScore = 0, sOk = false;
+    for (let attempt = 0; attempt < 2 && !sOk; attempt++) {
+      try {
+        p = await conceptShotGenerate({
+          uid, idea: { titulo: `${titulo}: ${s.title}`, porque: s.text }, tipo,
+          headline: '', refs: [], apiKey, usedStyles, styleOut, extraPrompt: extraPrompt || undefined,
+        });
+        // Scroll-stop QA de visión sobre la placa generada.
+        if (qaScrollStopB64) {
+          const abs = path.join(MEDIA_DIR, path.basename(String(p)));
+          let b64 = null;
+          try { b64 = fs.readFileSync(abs).toString('base64'); } catch (e) {}
+          const qa = b64 ? await qaScrollStopB64(b64, apiKey) : null;
+          if (qa) {
+            sScore = qa.score;
+            console.log(`[carousel] placa ${idx + 1} scroll-stop: score=${qa.score} (intento ${attempt + 1})`);
+            if (qa.pass) { sOk = true; break; }
+            extraPrompt = `SCROLL-STOP FIX: ${qa.fixes.join(' ')}. Regenerate as a high-impact Instagram image that stops the scroll in half a second.`;
+          } else { sOk = true; } // QA no disponible: se acepta la placa
+        } else { sOk = true; }
+      } catch (e) { console.error(`[carousel] placa ${idx + 1} falló:`, e.message); break; }
+    }
+    return { path: p, score: sScore, ok: !!p };
+  })());
+  const slideResults = await Promise.all(slideJobs);
+  for (const r of slideResults) {
+    if (r.path) { slidePaths.push(r.path); coverScoreSum += r.score; }
+  }
+  if (!slidePaths.length) throw new Error('no se pudo generar ninguna placa');
+  if (slidePaths.length < split.slides.length) needsReview = true;
+  const avgSlideScore = slidePaths.length ? Math.round(coverScoreSum / slidePaths.length) : 0;
+  const finalCaption = buildCarouselCaption(caption);
+  console.log(`[carousel] usuario ${uid}: portada + ${slidePaths.length} placas, score placas≈${avgSlideScore}, needsReview=${needsReview}`);
+  return { coverPath, slidePaths, caption: finalCaption, scrollScore: avgSlideScore, needsReview };
 }
 
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
@@ -6183,8 +6543,8 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
-    const { idea = '', tipo = '', headline = '', refs = [] } = req.body || {};
-    const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs });
+    const { idea = '', tipo = '', headline = '', refs = [], style = '' } = req.body || {};
+    const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null });
     console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length})`);
     res.json({ ok: true, path: imagePath });
   } catch (e) {
@@ -6193,6 +6553,362 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     if (String(e.message || '').startsWith('Sin clave')) return res.status(400).json({ error: e.message });
     res.status(502).json({ error: String(e.message || 'No se pudo generar la imagen').slice(0, 200) });
   }
+});
+
+// Estilos de imagen disponibles (para el picker "✨ Estilo" en borradores).
+app.get('/api/image-styles', requireAuth, (req, res) => {
+  try { res.json({ ok: true, styles: listStyles() }); }
+  catch (e) { res.json({ ok: true, styles: [] }); }
+});
+
+// Regenerar SOLO la foto de un borrador con un estilo elegido (picker "✨ Estilo").
+// Mantiene caption, hashtags y horario: solo cambia la imagen.
+app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    const postId = Number(req.params.id);
+    const { style = '' } = req.body || {};
+    const st = getStyle(style);
+    if (!postId || !st) return res.status(400).json({ ok: false, error: 'Estilo inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6) || '';
+    const styleOut = {};
+    const newPath = await conceptShotGenerate({
+      uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut,
+    });
+    if (!newPath) throw new Error('sin imagen');
+    db.prepare('UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ? WHERE id = ?')
+      .run(String(newPath), st.code, String(styleOut.reason || ''), String(styleOut.intent || ''), postId);
+    res.json({ ok: true, path: newPath, style: st.code, reason: styleOut.reason || '' });
+  } catch (e) {
+    console.error('[photo-style]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo regenerar la foto').slice(0, 200) });
+  }
+});
+
+// Restylear la foto ACTUAL de un borrador con un estilo elegido ("🎨 Restylear
+// mi foto"). A diferencia de /photo-style (que genera una foto nueva), acá la
+// foto del cliente es la BASE: gpt-image-1 EDITS mantiene el MISMO producto,
+// solo cambia el estilo. Mantiene caption, hashtags y horario.
+app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    const postId = Number(req.params.id);
+    const { style = '' } = req.body || {};
+    const st = getStyle(style);
+    if (!postId || !st) return res.status(400).json({ ok: false, error: 'Estilo inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const basePath = String(post.image_path || '');
+    const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
+    if (!absBase || !fs.existsSync(absBase))
+      return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para restylear' });
+    const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6) || '';
+    const styleOut = {};
+    const newPath = await conceptShotGenerate({
+      uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline,
+      refs: [basePath], style: st.code, styleOut, restyle: true,
+    });
+    if (!newPath) throw new Error('sin imagen');
+    db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?,
+      source_topic = COALESCE(NULLIF(source_topic,''), 'restyle') WHERE id = ?`)
+      .run(String(newPath), st.code, `restyle de tu foto con ${st.code}`, String(styleOut.intent || ''), postId);
+    res.json({ ok: true, path: newPath, style: st.code });
+  } catch (e) {
+    console.error('[photo-restyle]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo restylear la foto').slice(0, 200) });
+  }
+});
+
+// "✨ Mejorar foto": rescate de fotos mediocres. Un tap → gpt-image-1 EDITS
+// arregla luz, balance de blancos, exposición y nitidez MANTENIENDO la misma
+// foto (misma composición, mismos sujetos). Sin brief, sin vueltas.
+app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    const postId = Number(req.params.id);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const basePath = String(post.image_path || '');
+    const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
+    if (!absBase || !fs.existsSync(absBase))
+      return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para mejorar' });
+    const settings = getSettings(uid);
+    const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!apiKey) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
+    const b64 = await genConceptImage(apiKey,
+      'Enhance this photo professionally: fix lighting, white balance, exposure, sharpness and contrast. Keep the EXACT same composition, subjects, framing and colors — it must remain recognizably the SAME photo, just professionally finished. Do not add, remove or move anything.',
+      [absBase], null, uid);
+    const newPath = `/media/${saveImageB64(b64)}`;
+    db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), postId);
+    res.json({ ok: true, path: newPath });
+  } catch (e) {
+    console.error('[photo-enhance]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mejorar la foto').slice(0, 200) });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Posty dogfood: Posty como su propio primer cliente.
+// GET /api/dogfood/pending → la propuesta de hoy (o null).
+// POST /api/dogfood/:id/approve → publica por el pipeline existente.
+// POST /api/dogfood/:id/dismiss → la descarta (mañana se genera otra).
+// ---------------------------------------------------------------------------
+app.get('/api/dogfood/pending', requireAuth, async (req, res) => {
+  try {
+    const p = dogfood.getPendingDogfood(db, req.session.userId);
+    res.json({ post: p || null });
+  } catch (e) {
+    res.status(500).json({ post: null });
+  }
+});
+app.post('/api/dogfood/:id/approve', requireAuth, express.json(), async (req, res) => {
+  try {
+    const postId = Number(req.params.id);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Propuesta inválida' });
+    const p = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ? AND kind = 'dogfood'`).get(postId, req.session.userId);
+    if (!p) return res.status(404).json({ ok: false, error: 'Propuesta no encontrada' });
+    const r = await dogfood.approveDogfood(db, postId, (d, post) => publishSinglePost(d, post, { house: true }));
+    if (!r.ok) return res.status(400).json(r);
+    res.json(r);
+  } catch (e) {
+    console.error('[dogfood/approve]', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo publicar' });
+  }
+});
+app.post('/api/dogfood/:id/dismiss', requireAuth, express.json(), async (req, res) => {
+  try {
+    const postId = Number(req.params.id);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Propuesta inválida' });
+    const p = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ? AND kind = 'dogfood'`).get(postId, req.session.userId);
+    if (!p) return res.status(404).json({ ok: false, error: 'Propuesta no encontrada' });
+    res.json(dogfood.dismissDogfood(db, postId));
+  } catch (e) {
+    console.error('[dogfood/dismiss]', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo descartar' });
+  }
+});
+
+// Posty dogfood por email: los botones del email usan links firmados de un
+// solo uso (HMAC, 24h). Sin login: el token es la autenticación. El token se
+// invalida al usarse (anti-doble-click) y el approve usa el claim atómico
+// anti-doble-publicación.
+app.get('/api/dogfood/email-approve', async (req, res) => {
+  try {
+    const r = await dogfood.redeemDogfoodEmailToken(db, req.query.token, 'approve',
+      (d, post) => publishSinglePost(d, post, { house: true }));
+    res.status(200).send(r.html);
+  } catch (e) {
+    console.error('[dogfood/email-approve]', e.message);
+    res.status(200).send(dogfoodEmailResultPageFallback());
+  }
+});
+app.get('/api/dogfood/email-dismiss', async (req, res) => {
+  try {
+    const r = await dogfood.redeemDogfoodEmailToken(db, req.query.token, 'dismiss', null);
+    res.status(200).send(r.html);
+  } catch (e) {
+    console.error('[dogfood/email-dismiss]', e.message);
+    res.status(200).send(dogfoodEmailResultPageFallback());
+  }
+});
+function dogfoodEmailResultPageFallback() {
+  return '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty</title></head><body style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#47617A"><h1>🤔</h1><p>Algo salió mal. Abrí la app de Posty para ver tu propuesta de hoy.</p></body></html>';
+}
+
+// Historias automáticas: genera una story 1080×1920 (draft) del tipo pedido.
+// Tipos: poll | question | countdown | repost. Render con brand-card.py
+// (paleta del cliente). La publicación usa el flujo normal de stories.
+app.post('/api/story-generate', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const { type = 'poll', pollA = '', pollB = '', question = '', promoTitle = '', eventDate = '' } = req.body || {};
+    const S = require('./stories');
+    if (!S.STORY_TYPES.includes(type)) return res.status(400).json({ ok: false, error: 'Tipo de story inválido' });
+    const profile = getProfile(uid) || {};
+    const business = profile.business_name || '';
+    const brand = {
+      business, bgHex: primaryBrandHex(uid) || '#0A1E33', textHex: '#FFFFFF',
+      logoAbs: (() => { try { return logoAbsPath(uid); } catch (e) { return null; } })(),
+    };
+    // Contexto: último post del día (para repost).
+    let postCaption = '', postImageAbs = null;
+    try {
+      const p = db.prepare(
+        `SELECT caption, image_path FROM posts WHERE user_id = ? AND media_type = 'image'
+         AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid);
+      if (p) {
+        postCaption = String(p.caption || '').split('\n')[0];
+        const abs = p.image_path && p.image_path.startsWith('/media/')
+          ? path.join(MEDIA_DIR, path.basename(p.image_path)) : null;
+        if (abs && fs.existsSync(abs)) postImageAbs = abs;
+      }
+    } catch (e) {}
+    const ctx = { business, postCaption, postImageAbs, pollA, pollB, question, promoTitle, eventDate };
+    const out = S.generateStory({ db, uid, type, ctx, brand, mediaDir: MEDIA_DIR, scheduleAt: null });
+    res.json({ ok: true, id: out.id, path: out.path, type });
+  } catch (e) {
+    console.error('[story-generate]', e.message);
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo generar la story').slice(0, 200) });
+  }
+});
+
+// Community: cola de aprobación de respuestas a comentarios.
+// NUNCA se envía sin aprobación explícita del cliente.
+app.get('/api/community/pending', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const C = require('./community');
+    res.json({ ok: true, items: C.getPendingReplies(db, uid, 50) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Aprobar + enviar una respuesta a Instagram.
+app.post('/api/community/reply', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const id = Number((req.body || {}).id);
+    if (!id) return res.status(400).json({ ok: false, error: 'Id inválido' });
+    const C = require('./community');
+    const st = getSettings(uid) || {};
+    const creds = { igUserId: st.ig_user_id, accessToken: st.ig_access_token };
+    if (!creds.igUserId || !creds.accessToken)
+      return res.status(400).json({ ok: false, error: 'Conectá tu Instagram en Ajustes' });
+    const out = await C.approveAndSend(db, id, uid, { creds });
+    res.json({ ok: true, igId: out.igId });
+  } catch (e) {
+    console.error('[community-reply]', e.message);
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo enviar').slice(0, 200) });
+  }
+});
+
+// Descartar una respuesta propuesta (no se envía nada).
+app.post('/api/community/dismiss', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const id = Number((req.body || {}).id);
+    if (!id) return res.status(400).json({ ok: false, error: 'Id inválido' });
+    const C = require('./community');
+    res.json(C.dismissReply(db, id, uid));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// "🎠 Hacer carousel": convierte un borrador en carousel automático — portada
+// scroll-stop + 3 placas IA. El post pasa a media_type='carousel'.
+app.post('/api/carousel-generate', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    try { costs.assertAiOk(uid); }
+    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    const { postId = null } = req.body || {};
+    const pid = Number(postId);
+    if (!pid) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(pid, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if (post.media_type === 'carousel')
+      return res.json({ ok: true, already: true, paths: JSON.parse(post.carousel_paths || '[]') });
+    const usedStyles = [];
+    const gen = await generateCarouselSet({
+      uid,
+      idea: { titulo: post.source_topic || post.caption || '', porque: post.source_angle || '' },
+      tipo: post.tipo || '', caption: post.caption || '', key: openaiKeyFor(uid), usedStyles,
+    });
+    const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 5);
+    db.prepare(`UPDATE posts SET media_type = 'carousel', carousel_paths = ?, image_path = ?,
+      caption = ?, needs_review = ?, style_code = 'carousel' WHERE id = ?`)
+      .run(JSON.stringify(paths), gen.coverPath, gen.caption, gen.needsReview ? 1 : 0, pid);
+    res.json({ ok: true, paths, cover: gen.coverPath, needsReview: gen.needsReview });
+  } catch (e) {
+    console.error('[carousel-generate]', e.message);
+    if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar el carousel').slice(0, 200) });
+  }
+});
+
+// Reels automáticos (reels.js): Ken Burns + headline animado, 1080×1920, sin audio.
+// Máx 2 por semana (costo de generación). Nunca devuelve 500 sin mensaje claro.
+app.post('/api/reel-generate', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const R = require('./reels');
+    if (!R.ffmpegAvailable())
+      return res.status(500).json({ ok: false, error: 'ffmpeg no disponible en el servidor: el reel no se puede renderizar' });
+    if (R.reelsThisWeek(db, uid) >= R.REEL_MAX_PER_WEEK)
+      return res.status(429).json({ ok: false, error: 'Ya generaste los reels de esta semana 🎬 (máx 2)' });
+    const { postId = null, photos = null, headline = '' } = req.body || {};
+    let list = Array.isArray(photos) ? photos.filter(Boolean) : [];
+    let caption = '', hashtags = '';
+    if (!list.length && postId) {
+      const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(Number(postId), uid);
+      if (!post) return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+      if (post.media_type === 'carousel' && post.carousel_paths) {
+        try { list = JSON.parse(post.carousel_paths); } catch (e) { list = []; }
+      }
+      if (!list.length && post.image_path) list = [post.image_path];
+      caption = post.caption || ''; hashtags = post.hashtags || '';
+    }
+    const abs = list.slice(0, 6).map(p => path.isAbsolute(String(p)) ? String(p) : path.join(MEDIA_DIR, path.basename(String(p))));
+    if (!abs.length) return res.status(400).json({ ok: false, error: 'Pasame al menos 1 foto para armar el reel' });
+    const missing = abs.filter(p => !fs.existsSync(p));
+    if (missing.length) return res.status(400).json({ ok: false, error: 'Falta una foto: ' + path.basename(missing[0]) });
+    const profile = getProfile(uid);
+    const head = String(headline || '').trim() || String(caption).split('\n')[0].trim().slice(0, 60) || profile.business_name || '';
+    const gen = await R.buildReel({ photos: abs, headline: head, brandHex: primaryBrandHex(uid), businessName: profile.business_name || '', outDir: MEDIA_DIR });
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, tipo, hook_id)
+      VALUES (?,?,?,?,'draft','video','reel','')`).run(uid, gen.path, caption, hashtags);
+    res.json({ ok: true, id: ins.lastInsertRowid, video: gen.path, cover: gen.coverPath, durationSec: gen.durationSec, audioNote: gen.audioNote });
+  } catch (e) {
+    console.error('[reel-generate]', e.message);
+    res.status(502).json({ ok: false, error: String(e.message || 'No se pudo armar el reel').slice(0, 200) });
+  }
+});
+
+// Learning loop: registra rendimiento real de un posteo (insights de IG).
+// Acepta { post_id } (lee métricas de IG) o { style_code, intent, hook_id, metrics }.
+// Nunca devuelve 500. El scheduler lo alimenta a diario en automático.
+app.post('/api/learning/record', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const L = require('./learning');
+    const body = req.body || {};
+    let styleCode = String(body.style_code || ''), intent = String(body.intent || ''), hookId = String(body.hook_id || '');
+    let metrics = (body.metrics && typeof body.metrics === 'object') ? body.metrics : null;
+    if (body.post_id) {
+      const p = db.prepare('SELECT style_code, intent, hook_id, ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(Number(body.post_id), uid);
+      if (!p) return res.status(404).json({ ok: false, error: 'Post no encontrado' });
+      styleCode = styleCode || p.style_code; intent = intent || p.intent; hookId = hookId || p.hook_id;
+      if (!metrics && p.ig_media_id) {
+        const { getCreds, fetchMediaInsights } = require('./insights');
+        const creds = getCreds(db, uid);
+        if (creds) metrics = await fetchMediaInsights(p.ig_media_id, creds.accessToken);
+      }
+      const score = L.recordPerformance(db, { userId: uid, styleCode, intent, hookId, metrics: metrics || {} });
+      db.prepare('UPDATE posts SET learning_ingested = 1 WHERE id = ?').run(Number(body.post_id));
+      return res.json({ ok: true, score });
+    }
+    if (!styleCode) return res.status(400).json({ ok: false, error: 'Falta style_code o post_id' });
+    const score = L.recordPerformance(db, { userId: uid, styleCode, intent, hookId, metrics: metrics || {} });
+    res.json({ ok: true, score });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas
@@ -6268,6 +6984,43 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
 // (5 posteos: 4 imágenes + 1 video) → cartel de compra en el pico de emoción.
 app.get('/prueba', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
+});
+
+// ---------- Feed Audit: auditoría IA del Instagram (lead magnet) ----------
+// Página pública /auditoria → POST /api/audit {ig} → reporte con score.
+// Cache 72h por @ (no consume intento), anti-spam 5/día por IP con reembolso.
+app.get('/auditoria', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'auditoria.html'));
+});
+app.post('/api/audit', express.json({ limit: '16kb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  const ig = feedAudit.sanitizeHandle((req.body || {}).ig);
+  if (!ig) return res.status(400).json({ ok: false, error: 'Pasame tu @ de Instagram' });
+  const cached = feedAudit.getCachedAudit(ig);
+  if (cached) {
+    track(null, 'audit_done', ig + '|cached');
+    return res.json({ ok: true, audit: cached.audit, cached: true });
+  }
+  const rl = feedAudit.consumeAuditAttempt(ip);
+  if (!rl.ok) return res.status(429).json({ ok: false, error: 'Llegaste al límite de 5 auditorías por día. Volvé mañana 🔍' });
+  let ok = false;
+  try {
+    const r = await feedAudit.auditFeed(db, ig);
+    if (!r.ok) return res.status(422).json({ ok: false, error: r.error });
+    ok = true;
+    track(null, 'audit_done', ig);
+    res.json({ ok: true, audit: r.audit, cached: false });
+  } catch (e) {
+    console.error('[posta] Error en audit:', e.message);
+    res.status(500).json({ ok: false, error: 'No pudimos analizar ese Instagram ahora. Probá de nuevo en unos minutos.' });
+  } finally {
+    if (!ok) feedAudit.refundAuditAttempt(ip); // falló: no se consume
+  }
+});
+app.get('/api/audit/:handle', (req, res) => {
+  const cached = feedAudit.getCachedAudit(req.params.handle);
+  if (!cached) return res.status(404).json({ ok: false, cached: false });
+  res.json({ ok: true, audit: cached.audit, cached: true });
 });
 
 app.get('/api/trial/status', (req, res) => {
@@ -7338,4 +8091,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate };

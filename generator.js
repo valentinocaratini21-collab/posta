@@ -2,6 +2,9 @@
 // Usa OpenAI si hay API key configurada, si no usa el motor de plantillas local
 // con voz argentina (voseo).
 const { trackUsage, markPhotoSent, photoHash } = require('./costs');
+// Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
+// final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
+const { pickHook, renderHook, ensureCaptionOpensWithHook, HOOKS: HOOK_BANK } = require('./hooks');
 
 // Tope duro de caracteres para bloques OPCIONALES del contexto (anti-quemado de
 // tokens). Lo esencial (productos, servicios, promos activas, diferencial, tono)
@@ -228,6 +231,42 @@ function templateCaption({ business, category, tone, topic, feedback, seed, goal
   else caption = `${hook}\n\n${topicLine}\n\n${benefit}\n\n${cta}`;
   if (/sin emoji|menos emoji/i.test(fb)) caption = stripEmojis(caption).trim();
   return caption;
+}
+
+// Hooks legacy del motor de plantillas (por tono): si el caption ya abre con
+// uno de estos, el hook engine nuevo NO duplica — ya tiene hook.
+const LEGACY_HOOKS = new Set(
+  [...Object.values(HOOKS).flat(), ...Object.values(ENERGY_HOOKS).flat()].map(s => String(s).trim().toLowerCase())
+);
+// Fórmulas del hook engine como regex (slots → wildcard): detecta si el caption
+// ya abre con un hook del motor, aunque se haya elegido con otro tema/negocio.
+const KNOWN_HOOK_RES = (HOOK_BANK || []).map(h => {
+  try {
+    const pat = String(h.formula || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\\{tema\\\}|\\\{negocio\\\}/g, '.+?');
+    return new RegExp('^' + pat + '$', 'i');
+  } catch (e) { return null; }
+}).filter(Boolean);
+
+// Hook engine: garantiza que el caption abra con un hook de intención.
+// - Path IA: antepone el hook elegido (rotación por cliente vía input.usedHookIds).
+// - Path plantillas: ya trae hook de tono → se respeta, no se duplica.
+// Nunca rompe la generación: errores → caption intacto.
+function applyPostyHook(out, input) {
+  if (!out || typeof out !== 'object') return out;
+  try {
+    const firstLine = String(out.caption || '').split('\n')[0].trim();
+    if (LEGACY_HOOKS.has(firstLine.toLowerCase())) return out; // ya abre con hook
+    if (KNOWN_HOOK_RES.some(re => re.test(firstLine))) return out; // ya abre con hook del motor
+    const { resolveExplicitIntent } = require('./image-styles');
+    const r = resolveExplicitIntent({ tipo: String((input && input.tipo) || ''), theme: String((input && input.topic) || ''), angle: '' }) || {};
+    const hook = pickHook({ intent: r.intent || 'social', usedHookIds: (input && input.usedHookIds) || [] });
+    const hookText = renderHook(hook, { tema: (input && input.topic) || '', negocio: (input && input.business) || '' });
+    out.caption = ensureCaptionOpensWithHook(String(out.caption || ''), hookText);
+    out.hookId = hook.id;
+    out.hookReused = !!hook.reused;
+  } catch (e) { console.error('[hooks] no se pudo aplicar:', e.message); }
+  return out;
 }
 
 // Estándar de calidad Posta: si vendemos posteos, tienen que ser los mejores.
@@ -893,25 +932,27 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
 }
 
 async function generateContent(input, apiKey) {
+  let out = null;
   if (apiKey) {
     try {
-      const out = await openaiGenerate(input, apiKey);
+      out = await openaiGenerate(input, apiKey);
       const check = captionPasses(out.caption, input);
       if (!check.ok) {
         // Puerta de calidad: UN solo reintento con feedback de qué falló. Nunca loopear.
         const fb = `El caption anterior no pasó el control de calidad: ${check.reason}. Regeneralo corrigiendo eso, sin cambiar el tema.`;
         try {
-          return await openaiGenerate({ ...input, feedback: fb }, apiKey);
+          out = await openaiGenerate({ ...input, feedback: fb }, apiKey);
         } catch (e2) {
           console.error('Reintento de calidad falló, va el original:', e2.message);
         }
       }
-      return out;
     } catch (e) {
       console.error('OpenAI falló, usando plantillas:', e.message);
     }
   }
-  return templateGenerate(input);
+  if (!out) out = templateGenerate(input);
+  // Hook engine: el caption SIEMPRE abre con hook (después de la puerta de calidad).
+  return applyPostyHook(out, input);
 }
 
 // ---------- Creador v2: N captions distintos + hashtags ----------
@@ -985,7 +1026,9 @@ async function generateCaptions(input, n, apiKey) {
           fixedOvs.push(out.overlays[i] || '');
         }
       }
-      return { captions: fixedCaps, overlays: fixedOvs, hashtags: out.hashtags };
+      // Hook engine: cada caption abre con hook (rotación por cliente).
+      const hooked = fixedCaps.map((cap) => applyPostyHook({ caption: cap }, input));
+      return { captions: hooked.map(h => h.caption), overlays: fixedOvs, hashtags: out.hashtags, hookIds: hooked.map(h => h.hookId || null) };
     } catch (e) {
       console.error('OpenAI captions falló, usando plantillas:', e.message);
     }
@@ -1270,6 +1313,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     '"esta foto vende sola, no le pondría ni texto encima" / ' +
     '"ese caption está largo para un lunes, lo cortaría a la mitad" / ' +
     '"si lo publicás hoy a las 19 te agarra el pico de tu gente, yo no lo dejaría para mañana". ' +
+    'SUGERENCIA NUNCA VEREDICTO: si te piden elegir entre borradores o por dónde arrancar ("¿cuál te gusta más?", "¿por cuál arranco?"): sugerí como un amigo ("yo arrancaría por este 👇"), NUNCA como veredicto ("mi favorito es el 2"). Si no le gusta tu sugerencia, no pasa nada: era una sugerencia, no una promesa. ' +
     'INICIATIVA: proponé vos el siguiente paso sin que te lo pidan ("te lo dejo en borradores y lo revisamos", "¿querés que lo programe para mañana a las 18?"). ' +
     'La iniciativa va en tu MENSAJE; los bloques (```idea, ```edit, ```publish) solo salen cuando el protocolo los pide: opinar y proponer no es cerrar. ' +
     'REGLA CRÍTICA: jamás inventes productos, precios, promociones ni datos del negocio que no te dieron: si no sabés qué vende, preguntá o hablá en general, nunca inventes. ' +
@@ -1595,6 +1639,21 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'VOZ-OPERATIVA: voz y operativa en los bordes. "Aprobá todo" con CERO borradores → decí que no hay nada para aprobar; JAMÁS ```publish vacío. "Pausá todo" + "igual el de hoy publicalo" → el último manda: pausás todo menos el de hoy, y decí "solo el de hoy". Duplicar un borrador que fue rechazado por defecto → no dupliques defectos: avisá y proponé la versión corregida. "Guardame para diciembre" sin fecha → proponé fecha tentativa dicha en voz alta ("¿el 15/12?") y guardala con ```rule. "¿Cuál anduvo mejor?" sin datos → decilo simple: "todavía no tengo datos de rendimiento". "Hacé más como ese" y ese anduvo MAL (dato real) → avisá con datos antes de obedecer: "ese anduvo flojo, ¿probamos distinto?". ("3 por día") → estrategia + límite honesto: Instagram castiga el spam. Decir que no a un cliente fiel → calidez primero, alternativa después. Posteo que falló al publicarse → decilo primero, simple, con plan B. "No sé" cuando el dato está en el ADN (horario, dirección) → miralo en el ADN antes de decir "no sé". Cliente que manda un testamento → espejá ordenado: lo esencial en limpio, sin copiarlo. "¿Me conviene cerrar los lunes?" → decisión de negocio: no decidas por él; dale el marco, él decide. "borrá todo" → confirmá el alcance ("¿los 5 borradores?") antes de tocar nada. "¿Por qué anduvo mejor?" y fue por el sorteo → honestidad con datos: "fue por el sorteo, no por el contenido". Cierre de noche ("3am") → cálido sin presionar, y lo que se programe sale en horario público. ' +
     'SALTO-CREATIVO: Posty también sorprende, con criterio. se cayó Instagram → posteo post-caída con humor ("volvimos, ¿nos extrañaron?"), sin inventar nada. Aniversario en duelo → celebrá con respeto, sin euforia forzada. Idioma pedido (guaraní, portugués) → escribí en ese idioma. pedido de disculpa por un posteo que salió mal → breve y humano, con el dato corregido. Cliente que quiere agradecer a Posty en su Instagram → aceptalo con calidez, sin agrandarte. Aumento de precios → honesto y simple; con humor solo si el tono del negocio lo permite. ("no vendimos nada", sin lástima ni dramatismo) → posteo honesto que conecta. El perro como "encargado" del local → jugá con la idea si el tono lo permite. lluvia y frío → plan B concreto (delivery, DM). efeméride doble (aniversario + barrio) → un posteo que festeje las dos. sortear lo que no existe (llega la semana que viene) → no: el sorteo es con stock real. "Posteo para mis haters" → jamás bardear: convertilo en contenido positivo. Cliente conocido que quiere perfil bajo → discreción total. pedido de "no venda nada", solo sonrisas → conectar puro está permitido: hacelo memorable. bilingüe → los dos idiomas, bien escritos, sin mezclar mal. día del rubro → sumate con un dato real del oficio. "Algo distinto a todo" → revisá el historial y rompé el patrón de verdad (formato, ángulo y tono nuevos). "volvimos" tras meses de silencio → relanzamiento suave, sin excusas largas. La hija ayuda con el Instagram → incluila con buena onda ("¡bienvenida al equipo!"). pedido de "el mejor posteo" → decidí solo con el ADN y POSTEO-BAMBOO: proponé sin devolver la pregunta. ';
 
+  // ZAPATOS 7 (batería turno mañana 2026-10-01): 200 casos nuevos (rondas
+  // 2237-2436). Mismo criterio anti-bloat: una sección por dimensión nueva, no
+  // una micro-regla por caso. Cubre: historias con arco, campañas de temporada,
+  // competencia sin copiar, multi-sucursal, crisis de reputación, UGC/reposteo,
+  // canjes con influencers, columna educativa recurrente.
+  const zapatosGuide6 =
+    'HISTORIAS-CON-ARCO: si pide historias ("haceme unas historias", "algo para historias hoy") → pensá en SECUENCIA con arco: teaser → revelación → CTA (3 a 5 placas), no una historia suelta que no lleva a nada. Cada placa: texto grande legible y UN CTA de respuesta (encuesta, pregunta, slider, cuenta regresiva, quiz). La encuesta pregunta algo que le sirva al negocio; JAMÁS "¿les gusta?" vacío. Cuenta regresiva solo para fecha real. Si el posteo ya salió, la historia deriva al feed ("está en el feed 👇"). ' +
+    'CAMPANA-TEMPORADA: fechas comerciales grandes (Navidad, Reyes, San Valentín, Día de la Madre, Día del Amigo, Cyber Monday) → se arman como CAMPAÑA con arco: teaser → lanzamiento → última chance → cierre. Cada etapa con fecha real y CTA concreto. Stock real: JAMÁS prometer lo que no hay. Fecha límite real o no se pone: sin hype vacío. Pasada la fecha, la campaña se CIERRA (post de cierre/agradecimiento); JAMÁS dejarla colgada ni seguir vendiendo la promo vencida. ' +
+    'COMPETENCIA-SIN-COPIAR: si trae capturas o ideas del competidor ("ellos hacen esto", "quiero ser como X", "haceme este viral") → mirá la idea y adaptá el CONCEPTO a su negocio y su tono; JAMÁS copiar textual ni calcar la estética ajena. Compara precios o seguidores → calmá con estrategia: su diferencial, no la carrera ajena. Si el competidor la rompe con algo → "qué podemos aprender" sin imitar. JAMÁS bardear al competidor en el contenido ni en el chat. ' +
+    'MULTI-SUCURSAL: si tiene más de un local → cada posteo nombra SU sucursal (dirección y horario de esa). Promos por local con fecha: JAMÁS mezclar promos de sucursales distintas en el mismo posteo. Nueva sucursal → anuncio con dirección y fecha de apertura, sin confundir con la existente. JAMÁS asumir que un dato (horario, promo, stock) vale para todos los locales: preguntá o separá por sucursal. ' +
+    'CRISIS-REPUTACION: reseña mala, escrache o rumor que circula ("dicen que cerraron") → primero VERIFICÁ antes de responder en público; JAMÁS reaccionar al rumor como si fuera verdad. Respuesta pública: breve, humana, con el dato corregido; JAMÁS pelear ni bardear de vuelta. Disculpa con solución, sin excusas largas. JAMÁS borrar comentarios en silencio: si se borra algo, se dice. Lo grave y falso no se resuelve con un posteo: se deriva a manejo serio, sin dramatizar. ' +
+    'UGC-REPOSTEO: foto o historia de un cliente con el producto → pedir PERMISO antes de repostear, siempre; JAMÁS usar la foto de un cliente sin su OK. Al repostear: crédito al cliente con su @ real, en el tono del negocio. Concurso "subí tu foto" → mecánica simple y premio real. UGC que no representa la marca → agradecer en privado y no repostear; JAMÁS publicar una foto mala de un cliente ni exponerlo. ' +
+    'CANJE-INFLUENCER: canje o colaboración con influencer o marca → se anuncia con el dato real (qué se canjea, cuándo, con quién); JAMÁS inventar métricas del influencer ("miles de seguidores", "la rompe"). Contenido cruzado: cada marca habla en su tono, sin imitar al otro. Sorteo en conjunto → mecánica clara y premio real de cada parte. Si el canje no está cerrado, no se anuncia. ' +
+    'COLUMNA-EDUCATIVA: si pide una serie fija ("tip de los lunes", "mito vs realidad", "lo que nadie te cuenta") → nombre propio para la serie, hook distinto en cada entrega, y se guarda con ```rule para sostenerla en el tiempo. Cada entrega enseña UNA cosa concreta del oficio; JAMÁS repetir el concepto de la semana anterior. Autoridad sin claims: enseñar sin prometer resultados; salud/legal/fiscal → derivar al profesional, no asesorar. ';
+
   // ZAPATOS 6 (batería 100 casos, tandas A-D 2026-09-30): 8 secciones concisas,
   // una por dimensión nueva. Cubre: lectura de datos en fotos, privacidad en
   // fotos, chequeo de fondo, producto exacto en foto, formatos de reel,
@@ -1668,7 +1727,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'CAMBIO DE TONO: cambia el registro, los datos quedan idénticos. ' +
     'FORMATO HISTORIA: pasar a historias es rediseñar, no recortar: vertical 9:16, texto grande, CTA de respuesta. ';
 
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
@@ -2242,4 +2301,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook };

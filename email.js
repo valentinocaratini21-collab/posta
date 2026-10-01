@@ -11,19 +11,30 @@ function emailConfigured() {
   return !!process.env.RESEND_API_KEY;
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, attachments }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
     return { ok: false, skipped: true };
   }
   const from = process.env.EMAIL_FROM || 'Posty <hola@postahacetodo.com>';
+  const payload = { from, to: [to], subject, html };
+  // Adjuntos opcionales (formato Resend): [{ filename, content (base64), contentType?, contentId? }]
+  // contentId permite referenciarlo inline en el HTML como <img src="cid:xxx">.
+  if (Array.isArray(attachments) && attachments.length) {
+    payload.attachments = attachments.map((a) => {
+      const o = { content: a.content, filename: a.filename || 'adjunto' };
+      if (a.contentType) o.content_type = a.contentType;
+      if (a.contentId) o.content_id = a.contentId;
+      return o;
+    });
+  }
   let r;
   try {
     r = await fetch(RESEND_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(20000),
     });
   } catch (e) {
@@ -303,4 +314,4 @@ function magicLinkEmail(email, link) {
   return sendEmail({ to: email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail };
+module.exports = { emailConfigured, sendEmail, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail };

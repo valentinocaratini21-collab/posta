@@ -20,10 +20,12 @@ function getSettings(db, userId) {
   return db.prepare('SELECT * FROM settings WHERE user_id = ?').get(userId);
 }
 
-async function publishSinglePost(db, post) {
+async function publishSinglePost(db, post, opts = {}) {
   // Red de seguridad FINAL: ningún camino (endpoint, chat, scheduler, links de
   // aprobación) puede publicar si la prueba del usuario venció. El posteo se
-  // pausa con mensaje amable en vez de publicarse gratis.
+  // pausa con mensaje amable en vez de publicarse gratis. Excepción: dogfood
+  // (Posty publicando en su propia cuenta, con aprobación explícita del dueño).
+  if (!opts.house) {
   try {
     const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(post.user_id);
     if (u && u.plan_status === 'trial' && trialExpiryEffectiveEnd(u, Date.now()) <= Date.now()) {
@@ -31,6 +33,19 @@ async function publishSinglePost(db, post) {
         .run('Se terminó tu prueba gratis 😢 Elegí tu plan y seguimos publicando juntos.', post.id);
       console.log(`[posta] publishSinglePost bloqueado: trial vencido (user ${post.user_id}, post ${post.id})`);
       return { blocked: 'trial_expired' };
+    }
+  } catch (e) { /* ante la duda, seguir como antes */ }
+  }
+  // INVARIANTE: ningún posteo sale sin imagen, nunca solo palabras.
+  // Si no tiene imagen válida, se pausa con mensaje claro (no silencioso).
+  try {
+    const { assertPublishable } = require('./image-fallback');
+    const mediaDir = process.env.MEDIA_DIR || path.join(__dirname, 'data', 'media');
+    const chk = assertPublishable(post, mediaDir);
+    if (!chk.ok) {
+      db.prepare(`UPDATE posts SET status = 'paused', error = ? WHERE id = ?`).run(chk.message, post.id);
+      console.log(`[posta] publishSinglePost bloqueado: sin imagen (user ${post.user_id}, post ${post.id})`);
+      return { blocked: 'no_image' };
     }
   } catch (e) { /* ante la duda, seguir como antes */ }
   const settings = getSettings(db, post.user_id) || {};
@@ -530,6 +545,17 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[learnings] no se pudo programar:', e.message);
   }
+  // Learning loop (learning.js): todos los días 3:30 (Buenos Aires) lee insights
+  // de posteos publicados con IG conectado y registra qué estilos rinden por cliente.
+  // Posty "le pega cada vez más" sin que el cliente configure nada.
+  try {
+    cron.schedule('30 3 * * *', () => {
+      ingestLearningLoop(db).catch((e) => console.error('[learning-ingest]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Learning loop: ingesta diaria 3:30 (Buenos Aires)');
+  } catch (e) {
+    console.error('[learning-ingest] no se pudo programar:', e.message);
+  }
   // Minería de comentarios de Instagram: día 1 de cada mes, 8:00 (Buenos Aires).
   // Track 1 "Expertos en información": por cada usuario con IG conectado, lee los
   // últimos ~20 posteos + sus comentarios y gpt-4o-mini extrae preguntas frecuentes,
@@ -577,6 +603,165 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[next-week sweep] no se pudo programar:', e.message);
   }
+
+  // --- Posty Pro: stories automáticas, community y contenido reactivo ---
+  try {
+    cron.schedule('0 12 * * *', () => {
+      try {
+        require('./stories').dailyStories(db, proStoryDeps(db))
+          .catch((e) => console.error('[stories]', e.message));
+      } catch (e) { console.error('[stories] no se pudo ejecutar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Stories automáticas: 12:00 (Buenos Aires)');
+  } catch (e) { console.error('[stories] no se pudo programar:', e.message); }
+  try {
+    cron.schedule('0 9,18 * * *', () => {
+      try {
+        require('./community').pollCommunity(db, proCommunityDeps(db))
+          .catch((e) => console.error('[community]', e.message));
+      } catch (e) { console.error('[community] no se pudo ejecutar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Community (comentarios): 9:00 y 18:00 (Buenos Aires)');
+  } catch (e) { console.error('[community] no se pudo programar:', e.message); }
+  try {
+    cron.schedule('0 8 * * *', () => {
+      try {
+        require('./reactive').checkReactive(db, proReactiveDeps(db))
+          .catch((e) => console.error('[reactive]', e.message));
+      } catch (e) { console.error('[reactive] no se pudo ejecutar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Contenido reactivo: 8:00 (Buenos Aires)');
+  } catch (e) { console.error('[reactive] no se pudo programar:', e.message); }
+
+  // --- Posty dogfood: Posty como su propio primer cliente ---
+  // Lun–vie publica en DOGFOOD_POST_TIME (default 18:00, DOGFOOD_TZ).
+  // Generador: cada hora genera el draft del día con scheduled_for (si es
+  // día de semana y falta >30min para el slot). Ticker cada minuto: notifica
+  // en T-1min (push → email → badge) y auto-publica en T+2h sin respuesta.
+  // Sáb/dom: cero ruido.
+  const DOGFOOD_TZ = process.env.DOGFOOD_TZ || 'America/Argentina/Buenos_Aires';
+  try {
+    cron.schedule('7 * * * *', () => {
+      try {
+        require('./dogfood').generateDogfoodSlot(db, { mediaDir: PRO_MEDIA_DIR })
+          .catch((e) => console.error('[dogfood]', e.message));
+      } catch (e) { console.error('[dogfood] no se pudo generar:', e.message); }
+    }, { timezone: DOGFOOD_TZ });
+    console.log('[posta] Dogfood generador: cada hora, lun–vie (' + DOGFOOD_TZ + ')');
+  } catch (e) { console.error('[dogfood] no se pudo programar el generador:', e.message); }
+  try {
+    cron.schedule('* * * * *', () => {
+      try {
+        require('./dogfood').tickDogfood(db, {
+          mediaDir: PRO_MEDIA_DIR,
+          publishFn: (d, post) => publishSinglePost(d, post, { house: true }),
+        }).catch((e) => console.error('[dogfood] tick:', e.message));
+      } catch (e) { console.error('[dogfood] no se pudo ejecutar el tick:', e.message); }
+    }, { timezone: DOGFOOD_TZ });
+    console.log('[posta] Dogfood ticker: cada minuto (' + DOGFOOD_TZ + ')');
+  } catch (e) { console.error('[dogfood] no se pudo programar el ticker:', e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Deps compartidas para stories/community/reactive (scheduler).
+// Todo con db directo: sin dependencia de server.js (evita circulares).
+// ---------------------------------------------------------------------------
+const PRO_MEDIA_DIR = process.env.MEDIA_DIR || path.join(__dirname, 'data', 'media');
+
+function proBrandOf(db, uid) {
+  let business = '', bgHex = '#0A1E33', logoAbs = null;
+  try {
+    const p = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid) || {};
+    business = String(p.business_name || '');
+  } catch (e) {}
+  try {
+    const s = db.prepare('SELECT brand_colors FROM settings WHERE user_id = ?').get(uid) || {};
+    const m = String(s.brand_colors || '').match(/#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}/);
+    if (m) bgHex = m[0];
+  } catch (e) {}
+  try {
+    const r = db.prepare(
+      `SELECT file_path FROM assets WHERE user_id = ? AND kind = 'logo' ORDER BY id ASC LIMIT 1`).get(uid);
+    const ap = r && path.join(PRO_MEDIA_DIR, path.basename(String(r.file_path || '')));
+    if (ap && fs.existsSync(ap)) logoAbs = ap;
+  } catch (e) {}
+  return { business, bgHex, textHex: '#FFFFFF', logoAbs };
+}
+
+function proBusinessOf(db, uid) {
+  try {
+    return String((db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid) || {}).business_name || '');
+  } catch (e) { return ''; }
+}
+
+function proStoryDeps(db) {
+  return {
+    mediaDir: PRO_MEDIA_DIR,
+    getBrand: (uid) => proBrandOf(db, uid),
+    getCtx: (uid) => {
+      const ctx = {};
+      try {
+        const p = db.prepare(
+          `SELECT caption, image_path FROM posts WHERE user_id = ? AND media_type = 'image'
+           AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid);
+        if (p) {
+          ctx.postCaption = String(p.caption || '').split('\n')[0];
+          const abs = p.image_path && p.image_path.startsWith('/media/')
+            ? path.join(PRO_MEDIA_DIR, path.basename(p.image_path)) : null;
+          if (abs && fs.existsSync(abs)) ctx.postImageAbs = abs;
+        }
+      } catch (e) {}
+      return ctx;
+    },
+  };
+}
+
+function proCommunityDeps(db) {
+  let brief = null, cstyle = null;
+  try { brief = require('./client-brief'); } catch (e) {}
+  try { cstyle = require('./caption-style'); } catch (e) {}
+  return {
+    getBriefBlock: (uid) => { try { return brief.briefBlockFor(db, uid); } catch (e) { return ''; } },
+    getStyleBlock: (uid) => {
+      try { return cstyle.captionStyleBlock(cstyle.getCaptionStyle(db, uid)); }
+      catch (e) { return ''; }
+    },
+    getBusiness: (uid) => proBusinessOf(db, uid),
+    getApiKey: (uid) => {
+      try {
+        const s = db.prepare('SELECT openai_key FROM settings WHERE user_id = ?').get(uid) || {};
+        return s.openai_key || process.env.OPENAI_API_KEY || '';
+      } catch (e) { return process.env.OPENAI_API_KEY || ''; }
+    },
+  };
+}
+
+function proReactiveDeps(db) {
+  return {
+    mediaDir: PRO_MEDIA_DIR,
+    getRubro: (uid) => {
+      try { return String((db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(uid) || {}).category || ''); }
+      catch (e) { return ''; }
+    },
+    getBusiness: (uid) => proBusinessOf(db, uid),
+    getBrand: (uid) => proBrandOf(db, uid),
+    getLocText: (uid) => {
+      try {
+        const b = require('./client-brief').getBrief(db, uid) || {};
+        return String(b.ubicacion || '');
+      } catch (e) { return ''; }
+    },
+    generateImage: async ({ uid, headline, intent }) => {
+      try {
+        const srv = require('./server'); // lazy: server ya cargó a esta altura
+        if (srv && typeof srv.conceptShotGenerate === 'function') {
+          const p = await srv.conceptShotGenerate({ uid, idea: headline, tipo: '', intent: intent || null, headline, refs: [] });
+          return p || null;
+        }
+      } catch (e) { console.error('[reactive] imagen IA falló, va tarjeta:', e.message); }
+      return null; // ensurePostImage cae a tarjeta de marca / sólido
+    },
+  };
 }
 
 // Nudges proactivos de Posty (chequeo diario). Posty pide por chat lo que
@@ -1003,6 +1188,36 @@ async function refreshBestHours(db) {
   }
   if (updated) console.log(`[best-hour] actualizado para ${updated} usuarios`);
   return { updated };
+}
+
+// Learning loop: ingesta diaria de métricas reales (insights de IG) por posteo.
+// Solo posteos publicados en los últimos 14 días, con ig_media_id y no ingeridos.
+// Nunca rompe: cada posteo va en su propio try/catch.
+async function ingestLearningLoop(db) {
+  let L, getCreds, fetchMediaInsights;
+  try {
+    L = require('./learning');
+    ({ getCreds, fetchMediaInsights } = require('./insights'));
+  } catch (e) { console.error('[learning-ingest] módulos:', e.message); return { ingested: 0 }; }
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, user_id, style_code, intent, hook_id, ig_media_id FROM posts
+      WHERE status = 'published' AND learning_ingested = 0 AND ig_media_id != ''
+      AND published_at > datetime('now','-14 days') LIMIT 50`).all();
+  } catch (e) { console.error('[learning-ingest] query:', e.message); return { ingested: 0 }; }
+  let ingested = 0;
+  for (const p of rows) {
+    try {
+      const creds = getCreds(db, p.user_id);
+      if (!creds) continue;
+      const m = await fetchMediaInsights(p.ig_media_id, creds.accessToken);
+      L.recordPerformance(db, { userId: p.user_id, styleCode: p.style_code || '', intent: p.intent || '', hookId: p.hook_id || '', metrics: m || {} });
+      db.prepare('UPDATE posts SET learning_ingested = 1 WHERE id = ?').run(p.id);
+      ingested++;
+    } catch (e) { console.error('[learning-ingest] post', p.id, e.message); }
+  }
+  if (ingested) console.log(`[learning-ingest] métricas registradas: ${ingested} posteos`);
+  return { ingested };
 }
 
 // Track B: análisis profundo de Instagram semanal (lunes 9:00 Buenos Aires).

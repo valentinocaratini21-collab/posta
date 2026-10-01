@@ -83,6 +83,30 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_embed_url TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN preferred_palette INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN pexels_key TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Estilos de imagen (image-styles.js): estilo usado en cada borrador + motivo del pick.
+try { db.exec(`ALTER TABLE posts ADD COLUMN style_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN needs_image INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN product_ref TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Hook engine (hooks.js): hook usado en cada borrador + rotación 8 semanas.
+try { db.exec(`ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Learning loop (learning.js): 1 = métricas ya ingeridas.
+try { db.exec(`ALTER TABLE posts ADD COLUMN learning_ingested INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+db.exec(`CREATE TABLE IF NOT EXISTS hook_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  hook_id TEXT NOT NULL DEFAULT '',
+  used_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_hook_usage_user ON hook_usage(user_id, used_at)`);
+try { require('./learning').initLearningTables(db); } catch (e) { console.error('[learning] init:', e.message); }
+// Stories automáticas + community + reactive (2026-10-01).
+try { require('./community').initCommunityTables(db); } catch (e) { console.error('[community] init:', e.message); }
+try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_enabled INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_lat REAL DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_lon REAL DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN reactive_label TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Style Lock: logo de marca fijo del cliente (asset kind='logo', se sube una vez,
 // referencia en todo lo generado). Refactor 2026-09-30: antes vivía en settings
 // (mascot_path / mascot_candidate / mascot_candidate_dismissed); ahora el logo
@@ -409,6 +433,13 @@ CREATE TABLE IF NOT EXISTS ig_caption_style (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   profile_json TEXT NOT NULL DEFAULT '',
   analyzed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS client_briefs (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  bio_raw TEXT DEFAULT '',
+  bio_mined_json TEXT NOT NULL DEFAULT '{}',
+  brief_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS ig_analysis (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
