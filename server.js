@@ -8115,9 +8115,12 @@ app.get('/api/ig/stories-status', requireAuth, (req, res) => {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v14';
+const BUILD_ID = '20261001-v16';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
-app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID }));
+app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
+  // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
+  openai: Boolean(process.env.OPENAI_API_KEY),
+}));
 
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
