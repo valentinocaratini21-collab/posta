@@ -1707,12 +1707,25 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         // En su propio try: si falla, el resto del contexto igual llega.
         let quota = null;
         try { quota = weeklyQuota(req.session.userId); } catch (e) { console.error('[chat] quota ctx:', e.message); }
+        // Próximos posteos programados: Posty los conoce y los menciona cuando pinta.
+        let upcoming = [];
+        try {
+          upcoming = db.prepare(`SELECT caption, source_topic, media_type, scheduled_at FROM posts
+            WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL
+            AND datetime(scheduled_at) > datetime('now', '-4 hours')
+            ORDER BY datetime(scheduled_at) LIMIT 3`).all(req.session.userId).map(r => ({
+            when: String(r.scheduled_at || '').slice(0, 16).replace('T', ' '),
+            type: r.media_type === 'video' ? 'reel' : r.media_type === 'story' ? 'historia' : r.media_type === 'carousel' ? 'carrusel' : 'posteo',
+            caption: String(r.caption || r.source_topic || 'Posteo').split('\n')[0].slice(0, 80),
+          }));
+        } catch (e) { console.error('[chat] upcoming ctx:', e.message); }
         sales = {
           isTrial: su.plan_status !== 'active',
           trialExpired: su.plan_status === 'trial' && tEnds > 0 && tEnds <= nowMs,
           trialDaysLeft: (su.plan_status === 'trial' && tEnds > nowMs) ? Math.ceil((tEnds - nowMs) / 86400000) : 0,
           planName: su.plan_status === 'active' ? (su.plan || '') : '',
           quota,
+          upcoming,
         };
       }
     } catch (e) {}
@@ -1982,9 +1995,14 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
 // weeklyQuota(uid) = cupo de FEED (compatibilidad con el frontend).
 // quotaFor(uid, mediaType) = cupo para 'image' | 'video' | 'carousel' | 'story'.
 function quotaCounts(userId, monday) {
+  // El cupo cuenta lo COMPROMETIDO para la semana: posteos programados / en publicación /
+  // publicados cuya fecha de salida cae en ESTA semana (por scheduled_at, igual que el Schedule).
+  // Contar por created_at desfasaba la tira del chat vs el calendario.
   const rows = db.prepare(`SELECT media_type, COUNT(*) AS n FROM posts
     WHERE user_id = ? AND status IN ('scheduled','publishing','published')
-    AND date(created_at) >= date(?) GROUP BY media_type`).all(userId, monday) || [];
+    AND date(COALESCE(scheduled_at, published_at, created_at)) >= date(?)
+    AND date(COALESCE(scheduled_at, published_at, created_at)) < date(?, '+7 days')
+    GROUP BY media_type`).all(userId, monday, monday) || [];
   const m = {};
   for (const r of rows) m[r.media_type || 'image'] = r.n;
   return m;
@@ -3330,7 +3348,7 @@ function mediaFile(localPath) {
 // ---------- Generador de video ----------
 app.post('/api/videos', requireAuth, async (req, res) => {
   if (!ffmpegAvailable()) {
-    return res.status(500).json({ error: 'Instalá ffmpeg (ej: brew install ffmpeg)' });
+    return res.status(503).json({ error: 'Video no disponible en el servidor todavía — probá en un rato 🙏' });
   }
   const { scenes, music_path } = req.body || {};
   if (!Array.isArray(scenes) || !scenes.length || scenes.length > 5) {
@@ -3590,6 +3608,20 @@ app.get('/api/posts/:id', requireAuth, (req, res) => {
   ).get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   res.json({ ok: true, post });
+});
+
+// Descartar un posteo fallido: lo saca de la tarjeta de fallidos sin publicarlo.
+// Idempotente: si ya está cancelado/descartado, no hace nada.
+app.post('/api/posts/:id/dismiss-failed', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (post.status === 'cancelled') return res.json({ ok: true, status: 'cancelled' });
+  if (post.status !== 'failed') {
+    return res.status(409).json({ error: 'not_failed', message: 'Este posteo no está fallido.' });
+  }
+  db.prepare(`UPDATE posts SET status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  console.log(`[posta] Post #${post.id} fallido descartado por el cliente`);
+  res.json({ ok: true, status: 'cancelled' });
 });
 
 // Publicar AHORA de forma inmediata: no espera al scheduler.
@@ -6851,7 +6883,7 @@ app.post('/api/reel-generate', requireAuth, requireTrialValid, express.json(), a
   try {
     const R = require('./reels');
     if (!R.ffmpegAvailable())
-      return res.status(500).json({ ok: false, error: 'ffmpeg no disponible en el servidor: el reel no se puede renderizar' });
+      return res.status(503).json({ ok: false, error: 'Reels no disponibles en el servidor todavía — probá en un rato 🙏' });
     if (R.reelsThisWeek(db, uid) >= R.REEL_MAX_PER_WEEK)
       return res.status(429).json({ ok: false, error: 'Ya generaste los reels de esta semana 🎬 (máx 2)' });
     const { postId = null, photos = null, headline = '' } = req.body || {};

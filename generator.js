@@ -1525,7 +1525,14 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
         else if (q.stories.left <= 0) quotaTxt += '⛔ Sin historias esta semana (cupo agotado): si pide una, decilo con onda. JAMÁS generes una igual. ';
       }
     }
-    return st + plansTxt + quotaTxt +
+    // Próximos posteos programados: los conoce y los menciona cuando pinta en la charla.
+    let upcomingTxt = '';
+    const up = s.upcoming || [];
+    if (up.length) {
+      upcomingTxt = 'PRÓXIMOS POSTEOS PROGRAMADOS: ' + up.map((u, i) => `${i + 1}) ${u.type} ${u.when} — "${u.caption}"`).join(' | ') + '. ';
+      upcomingTxt += 'Si viene al caso (habla de su semana, pregunta qué sale, quiere cambiar algo), mencionalos de forma natural en 1 línea ("el jueves a las 19 sale el de la promo — ¿le tocamos algo? ✨"). NUNCA inventes posteos ni horarios que no estén en esta lista. ';
+    }
+    return st + plansTxt + quotaTxt + upcomingTxt +
       'Todos incluyen diseños + captions + hashtags y publicación automática programada. Prueba gratis de 3 días, sin tarjeta. ' +
       'Si se quiere dar de baja: sin trabas ni culpa, en 2 líneas ("dale, la damos de baja cuando quieras desde Mi plan 👍"). JAMÁS escondas la baja, inventes precios ni derives a un mail.';
   })();
