@@ -2855,20 +2855,24 @@ async function renderChatStoryboard() {
 let CHAT_STYLE_USED = [];
 
 // Igual que aiConceptShot pero devuelve también el estilo usado (para no repetirlo).
+// Si falla, lanza el último error con su mensaje real (para diagnóstico honesto).
 async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) {
+  let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 120000 });
       if (r && r.ok === false && r.capped) throw { aiCap: true, message: r.error || '' };
       if (r && r.path) return { path: r.path, style: r.style || null, styleName: r.styleName || '' };
+      lastErr = new Error('El servidor no devolvió imagen');
     } catch (e) {
       if (e && e.aiCap) throw e;
+      lastErr = e;
       console.warn('[concept-shot] intento ' + (attempt + 1) + ' falló:', (e && e.message) || e);
       if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
     }
   }
   console.warn('[concept-shot] no disponible tras reintento');
-  return null;
+  throw lastErr || new Error('No se pudo generar la imagen');
 }
 
 // Preview de la tarjeta "IDEA LISTA": UNA imagen real generada con IA usando
@@ -2922,10 +2926,13 @@ async function renderChatPreviews() {
   } catch (e) {
     if (CHAT_IDEA !== idea) return;
     stopPrevThinking();
+    const detail = String((e && e.message) || '').slice(0, 120);
     if (isAiCapErr(e)) {
       box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
     } else {
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora 😅 Probá tocando ↻ Otra imagen.</div>';
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅' +
+        (detail ? `<br><small style="opacity:.7">Detalle: ${esc(detail)}</small>` : '') +
+        '<br>Probá tocando ↻ Otra imagen.</div>';
     }
     CHAT_PREVIEWS = [];
   }
