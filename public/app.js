@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261001-v19'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261001-v21'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2886,23 +2886,9 @@ async function renderChatPreviews() {
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
   box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
   postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Aplicando tu estilo ✨…']);
-  try {
-    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
-    const refs = lib.slice(0, 2).map(p => p.file_path || '').filter(Boolean);
-    const gen = await aiConceptShotFull({
-      idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
-      tipo: idea.tipo || tipoFromText(idea.titulo),
-      headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
-      refs,
-      excludeStyles: CHAT_STYLE_USED,
-    });
+  // Pinta una imagen ya lista en la tarjeta (la usa la pre-generada y la on-demand).
+  const paintPreview = (gen) => {
     if (CHAT_IDEA !== idea) return;
-    if (!gen || !gen.path) {
-      stopPrevThinking();
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
-      CHAT_PREVIEWS = [];
-      return;
-    }
     if (gen.style && !CHAT_STYLE_USED.includes(gen.style)) CHAT_STYLE_USED.push(gen.style);
     CHAT_PREVIEWS = [{ kind: 'generated', cv: null, path: gen.path, style: gen.style, styleName: gen.styleName }];
     CHAT_PREV_SEL = 0;
@@ -2923,6 +2909,45 @@ async function renderChatPreviews() {
     }
     box.appendChild(d);
     renderChatStoryboard();
+  };
+  try {
+    // 1. ¿El servidor ya la pre-generó en background cuando nació la idea?
+    // Si está lista → instantáneo. Si sigue en curso → esperarla (poll corto).
+    try {
+      const pg0 = await api.post('/api/ideas/pregen-image', { titulo: idea.titulo }, { timeout: 8000 });
+      if (pg0 && pg0.status === 'done' && pg0.path) {
+        paintPreview({ path: pg0.path, style: null, styleName: '' });
+        return;
+      }
+      if (pg0 && pg0.status === 'pending') {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 90000 && CHAT_IDEA === idea) {
+          await new Promise(r => setTimeout(r, 4000));
+          const pg = await api.post('/api/ideas/pregen-image', { titulo: idea.titulo }, { timeout: 8000 }).catch(() => null);
+          if (pg && pg.status === 'done' && pg.path) { paintPreview({ path: pg.path, style: null, styleName: '' }); return; }
+          if (!pg || pg.status === 'error' || pg.status === 'missing') break;
+        }
+      }
+    } catch (e) { /* fallback a generación on-demand */ }
+    if (CHAT_IDEA !== idea) return;
+    // 2. Sin pre-generada: generar on-demand (comportamiento actual).
+    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
+    const refs = lib.slice(0, 2).map(p => p.file_path || '').filter(Boolean);
+    const gen = await aiConceptShotFull({
+      idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
+      tipo: idea.tipo || tipoFromText(idea.titulo),
+      headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
+      refs,
+      excludeStyles: CHAT_STYLE_USED,
+    });
+    if (CHAT_IDEA !== idea) return;
+    if (!gen || !gen.path) {
+      stopPrevThinking();
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
+      CHAT_PREVIEWS = [];
+      return;
+    }
+    paintPreview(gen);
   } catch (e) {
     if (CHAT_IDEA !== idea) return;
     stopPrevThinking();
