@@ -1548,7 +1548,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
   const clean = (Array.isArray(messages) ? messages : [])
-    .slice(-16)
+    .slice(-10)
     .map(m => ({ role: m && m.role === 'assistant' ? 'assistant' : 'user', text: String((m && m.text) || '').slice(0, 2000) }))
     .filter(m => m.text.trim());
   // Nota de voz: transcribir con Whisper y usar el texto como mensaje del usuario.
@@ -1859,7 +1859,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           regenJobs.push((async () => {
             try {
               const headline = makeHeadline(capForImg.split('\n')[0], 6) || makeHeadline(capForImg, 5);
-              const newPath = await conceptShotGenerate({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [] });
+              const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [] });
               if (newPath) {
                 db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id);
                 return true;
@@ -1951,7 +1951,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       await Promise.all(out.ideas.slice(0, 3).map(async (idea) => {
         try {
           const headline = makeHeadline(String(idea.titulo || idea.caption || idea.tema || ''), 6);
-          const p = await conceptShotGenerate({ uid, idea: JSON.stringify(idea), tipo: idea.tipo || '', headline, refs: [] });
+          const p = await conceptShotGenerateQueued({ uid, idea: JSON.stringify(idea), tipo: idea.tipo || '', headline, refs: [] });
           if (p) idea.image_url = absImageUrl(uid, p);
         } catch (e) { console.error('[chat] preview opción:', e.message); }
       }));
@@ -2611,7 +2611,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     if (p && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) regenProductRef = p;
   } catch (e) {}
   try {
-    imagePath = await conceptShotGenerate({
+    imagePath = await conceptShotGenerateQueued({
       uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
       tipo: idea.tipo, headline, refs, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
     });
@@ -3866,7 +3866,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
       if (!caption.trim()) throw new Error('La IA no devolvió texto');
       // Titular corto y COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
       const headline = makeHeadline(String(caption).split('\n')[0], 6);
-      const imagePath = await conceptShotGenerate({
+      const imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key,
       });
       return { image_path: imagePath, caption, hashtags: out.hashtags || '' };
@@ -4227,7 +4227,7 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
           }
           if (!isCarousel) {
           try {
-            imagePath = await conceptShotGenerate({
+            imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
               usedStyles, styleOut, productRef,
             });
@@ -5947,9 +5947,11 @@ async function expandArtBrief({ headline, tipo, angle, businessName, category, p
     ? `LÍNEA VISUAL OBLIGATORIA — el cliente ya tiene un Instagram con una estética definida y TUS imágenes deben parecer del MISMO feed:\n${String(visualStyle).trim()}`
     : '';
   const fam = CONCEPT_FAMILIES[tipo] || 'contenido visual atractivo de alto nivel';
-  const textRule = headline
-    ? `Renderizás el titular "${String(headline).slice(0, 80)}" en ESPAÑOL, en negrita, DENTRO de la imagen, exactamente como está escrito. NINGÚN otro texto, letra, número, precio, dirección ni teléfono en la imagen. REGLA DURA DE TITULAR: es una frase COMPLETA — la renderizás ÍNTEGRA, palabra por palabra, sin cortar ni deformar la última palabra y sin terminar en preposición o artículo. Si el espacio no alcanza, achicás la tipografía o la repartís en dos líneas; JAMÁS recortás el texto.`
-    : `SIN texto en la imagen: ni letras, ni palabras, ni números, ni precios, ni direcciones, ni teléfonos.`;
+  // REGLA DURA: la IA genera la imagen 100% LIMPIA, sin ningún texto.
+  // El titular se compone DESPUÉS con código (composite-headline.py): tipografía
+  // perfecta, siempre entra completo, nunca se recorta ni se escribe mal.
+  // El headline viaja igual en el brief para que la escena acompañe el tema.
+  const textRule = `SIN texto en la imagen: ni letras, ni palabras, ni números, ni precios, ni direcciones, ni teléfonos. La imagen debe estar 100% limpia de texto — el titular se agrega después por separado.`;
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -6267,7 +6269,7 @@ function pregenIdeaImage(uid, idea) {
     if (PREGEN.has(key)) return; // ya en curso o lista
     PREGEN.set(key, { status: 'pending', at: Date.now() });
     const styleOut = {};
-    conceptShotGenerate({
+     conceptShotGenerateQueued({
       uid,
       idea: { titulo: idea.titulo || idea.title, angulo: idea.angulo || '', porque: idea.porque || '', tipo: idea.tipo || 'novedad' },
       tipo: idea.tipo || 'novedad',
@@ -6290,7 +6292,20 @@ app.post('/api/ideas/pregen-image', requireAuth, express.json(), (req, res) => {
   if (!e) return res.json({ ok: true, status: 'missing' });
   res.json({ ok: true, status: e.status, path: e.path || null, error: e.error || null });
 });
-async function conceptShotGenerate({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '' }) {
+// Cola por usuario: una sola generación de imagen a la vez. Evita el 429 de
+// OpenAI cuando la pre-generación y el on-demand se pisan (o el usuario
+// toca "Otra imagen" varias veces seguidas).
+const GEN_QUEUE = new Map(); // uid -> Promise (la última encolada)
+function conceptShotGenerateQueued(args) {
+  const uid = args.uid;
+  const prev = GEN_QUEUE.get(uid) || Promise.resolve();
+  const next = prev.catch(() => {}).then(() => conceptShotGenerateInner(args));
+  const tracked = next.catch(() => {});
+  GEN_QUEUE.set(uid, tracked);
+  tracked.finally(() => { if (GEN_QUEUE.get(uid) === tracked) GEN_QUEUE.delete(uid); });
+  return next;
+}
+async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -6455,24 +6470,17 @@ async function conceptShotGenerate({ uid, idea, tipo, intent = null, headline, r
       dnaFacts: qaFactsLine(dna),
     }, key);
   } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  if (qa && (!qa.texto_ok || !qa.headline_complete || !qa.colores_ok || !qa.claims_ok || !qa.mobile_ok || !qa.brand_ok || !qa.anatomia_ok)) {
-    console.log(`[concept-shot] QA falló (texto=${qa.texto_ok} titular_completo=${qa.headline_complete} colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok} marca=${qa.brand_ok} anatomia=${qa.anatomia_ok}): ${qa.detalle}`);
+  // La imagen sale limpia de la IA (el titular se compone después con código),
+  // así que el QA solo valida lo visual: colores, claims, mobile, marca, anatomía.
+  if (qa && (!qa.colores_ok || !qa.claims_ok || !qa.mobile_ok || !qa.brand_ok || !qa.anatomia_ok)) {
+    console.log(`[concept-shot] QA falló (colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok} marca=${qa.brand_ok} anatomia=${qa.anatomia_ok}): ${qa.detalle}`);
     let retryPrompt;
-    if (!qa.texto_ok && cleanHeadline) {
-      // El texto salió mal → regenerar SIN texto en la imagen.
-      try {
-        retryPrompt = await expandArtBrief({ ...brief, headline: '' }, key);
-      } catch (e) { retryPrompt = null; }
-    } else if (!qa.headline_complete && cleanHeadline) {
-      // El titular se ve cortado a mitad de oración → reintentar CON el titular
-      // completo y orden explícita de renderizarlo íntegro.
-      retryPrompt = prompt + `\nIMPORTANT FIX: the image headline "${cleanHeadline}" was CUT OFF mid-sentence in the previous render. Render the FULL headline, every single word, complete — never end on a preposition or article, never cut a word in half. If space is tight, make the type smaller or split it across two lines, NEVER truncate the text.`;
-    } else if (!qa.anatomia_ok) {
+    if (!qa.anatomia_ok) {
       // Artefacto de anatomía (manos/caras deformadas) = pieza descartada: se regenera.
       retryPrompt = prompt + `\nIMPORTANT FIX: the previous render had deformed anatomy (hands, faces, fingers, proportions). Regenerate with natural, correct human anatomy — realistic hands, natural faces and proportions. Never deliver a render with deformed anatomy.`;
     } else {
       // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
-      retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, no famous-brand lookalike (never a Netflix/streaming-style red-on-black cinematic look — the design must have its OWN visual identity for this business category), and no extra text${cleanHeadline ? ` beyond the headline "${cleanHeadline}"` : ' at all (the image must have NO text)'}.`;
+      retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, no famous-brand lookalike (never a Netflix/streaming-style red-on-black cinematic look — the design must have its OWN visual identity for this business category), and NO text at all in the image (no letters, no words — the headline is added separately afterwards).`;
     }
     if (retryPrompt) {
       // N4+: el reintento también lleva la verificación de style lock.
@@ -6525,7 +6533,25 @@ async function conceptShotGenerate({ uid, idea, tipo, intent = null, headline, r
     console.log(`[concept-shot] comparación visual: posible duplicado de los últimos 7 días ("${dedupe.caption}"), cambio la propuesta`);
     try { b64 = await genConceptImage(key, withStyle(prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`), absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
   }
-  return `/media/${saveImageB64(b64)}`;
+  const imgName = saveImageB64(b64);
+  // Componer el titular con código (si hay): la imagen sale limpia de la IA
+  // y el texto se renderiza perfecto — siempre entra, nunca se recorta.
+  if (cleanHeadline) {
+    try {
+      const { execFileSync } = require('child_process');
+      const imgPath = path.join(MEDIA_DIR, imgName);
+      execFileSync('python3', [
+        path.join(__dirname, 'composite-headline.py'),
+        '--in', imgPath,
+        '--headline', cleanHeadline,
+        '--out', imgPath,
+      ], { timeout: 30000 });
+      console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
+    } catch (e) {
+      console.error('[concept-shot] composite titular falló, sigo con imagen limpia:', e.message);
+    }
+  }
+  return `/media/${imgName}`;
 }
 
 // generateCarouselSet — carousel automático: portada canvas (scroll-stop) +
@@ -6579,7 +6605,7 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
     let p = null, sScore = 0, sOk = false;
     for (let attempt = 0; attempt < 2 && !sOk; attempt++) {
       try {
-        p = await conceptShotGenerate({
+        p = await conceptShotGenerateQueued({
           uid, idea: { titulo: `${titulo}: ${s.title}`, porque: s.text }, tipo,
           headline: '', refs: [], apiKey, usedStyles, styleOut, extraPrompt: extraPrompt || undefined,
         });
@@ -6619,7 +6645,7 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
     const { idea = '', tipo = '', headline = '', refs = [], style = '', excludeStyles = [] } = req.body || {};
     const styleOut = {};
-    const imagePath = await conceptShotGenerate({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut });
+    const imagePath = await conceptShotGenerateQueued({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut });
     console.log(`[concept-shot] generado para usuario ${uid} (tipo=${tipo || '-'}, refs=${(refs || []).length}, estilo=${styleOut.code || '-'})`);
     res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null });
   } catch (e) {
@@ -6653,7 +6679,7 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
     const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6) || '';
     const styleOut = {};
-    const newPath = await conceptShotGenerate({
+    const newPath = await conceptShotGenerateQueued({
       uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut,
     });
     if (!newPath) throw new Error('sin imagen');
@@ -6689,7 +6715,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
       return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para restylear' });
     const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6) || '';
     const styleOut = {};
-    const newPath = await conceptShotGenerate({
+    const newPath = await conceptShotGenerateQueued({
       uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline,
       refs: [basePath], style: st.code, styleOut, restyle: true,
     });
@@ -8164,7 +8190,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v21';
+const BUILD_ID = '20261001-v24';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?

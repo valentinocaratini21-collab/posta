@@ -1890,6 +1890,16 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       }
     }
   }
+  // Routing de costo: mini para mensajes simples (16x más barato), 4o solo
+  // cuando hay fotos o el mensaje es largo/complejo. El prompt anti-rechazo
+  // ya está en el system, así que mini maneja bien los "dale"/"sí".
+  const lastUserText = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i] && messages[i].role === 'user') return String(messages[i].text || '');
+    }
+    return '';
+  })();
+  const chatModel = (visionImgs.length || lastUserText.length > 300) ? CHAT_MODEL : 'gpt-4o-mini';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1897,13 +1907,13 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       'Authorization': ['Bearer', apiKey].join(' '),
     },
     body: JSON.stringify({
-      model: CHAT_MODEL,
+      model: chatModel,
       messages: [
         { role: 'system', content: sysFull },
         { role: 'user', content: ctx },
         ...omsgs,
       ],
-      max_tokens: 1000,
+      max_tokens: 700,
       temperature: 0.7,
     }),
     // El cliente aborta a los 30s: el fetch principal no puede quedar sin timeout
@@ -1912,7 +1922,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   });
   if (!res.ok) throw new Error('OpenAI chat: ' + res.status);
   const data = await res.json();
-  trackUsage({ feature: 'chat', userId, model: CHAT_MODEL, json: data });
+  trackUsage({ feature: 'chat', userId, model: chatModel, json: data });
   // Marcar fotos como vistas por el modelo (dedup: no se reenvían por 20h).
   try {
     if (userId != null) for (const v of (visionImgs || [])) {
@@ -2062,7 +2072,7 @@ async function repairIdeaJson(brokenRaw, apiKey) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: CHAT_MODEL,
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```idea, sin ningún otro texto. El JSON debe tener "titulo" (string) y "angulo" (string); opcionalmente "caption", "photo_index", "colors" y "script".' },
         { role: 'user', content: 'Corregí este JSON para que sea válido:\n' + String(brokenRaw || '').slice(0, 2000) },
@@ -2074,7 +2084,7 @@ async function repairIdeaJson(brokenRaw, apiKey) {
   });
   if (!res.ok) throw new Error('repair: ' + res.status);
   const data = await res.json();
-  trackUsage({ feature: 'chat-repair', model: CHAT_MODEL, json: data });
+  trackUsage({ feature: 'chat-repair', model: 'gpt-4o-mini', json: data });
   const out = String((data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
   const mm = out.match(/```idea\s*([\s\S]*?)```/) || out.match(/(\{[\s\S]*\})/);
   if (!mm) throw new Error('repair sin JSON');
@@ -2117,7 +2127,7 @@ async function repairEditJson(brokenRaw, apiKey, tz) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: CHAT_MODEL,
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'Devolvé ÚNICAMENTE el JSON corregido dentro de un bloque ```edit, sin ningún otro texto. El JSON debe tener "draft" (entero ≥ 1); opcionalmente "caption", "hashtags", "photo_index" (entero ≥ 0) y "when" ("AAAA-MM-DD HH:MM").' },
         { role: 'user', content: 'Corregí este JSON para que sea válido:\n' + String(brokenRaw || '').slice(0, 2000) },
@@ -2129,7 +2139,7 @@ async function repairEditJson(brokenRaw, apiKey, tz) {
   });
   if (!res.ok) throw new Error('repair edit: ' + res.status);
   const data = await res.json();
-  trackUsage({ feature: 'chat-repair', model: CHAT_MODEL, json: data });
+  trackUsage({ feature: 'chat-repair', model: 'gpt-4o-mini', json: data });
   const out = String((data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
   const mm = out.match(/```edit\s*([\s\S]*?)```/) || out.match(/(\{[\s\S]*\})/);
   if (!mm) throw new Error('repair edit sin JSON');
