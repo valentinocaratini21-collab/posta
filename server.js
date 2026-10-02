@@ -6583,6 +6583,7 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     res.json({ ok: true, path: imagePath, style: styleOut.code || null, styleName: styleOut.name || null });
   } catch (e) {
     console.error('[concept-shot]', e.message);
+    try { logGenError('concept-shot', e); } catch (e2) {}
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
     if (String(e.message || '').startsWith('Sin clave')) return res.status(400).json({ error: e.message });
     res.status(502).json({ error: String(e.message || 'No se pudo generar la imagen').slice(0, 200) });
@@ -8109,18 +8110,27 @@ app.get('/api/ig/stories-status', requireAuth, (req, res) => {
   }
 });
 
-// ---------- Health ----------
+// Ring buffer de últimos errores de generación (diagnóstico admin, sin secretos).
+const LAST_ERRORS = [];
+function logGenError(where, err) {
+  try {
+    LAST_ERRORS.unshift({ at: new Date().toISOString(), where, msg: String((err && err.message) || err || '').slice(0, 300) });
+    if (LAST_ERRORS.length > 20) LAST_ERRORS.length = 20;
+  } catch (e) {}
+}
 // BUILD_ID: cambiar en cada zip consolidado. Sirve para verificar desde el
 // navegador que producción está corriendo el código nuevo:
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v16';
+const BUILD_ID = '20261001-v18';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
   openai: Boolean(process.env.OPENAI_API_KEY),
 }));
+// Diagnóstico admin: últimos errores de generación (requiere login).
+app.get('/api/diag', requireAuth, (req, res) => res.json({ ok: true, build: BUILD_ID, errors: LAST_ERRORS }));
 
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
