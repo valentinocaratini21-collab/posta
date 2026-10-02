@@ -5834,12 +5834,12 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
     const form = new FormData();
     form.append('model', 'gpt-image-1');
     form.append('prompt', prompt);
-    for (const p of absRefs) {
-      const buf = fs.readFileSync(p);
-      const ext = path.extname(p).toLowerCase();
-      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-      form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
-    }
+    // UNA sola imagen: OpenAI rechaza múltiples campos 'image' ("Duplicate parameter").
+    const p0 = absRefs[0];
+    const buf = fs.readFileSync(p0);
+    const ext = path.extname(p0).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
     form.append('size', '1024x1024');
     const r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
@@ -6172,12 +6172,13 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     const form = new FormData();
     form.append('model', 'gpt-image-1');
     form.append('prompt', prompt + ' ' + (refNote || 'IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.'));
-    for (const p of absRefs) {
-      const buf = fs.readFileSync(p);
-      const ext = path.extname(p).toLowerCase();
-      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-      form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
-    }
+    // UNA sola imagen de referencia: OpenAI rechaza múltiples campos 'image'
+    // ("Duplicate parameter"). Va la primera (la de mayor prioridad: logo > producto > fotos).
+    const p0 = absRefs[0];
+    const buf = fs.readFileSync(p0);
+    const ext = path.extname(p0).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
     form.append('size', '1024x1536'); // vertical 4:5: formato ideal para celular e Instagram
     r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
@@ -8123,7 +8124,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v18';
+const BUILD_ID = '20261001-v19';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
