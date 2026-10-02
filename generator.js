@@ -113,8 +113,35 @@ const HASHTAGS = {
   inmobiliaria: ['#inmobiliariaargentina', '#propiedades', '#realestateargentina', '#ventadepropiedades', '#inversion'],
   eventos: ['#eventosargentina', '#fiestas', '#organizaciondeeventos', '#casamientos', '#eventplanner'],
   arte: ['#arteargentina', '#artistasargentinos', '#disenografico', '#artecontemporaneo', '#creatividad'],
+  // Rubros de barrio agregados en la paridad 2026-10-01: sin banco propio caían
+  // a "otro" (#emprendedoresargentinos…) que no le vende nada al negocio.
+  panaderia: ['#panaderiaartesanal', '#facturas', '#medialunas', '#panaderiaargentina', '#hornoalena'],
+  pasteleria: ['#pasteleriaartesanal', '#tortasdecoradas', '#reposteriaargentina', '#mesadulce', '#pasteleria'],
+  heladeria: ['#heladeriaartesanal', '#heladoartesanal', '#gelato', '#heladeriaargentina', '#postre'],
+  pizzeria: ['#pizzeriaargentina', '#pizza', '#pizzacasera', '#empanadas', '#pizzeria'],
+  dietetica: ['#dietetica', '#alimentacionsaludable', '#vidasana', '#productosnaturales', '#dieteticaargentina'],
+  floreria: ['#floreria', '#floresnaturales', '#ramosdeflores', '#floreriaargentina', '#flores'],
+  carniceria: ['#carniceria', '#carniceriaargentina', '#asadoargentino', '#parrillada', '#carnedecalidad'],
+  verduleria: ['#verduleria', '#frutasyverduras', '#verdurasfrescas', '#verduleriaargentina', '#comidasana'],
+  kiosco: ['#kiosco', '#maxikiosco', '#kioscoargentina', '#golosinas', '#abierto'],
+  libreria: ['#libreria', '#libreriaargentina', '#utilesescolares', '#libros', '#papeleria'],
+  ferreteria: ['#ferreteria', '#ferreteriaargentina', '#herramientas', '#construccion', '#hogar'],
+  farmacia: ['#farmacia', '#farmaciaargentina', '#salud', '#cuidadopersonal', '#bienestar'],
+  optica: ['#optica', '#opticaargentina', '#anteojos', '#saludvisual', '#lentes'],
+  jugueteria: ['#jugueteria', '#jugueteriaargentina', '#juguetes', '#regalos', '#diadelniño'],
+  regaleria: ['#regaleria', '#regalosoriginales', '#regaleriaargentina', '#detalles', '#giftshop'],
+  vinoteca: ['#vinoteca', '#vinosargentinos', '#malbec', '#vinotecaargentina', '#winelover'],
+  cerveceria: ['#cerveceria', '#cervezaartesanal', '#birra', '#cerveceriaargentina', '#craftbeer'],
+  veterinaria: ['#veterinaria', '#veterinariaargentina', '#saludanimal', '#mascotasfelices', '#vete'],
   otro: ['#emprendedoresargentinos', '#pymesargentina', '#argentina', '#negociosdigitales'],
 };
+
+// Hashtags de nicho por rubro, lookup insensible a acentos/mayúsculas
+// (el perfil puede traer "panadería" y el banco usa "panaderia").
+function nicheTags(category) {
+  const k = String(category || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return HASHTAGS[k] || HASHTAGS.otro;
+}
 
 const GENERIC_TAGS = ['#argentina', '#emprendedor', '#marketingdigital'];
 
@@ -152,11 +179,15 @@ const ENERGY_CTAS = {
 };
 
 const ENERGY_BENEFITS = [
-  'Stock limitado, no te quedes afuera ⚡',
-  'Calidad premium que se nota en cada detalle ✨',
-  'Precio de lanzamiento solo por esta semana 💥',
-  'Te lo enviamos a todo el país 📦',
-  'Si no te enamora, te devolvemos la plata ✅',
+  // Ronda 2537 (2026-10-01): el banco anterior inventaba promesas comerciales
+  // ("stock limitado", "precio de lanzamiento", "te devolvemos la plata",
+  // "envíos a todo el país", "calidad premium") que el gate voltea. Los
+  // beneficios ahora son invitaciones sin claims: no inventan nada del negocio.
+  'Preguntanos lo que quieras por DM, te respondemos 💬',
+  'Guardalo para cuando lo necesites 🔖',
+  'Pedilo por DM y te lo preparamos 📩',
+  'Comentá INFO y te contamos todo 👇',
+  'Etiquetá a quien le va a gustar 🙋',
 ];
 
 const GOAL_LINES = {
@@ -338,6 +369,11 @@ const BANNED_PHRASES = [
   'de otro nivel',
   'como ningun otro',
   'como ninguna otra',
+  // Fluff de plantilla (ronda 2537, 2026-10-01): frases que suenan a IA
+  // y no dicen nada del negocio. "alimento premium" (categoría real de
+  // producto) NO matchea: el ban es a "calidad premium" como muletilla.
+  'calidad premium',
+  'se nota en cada detalle',
   // Testimonios vagos y métricas inventadas (hallazgo revisión en vivo 2026-09-29):
   'un cliente',
   'nuestros clientes',
@@ -482,6 +518,11 @@ function captionPasses(caption, input) {
   // con datos reales de stock.
   if (SCARCITY_PATTERNS.some(p => p.test(low)) && !dnaStockData(dna)) {
     return { ok: false, reason: 'escasez inventada: el gancho de urgencia no tiene datos reales de stock' };
+  }
+  // Promesas comerciales inventadas (ronda 2537): beneficios/garantías/
+  // devoluciones/precios especiales que el negocio nunca ofreció.
+  if (PROMO_CLAIM_PATTERNS.some(p => p.test(low)) && !dnaPromoClaim(dna)) {
+    return { ok: false, reason: 'promesa comercial inventada: el negocio no ofrece eso en sus datos' };
   }
   // Claims de salud bloqueados: cura / adelgaza / previene / trata.
   const hc = healthClaimHit(low);
@@ -639,6 +680,22 @@ function dnaStockData(dna) {
   const d = dna || {};
   if (d.stock != null && String(d.stock).trim() !== '') return true;
   return /stock[^0-9]{0,20}[0-9]/.test(JSON.stringify(d).toLowerCase());
+}
+
+// Promesas comerciales inventadas (ronda 2537, 2026-10-01): beneficios,
+// garantías, devoluciones o precios especiales que el negocio nunca ofreció
+// (típico de plantillas genéricas). Se rechazan salvo que el ADN traiga
+// promos, garantías o devoluciones reales.
+const PROMO_CLAIM_PATTERNS = [
+  /precio de lanzamiento/, /precio especial/, /oferta exclusiva/,
+  /te devolvemos la plata/, /devoluci[oó]n garantizada/, /satisfacci[oó]n garantizada/,
+  /si no te gusta[,.]?\s+te lo cambiamos/,
+];
+function dnaPromoClaim(dna) {
+  const d = dna || {};
+  const vals = [dnaList(d.promos_activas), dnaList(d.promos), d.garantia, d.devolucion, d.politica_devolucion]
+    .filter(Boolean).join(' | ').toLowerCase();
+  return /(lanzamiento|especial|exclusiv|devoluci|garant|reembolso|cambiamos|descuento)/.test(vals);
 }
 
 // Claims de salud bloqueados (cura / adelgaza / previene / trata): detección =
@@ -857,14 +914,32 @@ function bestHoursLine(db, userId) {
   } catch (e) { return ''; }
 }
 
-function templateGenerate({ business, category, tone, topic, goal }) {
+function templateGenerate(input) {
+  const { business, category, tone, topic, goal } = input || {};
   const t = HOOKS[tone] ? tone : 'canchero';
-  const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: Math.floor(Math.random() * 1000), goal });
-  const overlay = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
-  const tags = [...(HASHTAGS[category] || HASHTAGS.otro), ...GENERIC_TAGS]
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 8);
-  return { caption, overlay, suboverlay: cortar(String(caption).split('\n')[0], 140), hashtags: tags.join(' ') };
+  const baseSeed = Math.floor(Math.random() * 1000);
+  const mk = (extra) => {
+    const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: baseSeed + extra, goal });
+    const overlay = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
+    const tags = [...nicheTags(category), ...GENERIC_TAGS]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 8);
+    return { caption, overlay, suboverlay: cortar(String(caption).split('\n')[0], 140), hashtags: tags.join(' ') };
+  };
+  // Puerta de calidad también en plantillas (ronda 2537, 2026-10-01): el cliente
+  // nunca ve un caption mediocre, venga de IA o de plantilla. Reintenta con
+  // otra semilla (máx 3 intentos); si ninguno pasa, va el primero y se loguea.
+  // Nunca se loopea ni se crashea.
+  let first = null, firstReason = '';
+  for (const extra of [0, 7, 13]) {
+    const cand = mk(extra);
+    if (!first) first = cand;
+    const chk = captionPasses(cand.caption, input);
+    if (chk.ok) return cand;
+    if (!firstReason) firstReason = chk.reason;
+  }
+  console.error('[plantilla] ningún seed pasó captionPasses, va el primero:', firstReason);
+  return first;
 }
 
 // "Primera semana con rueditas": posteos APROBADOS en revisión como few-shot
@@ -1037,8 +1112,20 @@ async function generateCaptions(input, n, apiKey) {
   const captions = [];
   const overlays = [];
   const ovFb = makeHeadline(input.topic, 5).toUpperCase() || 'NOVEDAD';
-  for (let i = 0; i < n; i++) { captions.push(templateCaption({ ...input, seed: seedBase + i })); overlays.push(ovFb); }
-  const tags = [...(HASHTAGS[input.category] || HASHTAGS.otro), ...GENERIC_TAGS]
+  for (let i = 0; i < n; i++) {
+    // Puerta de calidad también en plantillas (ronda 2537): cada caption se
+    // chequea y se reintenta con otra semilla si el gate lo voltea.
+    let chosen = null, okAny = false, reason = '';
+    for (const extra of [0, 7, 13]) {
+      const cand = templateCaption({ ...input, seed: seedBase + i * 20 + extra });
+      const chk = captionPasses(cand, input);
+      if (!chosen) { chosen = cand; reason = chk.reason; }
+      if (chk.ok) { chosen = cand; okAny = true; break; }
+    }
+    if (!okAny) console.error('[plantilla] caption sin seed válido:', reason);
+    captions.push(chosen); overlays.push(ovFb);
+  }
+  const tags = [...nicheTags(input.category), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 8);
   return { captions, overlays, hashtags: tags.join(' ') };
@@ -1560,6 +1647,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'IMAGEN-NIVEL-AGENCIA (qué pedir al generar): la imagen generada tiene que parecer del NEGOCIO REAL: si hay foto del producto, usala como referencia y NO inventes otro producto. Formato VERTICAL 4:5 (se ve en celular). Zona segura: nada importante en los bordes (titular, logo y producto bien adentro). La imagen VENDE EL RESULTADO, no el producto (alivio, antojo, ganas — no el objeto solo). Composición: espacio limpio arriba para el titular. UN mensaje por imagen: si hay que explicar mucho, va en el caption. Estética del RUBRO (panadería cálida, no corporativa fría). Luz natural, personas que parezcan reales del rubro. Texto mínimo en la imagen: solo el titular, completo y jamás cortado. La imagen y el caption dicen LO MISMO (coherencia). En la semana, variá los visuales: JAMÁS dos imágenes iguales seguidas. ' +
     'REEL-DIRECTOR: cada reel tiene UNA idea y un ARCO (hook 0-3s → desarrollo → cierre con CTA). Duración según objetivo: promo directa 15s, historia/conexión 30s. El guion calza con el MATERIAL REAL: solo pedí tomas que existen en sus fotos/video; JAMÁS inventes escenas imposibles. Reel de fotos: cada foto 2-3 segundos con ritmo. El reel se entiende SIN SONIDO (texto en pantalla en cada escena). El primer frame ES la portada: tiene que frenar el scroll solo. CTA final siempre (qué hacer después de verlo). JAMÁS prometas música específica. Si el material no alcanza para un buen reel → decilo en 1 línea y pedí lo que falta. ' +
     'POSTEO-BAMBOO (criterio de publicación): cada posteo tiene que ser algo que el cliente postearía ORGULLOSO mañana — si vos no lo postearías, no lo propongas. ÁNGULO: cada posteo vende (deseo/urgencia), conecta (historia/gente) o educa (tip útil) — UNO por posteo, no los tres. El DESEO manda: hablá de lo que el seguidor quiere sentir/tener, no de features del negocio. Caption: hook en la primera línea (que frene el scroll) → líneas cortas → 1 dato REAL y concreto → CTA según objetivo (DM para vender, comentar para engagement, guardar para tips, link para oferta) → 5-8 hashtags de nicho + locales (JAMÁS #love #instagood). Longitud para celular: se lee sin scrollear mucho. UN mensaje por posteo. Tono según rubro (abogado sobrio, bar canchero). JAMÁS repitas el mismo concepto en la semana. ' +
+    'VEREDICTO DE CALIDAD (ronda 2543, 2026-10-01): si el cliente dice que algo es malo ("está malísimo", "es horrible", "me da vergüenza publicarlo", "suena a robot", "no tiene nada que ver con mi negocio", "salen todos iguales") → cero defensa, cero "a mí me parecía bien": tenés razón, lo rehago. Si no es obvio qué no va, preguntá en UNA línea y rehacé con OTRO ángulo — texto + imagen nuevos, no maquilles el mismo concepto. Si te pregunta "¿vos lo publicarías?" respondé honesto: si no lo publicarías, decilo ("te soy honesto: yo tampoco lo publicaría así") y rehacelo. JAMÁS publiques ni insistas con algo que al cliente le da vergüenza. ' +
     'DECIDÍ VOS: "hacé lo que quieras" / "sorprendeme" → decidí solo con el ADN y proponé: eso es el producto. JAMÁS le devuelvas la decisión ("¿qué tema preferís?"). ' +
     'REPETICIÓN: si repite la misma pregunta ("y los hashtags?"): detectalo, resolvé de fondo y guardalo con ```rule ("ya los dejé guardados en tus preferencias 👍"). Paciencia total. JAMÁS respondas lo mismo 3 veces ni digas "ya te lo dije".';
 

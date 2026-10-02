@@ -1983,6 +1983,9 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // ("¡ya está saliendo!") no puede quedar: se corrige el reply acá,
     // después de procesar los bloques y antes de responder.
     out.reply = fixPublishReply(out.reply, publishApplied);
+    // Pre-generar la imagen AHORA en background: cuando el cliente abra la
+    // tarjeta "IDEA LISTA", ya va a estar lista en vez de hacerlo esperar.
+    if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
   } catch (e) {
     console.error('[chat]', e.message);
@@ -3604,7 +3607,7 @@ app.post('/api/trial/rebuild-import', requireAuth, requireTrialValid, (req, res)
 // Estado de un posteo (para el seguimiento en vivo de "Publicar ahora")
 app.get('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare(
-    "SELECT id, status, error, ig_permalink, published_at, scheduled_at FROM posts WHERE id = ? AND user_id = ? AND COALESCE(needs_review,0)=0"
+    "SELECT * FROM posts WHERE id = ? AND user_id = ? AND COALESCE(needs_review,0)=0"
   ).get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   res.json({ ok: true, post });
@@ -6250,6 +6253,43 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
 // Motor de concept-shot como función reusable: brief expandido + imagen con
 // gpt-image-1 + QA de visión (máx 1 reintento) + guardado. Devuelve el path
 // público (/media/...). Lanza si falla (el llamador decide el status HTTP).
+//
+// PRE-GENERACIÓN: cuando el chat cierra una idea, el servidor arranca la imagen
+// en background AHÍ MISMO (pregenIdeaImage). La tarjeta "IDEA LISTA" la levanta
+// al instante con /api/ideas/pregen-image en vez de hacer esperar al cliente.
+const PREGEN = new Map(); // key: uid + ':' + titulo -> {status, path, style, styleName, at}
+function pregenKey(uid, titulo) { return String(uid) + '::' + String(titulo || '').slice(0, 80); }
+function pregenIdeaImage(uid, idea) {
+  try {
+    const titulo = idea && (idea.titulo || idea.title);
+    if (!titulo) return;
+    const key = pregenKey(uid, titulo);
+    if (PREGEN.has(key)) return; // ya en curso o lista
+    PREGEN.set(key, { status: 'pending', at: Date.now() });
+    const styleOut = {};
+    conceptShotGenerate({
+      uid,
+      idea: { titulo: idea.titulo || idea.title, angulo: idea.angulo || '', porque: idea.porque || '', tipo: idea.tipo || 'novedad' },
+      tipo: idea.tipo || 'novedad',
+      headline: String(titulo).slice(0, 80),
+      refs: [],
+      usedStyles: [],
+      styleOut,
+    }).then(path => {
+      PREGEN.set(key, { status: 'done', path, style: styleOut.code || null, styleName: styleOut.name || '', at: Date.now() });
+    }).catch(err => {
+      PREGEN.set(key, { status: 'error', error: String((err && err.message) || '').slice(0, 200), at: Date.now() });
+      try { logGenError('pregen', err); } catch (e2) {}
+    });
+    // Limpieza: tope de 50 entradas
+    if (PREGEN.size > 50) { try { PREGEN.delete(PREGEN.keys().next().value); } catch (e) {} }
+  } catch (e) { /* nunca romper el chat por la pre-generación */ }
+}
+app.post('/api/ideas/pregen-image', requireAuth, express.json(), (req, res) => {
+  const e = PREGEN.get(pregenKey(req.session.userId, (req.body || {}).titulo));
+  if (!e) return res.json({ ok: true, status: 'missing' });
+  res.json({ ok: true, status: e.status, path: e.path || null, error: e.error || null });
+});
 async function conceptShotGenerate({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
@@ -8124,7 +8164,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v19';
+const BUILD_ID = '20261001-v21';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
