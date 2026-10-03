@@ -1805,7 +1805,7 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-week{margin:0 0 6px}
 .hs-week-head{display:flex;align-items:baseline;justify-content:space-between;margin:0 2px 8px}
 .hs-week-head b{font-size:17px}
-.hs-week-head span{font-size:12.5px;color:var(--mut);font-weight:700}
+.hs-week-head span{font-size:13px;color:var(--mut);font-weight:800;white-space:nowrap;flex:none;margin-left:10px;background:var(--bg2);border-radius:999px;padding:4px 12px}
 .hs-chat-label{margin:6px 2px 8px}
 .hs-chat-label b{font-size:16px}
 .igmock-media{display:block;width:100%;border:none;background:#fff;padding:0;cursor:pointer;touch-action:manipulation}

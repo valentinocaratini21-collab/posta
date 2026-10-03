@@ -4109,7 +4109,7 @@ function homeWeekHTML(posts, quota) {
       </div>
     </div>`;
   }).join('');
-  const qLabel = qTotal > 0 ? `${Math.min(qUsed, qTotal)} de ${qTotal} posteos` : `${list.length} ${list.length === 1 ? 'posteo' : 'posteos'}`;
+  const qLabel = qTotal > 0 ? `${Math.min(qUsed, qTotal)}/${qTotal}` : `${list.length}`;
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b><span>${qLabel}</span></div>
     <div class="igmock-carousel">
