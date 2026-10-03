@@ -3888,7 +3888,7 @@ async function chatMakePost(asVideo) {
   // Cupo del plan: chequear antes de crear para no perder la idea armada
   try {
     const q = await api.get('/api/quota');
-    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount, q); paintUpcoming(mount); } } catch (e) {}
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount, q); } } catch (e) {}
     if (q.left <= 0) { quotaModal(q); return; }
   } catch (e) {}
   const m = $('#chatMsg');
@@ -3918,7 +3918,7 @@ async function chatMakePost(asVideo) {
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
-    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount); paintUpcoming(mount); } } catch (e) {}
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount); } } catch (e) {}
     try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
     setTimeout(() => {
       const rc = $('#reviewCard') || $('#draftsBanner');
@@ -4072,19 +4072,27 @@ function homeWeekHTML(posts, quota) {
   const cards = list.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
+    const isPub = String(d.status) === 'published';
     const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
     const when = d.scheduled_at ? homeWhenLabel(d.scheduled_at) : 'Borrador';
     const badge = d.status === 'scheduled' ? '📮' : '📝';
     const cap = String(d.caption || d.source_topic || '').split('\n')[0].slice(0, 90);
-    return `<div class="igmock" data-home-post="${d.id}">
+    const canApprove = String(d.approval) === 'pending' && String(d.status) === 'scheduled';
+    const acts = isPub ? '' : `<div class="pcard-actions hs-acts">
+        ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+        <button type="button" data-pc-act="skip">⏭️ Saltar</button>
+        ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
+      </div>`;
+    return `<div class="igmock" data-post-id="${esc(String(d.id))}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
         <span class="igmock-count">${i + 1} de ${list.length}</span></div>
       <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
       <div class="igmock-foot">
         <div class="igmock-when">${badge} ${esc(when)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</div>
         ${cap ? `<div class="igmock-cap">${esc(cap)}</div>` : ''}
+        ${acts}
       </div>
     </div>`;
   }).join('');
@@ -4880,7 +4888,7 @@ function renderQuickChips(drafts, scheduled, running) {
     i.value = t;
     chatSend();
   });
-  paintChatQuota(mount); paintUpcoming(mount);
+  paintChatQuota(mount);
 }
 
 // Utilidades de agenda con la zona horaria del usuario (misma convención que "Lo que se viene").
@@ -6258,7 +6266,7 @@ async function checkQuotaOrModal() {
     // Sincronizar la barrita con el dato fresco (si no, miente)
     try {
       const mount = document.getElementById('chatQuickChips');
-      if (mount) { paintChatQuota(mount, q); paintUpcoming(mount); }
+      if (mount) { paintChatQuota(mount, q); }
     } catch (e) {}
     if (q.left <= 0) {
       // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
