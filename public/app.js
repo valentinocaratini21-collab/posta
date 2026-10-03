@@ -4060,14 +4060,27 @@ function homeWeekHTML(posts, quota) {
   const q = quota || {};
   const qTotal = Number(q.limit) || 0;
   const qUsed = Math.max(0, Number(q.used) || 0);
-  const list = (posts || []).filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
-    .sort((a, b) => String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
-  if (!list.length) return `<div class="hs-generating">
+  const all = posts || [];
+  // La semana se ve completa: publicados también (orden: pendientes primero).
+  const rank = (st) => st === 'draft' ? 0 : st === 'scheduled' ? 1 : 2;
+  const list = all.filter(p => p && (p.status === 'draft' || p.status === 'scheduled' || p.status === 'published'))
+    .sort((a, b) => (rank(a.status) - rank(b.status)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
+  if (!list.length) {
+    // Solo usuario NUEVO de verdad ve "armando": si alguna vez tuvo posteos,
+    // la semana está completa (no un spinner eterno).
+    const everHad = all.length > 0;
+    if (everHad) return `<div class="hs-done">
+      <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+      <b>Tu semana está completa 🎉</b>
+      <p>Todo publicado. La próxima se arma sola ✨</p>
+    </div>`;
+    return `<div class="hs-generating">
     <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
   </div>`;
+  }
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   const cards = list.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
@@ -4076,8 +4089,8 @@ function homeWeekHTML(posts, quota) {
     const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
-    const when = d.scheduled_at ? homeWhenLabel(d.scheduled_at) : 'Borrador';
-    const badge = d.status === 'scheduled' ? '📮' : '📝';
+    const when = d.status === 'published' ? 'Publicado' : d.scheduled_at ? homeWhenLabel(d.scheduled_at) : 'Borrador';
+    const badge = d.status === 'published' ? '✅' : d.status === 'scheduled' ? '📮' : '📝';
     const cap = String(d.caption || d.source_topic || '').split('\n')[0].slice(0, 90);
     const canApprove = String(d.approval) === 'pending' && String(d.status) === 'scheduled';
     const acts = isPub ? '' : `<div class="pcard-actions hs-acts">
@@ -4115,10 +4128,12 @@ function homeWhenLabel(iso) {
 // Vista #/app/chat = HOME SIMPLE: los posteos de la semana uno al lado del
 // otro, y el chat abajo si querés cambiar/editar/crear algo distinto.
 async function chatView() {
-  let posts = [];
-  try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
-  let quota = null;
-  try { quota = await api.get('/api/quota'); } catch (e) { quota = null; }
+  const [postsR, quotaR] = await Promise.all([
+    api.get('/api/posts').catch(() => []),
+    api.get('/api/quota').catch(() => null),
+  ]);
+  const posts = Array.isArray(postsR) ? postsR : [];
+  const quota = quotaR;
   try { REVIEW_DRAFTS = posts.filter(p => p.status === 'draft'); } catch (e) {}
   const nDrafts = posts.filter(p => p.status === 'draft').length;
   return `
@@ -4175,6 +4190,21 @@ async function bindChatView() {
   let forced = null;
   try { forced = sessionStorage.getItem('posty-force-nudge'); sessionStorage.removeItem('posty-force-nudge'); } catch (e) {}
   try { await maybePostyNudge(forced || undefined); } catch (e) {}
+  // Home: si está "armando tu semana", refrescar solo hasta que aparezcan (máx 2 min).
+  try {
+    if (document.querySelector('.hs-generating') && (location.hash || '').startsWith('#/app/chat')) {
+      let n = 0;
+      try { n = Number(sessionStorage.getItem('hs_gen_retry') || 0); } catch (e) {}
+      if (n < 8) {
+        try { sessionStorage.setItem('hs_gen_retry', String(n + 1)); } catch (e) {}
+        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 15000);
+      } else {
+        try { sessionStorage.removeItem('hs_gen_retry'); } catch (e) {}
+      }
+    } else {
+      try { sessionStorage.removeItem('hs_gen_retry'); } catch (e) {}
+    }
+  } catch (e) {}
   // 🔔 Posty te avisa: "Editar" de #/app/post/:id pre-llena el chat (el chat edita posteos hablando)
   try {
     const pre = sessionStorage.getItem('posty-chat-prefill');
