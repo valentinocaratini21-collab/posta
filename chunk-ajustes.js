@@ -158,8 +158,8 @@ function ajustesView() {
     </div>
     <div id="igVerifyMsg" style="margin-top:10px"></div>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button>
-      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span>
+      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button><button class="btn btn-soft btn-sm" id="btnClientBrief">🔄 Actualizar mi brief</button>
+      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span><span class="hint" id="clientBriefMsg"></span>
     </div>
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
       <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
@@ -179,6 +179,14 @@ function ajustesView() {
   </div></div>
   <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div></div>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Autopiloto</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cuando está activado, Posty publica solo los posteos que pasan el filtro de calidad. Si algo no está a la altura, va a revisión manual y te avisa.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
+      <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
   </div></div>
   ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
@@ -210,6 +218,48 @@ function bindSettings() {
     h.onclick = tg;
     h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
   });
+  // --- Autopiloto (4 puntos, 2026-10-02) ---
+  const btnAp = $('#btnAutopilotToggle');
+  if (btnAp) {
+    const loadAp = async () => {
+      try {
+        const r = await api.get('/api/autopilot');
+        const on = !!(r && r.enabled);
+        const unlocked = !!(r && r.unlocked);
+        const prog = (r && r.progress) || 0;
+        if (!unlocked) {
+          btnAp.textContent = `🔒 Desbloqueá (${prog}/10)`;
+          btnAp.disabled = true;
+          $('#autopilotStatus').textContent = 'Aprobá 10 posteos sin editarlos y se desbloquea.';
+          $('#autopilotInfo').textContent = 'El autopiloto se gana con confianza: cuando Posty demuestra que la pega, te ofrece soltarle las riendas.';
+        } else {
+          btnAp.disabled = false;
+          btnAp.textContent = on ? '🟢 Activado' : '⚪ Activar';
+          btnAp.classList.toggle('btn-primary', !on);
+          $('#autopilotStatus').textContent = on
+            ? 'Posty publica solo lo que pasa el filtro de calidad. Te aviso 30 min antes.'
+            : 'Todo pasa por tu aprobación.';
+          $('#autopilotInfo').textContent = on
+            ? 'El filtro chequea: imagen válida, caption con contenido, hashtags y que no sea duplicado. Score mínimo: 70/100.'
+            : '';
+        }
+      } catch (e) {
+        btnAp.textContent = 'Error';
+      }
+    };
+    btnAp.onclick = async () => {
+      try {
+        const r = await api.get('/api/autopilot');
+        const next = !(r && r.enabled);
+        btnAp.disabled = true;
+        const r2 = await api.post('/api/autopilot', { enabled: next });
+        if (r2 && r2.ok) await loadAp();
+        else alert('No pude cambiarlo 😅');
+      } catch (e) { alert('No pude cambiarlo 😅'); }
+      btnAp.disabled = false;
+    };
+    loadAp();
+  }
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');
@@ -1333,6 +1383,15 @@ function bindSettings() {
     try { const r = await api.post('/api/caption-style/analyze'); if (m) m.textContent = r.ok ? 'Listo ✅ Tus próximos captions van a sonar como vos.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
     catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
     bcs.disabled = false;
+  };
+  // Brief Unificado: re-mina la bio y reconstruye NEGOCIO + VOZ + VISUAL + MARCA.
+  const bcb = $('#btnClientBrief');
+  if (bcb) bcb.onclick = async () => {
+    const m = $('#clientBriefMsg');
+    bcb.disabled = true; if (m) m.textContent = 'Armando tu brief…';
+    try { const r = await api.post('/api/client-brief/refresh'); if (m) m.textContent = r.ok ? 'Listo ✅ Posty ya sabe quién sos: qué vendés, cómo hablás y cómo te ves.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
+    catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
+    bcb.disabled = false;
   };
   const igRetry = $('#btnIgRetry');
   if (igRetry) igRetry.onclick = () => igConnect();

@@ -390,6 +390,7 @@ function startScheduler(db) {
   try {
     cron.schedule('30 9 * * 1', () => {
       weeklyWowSummary(db).catch((e) => console.error('[wow-semanal]', e.message));
+      calcBestHours(db).catch((e) => console.error('[best-hour]', e.message));
     }, { timezone: 'America/Argentina/Buenos_Aires' });
     console.log('[posta] Momento WOW semanal: lunes 09:30 (Buenos Aires)');
   } catch (e) {
@@ -1565,6 +1566,41 @@ async function autopilotPreNotify(db) {
     } catch (e) {
       console.error(`[autopilot-notify] post ${p.id}:`, e.message);
     }
+  }
+}
+
+// 🕐 Horarios óptimos (2026-10-03, funcionalidad 1).
+// Analiza a qué hora los posteos del usuario tuvieron más engagement
+// y guarda la mejor hora. Corre semanalmente.
+async function calcBestHours(db) {
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT DISTINCT user_id FROM posts
+      WHERE status = 'published' AND published_at > datetime('now', '-30 days')
+      AND (ig_likes > 0 OR ig_comments > 0)
+    `).all();
+  } catch (e) { return; }
+
+  for (const u of users) {
+    try {
+      // Engagement por hora de publicación (hora local aproximada).
+      const rows = db.prepare(`
+        SELECT CAST(strftime('%H', published_at) AS INTEGER) AS h,
+               AVG(CAST(COALESCE(ig_likes, 0) AS FLOAT) + CAST(COALESCE(ig_comments, 0) AS FLOAT) * 3) AS eng,
+               COUNT(*) AS n
+        FROM posts
+        WHERE user_id = ? AND status = 'published'
+        AND published_at > datetime('now', '-30 days')
+        GROUP BY h HAVING n >= 2
+        ORDER BY eng DESC LIMIT 1
+      `).get(u.user_id);
+
+      if (rows && rows.h !== null) {
+        db.prepare(`UPDATE users SET best_hour = ? WHERE id = ?`).run(rows.h, u.user_id);
+        console.log(`[best-hour] usuario ${u.user_id}: mejor hora ${rows.h}:00 (eng ${Math.round(rows.eng)})`);
+      }
+    } catch (e) {}
   }
 }
 

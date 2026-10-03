@@ -665,5 +665,21 @@ try { db.exec(`ALTER TABLE users ADD COLUMN clean_approvals INTEGER DEFAULT 0`);
 try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_offered INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Proactivo estratégico: flag para no repetir el aviso de trial.
 try { db.exec(`ALTER TABLE users ADD COLUMN proactive_trial_warned INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// 6 FUNCIONALIDADES (2026-10-03):
+// 1. Horarios óptimos: mejor hora para publicar según audiencia.
+try { db.exec(`ALTER TABLE users ADD COLUMN best_hour INTEGER DEFAULT 10`); } catch (e) { /* ya existe */ }
+// 3. Banco de ideas: guardar ideas para después.
+db.exec(`CREATE TABLE IF NOT EXISTS idea_bank (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  angle TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  used INTEGER DEFAULT 0
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_idea_bank_user ON idea_bank(user_id, used)`); } catch (e) {}
+// 5. Test A/B: dos captions por posteo, se trackea el ganador.
+try { db.exec(`ALTER TABLE posts ADD COLUMN caption_b TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 module.exports = db;

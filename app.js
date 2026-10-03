@@ -168,16 +168,16 @@ async function uploadAssetFile(file, kind) {
 
 // ---------- Lazy chunks: vistas pesadas fuera del primer pantallazo ----------
 // app.js trae el primer pantallazo (landing, auth, chat, semana, schedule, aprobación).
-// Las vistas pesadas (ajustes, admin, creador manual) viven en /js/chunk-*.js y se
+// Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20260930-post'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261002-v29'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
   __CHUNKS[name] = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = '/js/chunk-' + name + '.js?v=' + CHUNK_V;
+    s.src = '/chunk-' + name + '.js?v=' + CHUNK_V;
     s.onload = () => resolve();
     s.onerror = () => { delete __CHUNKS[name]; reject(new Error('chunk ' + name + ' no cargó')); };
     document.head.appendChild(s);
@@ -423,6 +423,7 @@ function landingView(cfg) {
       <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
     </div>
     <div class="hero-note">Sin tarjeta · probalo gratis · Cancelá cuando quieras</div>
+    <div class="hero-note" style="margin-top:10px"><a href="/auditoria" style="color:var(--cel);font-weight:800;text-decoration:none">🔍 ¿Tu Instagram vende? Audit gratis →</a></div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
       <div class="pz-ba-row">
@@ -743,6 +744,21 @@ function pushSupported() {
   catch (e) { return false; }
 }
 function pushPerm() { try { return Notification.permission; } catch (e) { return 'denied'; } }
+// 🔔 Posty te habla y estás en otra pestaña: notificación local del navegador.
+// Usa el mismo permiso que el push (pushEnableFlow). Solo dispara si la pestaña está oculta.
+function postyNotify(title, body) {
+  try {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    if (!document.hidden) return;
+    const n = new Notification(title || 'Posty', {
+      body: String(body || '').replace(/\n+/g, ' ').slice(0, 140),
+      icon: 'ai-avatar.png',
+      tag: 'posty-chat',
+    });
+    n.onclick = () => { try { window.focus(); } catch (e) {} try { n.close(); } catch (e2) {} };
+  } catch (e) {}
+}
 function pushKeyToU8(b64) {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
   const b = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
@@ -967,8 +983,7 @@ function appShell(tab, content) {
     <div class="drawer-ident" id="drawerIdent" aria-label="Tu negocio"></div>
     <div class="side-posty" id="sidePosty" aria-label="Posty">
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
-      <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b><small id="sidePostyLvl">…</small></span>
-      <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>
+      <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
     <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
@@ -1163,87 +1178,293 @@ function drawPost(canvas, o) {
   const ctx = canvas.getContext('2d');
   const pals = getPalettes();
   const pal = pals[o.pal] || pals[0];
-  const acc = pal.c[2] || pal.c[0]; // acento de LA MARCA del cliente, nunca el de Posta
+  const c0 = pal.c[0], c1 = pal.c[1] || pal.c[0];
+  let acc = pal.c[2] || pal.c[0]; // acento de LA MARCA del cliente, nunca el de Posta
   const ink = pal.dark ? '#0A1E33' : '#FFFFFF';
-  const sub = pal.dark ? 'rgba(10,30,51,.72)' : 'rgba(255,255,255,.82)';
+  const FONT = "-apple-system, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
+  const SERIF = "Georgia, 'Times New Roman', serif";
 
-  if (o.photoImg) {
-    // La foto va de fondo y el diseño se mantiene: velo con los colores de la marca
-    drawCover(ctx, o.photoImg, 0, 0, W, H);
-    if (o.tpl === 'claro') ctx.fillStyle = 'rgba(255,255,255,.88)';
-    else if (o.tpl === 'noche') ctx.fillStyle = 'rgba(10,30,51,.86)';
-    else { const pg = ctx.createLinearGradient(0, 0, W, H); pg.addColorStop(0, hexA(pal.c[0], .62)); pg.addColorStop(1, hexA(pal.c[1], .62)); ctx.fillStyle = pg; }
-    ctx.fillRect(0, 0, W, H);
-  }
+  const title = String(o.title || 'Tu título');
+  const subtitle = String(o.subtitle || '');
+  const handle = '@' + (o.handle || 'tunegocio');
 
-  if (o.tpl === 'claro') {
-    if (!o.photoImg) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); }
-    ctx.fillStyle = acc; ctx.fillRect(90, 120, 130, 18);
-    ctx.fillStyle = '#0A1E33'; ctx.textAlign = 'center';
-    ctx.font = '800 96px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'Tu título', W - 220).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, 420 + i * 116));
-    ctx.fillStyle = 'rgba(10,30,51,.65)'; ctx.font = '400 52px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.subtitle || '', W - 260).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 900 + i * 70));
-    ctx.fillStyle = '#0A1E33'; ctx.font = '700 44px -apple-system, Inter, sans-serif';
-    ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, 1230);
-  } else if (o.tpl === 'noche') {
-    if (!o.photoImg) { ctx.fillStyle = '#0A1E33'; ctx.fillRect(0, 0, W, H); }
-    ctx.strokeStyle = acc; ctx.lineWidth = 10; ctx.strokeRect(50, 50, W - 100, H - 100);
-    ctx.fillStyle = acc; ctx.font = '800 40px -apple-system, Inter, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(('' + (o.handle || 'tunegocio')).toUpperCase(), W / 2, 170);
-    ctx.fillStyle = '#fff'; ctx.font = '800 104px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'Tu título', W - 240).slice(0, 4).forEach((l, i) => ctx.fillText(l, W / 2, 560 + i * 124));
-    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = '400 54px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.subtitle || '', W - 280).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 1020 + i * 72));
-  } else if (o.tpl === 'promo') {
-    if (!o.photoImg) {
-      const g = ctx.createLinearGradient(0, 0, W, H);
-      g.addColorStop(0, pal.c[0]); g.addColorStop(1, pal.c[1]);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
-    ctx.fillStyle = ink; ctx.globalAlpha = .16;
-    ctx.beginPath(); ctx.arc(W / 2, 560, 330, 0, 7); ctx.fill();
-    ctx.globalAlpha = 1; ctx.textAlign = 'center';
-    ctx.font = '800 130px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'OFERTA', W - 200).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 520 + i * 150));
-    ctx.font = '700 58px -apple-system, Inter, sans-serif'; ctx.fillStyle = sub;
-    wrapText(ctx, o.subtitle || '', W - 240).slice(0, 3).forEach((l, i) => ctx.fillText(l, W / 2, 980 + i * 76));
-    // pill handle
-    ctx.font = '800 46px -apple-system, Inter, sans-serif';
-    const hw = ctx.measureText('@' + (o.handle || 'tunegocio')).width + 90;
-    ctx.fillStyle = pal.dark ? '#0A1E33' : '#fff';
-    ctx.beginPath(); ctx.roundRect(W / 2 - hw / 2, 1150, hw, 96, 48); ctx.fill();
-    ctx.fillStyle = pal.dark ? '#fff' : '#0A1E33';
-    ctx.fillText('@' + (o.handle || 'tunegocio'), W / 2, 1214);
-  } else { // gradiente
-    if (!o.photoImg) {
-      const g = ctx.createLinearGradient(0, 0, W, H);
-      g.addColorStop(0, pal.c[0]); g.addColorStop(1, pal.c[1]);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
-    ctx.fillStyle = ink; ctx.textAlign = 'left';
-    ctx.font = '800 44px -apple-system, Inter, sans-serif';
-    ctx.fillText('@' + (o.handle || 'tunegocio'), 90, 150);
-    ctx.font = '800 118px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.title || 'Tu título', W - 180).slice(0, 4).forEach((l, i) => ctx.fillText(l, 90, 420 + i * 138));
-    ctx.fillStyle = sub; ctx.font = '400 56px -apple-system, Inter, sans-serif';
-    wrapText(ctx, o.subtitle || '', W - 180).slice(0, 4).forEach((l, i) => ctx.fillText(l, 90, 1010 + i * 74));
-    ctx.fillStyle = ink; ctx.fillRect(90, H - 130, 120, 14);
-  }
-
-  // Logo del cliente en la esquina inferior derecha (brand kit)
-  if (o.logoImg) {
-    const lw = 170, lh = Math.min(170, 170 * o.logoImg.height / Math.max(1, o.logoImg.width));
-    const pad = 44;
-    ctx.fillStyle = 'rgba(255,255,255,.94)';
+  // ---------- helpers de dibujo ----------
+  function rr(x, y, w, h, r) {
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(W - pad - lw - 22, H - pad - lh - 22, lw + 44, lh + 44, 30);
-    else ctx.rect(W - pad - lw - 22, H - pad - lh - 22, lw + 44, lh + 44);
-    ctx.fill();
-    ctx.drawImage(o.logoImg, W - pad - lw, H - pad - lh, lw, lh);
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+  }
+  function L(text, maxW, font) { ctx.font = font; return wrapText(ctx, text, maxW); }
+  function cl(ls, cx, y, lh) { ls.forEach((l, i) => ctx.fillText(l, cx, y + i * lh)); } // centradas
+  function ll(ls, x, y, lh) { ls.forEach((l, i) => ctx.fillText(l, x, y + i * lh)); }   // a la izquierda
+  // Ajuste tipográfico: achica la fuente hasta que el texto entre en maxLines.
+  // NUNCA corta palabras: prefiere achicar antes que truncar. Si ni al mínimo
+  // entra, devuelve todas las líneas igual (los layouts centrados lo absorben).
+  // overflow=true solo se usa para subtítulos: mejor ausentes que cortados.
+  function fit(text, maxW, maxLines, mkFont, startSize, minSize) {
+    let size = startSize, ls = [];
+    while (true) {
+      ls = L(text, maxW, mkFont(size));
+      if (ls.length <= maxLines || size <= minSize) break;
+      size -= 6;
+    }
+    const overflow = ls.length > maxLines;
+    return { lines: ls, size, overflow };
+  }
+  function overline(text, cx, y, color, size) {
+    ctx.font = '700 ' + (size || 38) + 'px ' + FONT;
+    try { ctx.letterSpacing = '7px'; } catch (e) {}
+    ctx.fillStyle = color; ctx.textAlign = 'center';
+    ctx.fillText(String(text).toUpperCase(), cx, y);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+  }
+  function pill(cx, cy, text, font, bg, fg, opts) {
+    opts = opts || {};
+    ctx.font = font;
+    const padX = opts.padX != null ? opts.padX : 46;
+    const w = ctx.measureText(text).width + padX * 2, h = opts.h || 92;
+    ctx.save();
+    if (!opts.flat) { ctx.shadowColor = 'rgba(10,30,51,.25)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6; }
+    rr(cx - w / 2, cy - h / 2, w, h, h / 2);
+    if (opts.stroke) { ctx.strokeStyle = opts.stroke; ctx.lineWidth = opts.lw || 3; ctx.stroke(); }
+    else { ctx.fillStyle = bg; ctx.fill(); }
+    ctx.restore();
+    ctx.fillStyle = fg; ctx.textAlign = 'center';
+    const fs = parseInt((font.match(/(\d+)px/) || [0, 40])[1], 10);
+    ctx.fillText(text, cx, cy + fs * 0.36);
+    return w;
+  }
+  // foto de fondo con velo; devuelve false si no hay foto
+  function photoBG(veil) {
+    if (!o.photoImg) return false;
+    drawCover(ctx, o.photoImg, 0, 0, W, H);
+    ctx.fillStyle = veil; ctx.fillRect(0, 0, W, H);
+    return true;
+  }
+  function brandGrad(x0, y0, x1, y1) {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, c0); g.addColorStop(1, c1);
+    return g;
+  }
+
+  const tpl = o.tpl || 'gradiente';
+
+  if (tpl === 'claro') {
+    // ---- Tarjeta luminosa: aire, overline con tracking, titular protagonista ----
+    const hasPhoto = photoBG('rgba(255,255,255,.90)');
+    if (!hasPhoto) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H); }
+    if (!hasPhoto) {
+      const gl = ctx.createLinearGradient(0, 0, 0, 560);
+      gl.addColorStop(0, hexA(c0, 0.10)); gl.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gl; ctx.fillRect(0, 0, W, 560);
+    }
+    ctx.textAlign = 'center';
+    overline(handle, W / 2, 148, acc);
+    ctx.fillStyle = acc; rr(W / 2 - 60, 182, 120, 9, 4.5); ctx.fill();
+    const t = fit(title, W - 240, 4, s => '800 ' + s + 'px ' + FONT, 100, 70);
+    const th = (t.lines.length - 1) * t.size * 1.18, cy = 600;
+    ctx.fillStyle = '#0A1E33';
+    cl(t.lines, W / 2, cy - th / 2, t.size * 1.18);
+    if (subtitle) {
+      const s = fit(subtitle, W - 300, 3, z => '400 ' + z + 'px ' + FONT, 50, 34);
+      if (!s.overflow) {
+        ctx.fillStyle = 'rgba(10,30,51,.64)';
+        cl(s.lines, W / 2, cy + th / 2 + 72, s.size * 1.36);
+      }
+    }
+  } else if (tpl === 'noche') {
+    // ---- Noche premium: marco doble fino, titular blanco con subrayado acento ----
+    const hasPhoto = photoBG('rgba(10,30,51,.85)');
+    if (!hasPhoto) { ctx.fillStyle = '#0A1E33'; ctx.fillRect(0, 0, W, H); }
+    const vg = ctx.createRadialGradient(W / 2, H / 2, 300, W / 2, H / 2, 950);
+    vg.addColorStop(0, 'rgba(255,255,255,.06)'); vg.addColorStop(1, 'rgba(0,0,0,.30)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = acc; ctx.lineWidth = 5; ctx.strokeRect(46, 46, W - 92, H - 92);
+    ctx.strokeStyle = hexA(acc, 0.35); ctx.lineWidth = 2; ctx.strokeRect(68, 68, W - 136, H - 136);
+    ctx.textAlign = 'center';
+    overline(handle, W / 2, 172, acc);
+    const t = fit(title, W - 280, 4, s => '800 ' + s + 'px ' + FONT, 106, 72);
+    const th = (t.lines.length - 1) * t.size * 1.17, cy = 640;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+    cl(t.lines, W / 2, cy - th / 2, t.size * 1.17);
+    ctx.restore();
+    ctx.fillStyle = acc; rr(W / 2 - 70, cy + th / 2 + 36, 140, 10, 5); ctx.fill();
+    if (subtitle) {
+      const s = fit(subtitle, W - 320, 3, z => '400 ' + z + 'px ' + FONT, 52, 34);
+      if (!s.overflow) {
+        ctx.fillStyle = 'rgba(255,255,255,.72)';
+        cl(s.lines, W / 2, cy + th / 2 + 102, s.size * 1.35);
+      }
+    }
+  } else if (tpl === 'promo') {
+    // ---- Energía de oferta: diagonal, círculos deco, pill de marca ----
+    const hasPhoto = photoBG((() => {
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, hexA(c0, 0.70)); g.addColorStop(1, hexA(c1, 0.70));
+      return g;
+    })());
+    if (!hasPhoto) { ctx.fillStyle = brandGrad(0, 0, W, H); ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = 'rgba(255,255,255,.13)';
+    ctx.beginPath(); ctx.arc(W * 0.84, 250, 150, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(130, 1090, 210, 0, 7); ctx.fill();
+    ctx.save();
+    ctx.translate(W / 2, H / 2); ctx.rotate(-0.32);
+    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(-W, -70, W * 2, 140);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    overline(handle, W / 2, 150, hexA(ink, 0.85));
+    const t = fit(title, W - 200, 4, s => '900 ' + s + 'px ' + FONT, 138, 80);
+    const th = (t.lines.length - 1) * t.size * 1.15, cy = 620;
+    ctx.fillStyle = ink;
+    ctx.save();
+    ctx.shadowColor = 'rgba(10,30,51,.30)'; ctx.shadowOffsetY = 10; ctx.shadowBlur = 0;
+    cl(t.lines, W / 2, cy - th / 2, t.size * 1.15);
+    ctx.restore();
+    if (subtitle) {
+      const s = fit(subtitle, W - 260, 3, z => '700 ' + z + 'px ' + FONT, 56, 36);
+      if (!s.overflow) {
+        ctx.fillStyle = hexA(ink, 0.88);
+        cl(s.lines, W / 2, cy + th / 2 + 66, s.size * 1.32);
+      }
+    }
+    pill(W / 2, 1200, '✦ ' + handle + ' ✦', '800 42px ' + FONT,
+      pal.dark ? '#0A1E33' : 'rgba(255,255,255,.94)', pal.dark ? '#FFFFFF' : '#0A1E33', { padX: 40, h: 88 });
+  } else if (tpl === 'editorial') {
+    // ---- Revista: foto arriba, bloque de marca abajo, serif gigante ----
+    const PH = 780;
+    if (o.photoImg) { drawCover(ctx, o.photoImg, 0, 0, W, PH); }
+    else { ctx.fillStyle = brandGrad(0, 0, W, PH); ctx.fillRect(0, 0, W, PH); }
+    const sc = ctx.createLinearGradient(0, PH - 170, 0, PH + 20);
+    sc.addColorStop(0, hexA(c0, 0)); sc.addColorStop(1, c0);
+    ctx.fillStyle = sc; ctx.fillRect(0, PH - 170, W, 190);
+    ctx.fillStyle = c0; ctx.fillRect(0, PH, W, H - PH);
+    ctx.textAlign = 'left';
+    ctx.font = '800 40px ' + FONT; ctx.fillStyle = '#FFFFFF';
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+    ctx.fillText(handle, 90, 112);
+    ctx.restore();
+    const kickC = (acc !== c0) ? acc : ink;
+    const t = fit(title, 720, 3, s => '700 ' + s + 'px ' + SERIF, 110, 54);
+    const tlh = t.size * 1.11;
+    // kicker dinámico: siempre arriba del titular, sin tocarlo
+    const kickY = 962 - t.size * 0.95 - 30;
+    ctx.font = '700 36px ' + FONT;
+    try { ctx.letterSpacing = '6px'; } catch (e) {}
+    ctx.fillStyle = kickC; ctx.textAlign = 'left';
+    ctx.fillText('DESTACADO', 90, kickY);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+    ctx.font = '700 ' + t.size + 'px ' + SERIF;
+    ctx.fillStyle = ink;
+    ll(t.lines, 90, 962, tlh);
+    const ruleY = 962 + (t.lines.length - 1) * tlh + 46;
+    ctx.fillStyle = kickC; rr(90, ruleY, 160, 7, 3.5); ctx.fill();
+    if (subtitle) {
+      const sMax = t.lines.length >= 3 ? 1 : 2;
+      const s = fit(subtitle, 720, sMax, z => '400 ' + z + 'px ' + FONT, 46, 32);
+      // si ni así entra, se omite: mejor ausente que cortado a mitad de frase
+      if (!s.overflow) {
+        ctx.fillStyle = hexA(ink, 0.80);
+        ll(s.lines, 90, ruleY + 52, s.size * 1.35);
+      }
+    }
+  } else if (tpl === 'bold') {
+    // ---- Tipográfico gigante: marca de agua + titular enorme ----
+    const hasPhoto = photoBG((() => {
+      const g = ctx.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, hexA(c0, 0.84)); g.addColorStop(1, hexA(c1, 0.84));
+      return g;
+    })());
+    if (!hasPhoto) {
+      ctx.fillStyle = c0; ctx.fillRect(0, 0, W, H);
+      const hl = ctx.createRadialGradient(W / 2, H * 0.42, 100, W / 2, H * 0.42, 800);
+      hl.addColorStop(0, 'rgba(255,255,255,.10)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = hl; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.save();
+    ctx.globalAlpha = 0.08; ctx.fillStyle = ink; ctx.textAlign = 'center';
+    ctx.font = '900 330px ' + FONT;
+    const wword = (title.split(' ')[0] || title).toUpperCase().slice(0, 10);
+    ctx.fillText(wword, W / 2, 400);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    const t = fit(title.toUpperCase(), W - 160, 3, s => '900 ' + s + 'px ' + FONT, 168, 76);
+    const tlh = t.size * 1.06, th = (t.lines.length - 1) * tlh, cy = 640;
+    const lastAcc = (acc !== c0) ? acc : ink;
+    t.lines.forEach((ln, i) => {
+      ctx.fillStyle = (i === t.lines.length - 1 && t.lines.length > 1) ? lastAcc : ink;
+      ctx.fillText(ln, W / 2, cy - th / 2 + i * tlh);
+    });
+    if (subtitle) {
+      // pill de una línea: achica hasta entrar; si no entra, texto normal en 2 líneas
+      let pz = 44, pw = 0;
+      const maxPw = W - 240;
+      while (pz > 28) {
+        ctx.font = '700 ' + pz + 'px ' + FONT;
+        pw = ctx.measureText(subtitle).width + 100;
+        if (pw <= maxPw) break;
+        pz -= 2;
+      }
+      if (pw <= maxPw) {
+        pill(W / 2, cy + th / 2 + 112, subtitle, '700 ' + pz + 'px ' + FONT,
+          'rgba(255,255,255,.16)', ink, { stroke: hexA(ink, 0.85), lw: 3, flat: true });
+      } else {
+        const s = fit(subtitle, W - 260, 2, z => '700 ' + z + 'px ' + FONT, 44, 30);
+        if (!s.overflow) {
+          ctx.fillStyle = hexA(ink, 0.88);
+          cl(s.lines, W / 2, cy + th / 2 + 96, s.size * 1.32);
+        }
+      }
+    }
+    ctx.textAlign = 'left'; ctx.font = '700 40px ' + FONT;
+    ctx.fillStyle = hexA(ink, 0.75);
+    ctx.fillText(handle, 90, 1240);
+  } else { // gradiente
+    // ---- Moderno alineado a la izquierda: riel de acento, aire, jerarquía ----
+    const hasPhoto = photoBG((() => {
+      const g = ctx.createLinearGradient(0, 0, 0, H);
+      g.addColorStop(0, hexA(c0, 0.68)); g.addColorStop(1, hexA(c1, 0.68));
+      return g;
+    })());
+    if (!hasPhoto) { ctx.fillStyle = brandGrad(0, 0, 0, H); ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = acc; rr(84, 150, 14, 920, 7); ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.font = '700 38px ' + FONT;
+    try { ctx.letterSpacing = '6px'; } catch (e) {}
+    ctx.fillStyle = hexA(ink, 0.80);
+    ctx.fillText(handle.toUpperCase(), 130, 152);
+    try { ctx.letterSpacing = '0px'; } catch (e) {}
+    const t = fit(title, W - 300, 4, s => '800 ' + s + 'px ' + FONT, 116, 76);
+    const tlh = t.size * 1.17, th = (t.lines.length - 1) * tlh, cy = 640;
+    ctx.fillStyle = ink;
+    ctx.save();
+    ctx.shadowColor = 'rgba(10,30,51,.22)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    ll(t.lines, 130, cy - th / 2, tlh);
+    ctx.restore();
+    if (subtitle) {
+      const s = fit(subtitle, W - 320, 3, z => '400 ' + z + 'px ' + FONT, 54, 34);
+      if (!s.overflow) {
+        ctx.fillStyle = hexA(ink, 0.82);
+        ll(s.lines, 130, cy + th / 2 + 62, s.size * 1.33);
+      }
+    }
+    ctx.fillStyle = acc; rr(130, H - 170, 130, 12, 6); ctx.fill();
+  }
+
+  // Logo del cliente: siempre visible pero discreto, esquina inferior derecha
+  if (o.logoImg) {
+    const lw = 150, lh = Math.min(150, 150 * o.logoImg.height / Math.max(1, o.logoImg.width));
+    const pad = 40, card = 20;
+    const bx = W - pad - lw - card * 2, by = H - pad - lh - card * 2;
+    ctx.save();
+    ctx.shadowColor = 'rgba(10,30,51,.28)'; ctx.shadowBlur = 20; ctx.shadowOffsetY = 8;
+    ctx.fillStyle = 'rgba(255,255,255,.96)';
+    rr(bx, by, lw + card * 2, lh + card * 2, 26); ctx.fill();
+    ctx.restore();
+    ctx.drawImage(o.logoImg, bx + card, by + card, lw, lh);
   }
 }
-
 
 
 /* ---------- IDEAS: nosotros pensamos el contenido por vos ---------- */
@@ -1423,8 +1644,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
   <div class="card" id="reviewCard" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 6px">${title || '📋 Tus posteos de la semana'}</h3>
     <p style="color:var(--mut);font-size:12.5px;margin:0 0 4px">Revisalos y aceptalos — al aceptar, salen solos a la hora indicada.</p>
-    ${n ? `<button class="btn btn-primary btn-block" id="btnScheduleAll" style="margin:6px 0 10px">📅 Programar mi semana →</button>` : ''}
-    ${n ? `<button class="btn btn-soft btn-block" id="btnAcceptAll" style="margin:0 0 10px">✅ Aceptar todos</button>` : ''}
+    ${n ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:6px 0 10px">🚀 Activar mi semana</button>` : ''}
     <div class="igmock-carousel">
       ${drafts.length > 1 ? `<button class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
       <div class="igmock-track">
@@ -1482,7 +1702,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <button data-revedit="${d.id}">✏️ Editar</button>
           ${d.media_type === 'video' ? '' : `<button data-revregen="${d.id}" title="Generar otro diseño para este posteo">✨ Otro diseño</button>`}
           ${(d.media_type === 'video' || d.media_type === 'carousel') ? '' : `<button data-revvars="${d.id}" title="Ver 3 opciones nuevas de este posteo">🔄 Otras 3</button>`}
-          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button>`}
+          ${d.media_type === 'video' ? `<button data-revvideo="${d.id}" title="Cambiar el video de este posteo">🎬 Otro video</button>` : `<button data-revphoto="${d.id}" title="Cambiar la foto de este posteo">🖼️ Otra foto</button><button data-revphotopick=\"${d.id}\" title=\"Elegir una foto de tu librería o subir una nueva\">📷 Foto</button>${d.media_type !== 'carousel' ? `<button data-revrestyle=\"${d.id}\" title=\"Restylear TU foto con el estilo elegido arriba (mismo producto, otro estilo)\">🎨 Restylear</button><button data-revenhance=\"${d.id}\" title=\"Mejorar la foto: luz, nitidez y color en un tap\">✨ Mejorar</button><button data-revcarousel=\"${d.id}\" title=\"Convertir en carousel: portada que frena + 3 placas\">🎠 Carousel</button><button data-revreel=\\\"${d.id}\\\" title=\\\"Armar reel: Ken Burns + headline, 1080×1920 (máx 2/semana)\\\">🎬 Reel</button>` : ''}`}
           <button class="danger" data-revdel="${d.id}">🗑️</button>
         </div>
         ${d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : ''}
@@ -1500,6 +1720,11 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <div class="aiedit-row">
             <input class="in" id="aiphoto-inp-${d.id}" placeholder="¿Qué foto uso? Ej: la del local…" maxlength="200" autocomplete="off">
             <button class="btn btn-primary btn-sm" id="aiphoto-go-${d.id}">Aplicar</button>
+          </div>
+          <div class="aiedit-row" style="margin-top:8px">
+            <select class="in" id="aistyle-sel-${d.id}" title="Elegí un estilo para regenerar la foto">
+              <option value="">✨ Estilo: automático</option>
+            </select>
           </div>
           <button class="rev-nowsub" id="aiphoto-manual-${d.id}">o elegí la foto vos</button>
           <div class="aiedit-msg" id="aiphoto-msg-${d.id}"></div>
@@ -1566,6 +1791,145 @@ async function runAiEdit(id, kind) {
     msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error, probá de nuevo')}</span>`;
   }
   if (go) go.disabled = false;
+}
+// "🎨 Restylear": restylea la foto ACTUAL del borrador con el estilo elegido en
+// el select "✨ Estilo" (mismo producto, otro estilo). Si no eligió estilo, abre
+// el panel para que lo elija.
+async function restyleDraftPhoto(id, btn) {
+  const sel = document.getElementById(`aistyle-sel-${id}`);
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const code = sel && sel.value;
+  if (!code) {
+    const panel = document.getElementById(`aiphoto-${id}`);
+    if (panel) panel.hidden = false;
+    if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">Elegí un estilo arriba 👆 y tocá 🎨 Restylear</span>`;
+    if (sel) sel.focus();
+    return;
+  }
+  const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Restyleando tu foto con ${esc(code)}…</span>`;
+  try {
+    const r = await api.post(`/api/drafts/${id}/photo-restyle`, { style: code }, { timeout: 180000 });
+    if (r && r.ok && r.path) {
+      if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Tu foto, versión ${esc(code)}</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+  if (sel) sel.value = '';
+}
+// "✨ Mejorar": rescate de foto mediocre en un tap (luz, nitidez, color).
+async function enhanceDraftPhoto(id, btn) {
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const panel = document.getElementById(`aiphoto-${id}`);
+  if (panel) panel.hidden = false;
+  const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Mejorando la foto…</span>`;
+  try {
+    const r = await api.post(`/api/drafts/${id}/photo-enhance`, {}, { timeout: 180000 });
+    if (r && r.ok && r.path) {
+      if (draft) draft.image_path = r.path;
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto mejorada</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+}
+// "🎠 Carousel": convierte el borrador en carousel (portada + 3 placas).
+async function carouselDraft(id, btn) {
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const panel = document.getElementById(`aiphoto-${id}`);
+  if (panel) panel.hidden = false;
+  const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Armándo el carousel (portada + 3 placas)…</span>`;
+  try {
+    const r = await api.post('/api/carousel-generate', { postId: id }, { timeout: 300000 });
+    if (r && r.ok) {
+      if (draft) { draft.media_type = 'carousel'; draft.carousel_paths = r.paths; draft.image_path = r.cover; }
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Carousel listo 🎠</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 900);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+}
+// "🎬 Reel": arma un reel automático (Ken Burns + headline animado) desde el borrador.
+async function reelDraft(id, btn) {
+  const msg = document.getElementById(`aiphoto-msg-${id}`);
+  const panel = document.getElementById(`aiphoto-${id}`);
+  if (panel) panel.hidden = false;
+  if (btn) btn.disabled = true;
+  if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Armándo el reel (Ken Burns + headline)…</span>`;
+  try {
+    const r = await api.post('/api/reel-generate', { postId: id }, { timeout: 300000 });
+    if (r && r.ok) {
+      if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Reel listo 🎬</span><br><span style="font-size:11px;color:var(--mut)">${esc(r.audioNote || '')}</span>`;
+      setTimeout(() => { try { render(); } catch (e) {} }, 2600);
+    } else {
+      if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+    }
+  } catch (e) {
+    if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+  }
+  if (btn) btn.disabled = false;
+}
+// FEATURE-ESTILOS: lista de estilos cacheada + llenado de los selects "✨ Estilo".
+let IMAGE_STYLES_CACHE = null;async function imageStylesList() {
+  if (IMAGE_STYLES_CACHE) return IMAGE_STYLES_CACHE;
+  try {
+    const r = await api.get('/api/image-styles');
+    IMAGE_STYLES_CACHE = (r && r.styles) || [];
+  } catch (e) { IMAGE_STYLES_CACHE = []; }
+  return IMAGE_STYLES_CACHE;
+}
+async function fillStyleSelects() {
+  const styles = await imageStylesList();
+  $$('#reviewCard [id^="aistyle-sel-"]').forEach(sel => {
+    if (sel.dataset.filled) return;
+    sel.dataset.filled = '1';
+    for (const s of styles) {
+      const o = document.createElement('option');
+      o.value = s.code;
+      o.textContent = `${s.code} · ${s.name}${s.brandSafe ? '' : ' 🎲'}`;
+      sel.appendChild(o);
+    }
+    sel.onchange = async () => {
+      const code = sel.value;
+      if (!code) return;
+      const id = sel.id.replace('aistyle-sel-', '');
+      const msg = document.getElementById(`aiphoto-msg-${id}`);
+      const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
+      if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Regenerando la foto con ${esc(code)}…</span>`;
+      try {
+        const r = await api.post(`/api/drafts/${id}/photo-style`, { style: code }, { timeout: 180000 });
+        if (r && r.ok && r.path) {
+          if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
+          if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto nueva con ${esc(code)}</span>`;
+          setTimeout(() => { try { render(); } catch (e) {} }, 900);
+        } else {
+          if (msg) msg.innerHTML = `<span style="font-size:11.5px">${esc((r && r.error) || 'No se pudo, probá de nuevo')}</span>`;
+        }
+      } catch (e) {
+        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:11.5px">${esc(e.message || 'Error')}</span>`;
+      }
+      sel.value = '';
+    };
+  });
 }
 
 function bindReview() {
@@ -1654,6 +2018,9 @@ function bindReview() {
     if (panel) panel.hidden = true;
     togglePhotoPicker(+id);
   });
+  // FEATURE-ESTILOS: picker "✨ Estilo" — regenera SOLO la foto del borrador
+  // con el estilo elegido (mantiene caption, hashtags y horario).
+  fillStyleSelects();
   // Al guardar el caption, refrescar el preview
   $$('[data-revcap]').forEach(ta => ta.addEventListener('change', () => {
     const p = document.querySelector(`[data-revpreview="${ta.dataset.revcap}"]`);
@@ -1678,6 +2045,15 @@ function bindReview() {
     panel.hidden = !panel.hidden;
     if (!panel.hidden) { const i = document.getElementById(`aiphoto-inp-${id}`); if (i) i.focus({ preventScroll: true }); }
   });
+  // FEATURE-FOTO-BORRADOR: "📷 Foto" abre el picker directo (librería + subir + quitar foto)
+  $$('[data-revphotopick]').forEach(b => b.onclick = () => toggleDraftPhotoPicker(+b.dataset.revphotopick));
+  // "🎨 Restylear": restylea la foto ACTUAL con el estilo elegido en el select
+  $$('[data-revrestyle]').forEach(b => b.onclick = () => restyleDraftPhoto(+b.dataset.revrestyle, b));
+  // "✨ Mejorar": un tap rescata la foto (luz, nitidez, color)
+  $$('[data-revenhance]').forEach(b => b.onclick = () => enhanceDraftPhoto(+b.dataset.revenhance, b));
+  // "🎠 Carousel": convierte el borrador en carousel automático
+  $$('[data-revcarousel]').forEach(b => b.onclick = () => carouselDraft(+b.dataset.revcarousel, b));   // "🎬 Reel": arma un reel automático desde el borrador
+   $$('[data-revreel]').forEach(b => b.onclick = () => reelDraft(+b.dataset.revreel, b));
   // Cambiar el video de un borrador reel: tira de videos + subir nuevo
   $$('[data-revvideo]').forEach(b => b.onclick = () => toggleVideoPicker(+b.dataset.revvideo, b));
   // Eliminar borrador (señal honesta: lo borró = no le gustó; va antes del DELETE)
@@ -1829,7 +2205,7 @@ async function doScheduleAll(btn) {
       if (cg) cg.onclick = () => {
         closeStreakModal();
         render().then(() => {
-          const sc = document.querySelector('.sched-card');
+          const sc = document.querySelector('.pcard');
           if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       };
@@ -1845,6 +2221,75 @@ function bindScheduleAll() {
   const b = document.getElementById('btnScheduleAll');
   if (!b) return;
   b.onclick = () => doScheduleAll(b);
+}
+
+// "🚀 Activar mi semana": UN tap deja toda la semana lista. Acepta todos los
+// borradores respetando las horas que muestran las tarjetas y programa con
+// horario automático los que no tengan hora. El tap ES la confirmación.
+async function doActivateWeek(btn) {
+  const b = btn || document.getElementById('btnActivateWeek');
+  const m = $('#revMsg');
+  if (!(PROFILE && PROFILE.ig_connected)) {
+    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
+    const g = $('#revIgGo');
+    if (g) g.onclick = () => igConnectHere();
+    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (b) { b.disabled = true; b.innerHTML = '🚀 Activando tu semana…'; }
+  try {
+    // 1) Acepta con las horas de las tarjetas (respeta horas personalizadas).
+    const items = $$('#reviewCard [data-revwhen]')
+      .map((inp) => ({ id: +inp.dataset.revwhen, scheduled_at: inp.value ? new Date(inp.value).toISOString() : null }))
+      .filter((it) => it.id > 0);
+    let n1 = 0;
+    try {
+      const r1 = await api.post('/api/posts/accept-all', { items });
+      n1 = (r1 && r1.accepted) || 0;
+    } catch (e) { if (!isPlanLimitErr(e)) throw e; else throw e; }
+    // 2) Los que quedaron sin hora se programan con horario automático.
+    let n2 = 0;
+    try {
+      const r2 = await api.post('/api/posts/schedule-all', {});
+      n2 = (r2 && (r2.scheduled || []).length) || 0;
+    } catch (e) {
+      if (!(e && /No hay borradores para programar/.test(e.message || ''))) throw e;
+    }
+    const n = n1 + n2;
+    if (!n) throw new Error('No había borradores pendientes');
+    track('activate_week', { count: n });
+    try { REVIEW_DRAFTS = []; } catch (e) {}
+    try { paintWeekPill(); } catch (e) {}
+    try { renderQuickChips([], [], false); } catch (e) {}
+    postyCelebrate();
+    streakModalShell(`
+      <div class="big-emoji">🚀</div>
+      <h3 style="margin:12px 0 4px">Tu semana está activa</h3>
+      <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+      <p class="d">Vos a lo tuyo — Posty se ocupa del resto 💪</p>
+      ${typeof celebRefHTML === 'function' ? celebRefHTML() : ''}
+      <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
+    const cmo = document.getElementById('streakModal');
+    if (cmo && typeof wireCelebRef === 'function') wireCelebRef(cmo);
+    const cg = $('#celebGoSa');
+    if (cg) cg.onclick = () => {
+      closeStreakModal();
+      render().then(() => {
+        const sc = document.querySelector('.pcard');
+        if (sc) sc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    };
+    else render();
+  } catch (e) {
+    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    if (b) { b.disabled = false; b.innerHTML = '🚀 Activar mi semana'; }
+  }
+}
+function bindActivateWeek() {
+  const b = document.getElementById('btnActivateWeek');
+  if (!b) return;
+  b.onclick = () => doActivateWeek(b);
 }
 
 // "✅ Aceptar todos": un tap aprueba TODOS los borradores pendientes y los deja
@@ -1902,19 +2347,15 @@ function paintSchedCount() {
     b.style.display = n > 0 ? '' : 'none';
   } catch (e) {}
 }
-// Bloque de identidad del drawer mobile: logo + nombre del negocio + nivel de la marca + Mi plan.
-let __drawerLvl = null, __drawerLvlAt = 0;
+// Bloque de identidad del drawer mobile: logo + nombre del negocio.
+// Limpio: sin nivel ni "Mi plan" (igual que en el sidebar de escritorio;
+// el nivel vive en el avatar del chat, el plan solo en Ajustes).
 async function paintDrawerIdent() {
   const mount = document.getElementById('drawerIdent');
   if (!mount) return;
   const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   let logo = (typeof assetLogo === 'function') ? assetLogo() : null;
   if (!logo) { try { const a = await api.get('/api/assets'); if (Array.isArray(a)) logo = a.find(x => x.kind === 'logo'); } catch (e) {} }
-  if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
-    try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
-  }
-  const lv = (__drawerLvl && __drawerLvl.level) || 1;
-  const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
   const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
   const fbBg = bc[0] || '#2793C8';
   const initial = (biz.trim()[0] || 'M').toUpperCase();
@@ -1923,25 +2364,18 @@ async function paintDrawerIdent() {
     : `<span class="drawer-ident-fb" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
   mount.innerHTML = `
     <span class="drawer-ident-logo">${logoHtml}</span>
-    <span class="drawer-ident-txt"><b>${esc(biz)}</b><small>Nivel ${lv}</small></span>
-    <a class="drawer-plan" href="#/app/ajustes?plan=1">Mi plan</a>`;
+    <span class="drawer-ident-txt"><b>${esc(biz)}</b></span>`;
 }
 // Identidad de Posty para el sidebar fijo de escritorio (≥1024px).
 async function paintSidePosty() {
-  const el = document.getElementById('sidePostyLvl');
-  if (!el) return;
-  // El nombre se muestra TAL CUAL lo escribió el cliente (si pone mayúscula, va mayúscula)
+  // El nombre se muestra TAL CUAL lo escribió el cliente (si pone mayúscula, va mayúscula).
+  // Sin nivel ni "Mi plan": el header queda limpio (el nivel vive en el avatar del chat,
+  // el plan solo en Ajustes).
   try {
     const nm = document.getElementById('sidePostyName');
     const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
     if (nm && biz) nm.textContent = biz;
   } catch (e) {}
-  if (!__drawerLvl || Date.now() - __drawerLvlAt > 60000) {
-    try { const r = await api.get('/api/avatar-level'); if (r && r.ok) { __drawerLvl = r; __drawerLvlAt = Date.now(); } } catch (e) {}
-  }
-  const lv = (__drawerLvl && __drawerLvl.level) || 1;
-  const lvName = (__drawerLvl && (__drawerLvl.levelName || POSTA_LVL_NAMES[__drawerLvl.level])) || POSTA_LVL_NAMES[1];
-  el.textContent = `Nivel ${lv}`;
 }
 // Track 4 "Pipeline perpetuo": cuando la semana N está programada y ya existen
 // borradores de la N+1, el teaser permite verlos como semana corriente.
@@ -2099,6 +2533,72 @@ function togglePhotoPicker(id, btn) {
   };
 }
 
+// FEATURE-FOTO-BORRADOR: picker directo de foto para un borrador (botón "📷 Foto").
+// Librería del cliente (assetPhotos) + subir nueva vía POST /api/media
+// (que ya deja la foto en la librería como kind=photo) + "Sin foto" para
+// volver al diseño plano con los colores de la marca. Al elegir, reusa
+// changeDraftPhoto: el mismo pipeline que "✨ Otro diseño" (renderDesignImage
+// + PATCH save-draft); conserva título, subtítulo, handle y logo.
+function toggleDraftPhotoPicker(id) {
+  const mount = document.getElementById('revph-' + id);
+  if (!mount) return;
+  if (mount.dataset.open === '1' && mount.dataset.which === 'foto') { mount.innerHTML = ''; mount.dataset.open = ''; mount.dataset.which = ''; return; }
+  mount.dataset.open = '1'; mount.dataset.which = 'foto';
+  const photos = assetPhotos().slice().reverse(); // más nuevas primero
+  mount.innerHTML = `<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;align-items:center">
+    <button type="button" data-rmphoto style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px solid var(--line);background:var(--bg2);cursor:pointer;font-size:10.5px;font-weight:700;color:var(--mut);line-height:1.25;font-family:inherit" title="Quitar la foto: diseño plano con tus colores">🚫<br>Sin<br>foto</button>
+    ${photos.map(p => `<img src="${esc(p.file_path)}" data-pickphoto="${esc(p.file_path)}" alt="Foto del negocio" style="width:64px;height:64px;flex-shrink:0;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid var(--line)">`).join('')}
+    <label style="width:64px;height:64px;flex-shrink:0;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:24px;color:var(--mut)" title="Subir nueva foto">＋<input type="file" accept="image/*" data-uploadphoto style="display:none"></label>
+  </div>`;
+  mount.querySelectorAll('[data-pickphoto]').forEach(img => img.onclick = () => changeDraftPhoto(id, img, img.dataset.pickphoto));
+  const rm = mount.querySelector('[data-rmphoto]');
+  if (rm) rm.onclick = () => removeDraftPhoto(id, rm);
+  const up = mount.querySelector('[data-uploadphoto]');
+  if (up) up.onchange = async () => {
+    const f = up.files[0]; if (!f) return;
+    if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
+    try {
+      const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'No pude subirla 😅 Probá de nuevo');
+      ASSETS = await api.get('/api/assets').catch(() => ASSETS); // /api/media ya la dejó en la librería
+      await changeDraftPhoto(id, up, data.path);
+      track('photo_upload', { kind: 'draft' });
+    } catch (e) { alert('No se pudo subir la foto: ' + e.message); }
+  };
+}
+
+// FEATURE-FOTO-BORRADOR: quita la foto de fondo del borrador → diseño plano con
+// los colores de la marca (renderDesignImage con photoImg: null; drawPost ya lo
+// maneja). Conserva título, subtítulo, handle y logo; se guarda como el nuevo
+// diseño del borrador igual que "✨ Otro diseño".
+async function removeDraftPhoto(id, el) {
+  const d = REVIEW_DRAFTS.find(x => x.id === id);
+  if (!d || d.media_type === 'video') return;
+  try {
+    el.style.opacity = '0.4'; el.style.pointerEvents = 'none';
+    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
+    const idx = Math.max(0, REVIEW_DRAFTS.indexOf(d));
+    const topic = d.source_topic || (d.caption || '').split('\n')[0].slice(0, 80) || 'novedad';
+    const title = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
+    const imagePath = await renderDesignImage({
+      tpl: pickTpl(idx + 1, false),
+      pal: defaultPal(),
+      title,
+      subtitle: cortar(String(d.caption || '').split('\n')[0], 90),
+      handle: (PROFILE || {}).ig_username || '',
+      photoImg: null,
+      logoImg: logo,
+    });
+    await api.patch('/api/posts/' + id, { action: 'save-draft', image_path: imagePath });
+    track('photo_remove', { kind: 'draft' });
+    render();
+  } catch (e) {
+    alert('No pude quitar la foto 😅 Probá de nuevo.');
+    el.style.opacity = ''; el.style.pointerEvents = '';
+  }
+}
+
 // Cambiar el VIDEO de un borrador reel por otro de la biblioteca del cliente.
 async function changeDraftVideo(id, el, videoPath) {
   const d = REVIEW_DRAFTS.find(x => x.id === id);
@@ -2240,20 +2740,14 @@ async function chatMoreCaptions() {
   if (b2) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Probar otros textos'; }
 }
 
-// "🔄 Otra imagen": regenera los ejemplos visuales. Sin foto: genera una imagen nueva
-// con IA. Con foto: rota al siguiente par de estilos. Se puede tocar todas las veces
-// que quiera — cada tap da opciones nuevas.
+// "🔄 Otra imagen": genera una imagen nueva con OTRO estilo de la librería
+// (los prompts subidos). Cada tap da una opción nueva, sin repetir estilo.
 async function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
   if (b) { b.disabled = true; postyThinking(b); }
   try {
-    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
-    if (lib.length) {
-      const n = Math.max(2, chatStyles().length);
-      CHAT_STYLE_IDX = (CHAT_STYLE_IDX + 2) % n;
-    }
     await renderChatPreviews();
     if (CHAT_IDEA !== idea) return;
     renderChatStoryboard();
@@ -2357,98 +2851,123 @@ async function renderChatStoryboard() {
 // Genera 2 ejemplos visuales reales + opción "solo foto" de la idea con el diseñador,
 // para que el cliente vea qué va a postear antes de crearlo.
 // Usa las fotos subidas al chat (o las de la librería) y el estilo actual.
+// Estilos ya usados para la idea actual ("Otra imagen" no repite estilo).
+let CHAT_STYLE_USED = [];
+
+// Igual que aiConceptShot pero devuelve también el estilo usado (para no repetirlo).
+// Si falla, lanza el último error con su mensaje real (para diagnóstico honesto).
+async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) {
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 180000 });
+      if (r && r.ok === false && r.capped) throw { aiCap: true, message: r.error || '' };
+      if (r && r.path) return { path: r.path, style: r.style || null, styleName: r.styleName || '' };
+      lastErr = new Error('El servidor no devolvió imagen');
+    } catch (e) {
+      if (e && e.aiCap) throw e;
+      lastErr = e;
+      console.warn('[concept-shot] intento ' + (attempt + 1) + ' falló:', (e && e.message) || e);
+      if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  console.warn('[concept-shot] no disponible tras reintento');
+  throw lastErr || new Error('No se pudo generar la imagen');
+}
+
+// Preview de la tarjeta "IDEA LISTA": UNA imagen real generada con IA usando
+// los prompts de la librería de estilos. Lo que ves es EXACTAMENTE lo que sale
+// al tocar "Hacerlo posteo" (se reutiliza la misma imagen, no se regenera).
+// "Otra imagen" genera una nueva con OTRO estilo (sin repetir).
 async function renderChatPreviews() {
+  // REACTIVADO (2026-10-03): la tarjeta vuelve a mostrar la imagen.
+  // Con el backend v27 (sin reintentos en cadena) la generación es confiable.
+  return renderChatPreviews_OLD();
+}
+async function renderChatPreviews_OLD() {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
-  // Detiene la rotación "Posty pensando" del placeholder de ejemplos (si sigue viva)
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
-  try {
-    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
-    const logo = assetLogo() ? await photoImg(assetLogo().file_path) : null;
-    const handle = (PROFILE || {}).ig_username || '';
-    const title = makeHeadline(idea.titulo || 'NOVEDAD', 5).toUpperCase() || 'NOVEDAD';
-    // Bajada con copy real (primera línea del caption elegido); el ángulo es un brief y nunca se imprime.
-    const cap0 = (CHAT_CAPTIONS[CHAT_CAP_SEL] || '');
-    const subtitle = cortar(String(cap0 || idea.titulo || '').split('\n')[0], 90);
-    const styles = chatStyles();
-    const pair = [styles[CHAT_STYLE_IDX % styles.length], styles[(CHAT_STYLE_IDX + 1) % styles.length]];
-    const phEntry = lib.length ? lib[CHAT_PHOTO_IDX % lib.length] : null;
-    const ph = phEntry ? await photoImg(phEntry.file_path) : null;
+  box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
+  postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Aplicando tu estilo ✨…']);
+  // Pinta una imagen ya lista en la tarjeta (la usa la pre-generada y la on-demand).
+  const paintPreview = (gen) => {
     if (CHAT_IDEA !== idea) return;
-    if (ph && phEntry) {
-      const mk = (tpl, pal) => {
-        const cv = document.createElement('canvas');
-        drawPost(cv, { tpl, pal, title, subtitle, handle, photoImg: ph, logoImg: logo });
-        return cv;
-      };
-      CHAT_PREVIEWS = pair.map(([tpl, pal]) => ({ kind: 'design', cv: mk(tpl, pal) }));
-      // Tercera opción: la foto sola, sin diseño encima (cuando la foto vende sola)
-      const cv = document.createElement('canvas');
-      cv.width = 1080; cv.height = 1350;
-      drawCover(cv.getContext('2d'), ph, 0, 0, 1080, 1350);
-      CHAT_PREVIEWS.push({ kind: 'photo', cv, path: phEntry.file_path });
-    } else {
-      // SIN FOTO: PROHIBIDO el bloque de color plano (se ve malísimo). Se genera la
-      // imagen REAL con IA — es exactamente la que va a salir al crear el posteo.
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)" id="chatPrevThinking"></div>';
-      postyThinking($('#chatPrevThinking'));
-      let genPath = null;
-      try {
-        genPath = await aiConceptShot({
-          idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
-          tipo: idea.tipo || tipoFromText(idea.titulo),
-          headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
-          refs: [],
-        });
-      } catch (e) {
-        if (isAiCapErr(e)) {
-          stopPrevThinking();
-          box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
-          CHAT_PREVIEWS = [];
-          return;
-        }
-      }
-      if (CHAT_IDEA !== idea) return;
-      if (!genPath) {
-        stopPrevThinking();
-        box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen ahora, pero tocá ✨ Hacerlo posteo y la creo en el momento 👇</div>';
-        CHAT_PREVIEWS = [];
-        return;
-      }
-      const gImg = await photoImg(genPath);
-      if (CHAT_IDEA !== idea) return;
-      const cv = document.createElement('canvas');
-      cv.width = 1080; cv.height = 1350;
-      drawCover(cv.getContext('2d'), gImg, 0, 0, 1080, 1350);
-      CHAT_PREVIEWS = [{ kind: 'generated', cv, path: genPath }];
-      renderChatStoryboard();
-    }
+    if (gen.style && !CHAT_STYLE_USED.includes(gen.style)) CHAT_STYLE_USED.push(gen.style);
+    CHAT_PREVIEWS = [{ kind: 'generated', cv: null, path: gen.path, style: gen.style, styleName: gen.styleName }];
     CHAT_PREV_SEL = 0;
     stopPrevThinking();
     box.innerHTML = '';
-    CHAT_PREVIEWS.forEach((pv, i) => {
-      const d = document.createElement('div');
-      d.className = 'chat-prev' + (i === CHAT_PREV_SEL ? ' sel' : '');
-      d.appendChild(pv.cv);
-      if (pv.kind === 'photo') {
-        const tag = document.createElement('span');
-        tag.className = 'pv-tag';
-        tag.textContent = '📷 Solo foto';
-        d.appendChild(tag);
+    const pv = CHAT_PREVIEWS[0];
+    const d = document.createElement('div');
+    d.className = 'chat-prev sel chat-prev-single';
+    const img = document.createElement('img');
+    img.src = pv.path;
+    img.alt = 'Imagen del posteo';
+    d.appendChild(img);
+    if (pv.styleName) {
+      const tag = document.createElement('span');
+      tag.className = 'pv-tag';
+      tag.textContent = '\u2728 ' + pv.styleName;
+      d.appendChild(tag);
+    }
+    box.appendChild(d);
+    renderChatStoryboard();
+  };
+  try {
+    // 1. ¿El servidor ya la pre-generó en background cuando nació la idea?
+    // Si está lista → instantáneo. Si sigue en curso → esperarla (poll corto).
+    try {
+      const pg0 = await api.post('/api/ideas/pregen-image', { titulo: idea.titulo }, { timeout: 8000 });
+      if (pg0 && pg0.status === 'done' && pg0.path) {
+        paintPreview({ path: pg0.path, style: null, styleName: '' });
+        return;
       }
-      d.onclick = () => {
-        CHAT_PREV_SEL = i;
-        box.querySelectorAll('.chat-prev').forEach((el, j) => el.classList.toggle('sel', j === i));
-      };
-      box.appendChild(d);
+      if (pg0 && pg0.status === 'pending') {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 90000 && CHAT_IDEA === idea) {
+          await new Promise(r => setTimeout(r, 4000));
+          const pg = await api.post('/api/ideas/pregen-image', { titulo: idea.titulo }, { timeout: 8000 }).catch(() => null);
+          if (pg && pg.status === 'done' && pg.path) { paintPreview({ path: pg.path, style: null, styleName: '' }); return; }
+          if (!pg || pg.status === 'error' || pg.status === 'missing') break;
+        }
+      }
+    } catch (e) { /* fallback a generación on-demand */ }
+    if (CHAT_IDEA !== idea) return;
+    // 2. Sin pre-generada: generar on-demand (comportamiento actual).
+    const lib = CHAT_PHOTOS.length ? CHAT_PHOTOS : assetPhotos();
+    const refs = lib.slice(0, 2).map(p => p.file_path || '').filter(Boolean);
+    const gen = await aiConceptShotFull({
+      idea: { titulo: idea.titulo, angulo: idea.angulo, porque: idea.porque, tipo: idea.tipo },
+      tipo: idea.tipo || tipoFromText(idea.titulo),
+      headline: pickHeadline(idea, (CHAT_CAPTIONS[CHAT_CAP_SEL] || '')),
+      refs,
+      excludeStyles: CHAT_STYLE_USED,
     });
+    if (CHAT_IDEA !== idea) return;
+    if (!gen || !gen.path) {
+      stopPrevThinking();
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
+      CHAT_PREVIEWS = [];
+      return;
+    }
+    paintPreview(gen);
   } catch (e) {
+    if (CHAT_IDEA !== idea) return;
     stopPrevThinking();
-    box.innerHTML = `<div style="font-size:11.5px;color:var(--mut)">No pudimos generar los ejemplos, pero podés crearlo igual 👇</div>`;
+    const detail = String((e && e.message) || '').slice(0, 120);
+    if (isAiCapErr(e)) {
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
+    } else {
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅' +
+        (detail ? `<br><small style="opacity:.7">Detalle: ${esc(detail)}</small>` : '') +
+        '<br>Probá tocando ↻ Otra imagen.</div>';
+    }
     CHAT_PREVIEWS = [];
   }
 }
+
 
 let CHAT_LOADED = false; // historial ya cargado del servidor en esta sesión
 
@@ -2470,6 +2989,8 @@ function chatStripFpMarker(t) { return String(t || '').replace(/\[first-publish\
 const CELEBRATE_MARKER = /\[celebrate\]/i;
 const CELEBRATE_MARKER_G = /\[celebrate\]/gi;
 function chatStripCelebrate(t) { return String(t || '').replace(CELEBRATE_MARKER_G, '').trim(); }
+// Limpia marcadores internos del texto antes de mandarlo a la IA (el historial no los necesita).
+function chatStripMcMarker(t) { return chatStripCelebrate(t); }
 // Claves de mensajes ya renderizados: un mensaje con [celebrate] festeja UNA sola vez,
 // aunque el historial se recargue (visibilitychange, re-render, etc.).
 const CHAT_CELEBRATED_SEEN = new Set();
@@ -2631,6 +3152,7 @@ async function chatLoadHistory() {
     try { CHAT_FIRST_PICK = (r && r.first_pick) || null; } catch (e) { CHAT_FIRST_PICK = null; }
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
+      CHAT_STYLE_USED = [];
       applyChatOrder(r.idea);
       chatRenderProposal();
       const ta0 = $('#chatCaption');
@@ -2756,6 +3278,7 @@ function chatSay(text) {
   const box = $('#chatBox');
   if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   chatScroll();
+  postyNotify('Posty', text);
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text }] }).catch(() => {}); } catch (e) {}
 }
 
@@ -2989,8 +3512,7 @@ function chatEditCommand(text) {
   }
   // — Cambiar el estilo —
   if (/\botro\s+(estilo|diseño|fondo)\b/i.test(t) || /\b(cambi[ae]|ponele)\s+(otro\s+)?(fondo|estilo|diseño)\b/i.test(t) || /\bm[aá]s\s+(claro|oscuro)\b/i.test(t)) {
-    CHAT_STYLE_IDX++;
-    chatSay('✅ Probá con este estilo 👇');
+    chatSay('✅ Generando con otro estilo 👇');
     renderChatPreviews();
     renderChatStoryboard();
     return true;
@@ -3073,6 +3595,13 @@ function postyThinking(el, stages) {
 }
 function stopPostyThinking(el) {
   try { if (el && el._ptStop) { el._ptStop(); el._ptStop = null; } } catch (e) {}
+}
+// "Posty está escribiendo": tres puntitos animados, como WhatsApp.
+// Sin narración del proceso interno (elegir foto, tono, etc.): eso se ve todo.
+function postyTyping(el) {
+  if (!el) return;
+  try { stopPostyThinking(el); } catch (e) {}
+  el.innerHTML = '<span class="typing-dots" aria-label="Posty está escribiendo"><span></span><span></span><span></span></span>';
 }
 
 async function chatSend() {
@@ -3191,6 +3720,7 @@ function bindChatComments() {
 // Acepta la idea elegida: es el flujo EXACTO del de una sola idea (no se duplica lógica).
 function chatAcceptIdea(idea) {
   CHAT_IDEA = idea; CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
+  CHAT_STYLE_USED = [];
   applyChatOrder(idea); // foto elegida + colores del pedido
   chatRenderProposal();
   // Texto dictado por el cliente: va tal cual al textarea y se respeta (touched)
@@ -3252,7 +3782,7 @@ async function chatExchange({ text, display, extra, pushed }) {
   if (btn) btn.disabled = true;
   CHAT_IDEA = null; CUSTOM_PAL = null; CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0; chatRenderProposal();
   box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatTyping"></div>`);
-  postyThinking(document.getElementById('chatTyping'));
+  postyTyping(document.getElementById('chatTyping'));
   chatScroll();
   postyWorking(true);
   // Fotos subidas en el chat que la IA todavía no vio → se las mandamos con este mensaje
@@ -3268,6 +3798,7 @@ async function chatExchange({ text, display, extra, pushed }) {
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
     box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', r.reply || '…'));
+    postyNotify('Posty', r.reply || '…');
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
     if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
@@ -3356,7 +3887,7 @@ async function chatMakePost(asVideo) {
   // Cupo del plan: chequear antes de crear para no perder la idea armada
   try {
     const q = await api.get('/api/quota');
-    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount, q); } catch (e) {}
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount, q); paintUpcoming(mount); } } catch (e) {}
     if (q.left <= 0) { quotaModal(q); return; }
   } catch (e) {}
   const m = $('#chatMsg');
@@ -3386,7 +3917,7 @@ async function chatMakePost(asVideo) {
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
-    try { const mount = document.getElementById('chatQuickChips'); if (mount) paintChatQuota(mount); } catch (e) {}
+    try { const mount = document.getElementById('chatQuickChips'); if (mount) { paintChatQuota(mount); paintUpcoming(mount); } } catch (e) {}
     try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
     setTimeout(() => {
       const rc = $('#reviewCard') || $('#draftsBanner');
@@ -3529,7 +4060,10 @@ async function chatView() {
   return `
   <div class="chat-home">
     <div class="chome-top">
-      <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
+      <button type="button" class="chome-ava-btn" id="chomeLvlBtn" aria-label="Nivel de Posty">
+        <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
+        <span class="chome-lvl" id="chomeLvl" hidden></span>
+      </button>
       <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza.<br>Vos vendé. Yo posteo.</div></div>
     </div>
     <div id="firstPickSlot"></div>
@@ -3546,7 +4080,10 @@ async function bindChatView() {
   bindReview();
   bindScheduleAll();
   bindAcceptAll();
+  bindActivateWeek();
   bindAutopilot();
+  // El nivel vive en el avatar del chat (no en el Schedule).
+  try { paintChatLevel(); } catch (e) {}
   // El auto-arranque de la semana también aplica entrando por el chat.
   if (typeof maybeAutoStartWeek === 'function') { try { maybeAutoStartWeek(); } catch (e) {} }
   // El saludo va DESPUÉS del historial (chatLoadHistory reemplaza el box):
@@ -3730,6 +4267,7 @@ function chatSayLocal(text) {
   const box = document.getElementById('chatBox');
   if (box) box.insertAdjacentHTML('beforeend', chatMsgHtml('assistant', text));
   if (typeof chatScroll === 'function') chatScroll();
+  if (typeof postyNotify === 'function') postyNotify('Posty', text);
 }
 
 // Tarjeta "¿Arrancamos por este? 👀": solo primera apertura con borradores.
@@ -3902,6 +4440,351 @@ async function paintChatQuota(mount, q0) {
   mount.insertAdjacentHTML('afterbegin', `<div class="chat-quota">📊 ${esc(t)}</div>`);
   try { mount.classList.toggle('quota-row', mount.querySelectorAll(':scope > button').length === 1); } catch (e) {}
 }
+/* ============================================================
+   📇 TARJETA DE POSTEO UNIFICADA (chat "Se viene" + Schedule)
+   Un solo componente, todo inline sin navegar: ver, editar
+   caption, cambiar imagen (3 caminos), saltar con deshacer, aprobar.
+   Acciones por UN listener delegado en document ([data-pc-act]).
+   ============================================================ */
+function pcTz() {
+  try { return (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires'; }
+  catch (e) { return 'America/Argentina/Buenos_Aires'; }
+}
+// Misma convención de parseo que el Schedule: "YYYY-MM-DD HH:MM" (16) = hora local,
+// con 'T'/Z u offset se respeta lo que traiga.
+function pcParseDate(s0) {
+  const s = String(s0 || '');
+  if (!s) return null;
+  let x = s.length === 16 ? s.replace(' ', 'T') : s.replace(' ', 'T');
+  if (s.length !== 16 && !/[zZ]$|[+-]\d{2}:?\d{2}$/.test(x)) x += 'Z';
+  const d = new Date(x);
+  return isNaN(d) ? null : d;
+}
+function pcFmtDay(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
+function pcFmtDayLong(d, tz) { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } }
+function pcFmtHour(d, tz) { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } }
+function pcBadge(p) {
+  if (String(p.status) === 'published') return '<span class="pcard-badge pcard-badge-done">✅ Salió</span>';
+  const mt = String(p.media_type || '');
+  if (mt === 'video') return '<span class="pcard-badge">🎬 Reel</span>';
+  if (mt === 'story') return '<span class="pcard-badge">📸 Story</span>';
+  if (mt === 'carousel') return '<span class="pcard-badge">🖼️ Carrusel</span>';
+  return '<span class="pcard-badge">📝 Post</span>';
+}
+// layout: 'row' (chat, horizontal compacto) | 'col' (schedule, vertical)
+function postCardHTML(p, opts) {
+  opts = opts || {};
+  const layout = opts.layout === 'col' ? 'col' : 'row';
+  const tz = pcTz();
+  const isPub = String(p.status) === 'published';
+  const d = pcParseDate(isPub ? (p.published_at || p.scheduled_at) : p.scheduled_at);
+  const when = d ? pcFmtDay(d, tz) + ' · ' + pcFmtHour(d, tz) : '';
+  const dayLabel = d ? pcFmtDayLong(d, tz) + ' a las ' + pcFmtHour(d, tz) : '';
+  const isV = String(p.media_type || '') === 'video';
+  const media = !p.image_path ? '<span class="pcard-nothumb">📝</span>'
+    : isV ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+    : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`;
+  const capFull = String(p.caption || p.source_topic || 'Posteo');
+  const canApprove = String(p.approval) === 'pending' && String(p.status) === 'scheduled';
+  const actions = isPub ? '' : `<div class="pcard-actions">
+      ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+      <button type="button" data-pc-act="skip">⏭️ Saltar</button>
+      ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
+    </div>`;
+  return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
+    <button type="button" class="pcard-media" data-pc-act="open" aria-label="Ver posteo">${media}</button>
+    <div class="pcard-body">
+      <div class="pcard-meta"><b>${esc(when)}</b>${pcBadge(p)}</div>
+      <div class="pcard-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>
+      ${actions}
+    </div>
+  </div>`;
+}
+// Toast con acciones (fijo abajo, sobre el input). actions: [{label, fn}]
+function postToast(o) {
+  o = o || {};
+  try {
+    document.querySelectorAll('.ptoast').forEach(t => t.remove());
+    const t = document.createElement('div');
+    t.className = 'ptoast';
+    t.innerHTML = `<span class="ptoast-txt">${esc(o.text || '')}</span><span class="ptoast-acts"></span>`;
+    const acts = t.querySelector('.ptoast-acts');
+    (o.actions || []).forEach(a => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ptoast-btn';
+      b.textContent = a.label;
+      b.onclick = async () => { try { await a.fn(); } catch (e) {} try { t.remove(); } catch (e2) {} };
+      acts.appendChild(b);
+    });
+    document.body.appendChild(t);
+    setTimeout(() => { try { t.remove(); } catch (e) {} }, o.ms || 5000);
+  } catch (e) {}
+}
+// --- Edición inline del caption ---
+function pcStartEdit(card) {
+  if (!card || card.querySelector('.pcard-edit')) return;
+  const capEl = card.querySelector('.pcard-cap');
+  if (!capEl) return;
+  const current = capEl.dataset.full || capEl.textContent || '';
+  capEl.style.display = 'none';
+  const wrap = document.createElement('div');
+  wrap.className = 'pcard-edit';
+  wrap.innerHTML = `<textarea rows="3" maxlength="2200">${esc(current)}</textarea>
+    <div class="pcard-edit-btns">
+      <button type="button" class="btn btn-primary btn-sm" data-pc-act="save-cap">Guardar</button>
+      <button type="button" class="btn btn-soft btn-sm" data-pc-act="cancel-cap">Cancelar</button>
+    </div>`;
+  capEl.after(wrap);
+  const ta = wrap.querySelector('textarea');
+  if (ta) { ta.focus(); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {} }
+}
+function pcCancelEdit(card) {
+  if (!card) return;
+  const ed = card.querySelector('.pcard-edit');
+  if (ed) ed.remove();
+  const capEl = card.querySelector('.pcard-cap');
+  if (capEl) capEl.style.display = '';
+}
+async function pcSaveCap(card, id, btn) {
+  const wrap = card ? card.querySelector('.pcard-edit') : null;
+  const ta = wrap ? wrap.querySelector('textarea') : null;
+  if (!ta) return;
+  const v = ta.value.trim();
+  if (btn) btn.disabled = true;
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { caption: v });
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    toast('No se pudo guardar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  // Actualiza todas las tarjetas visibles de este posteo.
+  document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
+    const ce = c.querySelector('.pcard-cap');
+    if (ce) { ce.dataset.full = v; ce.textContent = v; ce.style.display = ''; }
+    const we = c.querySelector('.pcard-edit');
+    if (we) we.remove();
+  });
+  toast('✅ Caption actualizado');
+}
+// --- Loading + imagen inline en todas las tarjetas del posteo ---
+function pcSetLoading(id, on, label) {
+  document.querySelectorAll('[data-post-id="' + id + '"] .pcard-media').forEach(m => {
+    let ov = m.querySelector('.pcard-loading');
+    if (on) {
+      if (!ov) { ov = document.createElement('div'); ov.className = 'pcard-loading'; m.appendChild(ov); }
+      ov.innerHTML = '<span>' + esc(label || '⏳ Generando…') + '</span>';
+    } else if (ov) ov.remove();
+  });
+}
+function pcSetImage(id, path) {
+  document.querySelectorAll('[data-post-id="' + id + '"] .pcard-media').forEach(m => {
+    const img = m.querySelector('img');
+    if (img) img.src = path;
+    else m.innerHTML = '<img src="' + esc(path) + '" alt="" loading="lazy">';
+  });
+}
+// --- Bottom sheet: cambiar imagen (3 caminos) ---
+let PC_STYLES_CACHE = null;
+function pcCloseSheet() {
+  document.querySelectorAll('.pcsheet-backdrop').forEach(x => { try { x.remove(); } catch (e) {} });
+}
+async function pcLoadStyles(sel) {
+  if (PC_STYLES_CACHE) { pcFillStyles(sel, PC_STYLES_CACHE); return; }
+  try {
+    const r = await api.get('/api/image-styles');
+    PC_STYLES_CACHE = ((r && r.styles) || []).filter(s => s && (s.code || s.id));
+  } catch (e) { PC_STYLES_CACHE = []; }
+  pcFillStyles(sel, PC_STYLES_CACHE);
+}
+function pcFillStyles(sel, styles) {
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Elegí un estilo…</option>' + styles.map(s => {
+    const code = String(s.code || s.id || '');
+    const label = String(s.name || s.label || code);
+    return '<option value="' + esc(code) + '">' + esc(label) + '</option>';
+  }).join('');
+  sel.dataset.loaded = '1';
+}
+function pcOpenImageSheet(id) {
+  pcCloseSheet();
+  const bd = document.createElement('div');
+  bd.className = 'pcsheet-backdrop';
+  bd.innerHTML = `<div class="pcsheet" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
+    <div class="pcsheet-handle"></div>
+    <div class="pcsheet-title">Cambiar imagen</div>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-style">🎨 Otro estilo</button>
+    <div class="pcsheet-stylewrap" hidden>
+      <select class="pcsheet-select" aria-label="Elegí un estilo"><option value="">Cargando estilos…</option></select>
+    </div>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto</button>
+    <input type="file" accept="image/*" class="pcsheet-file" hidden>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta</button>
+    <button type="button" class="pcsheet-close" data-pc-act="img-close">Cerrar</button>
+    <div class="pcsheet-msg"></div>
+  </div>`;
+  document.body.appendChild(bd);
+  bd.addEventListener('click', (e) => { if (e.target === bd) pcCloseSheet(); });
+  const sheet = bd.querySelector('.pcsheet');
+  const sel = sheet.querySelector('.pcsheet-select');
+  sel.addEventListener('change', () => { if (sel.value) pcRestyle(id, sel.value); });
+  const file = sheet.querySelector('.pcsheet-file');
+  file.addEventListener('change', () => { if (file.files && file.files[0]) pcUploadPhoto(id, file.files[0]); });
+}
+function pcSheetMsg(id, html) {
+  const m = document.querySelector('.pcsheet[data-post-id="' + id + '"] .pcsheet-msg');
+  if (m) m.innerHTML = html;
+}
+async function pcRestyle(id, style) {
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Creando nueva imagen…');
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-restyle', { style }, { timeout: 180000 });
+    if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Imagen actualizada'); }
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+async function pcEnhance(id) {
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Mejorando la foto…');
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
+    if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Foto mejorada'); }
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+async function pcUploadPhoto(id, file) {
+  if (!file || !String(file.type || '').startsWith('image/')) { toast('Elegí un archivo de imagen'); return; }
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Subiendo foto…');
+  try {
+    const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': file.type || 'image/png' }, body: file });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'No pude subirla');
+    await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'save-draft', image_path: data.path });
+    pcSetImage(id, data.path);
+    toast('✅ Foto actualizada');
+  } catch (e) { toast('No se pudo subir: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+// --- Saltar con deshacer (5s) + armar otro ---
+async function pcSkip(id, card) {
+  if (!card) return;
+  const schedAt = card.dataset.schedAt || '';
+  const dayLabel = card.dataset.dayLabel || 'ese día';
+  card.style.pointerEvents = 'none';
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'cancel' });
+  } catch (e) {
+    card.style.pointerEvents = '';
+    toast('No se pudo saltar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  card.classList.add('pcard-gone');
+  setTimeout(() => { if (card.classList.contains('pcard-gone')) card.style.display = 'none'; }, 280);
+  postToast({
+    text: 'Posteo saltado',
+    ms: 5000,
+    actions: [
+      { label: 'Deshacer', fn: async () => {
+        try { await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: schedAt }); }
+        catch (e) { toast('No se pudo deshacer: ' + esc((e && e.message) || 'probá de nuevo')); return; }
+        card.style.display = '';
+        requestAnimationFrame(() => { card.classList.remove('pcard-gone'); card.style.pointerEvents = ''; });
+      } },
+      { label: 'Armar otro', fn: () => {
+        try { sessionStorage.setItem('posty-chat-prefill', 'Armame un posteo para el ' + dayLabel); } catch (e) {}
+        location.hash = '#/app/chat';
+      } },
+    ],
+  });
+}
+// --- Aprobar ---
+async function pcApprove(id, card, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await api.post('/api/posts/' + encodeURIComponent(id) + '/approve', {});
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    toast('No se pudo aprobar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
+    const b = c.querySelector('.pcard-badge');
+    if (b) b.outerHTML = '<span class="pcard-badge pcard-badge-ok">✅ Aprobado</span>';
+    const ab = c.querySelector('[data-pc-act="approve"]');
+    if (ab) ab.remove();
+  });
+  toast('✅ Aprobado — sale a su hora');
+}
+// --- UN solo listener delegado para [data-pc-act] ---
+function pcOnClick(e) {
+  const el = e.target && e.target.closest ? e.target.closest('[data-pc-act]') : null;
+  if (!el) return;
+  const root = el.closest('[data-post-id]');
+  if (!root) return;
+  const id = root.dataset.postId;
+  const act = el.dataset.pcAct;
+  if (act === 'open') { location.hash = '#/app/post/' + encodeURIComponent(id); return; }
+  if (act === 'edit-cap') { pcStartEdit(root); return; }
+  if (act === 'save-cap') { pcSaveCap(root, id, el); return; }
+  if (act === 'cancel-cap') { pcCancelEdit(root); return; }
+  if (act === 'image') { pcOpenImageSheet(id); return; }
+  if (act === 'skip') { pcSkip(id, root); return; }
+  if (act === 'approve') { pcApprove(id, root, el); return; }
+  if (act === 'img-style') {
+    const wrap = root.querySelector('.pcsheet-stylewrap');
+    const sel = root.querySelector('.pcsheet-select');
+    if (wrap) {
+      const show = wrap.hidden;
+      wrap.hidden = !show;
+      if (show && sel && !sel.dataset.loaded) pcLoadStyles(sel);
+    }
+    return;
+  }
+  if (act === 'img-upload') { const f = root.querySelector('.pcsheet-file'); if (f) f.click(); return; }
+  if (act === 'img-enhance') { pcEnhance(id); return; }
+  if (act === 'img-close') { pcCloseSheet(); return; }
+}
+if (!window.__pcardBound) {
+  window.__pcardBound = true;
+  document.addEventListener('click', pcOnClick);
+}
+// 📅 "Se viene": próximos posteos programados integrados al chat.
+// Usa la tarjeta unificada (todo inline: ver, editar, imagen, saltar, aprobar).
+async function paintUpcoming(mount) {
+  if (!mount || !mount.isConnected) return;
+  const old = mount.querySelector('.chat-upcoming');
+  if (old) old.remove();
+  let posts = [];
+  try { posts = await api.get('/api/posts'); } catch (e) { return; }
+  const now = Date.now();
+  const up = (Array.isArray(posts) ? posts : [])
+    .filter(p => p.status === 'scheduled' && p.scheduled_at)
+    .map(p => ({ p, d: pcParseDate(p.scheduled_at) }))
+    .filter(x => x.d && x.d.getTime() > now - 3600000)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3);
+  if (!up.length || !mount.isConnected) return;
+  const items = up.map(({ p }) => postCardHTML(p, { layout: 'row' })).join('');
+  mount.insertAdjacentHTML('afterbegin', `<div class="chat-upcoming">
+    <button type="button" class="cu-head" data-cu-go="schedule">📅 Se viene <span class="cu-go">Ver todo →</span></button>
+    <div class="cu-list">${items}</div>
+  </div>`);
+  // Debajo de la tira de cupo si ya está (orden estable sin importar el timing).
+  const box0 = mount.querySelector('.chat-upcoming');
+  const qEl = mount.querySelector('.chat-quota');
+  if (box0 && qEl && qEl.compareDocumentPosition(box0) & Node.DOCUMENT_POSITION_PRECEDING) {
+    qEl.insertAdjacentElement('afterend', box0);
+  }
+  const box = mount.querySelector('.chat-upcoming');
+  if (!box || !box.isConnected) return;
+  const go = box.querySelector('[data-cu-go]');
+  if (go) go.onclick = () => { location.hash = '#/app/schedule'; };
+}
 // mensaje), {go} (navega) o {do:'schedule'} (programa la semana sin salir del chat).
 function renderQuickChips(drafts, scheduled, running) {
   const card = document.getElementById('chatCard');
@@ -3940,7 +4823,7 @@ function renderQuickChips(drafts, scheduled, running) {
     i.value = t;
     chatSend();
   });
-  paintChatQuota(mount);
+  paintChatQuota(mount); paintUpcoming(mount);
 }
 
 // Utilidades de agenda con la zona horaria del usuario (misma convención que "Lo que se viene").
@@ -4078,60 +4961,39 @@ async function chatAvatarLevel() {
   }
 }
 
-// Pinta el nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con
-// marco de nivel (bronce/plata/oro) + badge, nombre del negocio, UNA barra
-// al siguiente nivel y 2-3 stats. Si no hay logo: inicial con la paleta del cliente.
-async function paintBrandStrip() {
-  const mount = document.getElementById('xpBrand');
-  if (!mount) return;
+// El nivel se ve en el logo del chat: badge "Nv N" sobre el avatar.
+// Tap → modal con el progreso (nombre del nivel, barra, qué falta).
+async function paintChatLevel() {
+  const badge = document.getElementById('chomeLvl');
+  const btn = document.getElementById('chomeLvlBtn');
+  if (!badge || !btn) return;
   let lv = null;
   try { lv = await api.get('/api/avatar-level'); } catch (e) {}
-  let logo = (typeof assetLogo === 'function') ? assetLogo() : null;
-  if (!logo) { try { const a = await api.get('/api/assets'); if (Array.isArray(a)) logo = a.find(x => x.kind === 'logo'); } catch (e) {} }
-  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
-  const lvl = (lv && lv.ok) ? lv.level : 1;
-  const lvlName = (lv && lv.ok && (lv.levelName || POSTA_LVL_NAMES[lv.level])) || POSTA_LVL_NAMES[1];
-  const tier = (lv && lv.ok && lv.tier) || 'none';
-  const xp = (lv && lv.ok && lv.xp) || 0;
-  const published = (lv && lv.ok && lv.published) || 0;
-  let pct = 0, sub;
-  if (lv && lv.ok && lv.nextXp) {
+  if (!lv || !lv.ok) { badge.hidden = true; return; }
+  badge.hidden = false;
+  badge.textContent = 'Nv ' + (lv.level || 1);
+  btn.onclick = () => postyLevelModal(lv);
+}
+function postyLevelModal(lv) {
+  const lvl = (lv && lv.level) || 1;
+  const name = (lv && (lv.levelName || POSTA_LVL_NAMES[lvl])) || POSTA_LVL_NAMES[1] || '';
+  const xp = (lv && lv.xp) || 0;
+  let pct = 100, nextTxt = '👑 ¡Nivel máximo!';
+  if (lv && lv.nextXp) {
     pct = Math.min(99, Math.round((xp / lv.nextXp) * 100));
-    sub = `${xp} de ${lv.nextXp} pts · próximo: ${lv.nextName}`;
-  } else if (lv && lv.ok) { pct = 100; sub = `👑 ¡Nivel máximo: ${lvlName}!`; }
-  else { sub = 'Publicá para subir de nivel'; }
-  const bc = (typeof brandColors === 'function' ? brandColors() : []).filter(Boolean);
-  const fbBg = bc[0] || '#2793C8';
-  const initial = (biz.trim()[0] || 'M').toUpperCase();
-  const logoHtml = (logo && logo.file_path)
-    ? `<img src="${esc(logo.file_path)}" alt="logo">`
-    : `<span class="xp-logo-fallback" style="background:${esc(fbBg)}">${esc(initial)}</span>`;
-  mount.innerHTML = `
-    <span class="xp-logo-wrap tier-${tier}">${logoHtml}<span class="xp-lvl-badge">${lvl}</span></span>
-    <span class="xp-brand-txt"><span class="xp-title">Tu progreso</span><b class="xp-biz">${esc(biz)}</b><span class="xp-lvlname">Nivel ${lvl} · ${esc(lvlName)}</span></span>`;
-  const bar = document.getElementById('xpBrandBar'); if (bar) bar.style.width = pct + '%';
-  const subEl = document.getElementById('xpBrandSub'); if (subEl) subEl.textContent = sub;
-  const stats = document.getElementById('xpBrandStats');
-  if (stats) {
-    let streakTxt = '';
-    try {
-      const sk = await api.get('/api/streak');
-      if (sk && sk.current > 0) streakTxt = `<span>🔥 ${sk.current} ${sk.current === 1 ? 'semana' : 'semanas'}</span>`;
-      // Vencimiento de la racha: SIEMPRE visible, muy claro. Pulso solo si se apaga pronto.
-      const expEl = document.getElementById('xpBrandExp');
-      if (expEl) {
-        if (sk && sk.current > 0 && sk.expiresInMs > 0) {
-          expEl.textContent = `⏳ Tu racha se apaga en ${fmtStreakLeft(sk.expiresInMs)}`;
-          expEl.classList.add('show');
-          expEl.classList.toggle('on', !!sk.expiringSoon);
-        } else {
-          expEl.classList.remove('show', 'on');
-          expEl.textContent = '';
-        }
-      }
-    } catch (e) {}
-    stats.innerHTML = `<span>⚡ ${xp} pts</span>${streakTxt}<span>📮 ${published} ${published === 1 ? 'publicado' : 'publicados'}</span>`;
+    nextTxt = `${xp} de ${lv.nextXp} pts · próximo: ${esc(lv.nextName || '')}`;
   }
+  streakModalShell(`
+    <div class="stk-hero">
+      <p class="stk-eyebrow">Nivel de Posty</p>
+      <p class="stk-pts"><b>Nv ${lvl}</b> · ${esc(name)}</p>
+      <div class="xp-bar" style="margin:12px auto;max-width:260px"><span style="width:${pct}%"></span></div>
+      <p class="stk-next">${esc(nextTxt)}</p>
+    </div>
+    <p class="d" style="text-align:center">Cada posteo publicado suma: 100 pts por post, 150 por reel.</p>
+    <button class="btn btn-ghost btn-block" id="lvlCloseBtn" style="margin-top:10px">Cerrar</button>`);
+  const c = document.getElementById('lvlCloseBtn');
+  if (c) c.onclick = () => closeStreakModal();
 }
 
 // Misiones de Posty: una activa por vez, narradas en el chat.
@@ -4183,7 +5045,9 @@ async function renderDesignImage(o) {
   const cv = document.createElement('canvas');
   drawPost(cv, o);
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-  const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  // FIX-FANTASMA: el diseño generado se registra como kind='design' (no 'photo')
+  // para que el próximo "✨ Otro diseño" no lo tome como foto de fondo.
+  const res = await fetch('/api/media?kind=design', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
   return data.path;
@@ -4289,7 +5153,7 @@ async function autopilotReel(idea, photos, logoImg, palIdx, handle, idx, sub, on
 // Lo usan el autopilot y el chat consultor. Nada se programa: todo va a revisión.
 // Rotación de estilos de diseño: el autopilot y el chat generan los posteos
 // con plantillas distintas para que la semana no se vea toda igual.
-const DESIGN_TPLS = ['gradiente', 'claro', 'noche', 'promo'];
+const DESIGN_TPLS = ['gradiente', 'claro', 'noche', 'promo', 'editorial', 'bold'];
 let TPL_ROT = 0;
 function pickTpl(idx, fromChat, topic) {
   if (fromChat) return DESIGN_TPLS[(TPL_ROT++) % DESIGN_TPLS.length];
@@ -5337,7 +6201,7 @@ async function checkQuotaOrModal() {
     // Sincronizar la barrita con el dato fresco (si no, miente)
     try {
       const mount = document.getElementById('chatQuickChips');
-      if (mount) paintChatQuota(mount, q);
+      if (mount) { paintChatQuota(mount, q); paintUpcoming(mount); }
     } catch (e) {}
     if (q.left <= 0) {
       // Sin plan (prueba vencida): directo a la pantalla de los 3 planes, sin vueltas
@@ -6088,10 +6952,10 @@ function shareStreakImage(sk) {
   });
 }
 
-/* ---------- Barra XP unificada (racha + progreso) ---------- */
-// Extraída de Mi semana para reutilizar en Schedule: racha + tu progreso en un
-// solo vistazo. El pintado fino lo hace paintBrandStrip() sobre #xpBrand etc.
-// El click abre el modal de racha (streakPillModal) vía el binding de la vista.
+/* ---------- Barra XP (racha) ---------- */
+// En Schedule solo se usa el expBanner (aviso de racha por apagarse) y el
+// cálculo de WEEKLY_BARS_HTML. La barrita del nivel se eliminó: el nivel
+// vive en el avatar del chat (badge "Nv N" con tap → progreso).
 function xpStripHTML(sk, st, draftN) {
   if (!st) return { xpStrip: '', expBanner: '' };
   const w = st.week, mo = st.month;
@@ -6797,6 +7661,7 @@ async function render() {
   else if (tab === 'ads') { if (typeof IS_NATIVE !== 'undefined' && IS_NATIVE) { location.hash = '#/app/semana'; } else content = await adsView(); } // 🚀 Potenciar: billetera + boost (solo web)
   else if (tab === 'admin') { let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
   else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
+  else if (tab === 'dogfood') content = await dogfoodView(postId); // 🤖 Posty dogfood: propuesta del día
   else { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
@@ -6923,6 +7788,7 @@ function failedCardHTML(failed) {
         ${p.error ? `<div style="font-size:11.5px;color:var(--mut)">${esc(humanError(p.error))}</div>` : ''}
       </div>
       <button class="btn btn-soft btn-sm" data-failed-retry="${p.id}">🔄 Reintentar</button>
+      <button class="btn btn-soft btn-sm" data-failed-dismiss="${p.id}" title="Descartar este posteo">✕</button>
     </div>`).join('')}
     <div class="hint" data-failed-msg style="margin-top:4px"></div>
   </div>`;
@@ -6945,15 +7811,15 @@ function salioCardHTML(publishedList) {
   return `
   <div class="card" id="salioCard">
     <h3 style="margin:0 0 4px">📮 Ya salió</h3>
-    <p class="hint" style="margin:0 0 10px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos 🙂</p>
+    <p class="hint" style="margin:0 0 12px">¿Del 1 al 5 qué tanto te gustaron estos posteos?<br>Con tus respuestas entiendo cada vez más tus gustos 🙂</p>
     ${list.map(p => `
-    <div style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        ${p.image_path ? `<img src="${esc(p.image_path)}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;flex:none" alt="">` : ''}
-        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(String(p.caption || p.source_topic || 'Posteo').split('\\n')[0].slice(0, 60))}</div>
-      </div>
-      <div style="display:flex;gap:6px;margin-left:54px">
-        ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">★</button>`).join('')}
+    <div class="st-rate-row">
+      ${p.image_path ? `<img class="st-rate-thumb" src="${esc(p.image_path)}" alt="" loading="lazy">` : ''}
+      <div class="st-rate-body">
+        <div class="st-rate-cap">${esc(String(p.caption || p.source_topic || 'Posteo').split('\n')[0].slice(0, 90))}</div>
+        <div class="st-rate-stars">
+          ${[1, 2, 3, 4, 5].map(n => `<button class="btn btn-soft btn-sm star-btn" data-sig="rating_${n}" data-id="${p.id}" aria-label="${n} de 5">★</button>`).join('')}
+        </div>
       </div>
     </div>`).join('')}
   </div>`;
@@ -6974,8 +7840,12 @@ async function scheduleView() {
   const published = allPosts.filter(p => p.status === 'published');
   const failed = allPosts.filter(p => p.status === 'failed');
   const slots = suggestSlots(drafts.length, schedPosts);
-  const { xpStrip, expBanner } = xpStripHTML(sk, st, drafts.length);
+  const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
+  // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
+  let dogfoodPost = null;
+  try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
+  const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
   const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
@@ -6985,8 +7855,6 @@ async function scheduleView() {
   const fpBlock = (!published.length) ? firstPublishCardHTML(drafts) : '';
   // Fallidos: debajo de la revisión, antes del calendario.
   const failedBlock = failedCardHTML(failed);
-  // "Ya salió": debajo del calendario, al fondo.
-  const salioBlock = salioCardHTML(published);
   const parse = (iso) => {
     const s0 = String(iso || '');
     let s = s0.length === 16 ? s0 : s0.replace(' ', 'T');
@@ -6996,6 +7864,12 @@ async function scheduleView() {
   const dayKey = (d) => { try { return d.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } };
   const scheduled = schedPosts
     .map(p => ({ p, d: parse(p.scheduled_at) }))
+    .filter(x => !isNaN(x.d))
+    .sort((a, b) => a.d - b.d);
+  // Publicados de la semana visible: van en el día que salieron (✓ Salió).
+  // Así el calendario + "te quedan X" siempre suman el cupo del plan.
+  const publishedThisWeek = published
+    .map(p => ({ p, d: parse(p.published_at || p.scheduled_at), done: true }))
     .filter(x => !isNaN(x.d))
     .sort((a, b) => a.d - b.d);
   // Lunes de la semana visible (offset en semanas desde la actual)
@@ -7015,23 +7889,15 @@ async function scheduleView() {
       return `${a} – ${b}`;
     } catch (e) { return ''; }
   })();
-  const capFull = (p) => esc(String(p.caption || p.source_topic || 'Posteo') || 'Posteo');
-  const typeBadge = (p) => {
-    const mt = String(p.media_type || '');
-    if (mt === 'video') return '<span class="sched-badge">🎬 Reel</span>';
-    if (mt === 'story') return '<span class="sched-badge">📸 Story</span>';
-    if (mt === 'carousel') return '<span class="sched-badge">🖼️ Carrusel</span>';
-    return '<span class="sched-badge">📝 Post</span>';
-  };
-  // Hora en 24h ("19:00"), como se lee en Argentina.
-  const fmtHour24 = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
   const dayLong = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
   // Pulso de la semana: resumen vivo arriba del calendario.
   const weekSchedCount = scheduled.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
+  const weekPubCount = publishedThisWeek.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
   let pulseHTML = '';
   if (SCHED_WEEK_OFFSET === 0) {
     const parts = [];
     if (weekSchedCount) parts.push(`📮 ${weekSchedCount} programado${weekSchedCount > 1 ? 's' : ''}`);
+    if (weekPubCount) parts.push(`✅ ${weekPubCount} publicado${weekPubCount > 1 ? 's' : ''}`);
     if (drafts.length) parts.push(`📝 ${drafts.length} borrador${drafts.length > 1 ? 'es' : ''}`);
     pulseHTML = parts.length ? parts.join(' <span class="sched-pulse-sep">·</span> ') : '🕊️ Tu semana está vacía';
   } else {
@@ -7039,32 +7905,24 @@ async function scheduleView() {
   }
   const cells = days.map(d => {
     const k = dayKey(d);
-    const items = scheduled.filter(x => dayKey(x.d) === k);
+    const items = scheduled.filter(x => dayKey(x.d) === k)
+      .concat(publishedThisWeek.filter(x => dayKey(x.d) === k))
+      .sort((a, b) => a.d - b.d);
     const isToday = k === todayK;
     return `<div class="sched-col${isToday ? ' today' : ''}">
       <div class="sched-colhead">${esc(fmtDay(d))}${isToday ? ' <span class="sched-today">hoy</span>' : ''}</div>
       <div class="sched-colbody">
-        ${items.length ? items.map(({ p, d: dt }) => `
-        <button class="sched-card" data-lightbox="${esc(p.image_path || '')}" ${p.media_type === 'video' ? 'data-video="1"' : ''}>
-          <span class="sched-thumbwrap">
-            ${p.image_path
-              ? (p.media_type === 'video'
-                ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
-                : `<img src="${esc(p.image_path)}" alt="" loading="lazy">`)
-              : `<span class="sched-nothumb">📝</span>`}
-            ${typeBadge(p)}
-          </span>
-          <div class="sched-cardtxt"><b>${esc(fmtHour24(dt))}</b><span>${capFull(p)}</span></div>
-        </button>`).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
+        ${items.length ? items.map(({ p }) => postCardHTML(p, { layout: 'col' })).join('') : `<button class="sched-ghost" data-sched-day="${esc(dayLong(d))}" aria-label="Pedirle a Posty un posteo para el ${esc(dayLong(d))}"><span class="sg-plus">+</span><span class="sg-txt">Libre</span></button>`}
       </div>
     </div>`;
   }).join('');
-  const empty = !scheduled.length && SCHED_WEEK_OFFSET === 0;
+  const empty = !scheduled.length && !publishedThisWeek.length && SCHED_WEEK_OFFSET === 0;
   // Sin borradores ni programados: la tarjeta para armar la semana vive acá.
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   return `<div id="schedView" class="sched-wrap">
     ${trialBanner}
-    ${xpStrip}${expBanner}
+    ${dogfoodBlock}
+    ${expBanner}
     ${fpBlock}
     ${ftBlock}
     ${reviewBlock}
@@ -7074,6 +7932,7 @@ async function scheduleView() {
       <div><h2 style="margin:0">📅 Schedule</h2>
       <p class="sub" style="margin:4px 0 0">Los que ya aceptaste — salen solos a la hora indicada.</p></div>
       <div class="sched-nav">
+        ${(sk && sk.current > 0) ? `<button type="button" class="sched-streak" id="schedStreakPill" aria-label="Ver mi racha">🔥 ${sk.current}</button>` : ''}
         <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_WEEK_OFFSET <= 0 ? 'disabled' : ''} aria-label="Semana anterior">‹</button>
         <button class="btn btn-ghost btn-sm" id="schedToday">Esta semana</button>
         <button class="btn btn-ghost btn-sm" id="schedNext" aria-label="Semana siguiente">›</button>
@@ -7091,7 +7950,6 @@ async function scheduleView() {
          </div>`
       : `<div class="sched-grid">${cells}</div>
          <p class="hint" style="margin-top:10px">Tocá un posteo para verlo en grande 🔍</p>`}
-    ${salioBlock}
   </div>`;
 }
 /* ---------- 📊 TUS NÚMEROS: stats reales de Instagram ---------- */
@@ -7109,12 +7967,21 @@ function statsView() {
     </div>
     <div class="st-grid" id="stGrid">${cards}</div>
     <div id="stBest"></div>
+    <div id="stRate"></div>
   </div>`;
 }
 function bindStats() {
   const paint = async () => {
     try {
       const d = await api.get('/api/stats/ig');
+      // 📮 "Ya salió": las estrellitas viven acá, con los números (aunque no haya alcance todavía).
+      try {
+        const posts = await api.get('/api/posts');
+        const pub = (Array.isArray(posts) ? posts : []).filter(p => p.status === 'published');
+        const rateBox = document.getElementById('stRate');
+        if (rateBox) rateBox.innerHTML = salioCardHTML(pub);
+        bindSignalBtns();
+      } catch (e) { /* sin posteos no hay estrellitas */ }
       const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('es-AR');
       const grid = document.getElementById('stGrid');
       const box = document.getElementById('stBest');
@@ -7191,13 +8058,16 @@ function bindSchedule() {
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
-  bindScheduleAll(); // "📅 Programar mi semana →" dentro de la tarjeta de revisión
-  bindAcceptAll(); // "✅ Aceptar todos" dentro de la tarjeta de revisión
+  bindScheduleAll(); // "📅 Programar mi semana →" (chip del chat)
+  bindAcceptAll(); // legacy (ya no se pinta en la tarjeta)
+  bindActivateWeek(); // "🚀 Activar mi semana" dentro de la tarjeta de revisión
   bindAutopilot(); // tarjeta "Armemos tu semana" (estado vacío)
   // Fast-track "🚀 Tu primer posteo" (solo cuentas que nunca publicaron).
   try { if (typeof bindFastTrack === 'function') bindFastTrack(); } catch (e) {}
   // "🚀 Publicar mi primero" (mejora 2026-09-30: 1 tap, solo 0 publicados).
   try { if (typeof bindFirstPublish === 'function') bindFirstPublish(); } catch (e) {}
+  // 🤖 Posty dogfood: ✅ Publicar / ⏭️ Saltar.
+  try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {}
   // Reintento de fallidos: publica de nuevo vía publish-now.
   $$('#schedView [data-failed-retry]').forEach(b => b.onclick = async () => {
     const id = b.dataset.failedRetry;
@@ -7212,13 +8082,24 @@ function bindSchedule() {
       if (msg) msg.innerHTML = `<div class="err">${esc(humanError(e.message || 'No se pudo reintentar'))}</div>`;
     }
   });
-  // 👍/👎 del "Ya salió" (outcome loop).
-  bindSignalBtns();
-  // Barra XP: pintado + click abre el modal de racha.
-  try { paintBrandStrip(); } catch (e) {}
-  const xs = $('#xpStrip');
-  if (xs) xs.onclick = async () => {
-    try { const sk = await api.get('/api/streak'); if (sk && sk.current > 0) streakPillModal(sk); } catch (e) {}
+  // Descartar un fallido: lo saca de la tarjeta sin publicarlo.
+  $$('#schedView [data-failed-dismiss]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.failedDismiss;
+    b.disabled = true;
+    try {
+      await api.post(`/api/posts/${id}/dismiss-failed`, {});
+      render();
+    } catch (e) {
+      b.disabled = false;
+      const msg = document.querySelector('#failedCard [data-failed-msg]');
+      if (msg) msg.innerHTML = `<div class="err">${esc(humanError(e.message || 'No se pudo descartar'))}</div>`;
+    }
+  });
+  // 👍/👎 del "Ya salió": ahora viven en 📊 Tus números (bindStats los cablea).
+  // Racha: pill compacta en el header del Schedule → abre el modal de racha.
+  const sp = $('#schedStreakPill');
+  if (sp) sp.onclick = async () => {
+    try { const sk2 = await api.get('/api/streak'); if (sk2 && sk2.current > 0) streakPillModal(sk2); } catch (e) {}
   };
   // Festejos (antes se chequeaban al entrar a Mi semana).
   setTimeout(() => maybeFirstPublishCelebration(), 1200);
@@ -7232,6 +8113,7 @@ function bindApp(tab) {
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
   if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
   if (tab === 'schedule') bindSchedule();
+  if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números
   if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
   pwaWire();
@@ -7264,7 +8146,6 @@ function bindApp(tab) {
   if (dov) dov.onclick = closeDrawer;
   try { paintDrawerIdent(); } catch (e) {}
   try { paintSidePosty(); } catch (e) {}
-  $$('.drawer-plan').forEach(a => { a.onclick = () => closeDrawer(); });
   const dlo = $('#drawerLogout');
   if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
 
@@ -7371,6 +8252,58 @@ function apvEditPrompt(d, tz) {
   let dl = '';
   try { dl = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) {}
   return dl ? `Quiero editar el posteo que sale el ${dl} a las ${hm}` : 'Quiero editar ese posteo';
+}
+// ---------------------------------------------------------------------------
+// Posty dogfood: tarjeta de la propuesta del día + vista dedicada (#/app/dogfood/:id).
+// ---------------------------------------------------------------------------
+function dogfoodCardHTML(p) {
+  const cap = esc(String(p.caption || '')).slice(0, 220);
+  return `<div class="card dogfood-card" id="dogfoodCard" style="border:2px solid #FEC14D;background:linear-gradient(135deg,#fffdf5,#fff)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:20px">🤖</span>
+      <div><b>Posty para @posty.hacetodo</b>
+      <div class="hint">⏳ Pendiente de tu aprobación — propuesta de hoy</div></div>
+    </div>
+    ${p.image_path ? `<img src="${esc(p.image_path)}" alt="Propuesta de Posty" style="width:100%;border-radius:12px" loading="eager">` : ''}
+    <p style="margin:10px 0 4px">${cap}${String(p.caption || '').length > 220 ? '…' : ''}</p>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-primary" id="dogfoodApprove" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">✅ Publicar</button>
+      <button class="btn btn-soft" id="dogfoodDismiss" data-dfid="${p.id}" style="flex:1;padding:14px;font-size:17px">⏭️ Saltar</button>
+    </div>
+  </div>`;
+}
+async function dogfoodAction(id, action) {
+  const btn = action === 'approve' ? $('#dogfoodApprove') : $('#dogfoodDismiss');
+  try { if (btn) { btn.disabled = true; btn.textContent = action === 'approve' ? 'Publicando…' : 'Descartando…'; } } catch (e) {}
+  try {
+    const r = await api.post(`/api/dogfood/${id}/${action}`, {});
+    if (r && r.ok) {
+      if (action === 'approve') toast('🎉 ¡Publicado en @posty.hacetodo!');
+      else toast('⏭️ Descartado. Mañana te propongo otro.');
+      render();
+    } else {
+      toast('😅 ' + ((r && (r.error || r.blocked)) || 'No se pudo completar'));
+      render();
+    }
+  } catch (e) { toast('😅 No se pudo completar, probá de nuevo'); render(); }
+}
+function bindDogfood() {
+  const a = $('#dogfoodApprove'), d = $('#dogfoodDismiss');
+  if (a) a.onclick = () => dogfoodAction(a.dataset.dfid, 'approve');
+  if (d) d.onclick = () => dogfoodAction(d.dataset.dfid, 'dismiss');
+}
+async function dogfoodView(id) {
+  let p = null;
+  try { const r = await api.get('/api/dogfood/pending'); p = (r && r.post) || null; } catch (e) {}
+  if (!p || (id && String(p.id) !== String(id))) {
+    return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">🤖 Sin propuesta pendiente</h3>
+      <p class="hint">Cada mañana te propongo un posteo para @posty.hacetodo. Volvé mañana ☀️</p>
+      <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a Schedule</a></div>`;
+  }
+  return `<div class="apv-wrap">
+    <a class="apv-back" href="#/app/schedule">← Schedule</a>
+    ${dogfoodCardHTML(p)}
+  </div>`;
 }
 async function approvalPostView(id) {
   if (!id) return apvNotFound();

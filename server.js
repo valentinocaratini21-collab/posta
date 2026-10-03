@@ -3549,9 +3549,15 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
     try {
       const ap = autopilot.shouldAutopublish(req.session.userId, newId, db, MEDIA_DIR);
       if (ap.ok) {
-        // Mañana 10am hora local del usuario (aprox: usamos America/Argentina/Buenos_Aires por defecto).
+        // Horario óptimo (2026-10-03): usa la mejor hora del usuario según
+        // engagement histórico. Si no hay datos, 10am por defecto.
+        let bestHour = 10;
+        try {
+          const bh = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(req.session.userId);
+          if (bh && bh.best_hour >= 0 && bh.best_hour <= 23) bestHour = bh.best_hour;
+        } catch (e) {}
         const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
-        tomorrow.setHours(10, 0, 0, 0);
+        tomorrow.setHours(bestHour, 0, 0, 0);
         const schedAt = tomorrow.toISOString().slice(0, 16).replace('T', ' ');
         db.prepare(`UPDATE posts SET status = 'scheduled', scheduled_at = ?, auto_published = 1 WHERE id = ?`)
           .run(schedAt, newId);
@@ -6127,6 +6133,7 @@ El prompt DEBE exigir:
 - PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
 - BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible en la imagen — el ÚNICO texto permitido es el titular intencional, renderizado perfecto e íntegro; marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
 - Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
+- VARA DE CALIDAD (piezas de referencia aprobadas 2026-10-03): la imagen tiene que sentirse PREMIUM y profesional — composición limpia con aire, un protagonista claro, iluminación cuidada, acabado de publicidad de alto nivel. Nada de estética amateur, genérica o de "IA barata". Si el posteo lleva titular, la escena deja ESPACIO despejado para él (zona limpia arriba o al centro) porque el texto se compone después por código y tiene que respirar.
 - Si la escena incluye pantallas, carteles, vidrieras, interfaces o celulares (draft 75): TODO texto visible tiene que ser LEGIBLE y tener SENTIDO — palabras reales del negocio, nunca lorem ipsum, palabras garbled, truncadas ni texto inventado.
 REGLA DURA: JAMÁS inventes datos del negocio (precios, direcciones, promos, teléfonos, nombres de producto que no se provean). Solo el titular provisto, tal cual.` },
         { role: 'user', content:
@@ -7263,6 +7270,90 @@ function spotsLeft() {
 }
 app.get('/api/capacity', (req, res) => {
   res.json({ ok: true, spots_left: spotsLeft(), spots_total: MONTHLY_SPOTS });
+});
+
+// ---------- Banco de ideas (2026-10-03, funcionalidad 3) ----------
+app.get('/api/idea-bank', requireAuth, (req, res) => {
+  try {
+    const ideas = db.prepare(`
+      SELECT id, title, angle, created_at FROM idea_bank
+      WHERE user_id = ? AND used = 0 ORDER BY created_at DESC LIMIT 50
+    `).all(req.session.userId);
+    res.json({ ok: true, ideas });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+app.post('/api/idea-bank', requireAuth, express.json(), (req, res) => {
+  try {
+    const { title, angle } = req.body || {};
+    if (!String(title || '').trim()) return res.status(400).json({ ok: false, error: 'Falta el título' });
+    const r = db.prepare(`INSERT INTO idea_bank (user_id, title, angle) VALUES (?, ?, ?)`)
+      .run(req.session.userId, String(title).slice(0, 200), String(angle || '').slice(0, 500));
+    res.json({ ok: true, id: r.lastInsertRowid });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+app.delete('/api/idea-bank/:id', requireAuth, (req, res) => {
+  try {
+    db.prepare(`DELETE FROM idea_bank WHERE id = ? AND user_id = ?`).run(Number(req.params.id), req.session.userId);
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+// ---------- Test A/B de captions (2026-10-03, funcionalidad 5) ----------
+// Guarda una variante B. Después de 48h, se compara engagement.
+app.post('/api/posts/:id/ab-variant', requireAuth, express.json(), (req, res) => {
+  try {
+    const { caption_b } = req.body || {};
+    db.prepare(`UPDATE posts SET caption_b = ? WHERE id = ? AND user_id = ?`)
+      .run(String(caption_b || '').slice(0, 2000), Number(req.params.id), req.session.userId);
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+// ---------- Reutilizar winners (2026-10-03, funcionalidad 6) ----------
+// Crea un borrador variación de un posteo que funcionó bien.
+app.post('/api/posts/:id/variate', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const orig = db.prepare(`SELECT * FROM posts WHERE id = ? AND user_id = ?`).get(Number(req.params.id), uid);
+    if (!orig) return res.status(404).json({ ok: false, error: 'No encontrado' });
+
+    // Generar variación con IA (nuevo ángulo, mismo estilo que funcionó).
+    const apiKey = (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '';
+    let newCaption = orig.caption, newAngle = '';
+    if (apiKey) {
+      try {
+        const prompt = `Sos Posty, community manager. Este posteo LA ROMPIÓ:\n\n"${String(orig.caption).slice(0, 500)}"\n\nCreá una VARIACIÓN: mismo tema y energía, pero ángulo y texto diferentes. No copies, reinventá. Devolvé solo el caption nuevo, sin hashtags.`;
+        const r = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 300 }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const data = await r.json();
+        const text = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if (text && text.trim().length > 20) newCaption = text.trim();
+      } catch (e) { console.error('[variate] IA:', e.message); }
+    }
+
+    // Crear el borrador (sin imagen aún, se genera al programar).
+    const r = db.prepare(`
+      INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, tipo)
+      VALUES (?, ?, ?, ?, 'draft', ?, ?, ?)
+    `).run(uid, orig.image_path, newCaption, orig.hashtags || '', orig.media_type || 'image',
+            'Variación de #' + orig.id, orig.tipo || '');
+
+    res.json({ ok: true, id: r.lastInsertRowid, message: 'Variación creada como borrador ✨' });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+// ---------- Calendario inteligente (2026-10-03, funcionalidad 4) ----------
+app.get('/api/calendar/upcoming', requireAuth, (req, res) => {
+  try {
+    const { getRelevant } = require('./calendar');
+    const p = db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(req.session.userId);
+    const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 60);
+    res.json({ ok: true, events: getRelevant(p && p.category, days) });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
 // ---------- Demo pública self-service (sin login) ----------
@@ -8469,7 +8560,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261002-v32';
+const BUILD_ID = '20261003-v38';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
