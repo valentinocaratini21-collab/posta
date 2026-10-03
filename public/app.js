@@ -2880,16 +2880,9 @@ async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) 
 // al tocar "Hacerlo posteo" (se reutiliza la misma imagen, no se regenera).
 // "Otra imagen" genera una nueva con OTRO estilo (sin repetir).
 async function renderChatPreviews() {
-  // SIMPLIFICADO: la tarjeta del chat ya no genera imágenes on-demand (era
-  // frágil y lento). Muestra solo texto; la imagen se genera una sola vez en
-  // background cuando el usuario toca "Hacerlo posteo" (draftFromIdea).
-  const box = $('#chatPreviews');
-  if (!box) return;
-  const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
-  stopPrevThinking();
-  box.innerHTML = '';
-  CHAT_PREVIEWS = [];
-  return;
+  // REACTIVADO (2026-10-03): la tarjeta vuelve a mostrar la imagen.
+  // Con el backend v27 (sin reintentos en cadena) la generación es confiable.
+  return renderChatPreviews_OLD();
 }
 async function renderChatPreviews_OLD() {
   const box = $('#chatPreviews');
