@@ -7,7 +7,12 @@ const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
 const costs = require('./costs');
-costs.initCosts(db); // medición de gasto de IA (api_costs) + kill-switch diario
+const autopilot = require('./autopilot');
+costs.initCosts(db, {
+  // Techo mensual de IA por usuario (5% del plan, 2026-10-02): costs.js lo usa
+  // en assertAiOk para que ningún usuario supere su techo, pase lo que pase.
+  planFor: (uid) => planForUid(uid),
+}); // medición de gasto de IA (api_costs) + techo mensual por usuario
 const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
 const dogfood = require('./dogfood');
@@ -39,6 +44,21 @@ const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
+// Plan del usuario (para techo mensual de IA y límites diarios por plan).
+// Un solo lugar: costs.js lo usa vía planFor para el techo 5%.
+function planForUid(uid) {
+  try {
+    const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid);
+    return getPlan(u && u.plan_status === 'active' ? u.plan : TRIAL_PLAN);
+  } catch (e) { return getPlan(TRIAL_PLAN); }
+}
+const AI_LIMITS_DEFAULT = { chatPerDay: 40, weeksPerDay: 1, regensPerDay: 3 };
+function aiLimitsFor(uid) {
+  try {
+    const p = planForUid(uid);
+    return (p && p.ai) || AI_LIMITS_DEFAULT;
+  } catch (e) { return AI_LIMITS_DEFAULT; }
+}
 // Style Lock visual: contrato de Worker 1 (style-visual.js). Si el módulo aún no
 // existe, los fallbacks garantizan que nada se rompa: analyzeVisualStyle resuelve
 // {ok:false}, getVisualStyle devuelve null y visualStyleBlock ''.
@@ -328,7 +348,12 @@ function requireTrialValid(req, res, next) {
     const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.plan_status === 'trial' && trialEffectiveEnd(u) <= Date.now())
       return res.status(402).json({ error: 'trial_expired', message: '¡Ey! Se terminó tu prueba gratis 😢 Elegí tu plan y seguimos publicando juntos — Posty te extraña.' });
-  } catch (e) { /* ante la duda, dejar pasar */ }
+  } catch (e) {
+    // FAIL-CLOSED (2026-10-02): si la DB falla, NO dejamos pasar. Antes dejaba
+    // usar la IA sin trial válido ante cualquier error transitorio.
+    console.error('[requireTrialValid] DB error, bloqueando por seguridad:', e.message);
+    return res.status(503).json({ error: 'tmp_unavailable', message: 'Dame un segundo 😅 Probá de nuevo.' });
+  }
   next();
 }
 // Fin efectivo de la prueba: respeta la política vigente (TRIAL_DAYS desde la creación),
@@ -1348,6 +1373,46 @@ const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
 // ---------- Ajustes ----------
 app.get('/api/settings', requireAuth, (req, res) => res.json(maskSettings(getSettings(req.session.userId))));
 
+// ---------- Autopiloto (4 puntos, 2026-10-02) ----------
+// GET estado, POST toggle. El filtro de calidad decide qué sale solo.
+app.get('/api/autopilot', requireAuth, (req, res) => {
+  try {
+    const u = db.prepare('SELECT autopilot_enabled, clean_approvals, autopilot_offered FROM users WHERE id = ?').get(req.session.userId);
+    const clean = (u && u.clean_approvals) || 0;
+    res.json({
+      ok: true,
+      enabled: !!(u && u.autopilot_enabled),
+      clean_approvals: clean,
+      unlocked: clean >= 10 || !!(u && u.autopilot_offered) || !!(u && u.autopilot_enabled),
+      progress: Math.min(10, clean),
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude leer el estado 😅' });
+  }
+});
+app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
+  try {
+    const enabled = !!req.body.enabled;
+    db.prepare('UPDATE users SET autopilot_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, req.session.userId);
+    console.log(`[autopilot] usuario ${req.session.userId} ${enabled ? 'ACTIVÓ' : 'desactivó'} el autopiloto`);
+    res.json({ ok: true, enabled });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
+  }
+});
+// Chequear calidad de un borrador sin publicarlo.
+app.get('/api/posts/:id/quality', requireAuth, (req, res) => {
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(Number(req.params.id), req.session.userId);
+    if (!post) return res.status(404).json({ ok: false, error: 'No encontrado' });
+    const result = autopilot.qualityGate(post, db, MEDIA_DIR);
+    autopilot.saveQualityResult(db, post.id, result);
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude chequearlo 😅' });
+  }
+});
+
 app.put('/api/settings', requireAuth, (req, res) => {
   const { openai_key, demo_mode, meta_app_id, meta_app_secret, ig_embed_url, image_base_url, timezone, preferred_palette, brand_colors, pexels_key } = req.body || {};
   const cur = getSettings(req.session.userId);
@@ -1542,8 +1607,8 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
   // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
   try { costs.assertAiOk(uidChat); }
   catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ reply: e.message, idea: null }); throw e; }
-  // Rate limit: 150 mensajes/día por usuario (generoso, anti-abuso).
-  if (!costs.checkRate(uidChat, 'chat', 150).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
+  // Rate limit por plan: 40/80/150 mensajes/día (Esencial/Pro/Total). Anti-abuso.
+  if (!costs.checkRate(uidChat, 'chat', aiLimitsFor(uidChat).chatPerDay).ok) return res.json({ reply: costs.MSG_CHAT_RATE, idea: null });
   if (!Array.isArray(messages) || !messages.length) {
     if (typeof audio !== 'string' || !audio.startsWith('data:audio/')) return res.status(400).json({ error: 'Contanos tu idea' });
   }
@@ -1945,17 +2010,10 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       }
       if (n) revertApplied = { ok: true, count: n };
     }
-    // MODO OPCIONES con vista previa: generar la imagen de cada idea en paralelo
-    // para que el cliente las VEA en el chat, no solo las lea.
-    if (out.ideas && out.ideas.length > 1) {
-      await Promise.all(out.ideas.slice(0, 3).map(async (idea) => {
-        try {
-          const headline = makeHeadline(String(idea.titulo || idea.caption || idea.tema || ''), 6);
-          const p = await conceptShotGenerateQueued({ uid, idea: JSON.stringify(idea), tipo: idea.tipo || '', headline, refs: [] });
-          if (p) idea.image_url = absImageUrl(uid, p);
-        } catch (e) { console.error('[chat] preview opción:', e.message); }
-      }));
-    }
+    // MODO OPCIONES: las ideas se devuelven como TEXTO. La imagen se genera
+    // una sola vez cuando el usuario crea el posteo (draftFromIdea).
+    // (2026-10-02: eliminado el bloque que generaba 3 imágenes acá — tardaba
+    // 630s, el frontend cortaba a los 60s, y se quemaba costo en imágenes huérfanas.)
     // El cliente pidió VER sus posteos (```show_drafts): devolver los borradores
     // reales con imagen para que el chat los muestre. Nunca texto sin imágenes.
     let showDrafts = null;
@@ -1985,7 +2043,9 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     out.reply = fixPublishReply(out.reply, publishApplied);
     // Pre-generar la imagen AHORA en background: cuando el cliente abra la
     // tarjeta "IDEA LISTA", ya va a estar lista en vez de hacerlo esperar.
-    if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
+    // Pre-generación DESACTIVADA: la imagen se genera una sola vez cuando el
+    // usuario crea el posteo (draftFromIdea). La pregen causaba 429s y doble gasto.
+    // if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
   } catch (e) {
     console.error('[chat]', e.message);
@@ -2770,7 +2830,8 @@ app.post('/api/ads/webhook', async (req, res) => {
     res.status(200).json({ ok: true, balance_cents: after });
   } catch (e) {
     console.error('[posta] Webhook ads falló:', e.message);
-    res.status(200).json({ ok: false, error: 'retry' });
+    // FIX (2026-10-02): 500 para que MP reintente (antes 200 = pago perdido).
+    res.status(500).json({ ok: false, error: 'retry' });
   }
 });
 
@@ -2815,6 +2876,7 @@ app.get('/api/ads/recommendations', requireAuth, (req, res) => {
 
 // Crear una pauta: debita la billetera y la lanza en Meta (o queda pendiente)
 app.post('/api/ads/boost', requireAuth, async (req, res) => {
+  try {
   const postId = Number(req.body.post_id) || 0;
   const budgetCents = Math.round(Number(req.body.budget_cents) || 0);
   if (!postId) return res.status(400).json({ error: 'Elegí un posteo' });
@@ -2866,6 +2928,12 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
       ? '🚀 Tu pauta ya está corriendo en Instagram y Facebook.'
       : '¡Listo! Tu pauta quedó programada: la activamos en las próximas horas y te avisamos.',
   });
+  } catch (e) {
+    // FAIL-SAFE (2026-10-02): un throw acá antes mataba el proceso entero
+    // (unhandled rejection en Express 4 + Node 24). Ahora responde 500.
+    console.error('[ads/boost] error:', e.message);
+    try { if (!res.headersSent) res.status(500).json({ error: 'No pude crear la pauta 😅 Probá de nuevo.' }); } catch (e2) {}
+  }
 });
 
 // Historial de pautas (refresca métricas de las activas, best effort)
@@ -3176,7 +3244,8 @@ app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
   catch (e) { if (e && e.name === 'AiCapExceeded') return res.status(429).json({ error: e.message }); throw e; }
   // Rate limits: semana/autopilot máx 3/día, ideas máx 20/día (anti-abuso).
   // 429 para que el frontend muestre el mensaje amable tal cual (sin prefijo "Error:").
-  if (!costs.checkRate(uidIdeas, 'week', 3).ok) return res.status(429).json({ error: costs.MSG_WEEK_RATE });
+  // Rate limits por plan (2026-10-02): 1 semana/día en todos los planes.
+  if (!costs.checkRate(uidIdeas, 'week', aiLimitsFor(uidIdeas).weeksPerDay).ok) return res.status(429).json({ error: costs.MSG_WEEK_RATE });
   if (!costs.checkRate(uidIdeas, 'ideas', 20).ok) return res.status(429).json({ error: costs.MSG_IDEAS_RATE });
   const profile = getProfile(req.session.userId);
   const dna = readDna(req.session.userId);
@@ -3450,8 +3519,32 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   const r = db.prepare(
     'INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, source_topic, source_angle, carousel_paths, tipo, strategy_why, needs_review, script) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
   ).run(req.session.userId, image_path, caption || '', hashtags || '', scheduled_at || null, status, mt, source_topic || '', source_angle || '', cpaths, ['promo','tip','social','detras','novedad'].includes(tipo) ? tipo : '', String(strategy_why || '').slice(0, 500), status === 'draft' && trainingWheelsActive(req.session.userId) ? 1 : 0, scriptJson);
+  const newId = r.lastInsertRowid;
+
+  // 🚀 Autopiloto (2026-10-02): si está activado y el borrador pasa el filtro
+  // de calidad, se programa solo para mañana 10am. Si no pasa, queda en
+  // revisión manual.
+  let autopiloted = false;
+  if (status === 'draft') {
+    try {
+      const ap = autopilot.shouldAutopublish(req.session.userId, newId, db, MEDIA_DIR);
+      if (ap.ok) {
+        // Mañana 10am hora local del usuario (aprox: usamos America/Argentina/Buenos_Aires por defecto).
+        const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+        tomorrow.setHours(10, 0, 0, 0);
+        const schedAt = tomorrow.toISOString().slice(0, 16).replace('T', ' ');
+        db.prepare(`UPDATE posts SET status = 'scheduled', scheduled_at = ?, auto_published = 1 WHERE id = ?`)
+          .run(schedAt, newId);
+        autopiloted = true;
+        console.log(`[autopilot] post ${newId} programado solo para ${schedAt} (score ${ap.score})`);
+      }
+    } catch (e) {
+      console.error('[autopilot] no pude auto-programar:', e.message);
+    }
+  }
+
   ensureImageBaseUrl(db, req.session.userId, req);
-  res.json({ ok: true, id: r.lastInsertRowid });
+  res.json({ ok: true, id: newId, autopiloted });
 });
 
 app.patch('/api/posts/:id', requireAuth, (req, res) => {
@@ -3462,6 +3555,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
+  } else if (action === 'unschedule') {
+    // Frenar el autopiloto (2026-10-02): vuelve a borrador, no se publica.
+    db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0 WHERE id=?`).run(post.id);
+    console.log(`[autopilot] usuario ${req.session.userId} frenó el post ${post.id}`);
   } else if (action === 'save-draft') {
     // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
     // También acepta image_path para la regeneración de un borrador (↻).
@@ -3493,6 +3590,30 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       post.approval === 'rejected' ? 'pending' : (post.approval || 'pending'),
       post.id
     );
+    // 🎓 Autopiloto graduado (2026-10-02): si programó SIN editar, es un voto
+    // de confianza. A los 10, Posty ofrece el autopiloto.
+    if (!edited && post.status === 'draft') {
+      try {
+        db.prepare(`UPDATE users SET clean_approvals = COALESCE(clean_approvals, 0) + 1 WHERE id = ?`)
+          .run(req.session.userId);
+        const u = db.prepare(`SELECT clean_approvals, autopilot_offered, autopilot_enabled FROM users WHERE id = ?`)
+          .get(req.session.userId);
+        if (u && (u.clean_approvals || 0) >= 10 && !u.autopilot_offered && !u.autopilot_enabled) {
+          db.prepare(`UPDATE users SET autopilot_offered = 1 WHERE id = ?`).run(req.session.userId);
+          // Posty le ofrece el autopiloto en el chat.
+          try {
+            db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
+              .run(req.session.userId,
+                `🚀 Ya aprobaste 10 posteos sin cambiarles nada — ¡parece que nos entendemos!\n\n` +
+                `¿Querés que de ahora en más los publique solo? Te aviso 30 min antes de cada uno por si querés frenarlo.\n\n` +
+                `Activá el Autopiloto en Ajustes cuando quieras ✨`);
+          } catch (e) {}
+          console.log(`[autopilot] usuario ${req.session.userId} desbloqueó la oferta (${u.clean_approvals} aprobaciones limpias)`);
+        }
+      } catch (e) {
+        console.error('[autopilot] no pude contar aprobación limpia:', e.message);
+      }
+    }
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto antes de que salga
   }
   res.json({ ok: true });
@@ -5163,7 +5284,10 @@ app.post('/api/billing/webhook', async (req, res) => {
     res.status(200).json({ ok: true });
   } catch (e) {
     console.error('[posta] Webhook MP falló:', e.message);
-    res.status(200).json({ ok: false, error: 'retry' });
+    // FIX (2026-10-02): devolver 500 (no 200) para que MercadoPago REINTENTE.
+    // Antes devolvía 200 con ok:false y MP nunca reintentaba → usuario pagaba
+    // y quedaba sin plan para siempre.
+    res.status(500).json({ ok: false, error: 'retry' });
   }
 });
 
@@ -5817,6 +5941,8 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
   try {
     try { costs.assertAiOk(req.session.userId); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    if (!costs.checkRate(req.session.userId, 'regen', aiLimitsFor(req.session.userId).regensPerDay).ok)
+      return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
     const { refs = [], idea = '', angle = '', style = '' } = req.body || {};
     const profile = getProfile(req.session.userId);
     const settings = getSettings(req.session.userId);
@@ -5844,6 +5970,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
     const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
     form.append('size', '1024x1024');
+    form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY)
     const r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -6185,6 +6312,7 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
     form.append('size', '1024x1536'); // vertical 4:5: formato ideal para celular e Instagram
+    form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY): medium en vez de auto (auto puede resolver a high = 4x)
     r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -6195,7 +6323,7 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536' }), // vertical 4:5: formato ideal para celular e Instagram
+      body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536', quality: costs.IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
       signal: AbortSignal.timeout(120000),
     });
   }
@@ -6460,9 +6588,10 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     console.error('[concept-shot] openai:', e.message);
     throw new Error('OpenAI no pudo generar la imagen: ' + e.message);
   }
-  // Ojo crítico: QA de visión con gpt-4o-mini. Silencioso, rápido, máx 1 reintento.
-  // Si el QA falla por red, se sigue con la primera imagen (no se pierde el trabajo).
-  let qa = null;
+  // QA de visión DESACTIVADO (2026-10-02): causaba timeouts (hasta 6 reintentos
+  // encadenados = 15 min). Se genera una vez y se entrega. El usuario puede
+  // tocar "Otro estilo" si no le gusta.
+  let qa = null; /*
   try {
     qa = await qaImageB64(b64, {
       headline: cleanHeadline,
@@ -6493,7 +6622,9 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       }
     }
   }
-  // Chequeo automático de marca (Style Lock): gpt-4o verifica paleta, logo y
+  */
+  // Chequeo automático de marca (Style Lock): DESACTIVADO (2026-10-02, causa timeouts).
+  /*
   // línea visual. Si algún flag es false → regenerar pidiendo explícitamente lo
   // que falló (máx 2 reintentos). Si el chequeo falla por red/API → se acepta
   // la imagen (nunca bloquea). refNote viaja en las regeneraciones igual que el QA.
@@ -6517,7 +6648,9 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       break;
     }
   }
-  // QA visual extendido (tanda D): resolución mínima, aspect ratio = contrato y
+  */
+  // QA visual extendido DESACTIVADO (2026-10-02, causa timeouts).
+  /*
   // anti-duplicado visual de 7 días. Se avisa en el log y se regenera una vez;
   // si la regeneración falla, se entrega la última imagen (no se pierde el trabajo).
   if (!qaResolutionOk(b64)) {
@@ -6533,6 +6666,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     console.log(`[concept-shot] comparación visual: posible duplicado de los últimos 7 días ("${dedupe.caption}"), cambio la propuesta`);
     try { b64 = await genConceptImage(key, withStyle(prompt + `\nIMPORTANT: differentiate clearly from this recent post of the same business: "${dedupe.caption}". Different scene, different composition, different angle.`), absRefs, refNote, uid); } catch (e) { console.error('[concept-shot] regen dedupe:', e.message); }
   }
+  */
   const imgName = saveImageB64(b64);
   // Componer el titular con código (si hay): la imagen sale limpia de la IA
   // y el texto se renderiza perfecto — siempre entra, nunca se recorta.
@@ -6643,6 +6777,9 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    // Límite diario de regeneraciones por plan (2026-10-02): 3/5/8 (Esencial/Pro/Total).
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok)
+      return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
     const { idea = '', tipo = '', headline = '', refs = [], style = '', excludeStyles = [] } = req.body || {};
     const styleOut = {};
     const imagePath = await conceptShotGenerateQueued({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut });
@@ -6670,6 +6807,8 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok)
+      return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
     const postId = Number(req.params.id);
     const { style = '' } = req.body || {};
     const st = getStyle(style);
@@ -6702,6 +6841,8 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok)
+      return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
     const postId = Number(req.params.id);
     const { style = '' } = req.body || {};
     const st = getStyle(style);
@@ -6739,6 +6880,8 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
     const uid = req.session.userId;
     try { costs.assertAiOk(uid); }
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok)
+      return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
     const postId = Number(req.params.id);
     if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
@@ -7011,6 +7154,83 @@ app.post('/api/learning/record', requireAuth, express.json(), async (req, res) =
     const score = L.recordPerformance(db, { userId: uid, styleCode, intent, hookId, metrics: metrics || {} });
     res.json({ ok: true, score });
   } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+// ---------- Insights "te muestro que funciona" (Punto 3, 2026-10-02) ----------
+// Compara un posteo con tu promedio. Devuelve el múltiplo ("3.2x tu promedio").
+app.get('/api/insights/post/:id', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const post = db.prepare(`SELECT id, ig_likes, ig_comments, ig_reach, caption, published_at
+      FROM posts WHERE id = ? AND user_id = ?`).get(Number(req.params.id), uid);
+    if (!post) return res.status(404).json({ ok: false, error: 'No encontrado' });
+
+    // Promedio del usuario (últimos 30 días, solo publicados con métricas).
+    const avg = db.prepare(`
+      SELECT AVG(ig_likes + ig_comments * 3) AS avg_eng, COUNT(*) AS n
+      FROM posts WHERE user_id = ? AND status = 'published'
+      AND published_at > datetime('now', '-30 days')
+      AND (ig_likes > 0 OR ig_comments > 0)
+    `).get(uid);
+
+    const eng = (post.ig_likes || 0) + (post.ig_comments || 0) * 3;
+    const avgEng = (avg && avg.avg_eng) || 0;
+    const n = (avg && avg.n) || 0;
+
+    let vsAvg = null, label = '';
+    if (avgEng > 0 && eng > 0 && n >= 3) {
+      vsAvg = eng / avgEng;
+      if (vsAvg >= 2) label = `🔥 ${vsAvg.toFixed(1)}x tu promedio`;
+      else if (vsAvg >= 1.2) label = `✨ ${vsAvg.toFixed(1)}x tu promedio`;
+      else if (vsAvg < 0.5) label = `📉 Mitad de tu promedio`;
+    }
+
+    res.json({
+      ok: true,
+      likes: post.ig_likes || 0,
+      comments: post.ig_comments || 0,
+      reach: post.ig_reach || 0,
+      vs_avg: vsAvg ? Number(vsAvg.toFixed(2)) : null,
+      label,
+      sample_size: n,
+    });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// Promedio general del usuario para el resumen semanal.
+app.get('/api/insights/summary', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const week = db.prepare(`
+      SELECT COUNT(*) AS n, SUM(ig_likes) AS likes, SUM(ig_comments) AS comments, SUM(ig_reach) AS reach
+      FROM posts WHERE user_id = ? AND status = 'published'
+      AND published_at > datetime('now', '-7 days')
+    `).get(uid);
+    const best = db.prepare(`
+      SELECT id, caption, ig_likes, ig_comments, image_path
+      FROM posts WHERE user_id = ? AND status = 'published'
+      AND published_at > datetime('now', '-7 days')
+      ORDER BY (ig_likes + ig_comments * 3) DESC LIMIT 1
+    `).get(uid);
+    res.json({
+      ok: true,
+      week_posts: (week && week.n) || 0,
+      week_likes: (week && week.likes) || 0,
+      week_comments: (week && week.comments) || 0,
+      week_reach: (week && week.reach) || 0,
+      best_post: best ? {
+        id: best.id,
+        caption: String(best.caption || '').slice(0, 80),
+        likes: best.ig_likes || 0,
+        comments: best.ig_comments || 0,
+        image: best.image_path,
+      } : null,
+    });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // Capacidad real: 15 lugares por mes menos suscripciones activas
@@ -7914,7 +8134,46 @@ app.post('/api/website/analyze', requireAuth, async (req, res) => {
       writeDna(uid, { ...cur, ...patch });
     }
 
-    res.json({ ok: true, partial: !!r.partial, fields: websiteFilledFields(r) });
+    // Marca visual (2026-10-02): logo, paleta y fotos directo de la web.
+    // Esto es lo que hace que el onboarding sea mágico: "ya te conozco 👀".
+    let brandAssets = { logo: null, palette: [], photos: [] };
+    if (!isMeli) {
+      try {
+        const { extractLogoUrl, extractPalette, extractPhotos } = require('./website-study');
+        const homeHtml = await (async () => {
+          // Re-fetch liviano solo para assets (el analyze ya lo hizo, pero no lo expone).
+          const ctl = new AbortController();
+          const timer = setTimeout(() => ctl.abort(), 10000);
+          try {
+            const res = await fetch(url, { signal: ctl.signal, headers: { 'User-Agent': 'PostaBot/1.0' } });
+            return res.ok ? await res.text() : null;
+          } catch (e) { return null; }
+          finally { clearTimeout(timer); }
+        })();
+        if (homeHtml) {
+          const logo = extractLogoUrl(homeHtml, url);
+          const palette = await extractPalette(homeHtml, url);
+          const photos = extractPhotos(homeHtml, url);
+          brandAssets = { logo, palette, photos };
+
+          // Guardar paleta en el perfil si no tiene colores definidos.
+          if (palette.length >= 2) {
+            try {
+              const cur = db.prepare('SELECT brand_colors FROM profiles WHERE user_id = ?').get(uid);
+              if (!cur || !cur.brand_colors) {
+                db.prepare(`UPDATE profiles SET brand_colors = ? WHERE user_id = ?`)
+                  .run(JSON.stringify(palette.slice(0, 3)), uid);
+                console.log(`[website] paleta extraída para usuario ${uid}: ${palette.slice(0, 3).join(', ')}`);
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (e) {
+        console.error('[website] brand assets:', e.message);
+      }
+    }
+
+    res.json({ ok: true, partial: !!r.partial, fields: websiteFilledFields(r), brand: brandAssets });
   } catch (e) {
     console.error('[website/analyze]:', e.message);
     res.status(400).json({ error: e.message || 'No pudimos estudiar tu web, probá de nuevo en un rato' });
@@ -8190,7 +8449,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261001-v25';
+const BUILD_ID = '20261002-v32';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
@@ -8201,6 +8460,18 @@ app.get('/api/diag', requireAuth, (req, res) => res.json({ ok: true, build: BUIL
 
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async
+// sin try/catch = unhandled rejection = el proceso MUERE para todos los usuarios.
+// Esto lo convierte en log en vez de crash. (Igual hay que poner try/catch en
+// los handlers, esto es la red de seguridad.)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL-SAFE] unhandledRejection capturada (el servidor sigue vivo):', reason && reason.message ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL-SAFE] uncaughtException:', err && err.message ? err.message : err);
+  // En uncaughtException sí conviene reiniciar, pero loggeamos antes.
+});
 
 app.listen(PORT, () => {
   console.log(`[posta] Corriendo en http://localhost:${PORT} (${NODE_ENV})`);

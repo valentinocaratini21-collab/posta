@@ -93,6 +93,8 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN product_ref TEXT DEFAULT ''`); } cat
 try { db.exec(`ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Learning loop (learning.js): 1 = métricas ya ingeridas.
 try { db.exec(`ALTER TABLE posts ADD COLUMN learning_ingested INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Costos IA (costs.js, 2026-10-02): tokens cacheados por prompt caching.
+try { db.exec(`ALTER TABLE api_costs ADD COLUMN cached_tokens INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS hook_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -457,6 +459,7 @@ CREATE TABLE IF NOT EXISTS api_costs (
   model TEXT NOT NULL DEFAULT '',
   in_tokens INTEGER NOT NULL DEFAULT 0,
   out_tokens INTEGER NOT NULL DEFAULT 0,
+  cached_tokens INTEGER NOT NULL DEFAULT 0,
   images INTEGER NOT NULL DEFAULT 0,
   est_cost_usd REAL NOT NULL DEFAULT 0
 );
@@ -642,5 +645,25 @@ db.exec(`CREATE TABLE IF NOT EXISTS magic_tokens (
   used INTEGER DEFAULT 0
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_magic_tokens_email ON magic_tokens(email, created_at)`); } catch (e) { /* ya existe */ }
+
+// 4 PUNTOS (2026-10-02): autopiloto + proactivo + insights + resumen semanal.
+// Filtro de calidad: score 0-100 y detalle de checks en JSON.
+try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_enabled INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN proactive_enabled INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN quality_score INTEGER DEFAULT NULL`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN quality_checks TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN auto_published INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Engagement para insights ("te muestro que funciona").
+try { db.exec(`ALTER TABLE posts ADD COLUMN ig_likes INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN ig_comments INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN ig_reach INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN insights_updated_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Aviso pre-autopiloto (2026-10-02): push 30 min antes de publicar solo.
+try { db.exec(`ALTER TABLE posts ADD COLUMN autopilot_notified INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Autopiloto graduado (2026-10-02): se desbloquea a las 10 aprobaciones limpias.
+try { db.exec(`ALTER TABLE users ADD COLUMN clean_approvals INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_offered INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Proactivo estratégico: flag para no repetir el aviso de trial.
+try { db.exec(`ALTER TABLE users ADD COLUMN proactive_trial_warned INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 
 module.exports = db;

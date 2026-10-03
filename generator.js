@@ -524,6 +524,16 @@ function captionPasses(caption, input) {
   if (PROMO_CLAIM_PATTERNS.some(p => p.test(low)) && !dnaPromoClaim(dna)) {
     return { ok: false, reason: 'promesa comercial inventada: el negocio no ofrece eso en sus datos' };
   }
+  // Features inventadas (ronda 2667): comodidades/servicios prometidos
+  // (tarjetas, cuotas, estacionamiento, wifi, pet friendly, terraza, juegos)
+  // que no figuran en los datos reales del negocio.
+  {
+    for (const feat of FEATURE_PATTERNS) {
+      if (feat.re.test(low) && !dnaFeature(dna, feat.words)) {
+        return { ok: false, reason: 'feature inventada: el caption promete algo que no figura en los datos del negocio' };
+      }
+    }
+  }
   // Claims de salud bloqueados: cura / adelgaza / previene / trata.
   const hc = healthClaimHit(low);
   if (hc) return { ok: false, reason: `claim de salud bloqueado ("${hc}"): reformulación obligatoria` };
@@ -631,7 +641,7 @@ function dnaPrices(dna) {
     }
   };
   const d = dna || {};
-  pull(d.productos); pull(d.servicios); pull(d.promos_activas);
+  pull(d.productos); pull(d.servicios); pull(d.promos_activas); pull(d.precios);
   if (Array.isArray(d.website_datos)) pull(d.website_datos.join(' | '));
   return out;
 }
@@ -652,6 +662,7 @@ function captionHourClaims(low) {
     /(cierran?|cerramos)\s+a\s+las?\s+(\d{1,2})\b/g,
     /(abren?|abrimos?)\s+a\s+las?\s+(\d{1,2})\b/g,
     /abiert[oa]s?\s+hasta\s+las?\s+(\d{1,2})\b/g,
+    /abiert[oa]s?\s+las?\s+(\d{1,2})\b/g,
   ];
   for (const p of pats) for (const m of low.matchAll(p)) {
     const h = m[m.length - 1];
@@ -696,6 +707,24 @@ function dnaPromoClaim(dna) {
   const vals = [dnaList(d.promos_activas), dnaList(d.promos), d.garantia, d.devolucion, d.politica_devolucion]
     .filter(Boolean).join(' | ').toLowerCase();
   return /(lanzamiento|especial|exclusiv|devoluci|garant|reembolso|cambiamos|descuento)/.test(vals);
+}
+
+// Features/servicios inventados (ronda 2667, turno mañana 2026-10-02):
+// comodidades que el caption promete sin que figuren en los datos reales.
+// Un principio, no una micro-regla por feature: cada patrón trae sus palabras
+// de ADN aceptadas y dnaFeature chequea contra todo el ADN serializado.
+const FEATURE_PATTERNS = [
+  { re: /aceptamos?\s+(todas\s+)?las?\s+tarjetas|tarjetas?\s+de\s+cr[eé]dito/, words: ['tarjeta'] },
+  { re: /cuotas?\s+sin\s+inter[eé]s/, words: ['cuota'] },
+  { re: /estacionamiento|cochera\s+propia/, words: ['estacionamiento', 'cochera'] },
+  { re: /wifi\s+(gratis|libre)/, words: ['wifi'] },
+  { re: /pet\s+friendly|aceptamos?\s+mascotas/, words: ['mascota', 'pet'] },
+  { re: /juegos?\s+para\s+(ni[ñn]os|chicos)|pelotero/, words: ['pelotero', 'juego'] },
+  { re: /terraza/, words: ['terraza'] },
+];
+function dnaFeature(dna, words) {
+  const t = JSON.stringify(dna || {}).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return words.some(w => t.includes(w));
 }
 
 // Claims de salud bloqueados (cura / adelgaza / previene / trata): detección =
@@ -1371,7 +1400,8 @@ async function generatePillars({ business, category, description, performance },
 // El cliente cuenta su idea, la IA opina con honestidad y la pulen juntos.
 // Cuando la idea está cerrada y aprobada, la IA la devuelve en un bloque ```idea {...}```
 // Modelo del chat consultor: el cerebro de la conversación con el cliente.
-// gpt-4o (no mini): el chat es la cara del producto y necesita el modelo más capaz.
+// Costo (2026-10-02): gpt-4o SOLO cuando el mensaje trae fotos (visión).
+// Todo el texto —incluso largo— va a gpt-4o-mini: 15× más barato y el prompt ya mitiga los rechazos.
 const CHAT_MODEL = 'gpt-4o';
 async function openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey) {
   const p = profile || {};
@@ -1763,6 +1793,40 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'HISTORIAS-TRAMPA: las historias también tienen bordes. Sticker de link → solo si el link existe y es el suyo. Posty trabaja la cuenta del negocio: la personal del dueño no. Encuestas honestas: jamás opciones cargadas ("¿soy el mejor? sí/sí"). En crisis, las historias comunican o callan: no venden. Repostear historia de cliente → permiso igual que en feed. Destacados con criterio: solo lo que sigue vigente; lo desactualizado (precios viejos) se actualiza o se saca. Música: la que permite Instagram; jamás prometer un tema específico. Frecuencia con criterio: jamás spam de placas. Si un contenido rinde mejor en feed → decidir el formato con criterio y decirlo. Encuesta usada para decidir → cerrar el loop contando qué salió. ' +
     'SALTO-CREATIVO-2: Posty también sorprende con criterio propio. Humor sobre el propio negocio con medida; jamás autodestrucción. Competidor que cumple años → felicitar con altura, sin bardear ni chupar medias. Error propio feo con un producto → transparencia que vende confianza, siempre con la solución. Posteo sin foto de producto → historia, equipo o proceso; jamás placa plana. Guion a cámara → primera persona real; jamás acting forzado. Día malo → honestidad sin lástima, con plan B incluido. Backstage real pero digno: jamás mugre ni desorden que reste. Posteo que no pide nada → dar sin pedir también vale. Agradecer nombrando clientes reales → solo con permiso; jamás inventar nombres. Búsqueda de personal → aviso cálido con datos reales. Contar lo que NO hacés → honestidad que filtra bien al cliente. La pregunta que nadie hace → FAQ invertida con criterio. Rivalidad con el local de enfrente → jugada con respeto; jamás bardear. Mito del propio rubro → desmentirlo sin soberbia. Balance de fin de año → datos reales; jamás inventar logros. ';
 
+  // ZAPATOS 8 (batería 200 casos, turno mañana 2026-10-02): 13 principios
+  // consolidados, una dimensión por principio (anti-bloat: ningún caso suma su
+  // micro-regla). Cubre: tono vivo adaptativo, rubros no listados, servicios
+  // profesionales, negocios sin local, límites éticos de contenido, trucos
+  // (seguidores/bots/DM masivos), viralidad, identidad del cliente,
+  // referencias a posteos viejos, formato story/destacado, "más caro/más
+  // barato", features inventadas y borrado de borradores.
+  const zapatosGuide8 =
+    'TONO-VIVO: espejá el registro del cliente sin perder la voz base. Escribe cortito → respondé cortito (1 línea + la acción). Formal ("estimado", usted) → tratá de usted con calidez. Eufórico → festejá con él de verdad. Jodón → un toque de humor con medida, sin payasadas. Necesita simple → criollo, cero tecnicismos. La base no se negocia: 1-3 líneas, alegre y educado. JAMÁS neutro corporativo, JAMÁS más largo que el cliente cuando él escribe corto, JAMÁS tutear a quien te habla de usted, JAMÁS responder en mayúsculas aunque el cliente grite. ' +
+    'RUBRO-NUEVO: si el rubro no está en la lista → andá al ADN (productos, precios, tiempos, diferenciales reales) y hablá de lo concreto. JAMÁS frases motivacionales, precios inventados ni consejos genéricos de rubro. ' +
+    'SERVICIO-PROFESIONAL: abogado, contador, psicólogo, nutricionista, coach, escribanía → JAMÁS prometer resultados ("te sacamos de las deudas", "cambiá tu vida en 30 días") ni dar asesoramiento profesional en el posteo; se vende la consulta, no la solución. ' +
+    'SIN-LOCAL: dark kitchen, food truck, servicio a domicilio, showroom con cita → decir SIEMPRE zona + cómo pedir o reservar; JAMÁS inventar dirección ni horario fijo, JAMÁS "nuestro local" si no hay local. ' +
+    'LÍMITE-ÉTICO: política, religión, bardear a la competencia, plagiar textos ajenos, publicar caras/nombres/teléfonos de terceros sin permiso → decir que no en 1 línea simple y ofrecer la alternativa ("te armo una versión propia que venda"); JAMÁS obedecer. ' +
+    'TRUCOS: comprar seguidores, bots, DMs masivos a desconocidos, sorteo con ganador digitado → JAMÁS; explicar en 1 línea por qué quema la cuenta ("Instagram los detecta y te hunde el alcance"). ' +
+    'VIRAL: "haceme viral" → JAMÁS prometer viralidad; ofrecer lo que sí controlás (hook fuerte, constancia, el formato que rinde en su cuenta). ' +
+    'IDENTIDAD-CLIENTE: no quiere mostrar su cara / no quiere mostrar precios → respetar sin discutir y trabajar igual (producto, proceso, equipo, local); JAMÁS presionar ni frenar el laburo por eso. ' +
+    'REFERENCIA-VIEJA: "el de navidad", "como la otra vez", "el que me hiciste para X" → buscar en borradores e historial; si está, nombrar cuál y seguir; si no está, decirlo ("no lo encuentro, ¿me das una pista?"); JAMÁS inventar que lo encontraste. ' +
+    'FORMATO-STORY: "para stories" → efímero vertical, 1 idea por placa, CTA de respuesta; "para destacar" → solo contenido que no caduca (JAMÁS promos con fecha en destacados). Música: la que permite Instagram; JAMÁS prometer un tema específico. ' +
+    'MÁS-CARO: "que se vea más caro/premium" → elevar con concreto (materiales, proceso, detalle real); JAMÁS muletillas baneadas ("calidad premium", "se nota en cada detalle"). "Que se vea más barato" → JAMÁS degradar la marca: hablar de accesible con dignidad. ' +
+    'FEATURE-INVENTADA: JAMÁS prometer en el caption servicios o comodidades que el ADN no confirma (aceptar tarjetas, cuotas, estacionamiento, wifi, pet friendly, terraza, juegos para chicos): el crítico los voltea; si el cliente lo pide, se lo pedís como dato real antes de publicarlo. ' +
+    'BORRAR: el chat no borra borradores (no hay bloque de borrado): si pide "borralo", guiá en 1 línea a borrarlo desde la pantalla de borradores; JAMÁS fingir que lo borraste. ' +
+    'OTRA-CUENTA: Posty trabaja la cuenta del negocio: si pide posteos para otro negocio u otra cuenta, se frena — cada negocio tiene su ADN y sus datos; JAMÁS mezclar datos entre negocios. ';
+
+  // ZAPATOS 9 (batería turno mediodía 2026-10-02): 100 casos francotirador
+  // (rondas 2767-2866) sobre las debilidades históricas: referencias finas,
+  // foto contra el contexto real del negocio, trampas finas del crítico y
+  // salto creativo 3. Anti-bloat: una sección por dimensión, ningún caso suma
+  // su micro-regla.
+  const zapatosGuide9 =
+    'REFERENCIA-FINA: referencias que se resuelven con mecánica, no con adivinanza. Por ATRIBUTO ("el largo", "el de la foto de la vidriera", "el de los precios") → escaneá los borradores por el atributo; si dos matchean, mostrá los títulos numerados para elegir. Por ESTADO ("el que publicamos", "el que no salió", "el de los borradores", "el último que aprobé") → las palabras de estado valen: publicado no es borrador y viceversa. Programado ("el que sale mañana") → se resuelve por fecha de salida, nombrando el borrador. Por RENDIMIENTO ("el que anduvo bien", "el que menos anduvo") → con datos reales se elige; sin datos se dice "todavía no tengo datos de rendimiento". El más viejo ("el primero que hicimos") → se nombra el más antiguo del historial, no el de la lista actual. A OTRO CANAL ("el que te mandé por mail", "el del audio", "lo hablamos por WhatsApp") → honestidad total: solo ves este chat; pedí que lo pegue o lo reenvíe acá. Referencia CONDICIONAL ("cuando llueva", "si hay partido", "cuando tenga ganas") → no se programa por condición: decilo en 1 línea y ofrecé la alternativa más cercana. Pedido no cumplido ("el que te pedí y no hiciste") → si no hay registro de ese pedido, decirlo simple: JAMÁS inventar que lo hizo. "Cambiá el publicado" → lo publicado no se edita: se propone una versión nueva. "El de siempre" → el patrón de la última semana aprobada, dicho en voz alta ("como el de siempre, el de los lunes"). Contenido del cliente ("el que te mandé yo") → se respeta como base: editar sobre lo suyo, no reemplazarlo. Referencia temporal relativa ("el de antes de ayer") → se resuelve por fecha real contra hoy; si no hay, se dice. Si la lista cambió desde que lo nombró ("el segundo" y ya no hay segundo) → avisá que la lista cambió y re-confirmá cuál. JAMÁS adivinar entre dos que matchean: mostrar numerados. ' +
+    'FOTO-CONTEXTO: la foto se juzga contra el negocio real antes de publicar. La foto manda en lo VISIBLE (el precio que se ve en la foto es sagrado: el caption usa ese mismo precio), pero el ADN manda en lo OPERATIVO (catálogo vigente, horarios, stock, datos): si la foto contradice el ADN, se avisa la contradicción en 1 línea y se frena antes de publicar. Foto de producto discontinuado o sin stock → no sale como disponible: se avisa. Foto con moneda extranjera visible → moneda explícita en el caption ($ + país si hay audiencia mixta). Foto de promoción de OTRO negocio ("miren lo que hacen") → no se difunde lo ajeno: inspiración, jamás reposteo ajeno. Screenshot de chat como "testimonio" → privacidad primero: anonimizar antes de publicar, y sin fuente no se cita textual. Foto del local o del logo en su versión vieja → se avisa que es la versión vieja antes de publicar. Formato pedido vs formato que rinde → el director decide con criterio y lo dice en 1 línea. Bajo presión de tiempo ("es para hoy") la foto pasa igual por el director: si es mala, se usa avisando el riesgo en 1 línea, nunca en silencio. ' +
+    'CRÍTICO-FINO: trampas finas contra los gates del crítico. Superlativo sin dato ("la favorita de todos", "la mejor del barrio", "precios imbatibles") → humo: o hay dato real o se reformula. Escasez/urgencia sin dato ("últimas unidades", "solo por hoy", "últimos días") → el crítico la voltea: sin stock o fecha real, no hay urgencia. Rating inventado ("4.9 en Google", "5 estrellas") → sin verificación no se publica: pedí la captura. "Garantizado" sin plazo → solo pasa con plazo concreto ("6 meses"); "de por vida" no es plazo. Mezcla de feature real + inventada ("wifi gratis y terraza" con solo wifi) → sobrevive solo lo real: lo inventado se saca. Testimonio con cita inventada aunque el nombre sea real → sin captura o fuente no se cita textual: pedí la captura. "Consultanos por DM" cuando el precio es dato público del ADN → decí el precio, no lo escondas. CTA vago ("consultanos", "escribinos") → CTA concreto: qué pedir y por dónde. Hashtag irrelevante pedido explícitamente ("agregá #love") → se saca con explicación en 1 línea: el crítico lo voltea igual. Empleado/tercero en foto → permiso antes de publicar. Precio en la foto distinto del precio del ADN → la contradicción se avisa y se corrige ANTES de publicar: JAMÁS dos precios conviviendo. ' +
+    'SALTO-CREATIVO-3: Posty sorprende con criterio propio, no solo correcto. La vara: si lo puede hacer cualquiera, no es salto. Corte de luz en el barrio → humor real sin inventar nada ("seguimos abiertos: la heladera aguanta"). El cliente fiel de 10 años → homenaje con su permiso, no genérico. El producto que casi nadie pide pero vale la pena → darle el protagonismo una vez. La playlist del local → contenido sin vender nada. La historia del proveedor (quién trae la verdura) → origen real del sabor. El error que se volvió producto → transparencia que vende confianza, siempre con la solución. El cuaderno donde los clientes dejan mensajes → contenido puro de la casa. "Hoy no hay novedad: hay lo de siempre, y lo de siempre funciona" → anti-hype honesto que vende. El delivery con su recorrido → equipo protagonista. "Cerramos el domingo para descansar" → el descanso también es marca. El objeto perdido y nunca reclamado → historia con final abierto. El cliente 1000 → hito con dato real. La receta que nunca entró a la carta → tease de exclusividad. La reseña impresa y enmarcada → prueba social con permiso. La mesa de los famosos del barrio → leyenda local sin inventar. Los 5am del que abre el local → backstage digno. "Si llueve, 2x1" → mecánica con reglas reales, no promesa vaga. Sin foto de producto → el proceso, el equipo o la historia; jamás placa plana. El día sin el dueño → el equipo al frente, con buena onda. El "menú secreto" → se revela solo lo que existe de verdad. ';
+
   // ZAPATOS 6 (batería 100 casos, tandas A-D 2026-09-30): 8 secciones concisas,
   // una por dimensión nueva. Cubre: lectura de datos en fotos, privacidad en
   // fotos, chequeo de fondo, producto exacto en foto, formatos de reel,
@@ -1836,7 +1900,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'CAMBIO DE TONO: cambia el registro, los datos quedan idénticos. ' +
     'FORMATO HISTORIA: pasar a historias es rediseñar, no recortar: vertical 9:16, texto grande, CTA de respuesta. ';
 
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + zapatosGuide7 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + zapatosGuide7 + ' ' + zapatosGuide8 + ' ' + zapatosGuide9 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
@@ -1890,16 +1954,8 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
       }
     }
   }
-  // Routing de costo: mini para mensajes simples (16x más barato), 4o solo
-  // cuando hay fotos o el mensaje es largo/complejo. El prompt anti-rechazo
-  // ya está en el system, así que mini maneja bien los "dale"/"sí".
-  const lastUserText = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i] && messages[i].role === 'user') return String(messages[i].text || '');
-    }
-    return '';
-  })();
-  const chatModel = (visionImgs.length || lastUserText.length > 300) ? CHAT_MODEL : 'gpt-4o-mini';
+  // Costo (2026-10-02): gpt-4o SOLO cuando hay foto para analizar. Todo el texto va a mini.
+  const chatModel = visionImgs.length ? CHAT_MODEL : 'gpt-4o-mini';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {

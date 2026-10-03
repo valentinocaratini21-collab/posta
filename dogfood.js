@@ -26,7 +26,7 @@ const { fallbackImage } = require('./image-fallback');
 const { sendPush, pushConfigured } = require('./push');
 const { sendEmail, emailShell, emailConfigured } = require('./email');
 const { recordPerformance } = require('./learning');
-const { trackUsage } = require('./costs');
+const { trackUsage, IMAGE_QUALITY } = require('./costs');
 
 // ---------------------------------------------------------------------------
 // 1. House account: el brief unificado de Posty.
@@ -305,6 +305,7 @@ async function generateDogfoodImage({ angle, openaiKey, mediaDir, tmpName }) {
       form.append('image', new Blob([buf], { type: mime }), 'mascot' + ext);
       form.append('prompt', prompt + ' IMPORTANT: keep the EXACT same character from the reference photo — identical face, same bright blue body, darker blue accent patches, yellow antenna ball, yellow chest button, same Pixar 3D style. The character must be instantly recognizable as the same Posty. Only change the scene, pose and props around it.');
       form.append('size', '1024x1536');
+      form.append('quality', IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY)
       r = await fetch('https://api.openai.com/v1/images/edits', {
         method: 'POST', headers: { Authorization: `Bearer ${openaiKey}` }, body: form,
         signal: AbortSignal.timeout(120000),
@@ -313,7 +314,7 @@ async function generateDogfoodImage({ angle, openaiKey, mediaDir, tmpName }) {
       r = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
-        body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536' }),
+        body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536', quality: IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
         signal: AbortSignal.timeout(120000),
       });
     }

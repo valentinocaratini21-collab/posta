@@ -17,7 +17,7 @@ const { getCreds } = require('./insights');
 let costs = null;
 try { costs = require('./costs'); } catch (_) { costs = null; }
 
-const CAPTION_MODEL = 'gpt-4o';
+const CAPTION_MODEL = 'gpt-4o-mini'; // costo (2026-10-02): analiza TEXTO, no necesita visión
 const MIN_CAPTIONS = 6;   // mínimo de captions con texto para perfilar
 const MAX_CAPTIONS = 9;   // tope que se analiza
 

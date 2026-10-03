@@ -53,6 +53,17 @@ function extractCleanText(html) {
 // Fetch con timeout
 // ---------------------------------------------------------------------------
 async function fetchHtml(url) {
+  // SSRF protection (2026-10-02): bloquear IPs privadas antes de fetchear.
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' ||
+        host.startsWith('10.') || host.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host) ||
+        host === '169.254.169.254' || host.endsWith('.internal')) {
+      return null;
+    }
+  } catch (e) { return null; }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -60,7 +71,7 @@ async function fetchHtml(url) {
       signal: ctl.signal,
       redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PostaBot/1.0; +https://postahacetodo.com)',
+        'User-Agent': 'Mozilla/5.0 (compatible; PostaBot/1.0; +https://postyhacetodo.com)',
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'es-AR,es;q=0.9',
       },
@@ -213,4 +224,199 @@ async function analyzeWebsite(url, apiKey) {
   };
 }
 
-module.exports = { analyzeWebsite, extractCleanText };
+// ---------------------------------------------------------------------------
+// Brand assets: logo, paleta, fotos (2026-10-02).
+// Extrae la identidad visual directo de la web del cliente.
+// ---------------------------------------------------------------------------
+
+/**
+ * extractLogoUrl(html, baseUrl): busca el logo en orden de prioridad:
+ * 1. <img> con "logo" en src/alt/class (el del header)
+ * 2. og:image / twitter:image
+ * 3. apple-touch-icon
+ * 4. favicon (último recurso, chico)
+ */
+function extractLogoUrl(html, baseUrl) {
+  const s = String(html || '');
+  const resolve = (u) => {
+    try { return new URL(u, baseUrl).href; } catch (e) { return null; }
+  };
+
+  // 1. <img> con logo en src, alt o class.
+  const imgRe = /<img[^>]+>/gi;
+  let m;
+  while ((m = imgRe.exec(s)) !== null) {
+    const tag = m[0];
+    const srcM = /src=["']([^"']+)["']/i.exec(tag);
+    if (!srcM) continue;
+    const src = srcM[1];
+    const altM = /alt=["']([^"']*)["']/i.exec(tag);
+    const clsM = /class=["']([^"']*)["']/i.exec(tag);
+    const haystack = (src + ' ' + (altM ? altM[1] : '') + ' ' + (clsM ? clsM[1] : '')).toLowerCase();
+    if (haystack.includes('logo') && !haystack.includes('favicon')) {
+      const url = resolve(src);
+      if (url) return { url, source: 'img-logo' };
+    }
+  }
+
+  // 2. og:image / twitter:image.
+  const ogM = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(s) ||
+              /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(s);
+  if (ogM) {
+    const url = resolve(ogM[1]);
+    if (url) return { url, source: 'og:image' };
+  }
+
+  // 3. apple-touch-icon.
+  const appleM = /<link[^>]+rel=["']apple-touch-icon["'][^>]+href=["']([^"']+)["']/i.exec(s);
+  if (appleM) {
+    const url = resolve(appleM[1]);
+    if (url) return { url, source: 'apple-touch-icon' };
+  }
+
+  // 4. favicon.
+  const favM = /<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i.exec(s);
+  if (favM) {
+    const url = resolve(favM[1]);
+    if (url) return { url, source: 'favicon' };
+  }
+
+  return null;
+}
+
+/**
+ * extractPalette(html, baseUrl): saca los colores de marca.
+ * 1. theme-color meta tag (el más confiable)
+ * 2. Colores hex en <style> inline y atributos style=""
+ * Devuelve array de hex únicos, ordenados por frecuencia, sin grises.
+ */
+async function extractPalette(html, baseUrl) {
+  const s = String(html || '');
+  const colors = {};
+
+  // 1. theme-color.
+  const themeM = /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)["']/i.exec(s);
+  if (themeM && /^#[0-9a-f]{6}$/i.test(themeM[1])) {
+    colors[themeM[1].toUpperCase()] = 100; // peso alto
+  }
+
+  // 2. Hex en <style> tags.
+  const styleRe = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let sm;
+  while ((sm = styleRe.exec(s)) !== null) {
+    countHex(sm[1], colors, 2);
+  }
+
+  // 3. Hex en style="" inline.
+  const inlineRe = /style=["']([^"']*)["']/gi;
+  let im;
+  while ((im = inlineRe.exec(s)) !== null) {
+    countHex(im[1], colors, 1);
+  }
+
+  // 4. CSS externos (máx 2 archivos, liviano).
+  try {
+    const cssRe = /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']+)["']/gi;
+    let cm, count = 0;
+    while ((cm = cssRe.exec(s)) !== null && count < 2) {
+      try {
+        const cssUrl = new URL(cm[1], baseUrl).href;
+        const css = await fetchCss(cssUrl);
+        if (css) { countHex(css, colors, 1); count++; }
+      } catch (e) {}
+    }
+  } catch (e) {}
+
+  // Filtrar grises/blancos/negros y ordenar por frecuencia.
+  const result = Object.entries(colors)
+    .filter(([hex]) => !isGrayscale(hex))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([hex]) => hex);
+
+  return result;
+}
+
+function countHex(text, colors, weight) {
+  const hexRe = /#([0-9a-f]{6}|[0-9a-f]{3})\b/gi;
+  let m;
+  while ((m = hexRe.exec(text)) !== null) {
+    let hex = m[1].toUpperCase();
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    hex = '#' + hex;
+    colors[hex] = (colors[hex] || 0) + weight;
+  }
+}
+
+function isGrayscale(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  // Gris si la saturación es muy baja, o es casi blanco/negro.
+  if (max - min < 24) return true;
+  if (max < 32) return true;  // casi negro
+  if (min > 232) return true; // casi blanco
+  return false;
+}
+
+async function fetchCss(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (host === 'localhost' || host.startsWith('10.') || host.startsWith('192.168.')) return null;
+  } catch (e) { return null; }
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const res = await fetch(url, { signal: ctl.signal, redirect: 'follow' });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text.slice(0, 200 * 1024); // tope 200KB
+  } catch (e) { return null; }
+  finally { clearTimeout(timer); }
+}
+
+/**
+ * extractPhotos(html, baseUrl): fotos grandes del sitio (no logos, no iconos).
+ * Busca og:image, hero images, y <img> grandes. Máx 6.
+ */
+function extractPhotos(html, baseUrl) {
+  const s = String(html || '');
+  const photos = [];
+  const seen = new Set();
+  const resolve = (u) => {
+    try {
+      const url = new URL(u, baseUrl).href;
+      if (seen.has(url)) return null;
+      seen.add(url);
+      return url;
+    } catch (e) { return null; }
+  };
+
+  // og:image primero (suele ser representativa).
+  const ogM = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(s);
+  if (ogM) {
+    const url = resolve(ogM[1]);
+    if (url) photos.push({ url, source: 'og:image' });
+  }
+
+  // <img> grandes (con width/height o sin atributos de icono).
+  const imgRe = /<img[^>]+>/gi;
+  let m;
+  while ((m = imgRe.exec(s)) !== null && photos.length < 6) {
+    const tag = m[0];
+    const srcM = /src=["']([^"']+)["']/i.exec(tag);
+    if (!srcM) continue;
+    const src = srcM[1].toLowerCase();
+    // Saltear iconos, logos, avatares, tracking pixels.
+    if (/icon|logo|avatar|pixel|spinner|loader|badge/i.test(src)) continue;
+    if (/\.svg(\?|$)/i.test(src)) continue; // SVGs son gráficos, no fotos
+    const url = resolve(srcM[1]);
+    if (url) photos.push({ url, source: 'img' });
+  }
+
+  return photos.slice(0, 6);
+}
+
+module.exports = { analyzeWebsite, extractCleanText, extractLogoUrl, extractPalette, extractPhotos };

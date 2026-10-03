@@ -355,6 +355,8 @@ function startScheduler(db) {
   cron.schedule('* * * * *', () => {
     processDuePosts(db);
     processApprovalNotifications(db).catch((e) => console.error('[notif]', e.message));
+    // Aviso pre-autopiloto (2026-10-02): push 30 min antes de publicar solo.
+    autopilotPreNotify(db).catch((e) => console.error('[autopilot-notify]', e.message));
   });
   console.log('[posta] Scheduler activo (cada 1 minuto)');
   // Chequeo inicial a los 10 segundos
@@ -382,6 +384,16 @@ function startScheduler(db) {
     console.log('[posta] Resumen semanal de Posty: lunes 09:00 (Buenos Aires)');
   } catch (e) {
     console.error('[posty-digest] no se pudo programar:', e.message);
+  }
+  // 🎉 Momento WOW semanal (Punto 4, 2026-10-02): lunes 09:30 (Buenos Aires).
+  // "Qué bueno que tengo esto": tu semana en números + tu mejor posteo.
+  try {
+    cron.schedule('30 9 * * 1', () => {
+      weeklyWowSummary(db).catch((e) => console.error('[wow-semanal]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Momento WOW semanal: lunes 09:30 (Buenos Aires)');
+  } catch (e) {
+    console.error('[wow-semanal] no se pudo programar:', e.message);
   }
   // Email "tu semana te está esperando" (abandono de trial): todos los días
   // 10:00 (Buenos Aires). Solo leads NO registrados con email, 24-30h después
@@ -449,6 +461,16 @@ function startScheduler(db) {
     console.log('[posta] Email día 2 "publicá tu primero": 14:00 (Buenos Aires)');
   } catch (e) {
     console.error('[primer-posteo] no se pudo programar:', e.message);
+  }
+  // 💡 Posty proactivo (Punto 2, 2026-10-02): todos los días 11:00 (Buenos Aires).
+  // Si el usuario no estuvo activo, Posty le escribe con una idea espontánea.
+  try {
+    cron.schedule('0 11 * * *', () => {
+      proactiveIdeas(db).catch((e) => console.error('[proactivo]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Posty proactivo: todos los días 11:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[proactivo] no se pudo programar:', e.message);
   }
   // Conciliación de descuentos con MercadoPago: cada 12 horas
   try {
@@ -1382,6 +1404,168 @@ function newSourcesSince(db, userId, since) {
     if (at && at > since) out.push(`estudié ${phrase}`);
   }
   return out;
+}
+
+// 🎉 Momento WOW semanal (Punto 4, 2026-10-02).
+// Lunes 09:30: "tu semana en números". Hace que el usuario piense
+// "qué bueno que tengo esto". Solo si publicó al menos 1 posteo.
+async function weeklyWowSummary(db) {
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT DISTINCT u.id, u.email, p.business_name
+      FROM users u
+      LEFT JOIN profiles p ON p.user_id = u.id
+      WHERE EXISTS (
+        SELECT 1 FROM posts 
+        WHERE user_id = u.id AND status = 'published'
+        AND published_at > datetime('now', '-7 days')
+      )
+    `).all();
+  } catch (e) { console.error('[wow-semanal]', e.message); return; }
+
+  for (const u of users) {
+    try {
+      const stats = db.prepare(`
+        SELECT COUNT(*) AS n, COALESCE(SUM(ig_likes), 0) AS likes,
+               COALESCE(SUM(ig_comments), 0) AS comments,
+               COALESCE(SUM(ig_reach), 0) AS reach
+        FROM posts WHERE user_id = ? AND status = 'published'
+        AND published_at > datetime('now', '-7 days')
+      `).get(u.id);
+
+      const best = db.prepare(`
+        SELECT caption, ig_likes, ig_comments
+        FROM posts WHERE user_id = ? AND status = 'published'
+        AND published_at > datetime('now', '-7 days')
+        ORDER BY (COALESCE(ig_likes, 0) + COALESCE(ig_comments, 0) * 3) DESC LIMIT 1
+      `).get(u.id);
+
+      const n = (stats && stats.n) || 0;
+      if (!n) continue;
+
+      const name = (u.business_name || '').trim();
+      let msg = `🎉 ¡Tu semana en Posty${name ? ', ' + name : ''}!\n\n`;
+      msg += `📸 ${n} posteo${n > 1 ? 's' : ''} publicado${n > 1 ? 's' : ''}\n`;
+      if (stats.likes > 0) msg += `❤️ ${stats.likes} likes\n`;
+      if (stats.comments > 0) msg += `💬 ${stats.comments} comentarios\n`;
+      if (stats.reach > 0) msg += `👁️ ${stats.reach} alcance\n`;
+      if (best && (best.ig_likes > 0 || best.ig_comments > 0)) {
+        const cap = String(best.caption || '').split('\n')[0].slice(0, 60);
+        msg += `\n🏆 Tu mejor posteo: "${cap}..."\n`;
+        msg += `   ${best.ig_likes || 0} likes, ${best.ig_comments || 0} comentarios`;
+      }
+      msg += `\n\nSeguimos esta semana 💪`;
+
+      // Guardar en el chat del usuario.
+      try {
+        db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
+          .run(u.id, msg);
+      } catch (e) {}
+
+      // Push si está suscrito.
+      try {
+        const { sendPushToUser } = require('./push');
+        await sendPushToUser(db, u.id, {
+          title: '🎉 Tu semana en Posty',
+          body: `${n} posteos publicados. Tocá para ver cómo te fue.`,
+          url: '/#/app/semana',
+        });
+      } catch (e) {}
+
+      console.log(`[wow-semanal] enviado a usuario ${u.id} (${n} posteos)`);
+    } catch (e) {
+      console.error(`[wow-semanal] usuario ${u.id}:`, e.message);
+    }
+  }
+}
+
+// 💡 Posty proactivo ESTRATÉGICO (2026-10-02, v2).
+// 6 triggers por prioridad: trial, racha, borradores, fotos, winner, oportunidad.
+// Cada mensaje tiene un motivo. No hablamos "porque sí".
+async function proactiveIdeas(db) {
+  const { checkTriggers, logTrigger } = require('./proactive');
+  let users = [];
+  try {
+    users = db.prepare(`
+      SELECT u.id
+      FROM users u
+      WHERE COALESCE(u.plan_status, 'trial') IN ('trial', 'active')
+      AND COALESCE(u.proactive_enabled, 1) = 1
+    `).all();
+  } catch (e) { console.error('[proactivo]', e.message); return; }
+
+  for (const u of users) {
+    try {
+      const trigger = checkTriggers(db, u.id);
+      if (!trigger) continue;
+
+      // Guardar en el chat.
+      try {
+        db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
+          .run(u.id, trigger.message);
+      } catch (e) {}
+
+      // Push.
+      try {
+        const { sendPushToUser } = require('./push');
+        await sendPushToUser(db, u.id, {
+          title: trigger.push_title,
+          body: trigger.push_body,
+          url: '/#/app/chat',
+        });
+      } catch (e) {}
+
+      logTrigger(db, u.id, trigger);
+      console.log(`[proactivo] trigger "${trigger.type}" enviado a usuario ${u.id}`);
+    } catch (e) {
+      console.error(`[proactivo] usuario ${u.id}:`, e.message);
+    }
+  }
+}
+
+// ⏰ Aviso pre-autopiloto (2026-10-02, opción 2).
+// 30 min antes de que el autopiloto publique solo, manda push:
+// "En 30 min publico esto 👆 Tocá para frenarlo".
+// Solo una vez por posteo (autopilot_notified).
+async function autopilotPreNotify(db) {
+  let posts = [];
+  try {
+    posts = db.prepare(`
+      SELECT p.id, p.user_id, p.caption, p.image_path, p.scheduled_at
+      FROM posts p
+      WHERE p.auto_published = 1
+      AND p.status = 'scheduled'
+      AND COALESCE(p.autopilot_notified, 0) = 0
+      AND p.scheduled_at > datetime('now', '+25 minutes')
+      AND p.scheduled_at <= datetime('now', '+35 minutes')
+    `).all();
+  } catch (e) { return; }
+
+  for (const p of posts) {
+    try {
+      // Marcar como notificado ANTES de enviar (evita doble push si falla).
+      db.prepare(`UPDATE posts SET autopilot_notified = 1 WHERE id = ?`).run(p.id);
+
+      const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
+      const { sendPushToUser } = require('./push');
+      await sendPushToUser(db, p.user_id, {
+        title: '🚀 Publico en 30 min',
+        body: `"${cap}..." — tocá para verlo o frenarlo`,
+        url: `/#/app/semana?post=${p.id}`,
+      });
+
+      // También en el chat.
+      try {
+        db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
+          .run(p.user_id, `🚀 En 30 minutos publico este posteo:\n\n"${cap}..."\n\nSi querés frenarlo o cambiarlo, tocá acá 👆`);
+      } catch (e) {}
+
+      console.log(`[autopilot-notify] aviso enviado para post ${p.id} (usuario ${p.user_id})`);
+    } catch (e) {
+      console.error(`[autopilot-notify] post ${p.id}:`, e.message);
+    }
+  }
 }
 
 async function postyWeeklyDigest(db) {
