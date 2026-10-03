@@ -740,10 +740,6 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .st-delta.up{background:#E2F5EA;color:#147A3C}
 .st-delta.down{background:#FBE9E7;color:#B3402E}
 /* Empty state con vista previa: sin datos no hay tarjetas, solo la promesa */
-.st-preview{margin-top:18px;padding-top:16px;border-top:1.5px dashed var(--line)}
-.st-preview-tag{display:inline-block;font-size:11px;font-weight:800;color:var(--cel);background:#E8F4FB;border-radius:999px;padding:4px 12px;margin-bottom:12px;letter-spacing:.04em;text-transform:uppercase}
-.st-skel{pointer-events:none}
-.st-skel-num{height:30px;border-radius:8px;background:linear-gradient(90deg,#EAF2F8 25%,#F7FBFE 50%,#EAF2F8 75%);background-size:200% 100%;animation:stShimmer 1.6s infinite;margin-bottom:8px;max-width:110px}
 @keyframes stShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media (max-width:420px){
   .st-card{padding:15px 13px;min-height:96px}
@@ -1587,15 +1583,15 @@ textarea.in{resize:vertical;min-height:96px}
 .sched-wrap{max-width:920px;margin:0 auto}
 .sched-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:6px 0 4px;flex-wrap:wrap}
 .sched-nav{display:flex;gap:6px;align-items:center}
-.sched-weeklabel{font-size:13px;font-weight:700;color:var(--mut);margin:2px 0 12px}
-.sched-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
-.sched-col{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:132px}
+.sched-daylabel{font-size:21px;font-weight:800;color:var(--txt);margin:2px 0 12px;text-transform:capitalize;letter-spacing:-.01em}
+.sched-grid{display:block;max-width:560px}
+.sched-col{background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden;display:flex;flex-direction:column;min-height:200px;box-shadow:0 10px 34px rgba(10,30,51,.09)}
 .sched-col.today{border:2px solid var(--cel);box-shadow:0 8px 24px rgba(39,147,200,.20);background:linear-gradient(180deg,#F1F8FE 0%,#ffffff 55%)}
-.sched-colhead{font-size:11.5px;font-weight:800;color:var(--mut);padding:8px 10px;border-bottom:1px solid var(--line-soft);text-transform:capitalize;background:var(--bg2)}
+.sched-colhead{font-size:15px;font-weight:800;color:var(--mut);padding:12px 16px;border-bottom:1px solid var(--line-soft);text-transform:capitalize;background:var(--bg2)}
 .sched-col.today .sched-colhead{background:var(--cel);color:#fff;border-bottom-color:var(--cel)}
 .sched-today{display:inline-block;background:var(--cel);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:2px 8px;margin-left:4px;text-transform:none}
 .sched-col.today .sched-today{background:rgba(255,255,255,.28)}
-.sched-colbody{padding:8px;display:flex;flex-direction:column;gap:8px;flex:1}
+.sched-colbody{padding:14px;display:flex;flex-direction:column;gap:12px;flex:1}
 .sched-card{margin-top:0;border:none;background:var(--bg2);border-radius:12px;padding:6px;cursor:pointer;text-align:left;font-family:inherit;display:flex;flex-direction:column;gap:6px;touch-action:manipulation;box-shadow:0 2px 10px rgba(10,30,51,.07)}
 .sched-card:active{transform:scale(.98)}
 .sched-thumbwrap{position:relative;display:block}
@@ -1663,6 +1659,8 @@ textarea.in{resize:vertical;min-height:96px}
 .ptoast-acts{display:flex;gap:8px;flex:none}
 .ptoast-btn{border:1.5px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:800;font-family:inherit;cursor:pointer;touch-action:manipulation;white-space:nowrap}
 .ptoast-btn:active{background:rgba(255,255,255,.15)}
+.sched-nextpost{margin-top:14px;background:#F1F8FE;border:1.5px solid var(--cel-line);border-radius:16px;padding:13px 16px;font-size:14px;color:var(--txt);text-transform:capitalize}
+.sched-nextpost b{color:var(--cel)}
 .sched-ghost{border:1.5px dashed var(--line);background:transparent;border-radius:12px;padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--dim);font-family:inherit;width:100%;flex:1;min-height:76px;touch-action:manipulation}
 .sched-ghost:active{transform:scale(.97);border-color:var(--cel);color:var(--cel)}
 .sg-plus{font-size:22px;font-weight:300;line-height:1}
@@ -1674,8 +1672,8 @@ textarea.in{resize:vertical;min-height:96px}
 .sched-emptyhero b{font-size:14.5px;color:var(--txt)}
 .sched-emptyhero p{font-size:12.5px;color:var(--mut);margin:4px 0 0;line-height:1.5}
 @media(max-width:1023px){
-  .sched-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:10px;padding:2px 2px 10px}
-  .sched-col{flex:0 0 212px;scroll-snap-align:start}
+  .sched-grid{max-width:none}
+  .sched-daylabel{font-size:19px}
 }
 .star-btn{color:#E8A100;font-size:16px;line-height:1;padding:8px 10px}
 .star-btn:hover{color:#F5B800;transform:scale(1.12)}
@@ -1783,3 +1781,15 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-prev-single{cursor:default;max-width:280px}
 .chat-prev-single img{width:100%;height:auto;display:block}
 .chat-prev-loading{min-height:120px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--mut);background:var(--bg-soft);border-radius:14px;flex:1}
+
+/* Tus números: tags de vista previa (estado vacío, sin apariencia de carga) */
+.st-empty-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+.st-empty-tags span{background:#f2f7fb;color:#5a768c;font-size:13px;font-weight:600;padding:7px 14px;border-radius:999px;border:1px dashed #cfdbe5}
+
+/* Schedule de un día: tarjetas de posteo más grandes y lindas */
+.sched-col .pcard-col{padding:10px;gap:10px;border-radius:16px}
+.sched-col .pcard-meta b{font-size:14px}
+.sched-col .pcard-cap{font-size:14px;line-height:1.55}
+.sched-col .pcard-col .pcard-cap{-webkit-line-clamp:4}
+.sched-col .pcard-actions button{padding:8px 15px;font-size:13px}
+.sched-col .pcard-badge{font-size:11px}

@@ -7770,7 +7770,7 @@ async function trialExpiredBannerHTML() {
 }
 
 /* ---------- SCHEDULE: calendario de posteos programados ---------- */
-let SCHED_WEEK_OFFSET = 0; // 0 = semana actual; no se permite ir al pasado
+let SCHED_DAY_OFFSET = 0; // 0 = hoy; navegacion dia por dia
 /* ---------- Tarjeta de fallidos + "Ya salió" (viven en Schedule) ---------- */
 // Posteos que fallaron al publicar, con botón de reintento (usa /api/posts/:id/publish-now).
 function failedCardHTML(failed) {
@@ -7872,36 +7872,41 @@ async function scheduleView() {
     .map(p => ({ p, d: parse(p.published_at || p.scheduled_at), done: true }))
     .filter(x => !isNaN(x.d))
     .sort((a, b) => a.d - b.d);
-  // Lunes de la semana visible (offset en semanas desde la actual)
+  // Día visible (offset en días desde hoy): se muestra UN día a la vez.
   const now = new Date();
-  const mon = new Date(now);
-  mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7) + SCHED_WEEK_OFFSET * 7);
-  mon.setHours(12, 0, 0, 0);
-  const days = [];
-  for (let i = 0; i < 7; i++) days.push(new Date(mon.getTime() + i * 86400000));
+  const day = new Date(now);
+  day.setDate(day.getDate() + SCHED_DAY_OFFSET);
+  day.setHours(12, 0, 0, 0);
+  const days = [day];
   const fmtDay = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
   const fmtHour = (d) => { try { return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz }); } catch (e) { return ''; } };
   const todayK = dayKey(new Date());
-  const weekLabel = (() => {
-    try {
-      const a = days[0].toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: tz });
-      const b = days[6].toLocaleDateString('es-AR', { day: 'numeric', month: 'long', timeZone: tz });
-      return `${a} – ${b}`;
-    } catch (e) { return ''; }
+  const dayLabel = (() => {
+    try { return days[0].toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }); }
+    catch (e) { return ''; }
   })();
   const dayLong = (d) => { try { return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz }); } catch (e) { return ''; } };
   // Pulso de la semana: resumen vivo arriba del calendario.
-  const weekSchedCount = scheduled.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
-  const weekPubCount = publishedThisWeek.filter(x => days.some(d => dayKey(d) === dayKey(x.d))).length;
+  const daySchedCount = scheduled.filter(x => dayKey(x.d) === dayKey(days[0])).length;
+  const dayPubCount = publishedThisWeek.filter(x => dayKey(x.d) === dayKey(days[0])).length;
   let pulseHTML = '';
-  if (SCHED_WEEK_OFFSET === 0) {
+  {
     const parts = [];
-    if (weekSchedCount) parts.push(`📮 ${weekSchedCount} programado${weekSchedCount > 1 ? 's' : ''}`);
-    if (weekPubCount) parts.push(`✅ ${weekPubCount} publicado${weekPubCount > 1 ? 's' : ''}`);
-    if (drafts.length) parts.push(`📝 ${drafts.length} borrador${drafts.length > 1 ? 'es' : ''}`);
-    pulseHTML = parts.length ? parts.join(' <span class="sched-pulse-sep">·</span> ') : '🕊️ Tu semana está vacía';
-  } else {
-    pulseHTML = weekSchedCount ? `📮 ${weekSchedCount} programado${weekSchedCount > 1 ? 's' : ''}` : '🕊️ Nada esa semana';
+    if (daySchedCount) parts.push(`📮 ${daySchedCount} programado${daySchedCount > 1 ? 's' : ''}`);
+    if (dayPubCount) parts.push(`✅ ${dayPubCount} publicado${dayPubCount > 1 ? 's' : ''}`);
+    if (SCHED_DAY_OFFSET === 0 && drafts.length) parts.push(`📝 ${drafts.length} borrador${drafts.length > 1 ? 'es' : ''}`);
+    pulseHTML = parts.length ? parts.join(' <span class="sched-pulse-sep">·</span> ') : '🕊️ Nada este día';
+  }
+  // Banner del próximo posteo (día y hora), debajo del día visible.
+  let nextPostHTML = '';
+  {
+    const upcoming = scheduled.filter(x => x.d > new Date());
+    if (upcoming.length) {
+      const nx = upcoming[0];
+      const nd = nx.d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
+      const nh = nx.d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+      nextPostHTML = `<div class="sched-nextpost">📮 <b>Próximo posteo:</b> ${esc(nd)} a las ${esc(nh)}</div>`;
+    }
   }
   const cells = days.map(d => {
     const k = dayKey(d);
@@ -7916,7 +7921,7 @@ async function scheduleView() {
       </div>
     </div>`;
   }).join('');
-  const empty = !scheduled.length && !publishedThisWeek.length && SCHED_WEEK_OFFSET === 0;
+  const empty = !scheduled.length && !publishedThisWeek.length && SCHED_DAY_OFFSET === 0;
   // Sin borradores ni programados: la tarjeta para armar la semana vive acá.
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   return `<div id="schedView" class="sched-wrap">
@@ -7933,22 +7938,23 @@ async function scheduleView() {
       <p class="sub" style="margin:4px 0 0">Los que ya aceptaste — salen solos a la hora indicada.</p></div>
       <div class="sched-nav">
         ${(sk && sk.current > 0) ? `<button type="button" class="sched-streak" id="schedStreakPill" aria-label="Ver mi racha">🔥 ${sk.current}</button>` : ''}
-        <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_WEEK_OFFSET <= 0 ? 'disabled' : ''} aria-label="Semana anterior">‹</button>
-        <button class="btn btn-ghost btn-sm" id="schedToday">Esta semana</button>
-        <button class="btn btn-ghost btn-sm" id="schedNext" aria-label="Semana siguiente">›</button>
+        <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_DAY_OFFSET <= 0 ? 'disabled' : ''} aria-label="Día anterior">‹</button>
+        <button class="btn btn-ghost btn-sm" id="schedToday">Hoy</button>
+        <button class="btn btn-ghost btn-sm" id="schedNext" aria-label="Día siguiente">›</button>
       </div>
     </div>
-    <div class="sched-weeklabel">${esc(weekLabel)}</div>
+    <div class="sched-daylabel">${esc(dayLabel)}</div>
     <div class="sched-pulse">${pulseHTML}</div>
     ${!drafts.length && empty
       ? '' // el armBlock de arriba ya invita a armar la semana
       : empty
       ? `<div class="sched-emptyhero">
            <img src="ai-avatar.png" alt="Posty">
-           <div><b>Tu semana está vacía… por ahora 😏</b>
-           <p>Programá tus borradores de arriba 👆 y aparecen acá día por día, con su hora. Yo me ocupo de que salgan solos.</p></div>
+           <div><b>Tu día está vacío… por ahora 😏</b>
+           <p>Programá tus borradores de arriba 👆 y aparecen acá, con su hora. Yo me ocupo de que salgan solos.</p></div>
          </div>`
       : `<div class="sched-grid">${cells}</div>
+         ${nextPostHTML}
          <p class="hint" style="margin-top:10px">Tocá un posteo para verlo en grande 🔍</p>`}
   </div>`;
 }
@@ -7988,16 +7994,18 @@ function bindStats() {
       const vals = [d.reach_7d, d.reach_30d, d.interactions_30d, d.followers];
       const hasData = vals.some((v) => Number(v) > 0) || d.best_post;
       if (!hasData) {
-        // Sin datos no hay tarjetas: solo el empty state con vista previa.
+        // Estado vacío claro: no es un error ni está cargando, simplemente
+        // no hay posteos publicados todavía para analizar.
         if (grid) grid.style.display = 'none';
         if (box) box.innerHTML = `<div class="card st-empty">
           <div class="st-empty-ico">📊</div>
-          <b>Tus números van a vivir acá</b>
-          <p>Cuando publiquemos tu primera semana, vas a ver tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>
-          <div class="st-preview"><span class="st-preview-tag">Vista previa</span>
-            <div class="st-grid">
-              ${['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores'].map(l => `<div class="st-card st-skel"><div class="st-skel-num"></div><div class="st-label">${esc(l)}</div></div>`).join('')}
-            </div>
+          <b>Todavía no hay posteos para analizar</b>
+          <p>Cuando publiquemos tu primera semana, vas a ver acá tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>
+          <div class="st-empty-tags">
+            <span>Personas alcanzadas</span>
+            <span>Interacciones</span>
+            <span>Mejor posteo</span>
+            <span>Seguidores</span>
           </div>
         </div>`;
         return;
@@ -8048,9 +8056,9 @@ function bindStats() {
 }
 function bindSchedule() {
   const pv = $('#schedPrev'), nx = $('#schedNext'), td = $('#schedToday');
-  if (pv) pv.onclick = () => { if (SCHED_WEEK_OFFSET > 0) { SCHED_WEEK_OFFSET--; render(); } };
-  if (nx) nx.onclick = () => { SCHED_WEEK_OFFSET++; render(); };
-  if (td) td.onclick = () => { SCHED_WEEK_OFFSET = 0; render(); };
+  if (pv) pv.onclick = () => { if (SCHED_DAY_OFFSET > 0) { SCHED_DAY_OFFSET--; render(); } };
+  if (nx) nx.onclick = () => { SCHED_DAY_OFFSET++; render(); };
+  if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; render(); };
   // Días libres: el fantasma "+" lleva al chat a pedirle algo a Posty para ese día.
   $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => { location.hash = '#/app/chat'; });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
