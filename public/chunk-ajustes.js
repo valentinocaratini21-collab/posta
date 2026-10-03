@@ -180,6 +180,14 @@ function ajustesView() {
   <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Autopiloto</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cuando está activado, Posty publica solo los posteos que pasan el filtro de calidad. Si algo no está a la altura, va a revisión manual y te avisa.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
+      <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
+  </div></div>
   ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
@@ -210,6 +218,48 @@ function bindSettings() {
     h.onclick = tg;
     h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
   });
+  // --- Autopiloto (4 puntos, 2026-10-02) ---
+  const btnAp = $('#btnAutopilotToggle');
+  if (btnAp) {
+    const loadAp = async () => {
+      try {
+        const r = await api.get('/api/autopilot');
+        const on = !!(r && r.enabled);
+        const unlocked = !!(r && r.unlocked);
+        const prog = (r && r.progress) || 0;
+        if (!unlocked) {
+          btnAp.textContent = `🔒 Desbloqueá (${prog}/10)`;
+          btnAp.disabled = true;
+          $('#autopilotStatus').textContent = 'Aprobá 10 posteos sin editarlos y se desbloquea.';
+          $('#autopilotInfo').textContent = 'El autopiloto se gana con confianza: cuando Posty demuestra que la pega, te ofrece soltarle las riendas.';
+        } else {
+          btnAp.disabled = false;
+          btnAp.textContent = on ? '🟢 Activado' : '⚪ Activar';
+          btnAp.classList.toggle('btn-primary', !on);
+          $('#autopilotStatus').textContent = on
+            ? 'Posty publica solo lo que pasa el filtro de calidad. Te aviso 30 min antes.'
+            : 'Todo pasa por tu aprobación.';
+          $('#autopilotInfo').textContent = on
+            ? 'El filtro chequea: imagen válida, caption con contenido, hashtags y que no sea duplicado. Score mínimo: 70/100.'
+            : '';
+        }
+      } catch (e) {
+        btnAp.textContent = 'Error';
+      }
+    };
+    btnAp.onclick = async () => {
+      try {
+        const r = await api.get('/api/autopilot');
+        const next = !(r && r.enabled);
+        btnAp.disabled = true;
+        const r2 = await api.post('/api/autopilot', { enabled: next });
+        if (r2 && r2.ok) await loadAp();
+        else alert('No pude cambiarlo 😅');
+      } catch (e) { alert('No pude cambiarlo 😅'); }
+      btnAp.disabled = false;
+    };
+    loadAp();
+  }
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };
   const sDesc = $('#s_desc');

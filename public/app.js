@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261001-v21'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261002-v29'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1916,7 +1916,7 @@ async function fillStyleSelects() {
       const draft = REVIEW_DRAFTS.find(d => String(d.id) === String(id));
       if (msg) msg.innerHTML = `<span style="color:var(--mut);font-size:11.5px">⏳ Regenerando la foto con ${esc(code)}…</span>`;
       try {
-        const r = await api.post(`/api/drafts/${id}/photo-style`, { style: code }, { timeout: 120000 });
+        const r = await api.post(`/api/drafts/${id}/photo-style`, { style: code }, { timeout: 180000 });
         if (r && r.ok && r.path) {
           if (draft) { draft.image_path = r.path; draft.style_code = r.style; }
           if (msg) msg.innerHTML = `<span style="color:#1B7A3D;font-size:11.5px;font-weight:700">✅ Foto nueva con ${esc(code)}</span>`;
@@ -2860,7 +2860,7 @@ async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) 
   let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 120000 });
+      const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 180000 });
       if (r && r.ok === false && r.capped) throw { aiCap: true, message: r.error || '' };
       if (r && r.path) return { path: r.path, style: r.style || null, styleName: r.styleName || '' };
       lastErr = new Error('El servidor no devolvió imagen');
@@ -2880,6 +2880,18 @@ async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) 
 // al tocar "Hacerlo posteo" (se reutiliza la misma imagen, no se regenera).
 // "Otra imagen" genera una nueva con OTRO estilo (sin repetir).
 async function renderChatPreviews() {
+  // SIMPLIFICADO: la tarjeta del chat ya no genera imágenes on-demand (era
+  // frágil y lento). Muestra solo texto; la imagen se genera una sola vez en
+  // background cuando el usuario toca "Hacerlo posteo" (draftFromIdea).
+  const box = $('#chatPreviews');
+  if (!box) return;
+  const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
+  stopPrevThinking();
+  box.innerHTML = '';
+  CHAT_PREVIEWS = [];
+  return;
+}
+async function renderChatPreviews_OLD() {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
