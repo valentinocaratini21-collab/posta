@@ -4112,7 +4112,12 @@ function homeWeekHTML(posts, quota) {
   const qLabel = qTotal > 0 ? `${Math.min(qUsed, qTotal)} de ${qTotal} posteos` : `${list.length} ${list.length === 1 ? 'posteo' : 'posteos'}`;
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b><span>${qLabel}</span></div>
-    <div class="igmock-carousel"><div class="igmock-track">${cards}</div></div>
+    <div class="igmock-carousel">
+      ${list.length > 1 ? `<button type="button" class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
+      <div class="igmock-track">${cards}</div>
+      ${list.length > 1 ? `<button type="button" class="car-arrow right" data-carnext aria-label="Posteo siguiente">›</button>` : ''}
+      ${list.length > 1 ? `<div class="igmock-dots">${list.map((_, j) => `<i class="${j === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
+    </div>
   </div>`;
 }
 function homeWhenLabel(iso) {

@@ -767,13 +767,23 @@ function trialPostUsesClientPhoto(out, i) {
 // así no se re-suben los archivos desde el navegador.
 // Marca source='trial' (marcador confiable de "semana importada de la prueba")
 // y client_photo=1 en los posteos que usan fotos reales del cliente.
-function importTrialWeek(userId, igRaw) {
+// expectedBusiness (opcional): si se pasa, la semana cacheada tiene que ser de
+// ese negocio — si es de otro (cache cruzado), NO se importa nada.
+function importTrialWeek(userId, igRaw, expectedBusiness) {
   const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
   if (!ig) return 0;
   const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
   if (!hit) return 0;
   let out;
   try { out = JSON.parse(hit.payload); } catch (e) { return 0; }
+  const exp = String(expectedBusiness || '').trim().toLowerCase();
+  if (exp) {
+    const got = String((out && out.business) || '').trim().toLowerCase();
+    if (got !== exp) {
+      console.log(`[posta] importTrialWeek: semana de @${ig} es de otro negocio ("${out && out.business}") — no se importa`);
+      return 0;
+    }
+  }
   const posts = (out.posts || []).filter((p) => p && (p.image || p.video));
   if (!posts.length) return 0;
   if (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(userId).c) return 0;
@@ -987,7 +997,11 @@ app.get('/api/auth/magic', (req, res) => {
         .run(email, code, referredBy, trialEnds, utmS, utmC);
       const userId = r.lastInsertRowid;
       try {
-        const nImp = importTrialWeek(userId, payload.trial_ig);
+        // El negocio esperado sale del perfil de la prueba (lo que el usuario
+        // escribió en SU navegador): si la semana cacheada es de otro negocio,
+        // no se importa (bug 2026-10-03).
+        const expBiz = (payload.trial_profile && payload.trial_profile.business_name) || null;
+        const nImp = importTrialWeek(userId, payload.trial_ig, expBiz);
         if (nImp) console.log(`[posta] semana de prueba importada (magic): ${nImp} borradores → usuario ${userId}`);
         recordTrialImport(userId, payload.trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
         streakFromTrialImport(userId, nImp);
@@ -1000,7 +1014,8 @@ app.get('/api/auth/magic', (req, res) => {
       req.session.userId = user.id;
       try {
         const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(user.id).c || 0) > 0;
-        const nImp = importTrialWeek(user.id, payload.trial_ig);
+        const expBiz = (payload.trial_profile && payload.trial_profile.business_name) || null;
+        const nImp = importTrialWeek(user.id, payload.trial_ig, expBiz);
         if (nImp) console.log(`[posta] semana de prueba importada (magic, login): ${nImp} borradores → usuario ${user.id}`);
         recordTrialImport(user.id, payload.trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
         streakFromTrialImport(user.id, nImp);
@@ -7623,6 +7638,22 @@ function buildTrialWeek(n) {
 
 const TRIAL_IMG_MIME = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
+// La semana cacheada por @ solo vale si se generó para ESTE negocio y rubro.
+// Sin este chequeo, una prueba vieja de otro negocio con el mismo @ se servía
+// e importaba verbatim: marca, fotos y textos ajenos en la semana del cliente
+// (bug 2026-10-03: posteos "FITSWAPP" en la cuenta de otro negocio).
+function trialCacheMatches(out, business, category) {
+  try {
+    const b = String((out && out.business) || '').trim().toLowerCase();
+    const want = String(business || '').trim().toLowerCase();
+    if (!b || !want || b !== want) return false;
+    const c = String((out && out.category) || '').trim().toLowerCase();
+    const wantC = String(category || '').trim().toLowerCase();
+    if (wantC && c && c !== wantC) return false;
+    return true;
+  } catch (e) { return false; }
+}
+
 app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit: '6mb' }), async (req, res) => {
   let fields, file;
   try {
@@ -7678,16 +7709,25 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   const igKey = ig.toLowerCase();
   // Cache por @: si este Instagram ya generó su semana hace menos de 72h,
   // se la mostramos al instante sin regenerar (no gasta IA ni espera).
+  // PERO solo si esa semana es de ESTE negocio y rubro: si el @ se usó antes
+  // para otro negocio, la semana vieja NO se sirve (se regenera).
   if (!testMode && igKey) {
     try {
       const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
       if (hit && Date.now() - hit.created_at < 72 * 3600 * 1000) {
-        const out = JSON.parse(hit.payload);
-        out.cached = true;
-        out.spots_left = spotsLeft();
-        out.week = buildTrialWeek((out.posts || []).length);
-        track(null, 'prueba_done', igKey + '|cached');
-        return res.json(out);
+        let cachedOut = null;
+        try {
+          const probe = JSON.parse(hit.payload);
+          if (trialCacheMatches(probe, business, category)) cachedOut = probe;
+          else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
+        } catch (e) { /* payload roto: se regenera */ }
+        if (cachedOut) {
+          cachedOut.cached = true;
+          cachedOut.spots_left = spotsLeft();
+          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length);
+          track(null, 'prueba_done', igKey + '|cached');
+          return res.json(cachedOut);
+        }
       }
       if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
@@ -7877,18 +7917,26 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   const ip = demo.clientIp(req);
   const testMode = trialTestMode(req);
   const igKey = ig.toLowerCase();
-  // Cache por @ 72h: hit → done directo, sin regenerar
+  // Cache por @ 72h: hit → done directo, sin regenerar.
+  // Igual que /api/trial/generate: solo vale si la semana es de ESTE negocio.
   if (!testMode && igKey) {
     try {
       const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
       if (hit && Date.now() - hit.created_at < 72 * 3600 * 1000) {
-        const out = JSON.parse(hit.payload);
-        out.cached = true;
-        out.spots_left = spotsLeft();
-        out.week = buildTrialWeek((out.posts || []).length);
-        track(null, 'prueba_done', igKey + '|cached');
-        send('done', { out });
-        return finish();
+        let cachedOut = null;
+        try {
+          const probe = JSON.parse(hit.payload);
+          if (trialCacheMatches(probe, business, category)) cachedOut = probe;
+          else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
+        } catch (e) { /* payload roto: se regenera */ }
+        if (cachedOut) {
+          cachedOut.cached = true;
+          cachedOut.spots_left = spotsLeft();
+          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length);
+          track(null, 'prueba_done', igKey + '|cached');
+          send('done', { out: cachedOut });
+          return finish();
+        }
       }
       if (hit) db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
@@ -8703,7 +8751,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261003-v45';
+const BUILD_ID = '20261003-v47';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?

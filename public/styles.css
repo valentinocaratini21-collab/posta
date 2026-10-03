@@ -248,7 +248,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .igmock-track::-webkit-scrollbar{display:none}
 .igmock-track .igmock{flex:0 0 min(470px,94%);max-width:none;margin:0;scroll-snap-align:start}
 .igmock-carousel{position:relative}
-.car-arrow{position:absolute;top:34%;z-index:3;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;box-shadow:0 2px 12px rgba(10,30,51,.22);font-size:21px;font-weight:800;color:var(--txt);cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0 0 3px}
+.car-arrow{position:absolute;top:34%;z-index:3;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:#fff;box-shadow:0 2px 12px rgba(10,30,51,.22);font-size:21px;font-weight:800;color:var(--txt);cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0 0 3px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .car-arrow.left{left:8px}
 .car-arrow.right{right:8px}
 .car-arrow:active{transform:scale(.93)}
@@ -256,6 +256,8 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .igmock-dots i{width:7px;height:7px;border-radius:99px;background:#D5DDE6;transition:all .2s}
 .igmock-dots i.on{width:24px;background:#2793C8}
 @media(max-width:760px){.car-arrow{display:none}}
+/* Fix 2: el carrusel "Tu semana" sí muestra flechas en mobile (affordance iPhone-first) */
+@media(max-width:760px){.hs-week .car-arrow{display:flex}}
 /* Carrusel: slides swipeables dentro del preview del borrador */
 .carslide-carousel{position:relative}
 .carslide-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}

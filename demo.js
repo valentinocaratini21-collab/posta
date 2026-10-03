@@ -352,7 +352,7 @@ function phraseAround(goal, kw) {
   return '';
 }
 
-function applyGoal(topics, goal, goal_key) {
+function applyGoal(topics, goal, goal_key, hasPhoto) {
   const clean = sanitizeGoal(goal);
   const keyKws = (goal_key && GOAL_KEY_KWS[goal_key]) ? GOAL_KEY_KWS[goal_key] + ' ' : '';
   if (!clean && !keyKws) return { topics, goalLine: '' };
@@ -364,6 +364,15 @@ function applyGoal(topics, goal, goal_key) {
       if (i > 0) ordered = [topics[i], ...topics.slice(0, i), ...topics.slice(i + 1)];
       break;
     }
+  }
+  // SIN foto real del cliente el posteo usa foto stock genérica del rubro: NO
+  // se personaliza el titular con el producto específico que nombró ("buzo
+  // adidas última"), porque la foto no sería ese producto y el posteo quedaría
+  // roto (regla: la foto tiene que coincidir con el producto). El "Tal como
+  // pediste" igual muestra en el caption que lo escuchamos.
+  if (!hasPhoto) {
+    const short = clean.length > 140 ? clean.slice(0, 140).trimEnd() + '…' : clean;
+    return { topics: ordered, goalLine: '\nTal como pediste: ' + short };
   }
   // Titular con las palabras del cliente: si el párrafo nombra algo que un
   // posteo también nombra (ej. "plan canje"), ese posteo usa su frase como
@@ -435,7 +444,7 @@ function renderDemoVideo(pngPath, runDir, idx) {
 function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
-  const { topics: allTopics, goalLine } = applyGoal(captions.DEMO_TOPICS[cat], goal, goal_key);
+  const { topics: allTopics, goalLine } = applyGoal(captions.DEMO_TOPICS[cat], goal, goal_key, !!photoPath);
   const topics = allTopics.slice(0, n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
