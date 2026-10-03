@@ -4056,7 +4056,10 @@ function bindChat() {
 // ---------- 🏠 HOME SIMPLE (2026-10-03) ----------
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
-function homeWeekHTML(posts) {
+function homeWeekHTML(posts, quota) {
+  const q = quota || {};
+  const qTotal = Number(q.limit) || 0;
+  const qUsed = Math.max(0, Number(q.used) || 0);
   const list = (posts || []).filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
     .sort((a, b) => String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
   if (!list.length) return `<div class="hs-generating">
@@ -4085,8 +4088,9 @@ function homeWeekHTML(posts) {
       </div>
     </div>`;
   }).join('');
+  const qLabel = qTotal > 0 ? `${Math.min(qUsed, qTotal)} de ${qTotal} posteos` : `${list.length} ${list.length === 1 ? 'posteo' : 'posteos'}`;
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b><span>${list.length} ${list.length === 1 ? 'posteo' : 'posteos'}</span></div>
+    <div class="hs-week-head"><b>Tu semana</b><span>${qLabel}</span></div>
     <div class="igmock-carousel"><div class="igmock-track">${cards}</div></div>
   </div>`;
 }
@@ -4105,6 +4109,8 @@ function homeWhenLabel(iso) {
 async function chatView() {
   let posts = [];
   try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
+  let quota = null;
+  try { quota = await api.get('/api/quota'); } catch (e) { quota = null; }
   try { REVIEW_DRAFTS = posts.filter(p => p.status === 'draft'); } catch (e) {}
   const nDrafts = posts.filter(p => p.status === 'draft').length;
   return `
@@ -4114,7 +4120,7 @@ async function chatView() {
       <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime 👇</div></div>
     </div>
     <div id="revMsg"></div>
-    ${homeWeekHTML(posts)}
+    ${homeWeekHTML(posts, quota)}
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
     <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
