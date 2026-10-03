@@ -111,7 +111,7 @@ const MSG_CAP = 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana con todo �
 // y quedaría bloqueada. El mensual permite el batch semanal y frena la cola.)
 const ARS_PER_USD = Math.max(1, parseFloat(process.env.ARS_PER_USD || '1425') || 1425);
 const UYU_PER_USD = Math.max(1, parseFloat(process.env.UYU_PER_USD || '40') || 40);
-const AI_CAP_FOUNDER_USD = Math.max(0, parseFloat(process.env.AI_CAP_FOUNDER_USD || '20') || 20);
+const AI_CAP_FOUNDER_USD = Math.max(0, parseFloat(process.env.AI_CAP_FOUNDER_USD || '200') || 200);
 
 function monthlyCapUsd(plan) {
   try {

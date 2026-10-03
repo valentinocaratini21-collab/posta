@@ -2958,7 +2958,8 @@ async function renderChatPreviews_OLD() {
     stopPrevThinking();
     const detail = String((e && e.message) || '').slice(0, 120);
     if (isAiCapErr(e)) {
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">Llegué al tope diario de imágenes 😅 Probá de nuevo en un rato.</div>';
+      const capMsg = (e.message || '').trim() || 'Llegamos al tope de IA 😅 Probá de nuevo en un rato.';
+      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">' + esc(capMsg) + '</div>';
     } else {
       box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅' +
         (detail ? `<br><small style="opacity:.7">Detalle: ${esc(detail)}</small>` : '') +
