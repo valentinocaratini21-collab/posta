@@ -4065,6 +4065,7 @@ function homeWeekHTML(posts) {
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
   </div>`;
+  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   const cards = list.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
