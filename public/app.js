@@ -171,7 +171,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261002-v29'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261003-v41'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -4053,32 +4053,81 @@ function bindChat() {
 }
 
 /* ---------- CHAT-FIRST MOBILE: el chat es el home del celular ---------- */
-// Vista #/app/chat: el chat a pantalla completa, con saludo proactivo y
-// las tarjetas de la semana adentro. Mi semana y Ajustes siguen como pestañas.
+// ---------- 🏠 HOME SIMPLE (2026-10-03) ----------
+// Posty es esto: los posteos de la semana uno al lado del otro,
+// y el chat abajo si querés cambiar/editar/crear algo distinto.
+function homeWeekHTML(posts) {
+  const list = (posts || []).filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
+    .sort((a, b) => String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
+  if (!list.length) return `<div class="hs-generating">
+    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <b>Posty está armando tu semana ✨</b>
+    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
+    <div class="hs-gen-dots"><i></i><i></i><i></i></div>
+  </div>`;
+  const cards = list.map((d, i) => {
+    const isV = String(d.media_type || '') === 'video';
+    const isS = String(d.media_type || '') === 'story';
+    const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
+      : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
+    const when = d.scheduled_at ? homeWhenLabel(d.scheduled_at) : 'Borrador';
+    const badge = d.status === 'scheduled' ? '📮' : '📝';
+    const cap = String(d.caption || d.source_topic || '').split('\n')[0].slice(0, 90);
+    return `<div class="igmock" data-home-post="${d.id}">
+      <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
+        <span class="igmock-count">${i + 1} de ${list.length}</span></div>
+      <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
+      <div class="igmock-foot">
+        <div class="igmock-when">${badge} ${esc(when)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</div>
+        ${cap ? `<div class="igmock-cap">${esc(cap)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="hs-week">
+    <div class="hs-week-head"><b>Tu semana</b><span>${list.length} ${list.length === 1 ? 'posteo' : 'posteos'}</span></div>
+    <div class="igmock-carousel"><div class="igmock-track">${cards}</div></div>
+  </div>`;
+}
+function homeWhenLabel(iso) {
+  try {
+    const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+    const d = new Date(String(iso).replace(' ', 'T') + 'Z');
+    const day = d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz });
+    const hh = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz });
+    return `${day} · ${hh}`;
+  } catch (e) { return ''; }
+}
+
+// Vista #/app/chat = HOME SIMPLE: los posteos de la semana uno al lado del
+// otro, y el chat abajo si querés cambiar/editar/crear algo distinto.
 async function chatView() {
-  // Orden "contenido primero": la estrella son los borradores; el chat y el
-  // checklist bajan de protagonismo (el checklist sigue 100% funcional).
+  let posts = [];
+  try { posts = await api.get('/api/posts'); } catch (e) { posts = []; }
+  try { REVIEW_DRAFTS = posts.filter(p => p.status === 'draft'); } catch (e) {}
+  const nDrafts = posts.filter(p => p.status === 'draft').length;
   return `
-  <div class="chat-home">
-    <div class="chome-top">
-      <button type="button" class="chome-ava-btn" id="chomeLvlBtn" aria-label="Nivel de Posty">
-        <span class="chome-ava-wrap"><img src="ai-avatar.png" class="chome-ava" alt="Posty"></span>
-        <span class="chome-lvl" id="chomeLvl" hidden></span>
-      </button>
-      <div><b>Posty<span class="pdot">.</span></b><div class="chome-sub">Tu community manager de confianza.<br>Vos vendé. Yo posteo.</div></div>
+  <div class="chat-home hs-home">
+    <div class="hs-top">
+      <img src="ai-avatar.png" class="hs-ava" alt="Posty">
+      <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime 👇</div></div>
     </div>
-    <div id="firstPickSlot"></div>
     <div id="revMsg"></div>
-    <div id="nextStepCta" style="display:none"><button type="button" class="btn btn-primary" id="nextStepBtn">Revisá tu semana 👇</button></div>
+    ${homeWeekHTML(posts)}
+    ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
+    <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
-    ${setupSecondaryHtml()}
-    <div id="apProg-semana"></div>
   </div>`;
 }
 
 async function bindChatView() {
   bindChat();
   bindReview();
+  // Home simple: tocar un posteo del carrusel lo abre en grande (patrón data-lightbox).
+  $$('.hs-week [data-lightbox]').forEach(el => el.onclick = (e) => {
+    e.stopPropagation();
+    if (el.dataset.lightbox) try { openLightbox(el.dataset.lightbox, el.dataset.video === '1'); } catch (err) {}
+  });
   bindScheduleAll();
   bindAcceptAll();
   bindActivateWeek();

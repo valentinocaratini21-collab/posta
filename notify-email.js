@@ -128,4 +128,27 @@ async function sendMissedEmail(db, post) {
   }
 }
 
-module.exports = { sendApprovalEmail, sendMissedEmail };
+// Aviso "tu semana está lista 🎉": la semana se armó y programó sola.
+// Se manda tras el auto-arm (signup, regla 24h, semana semanal).
+async function sendWeekReady(db, userId, n) {
+  try {
+    if (!emailConfigured()) return { ok: false, reason: 'email no configurado' };
+    const user = getUser(db, userId);
+    if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'usuario sin email' };
+    const base = BASE_URL();
+    const subject = 'Tu semana está lista 🎉';
+    const html = emailShell(`
+    <p style="font-size:18px;font-weight:800;margin:0 0 12px">¡Hola${user.name ? ' ' + esc(user.name) : ''}! Soy Posty 🤖</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#0A1E33">Armé tu semana y ya la dejé programada: <b>${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'}</b> en su horario ✨</p>
+    <p style="text-align:center;margin:0 0 20px">
+      <a href="${base}/#/app/semana" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">Ver mi semana 👀</a>
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Si querés cambiar algo, respondeme en el chat y lo ajustamos 💪</p>`);
+    return await sendEmail({ to: user.email, subject, html });
+  } catch (e) {
+    console.error(`[notify-email] semana lista usuario ${userId}:`, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = { sendApprovalEmail, sendMissedEmail, sendWeekReady };

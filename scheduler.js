@@ -627,6 +627,43 @@ function startScheduler(db) {
     console.error('[next-week sweep] no se pudo programar:', e.message);
   }
 
+  // 🚀 Abrir y listo — regla 24h (2026-10-03): cada hora, los borradores que
+  // llevan 24h+ sin que el cliente los toque se programan SOLOS (si el usuario
+  // no apagó el auto-arm en Ajustes). "Si no tocás nada en 24 horas, sale sola."
+  async function autoArmStaleDrafts() {
+    let users = [];
+    try {
+      users = db.prepare(`
+        SELECT DISTINCT p.user_id AS id FROM posts p
+        JOIN users u ON u.id = p.user_id
+        WHERE p.status = 'draft' AND COALESCE(p.needs_review, 0) = 0
+          AND p.created_at < datetime('now', '-24 hours')
+          AND COALESCE(u.auto_week, 1) = 1
+      `).all();
+    } catch (e) { console.error('[auto-arm 24h] query:', e.message); return; }
+    if (!users.length) return;
+    let srv = null;
+    try { srv = require('./server'); } catch (e) { return; }
+    if (!srv || typeof srv.autoArmWeek !== 'function') return;
+    for (const u of users) {
+      try {
+        // Solo si SIGUE habiendo borradores viejos sin tocar (no pisar edición reciente).
+        const stale = db.prepare(`SELECT COUNT(*) AS n FROM posts
+          WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review, 0) = 0
+            AND created_at < datetime('now', '-24 hours')`).get(u.id).n || 0;
+        if (!stale) continue;
+        const r = await srv.autoArmWeek(u.id, '24h');
+        if (r && r.ok) console.log(`[auto-arm 24h] usuario ${u.id}: ${r.scheduled.length} programados solos 🚀`);
+      } catch (e) { console.error('[auto-arm 24h] usuario', u.id, e.message); }
+    }
+  }
+  try {
+    cron.schedule('17 * * * *', () => {
+      autoArmStaleDrafts().catch((e) => console.error('[auto-arm 24h]', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Regla 24h (auto-arm borradores viejos): cada hora y 17 (Buenos Aires)');
+  } catch (e) { console.error('[auto-arm 24h] no se pudo programar:', e.message); }
+
   // --- Posty Pro: stories automáticas, community y contenido reactivo ---
   try {
     cron.schedule('0 12 * * *', () => {

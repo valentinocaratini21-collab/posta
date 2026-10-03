@@ -188,6 +188,13 @@ function ajustesView() {
     </div>
     <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
   </div></div>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>✨ Mi semana en automático</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
+      <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+  </div></div>
   ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
@@ -259,6 +266,32 @@ function bindSettings() {
       btnAp.disabled = false;
     };
     loadAp();
+  }
+  // --- Mi semana en automático (abrir y listo, 2026-10-03) ---
+  const btnAw = $('#btnAutoWeekToggle');
+  if (btnAw) {
+    const loadAw = async () => {
+      try {
+        const r = await api.get('/api/settings/auto-week');
+        const on = !!(r && r.enabled);
+        btnAw.textContent = on ? '🟢 Activado' : '⚪ Activar';
+        btnAw.classList.toggle('btn-primary', !on);
+        $('#autoWeekStatus').textContent = on
+          ? 'Tu semana se arma y programa sola ✨'
+          : 'Vos armás tu semana a mano.';
+      } catch (e) { btnAw.textContent = 'Error'; }
+    };
+    btnAw.onclick = async () => {
+      btnAw.disabled = true;
+      try {
+        const r = await api.get('/api/settings/auto-week');
+        const r2 = await api.post('/api/settings/auto-week', { enabled: !(r && r.enabled) });
+        if (r2 && r2.ok) await loadAw();
+        else alert('No pude cambiarlo 😅');
+      } catch (e) { alert('No pude cambiarlo 😅'); }
+      btnAw.disabled = false;
+    };
+    loadAw();
   }
   const sCat = $('#s_cat');
   if (sCat) sCat.onchange = () => { $('#s_catother_w').style.display = sCat.value === 'otro' ? '' : 'none'; };

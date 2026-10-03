@@ -853,6 +853,12 @@ app.post('/api/auth/register', (req, res) => {
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
       recordTrialImport(r.lastInsertRowid, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
       streakFromTrialImport(r.lastInsertRowid, nImp);
+      // 🚀 Abrir y listo: la semana se arma SOLA (historias + programación + aviso).
+      // Fire-and-forget: la respuesta ya casi sale, esto no la bloquea.
+      if (nImp && autoWeekEnabled(r.lastInsertRowid)) {
+        const uidNew = r.lastInsertRowid;
+        setTimeout(() => { autoArmWeek(uidNew, 'signup').catch(() => {}); }, 5000);
+      }
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     track(r.lastInsertRowid, 'registered');
     evTrack(r.lastInsertRowid, 'account_created', {});
@@ -876,6 +882,10 @@ app.post('/api/auth/login', (req, res) => {
     if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${uidL}`);
     recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
     streakFromTrialImport(uidL, nImp);
+    // 🚀 Abrir y listo (login con semana importada): también se arma sola.
+    if (nImp && !hadPosts && autoWeekEnabled(uidL)) {
+      setTimeout(() => { autoArmWeek(uidL, 'login').catch(() => {}); }, 5000);
+    }
   } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
   res.json({ ok: true });
 });
@@ -1391,6 +1401,17 @@ app.get('/api/autopilot', requireAuth, (req, res) => {
     res.status(500).json({ ok: false, error: 'No pude leer el estado 😅' });
   }
 });
+// 🚀 Abrir y listo: toggle "Posty arma mi semana solo" (default ON).
+app.get('/api/settings/auto-week', requireAuth, (req, res) => {
+  res.json({ ok: true, enabled: autoWeekEnabled(req.session.userId) });
+});
+app.post('/api/settings/auto-week', requireAuth, express.json(), (req, res) => {
+  const on = !!((req.body || {}).enabled);
+  db.prepare('UPDATE users SET auto_week = ? WHERE id = ?').run(on ? 1 : 0, req.session.userId);
+  console.log(`[auto-week] usuario ${req.session.userId} ${on ? 'ACTIVÓ' : 'apagó'} el armado automático`);
+  res.json({ ok: true, enabled: on });
+});
+
 app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
   try {
     const enabled = !!req.body.enabled;
@@ -3073,7 +3094,7 @@ function firstPickFrom(drafts) {
 // Historial del chat consultor (persiste entre sesiones) + idea cerrada pendiente
 app.get('/api/ideas/chat', requireAuth, (req, res) => {
   const uid = req.session.userId;
-  const msgs = db.prepare('SELECT role, text FROM chat_messages WHERE user_id=? ORDER BY id DESC LIMIT 60').all(uid).reverse();
+  const msgs = db.prepare(`SELECT role, text FROM chat_messages WHERE user_id=? AND created_at > datetime('now', '-24 hours') ORDER BY id DESC LIMIT 30`).all(uid).reverse();
   const st = db.prepare('SELECT idea_json FROM chat_state WHERE user_id=?').get(uid);
   let idea = null;
   try { idea = st ? JSON.parse(st.idea_json) : null; } catch (e) { idea = null; }
@@ -4447,7 +4468,17 @@ async function nextWeekSweep() {
       const elig = nextWeekEligible(u.id, nextWk);
       if (!elig.ok) { skip++; continue; }
       const r = await generateWeekDrafts(u.id, { weekKey: nextWk, tag: 'sweep' });
-      if (r.ok) ok++; else skip++;
+      if (r.ok) {
+        ok++;
+        // 🚀 Abrir y listo: la semana semanal también se programa sola.
+        // generateWeekDrafts ya generó historias/reels y mandó el push.
+        if (autoWeekEnabled(u.id)) {
+          try {
+            const sa = scheduleAllDrafts(u.id);
+            if (sa.ok) console.log(`[next-week sweep] usuario ${u.id}: ${sa.scheduled.length} programados solos 🚀`);
+          } catch (e) { console.error('[next-week sweep] auto-schedule:', e.message); }
+        }
+      } else skip++;
     } catch (e) { console.error('[next-week sweep] usuario', u.id, e.message); skip++; }
   }
   console.log(`[next-week sweep] generadas: ${ok}, salteadas: ${skip}`);
@@ -4510,6 +4541,118 @@ function vaciarYMarcar(uid, drafts, wk) {
 // de una, cada uno en su mejor horario. El tap ES la aprobación (sin él,
 // nada se programa ni publica). Registra la señal 'approved' por posteo para
 // que el aprendizaje no se rompa. Programar SÍ consume cupo (los borradores son gratis).
+// ---------- 🚀 ABRIR Y LISTO (2026-10-03) ----------
+// Programa todos los borradores listos del usuario en sus horarios óptimos.
+// Es la versión interna de POST /api/posts/schedule-all (sin req/res):
+// acepta (approval='approved') y programa feed en best_hour, stories 13:00,
+// reels en best_hour, sin pisar días ya ocupados. Devuelve { ok, scheduled }.
+function scheduleAllDrafts(uid) {
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
+  if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [] };
+  // Cupo: todos de una o nada (mismo criterio que el endpoint).
+  const qf = quotaFor(uid, 'image');
+  const qr = quotaFor(uid, 'video');
+  const qs = quotaFor(uid, 'story');
+  const feedBillable = drafts.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
+  const reelBillable = drafts.filter((d) => d.media_type === 'video').length;
+  const storyBillable = drafts.filter((d) => d.media_type === 'story').length;
+  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left)
+    return { ok: false, reason: 'plan_limit', scheduled: [] };
+  const tz = userTz(uid);
+  let bestHour = 19;
+  try {
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
+    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
+  } catch (e) { /* respaldo 19:00 */ }
+  const { STORY_HOUR } = require('./story-reel');
+  const taken = new Set();
+  const takenStory = new Set();
+  try {
+    const sched = db.prepare(`SELECT scheduled_at, media_type FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    for (const s of sched) {
+      const k = ymdInTz(s.scheduled_at, tz); if (!k) continue;
+      if (s.media_type === 'story') takenStory.add(k); else taken.add(k);
+    }
+  } catch (e) { /* no bloquea */ }
+  const slotAt = (i, hour) => {
+    const ymd = shiftDays(tzToday(tz), i + 1);
+    return zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
+  };
+  const scheduled = [];
+  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0 WHERE id=?`);
+  let off = 0, offStory = 0, guard = 0;
+  for (const d of drafts) {
+    const isStory = d.media_type === 'story';
+    const hour = isStory ? STORY_HOUR : bestHour;
+    const tset = isStory ? takenStory : taken;
+    let o = isStory ? offStory : off;
+    let iso = null;
+    while (guard++ < 160) {
+      const cand = slotAt(o++, hour);
+      if (!cand) break;
+      const k = ymdInTz(cand, tz);
+      if (k && !tset.has(k)) { tset.add(k); iso = cand; break; }
+    }
+    if (isStory) offStory = o; else off = o;
+    if (!iso) iso = slotAt(o++, hour);
+    upd.run(iso, d.id);
+    try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
+    scheduled.push({ id: d.id, scheduled_at: iso });
+  }
+  return { ok: true, scheduled };
+}
+
+// Arma la semana sola: genera historias/reels del plan sobre los borradores,
+// programa TODO y avisa "tu semana está lista 🎉" (push + email de respaldo).
+// Fire-and-forget: nunca tira.
+async function autoArmWeek(uid, tag) {
+  try {
+    tag = tag || 'auto-arm';
+    // 1) Historias + reels del plan (si el plan los incluye).
+    try {
+      const { generateWeekExtras } = require('./story-reel');
+      const tz = userTz(uid);
+      const weekKey = mondayKeyOf(tzToday(tz));
+      const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND media_type = 'image'
+        AND status IN ('draft','scheduled') AND created_at > datetime('now', '-3 days')
+        ORDER BY created_at ASC`).all(uid, weekKey);
+      if (feedDrafts.length) {
+        let needRev = 0;
+        try { needRev = trainingWheelsActive(uid) ? 1 : 0; } catch (e) {}
+        await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
+      }
+    } catch (e) { console.error(`[auto-arm:${tag}] extras:`, e.message); }
+    // 2) Programar todo lo listo.
+    const r = scheduleAllDrafts(uid);
+    if (!r.ok) { console.log(`[auto-arm:${tag}] usuario ${uid}: ${r.reason}`); return r; }
+    console.log(`[auto-arm:${tag}] usuario ${uid}: ${r.scheduled.length} programados 🚀`);
+    // 3) Aviso "tu semana está lista".
+    try {
+      const n = r.scheduled.length;
+      push.sendPush(uid, {
+        title: 'Tu semana está lista 🎉',
+        body: `${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario. Tocá para verla 👀`,
+        url: '/#/app/semana',
+      }).catch(() => {});
+    } catch (e) { /* el push nunca bloquea */ }
+    try {
+      const em = require('./notify-email');
+      if (em && em.sendWeekReady) em.sendWeekReady(db, uid, r.scheduled.length);
+    } catch (e) { /* el email nunca bloquea */ }
+    return r;
+  } catch (e) {
+    console.error(`[auto-arm:${tag}] usuario ${uid}:`, e.message);
+    return { ok: false, reason: 'error', scheduled: [] };
+  }
+}
+
+function autoWeekEnabled(uid) {
+  try {
+    const r = db.prepare('SELECT auto_week FROM users WHERE id = ?').get(uid);
+    return !r || r.auto_week !== 0; // default 1 (migración): opt-out
+  } catch (e) { return true; }
+}
+
 app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
   const uid = req.session.userId;
   const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
@@ -8560,7 +8703,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261003-v40';
+const BUILD_ID = '20261003-v41';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
@@ -8594,4 +8737,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled };

@@ -95,6 +95,8 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN hook_id TEXT DEFAULT ''`); } catch (
 try { db.exec(`ALTER TABLE posts ADD COLUMN learning_ingested INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Costos IA (costs.js, 2026-10-02): tokens cacheados por prompt caching.
 try { db.exec(`ALTER TABLE api_costs ADD COLUMN cached_tokens INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Abrir y listo (2026-10-03): 1 = Posty arma y programa la semana solo.
+try { db.exec(`ALTER TABLE users ADD COLUMN auto_week INTEGER NOT NULL DEFAULT 1`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS hook_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
