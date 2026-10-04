@@ -2770,8 +2770,8 @@ function renderChatCaps() {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chat-cap-opt' + (i === CHAT_CAP_SEL ? ' sel' : '');
-    const prev = c.length > 90 ? cortar(c, 90) + '…' : c;
-    b.innerHTML = `<b>Opción ${i + 1}</b><span>${esc(prev)}</span>`;
+    // Texto COMPLETO: el usuario lo lee todo para decidir cuál le gusta.
+    b.innerHTML = `<b>Opción ${i + 1}</b><span>${esc(c)}</span>`;
     b.onclick = () => {
       CHAT_CAP_SEL = i;
       CHAT_CAPTION = { caption: c, hashtags: (CHAT_CAPTION && CHAT_CAPTION.hashtags) || '' };

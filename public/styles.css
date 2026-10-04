@@ -1029,7 +1029,7 @@ textarea.in{resize:vertical;min-height:96px}
 .chat-caps:empty{display:none}
 .chat-cap-opt{display:flex;gap:8px;align-items:baseline;text-align:left;background:var(--bg-soft);border:2px solid var(--line-soft);border-radius:12px;padding:8px 10px;cursor:pointer;font-size:11.5px;line-height:1.45;color:var(--txt)}
 .chat-cap-opt b{color:var(--cel);white-space:nowrap;font-size:10.5px}
-.chat-cap-opt span{color:var(--mut);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.chat-cap-opt span{color:var(--mut)}
 .chat-cap-opt.sel{border-color:var(--cel);box-shadow:0 4px 14px rgba(39,147,200,.22)}
 .chat-cap-opt.sel span{color:var(--txt)}
 .chat-photos{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
