@@ -2863,7 +2863,8 @@ async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) 
       const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 180000 });
       if (r && r.ok === false) {
         if (r.capped) throw { aiCap: true, message: r.error || '' };
-        throw new Error(r.error || 'El servidor no devolvió imagen');
+        const diagStr = r.diag ? ` [diag: founder=${r.diag.founder}, aiOk=${r.diag.aiOk}, rateOk=${r.diag.rateOk}, used=${r.diag.rateUsed}]` : '';
+        throw new Error((r.error || 'El servidor no devolvió imagen') + diagStr);
       }
       if (r && r.path) return { path: r.path, style: r.style || null, styleName: r.styleName || '' };
       lastErr = new Error('El servidor no devolvió imagen');

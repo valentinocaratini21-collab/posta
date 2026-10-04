@@ -241,7 +241,7 @@ module.exports = {
   estCostUsd, logApiCost, trackUsage,
   daySpendUsd, AiCapExceeded, assertAiOk, MSG_CAP,
   monthlyCapUsd, monthSpendUsd, MSG_MONTHLY_CAP,
-  checkRate, MSG_CHAT_RATE, MSG_WEEK_RATE, MSG_IDEAS_RATE, MSG_REGEN_RATE,
+  checkRate, isFounderEmail, MSG_CHAT_RATE, MSG_WEEK_RATE, MSG_IDEAS_RATE, MSG_REGEN_RATE,
   photoHash, photoRecentlySent, markPhotoSent,
   costBreakdown,
 };

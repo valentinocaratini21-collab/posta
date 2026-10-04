@@ -6954,11 +6954,21 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
+    // Diagnóstico temporal (2026-10-04): exponer por qué falla la generación.
+    const diag = { founder: false, aiOk: true, rateOk: true };
+    try { diag.founder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
     try { costs.assertAiOk(uid); }
-    catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
+    catch (e) {
+      diag.aiOk = false;
+      if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message, diag });
+      throw e;
+    }
     // Límite diario de regeneraciones por plan (2026-10-02): 3/5/8 (Esencial/Pro/Total).
-    if (!costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay).ok)
-      return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
+    const rateRes = costs.checkRate(uid, 'regen', aiLimitsFor(uid).regensPerDay);
+    diag.rateOk = !!rateRes.ok;
+    diag.rateUsed = rateRes.used;
+    if (!rateRes.ok)
+      return res.json({ ok: false, error: costs.MSG_REGEN_RATE, diag });
     const { idea = '', tipo = '', headline = '', refs = [], style = '', excludeStyles = [] } = req.body || {};
     const styleOut = {};
     const imagePath = await conceptShotGenerateQueued({ uid, idea, tipo, headline, refs, style: String(style || '').trim() || null, usedStyles: Array.isArray(excludeStyles) ? excludeStyles.slice() : null, styleOut });
@@ -8745,7 +8755,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v61';
+const BUILD_ID = '20261004-v62';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
