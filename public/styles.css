@@ -1797,8 +1797,8 @@ textarea.in{resize:vertical;min-height:96px}
 .sched-col .pcard-badge{font-size:11px}
 
 /* ---------- 🏠 HOME SIMPLE (2026-10-03): semana lado a lado + chat abajo ---------- */
-.hs-home{max-width:640px;margin:0 auto}.hs-home .igmock{font-size:14px}
-.hs-top{display:flex;gap:12px;align-items:center;margin:4px 0 14px}
+.hs-home{max-width:640px;margin:0 auto;overflow-x:clip}.hs-home .igmock{font-size:14px}
+.hs-top{display:flex;gap:12px;align-items:center;margin:4px 0 14px;max-width:100%}.hs-top>div{min-width:0}.hs-top .hs-sub{overflow-wrap:break-word}
 .hs-ava{width:52px;height:52px;border-radius:50%;flex:none;box-shadow:0 4px 14px rgba(39,147,200,.25)}
 .hs-top b{font-size:19px}
 .hs-sub{font-size:13px;color:var(--mut);margin-top:2px}
