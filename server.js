@@ -6291,7 +6291,7 @@ El prompt DEBE exigir:
 - PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
 - BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible en la imagen — el ÚNICO texto permitido es el titular intencional, renderizado perfecto e íntegro; marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
 - Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
-- VARA DE CALIDAD (piezas de referencia aprobadas 2026-10-03): la imagen tiene que sentirse PREMIUM y profesional — composición limpia con aire, un protagonista claro, iluminación cuidada, acabado de publicidad de alto nivel. Nada de estética amateur, genérica o de "IA barata". Si el posteo lleva titular, la escena deja ESPACIO despejado para él (zona limpia arriba o al centro) porque el texto se compone después por código y tiene que respirar.
+- VARA DE CALIDAD (piezas de referencia aprobadas 2026-10-03): la imagen tiene que sentirse PREMIUM y profesional — composición limpia con aire, un protagonista claro, iluminación cuidada, acabado de publicidad de alto nivel. Nada de estética amateur, genérica o de "IA barata". REGLA DE ZONA DEL TITULAR (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular en posteos publicados): el tercio superior de la imagen es ZONA LIMPIA RESERVADA — solo fondo suave, desenfocado o degradado liso; NINGÚN sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido puede asomarse ni tocar esa zona. El protagonista y la acción viven del centro hacia abajo. El titular se compone después por código en ese tercio superior y tiene que respirar: nada detrás que lo choque ni le compita.
 - Si la escena incluye pantallas, carteles, vidrieras, interfaces o celulares (draft 75): TODO texto visible tiene que ser LEGIBLE y tener SENTIDO — palabras reales del negocio, nunca lorem ipsum, palabras garbled, truncadas ni texto inventado.
 REGLA DURA: JAMÁS inventes datos del negocio (precios, direcciones, promos, teléfonos, nombres de producto que no se provean). Solo el titular provisto, tal cual.` },
         { role: 'user', content:
@@ -6351,9 +6351,10 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"detalle":"...","anatomia_ok":true}
+{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
 - headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. Si la imagen NO lleva texto → true.
+- headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
@@ -6377,6 +6378,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
     return {
       texto_ok: parsed.texto_ok !== false,
       headline_complete: parsed.headline_complete !== false,
+      headline_clear: parsed.headline_clear !== false, // 2026-10-04: zona del titular despejada
       brand_ok: parsed.brand_ok !== false, // draft 76: la imagen parecía Netflix (estilo de marca ajena)
       colores_ok: parsed.colores_ok !== false,
       claims_ok: parsed.claims_ok !== false,
@@ -6776,7 +6778,13 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // QA de visión DESACTIVADO (2026-10-02): causaba timeouts (hasta 6 reintentos
   // encadenados = 15 min). Se genera una vez y se entrega. El usuario puede
   // tocar "Otro estilo" si no le gusta.
-  let qa = null; /*
+  // QA de visión en MODO AUDITORÍA (2026-10-04): valida pero NO regenera.
+  // El 2026-10-02 se desactivó porque los reintentos encadenados causaban
+  // timeouts (hasta 6 reintentos = 15 min por imagen). En auditoría no hay
+  // reintentos: se corre el QA una sola vez, se registra el resultado en
+  // qa_audit, y la imagen se entrega igual. Mora (11:00) lee esa tabla y
+  // convierte cada defecto en una regla del pipeline.
+  let qa = null;
   try {
     qa = await qaImageB64(b64, {
       headline: cleanHeadline,
@@ -6784,30 +6792,14 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       dnaFacts: qaFactsLine(dna),
     }, key);
   } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  // La imagen sale limpia de la IA (el titular se compone después con código),
-  // así que el QA solo valida lo visual: colores, claims, mobile, marca, anatomía.
-  if (qa && (!qa.colores_ok || !qa.claims_ok || !qa.mobile_ok || !qa.brand_ok || !qa.anatomia_ok)) {
-    console.log(`[concept-shot] QA falló (colores=${qa.colores_ok} claims=${qa.claims_ok} mobile=${qa.mobile_ok} marca=${qa.brand_ok} anatomia=${qa.anatomia_ok}): ${qa.detalle}`);
-    let retryPrompt;
-    if (!qa.anatomia_ok) {
-      // Artefacto de anatomía (manos/caras deformadas) = pieza descartada: se regenera.
-      retryPrompt = prompt + `\nIMPORTANT FIX: the previous render had deformed anatomy (hands, faces, fingers, proportions). Regenerate with natural, correct human anatomy — realistic hands, natural faces and proportions. Never deliver a render with deformed anatomy.`;
-    } else {
-      // Colores flojos, claims inventados o diseño poco legible en celular → reforzar.
-      retryPrompt = prompt + `\nIMPORTANT FIX: mobile-first vertical 4:5 design — the headline (if any) must be BIG, bold and high-contrast, perfectly legible on a small phone screen; keep everything important (headline, product, faces) in the CENTER with generous safe margins, nothing important near the edges. Use EXACTLY these brand colors (${hexes.join(', ') || 'the same palette'}) integrated INTO the scene (props, wardrobe, packaging, environment details) — never as a flat background. Do NOT invent any business data: no prices, no addresses, no promos, no phone numbers, no product names beyond what the brief gives, no famous-brand lookalike (never a Netflix/streaming-style red-on-black cinematic look — the design must have its OWN visual identity for this business category), and NO text at all in the image (no letters, no words — the headline is added separately afterwards).`;
-    }
-    if (retryPrompt) {
-      // N4+: el reintento también lleva la verificación de style lock.
-      if (brief.styleLockVerify && !String(retryPrompt).includes('STYLE LOCK CHECK')) retryPrompt = `${retryPrompt}\n\n${brief.styleLockVerify}`;
-      try {
-        b64 = await genConceptImage(key, withStyle(retryPrompt), absRefs, refNote, uid); // el reintento no pasa por QA
-        console.log('[concept-shot] reintento QA generado');
-      } catch (e) {
-        console.error('[concept-shot] reintento falló, devuelvo la primera imagen:', e.message);
-      }
-    }
+  if (qa) {
+    const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
+    try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
+    try {
+      db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
+      db.prepare('INSERT INTO qa_audit (passed, result) VALUES (?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000));
+    } catch (e) { console.error('[qa-audit] db:', e.message); }
   }
-  */
   // Chequeo automático de marca (Style Lock): DESACTIVADO (2026-10-02, causa timeouts).
   /*
   // línea visual. Si algún flag es false → regenerar pidiendo explícitamente lo
@@ -8751,8 +8743,15 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261003-v51';
+const BUILD_ID = '20261004-v52';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
+app.get('/api/qa-audit', (req, res) => {
+  try {
+    const rows = db.prepare("SELECT id, created_at, passed, substr(result,1,1200) AS result FROM qa_audit ORDER BY id DESC LIMIT 100").all();
+    const stats = db.prepare("SELECT COUNT(*) AS n, SUM(passed) AS ok FROM qa_audit WHERE created_at > datetime('now','-7 days')").get();
+    res.json({ ok: true, stats, rows });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
   openai: Boolean(process.env.OPENAI_API_KEY),
