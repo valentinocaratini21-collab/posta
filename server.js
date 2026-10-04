@@ -6951,6 +6951,50 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
   return { coverPath, slidePaths, caption: finalCaption, scrollScore: avgSlideScore, needsReview };
 }
 
+// Diagnóstico de generación de imagen (solo fundador, por sesión).
+// Prueba la llamada directa a OpenAI y devuelve el error exacto.
+app.post('/api/diag/image-test', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let isFounder = false;
+    try { isFounder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+    if (!isFounder) return res.status(403).json({ ok: false, error: 'no autorizado' });
+    const key = process.env.OPENAI_API_KEY || '';
+    const diag = { hasKey: !!key, keyPrefix: key ? key.slice(0, 7) + '...' : null };
+    if (!key) return res.json({ ok: false, diag, error: 'Sin OPENAI_API_KEY en el servidor' });
+    // Llamada mínima a gpt-image-1
+    let r;
+    try {
+      r = await fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: 'gpt-image-1', prompt: 'A simple red circle on white background', size: '1024x1024', quality: 'low' }),
+        signal: AbortSignal.timeout(60000),
+      });
+    } catch (e) {
+      diag.fetchError = String(e.message || e).slice(0, 200);
+      return res.json({ ok: false, diag, error: 'Error de red a OpenAI: ' + diag.fetchError });
+    }
+    diag.httpStatus = r.status;
+    const bodyText = await r.text().catch(() => '');
+    diag.bodyPreview = bodyText.slice(0, 300);
+    if (!r.ok) {
+      return res.json({ ok: false, diag, error: `OpenAI devolvió ${r.status}: ${bodyText.slice(0, 200)}` });
+    }
+    let data;
+    try { data = JSON.parse(bodyText); } catch (e) {
+      return res.json({ ok: false, diag, error: 'OpenAI devolvió JSON inválido' });
+    }
+    const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
+    diag.hasB64 = !!b64;
+    diag.b64Len = b64 ? b64.length : 0;
+    if (!b64) return res.json({ ok: false, diag, error: 'OpenAI no devolvió b64_json' });
+    return res.json({ ok: true, diag });
+  } catch (e) {
+    return res.json({ ok: false, error: 'Excepción: ' + String(e.message || e).slice(0, 200) });
+  }
+});
+
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -8755,7 +8799,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v62';
+const BUILD_ID = '20261004-v63';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

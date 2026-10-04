@@ -3626,6 +3626,36 @@ async function chatSend() {
   inp.value = '';
   chatUpdateSendBtn();
   chatScroll();
+  // "diagnostico imagen" → prueba la generación de imagen y reporta el error exacto.
+  if (/diagn[oó]stico imagen/i.test(sendText)) {
+    (async () => {
+      try {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
+        inp.value = ''; chatUpdateSendBtn(); chatScroll();
+        const sayId = 'diagSay' + Date.now();
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Probando la generación de imagen… 🔍</div>`);
+        chatScroll();
+        const r = await api.post('/api/diag/image-test', {}, { timeout: 90000 });
+        const el = document.getElementById(sayId);
+        if (r && r.ok) {
+          if (el) el.innerHTML = '✅ La generación de imagen funciona. El problema está en otro lado.';
+        } else {
+          const d = r && r.diag ? r.diag : {};
+          let msg = '❌ Encontré el problema:<br><br>';
+          msg += `<b>Error:</b> ${esc(r.error || 'desconocido')}<br>`;
+          if (d.httpStatus) msg += `<b>HTTP:</b> ${d.httpStatus}<br>`;
+          if (d.hasKey === false) msg += '<b>Key:</b> no hay API key en el servidor<br>';
+          if (d.bodyPreview) msg += `<b>Respuesta:</b> <small>${esc(d.bodyPreview.slice(0, 150))}</small>`;
+          if (el) el.innerHTML = msg;
+        }
+        chatScroll();
+      } catch (e) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a">No pude correr el diagnóstico: ${esc(e.message || '')}</div>`);
+        chatScroll();
+      }
+    })();
+    return;
+  }
   // "Armame la semana" (chip) → dispara el autopilot directo, como el CTA.
   if (/arma(m|r)?(me)? la semana|armemos (mi|la) semana/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
