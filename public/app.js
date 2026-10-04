@@ -4061,10 +4061,10 @@ function homeWeekHTML(posts, quota) {
   const qTotal = Number(q.limit) || 0;
   const qUsed = Math.max(0, Number(q.used) || 0);
   const all = posts || [];
-  // La semana se ve completa: publicados también (orden: pendientes primero).
-  const rank = (st) => st === 'draft' ? 0 : st === 'scheduled' ? 1 : 2;
-  const list = all.filter(p => p && (p.status === 'draft' || p.status === 'scheduled' || p.status === 'published'))
-    .sort((a, b) => (rank(a.status) - rank(b.status)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
+  // Solo lo POR VENIR: borradores (a aprobar) + programados (con fecha/hora).
+  // Los publicados no van en el carrusel.
+  const list = all.filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
+    .sort((a, b) => ((a.status === 'draft' ? 0 : 1) - (b.status === 'draft' ? 0 : 1)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
   if (!list.length) {
     // Solo usuario NUEVO de verdad ve "armando": si alguna vez tuvo posteos,
     // la semana está completa (no un spinner eterno).
@@ -4089,8 +4089,8 @@ function homeWeekHTML(posts, quota) {
     const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
-    const when = d.status === 'published' ? 'Publicado' : d.scheduled_at ? homeWhenLabel(d.scheduled_at) : 'Borrador';
-    const badge = d.status === 'published' ? '✅' : d.status === 'scheduled' ? '📮' : '📝';
+    const when = d.scheduled_at ? '📮 ' + homeWhenLabel(d.scheduled_at) : '📝 Borrador';
+    const badge = d.status === 'scheduled' ? '📮' : '📝';
     const cap = String(d.caption || d.source_topic || '').split('\n')[0].slice(0, 90);
     const canApprove = String(d.approval) === 'pending' && String(d.status) === 'scheduled';
     const acts = isPub ? '' : `<div class="pcard-actions hs-acts">
