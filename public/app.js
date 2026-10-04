@@ -2861,7 +2861,10 @@ async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await api.post('/api/concept-shot', { idea, tipo, headline, refs: refs || [], excludeStyles: excludeStyles || [] }, { timeout: 180000 });
-      if (r && r.ok === false && r.capped) throw { aiCap: true, message: r.error || '' };
+      if (r && r.ok === false) {
+        if (r.capped) throw { aiCap: true, message: r.error || '' };
+        throw new Error(r.error || 'El servidor no devolvió imagen');
+      }
       if (r && r.path) return { path: r.path, style: r.style || null, styleName: r.styleName || '' };
       lastErr = new Error('El servidor no devolvió imagen');
     } catch (e) {
