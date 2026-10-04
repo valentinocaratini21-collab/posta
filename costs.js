@@ -112,6 +112,16 @@ const MSG_CAP = 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana con todo �
 const ARS_PER_USD = Math.max(1, parseFloat(process.env.ARS_PER_USD || '1425') || 1425);
 const UYU_PER_USD = Math.max(1, parseFloat(process.env.UYU_PER_USD || '40') || 40);
 const AI_CAP_FOUNDER_USD = Math.max(0, parseFloat(process.env.AI_CAP_FOUNDER_USD || '200') || 200);
+// El fundador testea sin techo mensual de IA: sus cuentas se reconocen por email.
+const FOUNDER_EMAILS = ['valentino_bamboo@hotmail.com', 'valentinocaratini21@gmail.com'];
+function isFounderEmail(userId) {
+  if (!DB || !userId) return false;
+  try {
+    const u = DB.prepare('SELECT email FROM users WHERE id = ?').get(userId);
+    const em = String((u && u.email) || '').trim().toLowerCase();
+    return em && FOUNDER_EMAILS.includes(em);
+  } catch (e) { return false; }
+}
 
 function monthlyCapUsd(plan) {
   try {
@@ -146,6 +156,8 @@ function assertAiOk(userId) {
     throw new AiCapExceeded(MSG_CAP);
   }
   // Techo mensual por usuario (5% del plan): el que garantiza los números.
+  // El fundador queda exento para poder testear sin fricción.
+  if (isFounderEmail(userId)) return;
   try {
     const plan = planFor ? planFor(userId) : null;
     const cap = monthlyCapUsd(plan);
