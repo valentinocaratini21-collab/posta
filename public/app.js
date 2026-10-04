@@ -6313,14 +6313,21 @@ async function checkQuotaOrModal() {
 }
 function quotaModal(q, opts = {}) {
   const left = q.left || 0;
+  const hasPartial = left > 0 && typeof opts.onPartial === 'function';
   track('paywall_view', { plan: (q && q.plan_name) || '', limit: (q && q.limit) || 0 });
+  const headTitle = hasPartial
+    ? `Te quedan ${left} ${left === 1 ? 'posteo' : 'posteos'} esta semana`
+    : `¡Llegamos al tope de la semana! 🚀`;
+  const headHtml = hasPartial
+    ? `<p style="font-size:14px;margin:0 0 6px">¿Los armamos ahora mismo? O mejorá tu paquete y seguimos sin freno — se activa al instante.</p>`
+    : `<p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b> — y los usamos todos, ¡bien ahí!</p>
+    <p class="d">${(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? 'La semana que viene arrancás de cero de nuevo.' : 'Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.'}</p>`;
   streakModalShell(`
     <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
-    <h3 style="margin:12px 0 4px">¡Llegamos al tope de la semana! 🚀</h3>
-    <p style="font-size:14px;margin:0 0 6px">Tu plan <b>${esc(q.plan_name || '')}</b> incluye <b>${q.limit} posteos por semana</b> — y los usamos todos, ¡bien ahí!</p>
-    <p class="d">${(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? 'La semana que viene arrancás de cero de nuevo.' : 'Mejorá tu paquete y seguimos posteando ya mismo — se activa al instante, sin vueltas.'}</p>
-    ${left > 0 && opts.onPartial ? `<button class="btn btn-soft btn-block" id="qPartial" style="margin-top:10px">Armar solo ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
-    ${!(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? '<button class="btn btn-primary btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>' : ''}
+    <h3 style="margin:12px 0 4px">${headTitle}</h3>
+    ${headHtml}
+    ${hasPartial ? `<button class="btn btn-primary btn-block" id="qPartial" style="margin-top:10px">⚡ Armar ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
+    ${!(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? `<button class="btn ${hasPartial ? 'btn-soft' : 'btn-primary'} btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>` : ''}
     <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Entendido</button>`);
   const up = document.getElementById('qUpgrade');
   if (up) up.onclick = () => { closeStreakModal(); location.hash = '#/app/ajustes?plan=1'; };
