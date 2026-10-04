@@ -9,7 +9,7 @@ const db = require('./db');
 const costs = require('./costs');
 const autopilot = require('./autopilot');
 costs.initCosts(db, {
-  // Techo mensual de IA por usuario (5% del plan, 2026-10-02): costs.js lo usa
+  // Techo mensual de IA por usuario (10% del plan, 2026-10-04): costs.js lo usa
   // en assertAiOk para que ningún usuario supere su techo, pase lo que pase.
   planFor: (uid) => planForUid(uid),
 }); // medición de gasto de IA (api_costs) + techo mensual por usuario
@@ -8799,7 +8799,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v63';
+const BUILD_ID = '20261004-v64';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

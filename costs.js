@@ -2,7 +2,7 @@
 // Palancas anti-quemado:
 //  1) Cada llamada a OpenAI se loguea en api_costs con los tokens REALES
 //     (usage.prompt_tokens / usage.completion_tokens / cached_tokens) + modelo + feature.
-//  2) Techo mensual POR USUARIO: 5% del precio de su plan (vara 2026-10-02).
+//  2) Techo mensual POR USUARIO: 10% del precio de su plan (vara 2026-10-04).
 //     Esencial: $2.000 ARS/mes ≈ USD 1.40. Ningún usuario puede costar más que eso,
 //     pase lo que pase. El cap global diario ($10) se eliminó: un heavy user lo
 //     agotaba y bloqueaba a todos; queda DAILY_AI_CAP_USD como freno de emergencia.
@@ -104,8 +104,8 @@ class AiCapExceeded extends Error {
 const MSG_CAP = 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana con todo — no se perdió nada, tus borradores están a salvo 💪';
 
 // ---------- Techo mensual de IA por usuario (vara 5%, 2026-10-02) ----------
-// El costo variable de IA por usuario/mes no puede superar el 5% del precio de su plan.
-// Esencial ($39.900 ARS): $2.000 ARS/mes ≈ USD 1.40. Pro: ≈ USD 2.80. Total: ≈ USD 4.55.
+// El costo variable de IA por usuario/mes no puede superar el 10% del precio de su plan.
+// Esencial ($39.900 ARS): $3.990 ARS/mes ≈ USD 2.80. Pro: ≈ USD 5.60. Total: ≈ USD 9.11.
 // Es el techo DURO: pase lo que pase, ningún usuario cuesta más que eso en IA por mes.
 // (Un cap diario por usuario no sirve: la generación semanal mete ~USD 0.32 en un día
 // y quedaría bloqueada. El mensual permite el batch semanal y frena la cola.)
@@ -125,12 +125,12 @@ function isFounderEmail(userId) {
 
 function monthlyCapUsd(plan) {
   try {
-    if (!plan) return 1.40;
+    if (!plan) return 2.80;
     if (plan.id === 'free') return AI_CAP_FOUNDER_USD; // cuenta del fundador (testeo)
     const rate = (plan.currency === 'UYU') ? UYU_PER_USD : ARS_PER_USD;
-    const cap = (Number(plan.price) || 0) * 0.05 / rate;
+    const cap = (Number(plan.price) || 0) * 0.10 / rate;
     return Math.max(0.50, Math.round(cap * 100) / 100); // piso de seguridad
-  } catch (e) { return 1.40; }
+  } catch (e) { return 2.80; }
 }
 
 function monthSpendUsd(userId) {
@@ -155,7 +155,7 @@ function assertAiOk(userId) {
     try { console.error(`[ai-cap] BLOQUEO GLOBAL usuario=${userId} gasto_hoy=$${daySpendUsd().toFixed(2)} tope=$${DAILY_CAP_USD}`); } catch (e) {}
     throw new AiCapExceeded(MSG_CAP);
   }
-  // Techo mensual por usuario (5% del plan): el que garantiza los números.
+  // Techo mensual por usuario (10% del plan): el que garantiza los números.
   // El fundador queda exento para poder testear sin fricción.
   if (isFounderEmail(userId)) return;
   try {
