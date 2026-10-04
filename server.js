@@ -2080,9 +2080,11 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     out.reply = fixPublishReply(out.reply, publishApplied);
     // Pre-generar la imagen AHORA en background: cuando el cliente abra la
     // tarjeta "IDEA LISTA", ya va a estar lista en vez de hacerlo esperar.
-    // Pre-generación DESACTIVADA: la imagen se genera una sola vez cuando el
-    // usuario crea el posteo (draftFromIdea). La pregen causaba 429s y doble gasto.
-    // if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
+    // REACTIVADA (2026-10-04): la generación on-demand sincrónica falla por
+    // timeout del proxy (respuesta vacía → "Detalle: Error"). La cola por
+    // usuario (GEN_QUEUE) ya evita los 429s, y el preview reutiliza la imagen
+    // (draftFromPreview) así que no hay doble gasto.
+    if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
   } catch (e) {
     console.error('[chat]', e.message);
@@ -8743,7 +8745,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v58';
+const BUILD_ID = '20261004-v59';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
