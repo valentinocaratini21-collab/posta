@@ -2749,10 +2749,9 @@ function chatMoreImage() {
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
   if (b) { b.disabled = true; b.textContent = '🎨 Generando…'; }
-  // Mostrar estado de progreso en el preview sin congelar
+  // NO borrar el preview anterior: queda visible mientras se genera la nueva.
+  // El "generando" se muestra en el botón, no pisando la imagen.
   const box = $('#chatPreviews');
-  if (box) box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
-  try { postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Probando otro estilo ✨…', 'Ya casi está…']); } catch (e) {}
   renderChatPreviews().then(() => {
     if (CHAT_IDEA !== idea) return;
     renderChatStoryboard();
@@ -2898,8 +2897,13 @@ async function renderChatPreviews_OLD() {
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
-  box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
-  postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Aplicando tu estilo ✨…']);
+  // Si ya hay un preview, NO lo borramos: queda visible mientras se genera la nueva.
+  // Solo mostramos "generando" si no hay nada que mostrar.
+  const hadPreview = box.querySelector('img');
+  if (!hadPreview) {
+    box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
+    postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Aplicando tu estilo ✨…']);
+  }
   // Pinta una imagen ya lista en la tarjeta (la usa la pre-generada y la on-demand).
   const paintPreview = (gen) => {
     if (CHAT_IDEA !== idea) return;
@@ -2957,8 +2961,11 @@ async function renderChatPreviews_OLD() {
     if (CHAT_IDEA !== idea) return;
     if (!gen || !gen.path) {
       stopPrevThinking();
-      box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
-      CHAT_PREVIEWS = [];
+      // No borrar el preview anterior si había uno: solo avisar del fallo.
+      if (!box.querySelector('img')) {
+        box.innerHTML = '<div style="font-size:12px;color:var(--mut)">No pude generar la imagen 😅 Probá tocando ↻ Otra imagen.</div>';
+        CHAT_PREVIEWS = [];
+      }
       return;
     }
     paintPreview(gen);
@@ -2966,6 +2973,8 @@ async function renderChatPreviews_OLD() {
     if (CHAT_IDEA !== idea) return;
     stopPrevThinking();
     const detail = String((e && e.message) || '').slice(0, 120);
+    // Si había un preview anterior, lo conservamos y solo avisamos.
+    if (box.querySelector('img')) return;
     if (isAiCapErr(e)) {
       const capMsg = (e.message || '').trim() || 'Llegamos al tope de IA 😅 Probá de nuevo en un rato.';
       box.innerHTML = '<div style="font-size:12px;color:var(--mut)">' + esc(capMsg) + '</div>';
