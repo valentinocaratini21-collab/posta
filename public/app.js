@@ -2742,19 +2742,24 @@ async function chatMoreCaptions() {
 
 // "🔄 Otra imagen": genera una imagen nueva con OTRO estilo de la librería
 // (los prompts subidos). Cada tap da una opción nueva, sin repetir estilo.
-async function chatMoreImage() {
+// "↻ Otra imagen" NO bloquea: dispara la generación en segundo plano y el
+// usuario puede seguir chateando. La imagen aparece sola cuando está lista.
+function chatMoreImage() {
   if (!CHAT_IDEA) return;
   const idea = CHAT_IDEA;
   const b = $('#chatMoreImg');
-  if (b) { b.disabled = true; postyThinking(b); }
-  try {
-    await renderChatPreviews();
+  if (b) { b.disabled = true; b.textContent = '🎨 Generando…'; }
+  // Mostrar estado de progreso en el preview sin congelar
+  const box = $('#chatPreviews');
+  if (box) box.innerHTML = '<div class="chat-prev-loading" id="chatPrevThinking"></div>';
+  try { postyThinking($('#chatPrevThinking'), ['Generando tu imagen 🎨…', 'Probando otro estilo ✨…', 'Ya casi está…']); } catch (e) {}
+  renderChatPreviews().then(() => {
     if (CHAT_IDEA !== idea) return;
     renderChatStoryboard();
-  } finally {
+  }).catch(() => {}).finally(() => {
     const b2 = $('#chatMoreImg');
     if (b2 && CHAT_IDEA === idea) { stopPostyThinking(b2); b2.disabled = false; b2.textContent = '↻ Otra imagen'; }
-  }
+  });
 }
 
 // 3 opciones de texto tocables: elegir una la carga en el campo editable
