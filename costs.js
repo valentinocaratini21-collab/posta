@@ -177,6 +177,8 @@ function assertAiOk(userId) {
 // ---------- Rate limits por usuario/día ----------
 function checkRate(userId, feature, limit) {
   if (!DB) return { ok: true, remaining: limit, used: 0 };
+  // El fundador testea sin límites de ritmo tampoco.
+  try { if (isFounderEmail(userId)) return { ok: true, remaining: 999, used: 0 }; } catch (e) {}
   try {
     const row = DB.prepare(`SELECT n FROM ai_rate WHERE user_id = ? AND feature = ? AND day = date('now')`).get(userId, feature);
     const n = (row && row.n) || 0;
