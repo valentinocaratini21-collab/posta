@@ -606,15 +606,17 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[stories] no se pudo programar:', e.message);
   }
-  // Pipeline perpetuo (Track 4): lunes 7:00 (Buenos Aires), respaldo del trigger
-  // inline de /api/posts/schedule-all. Para cada usuario que cumple los 4 gates
-  // (plan/trial vigente, activo 7 días, sin borradores de la próxima semana,
-  // pipeline vivo 14 días) genera los borradores de la semana que viene.
+  // Pipeline perpetuo (Track 4): DOMINGO 7:00 (Buenos Aires) — la semana que viene
+  // se arma el domingo para que el cliente la VEA antes del primer posteo del lunes
+  // (regla sagrada: ningún primer posteo sale sin que el cliente haya visto la semana).
+  // Respaldo del trigger inline de /api/posts/schedule-all. Para cada usuario que
+  // cumple los 4 gates (plan/trial vigente, activo 7 días, sin borradores de la
+  // próxima semana, pipeline vivo 14 días) genera los borradores de la semana que viene.
   // Solo BORRADORES: nada se programa ni publica sin el tap del usuario.
   // Require perezoso DENTRO del callback: server.js ya está cargado a esta
   // altura (es quien requiere este módulo), así que no se re-ejecuta.
   try {
-    cron.schedule('0 7 * * 1', () => {
+    cron.schedule('0 7 * * 0', () => {
       try {
         const srv = require('./server');
         if (srv && typeof srv.nextWeekSweep === 'function') {
@@ -622,7 +624,7 @@ function startScheduler(db) {
         }
       } catch (e) { console.error('[next-week sweep] no se pudo cargar el pipeline:', e.message); }
     }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Pipeline perpetuo (borradores semana+1): lunes 7:00 (Buenos Aires)');
+    console.log('[posta] Pipeline perpetuo (borradores semana+1): domingo 7:00 (Buenos Aires)');
   } catch (e) {
     console.error('[next-week sweep] no se pudo programar:', e.message);
   }
