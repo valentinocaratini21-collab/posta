@@ -5403,7 +5403,21 @@ async function runAutopilot(n, tag) {
   postyWorking(true);
   const apT0 = Date.now();
   track('autopilot_start', { n, tag: t }); track('week_generate_start', { n, tag: t });
-  const prog = document.getElementById('apProg-' + t);
+  let prog = document.getElementById('apProg-' + t);
+  if (!prog) {
+    // El autopilot se disparó desde el home/chat sin la tarjeta renderizada
+    // (ej: chip "Armame la semana" o modal de cupo): crear el contenedor de
+    // progreso donde el usuario lo vea, si no todo muere en silencio.
+    prog = document.createElement('div');
+    prog.id = 'apProg-' + t;
+    const box = document.getElementById('chatBox');
+    if (box) box.prepend(prog);
+    else {
+      const home = document.querySelector('.hs-home');
+      if (home) home.appendChild(prog);
+      else document.body.prepend(prog);
+    }
+  }
   $$('[data-autopilot]').forEach(b => b.disabled = true);
   try {
     // Cupo del plan: chequear ANTES de gastar IA — ofrecer mejorar o armar parcial
