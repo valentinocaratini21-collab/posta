@@ -8743,10 +8743,11 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v52';
+const BUILD_ID = '20261004-v53';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
+    db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
     const rows = db.prepare("SELECT id, created_at, passed, substr(result,1,1200) AS result FROM qa_audit ORDER BY id DESC LIMIT 100").all();
     const stats = db.prepare("SELECT COUNT(*) AS n, SUM(passed) AS ok FROM qa_audit WHERE created_at > datetime('now','-7 days')").get();
     res.json({ ok: true, stats, rows });
