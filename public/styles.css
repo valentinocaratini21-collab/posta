@@ -246,7 +246,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .igmock{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;margin:0 auto 18px;max-width:470px;box-shadow:0 2px 12px rgba(10,30,51,.08)}
 .igmock-track{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:6px 2px 14px;margin:0 -2px;scrollbar-width:none}
 .igmock-track::-webkit-scrollbar{display:none}
-.igmock-track .igmock{flex:0 0 min(260px,62%);max-width:none;margin:0;scroll-snap-align:start}
+.igmock-track .igmock{flex:0 0 min(300px,72%);max-width:none;margin:0;scroll-snap-align:start}
 .igmock-carousel{position:relative}
 .car-arrow{position:absolute;top:34%;z-index:3;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:#fff;box-shadow:0 2px 12px rgba(10,30,51,.22);font-size:21px;font-weight:800;color:var(--txt);cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;padding:0 0 3px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .car-arrow.left{left:8px}
