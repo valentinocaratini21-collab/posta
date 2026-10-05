@@ -636,6 +636,42 @@ function startScheduler(db) {
     console.error('[next-week sweep] no se pudo programar:', e.message);
   }
 
+  // Resiliencia del generador semanal (2026-10-05): cada 3 horas reintenta
+  // los fallos del barrido registrados en sweep_failures (backoff
+  // exponencial: 3h, 6h, 12h...). Así un domingo con la IA caída no deja la
+  // semana vacía: en cuanto vuelve el crédito, la semana se genera sola.
+  try {
+    cron.schedule('0 */3 * * *', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.retrySweepFailures === 'function') {
+          srv.retrySweepFailures().catch((e) => console.error('[sweep-retry]', e.message));
+        }
+      } catch (e) { console.error('[sweep-retry] no se pudo cargar el pipeline:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Reintento de fallos del sweep: cada 3 horas (Buenos Aires)');
+  } catch (e) {
+    console.error('[sweep-retry] no se pudo programar:', e.message);
+  }
+
+  // Backfill diario (2026-10-05): 8:00 ART genera la semana EN CURSO para los
+  // usuarios que el barrido del domingo no cubrió. Aunque el domingo falle
+  // TODO, el lunes a la mañana la semana existe (tarde, pero existe).
+  // Idempotente por el guard already_exists.
+  try {
+    cron.schedule('0 8 * * *', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.backfillThisWeek === 'function') {
+          srv.backfillThisWeek().catch((e) => console.error('[backfill]', e.message));
+        }
+      } catch (e) { console.error('[backfill] no se pudo cargar el pipeline:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Backfill semanal: 8:00 diario (Buenos Aires)');
+  } catch (e) {
+    console.error('[backfill] no se pudo programar:', e.message);
+  }
+
   // 🚀 Abrir y listo — regla 24h (2026-10-03): cada hora, los borradores que
   // llevan 24h+ sin que el cliente los toque se programan SOLOS (si el usuario
   // no apagó el auto-arm en Ajustes). "Si no tocás nada en 24 horas, sale sola."

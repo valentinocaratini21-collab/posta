@@ -4482,7 +4482,12 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
     const ppw = (getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN).postsPerWeek) || 3;
     const key = openaiKeyFor(uid);
-    const ideas = await generateIdeas(ideasInputFor(uid), key);
+    // Resiliencia (2026-10-05): si la generación de ideas tira (IA caída,
+    // saldo 0, input inesperado), NO propagar la excepción al sweep: devolver
+    // fallo estructurado para que se registre y se reintente con backoff.
+    let ideas;
+    try { ideas = await generateIdeas(ideasInputFor(uid), key); }
+    catch (e) { console.error(`[pipeline:${tag}] ideas falló:`, e.message); return { ok: false, reason: 'ai_error', error: e.message }; }
     const picks = ideas.slice(0, ppw);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
@@ -4622,6 +4627,20 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     NEXTWEEK_RUNNING.delete(uid);
   }
 }
+// ----- Resiliencia del generador semanal (2026-10-05): "la semana nunca queda
+// vacía en silencio". Los fallos transitorios del sweep se registran en
+// sweep_failures para reintentarse con backoff (retrySweepFailures, cada 3h)
+// y con el backfill diario de las 8:00 (backfillThisWeek).
+function sweepNowStr() { return new Date().toISOString().slice(0, 19).replace('T', ' '); }
+function recordSweepFailure(uid, weekKey, reason) {
+  try {
+    const nextRetry = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    db.prepare(`INSERT INTO sweep_failures (user_id, week_key, reason, attempts, next_retry_at, created_at)
+      VALUES (?,?,?,?,?,?)
+      ON CONFLICT(user_id, week_key) DO UPDATE SET reason = excluded.reason, attempts = 0, next_retry_at = excluded.next_retry_at, created_at = excluded.created_at`)
+      .run(uid, weekKey, String(reason || '').slice(0, 200), 0, nextRetry, sweepNowStr());
+  } catch (e) { console.error('[sweep-retry] no se pudo registrar el fallo:', e.message); }
+}
 // Barrido semanal (lo llama el cron de scheduler.js): para cada usuario que
 // cumple los gates y no tiene borradores de la próxima semana, generarlos.
 // Respaldo por si el trigger inline de schedule-all falló.
@@ -4630,12 +4649,13 @@ async function nextWeekSweep() {
   try { users = db.prepare('SELECT id FROM users').all(); } catch (e) { return { ok: false, error: e.message }; }
   let ok = 0, skip = 0;
   for (const u of users) {
+    let nextWk = null;
     try {
       // FASE 1: evaluación semanal de la escalera de confianza (barata: sale
       // enseguida si el usuario no está en nivel 1).
       try { autopilot.maybeGraduateLevel2(db, u.id); } catch (e) {}
       const tz = userTz(u.id);
-      const nextWk = shiftDays(mondayKeyOf(tzToday(tz)), 7);
+      nextWk = shiftDays(mondayKeyOf(tzToday(tz)), 7);
       const elig = nextWeekEligible(u.id, nextWk);
       if (!elig.ok) { skip++; continue; }
       const r = await generateWeekDrafts(u.id, { weekKey: nextWk, tag: 'sweep', quiet: autopilot.trustLevel(db, u.id) === 0 });
@@ -4665,10 +4685,101 @@ async function nextWeekSweep() {
             if (sa.ok) console.log(`[next-week sweep] usuario ${u.id}: ${sa.scheduled.length} programados solos 🚀`);
           } catch (e) { console.error('[next-week sweep] auto-schedule:', e.message); }
         }
-      } else skip++;
-    } catch (e) { console.error('[next-week sweep] usuario', u.id, e.message); skip++; }
+      } else {
+        // Fallo transitorio de IA ('ai_error' / 'no_ideas'): se registra para
+        // reintentar con backoff — nunca queda la semana vacía en silencio.
+        // Las demás reasons (no_dna, no_plan, ai_cap, already_exists, running)
+        // son finales o requieren acción del usuario: no van a retry.
+        if (r.reason === 'ai_error' || r.reason === 'no_ideas') recordSweepFailure(u.id, nextWk, r.reason);
+        skip++;
+      }
+    } catch (e) {
+      console.error('[next-week sweep] usuario', u.id, e.message);
+      if (nextWk) recordSweepFailure(u.id, nextWk, 'exception: ' + String((e && e.message) || e || '').slice(0, 120));
+      skip++;
+    }
   }
   console.log(`[next-week sweep] generadas: ${ok}, salteadas: ${skip}`);
+  return { ok: true, generated: ok, skipped: skip };
+}
+// Reintenta los fallos registrados del sweep con backoff exponencial
+// (3h, 6h, 12h, 12h, 12h; a los 5 intentos se rinde y lo reporta).
+// Lo llama el cron de scheduler.js cada 3 horas. Cada usuario está aislado:
+// un fallo no mata el loop de los demás.
+async function retrySweepFailures() {
+  let rows = [];
+  try { rows = db.prepare(`SELECT * FROM sweep_failures WHERE next_retry_at <= datetime('now') AND attempts < 5`).all(); }
+  catch (e) { console.error('[sweep-retry] query:', e.message); return { ok: false, error: e.message }; }
+  let resolved = 0, retried = 0;
+  for (const f of rows) {
+    try {
+      const r = await generateWeekDrafts(f.user_id, { weekKey: f.week_key, tag: 'sweep-retry' });
+      const del = () => { try { db.prepare(`DELETE FROM sweep_failures WHERE user_id = ? AND week_key = ?`).run(f.user_id, f.week_key); } catch (e) {} };
+      if (r && r.ok) { del(); resolved++; }
+      else if (r && (r.reason === 'ai_error' || r.reason === 'no_ideas')) {
+        const attempts = (f.attempts || 0) + 1;
+        if (attempts >= 5) {
+          del();
+          logGenError('sweep', new Error(`semana ${f.week_key} sin generar tras 5 reintentos (uid ${f.user_id})`));
+        } else {
+          const hours = Math.min(3 * Math.pow(2, attempts), 12);
+          const nextRetry = new Date(Date.now() + hours * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+          try { db.prepare(`UPDATE sweep_failures SET attempts = ?, reason = ?, next_retry_at = ? WHERE user_id = ? AND week_key = ?`).run(attempts, r.reason, nextRetry, f.user_id, f.week_key); }
+          catch (e) { console.error('[sweep-retry] update:', e.message); }
+        }
+        retried++;
+      } else {
+        // Reason final (no_dna, no_plan, ai_cap, already_exists, running,
+        // inactive_7d, paused_14d): ya no aplica → no tiene sentido seguir
+        // reintentando, se limpia la fila.
+        del();
+      }
+    } catch (e) {
+      // Excepción inesperada (ej. el usuario fue borrado y getProfile choca
+      // con la FK): cuenta como intento para no dejar la fila colgada.
+      console.error('[sweep-retry] usuario', f.user_id, e.message);
+      const attempts = (f.attempts || 0) + 1;
+      if (attempts >= 5) {
+        try { db.prepare(`DELETE FROM sweep_failures WHERE user_id = ? AND week_key = ?`).run(f.user_id, f.week_key); } catch (e2) {}
+        logGenError('sweep', new Error(`semana ${f.week_key} sin generar tras 5 reintentos (uid ${f.user_id}, excepción)`));
+      } else {
+        try { db.prepare(`UPDATE sweep_failures SET attempts = ?, next_retry_at = datetime('now', '+3 hours') WHERE user_id = ? AND week_key = ?`).run(attempts, f.user_id, f.week_key); }
+        catch (e2) {}
+      }
+    }
+  }
+  if (rows.length) console.log(`[sweep-retry] filas: ${rows.length}, resueltas: ${resolved}, reintentadas: ${retried}`);
+  return { ok: true, rows: rows.length, resolved, retried };
+}
+// Backfill diario (cron 8:00 ART en scheduler.js): genera la semana EN CURSO
+// para los usuarios que el barrido del domingo no cubrió — aunque el domingo
+// falle TODO, el lunes a la mañana la semana existe (tarde, pero existe).
+// Idempotente por el guard already_exists (de nextWeekEligible y del pipeline).
+async function backfillThisWeek() {
+  let users = [];
+  try { users = db.prepare('SELECT id FROM users').all(); } catch (e) { return { ok: false, error: e.message }; }
+  let ok = 0, skip = 0;
+  for (const u of users) {
+    let wk = null;
+    try {
+      wk = mondayKeyOf(tzToday(userTz(u.id)));
+      const elig = nextWeekEligible(u.id, wk);
+      if (!elig.ok) { skip++; continue; }
+      const r = await generateWeekDrafts(u.id, { weekKey: wk, tag: 'backfill' });
+      if (r && r.ok) ok++;
+      else {
+        // El backfill también alimenta el loop de reintentos: si a las 8:00 la
+        // IA sigue caída, el cron de cada 3h lo vuelve a intentar.
+        if (r && (r.reason === 'ai_error' || r.reason === 'no_ideas')) recordSweepFailure(u.id, wk, r.reason);
+        skip++;
+      }
+    } catch (e) {
+      console.error('[backfill] usuario', u.id, e.message);
+      if (wk) recordSweepFailure(u.id, wk, 'exception: ' + String((e && e.message) || e || '').slice(0, 120));
+      skip++;
+    }
+  }
+  console.log(`[backfill] semanas generadas: ${ok}, salteadas: ${skip}`);
   return { ok: true, generated: ok, skipped: skip };
 }
 // ----- Agregado Track 4: "si vacía los borradores, se reconstruye con otro enfoque" -----
@@ -9066,4 +9177,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek };

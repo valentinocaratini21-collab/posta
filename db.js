@@ -705,4 +705,19 @@ try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_prenotify INTEGER DEFAULT 
 try { db.exec(`UPDATE users SET trust_level = 2 WHERE COALESCE(autopilot_enabled, 0) = 1 AND COALESCE(trust_level, 0) < 2`); } catch (e) {}
 try { db.exec(`UPDATE users SET trust_level = 1 WHERE COALESCE(trust_level, 0) < 1 AND (COALESCE(training_wheels, 1) = 0 OR (SELECT COUNT(*) FROM golden_examples ge WHERE ge.user_id = users.id) >= 5 OR (SELECT COUNT(*) FROM posts p WHERE p.user_id = users.id AND p.status = 'published') >= 5)`); } catch (e) {}
 
+// Resiliencia del generador semanal (2026-10-05): si el barrido dominical
+// falla por error transitorio de IA (saldo 0, 429, timeout), el fallo se
+// registra acá para reintentarlo con backoff en vez de dejar la semana
+// vacía en silencio. retrySweepFailures (server.js) la consume cada 3h.
+db.exec(`CREATE TABLE IF NOT EXISTS sweep_failures (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  reason TEXT DEFAULT '',
+  attempts INTEGER DEFAULT 0,
+  next_retry_at TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY(user_id, week_key)
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sweep_failures_retry ON sweep_failures(next_retry_at)`); } catch (e) {}
+
 module.exports = db;
