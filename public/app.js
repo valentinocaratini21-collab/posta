@@ -898,7 +898,7 @@ function firstOpenParty() {
 }
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
 function igConnectHere() {
-  const cur = '/#' + ((location.hash.split('?')[0] || '#/app/chat').replace(/^#/, ''));
+  const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
   igConnect(cur);
 }
 function setupChecklistHtml(title) {
@@ -7340,7 +7340,7 @@ async function maybeAutoStartWeek() {
 function postAuthLanding() {
   // FASE 4 (autopilot): onboarding si falta el negocio; si no, directo a la
   // semana. El chat queda como escape hatch en la navegación secundaria.
-  const homeTab = '#/app/chat';
+  const homeTab = '#/app/schedule';
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
     location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
@@ -8135,6 +8135,20 @@ async function scheduleView() {
   const schedPosts = allPosts.filter(p => p.status === 'scheduled');
   const published = allPosts.filter(p => p.status === 'published');
   const failed = allPosts.filter(p => p.status === 'failed');
+  // 2026-10-05: si no hay nada por venir, disparar la generación en segundo
+  // plano (sin bloquear). El home muestra "armando" y refresca solo.
+  let weekGenerating = false;
+  if (!drafts.length && !schedPosts.length) {
+    try {
+      const er = await api.post('/api/week/ensure', {}).catch(() => null);
+      weekGenerating = !!(er && (er.generating || er.count > 0));
+      if (er && er.generating) {
+        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 20000);
+      }
+    } catch (e) {}
+  }
+  let quota = null;
+  try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
   const slots = suggestSlots(drafts.length, schedPosts);
   const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
@@ -8220,14 +8234,19 @@ async function scheduleView() {
   const empty = !scheduled.length && !publishedThisWeek.length && SCHED_DAY_OFFSET === 0;
   // Sin borradores ni programados: la tarjeta para armar la semana vive acá.
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
+  // 2026-10-05: home en Schedule (primera pestaña) — 5 tarjetas fijas arriba,
+  // chat abajo en la misma pantalla. Pedido de Valentino.
+  const homeWeekBlock = homeWeekHTML(allPosts, quota, weekGenerating);
+  const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
     ${trialBanner}
     ${dogfoodBlock}
     ${expBanner}
     ${fpBlock}
     ${ftBlock}
-    ${reviewBlock}
     ${failedBlock}
+    ${homeWeekBlock}
+    ${homeChatBlock}
     ${armBlock}
     <div class="sched-top">
       <div><h2 style="margin:0">📅 Schedule</h2>
@@ -8355,6 +8374,8 @@ function bindSchedule() {
   if (pv) pv.onclick = () => { if (SCHED_DAY_OFFSET > 0) { SCHED_DAY_OFFSET--; render(); } };
   if (nx) nx.onclick = () => { SCHED_DAY_OFFSET++; render(); };
   if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; render(); };
+  // 2026-10-05: chat en el Schedule (home) — cablear como en #/app/chat.
+  try { bindChat(); } catch (e) {}
   // Días libres: el fantasma "+" lleva al chat a pedirle algo a Posty para ese día.
   $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => { location.hash = '#/app/chat'; });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
