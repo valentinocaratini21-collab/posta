@@ -1,0 +1,47 @@
+FESTEJOS DE POSTY — posta-festejos.zip
+==========================================
+Cada momento de celebración ahora SE SIENTE: confetti + Posty haciendo
+malabares con 3 pelotas amarillas (~3s, CSS puro).
+
+ARCHIVOS Y DESTINO
+------------------
+Raíz del repo:
+  scheduler.js   → fiesta al publicar + ceremonia primer posteo + wins (cron 18:00)
+  db.js          → columna posts.win_celebrated
+  LEEME-FESTEJOS.txt → este archivo (NO subir al repo)
+
+public/:
+  app.js         → postyCelebrate() + coreografía + auto-trigger [celebrate]
+                   + Posty pensando en voz alta en el chat
+  styles.css     → keyframes de la coreografía (pelotas + salto)
+  index.html     → ?v=20260930-party1 (app.js y styles.css)
+  prueba.html    → tracker de /prueba en primera persona de Posty + avatar
+
+QUÉ SE FESTEJA Y CUÁNDO
+-----------------------
+1. Post publicado (scheduler) → "¡Ya está en tu Instagram! 🎉" + link + [celebrate].
+   Nunca en demo (sería mentira).
+2. Primer posteo EVER → ceremonia grande: "¡Tu primer posteo con Posty
+   ya está vivo! 🎉 Esto funciona de verdad 💪".
+3. Win (cron 18:00 America/Argentina/Buenos_Aires) → si un posteo supera
+   1.4x tu promedio (mín 3 posteos con métricas, reach ≥ 100, datos reales
+   de post_metrics): "Tu posteo del lunes llegó a 1.500 — 150% más que
+   tu promedio 🚀". Una vez por posteo. Sin datos → silencio total.
+4. Level-up y primera apertura → postyCelebrate() (confetti + malabares).
+5. Posty pensando en voz alta: /prueba y generaciones del chat hablan en
+   primera persona ("Estoy eligiendo tu mejor foto 📸…") en vez de ⏳ fríos.
+
+CÓMO PROBARLO
+-------------
+- Publicá un posteo (o simulá en staging): llega el mensaje al chat con
+  confetti + malabares al abrir el chat.
+- Wins: el cron corre a las 18:00; no se probó en vivo el disparo.
+- QA visual en iPhone: confetti, overlay de malabares y tracker de /prueba
+  (dueño).
+
+ADVERTENCIAS
+------------
+- Toca scheduler.js y db.js (backend): verificar qué sirve producción
+  antes de subir para no pisar cambios.
+- Esperar ~3 min de Railway antes de probar.
+- En iPhone verificar nombres exactos en GitHub (iOS renombra duplicados).

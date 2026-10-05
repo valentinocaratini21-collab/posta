@@ -34,15 +34,15 @@ Raíz del repo:
   first-publish-nudge.js (nuevo), level-boosts.js (nuevo)
 Carpeta public/:
   app.js, styles.css, index.html, prueba.html
-Carpeta public/js/ (nueva — crearla si no existe):
-  chunk-ajustes.js, chunk-admin.js, chunk-creator.js
+  chunk-ajustes.js, chunk-admin.js, chunk-creator.js (van en public/ directo, NO en public/js/:
+  el frontend los pide como /chunk-*.js y express.static los sirve desde public/)
 
 NO subir este LEEME al repo.
 
 ANTES DE SUBIR (en iPhone, GitHub web):
   1. Verificar que cada archivo se llame EXACTO (iOS renombra duplicados: "server 2.js").
   2. Si GitHub muestra "server 2.js" o similar: borrar el duplicado y renombrar.
-  3. Subir los 23 archivos a sus carpetas (incluye crear public/js/).
+  3. Subir los archivos a sus carpetas (raíz vs public/).
 
 DESPUÉS DE SUBIR:
   - Esperar ~3 minutos (Railway).

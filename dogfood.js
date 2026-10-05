@@ -27,6 +27,9 @@ const { sendPush, pushConfigured } = require('./push');
 const { sendEmail, emailShell, emailConfigured } = require('./email');
 const { recordPerformance } = require('./learning');
 const { trackUsage, IMAGE_QUALITY } = require('./costs');
+// FASE 0 — qualityGate en el auto-publish de dogfood (autopilot.js no tiene
+// dependencias del proyecto, no hay ciclo de requires).
+const { qualityGate, saveQualityResult } = require('./autopilot');
 
 // ---------------------------------------------------------------------------
 // 1. House account: el brief unificado de Posty.
@@ -510,6 +513,22 @@ async function tickDogfood(db, { now = new Date(), mediaDir, baseUrl, publishFn 
   } catch (e) { console.error('[dogfood] tick auto:', e.message); }
   for (const post of auto) {
     if (!publishFn) { console.log(`[dogfood] #${post.id} venció sin publishFn, skip`); continue; }
+    // FASE 0 — qualityGate también en el auto-publish: si no pasa, no sale
+    // solo (fail-closed). Se limpia auto_at para no reintentarlo cada minuto;
+    // queda en pending_approval para revisión/aprobación manual.
+    let g = null;
+    try {
+      g = qualityGate(post, db, mediaDir);
+      saveQualityResult(db, post.id, g);
+    } catch (e) { console.error(`[dogfood] gate #${post.id}:`, e.message); }
+    if (!g || !g.pass) {
+      const failed = g
+        ? Object.entries(g.checks).filter(([, c]) => !c.ok).map(([k, c]) => `${k}(${c.detail})`).join(', ')
+        : 'gate_error';
+      console.log(`[dogfood] #${post.id} NO pasa gate (score ${g ? g.score : '?'}): ${failed} → queda pendiente para revisión manual`);
+      try { db.prepare(`UPDATE posts SET auto_at = '' WHERE id = ? AND kind = 'dogfood'`).run(post.id); } catch (e) {}
+      continue;
+    }
     const r = await approveDogfood(db, post.id, publishFn, { decision: 'auto' });
     if (r.ok) {
       console.log(`[dogfood] #${post.id} auto-publicado (2h sin respuesta)`);

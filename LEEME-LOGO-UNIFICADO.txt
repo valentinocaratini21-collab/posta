@@ -1,0 +1,36 @@
+LEEME — LOGO UNIFICADO (reemplaza a style-lock y activación)
+============================================================
+
+⚠️ IMPORTANTE: NO subir posta-style-lock.zip NI posta-activacion.zip.
+Este zip los REEMPLAZA a los dos: trae el estado final de todos sus
+archivos ya con el refactor "mascota → logo de tu marca" aplicado.
+Subí SOLO este.
+
+Qué cambió (todo junto):
+- Style Lock visual: analiza el IG conectado y guarda la línea visual
+  de cada cliente (style-visual.js, tabla ig_visual_style).
+- Logo unificado: se eliminó el concepto "mascota". La referencia visual
+  fija para generación es el asset kind='logo' del brand kit.
+- Logo auto-extraído: Posty propone la foto de perfil de IG como logo
+  ("¿Este es el logo de tu marca? Lo uso en todos tus diseños 👇",
+  1 tap para confirmar → se guarda como logo).
+- Chequeo automático de marca post-generación (regenera solo si falla).
+- "No me gusta" con motivo en borradores (chips → reglas NUNCA:).
+- Nudge día 2 (activation-nudge.js, cron 11:00 America/Argentina/Buenos_Aires).
+- posty-level.js: el nivel "Veo tu marca" ahora lee el logo de
+  assets kind='logo' (antes settings.brand_logo, legacy).
+
+Dónde va cada archivo:
+  RAÍZ del repo:  style-visual.js, db.js, server.js, scheduler.js,
+                  activation-nudge.js, posty-level.js
+  public/:        app.js, index.html
+
+⚠️ backend (server.js, db.js, scheduler.js): antes de subir, verificá qué
+versión sirve producción hoy para no pisar cambios.
+⚠️ iPhone: verificá en GitHub que los nombres sean EXACTOS
+(app.js, server.js — iOS los renombra como "app 2.js" si ya los descargaste).
+⏳ Railway tarda ~3 minutos en deployar antes de probar.
+
+Harness: 15/15 PASS contra servidor real (confirm/reject de logo,
+reemplazo, auth, niveles, migraciones). Rubro "Mascotas" (pet shops)
+intacto en todos lados.

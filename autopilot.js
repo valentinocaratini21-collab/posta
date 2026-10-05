@@ -138,6 +138,83 @@ function saveQualityResult(db, postId, result) {
   }
 }
 
+// ---------- FASE 1: una sola escalera de confianza (2026-10-05) ----------
+// trust_level:
+//   0 = todo pasa por revisión/aprobación explícita (rueditas);
+//   1 = publica solo, con aviso pre-publicación de 30 min (freno de emergencia);
+//   2 = autopiloto pleno (aviso pre-publicación opt-in).
+// Reemplaza los 3 mecanismos redundantes: training_wheels, autopilot_enabled +
+// 10 aprobaciones limpias, y el gate de primera semana en processDuePosts.
+// autopilot_enabled queda espejado de trust_level>=2.
+const GOLDEN_TARGET = 5;     // golden examples para subir al nivel 1
+const TRUST_CLEAN_WEEKS = 3; // semanas en auto sin vetos/fallos para el nivel 2
+
+// Nivel de confianza del usuario. Fail-closed: ante cualquier duda → 0
+// (columna aún no migrada, usuario inexistente, valor raro).
+function trustLevel(db, userId) {
+  try {
+    const u = db.prepare('SELECT trust_level FROM users WHERE id = ?').get(userId);
+    const tl = u ? u.trust_level : 0;
+    return Number.isInteger(tl) && tl >= 0 ? tl : 0;
+  } catch (e) { return 0; }
+}
+
+// Graduación al nivel 1: 5+ golden examples (aprobaciones del revisor) o
+// 5+ publicados (paridad con la vieja trainingWheelsActive). Espeja
+// training_wheels=0 para no romper lectores viejos. Idempotente.
+function maybeGraduate(db, uid) {
+  try {
+    const n = db.prepare(`SELECT COUNT(*) AS n FROM golden_examples WHERE user_id = ?`).get(uid).n || 0;
+    let ok = n >= GOLDEN_TARGET;
+    if (!ok) {
+      const pub = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'`).get(uid).n || 0;
+      ok = pub >= GOLDEN_TARGET;
+    }
+    if (ok) {
+      try { db.prepare(`UPDATE users SET trust_level = 1 WHERE id = ? AND COALESCE(trust_level, 0) < 1`).run(uid); } catch (e) {}
+      try { db.prepare(`UPDATE users SET training_wheels = 0 WHERE id = ?`).run(uid); } catch (e) {}
+    }
+    return n;
+  } catch (e) { return 0; }
+}
+
+// Graduación al nivel 2: TRUST_CLEAN_WEEKS semanas consecutivas con
+// publicaciones automáticas (auto_published=1, lo marca el flujo auto) y sin
+// vetos (rejected/cancelled) ni fallos. Se evalúa una vez por semana (sweep
+// dominical). Las semanas sin actividad automática no cuentan ni resetean;
+// una semana con veto/fallo resetea el contador a 0.
+function maybeGraduateLevel2(db, uid) {
+  try {
+    const u = db.prepare('SELECT trust_level, auto_weeks_clean FROM users WHERE id = ?').get(uid) || {};
+    if ((u.trust_level || 0) !== 1) return u.trust_level || 0;
+    const auto = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ?
+      AND status = 'published' AND COALESCE(auto_published, 0) = 1
+      AND COALESCE(published_at, '') > datetime('now', '-7 days')`).get(uid).n || 0;
+    if (!auto) return 1; // sin actividad auto esta semana: no cuenta ni resetea
+    const bad = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ?
+      AND created_at > datetime('now', '-7 days')
+      AND (COALESCE(approval, '') = 'rejected' OR status = 'cancelled' OR status = 'failed')`).get(uid).n || 0;
+    if (bad) {
+      db.prepare(`UPDATE users SET auto_weeks_clean = 0 WHERE id = ?`).run(uid);
+      console.log(`[trust] usuario ${uid}: semana con veto/fallo → contador a 0`);
+      return 1;
+    }
+    const clean = (u.auto_weeks_clean || 0) + 1;
+    if (clean >= TRUST_CLEAN_WEEKS) {
+      db.prepare(`UPDATE users SET trust_level = 2, auto_weeks_clean = ?, autopilot_enabled = 1 WHERE id = ?`).run(clean, uid);
+      console.log(`[trust] usuario ${uid} → NIVEL 2 (${clean} semanas limpias en auto) 🚀`);
+      try {
+        db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
+          .run(uid, `🚀 Llegaste al nivel máximo de confianza: de ahora en más publico solo, sin pedirte nada. Si querés que te avise 30 min antes igual, lo prendés en Ajustes ✨`);
+      } catch (e) {}
+      return 2;
+    }
+    db.prepare(`UPDATE users SET auto_weeks_clean = ? WHERE id = ?`).run(clean, uid);
+    console.log(`[trust] usuario ${uid}: semana limpia en auto ${clean}/${TRUST_CLEAN_WEEKS}`);
+    return 1;
+  } catch (e) { console.error('[trust] level2:', e.message); return 0; }
+}
+
 /**
  * shouldAutopublish(userId, postId, db, mediaDir): decide si un posteo
  * puede salir solo. Requiere:
@@ -145,8 +222,7 @@ function saveQualityResult(db, postId, result) {
  * 2. Quality gate con score >= umbral
  * Si pasa, devuelve { ok: true, score }. Si no, { ok: false, reason }.
  */
-function shouldAutopublish(userId, postId, db, mediaDir) {
-  try {
+function shouldAutopublish(userId, postId, db, mediaDir) {  try {
     const user = db.prepare('SELECT autopilot_enabled FROM users WHERE id = ?').get(userId);
     if (!user || !user.autopilot_enabled) {
       return { ok: false, reason: 'autopilot_off' };
@@ -181,4 +257,10 @@ module.exports = {
   saveQualityResult,
   shouldAutopublish,
   QUALITY_THRESHOLD,
+  // FASE 1: escalera de confianza unificada.
+  trustLevel,
+  maybeGraduate,
+  maybeGraduateLevel2,
+  GOLDEN_TARGET,
+  TRUST_CLEAN_WEEKS,
 };

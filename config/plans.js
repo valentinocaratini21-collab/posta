@@ -3,7 +3,18 @@
 // postsPerWeek = posts que arma el autopilot por semana.
 // reelsPerWeek / storiesPerWeek = reels e historias semanales (pipeline en construcción).
 //
+// TECHO DE IA (vara de Valentino, 2026-10-02): el costo variable de IA por usuario/mes
+// no puede superar el 5% del precio del plan (Esencial: $2.000 ARS/mes). Se enforcea
+// con `monthlyCapUsd` en costs.js (calculado desde price × 0.05) + límites diarios `ai`.
 // ⚠️ PRECIOS UY PROPUESTOS — a confirmar por el usuario antes de cobrar en Uruguay.
+
+// Límites diarios de IA por plan. El cap mensual (5%) es el techo duro;
+// estos límites son el ritmo para que un usuario normal nunca lo note.
+const AI_LIMITS = {
+  esencial: { chatPerDay: 40, weeksPerDay: 1, regensPerDay: 3 },
+  pro:      { chatPerDay: 80, weeksPerDay: 1, regensPerDay: 5 },
+  total:    { chatPerDay: 150, weeksPerDay: 1, regensPerDay: 8 },
+};
 
 const PLANS_AR = {
   esencial: {
@@ -15,6 +26,7 @@ const PLANS_AR = {
     reelsPerWeek: 0,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
+    ai: AI_LIMITS.esencial,
     features: [
       '5 posts por semana, armados con un clic',
       'Ideas estratégicas para tu negocio',
@@ -31,6 +43,7 @@ const PLANS_AR = {
     reelsPerWeek: 0,
     storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
+    ai: AI_LIMITS.pro,
     features: [
       '7 posts por semana, armados con un clic',
       '3 historias por semana',
@@ -50,6 +63,7 @@ const PLANS_AR = {
     reelsPerWeek: 5,
     storiesPerWeek: 7,
     tagline: 'Presencia total, todos los días',
+    ai: AI_LIMITS.total,
     features: [
       '7 posts por semana, armados con un clic',
       '5 reels por semana',
@@ -74,6 +88,7 @@ const PLANS_UY = {
     reelsPerWeek: 0,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
+    ai: AI_LIMITS.esencial,
     features: [
       '5 posts por semana, armados con un clic',
       'Ideas estratégicas para tu negocio',
@@ -90,6 +105,7 @@ const PLANS_UY = {
     reelsPerWeek: 0,
     storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
+    ai: AI_LIMITS.pro,
     features: [
       '7 posts por semana, armados con un clic',
       '3 historias por semana',
@@ -109,6 +125,7 @@ const PLANS_UY = {
     reelsPerWeek: 5,
     storiesPerWeek: 7,
     tagline: 'Presencia total, todos los días',
+    ai: AI_LIMITS.total,
     features: [
       '7 posts por semana, armados con un clic',
       '5 reels por semana',

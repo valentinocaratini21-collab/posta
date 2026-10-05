@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { publishPost, publishVideo, publishStory, publishCarousel } = require('./instagram');
 const approval = require('./approval');
+const autopilot = require('./autopilot');
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
 
@@ -97,8 +98,8 @@ async function publishSinglePost(db, post, opts = {}) {
         d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
         const wk = d.toISOString().slice(0, 10);
         db.prepare(
-          `INSERT INTO post_signals (user_id, post_id, hashtags, scheduled_for, rubro, client_signal, week_key)
-           VALUES (?,?,?,?,?, 'approved', ?)`
+          `INSERT INTO post_signals (user_id, post_id, hashtags, scheduled_for, rubro, client_signal, week_key, auto_signal)
+           VALUES (?,?,?,?,?, 'approved', ?, 1)`
         ).run(post.user_id, post.id, post.hashtags || '', post.scheduled_at || '', prof.category || '', wk);
       }
     } catch (e) { console.error('[posta] signal auto:', e.message); }
@@ -232,26 +233,32 @@ async function processDuePosts(db) {
       continue;
     }
     if (ap === 'pending') {
-      if (approval.isFirstWeek(db, post.user_id)) {
-        // Primera semana: sin aprobación explícita NO sale. Queda como fallido
-        // y se avisa ("no se publicó porque no lo aprobaste").
+      // FASE 1 — política de la escalera de confianza (reemplaza el gate de
+      // primera semana): nivel 0 → sin aprobación explícita NO sale (failed
+      // + aviso); nivel ≥1 → sale solo y queda 'auto'.
+      if (autopilot.trustLevel(db, post.user_id) < 1) {
         db.prepare(`UPDATE posts SET status='failed', error='sin aprobación' WHERE id = ?`).run(post.id);
-        console.log(`[posta] Post #${post.id} no publicado: sin aprobación (primera semana)`);
-        try { await approval.notifyMissed(db, post, 'first_week'); } catch (e) { console.error('[notif] missed:', e.message); }
+        console.log(`[posta] Post #${post.id} no publicado: sin aprobación (trust_level 0)`);
+        try { await approval.notifyMissed(db, post, 'trust_0'); } catch (e) { console.error('[notif] missed:', e.message); }
         continue;
       }
-      // Fuera de la primera semana: sale solo; si se publica, queda 'auto'.
+      // Nivel ≥1: sale solo; si se publica, queda 'auto' y puede graduar.
       await publishSinglePost(db, post);
       try {
         const st = db.prepare(`SELECT status FROM posts WHERE id = ?`).get(post.id);
         if (st && st.status === 'published') {
           db.prepare(`UPDATE posts SET approval='auto' WHERE id = ?`).run(post.id);
+          autopilot.maybeGraduate(db, post.user_id);
         }
       } catch (e) { /* el publish ya informó su propio error */ }
       continue;
     }
     // 'approved' (o 'auto' ya marcado): publicar normal.
     await publishSinglePost(db, post);
+    try {
+      const st = db.prepare(`SELECT status FROM posts WHERE id = ?`).get(post.id);
+      if (st && st.status === 'published') autopilot.maybeGraduate(db, post.user_id);
+    } catch (e) { /* el publish ya informó su propio error */ }
   }
 }
 
@@ -1564,21 +1571,28 @@ async function proactiveIdeas(db) {
   }
 }
 
-// ⏰ Aviso pre-autopiloto (2026-10-02, opción 2).
+// ⏰ Aviso pre-autopiloto (2026-10-02, opción 2; FASE 1, 2026-10-05).
 // 30 min antes de que el autopiloto publique solo, manda push:
 // "En 30 min publico esto 👆 Tocá para frenarlo".
 // Solo una vez por posteo (autopilot_notified).
+// FASE 1: en nivel 1 es el freno de emergencia del usuario (siempre); en
+// nivel 2 es opt-in (users.autopilot_prenotify).
 async function autopilotPreNotify(db) {
   let posts = [];
   try {
     posts = db.prepare(`
       SELECT p.id, p.user_id, p.caption, p.image_path, p.scheduled_at
       FROM posts p
+      JOIN users u ON u.id = p.user_id
       WHERE p.auto_published = 1
       AND p.status = 'scheduled'
       AND COALESCE(p.autopilot_notified, 0) = 0
       AND p.scheduled_at > datetime('now', '+25 minutes')
       AND p.scheduled_at <= datetime('now', '+35 minutes')
+      AND (
+        COALESCE(u.trust_level, 0) = 1
+        OR (COALESCE(u.trust_level, 0) >= 2 AND COALESCE(u.autopilot_prenotify, 0) = 1)
+      )
     `).all();
   } catch (e) { return; }
 

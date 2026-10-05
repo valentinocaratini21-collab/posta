@@ -47,11 +47,12 @@ function getOpenAiKey(db, userId) {
 const CAPTION_CHECKLIST = [
   'CHECKLIST ANTI-GENÉRICO (obligatorio en CADA caption que escribas, sin excepciones):',
   '1. UNA idea por posteo. Específico > genérico: nombrá productos/servicios reales del negocio (los de su ficha y ADN). Nunca "nuestros productos", "lo mejor", "la mejor calidad" sin decir QUÉ.',
-  '2. CTA concreto SIEMPRE: una acción real y posible ("escribinos por WhatsApp", "reservá tu turno", "pasá por el local"). Nunca CTA vacío ("¡no te lo pierdas!", "aprovechá", "contactanos").',
-  '3. Hashtags: MÁXIMO 5, todos relevantes al rubro y al posteo (esto reemplaza cualquier otro límite de este prompt). Prohibido relleno: #love #instagood #photooftheday y genéricos quemados.',
-  '4. Prohibido abrir con muletillas: nunca arranques con "¡Hola!", "¡Descubrí…" o "¿Sabías que…?" como fórmula automática.',
-  '5. El caption tiene que MATCHEAR lo que muestra la imagen: no prometas, describas ni vendas lo que no se ve en la foto/video.',
-  '6. Si el negocio es argentino: escribí en rioplatense con voseo ("vos"), siempre.',
+  '2. CTA concreto SIEMPRE: una acción real y posible ("escribinos por WhatsApp", "reservá tu turno", "pasá por el local"). Nunca CTA vacío ("¡no te lo pierdas!", "aprovechá", "contactanos") y nunca "te esperamos" a secas: si invitás, decí CUÁNDO y CÓMO.',
+  '3. Hashtags: MÁXIMO 5, todos relevantes al rubro y al posteo (esto reemplaza cualquier otro límite de este prompt). Prohibido relleno: #love #instagood #photooftheday y genéricos quemados. Y ROTÁ: nunca el mismo bloque de hashtags en dos posteos seguidos del mismo cliente.',
+  '4. Nunca cierres con la misma fórmula dos veces seguidas: variá el CTA final (pedido por DM, pregunta, invitación al local) para que no parezca template.',
+  '5. Prohibido abrir con muletillas: nunca arranques con "¡Hola!", "¡Descubrí…" o "¿Sabías que…?" como fórmula automática.',
+  '6. El caption tiene que MATCHEAR lo que muestra la imagen: no prometas, describas ni vendas lo que no se ve en la foto/video.',
+  '7. Si el negocio es argentino: escribí en rioplatense con voseo ("vos"), siempre.',
 ].join('\n');
 
 function isArgentineClient(db, userId) {

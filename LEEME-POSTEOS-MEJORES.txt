@@ -1,0 +1,34 @@
+POSTA — "Posteos mejores" (30/09/2026)
+=======================================
+Sube la calidad REAL de lo que Posty genera: imágenes + captions.
+
+ARCHIVOS → DESTINO
+------------------
+Raíz del repo (6):
+  server.js          — brief de imagen (Style Lock al inicio, bloque AVOID, cierre de supremacía)
+                       + captionExtrasFor + POST /api/caption-style/analyze + trigger en conexión IG
+  db.js              — tabla ig_caption_style (migración)
+  generator.js       — inyección captionExtras en openaiGenerate/openaiCaptions/openaiChatIdea
+  caption-style.js   — NUEVO: analyzeCaptionStyle + captionStyleBlock + CAPTION_CHECKLIST
+  test-caption-style.js — NUEVO: harness captions 51/51 (no subir si no querés, es test)
+Carpeta public/ (2):
+  app.js             — botón "✍️ Analizar cómo escribo" + handler
+  index.html         — ?v=20260930-post
+
+NO subir este LEEME al repo.
+
+QUÉ CAMBIÓ
+----------
+1. Caption Style Lock: analiza los últimos captions del IG conectado (tono,
+   emojis, largo, CTA, hashtags, apertura, persona) → bloque "ESCRIBÍ COMO EL
+   CLIENTE" en todos los prompts de caption. Sin IG: sin cambios.
+2. Checklist anti-genérico SIEMPRE: 1 idea/posteo, productos reales nombrados,
+   CTA concreto, ≤5 hashtags (adiós "máximo 8"), sin muletillas ("¡Hola!",
+   "¡Descubrí…"), rioplatense si es argentino, caption matchea la imagen.
+3. Brief de imagen: bloque "LÍNEA VISUAL OBLIGATORIA" movido al INICIO del
+   prompt (lo que más pondera el modelo) + línea de cierre de supremacía +
+   bloque AVOID obligatorio (no stock genérico, no manos/texto deformados,
+   no marcas de agua, no fondos grises planos). Fallback sin perfil: idéntico.
+
+ANTES DE SUBIR: verificar nombres exactos en GitHub (iOS renombra duplicados).
+DESPUÉS: esperar ~3 min Railway. Verificar app.js?v=20260930-post en producción.

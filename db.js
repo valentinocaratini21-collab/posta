@@ -350,6 +350,10 @@ CREATE TABLE IF NOT EXISTS recycled_posts (
   created_at INTEGER
 );
 `);
+// FASE 5 (2026-10-05): distingue la señal MANUAL del cliente de la auto-marcada
+// por el scheduler (todo lo publicado sin veto se auto-marca 'approved' y
+// diluye el taste). 0 = manual (o anterior), 1 = auto.
+try { db.exec(`ALTER TABLE post_signals ADD COLUMN auto_signal INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
@@ -683,5 +687,22 @@ try { db.exec(`CREATE INDEX IF NOT EXISTS idx_idea_bank_user ON idea_bank(user_i
 // 5. Test A/B: dos captions por posteo, se trackea el ganador.
 try { db.exec(`ALTER TABLE posts ADD COLUMN caption_b TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+
+// FASE 1 (2026-10-05): una sola escalera de confianza — trust_level 0/1/2.
+// Unifica los 3 mecanismos redundantes: training_wheels, autopilot_enabled +
+// 10 aprobaciones limpias, y el gate de primera semana en processDuePosts.
+// 0 = todo pasa por revisión/aprobación; 1 = publica solo con aviso previo
+// (freno de emergencia); 2 = autopiloto pleno (aviso previo opt-in).
+// Las columnas viejas se MANTIENEN (lecturas existentes no se rompen);
+// autopilot_enabled queda espejado de trust_level>=2.
+try { db.exec(`ALTER TABLE users ADD COLUMN trust_level INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Semanas consecutivas en auto sin vetos ni fallos (graduación a nivel 2: 3).
+try { db.exec(`ALTER TABLE users ADD COLUMN auto_weeks_clean INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Opt-in del aviso pre-publicación (30 min) en nivel 2 (en nivel 1 es obligatorio).
+try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_prenotify INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Backfill idempotente (corre en cada boot, solo sube de nivel): nadie regresa
+// de nivel por la migración — conserva lo ganado con los mecanismos viejos.
+try { db.exec(`UPDATE users SET trust_level = 2 WHERE COALESCE(autopilot_enabled, 0) = 1 AND COALESCE(trust_level, 0) < 2`); } catch (e) {}
+try { db.exec(`UPDATE users SET trust_level = 1 WHERE COALESCE(trust_level, 0) < 1 AND (COALESCE(training_wheels, 1) = 0 OR (SELECT COUNT(*) FROM golden_examples ge WHERE ge.user_id = users.id) >= 5 OR (SELECT COUNT(*) FROM posts p WHERE p.user_id = users.id AND p.status = 'published') >= 5)`); } catch (e) {}
 
 module.exports = db;

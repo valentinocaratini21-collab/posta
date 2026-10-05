@@ -56,6 +56,19 @@ self.addEventListener('push', (e) => {
   if (data.image) opts.image = data.image;
   if (Array.isArray(data.actions) && data.actions.length) opts.actions = data.actions;
   e.waitUntil(self.registration.showNotification(title, opts));
+
+  // FASE 3 — badge en el ícono de la app (tercer nivel de la cascada).
+  // Feature-detect total: si el navegador no tiene Badging API, no pasa nada.
+  // El conteo viaja en data.badge (payload webpush lo pone dentro de `data`).
+  try {
+    if (typeof navigator.setAppBadge === 'function') {
+      const inner = (data && data.data) || {};
+      const raw = inner.badge != null ? inner.badge : data.badge;
+      const n = Number(raw);
+      const count = Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1;
+      e.waitUntil(navigator.setAppBadge(count).catch(() => {}));
+    }
+  } catch (err) { /* sin Badging API: ignorar */ }
 });
 
 function openPushUrl(url) {
@@ -72,6 +85,10 @@ function openPushUrl(url) {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
+  // FASE 3 — al tocar la notificación el usuario ya la vio: limpiar el badge.
+  try {
+    if (typeof navigator.clearAppBadge === 'function') navigator.clearAppBadge().catch(() => {});
+  } catch (err) { /* sin Badging API: ignorar */ }
   const ndata = e.notification.data || {};
   const url = ndata.url || '/#/app/semana';
   const postId = ndata.postId;

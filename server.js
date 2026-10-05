@@ -170,13 +170,9 @@ function saveGoldenExample(uid, postId, caption, visualBrief) {
   } catch (e) { console.error('[golden] save:', e.message); }
 }
 // Graduación: con 5+ aprobados se apaga training_wheels para ese usuario.
-function maybeGraduate(uid) {
-  try {
-    const n = db.prepare(`SELECT COUNT(*) AS n FROM golden_examples WHERE user_id = ?`).get(uid).n || 0;
-    if (n >= GOLDEN_TARGET) db.prepare(`UPDATE users SET training_wheels = 0 WHERE id = ?`).run(uid);
-    return n;
-  } catch (e) { return 0; }
-}
+// FASE 1: la escalera de confianza vive en autopilot.js —
+// autopilot.maybeGraduate(db, uid) sube a trust_level=1 (y espeja
+// training_wheels=0); autopilot.maybeGraduateLevel2(db, uid) sube a 2.
 const mp = require('./mercadopago');
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
@@ -1399,18 +1395,25 @@ const DEFAULT_TZ = 'America/Argentina/Buenos_Aires';
 // ---------- Ajustes ----------
 app.get('/api/settings', requireAuth, (req, res) => res.json(maskSettings(getSettings(req.session.userId))));
 
-// ---------- Autopiloto (4 puntos, 2026-10-02) ----------
-// GET estado, POST toggle. El filtro de calidad decide qué sale solo.
+// ---------- Autopiloto (4 puntos, 2026-10-02; FASE 1, 2026-10-05) ----------
+// GET estado, POST toggle. FASE 1: la fuente de verdad es trust_level
+// (autopilot_enabled queda espejado de trust_level>=2). clean_approvals y
+// autopilot_offered se mantienen como columnas/lecturas pero ya no son gates.
 app.get('/api/autopilot', requireAuth, (req, res) => {
   try {
-    const u = db.prepare('SELECT autopilot_enabled, clean_approvals, autopilot_offered FROM users WHERE id = ?').get(req.session.userId);
+    const u = db.prepare('SELECT autopilot_enabled, clean_approvals, autopilot_offered, trust_level, autopilot_prenotify FROM users WHERE id = ?').get(req.session.userId);
     const clean = (u && u.clean_approvals) || 0;
+    const tl = autopilot.trustLevel(db, req.session.userId);
     res.json({
       ok: true,
       enabled: !!(u && u.autopilot_enabled),
       clean_approvals: clean,
-      unlocked: clean >= 10 || !!(u && u.autopilot_offered) || !!(u && u.autopilot_enabled),
+      unlocked: tl >= 2 || clean >= 10 || !!(u && u.autopilot_offered) || !!(u && u.autopilot_enabled),
       progress: Math.min(10, clean),
+      trust_level: tl,
+      // En nivel 1 el aviso pre-publicación es obligatorio (freno de
+      // emergencia); en nivel 2 es opt-in.
+      pre_notify: tl >= 2 ? !!((u && u.autopilot_prenotify)) : true,
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'No pude leer el estado 😅' });
@@ -1430,9 +1433,29 @@ app.post('/api/settings/auto-week', requireAuth, express.json(), (req, res) => {
 app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
   try {
     const enabled = !!req.body.enabled;
-    db.prepare('UPDATE users SET autopilot_enabled = ? WHERE id = ?').run(enabled ? 1 : 0, req.session.userId);
-    console.log(`[autopilot] usuario ${req.session.userId} ${enabled ? 'ACTIVÓ' : 'desactivó'} el autopiloto`);
+    const uid = req.session.userId;
+    if (enabled) {
+      // Opt-in explícito al autopiloto pleno: sube directo al nivel 2.
+      db.prepare(`UPDATE users SET autopilot_enabled = 1, trust_level = CASE WHEN COALESCE(trust_level, 0) < 2 THEN 2 ELSE trust_level END WHERE id = ?`).run(uid);
+    } else {
+      // Apagarlo baja al nivel 1: sigue publicando solo pero con el aviso
+      // pre-publicación como freno de emergencia (puede frenar cada posteo).
+      db.prepare(`UPDATE users SET autopilot_enabled = 0, trust_level = CASE WHEN COALESCE(trust_level, 0) > 1 THEN 1 ELSE trust_level END WHERE id = ?`).run(uid);
+    }
+    console.log(`[autopilot] usuario ${uid} ${enabled ? 'ACTIVÓ' : 'desactivó'} el autopiloto`);
     res.json({ ok: true, enabled });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
+  }
+});
+// Opt-in del aviso pre-publicación (30 min antes) en nivel 2. En nivel 1 el
+// aviso es obligatorio y este toggle no tiene efecto.
+app.post('/api/autopilot/pre-notify', requireAuth, express.json(), (req, res) => {
+  try {
+    const on = !!((req.body || {}).enabled);
+    db.prepare(`UPDATE users SET autopilot_prenotify = ? WHERE id = ?`).run(on ? 1 : 0, req.session.userId);
+    console.log(`[autopilot] usuario ${req.session.userId} ${on ? 'ACTIVÓ' : 'apagó'} el aviso pre-publicación`);
+    res.json({ ok: true, pre_notify: on });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
   }
@@ -2648,7 +2671,7 @@ app.post('/api/admin/review/:id/approve', requireAdminToken, (req, res) => {
   if (!post) return res.status(404).json({ ok: false, error: 'not_found' });
   db.prepare(`UPDATE posts SET needs_review = 0 WHERE id = ?`).run(post.id);
   saveGoldenExample(post.user_id, post.id, post.caption, [post.strategy_why, post.tipo].filter(Boolean).join(' · '));
-  const approved = maybeGraduate(post.user_id);
+  const approved = autopilot.maybeGraduate(db, post.user_id);
   console.log(`[review] aprobado borrador ${post.id} (usuario ${post.user_id}), golden #${approved}`);
   res.json({ ok: true, id: post.id, approved_count: approved, graduated: approved >= GOLDEN_TARGET });
 });
@@ -2664,7 +2687,7 @@ app.post('/api/admin/review/:id/edit', requireAdminToken, (req, res) => {
   db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, needs_review = 0 WHERE id = ?`).run(finalCaption, finalTags, post.id);
   const brief = image_brief !== undefined ? String(image_brief) : [post.strategy_why, post.tipo].filter(Boolean).join(' · ');
   saveGoldenExample(post.user_id, post.id, finalCaption, brief);
-  const approved = maybeGraduate(post.user_id);
+  const approved = autopilot.maybeGraduate(db, post.user_id);
   console.log(`[review] editado+aprobado borrador ${post.id} (usuario ${post.user_id}), golden #${approved}`);
   res.json({ ok: true, id: post.id, approved_count: approved, graduated: approved >= GOLDEN_TARGET });
 });
@@ -3253,6 +3276,7 @@ function ideasInputFor(uid) {
     excluded: excludedTopicsLine(uid),
     approved: approvedTopicsLine(uid),
     outcome: outcomeBrief(uid),
+    contentPerf: contentPerformanceLine(uid),
   });
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
@@ -3906,17 +3930,21 @@ app.get('/api/posts/:id/approve', approvalAuth('approve'), (req, res) => {
   res.send(approvalPage('✅ ¡Aprobado!', `Tu posteo sale a las ${label || 'la hora programada'}.`));
 });
 
-// POST /api/posts/accept-all — "✅ Aceptar todos" (tarjeta "Revisá tu semana").
-// Todos los borradores pendientes del usuario pasan a aprobados + programados en
-// la hora indicada (la que muestra la tarjeta de revisión). Respeta rechazados:
-// no los toca. El tap ES la confirmación (sin diálogo redundante).
-app.post('/api/posts/accept-all', requireAuth, (req, res) => {
-  const uid = req.session.userId;
-  const items = Array.isArray((req.body || {}).items) ? req.body.items : [];
-  const ids = [...new Set(items.map((it) => Number(it && it.id)).filter((n) => n > 0))];
-  if (!ids.length) return res.status(400).json({ error: 'Sin posteos para aceptar' });
+// FASE 2 — lógica compartida de "aceptar borradores": los marca approved +
+// scheduled en su horario. items = [{ id, scheduled_at? }].
+// opts.includeNeedsReview=true incluye borradores con needs_review=1: el
+// preview del email de semana YA fue la revisión humana, y el tap firmado ES
+// la aprobación (default false = solo borradores ya revisados, comportamiento
+// histórico del accept-all in-app).
+// Con quota checks: todos de una o nada (mismo criterio que schedule-all).
+// El tap cuenta como aprobación del usuario (recordSignal), NO como
+// auto_published del sistema: suma a la escalera de confianza de Fase 1.
+function acceptAllDrafts(uid, items, opts) {
+  const list = Array.isArray(items) ? items : [];
+  const ids = [...new Set(list.map((it) => Number(it && it.id)).filter((n) => n > 0))];
+  if (!ids.length) return { ok: false, reason: 'empty' };
   const whenById = {};
-  for (const it of items) {
+  for (const it of list) {
     const n = Number(it && it.id);
     if (n > 0 && it.scheduled_at) {
       const d = new Date(String(it.scheduled_at));
@@ -3925,11 +3953,14 @@ app.post('/api/posts/accept-all', requireAuth, (req, res) => {
   }
   const ph = ids.map(() => '?').join(',');
   const drafts = db.prepare(
-    `SELECT * FROM posts WHERE id IN (${ph}) AND user_id = ? AND status = 'draft' AND COALESCE(needs_review, 0) = 0`
+    `SELECT * FROM posts WHERE id IN (${ph}) AND user_id = ? AND status = 'draft'`
   ).all(...ids, uid);
+  const pool = (opts && opts.includeNeedsReview)
+    ? drafts
+    : drafts.filter((d) => (d.needs_review || 0) === 0);
   // Solo pendientes: respeta rechazados (no se tocan) y omite los ya aprobados.
-  const pending = drafts.filter((d) => (d.approval || 'pending') === 'pending');
-  if (!pending.length) return res.status(400).json({ error: 'No hay borradores pendientes' });
+  const pending = pool.filter((d) => (d.approval || 'pending') === 'pending');
+  if (!pending.length) return { ok: false, reason: 'no_pending' };
   // Cupo: todos de una o nada (mismo criterio que /api/posts/schedule-all).
   const qf = quotaFor(uid, 'image');
   const qr = quotaFor(uid, 'video');
@@ -3938,10 +3969,9 @@ app.post('/api/posts/accept-all', requireAuth, (req, res) => {
   const reelBillable = pending.filter((d) => d.media_type === 'video').length;
   const storyBillable = pending.filter((d) => d.media_type === 'story').length;
   if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left) {
-    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qf.limit, plan_name: qf.plan_name,
-      message: `Llegaste al límite de tu plan ${qf.plan_name}. Mejorá tu paquete para seguir posteando esta semana.` });
+    return { ok: false, reason: 'plan_limit', quota: qf };
   }
-  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, error='' WHERE id=?`);
+  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='' WHERE id=?`);
   let n = 0;
   for (const d of pending) {
     const when = whenById[d.id] || (d.scheduled_at ? String(d.scheduled_at).slice(0, 19).replace('T', ' ') : null);
@@ -3951,7 +3981,61 @@ app.post('/api/posts/accept-all', requireAuth, (req, res) => {
     n++;
   }
   try { track(uid, 'accept_all', String(n)); } catch (e) {}
-  res.json({ ok: true, accepted: n });
+  return { ok: true, accepted: n };
+}
+
+// POST /api/posts/accept-all — "✅ Aceptar todos" (tarjeta "Revisá tu semana").
+// Todos los borradores pendientes del usuario pasan a aprobados + programados en
+// la hora indicada (la que muestra la tarjeta de revisión). Respeta rechazados:
+// no los toca. El tap ES la confirmación (sin diálogo redundante).
+app.post('/api/posts/accept-all', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const items = Array.isArray((req.body || {}).items) ? req.body.items : [];
+  const r = acceptAllDrafts(uid, items);
+  if (r.reason === 'empty') return res.status(400).json({ error: 'Sin posteos para aceptar' });
+  if (r.reason === 'no_pending') return res.status(400).json({ error: 'No hay borradores pendientes' });
+  if (r.reason === 'plan_limit') {
+    const qf = r.quota;
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qf.limit, plan_name: qf.plan_name,
+      message: `Llegaste al límite de tu plan ${qf.plan_name}. Mejorá tu paquete para seguir posteando esta semana.` });
+  }
+  res.json({ ok: true, accepted: r.accepted });
+});
+
+// FASE 2 — GET /api/week/:weekKey/publish — "Publicar semana" de un tap, SIN
+// login. Es el botón del email de preview (sendWeekPreview): la firma HMAC ata
+// (userId, weekKey, exp) y el tap ES la revisión humana (includeNeedsReview).
+// Idempotente: si ya no hay borradores, confirma igual.
+app.get('/api/week/:weekKey/publish', (req, res) => {
+  const weekKey = String(req.params.weekKey || '');
+  const uid = Number(req.query.uid);
+  const { sig, exp } = req.query || {};
+  const bad = (code, title, msg) => res.status(code).send(approvalPage(title, msg));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) return bad(404, 'Enlace inválido', 'Este enlace no corresponde a ninguna semana.');
+  if (!uid || !(sig && exp)) return bad(403, 'Enlace inválido', 'A este enlace le faltan datos. Pedí uno nuevo desde tu email de Posty.');
+  if (!approval.verifyWeekAction(uid, weekKey, sig, exp)) return bad(403, 'Enlace vencido', 'Este enlace venció o no es válido. Entrá a Posty para publicar tu semana.');
+  const u = db.prepare('SELECT id FROM users WHERE id = ?').get(uid);
+  if (!u) return bad(404, 'Cuenta no encontrada', 'Este enlace no corresponde a una cuenta válida.');
+  const drafts = db.prepare(`SELECT id, scheduled_at FROM posts
+    WHERE user_id = ? AND week_key = ? AND status = 'draft'
+      AND media_type IN ('image','carousel','video')
+    ORDER BY created_at ASC`).all(uid, weekKey);
+  if (!drafts.length) return res.send(approvalPage('✅ Semana publicada', 'Tu semana ya está publicada o programada. ¡A seguir vendiendo! 🚀'));
+  // Horarios propuestos: el preview los deja puestos; si faltan (email viejo),
+  // se asignan acá con la misma política del autopilot.
+  let slots = new Map();
+  try {
+    const missing = drafts.filter((d) => !d.scheduled_at);
+    if (missing.length) slots = assignScheduleSlots(uid, missing);
+  } catch (e) { console.error('[week publish] slots:', e.message); }
+  const items = drafts.map((d) => ({ id: d.id, scheduled_at: d.scheduled_at || slots.get(d.id) || null }));
+  const r = acceptAllDrafts(uid, items, { includeNeedsReview: true });
+  if (r.reason === 'plan_limit') {
+    const qf = r.quota || {};
+    return bad(403, 'Límite del plan', `Tu plan ${qf.plan_name || ''} no alcanza para publicar toda la semana de una. Mejorá tu paquete y volvé a tocar el botón.`);
+  }
+  if (!r.ok || !r.accepted) return res.send(approvalPage('Nada para publicar', 'No había borradores pendientes en esta semana.'));
+  return res.send(approvalPage('✅ ¡Semana publicada!', `${r.accepted} ${r.accepted === 1 ? 'posteo programado' : 'posteos programados'}. Posty se encarga del resto 🚀`));
 });
 
 app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
@@ -3966,6 +4050,7 @@ app.post('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
     return res.status(409).json({ error: 'not_rejectable', message: 'Este posteo ya no se puede cancelar.' });
   }
   db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  try { recordSignal(post.user_id, post, 'rejected'); } catch (e) {} // FASE 5: el veto en el pre-aviso es señal fuerte
   console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
   res.json({ ok: true, approval: 'rejected' });
 });
@@ -3982,6 +4067,7 @@ app.get('/api/posts/:id/reject', approvalAuth('reject'), (req, res) => {
     return res.status(409).send(approvalPage('No se puede cancelar', 'Este posteo ya no está programado.'));
   }
   db.prepare(`UPDATE posts SET approval = 'rejected', status = 'cancelled', error = '' WHERE id = ?`).run(post.id);
+  try { recordSignal(post.user_id, post, 'rejected'); } catch (e) {} // FASE 5: el veto en el pre-aviso es señal fuerte
   console.log(`[posta] Post #${post.id} rechazado por el cliente → cancelado`);
   res.send(approvalPage('Posteo cancelado', 'Listo: este posteo no se va a publicar.'));
 });
@@ -4134,10 +4220,12 @@ function postWeekKey(p, tz) {
 // Perfil de gusto del cliente a partir de sus 👍/👎: se inyecta en el prompt para que la IA aprenda de verdad.
 function tasteProfile(userId) {
   try {
+    // FASE 5: las señales manuales pesan primero; las auto-marcadas por el
+    // scheduler (auto_signal=1) van después para no diluir el taste.
     const rows = db.prepare(`
       SELECT s.caption AS caption, s.client_signal AS sig FROM post_signals s
       WHERE s.user_id = ? AND s.client_signal IN ('approved','rejected')
-      ORDER BY s.updated_at DESC LIMIT 12
+      ORDER BY COALESCE(s.auto_signal, 0) ASC, s.updated_at DESC LIMIT 12
     `).all(userId);
     const liked = [], disliked = [];
     for (const r of rows) {
@@ -4179,7 +4267,7 @@ function approvedTopicsLine(userId) {
       LEFT JOIN posts p ON p.id = s.post_id
       WHERE s.user_id = ? AND s.client_signal IN ('approved', 'edited', 'rating_4', 'rating_5')
         AND s.updated_at >= datetime('now', '-60 days')
-      ORDER BY s.updated_at DESC LIMIT 12
+      ORDER BY COALESCE(s.auto_signal, 0) ASC, s.updated_at DESC LIMIT 12
     `).all(userId);
     const temas = rows.map(r => String(r.caption || '').split('\n')[0].slice(0, 80).trim())
       .filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 5);
@@ -4212,6 +4300,60 @@ function outcomeBrief(userId) {
     return t;
   } catch (e) { return ''; }
 }
+// ===== FASE 5 (2026-10-05) — aprendizaje AUTOMÁTICO de contenido =====
+// Bajo autopilot el taste manual (👍/👎) se seca: este bloque lo reemplaza con
+// ER medido por tipo de contenido, y se inyecta en generateIdeas igual que
+// tasteProfile. Lee post_metrics (ingesta de insights) con fallback a las
+// columnas ig_* de posts; sin datos reales devuelve '' (fail-safe: sin App
+// Review no hay métricas y el prompt queda intacto).
+// Suavizado bayesiano con la fórmula documentada de learning.js, pero con
+// prior = el promedio del PROPIO cliente (no el global): 1 posteo viral no
+// domina. Solo habla con evidencia (>=2 posteos medidos por tipo, >=4 total)
+// y cuando algún tipo se desvía de forma significativa de su promedio.
+function contentPerformanceLine(userId) {
+  try {
+    const { engagementRate, C_PRIOR, PRIOR_ER } = require('./learning');
+    const C = (typeof C_PRIOR === 'number' && C_PRIOR > 0) ? C_PRIOR : 5;
+    const rows = db.prepare(`
+      SELECT p.tipo AS tipo,
+             SUM(COALESCE(m.reach, p.ig_reach, 0)) AS reach,
+             SUM(COALESCE(m.likes, p.ig_likes, 0)) AS likes,
+             SUM(COALESCE(m.comments, p.ig_comments, 0)) AS comments,
+             SUM(COALESCE(m.saved, 0)) AS saved,
+             COUNT(*) AS n
+      FROM posts p
+      LEFT JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ?
+        AND p.status = 'published'
+        AND COALESCE(p.published_at, p.created_at) > datetime('now', '-90 days')
+        AND p.tipo IN ('promo','tip','social','detras','novedad')
+      GROUP BY p.tipo
+    `).all(userId);
+    const measured = rows.filter(r => (r.reach + r.likes + r.comments + r.saved) > 0 && r.n >= 2);
+    const totalN = measured.reduce((a, r) => a + r.n, 0);
+    if (!measured.length || totalN < 4) return '';
+    const tot = measured.reduce((a, r) => ({
+      reach: a.reach + r.reach, likes: a.likes + r.likes,
+      comments: a.comments + r.comments, saved: a.saved + r.saved,
+    }), { reach: 0, likes: 0, comments: 0, saved: 0 });
+    const mean = engagementRate(tot) || PRIOR_ER;
+    const scored = measured.map(r => {
+      const er = engagementRate(r);
+      const score = (C * mean + r.n * er) / (C + r.n);
+      return { tipo: r.tipo, n: r.n, ratio: mean > 0 ? score / mean : 1 };
+    }).filter(s => s.ratio >= 1.25 || s.ratio <= 0.75)
+      .sort((a, b) => Math.abs(Math.log(b.ratio)) - Math.abs(Math.log(a.ratio)))
+      .slice(0, 4);
+    if (!scored.length) return '';
+    const lines = scored.map(s => {
+      const x = (Math.round(s.ratio * 10) / 10).toFixed(1).replace(/\.0$/, '');
+      return s.ratio >= 1.25
+        ? `- Tus posteos tipo "${s.tipo}" rinden ${x}x tu promedio (${s.n} posteos): PRIORIZALOS con variación.`
+        : `- Tus posteos tipo "${s.tipo}" rinden ${x}x tu promedio (${s.n} posteos): usalos menos o cambiales el ángulo.`;
+    });
+    return `\nRENDIMIENTO MEDIDO de tu cuenta (últimos 90 días, datos reales de Instagram):\n${lines.join('\n')}`;
+  } catch (e) { return ''; }
+}
 function recordSignal(userId, post, signal) {
   try {
     const tz = userTz(userId);
@@ -4223,7 +4365,8 @@ function recordSignal(userId, post, signal) {
       ON CONFLICT(user_id, post_id) DO UPDATE SET
         client_signal=excluded.client_signal, caption=excluded.caption, hashtags=excluded.hashtags,
         scheduled_for=excluded.scheduled_for, rubro=excluded.rubro,
-        week_key=excluded.week_key, updated_at=datetime('now')
+        week_key=excluded.week_key, updated_at=datetime('now'),
+        auto_signal=0 -- FASE 5: la señal manual pisa la auto-marcada
     `).run(userId, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', prof.category || '', signal, wk);
   } catch (e) { console.error('[posta] recordSignal:', e.message); }
 }
@@ -4315,7 +4458,7 @@ function primaryBrandHex(uid) {
 }
 // Genera los borradores de una semana (week_key = lunes 'YYYY-MM-DD').
 // Idempotente por (usuario, semana): si ya existen, no hace nada.
-async function generateWeekDrafts(uid, { weekKey, tag }) {
+async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // Kill-switch diario también para el pipeline en segundo plano: se aborta en
   // silencio (el usuario lo reintenta mañana; nada se rompe).
   try { costs.assertAiOk(uid); }
@@ -4341,7 +4484,10 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`);
-    const needRev = trainingWheelsActive(uid) ? 1 : 0;
+    // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
+    // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
+    // scheduleAllDrafts ya filtra lo que no está a la altura).
+    const needRev = autopilot.trustLevel(db, uid) === 0 ? 1 : 0;
     let created = 0;
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
     // entre borradores (lo comparten los 3 workers del pool).
@@ -4455,7 +4601,9 @@ async function generateWeekDrafts(uid, { weekKey, tag }) {
     await Promise.all([worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
     // Push "tu semana está lista": avisar en el celu para que la revise.
-    if (created > 0) {
+    // quiet (FASE 2): el sweep de nivel 0 manda el email con preview + botón
+    // "Publicar semana" en su lugar — el push exigiría entrar a la app.
+    if (created > 0 && !quiet) {
       try { push.sendPush(uid, { title: 'Tu semana está lista ✨', body: 'Posty armó tus posteos: revisalos y aprobá 👇', url: '/#/app/semana' }).catch(() => {}); }
       catch (e) { /* el push nunca bloquea */ }
     }
@@ -4480,13 +4628,32 @@ async function nextWeekSweep() {
   let ok = 0, skip = 0;
   for (const u of users) {
     try {
+      // FASE 1: evaluación semanal de la escalera de confianza (barata: sale
+      // enseguida si el usuario no está en nivel 1).
+      try { autopilot.maybeGraduateLevel2(db, u.id); } catch (e) {}
       const tz = userTz(u.id);
       const nextWk = shiftDays(mondayKeyOf(tzToday(tz)), 7);
       const elig = nextWeekEligible(u.id, nextWk);
       if (!elig.ok) { skip++; continue; }
-      const r = await generateWeekDrafts(u.id, { weekKey: nextWk, tag: 'sweep' });
+      const r = await generateWeekDrafts(u.id, { weekKey: nextWk, tag: 'sweep', quiet: autopilot.trustLevel(db, u.id) === 0 });
       if (r.ok) {
         ok++;
+        // FASE 2: nivel 0 → preview por email con "Publicar semana" de un tap
+        // (sin login), en vez del push que exige entrar a la app. Nivel ≥1
+        // mantiene el aviso de siempre (ya está programada).
+        if (autopilot.trustLevel(db, u.id) === 0) {
+          let emailed = false;
+          try {
+            const em = require('./notify-email');
+            const er = (em && em.sendWeekPreview) ? await em.sendWeekPreview(db, u.id, nextWk) : null;
+            emailed = !!(er && er.ok);
+          } catch (e) { console.error('[next-week sweep] week preview:', e.message); }
+          if (!emailed) {
+            // Fallback: el push de siempre (mejor que silencio si no hay email).
+            try { push.sendPush(u.id, { title: 'Tu semana está lista ✨', body: 'Posty armó tus posteos: revisalos y aprobá 👇', url: '/#/app/semana' }).catch(() => {}); }
+            catch (e) { /* el push nunca bloquea */ }
+          }
+        }
         // 🚀 Abrir y listo: la semana semanal también se programa sola.
         // generateWeekDrafts ya generó historias/reels y mandó el push.
         if (autoWeekEnabled(u.id)) {
@@ -4563,18 +4730,12 @@ function vaciarYMarcar(uid, drafts, wk) {
 // Es la versión interna de POST /api/posts/schedule-all (sin req/res):
 // acepta (approval='approved') y programa feed en best_hour, stories 13:00,
 // reels en best_hour, sin pisar días ya ocupados. Devuelve { ok, scheduled }.
-function scheduleAllDrafts(uid) {
-  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
-  if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [] };
-  // Cupo: todos de una o nada (mismo criterio que el endpoint).
-  const qf = quotaFor(uid, 'image');
-  const qr = quotaFor(uid, 'video');
-  const qs = quotaFor(uid, 'story');
-  const feedBillable = drafts.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
-  const reelBillable = drafts.filter((d) => d.media_type === 'video').length;
-  const storyBillable = drafts.filter((d) => d.media_type === 'story').length;
-  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left)
-    return { ok: false, reason: 'plan_limit', scheduled: [] };
+// Asigna horarios de publicación a borradores: un feed por día desde mañana en
+// best_hour (9-21, respaldo 19:00), historias en STORY_HOUR, salteando días ya
+// ocupados. No toca la DB: devuelve Map id → 'YYYY-MM-DD HH:MM:SS' (UTC).
+// Extraído de scheduleAllDrafts (FASE 2) para reutilizar la misma política en
+// el publish firmado de la semana y en el email de preview.
+function assignScheduleSlots(uid, drafts) {
   const tz = userTz(uid);
   let bestHour = 19;
   try {
@@ -4595,8 +4756,7 @@ function scheduleAllDrafts(uid) {
     const ymd = shiftDays(tzToday(tz), i + 1);
     return zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
   };
-  const scheduled = [];
-  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0 WHERE id=?`);
+  const out = new Map();
   let off = 0, offStory = 0, guard = 0;
   for (const d of drafts) {
     const isStory = d.media_type === 'story';
@@ -4612,11 +4772,58 @@ function scheduleAllDrafts(uid) {
     }
     if (isStory) offStory = o; else off = o;
     if (!iso) iso = slotAt(o++, hour);
+    if (iso) out.set(d.id, iso);
+    // (Si no hay slot —tz inválida—, se saltea: nunca scheduled_at=NULL.)
+  }
+  return out;
+}
+
+function scheduleAllDrafts(uid) {
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
+  if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [] };
+  // FASE 0 — qualityGate: solo lo bueno sale solo. El borrador que no pasa
+  // el gate queda en 'draft' con needs_review=1 (cola de revisión humana) y
+  // no consume cupo. Fail-closed: si el gate tira error, tampoco sale solo.
+  const ready = [];
+  let gateFailed = 0;
+  for (const d of drafts) {
+    let g = null;
+    try {
+      g = autopilot.qualityGate(d, db, MEDIA_DIR);
+      autopilot.saveQualityResult(db, d.id, g);
+    } catch (e) { console.error(`[autopilot] gate post ${d.id}:`, e.message); }
+    if (g && g.pass) { ready.push(d); continue; }
+    gateFailed++;
+    try { db.prepare(`UPDATE posts SET needs_review=1 WHERE id=?`).run(d.id); } catch (e) {}
+    const failed = g
+      ? Object.entries(g.checks).filter(([, c]) => !c.ok).map(([k, c]) => `${k}(${c.detail})`).join(', ')
+      : 'gate_error';
+    console.log(`[autopilot] scheduleAllDrafts: post ${d.id} NO pasa gate (score ${g ? g.score : '?'}): ${failed} → revisión humana`);
+  }
+  if (!ready.length) return { ok: false, reason: gateFailed > 0 ? 'quality_failed' : 'no_drafts', scheduled: [], gateFailed };
+  // Cupo: todos de una o nada (mismo criterio que el endpoint). Solo cuentan los que pasaron el gate.
+  const qf = quotaFor(uid, 'image');
+  const qr = quotaFor(uid, 'video');
+  const qs = quotaFor(uid, 'story');
+  const feedBillable = ready.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
+  const reelBillable = ready.filter((d) => d.media_type === 'video').length;
+  const storyBillable = ready.filter((d) => d.media_type === 'story').length;
+  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left)
+    return { ok: false, reason: 'plan_limit', scheduled: [] };
+  const slots = assignScheduleSlots(uid, ready);
+  const scheduled = [];
+  // FASE 1: auto_published=1 marca lo programado POR EL SISTEMA (sin tap del
+  // usuario): así el aviso pre-publicación de 30 min lo cubre como freno de
+  // emergencia en nivel 1, y el conteo de semanas limpias (nivel 2) lo ve.
+  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0, auto_published=1 WHERE id=?`);
+  for (const d of ready) {
+    const iso = slots.get(d.id);
+    if (!iso) continue; // sin slot no se programa (nunca scheduled_at=NULL)
     upd.run(iso, d.id);
     try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
     scheduled.push({ id: d.id, scheduled_at: iso });
   }
-  return { ok: true, scheduled };
+  return { ok: true, scheduled, gateFailed };
 }
 
 // Arma la semana sola: genera historias/reels del plan sobre los borradores,
@@ -8814,7 +9021,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v69';
+const BUILD_ID = '20261005-v70';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -8856,4 +9063,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts };

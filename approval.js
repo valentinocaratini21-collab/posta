@@ -13,11 +13,23 @@ function approvalSecret() {
   return s;
 }
 
+// Primitiva HMAC compartida (mismo secreto para posteos y semanas: NO crear
+// un tercer esquema; dogfood.js tiene el suyo propio y no se toca).
+function hmacHex(data) {
+  return crypto.createHmac('sha256', approvalSecret()).update(String(data)).digest('hex');
+}
+
+function timingSafeEq(a, b) {
+  const x = Buffer.from(String(a || ''), 'utf8');
+  const y = Buffer.from(String(b || ''), 'utf8');
+  if (x.length !== y.length) return false;
+  return crypto.timingSafeEqual(x, y);
+}
+
 // Firma una acción sobre un posteo. exp = unix timestamp de vencimiento.
 function signAction(postId, action, expHours = 4) {
   const exp = Math.floor(Date.now() / 1000) + Math.floor(Number(expHours) * 3600);
-  const data = `${String(postId)}:${String(action)}:${exp}`;
-  const sig = crypto.createHmac('sha256', approvalSecret()).update(data).digest('hex');
+  const sig = hmacHex(`${String(postId)}:${String(action)}:${exp}`);
   return { sig, exp };
 }
 
@@ -27,15 +39,34 @@ function verifyAction(postId, action, sig, exp) {
   if (!Number.isFinite(expN) || expN <= Math.floor(Date.now() / 1000)) return false;
   let expected;
   try {
-    const data = `${String(postId)}:${String(action)}:${expN}`;
-    expected = crypto.createHmac('sha256', approvalSecret()).update(data).digest('hex');
+    expected = hmacHex(`${String(postId)}:${String(action)}:${expN}`);
   } catch (e) {
     return false; // p.ej. sin secreto configurado
   }
-  const a = Buffer.from(String(sig || ''), 'utf8');
-  const b = Buffer.from(expected, 'utf8');
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  return timingSafeEq(sig, expected);
+}
+
+// FASE 2 — firma una acción sobre una SEMANA ("Publicar semana" de un tap).
+// Ata (userId, weekKey, exp) con la misma primitiva HMAC. weekKey =
+// 'YYYY-MM-DD' del lunes (mondayKeyOf). TTL recomendado 48-72h: el link de 4h
+// del posteo no sirve para aprobar una semana el domingo/lunes.
+function signWeekAction(userId, weekKey, expHours = 72) {
+  const exp = Math.floor(Date.now() / 1000) + Math.floor(Number(expHours) * 3600);
+  const sig = hmacHex(`${String(userId)}:${String(weekKey)}:${exp}`);
+  return { sig, exp };
+}
+
+function verifyWeekAction(userId, weekKey, sig, exp) {
+  const expN = Number(exp);
+  if (!Number.isFinite(expN) || expN <= Math.floor(Date.now() / 1000)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(weekKey || ''))) return false;
+  let expected;
+  try {
+    expected = hmacHex(`${String(userId)}:${String(weekKey)}:${expN}`);
+  } catch (e) {
+    return false; // p.ej. sin secreto configurado
+  }
+  return timingSafeEq(sig, expected);
 }
 
 // Convierte 'YYYY-MM-DD HH:MM:SS' (UTC, formato SQLite) o ISO a Date.
@@ -104,22 +135,29 @@ function getDemoMode(db, userId) {
 }
 
 // Dispatcher del aviso "tu posteo sale en 3h, ¿lo aprobás?".
-// Los módulos ./notify-push y ./notify-email los crea otro worker: si no
+// FASE 3 — cascada real push→email: se intenta push primero y SOLO si
+// retorna {ok:false} se envía el email (antes se mandaban los dos siempre).
+// Retorna el canal usado (channel: 'push' | 'email' | 'none') para tracking.
+// Los módulos ./notify-push y ./notify-email los provee el build: si no
 // existen (o fallan), no se rompe nada.
 async function notifyApproval(db, post) {
   if (getDemoMode(db, post.user_id)) {
     console.log(`[notif] demo: no se envía (post #${post.id})`);
-    return { ok: false, demo: true };
+    return { ok: false, demo: true, channel: 'none' };
   }
+  let pushRes = null;
   try {
     const m = require('./notify-push');
-    if (m && typeof m.sendApprovalPush === 'function') await m.sendApprovalPush(db, post);
+    if (m && typeof m.sendApprovalPush === 'function') pushRes = await m.sendApprovalPush(db, post);
   } catch (e) { console.error('[notif] push aprobación:', e.message); }
+  if (pushRes && pushRes.ok) return { ok: true, channel: 'push', sent: pushRes.sent };
+  let emailRes = null;
   try {
     const m = require('./notify-email');
-    if (m && typeof m.sendApprovalEmail === 'function') await m.sendApprovalEmail(db, post);
+    if (m && typeof m.sendApprovalEmail === 'function') emailRes = await m.sendApprovalEmail(db, post);
   } catch (e) { console.error('[notif] email aprobación:', e.message); }
-  return { ok: true };
+  if (emailRes && emailRes.ok) return { ok: true, channel: 'email' };
+  return { ok: false, channel: 'none' };
 }
 
 // Dispatcher del aviso "no se publicó porque no lo aprobaste".
@@ -143,6 +181,8 @@ module.exports = {
   approvalSecret,
   signAction,
   verifyAction,
+  signWeekAction,
+  verifyWeekAction,
   isFirstWeek,
   absoluteMediaUrl,
   userHourLabel,

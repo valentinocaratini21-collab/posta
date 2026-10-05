@@ -627,6 +627,12 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+/* ---------- FASE 3: limpiar el badge de notificaciones al abrir la app ---------- */
+try {
+  if (typeof navigator.clearAppBadge === 'function') {
+    window.addEventListener('load', () => { navigator.clearAppBadge().catch(() => {}); });
+  }
+} catch (e) { /* nunca bloquear */ }
 let PWA_DEFERRED = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -985,8 +991,8 @@ function appShell(tab, content) {
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
     <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'chat' ? 'on' : ''}" data-tab="chat"><span class="di">💬</span>Chat</button>
     <button class="drawer-link ${tab === 'numeros' ? 'on' : ''}" data-tab="numeros"><span class="di">📊</span>Tus números</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -7314,8 +7320,9 @@ async function maybeAutoStartWeek() {
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
 function postAuthLanding() {
-  // Decisión normal post-registro/login: onboarding si falta el negocio, si no al chat con Posty (chat-first).
-  const homeTab = '#/app/chat';
+  // FASE 4 (autopilot): onboarding si falta el negocio; si no, directo a la
+  // semana. El chat queda como escape hatch en la navegación secundaria.
+  const homeTab = '#/app/schedule';
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
     location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
@@ -7442,6 +7449,7 @@ function freshOB() {
     chips: null, awaitLogo: false, awaitPhotos: false,
     loading: false, done: false, started: false,
     phase: 'chat',       // 'chat' | 'summary'
+    mode: 'form',        // FASE 4: 'form' (default, directo) | 'chat' (alternativa conversacional)
     profile: null, summary: null,
     colors: [],          // [c1,c2,c3] extraídos del logo
   };
@@ -7526,30 +7534,57 @@ async function obFinish() {
   }
   o.loading = false; saveOB(); render(); obScroll();
 }
+// FASE 4: guarda el perfil del onboarding (form directo o entrevista) con el
+// mismo mapeo a /api/profile, y aterriza en la semana. Extraído de obConfirmSave.
+async function obSaveProfile(p, colors) {
+  const cats = ['ropa', 'gastronomia', 'cafeteria', 'belleza', 'barberia', 'fitness', 'salud', 'mascotas', 'servicios', 'educacion', 'tecnologia', 'hogar', 'inmobiliaria', 'eventos', 'viajes', 'arte'];
+  const category = cats.includes(p.category) ? p.category : 'otro';
+  const desc = [p.description, p.audience ? `Cliente ideal: ${p.audience}` : '', p.differentiator ? `Diferencial: ${p.differentiator}` : ''].filter(Boolean).join(' ').slice(0, 600);
+  const igu = String(p.instagram || '').trim().replace(/^@/, '').replace(/\s+/g, '');
+  await api.put('/api/profile', {
+    business_name: p.business_name || 'Mi negocio', category, description: desc,
+    competitors: '', goal: p.goal || 'vender',
+    ig_username: igu,
+    tone: (PROFILE && PROFILE.tone) || 'canchero',
+  });
+  const cols = (colors || []).filter((c, i, a) => c && a.indexOf(c) === i);
+  if (cols.length >= 2) await api.put('/api/settings', { brand_colors: cols });
+  SETTINGS = await api.get('/api/settings');
+  await refreshSession();
+  clearOB(); // onboarding confirmado: ya no hay nada que retomar
+  const chosenPlan = localStorage.getItem('posta_chosen_plan');
+  location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/schedule';
+}
 async function obConfirmSave() {
-  const o = OB, p = o.profile || {};
+  const o = OB; if (!o) return;
   const btn = $('#obConfirm'); if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
   try {
-    const cats = ['ropa', 'gastronomia', 'cafeteria', 'belleza', 'barberia', 'fitness', 'salud', 'mascotas', 'servicios', 'educacion', 'tecnologia', 'hogar', 'inmobiliaria', 'eventos', 'viajes', 'arte'];
-    const category = cats.includes(p.category) ? p.category : 'otro';
-    const desc = [p.description, p.audience ? `Cliente ideal: ${p.audience}` : '', p.differentiator ? `Diferencial: ${p.differentiator}` : ''].filter(Boolean).join(' ').slice(0, 600);
-    const igu = String(p.instagram || '').trim().replace(/^@/, '').replace(/\s+/g, '');
-    await api.put('/api/profile', {
-      business_name: p.business_name || 'Mi negocio', category, description: desc,
-      competitors: '', goal: p.goal || 'vender',
-      ig_username: igu,
-      tone: (PROFILE && PROFILE.tone) || 'canchero',
-    });
-    const colors = (o.colors || []).filter((c, i, a) => c && a.indexOf(c) === i);
-    if (colors.length >= 2) await api.put('/api/settings', { brand_colors: colors });
-    SETTINGS = await api.get('/api/settings');
-    await refreshSession();
-    clearOB(); // onboarding confirmado: ya no hay nada que retomar
-    const chosenPlan = localStorage.getItem('posta_chosen_plan');
-    location.hash = chosenPlan ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosenPlan) : '#/app/schedule';
+    await obSaveProfile(o.profile || {}, o.colors || []);
   } catch (e) {
     const m = $('#obMsg'); if (m) m.innerHTML = `<div class="err">${esc(e.message)}</div>`;
     if (btn) { btn.disabled = false; btn.textContent = '✅ Todo bien, arranquemos'; }
+  }
+}
+// FASE 4: submit del formulario directo — valida, arma el perfil y guarda.
+async function obFormSubmit() {
+  const o = OB; if (!o) return;
+  const gv = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const msg = $('#obFormMsg');
+  const biz = gv('obfBiz'), cat = gv('obfCat');
+  if (!biz) { if (msg) msg.innerHTML = '<div class="err">Contanos el nombre de tu negocio 🙂</div>'; return; }
+  if (!cat) { if (msg) msg.innerHTML = '<div class="err">Elegí tu rubro 🙂</div>'; return; }
+  const btn = $('#obFormGo');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+  try {
+    await obSaveProfile({
+      business_name: biz, category: cat,
+      description: gv('obfDesc'), audience: '', differentiator: '',
+      instagram: gv('obfIg'), goal: gv('obfGoal') || 'vender',
+    }, []);
+    if (msg) msg.innerHTML = '';
+  } catch (e) {
+    if (msg) msg.innerHTML = `<div class="err">${esc((e && e.message) || 'No se pudo guardar')}</div>`;
+    if (btn) { btn.disabled = false; btn.textContent = 'Armar mi semana →'; }
   }
 }
 function obSummaryHTML() {
@@ -7577,8 +7612,38 @@ function obSummaryHTML() {
 }
 function onboardingView() {
   const o = OB;
-  if (!o.started || o._resumePending) { o.started = true; o._resumePending = false; setTimeout(() => { if (OB === o && !o.loading && !o.done && o.phase === 'chat') obNext(); }, 60); }
   if (o.phase === 'summary' && o.profile) return obSummaryHTML();
+  // FASE 4 (autopilot): el default es el formulario directo; la entrevista
+  // conversacional queda como alternativa explícita (modo 'chat').
+  if (o.mode === 'chat') return obChatHTML(o);
+  return obFormHTML();
+}
+
+// FASE 4 — formulario directo de onboarding (default): 5 datos y listo, sin
+// charla. Guarda con el mismo mapeo que la entrevista (obSaveProfile).
+function obFormHTML() {
+  const cats = [['ropa','👕 Ropa'],['gastronomia','🍔 Gastronomía'],['cafeteria','☕ Cafetería'],['belleza','💅 Belleza'],['barberia','💈 Barbería'],['fitness','🏋️ Fitness'],['salud','🩺 Salud'],['mascotas','🐾 Mascotas'],['servicios','🔧 Servicios'],['educacion','🎓 Educación'],['tecnologia','💻 Tecnología'],['hogar','🏠 Hogar'],['inmobiliaria','🏘️ Inmobiliaria'],['eventos','🎉 Eventos'],['viajes','✈️ Viajes'],['arte','🎨 Arte']];
+  const goals = [['vender','Vender más'],['seguidores','Conseguir seguidores'],['local','Llenar mi local'],['novedades','Contar novedades']];
+  return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Contame de tu negocio</h1><p class="sub">5 datos y armo todo por vos — sin charlas.</p></div></div>
+  <div class="card" style="max-width:640px">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
+    </div>
+    <div class="field"><label>Nombre de tu negocio *</label><input id="obfBiz" placeholder="Ej: Café Martínez" maxlength="60" autocomplete="off"></div>
+    <div class="field"><label>Rubro *</label><select id="obfCat"><option value="">Elegí tu rubro…</option>${cats.map(c => `<option value="${c[0]}">${c[1]}</option>`).join('')}</select></div>
+    <div class="field"><label>Instagram</label><input id="obfIg" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+    <div class="field"><label>¿Qué buscás con tu Instagram?</label><select id="obfGoal">${goals.map(g => `<option value="${g[0]}">${g[1]}</option>`).join('')}</select></div>
+    <div class="field" style="margin-bottom:6px"><label>¿Qué vendés?</label><textarea id="obfDesc" rows="3" maxlength="600" placeholder="En 1-2 líneas: qué ofrecés y qué te hace diferente"></textarea></div>
+    <div id="obFormMsg" style="margin-top:8px"></div>
+    <button class="btn btn-primary btn-block" id="obFormGo" style="margin-top:14px">Armar mi semana →</button>
+    <p style="text-align:center;margin:12px 0 0"><button type="button" id="obChatAlt" style="background:none;border:0;color:var(--cel);font-size:12.5px;font-weight:700;cursor:pointer">¿Preferís contármelo charlando? 💬</button></p>
+  </div>`;
+}
+
+// Entrevista conversacional (alternativa, ya no default): extraída de
+// onboardingView sin cambios de lógica. Usa /api/onboarding/chat.
+function obChatHTML(o) {
+  if (!o.started || o._resumePending) { o.started = true; o._resumePending = false; setTimeout(() => { if (OB === o && !o.loading && !o.done && o.phase === 'chat') obNext(); }, 60); }
   const msgs = o.chat.map(m => `<div class="chat-msg ${m.role === 'user' ? 'u' : 'ai'}">${esc(m.role === 'user' && !m.text ? '⏭️ Salteado' : m.text)}</div>`).join('');
   const pct = Math.round((o.step / o.total) * 100);
   return `<div class="page-head"><div class="ph-ico">🚀</div><div class="ph-txt"><h1>Te conozco primero</h1><p class="sub">Una charla rápida — con esto armo todo por vos.</p></div></div>
@@ -7587,6 +7652,7 @@ function onboardingView() {
       <span style="font-size:11.5px;color:var(--mut);font-weight:700">Pregunta ${Math.min(o.step + 1, o.total)} de ${o.total}</span>
       <span style="display:flex;gap:10px;align-items:center;flex:none">
         ${o.phase === 'chat' && !o.loading ? `<button class="btn btn-ghost btn-sm" id="obSkip">Saltear ⏭️</button>` : ''}
+        <button type="button" id="obFormAlt" style="background:none;border:0;color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap;cursor:pointer">Completarlo directo →</button>
         <a href="#/app/schedule" style="color:var(--dim);font-size:11.5px;font-weight:600;white-space:nowrap">Hacerlo después →</a>
       </span>
     </div>
@@ -7606,6 +7672,14 @@ function onboardingView() {
 
 function bindOnboarding() {
   const o = OB; if (!o) return;
+  // FASE 4: formulario directo (default) — cableado del form + alternancia
+  // de modo. (Esta función nunca se llamaba: la entrevista estaba sin cablear.)
+  const fGo = $('#obFormGo');
+  if (fGo) fGo.onclick = obFormSubmit;
+  const cAlt = $('#obChatAlt');
+  if (cAlt) cAlt.onclick = () => { o.mode = 'chat'; saveOB(); render(); };
+  const fAlt = $('#obFormAlt');
+  if (fAlt) fAlt.onclick = () => { o.mode = 'form'; saveOB(); render(); };
   const inp = $('#obInput'), send = $('#obSend');
   const doSend = () => { if (inp && !inp.disabled) { obSend(inp.value); inp.value = ''; } };
   if (send) send.onclick = doSend;
@@ -7825,13 +7899,13 @@ async function render() {
     return;
   }
   if (path === '#/' || path === '') {
-    // App instalada: se comporta como app, no como web. Va directo al chat
+    // App instalada: se comporta como app, no como web. Va directo a la semana
     // (o al login si no hay sesión) en vez de la landing de marketing.
-    if (pwaIsStandalone()) { location.hash = '#/app/chat'; return; }
-    // Logueado en la web: la vista principal es el chat con Posty (chat-first).
+    if (pwaIsStandalone()) { location.hash = '#/app/schedule'; return; }
+    // Logueado en la web: la vista principal es la semana (Schedule, FASE 4).
     // Visitante no logueado: la landing pública no cambia.
     await refreshSession();
-    if (ME) { location.hash = '#/app/chat'; return; }
+    if (ME) { location.hash = '#/app/schedule'; return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
@@ -7847,9 +7921,9 @@ async function render() {
   const tabRaw = path.split('/')[2] || '';
   // 🔔 Posty te avisa: #/app/post/:id → el id del posteo a aprobar
   const postId = decodeURIComponent(path.split('/')[3] || '').trim();
-  // Chat-first en todas las plataformas: sin pestaña explícita se abre el
-  // chat con Posty. Con pestaña explícita se respeta (navegación secundaria).
-  let tab = tabRaw || 'chat';
+  // FASE 4 (autopilot): sin pestaña explícita se abre la semana (Schedule).
+  // El chat sigue vivo en #/app/chat como escape hatch para retoques puntuales.
+  let tab = tabRaw || 'schedule';
   let content = '';
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
@@ -8323,8 +8397,9 @@ function bindSchedule() {
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
-  if (tab === 'chat') bindChatView(); // chat-first mobile: el chat es el home
+  if (tab === 'chat') bindChatView(); // chat como escape hatch (FASE 4: ya no es el home)
   if (tab === 'schedule') bindSchedule();
+  if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)
   if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números
   if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa

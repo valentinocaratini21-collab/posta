@@ -1,0 +1,33 @@
+POSTA — PRUEBA EN 1 CAMPO (30/09/2026)
+======================================
+Reduce la fricción de /prueba al máximo. Zip incremental.
+
+ARCHIVOS → DESTINO
+------------------
+Raíz del repo:
+  server.js      (nuevos endpoints /api/trial/prefill y /api/trial/generate-stream)
+  demo.js        (biography→rubro, renderSpecPngsStream)
+Carpeta public/:
+  prueba.html    (1 campo, sneak peeks, mockup teléfono, registro en el pico)
+
+NO subir este LEEME al repo.
+
+QUÉ CAMBIA
+----------
+1. Primer paso = solo "@tuinstagram" → Posty auto-completa nombre, rubro, colores y
+   foto de perfil desde el IG público (endpoint /api/trial/prefill, 30/hora por IP).
+   Si el IG es privado/inexistente → aparece el formulario detallado actual (fallback).
+2. Sneak peeks: los posteos aparecen a medida que se generan (SSE), no todo al final.
+   Si el stream falla → fallback silencioso al /api/trial/generate clásico.
+3. Resultados en mockup de teléfono con @handle ("así se ve en tu feed").
+4. Registro SOLO después de ver la semana: CTA "Guardá tu semana 👇".
+   El brief largo ("contame más") se movió a resultados post-wow.
+5. Anti-spam 5/día por IP intacto en ambos endpoints. Nada se publica sin registro.
+
+ANTES DE SUBIR (iPhone, GitHub web):
+- Nombres EXACTOS (iOS renombra duplicados: "server 2.js").
+- Después: esperar ~3 min (Railway).
+
+PROBADO: harness 10/10 PASS (prefill mock, stream ordenado, anti-spam en vivo,
+fallback, sin regresión del endpoint clásico). NO verificado: generación real con
+OpenAI, QA visual iPhone, fetch real a Instagram.

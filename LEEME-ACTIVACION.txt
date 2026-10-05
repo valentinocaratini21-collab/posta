@@ -1,0 +1,58 @@
+LEEME — Activación garantizada (posta-activacion.zip)
+================================================
+Fecha: 2026-09-30. Los pasos clave (mascota, estilo, logo) ahora se
+completan solos o con 1 tap. Nada de esto es gate: todo funciona igual
+sin completarlo.
+
+QUÉ HACE
+--------
+1) Mascota auto-extraída: al completar el análisis visual del IG, Posta
+   descarga sola la foto de perfil (o un recorte del feed si detectó una
+   mascota recurrente) como candidata. Posty la muestra en el chat:
+   "¿Este es tu avatar? Lo uso como tu mascota fija 👇 [Sí, ese es ✅]
+   [No ❌]". Un tap la confirma como mascota fija.
+2) Nudge proactivo día 2: cron diario 11:00 (Buenos Aires). Usuarios con
+   ~48h (ventana 36-60h) a los que les falte el paso de mayor impacto
+   (orden: logo > mascota > IG conectado > estilo analizado) reciben UN
+   mensaje de Posty en el chat con beneficio concreto + a dónde ir.
+   Una sola vez por usuario (flag activation_nudged). Si está todo
+   completo: silencio total.
+
+DÓNDE VA CADA ARCHIVO (subir desde GitHub web al repo, nombre EXACTO)
+---------------------------------------------------------------------
+RAÍZ del repo:
+  activation-nudge.js   (NUEVO — lógica del nudge día 2)
+  style-visual.js       (extracción de candidata a mascota)
+  db.js                 (columnas mascot_candidate, mascot_candidate_dismissed)
+  server.js             (endpoints /api/brand/mascot-candidate|confirm|reject)
+  scheduler.js          (cron 11:00 Buenos Aires del nudge)
+CARPETA public/:
+  app.js                (banner de confirmación en el chat)
+  index.html            (ya trae ?v=20260930-act1)
+
+⚠️ server.js, db.js y scheduler.js son backend: antes de subir, verificar
+qué versión sirve producción hoy (Railway) para no pisar cambios nuevos.
+⚠️ iOS puede renombrar archivos al descargarlos ("server 2.js"): verificar
+que el nombre en GitHub sea EXACTAMENTE igual antes de subir.
+⚠️ NO incluir data/ en el deploy (producción tiene su propia DB).
+Esperar ~3 min a que Railway redeployee antes de probar.
+
+CÓMO PROBARLO
+-------------
+1. Conectá tu Instagram → en el chat aparece "¿Este es tu avatar? 👇"
+   con tu foto de perfil.
+2. Tocá "Sí, ese es ✅" → Ajustes → Mi marca muestra la mascota con
+   preview. Los próximos posteos la usan idéntica.
+3. Tocá "No ❌" en otra cuenta → no vuelve a preguntar (queda el upload
+   manual en Mi marca).
+4. El nudge día 2 solo dispara a las ~48h; no es testeable a mano sin
+   esperar (verificado con harness: 13/13).
+
+TESTEO (harness, DB de prueba — la real intacta)
+-----------------------------------------------
+- Mascota: 8/8 extract + 7/7 endpoints (servidor real booteado) + 4/4
+  frontend. node --check OK.
+- Nudge: 13/13 (4 perfiles de usuario + no-repetición + prioridad).
+NO verificado en vivo: descarga real de profile_picture_url contra la API
+de IG (fetch stubbeado), render del banner en iPhone real, cron real de
+las 11:00, ni flujo punta a punta en navegador.
