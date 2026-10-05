@@ -3679,6 +3679,32 @@ async function chatSend() {
     })();
     return;
   }
+  // "generar semana que viene" → ejecuta el sweep semanal manualmente.
+  if (/generar semana que viene/i.test(sendText)) {
+    (async () => {
+      try {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg u msg-in">${esc(sendText)}</div>`);
+        inp.value = ''; chatUpdateSendBtn(); chatScroll();
+        const sayId = 'sweepSay' + Date.now();
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Generando tu semana entrante… ⏳</div>`);
+        chatScroll();
+        const r = await api.post('/api/diag/run-sweep', {}, { timeout: 300000 });
+        const el = document.getElementById(sayId);
+        if (r && r.ok) {
+          const res = r.result || {};
+          if (el) el.innerHTML = `✅ Listo: ${res.generated || 0} semanas generadas. Recargá para verla 👆`;
+          try { if (typeof refreshWeekPill === 'function') refreshWeekPill(); } catch (e) {}
+        } else {
+          if (el) el.innerHTML = `❌ No se pudo: ${esc(r.error || 'error desconocido')}`;
+        }
+        chatScroll();
+      } catch (e) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a">Error: ${esc(e.message || '')}</div>`);
+        chatScroll();
+      }
+    })();
+    return;
+  }
   // "Armame la semana" (chip) → dispara el autopilot directo, como el CTA.
   if (/arma(m|r)?(me)? la semana|armemos (mi|la) semana/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}

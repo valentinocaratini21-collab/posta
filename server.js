@@ -6953,6 +6953,21 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
 
 // Diagnóstico de generación de imagen (solo fundador, por sesión).
 // Prueba la llamada directa a OpenAI y devuelve el error exacto.
+// Ejecuta el sweep semanal manualmente (solo fundador). Genera la semana
+// entrante sin esperar al domingo 07:00. Idempotente por week_key.
+app.post('/api/diag/run-sweep', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let isFounder = false;
+    try { isFounder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+    if (!isFounder) return res.status(403).json({ ok: false, error: 'no autorizado' });
+    const r = await nextWeekSweep();
+    res.json({ ok: true, result: r });
+  } catch (e) {
+    res.json({ ok: false, error: String(e.message || e).slice(0, 200) });
+  }
+});
+
 app.post('/api/diag/image-test', requireAuth, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -8799,7 +8814,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261004-v68';
+const BUILD_ID = '20261004-v69';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
