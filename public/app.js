@@ -4145,16 +4145,24 @@ function bindChat() {
 // ---------- 🏠 HOME SIMPLE (2026-10-03) ----------
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
-function homeWeekHTML(posts, quota) {
+function homeWeekHTML(posts, quota, generating) {
   const q = quota || {};
   const qTotal = Number(q.limit) || 0;
   const qUsed = Math.max(0, Number(q.used) || 0);
   const all = posts || [];
   // Solo lo POR VENIR: borradores (a aprobar) + programados (con fecha/hora).
-  // Los publicados no van en el carrusel.
+  // Los publicados no van en el home.
   const list = all.filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
     .sort((a, b) => ((a.status === 'draft' ? 0 : 1) - (b.status === 'draft' ? 0 : 1)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
   if (!list.length) {
+    // Si estamos generando (ensure disparado), mostrar "armando" aunque
+    // haya tenido posteos antes — la semana actual está vacía.
+    if (generating) return `<div class="hs-generating" id="hsGenerating">
+    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <b>Posty está armando tu semana ✨</b>
+    <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
+    <div class="hs-gen-dots"><i></i><i></i><i></i></div>
+  </div>`;
     // Solo usuario NUEVO de verdad ve "armando": si alguna vez tuvo posteos,
     // la semana está completa (no un spinner eterno).
     const everHad = all.length > 0;
@@ -4163,7 +4171,7 @@ function homeWeekHTML(posts, quota) {
       <b>Tu semana está completa 🎉</b>
       <p>Todo publicado. La próxima se arma sola ✨</p>
     </div>`;
-    return `<div class="hs-generating">
+    return `<div class="hs-generating" id="hsGenerating">
     <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
@@ -4171,29 +4179,30 @@ function homeWeekHTML(posts, quota) {
   </div>`;
   }
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  // 2026-10-05: 5 tarjetas FIJAS en columna (no carrusel), caption completo,
+  // botones Aceptar/Editar/Imagen/Eliminar. Pedido de Valentino.
   const cards = list.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
-    const isPub = String(d.status) === 'published';
     const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
     const when = d.scheduled_at ? '📮 ' + homeWhenLabel(d.scheduled_at) : '📝 Borrador';
     const badge = d.status === 'scheduled' ? '📮' : '📝';
-    const cap = String(d.caption || d.source_topic || '').split('\n')[0].slice(0, 90);
-    const canApprove = String(d.approval) === 'pending' && String(d.status) === 'scheduled';
-    const acts = isPub ? '' : `<div class="pcard-actions hs-acts">
+    const capFull = String(d.caption || d.source_topic || '');
+    const acts = `<div class="pcard-actions hs-acts">
+        <button type="button" data-revaccept="${esc(String(d.id))}" class="pcard-accept">✅ Aceptar</button>
+        <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
         ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
-        <button type="button" data-pc-act="skip">⏭️ Saltar</button>
-        ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
+        <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
       </div>`;
-    return `<div class="igmock" data-post-id="${esc(String(d.id))}">
+    return `<div class="igmock igmock-fixed" data-post-id="${esc(String(d.id))}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
         <span class="igmock-count">${i + 1} de ${list.length}</span></div>
       <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
       <div class="igmock-foot">
         <div class="igmock-when">${badge} ${esc(when)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</div>
-        ${cap ? `<div class="igmock-cap">${esc(cap)}</div>` : ''}
+        ${capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : ''}
         ${acts}
       </div>
     </div>`;
@@ -4201,12 +4210,7 @@ function homeWeekHTML(posts, quota) {
   const qLabel = qTotal > 0 ? `${Math.min(qUsed, qTotal)}/${qTotal}` : `${list.length}`;
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b><span>${qLabel}</span></div>
-    <div class="igmock-carousel">
-      ${list.length > 1 ? `<button type="button" class="car-arrow left" data-carprev aria-label="Posteo anterior">‹</button>` : ''}
-      <div class="igmock-track">${cards}</div>
-      ${list.length > 1 ? `<button type="button" class="car-arrow right" data-carnext aria-label="Posteo siguiente">›</button>` : ''}
-      ${list.length > 1 ? `<div class="igmock-dots">${list.map((_, j) => `<i class="${j === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}
-    </div>
+    <div class="hs-week-list">${cards}</div>
   </div>`;
 }
 function homeWhenLabel(iso) {
@@ -4230,6 +4234,20 @@ async function chatView() {
   const quota = quotaR;
   try { REVIEW_DRAFTS = posts.filter(p => p.status === 'draft'); } catch (e) {}
   const nDrafts = posts.filter(p => p.status === 'draft').length;
+  const nSched = posts.filter(p => p.status === 'scheduled').length;
+  // 2026-10-05: si no hay nada por venir, disparar la generación en segundo
+  // plano (sin bloquear). El home muestra "armando" y refresca solo.
+  let weekGenerating = false;
+  if (!nDrafts && !nSched) {
+    try {
+      const er = await api.post('/api/week/ensure', {}).catch(() => null);
+      weekGenerating = !!(er && (er.generating || er.count > 0));
+      if (er && er.generating) {
+        // Refrescar en 20s para mostrar las tarjetas cuando aparezcan.
+        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 20000);
+      }
+    } catch (e) {}
+  }
   return `
   <div class="chat-home hs-home">
     <div class="hs-top">
@@ -4237,7 +4255,7 @@ async function chatView() {
       <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime 👇</div></div>
     </div>
     <div id="revMsg"></div>
-    ${homeWeekHTML(posts, quota)}
+    ${homeWeekHTML(posts, quota, weekGenerating)}
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
     <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
@@ -4713,7 +4731,7 @@ function postToast(o) {
 // --- Edición inline del caption ---
 function pcStartEdit(card) {
   if (!card || card.querySelector('.pcard-edit')) return;
-  const capEl = card.querySelector('.pcard-cap');
+  const capEl = card.querySelector('.pcard-cap') || card.querySelector('.igmock-cap');
   if (!capEl) return;
   const current = capEl.dataset.full || capEl.textContent || '';
   capEl.style.display = 'none';

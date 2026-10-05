@@ -1832,3 +1832,10 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-done{text-align:center;padding:34px 20px;background:linear-gradient(135deg,#E5F6EC 0%,#F2F9FD 100%);border-radius:22px;margin:0 0 14px}
 .hs-done b{font-size:16px}
 .hs-done p{font-size:13px;color:var(--mut);margin:6px 0 0;line-height:1.5}
+
+/* Home 2026-10-05: 5 tarjetas FIJAS en columna (pedido de Valentino) */
+.hs-week-list{display:flex;flex-direction:column;gap:16px}
+.igmock-fixed{max-width:520px}
+.igmock-fixed .igmock-cap{display:block;-webkit-line-clamp:unset;overflow:visible;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+.pcard-accept{background:var(--cel);color:#fff;font-weight:800}
+.pcard-accept:disabled{opacity:.6}

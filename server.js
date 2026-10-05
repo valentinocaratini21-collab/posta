@@ -3795,6 +3795,44 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
   res.json({ ok: true, emptied: drafts.length, week_key: wk, ...r });
 });
 
+// POST /api/week/ensure — garantiza que la semana actual tenga sus posteos.
+// Idempotente por usuario: si ya hay borradores/programados de la semana,
+// no hace nada. Si está vacío, dispara generateWeekDrafts en segundo plano
+// y devuelve { generating: true }. El frontend lo llama al abrir el home
+// (sin bloquear la UI) y refresca hasta que aparecen las tarjetas.
+// (2026-10-05: pedido de Valentino — los 5 posteos tienen que estar listos
+// al entrar a la app, sin comandos ni recargas.)
+app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const tz = userTz(uid);
+    const wk = mondayKeyOf(tzToday(tz));
+    // ¿Ya hay trabajo de esta semana? (borradores o programados, no cancelados)
+    let n = 0;
+    try {
+      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, wk).n || 0;
+    } catch (e) { /* DB sin week_key: seguir */ }
+    // Fallback: borradores sin week_key (pipeline viejo) también cuentan.
+    if (!n) {
+      try {
+        n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key IS NULL)`).get(uid).n || 0;
+      } catch (e) {}
+    }
+    if (n > 0) return res.json({ ok: true, generating: false, count: n, week_key: wk });
+    // ¿Ya hay una generación en curso? No duplicar.
+    if (NEXTWEEK_RUNNING.has(uid)) return res.json({ ok: true, generating: true, count: 0, week_key: wk });
+    if (!planOrTrialOk(uid)) return res.json({ ok: false, generating: false, reason: 'no_plan', week_key: wk });
+    // Disparar en segundo plano: la respuesta vuelve al toque.
+    generateWeekDrafts(uid, { weekKey: wk, tag: 'ensure', quiet: false })
+      .then(r => console.log(`[week-ensure] usuario ${uid} semana ${wk}:`, r.ok ? `${r.created} creados` : `falló (${r.reason})`))
+      .catch(e => console.error('[week-ensure] pipeline:', e.message));
+    return res.json({ ok: true, generating: true, count: 0, week_key: wk });
+  } catch (e) {
+    console.error('[week-ensure]:', e.message);
+    return res.status(500).json({ ok: false, error: 'No se pudo verificar la semana.' });
+  }
+});
+
 // Fix auditoría #2 (2026-09-30): "⚡ Rearmar mi semana" del welcome honesto.
 // La importación de /prueba trajo 0 (cache vencido / payload roto, marcado en
 // users.trial_import_n): se genera la semana de nuevo en segundo plano con el
@@ -9135,7 +9173,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261005-v73';
+const BUILD_ID = '20261005-v74';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
