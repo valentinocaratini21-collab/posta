@@ -40,11 +40,39 @@ const HOUSE = {
   sells: 'Tu community manager con IA: te arma la semana de Instagram en 1 minuto (posteos, reels, stories, captions y hashtags con la onda de tu negocio). Vos solo aprobás; nada se publica sin tu OK.',
   audience: 'dueños de pymes y emprendedores (gastronomía, moda, belleza, servicios) que no tienen tiempo para Instagram pero saben que lo necesitan.',
   tone: 'cálido, directo, canchero, cero humo. Habla de igual a igual, nunca vende humo corporativo. Español rioplatense.',
-  cta: 'Probalo gratis 👇\npostyhacetodo.com/prueba',
+  cta: 'Probalo gratis 👇\npostyhacetodo.com/prueba', // variante 1 de 3; rotación diaria en HOUSE_CTA_VARIANTS
   palette: ['#2793C8', '#FEC14D', '#0A1E33'], // celeste, amarillo, navy (marca Posty)
-  hashtags: '#communitymanager #marketingdigital #emprendedoresargentinos #pymes #instagramparanegocios #redessociales #contenidodevalor #negociosdigitales',
+  hashtags: '#communitymanager #marketingdigital #emprendedoresargentinos #pymes #instagramparanegocios', // bloque A de 3; rotación diaria en HOUSE_HASHTAG_BLOCKS
   mascotFile: 'posty-mascot.png', // opcional: data/media/posty-mascot.png → referencia visual
 };
+
+// ---------------------------------------------------------------------------
+// Rotación diaria de hashtags y CTA (Juli QA 2026-10-05).
+// El checklist anti-genérico exige: máx 5 hashtags, nunca el mismo bloque
+// en dos posteos seguidos, y cierre variado. El bloque/CTA hardcodeado
+// violaba las tres reglas en TODOS los posteos de la house account.
+// Semilla = día entero: dos días seguidos nunca repiten bloque ni CTA.
+// ---------------------------------------------------------------------------
+const HOUSE_HASHTAG_BLOCKS = [
+  '#communitymanager #marketingdigital #emprendedoresargentinos #pymes #instagramparanegocios',
+  '#communitymanager #negociosargentinos #contenidodevalor #emprendedores #marketingparaemprendedores',
+  '#communitymanager #redessociales #instagramparanegocios #emprender #negociosdigitales',
+];
+const HOUSE_CTA_VARIANTS = [
+  'Probalo gratis 👇\npostyhacetodo.com/prueba',
+  'Armá tu semana en 1 minuto 👇\npostyhacetodo.com/prueba',
+  'Mirá cómo quedaría tu Instagram 👇\npostyhacetodo.com/prueba',
+];
+function houseDaySeed(date) {
+  const t = date instanceof Date ? date.getTime() : new Date(date || Date.now()).getTime();
+  return Math.floor(t / 86400000);
+}
+function houseHashtags(date) {
+  return HOUSE_HASHTAG_BLOCKS[houseDaySeed(date) % HOUSE_HASHTAG_BLOCKS.length];
+}
+function houseCta(date) {
+  return HOUSE_CTA_VARIANTS[houseDaySeed(date) % HOUSE_CTA_VARIANTS.length];
+}
 
 // Rotación de ángulos: nunca dos días seguidos el mismo.
 const ANGLES = [
@@ -259,7 +287,7 @@ function buildCaption(angle, ownerId, db) {
   const hookText = renderHook(hook, { tema: angle.theme, negocio: HOUSE.businessName });
   const body = angle.bodies[Math.floor(Math.random() * angle.bodies.length)];
   let caption = ensureCaptionOpensWithHook(body, hookText);
-  caption = `${caption}\n\n${HOUSE.cta}`;
+  caption = `${caption}\n\n${houseCta()}`;
   caption = stripAsterisks(caption);
   return { caption, hookId: hook.id };
 }
@@ -465,7 +493,7 @@ async function generateDogfoodPost(db, { mediaDir, openaiKey, generateImageStub 
       `INSERT INTO posts (user_id, image_path, caption, hashtags, status, kind, tipo, media_type,
         style_code, style_reason, intent, hook_id, source_angle, scheduled_for, created_at)
        VALUES (?, ?, ?, ?, 'pending_approval', 'dogfood', 'dogfood', 'image', ?, ?, ?, ?, ?, ?, datetime('now'))`
-    ).run(ownerId, imagePath, caption, HOUSE.hashtags, styleCode, styleReason, angle.intent, hookId, angle.id, String(scheduledFor || ''));
+    ).run(ownerId, imagePath, caption, houseHashtags(), styleCode, styleReason, angle.intent, hookId, angle.id, String(scheduledFor || ''));
     postId = r.lastInsertRowid;
   } catch (e) {
     console.error('[dogfood] no se pudo guardar el draft:', e.message);
@@ -1023,6 +1051,10 @@ function getPendingDogfood(db, userId) {
 module.exports = {
   HOUSE,
   ANGLES,
+  HOUSE_HASHTAG_BLOCKS,
+  HOUSE_CTA_VARIANTS,
+  houseHashtags,
+  houseCta,
   AUTO_RULE_COPY,
   DOGFOOD_PUSH_TITLE,
   DOGFOOD_EMAIL_SUBJECT,
