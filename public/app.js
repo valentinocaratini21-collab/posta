@@ -2752,7 +2752,8 @@ function chatMoreImage() {
   // NO borrar el preview anterior: queda visible mientras se genera la nueva.
   // El "generando" se muestra en el botón, no pisando la imagen.
   const box = $('#chatPreviews');
-  renderChatPreviews().then(() => {
+  RENDER_PREV_FOR = null; RENDER_PREV_BUSY = null; // permitir regenerar
+  renderChatPreviews(true).then(() => {
     if (CHAT_IDEA !== idea) return;
     renderChatStoryboard();
   }).catch(() => {}).finally(() => {
@@ -2887,15 +2888,21 @@ async function aiConceptShotFull({ idea, tipo, headline, refs, excludeStyles }) 
 // los prompts de la librería de estilos. Lo que ves es EXACTAMENTE lo que sale
 // al tocar "Hacerlo posteo" (se reutiliza la misma imagen, no se regenera).
 // "Otra imagen" genera una nueva con OTRO estilo (sin repetir).
-async function renderChatPreviews() {
+async function renderChatPreviews(force) {
   // REACTIVADO (2026-10-03): la tarjeta vuelve a mostrar la imagen.
   // Con el backend v27 (sin reintentos en cadena) la generación es confiable.
-  return renderChatPreviews_OLD();
+  return renderChatPreviews_OLD(force);
 }
-async function renderChatPreviews_OLD() {
+let RENDER_PREV_FOR = null; // titulo ya pintado (no regenerar)
+let RENDER_PREV_BUSY = null; // titulo en generación (no duplicar)
+async function renderChatPreviews_OLD(force) {
   const box = $('#chatPreviews');
   if (!box || !CHAT_IDEA) return;
   const idea = CHAT_IDEA;
+  const tituloKey = String(idea.titulo || '').slice(0, 80);
+  if (!force && RENDER_PREV_FOR === tituloKey && box.querySelector('img')) return;
+  if (!force && RENDER_PREV_BUSY === tituloKey) return;
+  if (!force) RENDER_PREV_BUSY = tituloKey;
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
   // Si ya hay un preview, NO lo borramos: queda visible mientras se genera la nueva.
   // Solo mostramos "generando" si no hay nada que mostrar.
@@ -2907,6 +2914,7 @@ async function renderChatPreviews_OLD() {
   // Pinta una imagen ya lista en la tarjeta (la usa la pre-generada y la on-demand).
   const paintPreview = (gen) => {
     if (CHAT_IDEA !== idea) return;
+    RENDER_PREV_FOR = tituloKey; RENDER_PREV_BUSY = null;
     if (gen.style && !CHAT_STYLE_USED.includes(gen.style)) CHAT_STYLE_USED.push(gen.style);
     CHAT_PREVIEWS = [{ kind: 'generated', cv: null, path: gen.path, style: gen.style, styleName: gen.styleName }];
     CHAT_PREV_SEL = 0;
@@ -2970,6 +2978,7 @@ async function renderChatPreviews_OLD() {
     }
     paintPreview(gen);
   } catch (e) {
+    RENDER_PREV_BUSY = null;
     if (CHAT_IDEA !== idea) return;
     stopPrevThinking();
     const detail = String((e && e.message) || '').slice(0, 120);
