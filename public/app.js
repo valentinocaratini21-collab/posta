@@ -898,7 +898,7 @@ function firstOpenParty() {
 }
 /* ---------- CHECKLIST COMPACTO: reemplaza los 3 banners apilados ---------- */
 function igConnectHere() {
-  const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
+  const cur = '/#' + ((location.hash.split('?')[0] || '#/app/chat').replace(/^#/, ''));
   igConnect(cur);
 }
 function setupChecklistHtml(title) {
@@ -7340,7 +7340,7 @@ async function maybeAutoStartWeek() {
 function postAuthLanding() {
   // FASE 4 (autopilot): onboarding si falta el negocio; si no, directo a la
   // semana. El chat queda como escape hatch en la navegación secundaria.
-  const homeTab = '#/app/schedule';
+  const homeTab = '#/app/chat';
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
     location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
