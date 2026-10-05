@@ -27,6 +27,8 @@ const GENERIC_PATTERNS = [
  * 3. hashtags_ok: tiene al menos 1 hashtag
  * 4. not_duplicate: caption no es idéntico a uno de los últimos 7 días
  * 5. scheduled_ok: tiene fecha futura válida (si aplica)
+ * 6. not_flat_fallback: style_code !== 'fallback' (bloque plano brand_card/
+ *    solid sin foto real — JAMÁS publicable, resta 50)
  */
 function qualityGate(post, db, mediaDir) {
   const checks = {};
@@ -115,6 +117,22 @@ function qualityGate(post, db, mediaDir) {
   } catch (e) {
     // Si la DB falla, no bloqueamos por esto (fail-open solo para este check)
     checks.not_duplicate = { ok: true, detail: 'check omitido' };
+  }
+
+  // 5. No es bloque plano de respaldo (2026-10-05, Valentino): style_code
+  //    'fallback' = brand_card/solid sin foto real. Un brand_card pasa el
+  //    check de >10KB, así que hay que detectarlo por marca explícita.
+  //    JAMÁS publicable: resta 50 y hunde el score bajo el umbral.
+  try {
+    if (String(post.style_code || '') === 'fallback') {
+      checks.not_flat_fallback = { ok: false, detail: 'imagen de respaldo plana, no publicable' };
+      score -= 50;
+    } else {
+      checks.not_flat_fallback = { ok: true, detail: 'imagen real o sin marca de respaldo' };
+    }
+  } catch (e) {
+    checks.not_flat_fallback = { ok: false, detail: 'error: ' + e.message };
+    score -= 50;
   }
 
   score = Math.max(0, Math.min(100, score));

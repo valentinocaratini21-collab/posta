@@ -17,6 +17,9 @@ const push = require('./push');
 push.initPush(db); // push notifications (VAPID); inactivo en silencio sin las env vars
 const dogfood = require('./dogfood');
 dogfood.initDogfood(db); // Posty dogfood: columna kind + tabla dogfood_state
+// Observabilidad dogfood (2026-10-05): los errores de imagen del dogfood van
+// al ring buffer de logGenError (visible en /api/diag), además del console.
+try { dogfood.setErrorReporter(logGenError); } catch (e) {}
 // MIGRACION kind=design — diseños fantasma 2026-09-30
 // Los diseños generados por "✨ Otro diseño" se subían por /api/media y quedaban
 // registrados como kind='photo': al regenerar, assetPhotos() podía elegir el
@@ -9021,7 +9024,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261005-v70';
+const BUILD_ID = '20261005-v71';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

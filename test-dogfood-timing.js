@@ -165,7 +165,7 @@ await t('tick en T-2min: no notifica', async () => {
   const r = await genSlot(db, MON_10());
   assert.ok(r.ok);
   const pc = pushCap();
-  const out = await D.tickDogfood(db, { now: MON_1758(), pushStub: pc.stub, publishFn: pubCap().fn });
+  const out = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1758(), pushStub: pc.stub, publishFn: pubCap().fn });
   assert.deepStrictEqual(out.notified, []);
   assert.strictEqual(pc.calls.length, 0);
   db.close();
@@ -175,14 +175,14 @@ await t('tick en T-1min: notifica UNA vez (guard anti-doble)', async () => {
   const r = await genSlot(db, MON_10());
   assert.ok(r.ok);
   const pc = pushCap();
-  const out1 = await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pubCap().fn });
+  const out1 = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pubCap().fn });
   assert.strictEqual(out1.notified.length, 1);
   assert.strictEqual(out1.notified[0].id, r.postId);
   assert.strictEqual(out1.notified[0].channel, 'push');
   const p = db.prepare('SELECT notified_at, auto_at FROM posts WHERE id = ?').get(r.postId);
   assert.ok(p.notified_at, 'sin notified_at');
   assert.strictEqual(p.auto_at, '2026-10-05 20:00', 'auto_at=' + p.auto_at);
-  const out2 = await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pubCap().fn });
+  const out2 = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pubCap().fn });
   assert.deepStrictEqual(out2.notified, [], 'doble notify');
   assert.strictEqual(pc.calls.length, 1, 'push llamado 2 veces');
   db.close();
@@ -205,7 +205,7 @@ await t('copy email: asunto y regla de 2h en el html', async () => {
   const r = await genSlot(db, MON_10());
   assert.ok(r.ok);
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(r.postId);
-  fs.writeFileSync(path.join(tmpMedia, 'dogfood-stub.png'), Buffer.from('fake-png-bytes-para-test'));
+  fs.writeFileSync(path.join(tmpMedia, 'dogfood-stub.png'), Buffer.alloc(12 * 1024)); // >10KB: simula imagen IA real para el qualityGate (Fase 0)
   let payload = null;
   const em = await D.sendDogfoodEmail(db, post, uid, {
     mediaDir: tmpMedia, baseUrl: 'https://postyhacetodo.com',
@@ -223,8 +223,8 @@ await t('sin respuesta a T+2h: auto-publica con decision=auto', async () => {
   const r = await genSlot(db, MON_10());
   assert.ok(r.ok);
   const pc = pushCap(), pb = pubCap();
-  await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
-  const out = await D.tickDogfood(db, { now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
+  await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
+  const out = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
   assert.deepStrictEqual(out.autoPublished, [r.postId]);
   assert.deepStrictEqual(pb.calls, [r.postId], 'publish llamado != 1 vez');
   const p = db.prepare('SELECT decision FROM posts WHERE id = ?').get(r.postId);
@@ -237,10 +237,10 @@ await t('approve manual antes: publica una vez; tick posterior no duplica', asyn
   const db = mkdb(); const uid = mkuser(db, 'o@x.com'); addSub(db, uid);
   const r = await genSlot(db, MON_10());
   const pc = pushCap(), pb = pubCap();
-  await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
+  await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
   const a = await D.approveDogfood(db, r.postId, pb.fn);
   assert.ok(a.ok && a.decision === 'approved', JSON.stringify(a));
-  const out = await D.tickDogfood(db, { now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
+  const out = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
   assert.deepStrictEqual(out.autoPublished, []);
   assert.strictEqual(pb.calls.length, 1, 'publish llamado ' + pb.calls.length + ' veces');
   const p = db.prepare('SELECT decision FROM posts WHERE id = ?').get(r.postId);
@@ -251,10 +251,10 @@ await t('dismiss: no publica nunca', async () => {
   const db = mkdb(); const uid = mkuser(db, 'o@x.com'); addSub(db, uid);
   const r = await genSlot(db, MON_10());
   const pc = pushCap(), pb = pubCap();
-  await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
+  await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
   const d = D.dismissDogfood(db, r.postId);
   assert.ok(d.ok);
-  const out = await D.tickDogfood(db, { now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
+  const out = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
   assert.deepStrictEqual(out.autoPublished, []);
   assert.strictEqual(pb.calls.length, 0);
   const p = db.prepare('SELECT status, decision FROM posts WHERE id = ?').get(r.postId);
@@ -268,8 +268,8 @@ await t('approve DESPUÉS de auto-publicar: no duplica', async () => {
   const db = mkdb(); const uid = mkuser(db, 'o@x.com'); addSub(db, uid);
   const r = await genSlot(db, MON_10());
   const pc = pushCap(), pb = pubCap();
-  await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
-  await D.tickDogfood(db, { now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
+  await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
+  await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_20(), pushStub: pc.stub, publishFn: pb.fn });
   const a = await D.approveDogfood(db, r.postId, pb.fn);
   assert.ok(!a.ok && a.reason === 'not_pending', 'reason=' + a.reason);
   assert.strictEqual(pb.calls.length, 1, 'se publicó de más');
@@ -278,7 +278,7 @@ await t('approve DESPUÉS de auto-publicar: no duplica', async () => {
 await t('tick en domingo: cero ruido', async () => {
   const db = mkdb(); mkuser(db, 'o@x.com');
   const pc = pushCap(), pb = pubCap();
-  const out = await D.tickDogfood(db, { now: SUN_10(), pushStub: pc.stub, publishFn: pb.fn });
+  const out = await D.tickDogfood(db, { mediaDir: tmpMedia, now: SUN_10(), pushStub: pc.stub, publishFn: pb.fn });
   assert.deepStrictEqual(out.notified, []);
   assert.deepStrictEqual(out.autoPublished, []);
   db.close();
@@ -288,7 +288,7 @@ await t('sin scheduled_for (draft viejo): el tick lo ignora', async () => {
   const r = await D.generateDogfoodPost(db, { mediaDir: tmpMedia, generateImageStub: stubImage });
   assert.ok(r.ok);
   const pc = pushCap(), pb = pubCap();
-  const out = await D.tickDogfood(db, { now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
+  const out = await D.tickDogfood(db, { mediaDir: tmpMedia, now: MON_1759(), pushStub: pc.stub, publishFn: pb.fn });
   assert.deepStrictEqual(out.notified, []);
   db.close();
 });

@@ -1,13 +1,20 @@
-// image-fallback.js — INVARIANTE: todo posteo sale con imagen, nunca solo palabras.
+// image-fallback.js — INVARIANTE: todo posteo sale con imagen REAL, nunca
+// bloques de color planos sin foto (regla de Valentino, 2026-10-05).
 //
 // Cadena de fallback para la imagen de un borrador:
 //   1) foto IA (gpt-image-1, vía generateFn inyectada por server.js)
 //   2) tarjeta de marca con PIL (fondo color de marca o foto del cliente +
-//      titular + logo) — siempre funciona si PIL está disponible
+//      titular + logo) — solo último recurso técnico
 //   3) PNG sólido con el color primario de la marca (PIL, una línea)
 //   4) si TODO falla: se marca needs_image=1 (visible, no silencioso), se
 //      loguea fuerte y publish queda bloqueado para ese post.
 //
+// POLÍTICA (2026-10-05): los niveles 2 (brand_card) y 3 (solid) existen solo
+// como último recurso técnico y NUNCA deben presentarse como propuesta o
+// posteo terminado. Los callers deben tratar `source !== 'ai'` como
+// "sin imagen real":
+//   - dogfood.js: descarta la propuesta (el cron horario reintenta solo)
+//   - pipeline semanal (server.js): qualityGate falla style_code='fallback'
 // server.js inyecta su conceptShotGenerate como generateFn (evita require
 // circular). El harness inyecta stubs.
 'use strict';

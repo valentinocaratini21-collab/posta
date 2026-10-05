@@ -290,6 +290,56 @@ function buildImagePrompt(angle, stylePick) {
   return `${scene}\n\n${paletteLine}${frag}`;
 }
 
+// ---------------------------------------------------------------------------
+// Retry con backoff para OpenAI (2026-10-05): la propuesta del dogfood sale
+// SIEMPRE con imagen real; un 429/5xx transitorio no puede degradarla a un
+// bloque plano. 3 intentos, backoff 2s/8s. Se reintentan SOLO errores
+// transitorios: 429, 5xx, timeout/abort, errores de red. 400/401/403/404 son
+// definitivos y NO se reintentan.
+function isTransientOpenAIError(e) {
+  const s = e && e.status;
+  if (s === 429) return true;
+  if (Number.isInteger(s) && s >= 500 && s <= 599) return true;
+  // Sin status HTTP: la llamada ni llegó (red caída, DNS, abort, timeout).
+  if (s == null && e) return true;
+  return false;
+}
+
+async function openaiFetchWithRetry(url, opts, attempts = 3) {
+  const delays = [2000, 8000];
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url, opts);
+      if (r.ok) return r;
+      const body = await r.text().catch(() => '');
+      const err = new Error(`OpenAI ${r.status}: ${String(body).slice(0, 120)}`);
+      err.status = r.status;
+      throw err;
+    } catch (e) {
+      lastErr = e;
+      const transient = isTransientOpenAIError(e);
+      const more = i < attempts - 1;
+      if (!transient || !more) throw e;
+      const ms = delays[i] || 8000;
+      console.error(`[dogfood] OpenAI falló (intento ${i + 1}/${attempts}): ${e.message} — reintento en ${ms}ms`);
+      await new Promise((res) => setTimeout(res, ms));
+    }
+  }
+  throw lastErr;
+}
+
+// Observabilidad (2026-10-05): reporter opcional de errores de imagen.
+// server.js lo cablea a logGenError en el boot. dogfood.js NUNCA requiere
+// server.js (evita require circular).
+let dogfoodErrorReporter = null;
+function setErrorReporter(fn) {
+  dogfoodErrorReporter = (typeof fn === 'function') ? fn : null;
+}
+function reportDogfoodError(where, err) {
+  try { if (dogfoodErrorReporter) dogfoodErrorReporter(where, err); } catch (e) {}
+}
+
 async function generateDogfoodImage({ angle, openaiKey, mediaDir, tmpName }) {
   const stylePick = pickStyle({
     intent: angle.intent, theme: angle.theme, rubro: 'servicios',
@@ -309,19 +359,18 @@ async function generateDogfoodImage({ angle, openaiKey, mediaDir, tmpName }) {
       form.append('prompt', prompt + ' IMPORTANT: keep the EXACT same character from the reference photo — identical face, same bright blue body, darker blue accent patches, yellow antenna ball, yellow chest button, same Pixar 3D style. The character must be instantly recognizable as the same Posty. Only change the scene, pose and props around it.');
       form.append('size', '1024x1536');
       form.append('quality', IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY)
-      r = await fetch('https://api.openai.com/v1/images/edits', {
+      r = await openaiFetchWithRetry('https://api.openai.com/v1/images/edits', {
         method: 'POST', headers: { Authorization: `Bearer ${openaiKey}` }, body: form,
         signal: AbortSignal.timeout(120000),
       });
     } else {
-      r = await fetch('https://api.openai.com/v1/images/generations', {
+      r = await openaiFetchWithRetry('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
         body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536', quality: IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
         signal: AbortSignal.timeout(120000),
       });
     }
-    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${(await r.text().catch(() => '')).slice(0, 120)}`);
     const data = await r.json();
     const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
     if (!b64) throw new Error('OpenAI no devolvió imagen');
@@ -391,10 +440,21 @@ async function generateDogfoodPost(db, { mediaDir, openaiKey, generateImageStub 
     }
   } catch (e) {
     console.error('[dogfood] imagen falló:', e.message);
+    reportDogfoodError('imagen', e);
     return { ok: false, reason: 'image_failed', error: e.message };
+  }
+  // REGLA (2026-10-05, Valentino): un bloque plano (brand_card/solid) JAMÁS
+  // se presenta como propuesta terminada. El cron corre cada hora y reintenta
+  // solo; el stub de tests sigue funcionando igual.
+  if (!generateImageStub && imageSource !== 'ai') {
+    const msg = 'IA sin imagen real; sin fallback plano para propuestas';
+    console.error('[dogfood] imagen falló:', msg, `(source=${imageSource})`);
+    reportDogfoodError('imagen', new Error(`${msg} (source=${imageSource})`));
+    return { ok: false, reason: 'image_failed', error: msg };
   }
   if (!imagePath) {
     console.error('[dogfood] no se pudo generar imagen por ninguna vía');
+    reportDogfoodError('imagen', new Error('no se pudo generar imagen por ninguna vía'));
     return { ok: false, reason: 'image_failed' };
   }
   const styleCode = (stylePick && stylePick.style && stylePick.style.code) || '';
@@ -979,6 +1039,7 @@ module.exports = {
   generateDogfoodSlot,
   tickDogfood,
   sweepStaleDogfood,
+  setErrorReporter,
   dogfoodPushPayload,
   sendDogfoodPush,
   sendDogfoodEmail,
