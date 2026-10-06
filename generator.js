@@ -1039,6 +1039,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             'Sos un redactor publicitario argentino experto en Instagram que vende de verdad.\n' +
             CAPTION_CRAFT +
             (captionExtras ? '\n' + captionExtras : '') +
+            '\nREGLA ANTI-INVENCIÓN: si el tema del post es una pregunta abierta genérica ("¿qué preferís?", "elegí", "te leemos"), la pregunta TIENE que ser sobre el negocio real del contexto: sus productos, servicios o promos de verdad, con opciones concretas que existen. PROHIBIDO inventar opciones, productos, precios o temas que no estén en la descripción del negocio. Un posteo genérico con cosas inventadas es peor que no postear. ' +
             '\nREGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta" (prohibido "Con Posta", "Posta te ayuda", "probá Posta"). Si el negocio es Posta, escribí sobre "Posty" en primera persona del singular ("yo te lo armo", "escribime"), nunca en plural ("nosotros", "escribinos", "te ayudamos"). ' +
             '\nRespondé SOLO con un JSON: {"caption": "...", "overlay": "...", "suboverlay": "...", "hashtags": "#tag1 #tag2 ..."}. ' +
             '"overlay" es el titular de MÁXIMO 5 palabras que va SOBRE la imagen: corto, con punch, sin emojis. ' +
@@ -1359,7 +1360,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
   return mapped;
 }
 
-async function generateIdeas(input, apiKey) {
+async function generateIdeas(input, apiKey, opts = {}) {
   let ideas = null;
   if (apiKey) {
     try {
@@ -1368,7 +1369,13 @@ async function generateIdeas(input, apiKey) {
       console.error('OpenAI ideas falló, usando plantillas:', e.message);
     }
   }
-  if (!ideas) ideas = templateIdeas(input);
+  if (!ideas) {
+    // Modo estricto (pipeline semanal, 2026-10-06): SIN plantillas genéricas.
+    // Si la IA falló, se tira para que el retry v72 lo reintente más tarde.
+    // Un posteo genérico o con cosas inventadas es peor que no generar nada.
+    if (opts.strict) throw new Error('openaiIdeas falló (modo estricto: sin plantillas)');
+    ideas = templateIdeas(input);
+  }
   // Filtro anti-invención: fuera ideas con placeholders típicos ("XYZ", "[...]").
   ideas = ideas.filter(i => !hasPlaceholders(`${i.titulo || ''} ${i.angulo || ''}`));
   // Garantía de variedad: nunca dos ideas seguidas del mismo tipo.

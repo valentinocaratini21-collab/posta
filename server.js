@@ -4542,7 +4542,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // saldo 0, input inesperado), NO propagar la excepción al sweep: devolver
     // fallo estructurado para que se registre y se reintente con backoff.
     let ideas;
-    try { ideas = await generateIdeas(ideasInputFor(uid), key); }
+    try { ideas = await generateIdeas(ideasInputFor(uid), key, { strict: true }); }
     catch (e) { console.error(`[pipeline:${tag}] ideas falló:`, e.message); return { ok: false, reason: 'ai_error', error: e.message }; }
     const picks = ideas.slice(0, ppw);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
@@ -9205,7 +9205,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261005-v78';
+const BUILD_ID = '20261005-v79';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
