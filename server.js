@@ -235,16 +235,22 @@ function cortar(t, max) {
 function makeHeadline(text, maxWords = 6, maxChars = 70) {
   const s = String(text || '').replace(/\s+/g, ' ').trim();
   if (!s) return '';
-  // 1) Primera oración: si entra en el límite de palabras, va entera.
-  const m = s.match(/^[^.!?…]+[.!?…]/);
-  const first = (m ? m[0] : s).trim();
-  const fw = first.split(' ').filter(Boolean);
+  // Guard 2026-10-06 (propuesta Juli, QA captions): titulares de 1-2 palabras
+  // ("Lunes.") no venden y salen del makeHeadline cuando el caption arranca con
+  // una escena corta. Se toma la primera oración con >=3 palabras entre las 3
+  // primeras; si ninguna califica, se usan las primeras 8 palabras del texto.
+  const sentences = (s.match(/[^.!?…]+[.!?…]/g) || [s]).slice(0, 3);
+  let seed = sentences.find(c => c.trim().split(' ').filter(Boolean).length >= 3);
+  if (!seed) seed = s.split(' ').filter(Boolean).slice(0, 8).join(' ');
+  seed = seed.trim();
+  // 1) La oración elegida: si entra en el límite de palabras, va entera.
+  const fw = seed.split(' ').filter(Boolean);
   let words;
   if (fw.length <= maxWords) {
     words = sinColgada(fw);
   } else {
-    // 2) Recorte por palabras + retroceso anti-colgada.
-    words = sinColgada(s.split(' ').filter(Boolean).slice(0, maxWords));
+    // 2) Recorte por palabras + retroceso anti-colgada (sobre la oración elegida).
+    words = sinColgada(seed.split(' ').filter(Boolean).slice(0, maxWords));
   }
   let out = words.join(' ');
   // 3) Tope de caracteres, cortando por palabra y re-chequeando colgadas.
@@ -3822,6 +3828,21 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
     // ¿Ya hay una generación en curso? No duplicar.
     if (NEXTWEEK_RUNNING.has(uid)) return res.json({ ok: true, generating: true, count: 0, week_key: wk });
     if (!planOrTrialOk(uid)) return res.json({ ok: false, generating: false, reason: 'no_plan', week_key: wk });
+    // Gate de ADN "no generar a ciegas" (MISMA lógica que generateWeekDrafts):
+    // si la cuenta no tiene descripción del negocio ni producto_estrella, no
+    // disparar nada y avisar al frontend con reason:'no_dna' para que muestre
+    // la tarjeta honesta en vez del spinner de "armando tu semana" (que nunca
+    // terminaría porque el pipeline descarta la generación en silencio).
+    try {
+      const profile = getProfile(uid);
+      const dna = readDna(uid);
+      const descOk = (profile.description || '').trim().length >= 20;
+      const dnaOk = (dna.producto_estrella || '').trim().length >= 3;
+      if (!descOk && !dnaOk) {
+        console.log(`[week-ensure] usuario ${uid}: sin ADN mínimo, no se genera a ciegas`);
+        return res.json({ ok: true, generating: false, reason: 'no_dna', week_key: wk });
+      }
+    } catch (e) { /* si falla el chequeo, dejar que el pipeline decida */ }
     // Disparar en segundo plano: la respuesta vuelve al toque.
     generateWeekDrafts(uid, { weekKey: wk, tag: 'ensure', quiet: false })
       .then(r => console.log(`[week-ensure] usuario ${uid} semana ${wk}:`, r.ok ? `${r.created} creados` : `falló (${r.reason})`))
@@ -9173,7 +9194,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261005-v77';
+const BUILD_ID = '20261005-v78';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

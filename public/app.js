@@ -4145,7 +4145,7 @@ function bindChat() {
 // ---------- 🏠 HOME SIMPLE (2026-10-03) ----------
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
-function homeWeekHTML(posts, quota, generating) {
+function homeWeekHTML(posts, quota, generating, noDna) {
   const q = quota || {};
   const qTotal = Number(q.limit) || 0;
   const qUsed = Math.max(0, Number(q.used) || 0);
@@ -4155,6 +4155,17 @@ function homeWeekHTML(posts, quota, generating) {
   const list = all.filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
     .sort((a, b) => ((a.status === 'draft' ? 0 : 1) - (b.status === 'draft' ? 0 : 1)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
   if (!list.length) {
+    // 2026-10-06 (ensure honesto): el backend descartó la generación por falta
+    // de ADN (reason:'no_dna') — NO mostrar el spinner "armando tu semana"
+    // porque no hay nada en camino. Tarjeta honesta con camino a Ajustes.
+    // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
+    // no corra en este caso.
+    if (noDna) return `<div class="hs-nodna" id="hsNoDna">
+    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <b>Para armar tu semana necesito conocer tu negocio 👇</b>
+    <p>Contame de qué se trata en 2 minutos y la armo sola ✨</p>
+    <a class="btn btn-primary btn-block" href="#/app/ajustes" style="margin-top:4px">Contar de mi negocio</a>
+  </div>`;
     // Si estamos generando (ensure disparado), mostrar "armando" aunque
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
@@ -4238,10 +4249,12 @@ async function chatView() {
   // 2026-10-05: si no hay nada por venir, disparar la generación en segundo
   // plano (sin bloquear). El home muestra "armando" y refresca solo.
   let weekGenerating = false;
+  let weekNoDna = false;
   if (!nDrafts && !nSched) {
     try {
       const er = await api.post('/api/week/ensure', {}).catch(() => null);
       weekGenerating = !!(er && (er.generating || er.count > 0));
+      weekNoDna = !!(er && er.reason === 'no_dna');
       if (er && er.generating) {
         // Refrescar en 20s para mostrar las tarjetas cuando aparezcan.
         setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 20000);
@@ -4255,7 +4268,7 @@ async function chatView() {
       <div><b>Posty<span class="pdot">.</span></b><div class="hs-sub">Tu semana, lista. Si querés cambiar algo, decime 👇</div></div>
     </div>
     <div id="revMsg"></div>
-    ${homeWeekHTML(posts, quota, weekGenerating)}
+    ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna)}
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
     <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
@@ -8138,10 +8151,12 @@ async function scheduleView() {
   // 2026-10-05: si no hay nada por venir, disparar la generación en segundo
   // plano (sin bloquear). El home muestra "armando" y refresca solo.
   let weekGenerating = false;
+  let weekNoDna = false;
   if (!drafts.length && !schedPosts.length) {
     try {
       const er = await api.post('/api/week/ensure', {}).catch(() => null);
       weekGenerating = !!(er && (er.generating || er.count > 0));
+      weekNoDna = !!(er && er.reason === 'no_dna');
       if (er && er.generating) {
         setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 20000);
       }
@@ -8236,7 +8251,7 @@ async function scheduleView() {
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   // 2026-10-05: home en Schedule (primera pestaña) — 5 tarjetas fijas arriba,
   // chat abajo en la misma pantalla. Pedido de Valentino.
-  const homeWeekBlock = homeWeekHTML(allPosts, quota, weekGenerating);
+  const homeWeekBlock = homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
   const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
     ${trialBanner}
