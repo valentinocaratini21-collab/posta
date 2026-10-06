@@ -3823,7 +3823,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
     }
     if (n > 0) return res.json({ ok: true, generating: false, count: n, week_key: wk });
     // ¿Ya hay una generación en curso? No duplicar.
-    if (NEXTWEEK_RUNNING.has(uid)) return res.json({ ok: true, generating: true, count: 0, week_key: wk });
+    if (nextweekRunningFresh(uid)) return res.json({ ok: true, generating: true, count: 0, week_key: wk });
     if (!planOrTrialOk(uid)) return res.json({ ok: false, generating: false, reason: 'no_plan', week_key: wk });
     // Gate de ADN "no generar a ciegas" (MISMA lógica que generateWeekDrafts):
     // si la cuenta no tiene descripción del negocio ni producto_estrella, no
@@ -4453,7 +4453,20 @@ app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
 // (autopilotReel vive en el browser; el último borrador sale como imagen y el
 // usuario lo puede convertir).
 // Guard en memoria (mismo proceso que el cron): una sola corrida por usuario.
-const NEXTWEEK_RUNNING = new Set();
+const NEXTWEEK_RUNNING = new Map(); // uid -> timestamp de inicio
+// Limpia corridas trabadas: si una generación lleva más de 15 min, se asume
+// colgada y se libera para reintentar (2026-10-06: fix del "armando tu semana"
+// eterno — la corrida anterior de Valentino quedó marcada y nunca se liberó).
+function nextweekRunningFresh(uid) {
+  const ts = NEXTWEEK_RUNNING.get(uid);
+  if (!ts) return false;
+  if (Date.now() - ts > 15 * 60 * 1000) {
+    NEXTWEEK_RUNNING.delete(uid);
+    console.log(`[pipeline] usuario ${uid}: corrida trabada (>15min), liberada para reintentar`);
+    return false;
+  }
+  return true;
+}
 // Gate 1: solo con plan activo O trial vigente. Cada semana cuesta plata real.
 function planOrTrialOk(uid) {
   try {
@@ -4522,8 +4535,8 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // silencio (el usuario lo reintenta mañana; nada se rompe).
   try { costs.assertAiOk(uid); }
   catch (e) { console.error(`[pipeline:${tag}] kill-switch, skip usuario ${uid}`); return { ok: false, reason: 'ai_cap' }; }
-  if (NEXTWEEK_RUNNING.has(uid)) { console.log(`[pipeline:${tag}] usuario ${uid}: ya hay una corrida en curso, skip`); return { ok: false, reason: 'running' }; }
-  NEXTWEEK_RUNNING.add(uid);
+  if (nextweekRunningFresh(uid)) { console.log(`[pipeline:${tag}] usuario ${uid}: ya hay una corrida en curso, skip`); return { ok: false, reason: 'running' }; }
+  NEXTWEEK_RUNNING.set(uid, Date.now());
   try {
     try {
       const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled'`).get(uid, weekKey).n || 0;
