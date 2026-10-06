@@ -96,11 +96,11 @@ let intentFromTipo = () => null;
 let resolveExplicitIntent = () => ({ intent: null, source: null });
 try { ({ getStyle, pickStyle, styleFragment, listStyles, intentFromTipo, resolveExplicitIntent } = require('./image-styles')); }
 catch (e) { console.error('[init] image-styles no disponible:', e.message); }
-// Cadena de fallback de imagen (image-fallback.js): INVARIANTE — todo posteo
-// sale con imagen, nunca solo palabras. Mismo patrón defensivo.
-let fallbackImage = null;
+// image-fallback.js: solo se usa brandCardPng (portadas de stories).
+// El fallback plano para posteos del feed se eliminó el 2026-10-06
+// (Valentino): un bloque de color nunca se muestra como posteo terminado.
 let brandCardPng = null;
-try { ({ fallbackImage, brandCardPng } = require('./image-fallback')); }
+try { ({ brandCardPng } = require('./image-fallback')); }
 catch (e) { console.error('[init] image-fallback no disponible:', e.message); }
 // Scroll-stop QA (scrollstop.js) + carousels (carousel.js). Patrón defensivo.
 let scoreCanvasCover = null, qaScrollStopB64 = null, SCROLLSTOP_MIN = 60;
@@ -2747,8 +2747,8 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
   const styleOut2 = {};
-  // INVARIANTE: todo borrador sale con imagen. Si la IA falla, fallback
-  // (tarjeta de marca PIL → sólido color de marca). Nunca solo palabras.
+  // INVARIANTE: todo borrador sale con imagen real de IA. Si la IA falla
+  // tras reintentos, no se crea el borrador (nunca un bloque plano).
   let imagePath = null;
   // Reference lock: la primera foto de producto de la semana (misma que el
   // pipeline) para que el producto se vea idéntico.
@@ -2760,21 +2760,18 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     const p = r && String(r.image_path || '');
     if (p && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) regenProductRef = p;
   } catch (e) {}
-  try {
-    imagePath = await conceptShotGenerateQueued({
-      uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
-      tipo: idea.tipo, headline, refs, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
-    });
-  } catch (e) { console.error('[review] IA imagen falló, fallback:', e.message); }
-  if (!imagePath && fallbackImage) {
+  // Reintentos de imagen IA (2026-10-06, Valentino): sin fallback plano.
+  // Si la IA falla tras 3 intentos, no se crea el borrador.
+  for (let attempt = 0; attempt < 3 && !imagePath; attempt++) {
     try {
-      const prof = getProfile(uid) || {};
-      const fb = await fallbackImage({
-        generateFn: null, headline, bgHex: primaryBrandHex(uid), textHex: '#FFFFFF',
-        business: prof.business_name || '', logoAbs: logoAbsPath(uid), photoAbs: null, outDir: MEDIA_DIR,
+      imagePath = await conceptShotGenerateQueued({
+        uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
+        tipo: idea.tipo, headline, refs, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
       });
-      if (fb.path) { imagePath = fb.path; styleOut2.code = 'fallback'; styleOut2.reason = `imagen de respaldo (${fb.source})`; }
-    } catch (e) { console.error('[review] fallback imagen:', e.message); }
+    } catch (e) {
+      console.error(`[review] IA imagen falló (intento ${attempt + 1}/3):`, e.message);
+      if (attempt < 2) await new Promise(r => setTimeout(r, 4000 * (attempt + 1)));
+    }
   }
   if (!imagePath) return { ok: false, reason: 'no_image' };
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id)
@@ -4502,7 +4499,7 @@ function nextWeekEligible(uid, weekKey) {
   if (!pipelineAliveRecently(uid)) return { ok: false, reason: 'paused_14d' };
   return { ok: true };
 }
-// Helpers para la cadena de fallback de imagen (image-fallback.js).
+// Helpers de marca para portadas de stories/reels (image-fallback.js).
 // Logo del cliente como archivo absoluto (o null si no hay).
 function logoAbsPath(uid) {
   try {
@@ -4556,6 +4553,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // scheduleAllDrafts ya filtra lo que no está a la altura).
     const needRev = autopilot.trustLevel(db, uid) === 0 ? 1 : 0;
     let created = 0;
+    let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
     // entre borradores (lo comparten los 3 workers del pool).
     const usedStyles = [];
@@ -4601,9 +4599,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             || makeHeadline(idea.titulo, 5);
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
-          // INVARIANTE: todo borrador sale con imagen, nunca solo palabras.
-          // Si la IA falla, cadena de fallback (tarjeta de marca PIL → sólido
-          // color de marca). El borrador se crea igual: nunca solo palabras.
+          // INVARIANTE: todo borrador sale con imagen real de IA, nunca solo
+          // palabras y nunca un bloque plano. Si la IA falla tras los
+          // reintentos, la idea se salta (no se crea el borrador).
           const styleOut = {};
           let imagePath = null;
           let carouselGen = null;
@@ -4624,27 +4622,35 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             }
           }
           if (!isCarousel) {
+          // Reintentos de imagen IA (2026-10-06, Valentino): un bloque plano
+          // NUNCA se muestra como posteo terminado. Hasta 3 intentos con
+          // backoff corto antes de saltar la idea.
+          for (let attempt = 0; attempt < 3 && !imagePath; attempt++) {
           try {
             imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
               usedStyles, styleOut, productRef,
             });
-          } catch (e) { console.error(`[pipeline:${tag}] IA imagen falló, fallback:`, e.message); }
+          } catch (e) {
+            console.error(`[pipeline:${tag}] IA imagen falló (intento ${attempt + 1}/3):`, e.message);
+            if (attempt < 2) await new Promise(r => setTimeout(r, 4000 * (attempt + 1)));
+          }
+          }
           }
           let finalCode = String(styleOut.code || ''), finalReason = String(styleOut.reason || ''), finalIntent = String(styleOut.intent || '');
           const finalProductRef = String(productRef || '');
           const finalHookId = String((content && content.hookId) || '');
           if (!isCarousel) {
-          if (!imagePath && fallbackImage) {
-            try {
-              const fb = await fallbackImage({
-                generateFn: null, headline, bgHex: primaryBrandHex(uid), textHex: '#FFFFFF',
-                business: (profile && profile.business_name) || '', logoAbs: logoAbsPath(uid), photoAbs: null, outDir: MEDIA_DIR,
-              });
-              if (fb.path) { imagePath = fb.path; finalCode = 'fallback'; finalReason = `imagen de respaldo (${fb.source})`; }
-            } catch (e) { console.error(`[pipeline:${tag}] fallback imagen:`, e.message); }
+          // Sin fallback plano (2026-10-06, Valentino): si la IA no generó
+          // imagen tras los reintentos, NO se crea el borrador. La semana
+          // queda con menos posteos reales antes que mostrar un bloque de
+          // color como terminado. El retry del sweep (cada 3h) + backfill
+          // (8:00) + ensure al abrir reintentan la semana.
+          if (!imagePath) {
+            console.error(`[pipeline:${tag}] "${idea.titulo || i}": sin imagen IA tras 3 intentos, se salta (no se crea borrador plano)`);
+            imgFailCount++;
+            continue;
           }
-          if (!imagePath) throw new Error('sin imagen');
           insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
@@ -4667,6 +4673,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     await Promise.all([worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
+    // Si la semana quedó incompleta por fallos de imagen IA, alimentar el
+    // loop de reintentos (v72): el cron cada 3h la regenera con reason 'img_fail'.
+    if (imgFailCount > 0 && created < picks.length) {
+      try { recordSweepFailure(uid, weekKey, 'img_fail'); } catch (e) {}
+    }
     // Push "tu semana está lista": avisar en el celu para que la revise.
     // quiet (FASE 2): el sweep de nivel 0 manda el email con preview + botón
     // "Publicar semana" en su lugar — el push exigiría entrar a la app.
@@ -4775,7 +4786,7 @@ async function retrySweepFailures() {
       const r = await generateWeekDrafts(f.user_id, { weekKey: f.week_key, tag: 'sweep-retry' });
       const del = () => { try { db.prepare(`DELETE FROM sweep_failures WHERE user_id = ? AND week_key = ?`).run(f.user_id, f.week_key); } catch (e) {} };
       if (r && r.ok) { del(); resolved++; }
-      else if (r && (r.reason === 'ai_error' || r.reason === 'no_ideas')) {
+      else if (r && (r.reason === 'ai_error' || r.reason === 'no_ideas' || r.reason === 'img_fail')) {
         const attempts = (f.attempts || 0) + 1;
         if (attempts >= 5) {
           del();
@@ -6661,8 +6672,8 @@ El prompt DEBE exigir:
 - La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
 - Estética publicitaria premium: incluí los marcadores "fotografía comercial profesional" y "high-end advertising".
 - FORMATO VERTICAL 4:5, optimizado para verse en un CELULAR: es una pieza de Instagram, no un banner de web.
-- El titular (si lo hay) GRANDE, en negrita y con alto contraste: tiene que leerse perfecto en una pantalla de teléfono chica. El titular es una frase COMPLETA: se renderiza ÍNTEGRO, sin cortar la última palabra ni terminar en preposición o artículo; si no entra, se achica la tipografía o se usa una segunda línea, JAMÁS se trunca.
-- ZONA SEGURA: lo importante (titular, producto, caras) va en el centro de la imagen, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta.
+- PROHIBIDO RENDERIZAR TEXTO (2026-10-06, causa raíz de 19/20 fallas de la auditoría del 4-5/10: la instrucción vieja pedía "el titular GRANDE en la imagen" y el generador horneaba palabras en inglés, typos como "Backgnina"/"inatogram"/"Iratigran", claims inventados y logos de marcas): la imagen sale 100% SIN letras, palabras ni números — el titular NO se dibuja en la imagen, NO se inventa texto "parecido al titular", NO hay texto de escena ni de relleno. El titular se compone DESPUÉS por código (composite-headline.py) en el tercio superior reservado.
+- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. El tercio superior queda LIMPIO para el titular que agrega el código después.
 - Los colores EXACTOS de la paleta del cliente integrados EN la escena (props, vestuario, packaging, detalles del ambiente): ${hexes.join(', ') || 'sin paleta definida, usá colores armónicos del rubro'}. NUNCA como fondo plano de color.
 - "${textRule}"
 - "sin marca de agua".
@@ -6671,7 +6682,7 @@ El prompt DEBE exigir:
 - Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
 - ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
 - PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
-- BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible en la imagen — el ÚNICO texto permitido es el titular intencional, renderizado perfecto e íntegro; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
+- BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible — CERO texto legible en la imagen, sin excepción: lo que naturalmente llevaría texto (pantallas, carteles, etiquetas, vidrieras, ropa con estampa) va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible; el ÚNICO texto de la pieza es el titular y lo agrega el código DESPUÉS, nunca el generador; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
 - Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
 - VARA DE CALIDAD (piezas de referencia aprobadas 2026-10-03): la imagen tiene que sentirse PREMIUM y profesional — composición limpia con aire, un protagonista claro, iluminación cuidada, acabado de publicidad de alto nivel. Nada de estética amateur, genérica o de "IA barata". REGLA DE ZONA DEL TITULAR (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular en posteos publicados): el tercio superior de la imagen es ZONA LIMPIA RESERVADA — solo fondo suave, desenfocado o degradado liso; NINGÚN sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido puede asomarse ni tocar esa zona. El protagonista y la acción viven del centro hacia abajo. El titular se compone después por código en ese tercio superior y tiene que respirar: nada detrás que lo choque ni le compita.
 - REGLA ZERO-TEXT (reemplaza draft 75 — fallas reales 2026-10-05: el generador horneaba texto en inglés, typos como "Backgnina"/"inatogram", logos de marcas reales y claims inventados en pantallas y carteles): CERO texto legible en la imagen — ni una palabra, ni una letra, ni un número, en ningún idioma. Si la escena incluye pantallas, carteles, vidrieras, interfaces, celulares, etiquetas, ropa con estampas o fondos con letras: TODO va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible — nunca palabras "reales del negocio", nunca iconos de marcas reales. El ÚNICO texto que lleva la pieza es el titular, que se compone DESPUÉS por código.
