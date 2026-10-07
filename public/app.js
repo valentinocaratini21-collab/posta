@@ -4209,6 +4209,8 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
+    <button type="button" class="btn btn-ghost btn-sm" id="hsDiagBtn" style="margin-top:12px">🔍 ¿Por qué tarda tanto?</button>
+    <div id="hsDiagOut" style="margin-top:10px;text-align:left"></div>
   </div>`;
     // Solo usuario NUEVO de verdad ve "armando": si alguna vez tuvo posteos,
     // la semana está completa (no un spinner eterno).
@@ -8427,6 +8429,29 @@ function bindSchedule() {
   if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; render(); };
   // 2026-10-05: chat en el Schedule (home) — cablear como en #/app/chat.
   try { bindChat(); } catch (e) {}
+  // 2026-10-07: botón "¿Por qué tarda tanto?" en el estado "armando".
+  const diagBtn = $('#hsDiagBtn');
+  if (diagBtn) diagBtn.onclick = async () => {
+    const out = $('#hsDiagOut');
+    if (out) out.innerHTML = '<p style="font-size:13px">Revisando… 🔍</p>';
+    diagBtn.disabled = true;
+    try {
+      const r = await api.post('/api/diag/week-test', {}, { timeout: 90000 });
+      const d = r && r.diag ? r.diag : {};
+      let msg = '<div style="font-size:13px;line-height:1.7;background:#fff;border-radius:12px;padding:12px">';
+      msg += `<b>Diagnóstico:</b><br>`;
+      msg += `Plan: ${d.planOk ? '✅' : '❌'}<br>`;
+      msg += `Créditos IA: ${d.aiOk ? '✅' : '❌ ' + esc(d.aiErr || '')}<br>`;
+      msg += `Datos negocio: ${d.dnaOk ? '✅' : '❌'}<br>`;
+      msg += `En curso: ${d.running ? '⚠️' : 'no'}<br>`;
+      if (d.ideasOk === false) msg += `IA: ❌ ${esc((d.ideasErr || '').slice(0, 100))}<br>`;
+      msg += '</div>';
+      if (out) out.innerHTML = msg;
+    } catch (e) {
+      if (out) out.innerHTML = `<p style="font-size:13px;color:#c00">Error: ${esc(e.message || '')}</p>`;
+    }
+    diagBtn.disabled = false;
+  };
   // Días libres: el fantasma "+" lleva al chat a pedirle algo a Posty para ese día.
   $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => { location.hash = '#/app/chat'; });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
