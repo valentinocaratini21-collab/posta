@@ -7414,6 +7414,57 @@ app.post('/api/diag/image-test', requireAuth, express.json(), async (req, res) =
   }
 });
 
+// Diagnóstico de la generación semanal (2026-10-07): chequea TODOS los gates
+// que pueden trabar el "armando tu semana" y devuelve el motivo exacto.
+// Solo fundador.
+app.post('/api/diag/week-test', requireAuth, express.json(), async (req, res) => {
+  const uid = req.session.userId;
+  const diag = {};
+  try {
+    try { diag.founder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) { diag.founder = false; }
+    if (!diag.founder) return res.status(403).json({ ok: false, error: 'no autorizado' });
+    // Gate 1: plan/trial
+    try { diag.planOk = planOrTrialOk(uid); } catch (e) { diag.planOk = false; diag.planErr = e.message; }
+    // Gate 2: AI cap
+    try { costs.assertAiOk(uid); diag.aiOk = true; }
+    catch (e) { diag.aiOk = false; diag.aiErr = String(e.message || e).slice(0, 200); diag.aiName = e.name; }
+    // Gate 3: DNA
+    try {
+      const profile = getProfile(uid);
+      const dna = readDna(uid);
+      diag.descLen = (profile.description || '').trim().length;
+      diag.productoLen = (dna.producto_estrella || '').trim().length;
+      diag.dnaOk = diag.descLen >= 20 || diag.productoLen >= 3;
+    } catch (e) { diag.dnaOk = false; diag.dnaErr = e.message; }
+    // Gate 4: posts existentes
+    try {
+      const tz = userTz(uid);
+      const wk = mondayKeyOf(tzToday(tz));
+      diag.weekKey = wk;
+      diag.existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, wk).n || 0;
+    } catch (e) { diag.existing = -1; diag.existingErr = e.message; }
+    // Gate 5: NEXTWEEK_RUNNING
+    diag.running = nextweekRunningFresh(uid);
+    // Gate 6: OpenAI key
+    const key = openaiKeyFor(uid) || process.env.OPENAI_API_KEY || '';
+    diag.hasKey = !!key;
+    // Gate 7: probar generateIdeas (1 llamada real)
+    if (diag.planOk && diag.aiOk && diag.dnaOk && diag.hasKey) {
+      try {
+        const ideas = await generateIdeas(ideasInputFor(uid), key);
+        diag.ideasOk = true;
+        diag.ideasCount = (ideas || []).length;
+      } catch (e) {
+        diag.ideasOk = false;
+        diag.ideasErr = String(e.message || e).slice(0, 300);
+      }
+    }
+    return res.json({ ok: true, diag });
+  } catch (e) {
+    return res.json({ ok: false, error: String(e.message || e).slice(0, 200), diag });
+  }
+});
+
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
