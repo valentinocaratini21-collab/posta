@@ -53,6 +53,7 @@ const CAPTION_CHECKLIST = [
   '5. Prohibido abrir con muletillas: nunca arranques con "¡Hola!", "¡Descubrí…" o "¿Sabías que…?" como fórmula automática.',
   '6. El caption tiene que MATCHEAR lo que muestra la imagen: no prometas, describas ni vendas lo que no se ve en la foto/video.',
   '7. Si el negocio es argentino: escribí en rioplatense con voseo ("vos"), siempre.',
+  '8. Prohibido el GRITO: nunca uses MAYÚSCULAS para énfasis en el cuerpo del caption ("SUS fotos", "YA ESTÁ ARMADA"); si algo merece énfasis, que lo diga la frase, no el formato. Prohibido asteriscos para énfasis (*así*): en Instagram se ven literales y delatan que lo escribió una IA.',
 ].join('\n');
 
 function isArgentineClient(db, userId) {

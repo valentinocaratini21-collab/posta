@@ -37,7 +37,7 @@ const { qualityGate, saveQualityResult } = require('./autopilot');
 const HOUSE = {
   igHandle: '@posty.hacetodo',
   businessName: 'Posty',
-  sells: 'Tu community manager con IA: te arma la semana de Instagram en 1 minuto (posteos, reels, stories, captions y hashtags con la onda de tu negocio). Vos solo aprobás; nada se publica sin tu OK.',
+  sells: 'Tu community manager con IA: te arma la semana de Instagram (posteos, reels, stories, captions y hashtags con la onda de tu negocio). Vos solo aprobás; nada se publica sin tu OK.',
   audience: 'dueños de pymes y emprendedores (gastronomía, moda, belleza, servicios) que no tienen tiempo para Instagram pero saben que lo necesitan.',
   tone: 'cálido, directo, canchero, cero humo. Habla de igual a igual, nunca vende humo corporativo. Español rioplatense.',
   cta: 'Probalo gratis 👇\npostyhacetodo.com/prueba', // variante 1 de 3; rotación diaria en HOUSE_CTA_VARIANTS
@@ -60,28 +60,56 @@ const HOUSE_HASHTAG_BLOCKS = [
 ];
 const HOUSE_CTA_VARIANTS = [
   'Probalo gratis 👇\npostyhacetodo.com/prueba',
-  'Armá tu semana en 1 minuto 👇\npostyhacetodo.com/prueba',
+  'Armá tu semana gratis 👇\npostyhacetodo.com/prueba',
   'Mirá cómo quedaría tu Instagram 👇\npostyhacetodo.com/prueba',
 ];
 function houseDaySeed(date) {
   const t = date instanceof Date ? date.getTime() : new Date(date || Date.now()).getTime();
   return Math.floor(t / 86400000);
 }
-function houseHashtags(date) {
-  return HOUSE_HASHTAG_BLOCKS[houseDaySeed(date) % HOUSE_HASHTAG_BLOCKS.length];
+// Rotación con anti-repetición (Juli 2026-10-07): la rotación por fecha sola se
+// desincroniza con días sin posteo + posteos manuales (10-04/10-05/10-07 cerraron
+// los 3 con "Probalo gratis"). excludeIdx = índice (0-based) del bloque/variante
+// usado en el posteo anterior; si la fecha caería en el mismo, avanza uno.
+// Sin excludeIdx el comportamiento es idéntico al anterior.
+function rotIdx(date, len, excludeIdx) {
+  let i = houseDaySeed(date) % len;
+  const ex = Number.isInteger(excludeIdx) ? ((excludeIdx % len) + len) % len : -1;
+  if (i === ex) i = (i + 1) % len;
+  return i;
 }
-function houseCta(date) {
-  return HOUSE_CTA_VARIANTS[houseDaySeed(date) % HOUSE_CTA_VARIANTS.length];
+function houseHashtags(date, excludeIdx) {
+  return HOUSE_HASHTAG_BLOCKS[rotIdx(date, HOUSE_HASHTAG_BLOCKS.length, excludeIdx)];
 }
+function houseCta(date, excludeIdx) {
+  return HOUSE_CTA_VARIANTS[rotIdx(date, HOUSE_CTA_VARIANTS.length, excludeIdx)];
+}
+// Helpers para la ruta manual de Pipa: dado el bloque/variante literal del
+// posteo anterior, devuelven su índice para pasarlo como excludeIdx.
+// Bloques: A=0, B=1, C=2. Variantes: 1=0, 2=1, 3=2.
+function houseHashtagIndex(block) { return HOUSE_HASHTAG_BLOCKS.indexOf(String(block || '')); }
+function houseCtaIndex(variant) { return HOUSE_CTA_VARIANTS.indexOf(String(variant || '')); }
 
+// REGLA DE VERDAD (Valentino, 2026-10-05 — NO negociable): ningún ángulo/body
+// afirma como realidad presente algo que el producto no haga todavía.
+// "Tu semana YA ESTÁ ARMADA", "Posty la armó anoche", "se publica solo",
+// "respondo tus comentarios con tu voz" — todo eso sale SOLO si es verdad HOY.
+// Lo que está en construcción se cuenta como construcción (build in public),
+// jamás como funcionando. Revisar cada body contra esta regla antes de
+// reactivar el dogfood; si un body la viola, se reescribe o se pausa el ángulo.
+// Auditoría 2026-10-06 (turno noche, M14 — Juli encontró 3 captions en vivo
+// violándola): 8 bodies + 2 themes + sells + 1 CTA violaban la regla y fueron
+// reescritos a build-in-public / "vos aprobás". Gate permanente en
+// test-dogfood.js ('regla de verdad'): ningún body/theme/visual/sells/CTA
+// puede contener los patrones prohibidos de M14.
 // Rotación de ángulos: nunca dos días seguidos el mismo.
 const ANGLES = [
   {
     id: 'beneficio', label: 'Beneficios',
-    intent: 'promo', theme: 'tu semana de Instagram lista en 1 minuto',
+    intent: 'promo', theme: 'tu semana de Instagram lista para aprobar',
     visual: 'the cute blue robot mascot proudly presenting a smartphone showing a beautiful Instagram weekly content calendar, floating design icons around',
     bodies: [
-      'Publicar en Instagram te roba 6 horas por semana. Posty te las devuelve.\n\n5 posteos + 1 reel + stories, diseñados con la onda de tu negocio, tus colores, tus fotos. Vos solo mirás, aprobás y seguís vendiendo.',
+      'Publicar en Instagram te come la semana. Posty te la devuelve.\n\n5 posteos + 1 reel con la onda de tu negocio: tus colores, tus fotos, tus textos. Vos mirás, aprobás y seguís vendiendo.',
       'Mientras vos atendés tu negocio, Posty atiende tu Instagram.\n\nDiseños, textos y hashtags con tu onda, listos cada semana. Nada se publica sin tu OK.',
     ],
   },
@@ -90,8 +118,8 @@ const ANGLES = [
     intent: 'educativo', theme: 'cómo funciona Posty en 3 pasos',
     visual: 'the cute blue robot mascot showing 3 simple steps on floating cards: 1. pasame tu @, 2. armo tu semana, 3. vos aprobas',
     bodies: [
-      'Así de simple:\n\n1️⃣ Me pasás tu @\n2️⃣ Armo tu semana: diseños, textos y hashtags\n3️⃣ Vos aprobás y se publica solo\n\nSin curva de aprendizaje. Sin vueltas.',
-      'No tenés que aprender nada nuevo.\n\nMe contás de tu negocio una vez, y cada semana tu Instagram se llena solo. Vos solo decís que sí.',
+      'Así de simple:\n\n1️⃣ Me contás de tu negocio en /prueba\n2️⃣ Armo tu semana: diseños, textos y hashtags\n3️⃣ Vos aprobás cada posteo antes de que salga\n\nSin curva de aprendizaje. Sin vueltas.',
+      'No tenés que aprender nada nuevo.\n\nMe contás de tu negocio una vez, y cada semana te llega tu Instagram armado. Vos decís que sí o pedís cambios.',
     ],
   },
   {
@@ -99,17 +127,17 @@ const ANGLES = [
     intent: 'testimonio', theme: 'dueños que ya no piensan en Instagram',
     visual: 'the cute blue robot mascot celebrating with confetti next to a phone showing happy customer comments and likes',
     bodies: [
-      'Hay dueños que hace meses no piensan en qué publicar.\n\nNo porque no les importe Instagram. Porque Posty se ocupa.',
-      'El mejor marketing es el que no te quita tiempo.\n\nPosty publica por vos mientras vos vendés. Así de simple.',
+      'Sin testimonios inventados: mirá esta cuenta.\n\nCada posteo de @posty.hacetodo lo armó Posty y lo aprobó un humano. Eso mismo hace por tu negocio: arma, vos aprobás.',
+      'El mejor marketing es el que no te quita tiempo.\n\nPosty arma tu semana mientras vos vendés. Nada se publica sin tu OK. Así de simple.',
     ],
   },
   {
     id: 'detras', label: 'Detrás de escena',
-    intent: 'detras', theme: 'Posty trabajando de noche por tu negocio',
-    visual: 'the cute blue robot mascot working at night in a cozy office, juggling glowing Instagram icons, moon in the window',
+    intent: 'detras', theme: 'construyendo Posty de noche, a la vista de todos',
+    visual: 'the cute blue robot mascot building and tinkering at night in a cozy workshop, blueprints and glowing Instagram icons on the desk, moon in the window, work-in-progress vibe',
     bodies: [
-      'Mientras dormís, Posty sigue trabajando.\n\nResponde comentarios con tu voz, sube stories, y si llueve te arma la promo de delivery antes de que se te ocurra.',
-      'Las 3 AM. Tu negocio duerme. Tu Instagram no.\n\nPosty programa, responde y prepara. A la mañana, todo listo.',
+      'De noche también se construye.\n\nNada de magia autónoma: estamos armando Posty a la vista de todos. Cada mejora sale primero en esta cuenta.',
+      'Tu negocio duerme. Nosotros seguimos.\n\nCada semana el producto hace un poco más por tu Instagram. Lo que ves acá es el progreso en vivo, sin humo.',
     ],
   },
   {
@@ -117,7 +145,7 @@ const ANGLES = [
     intent: 'tips', theme: 'tip de Instagram para negocios',
     visual: 'the cute blue robot mascot teaching at a small chalkboard with Instagram tips, lightbulb moment',
     bodies: [
-      'El error #1 de los negocios en Instagram: publicar cuando se acuerdan.\n\nEl algoritmo premia la constancia, no la inspiración. Posty te da la constancia sin que muevas un dedo.',
+      'El error #1 de los negocios en Instagram: publicar cuando se acuerdan.\n\nEl algoritmo premia la constancia, no la inspiración. Posty te arma la semana; vos solo aprobás.',
       'Tip que nadie te dice: tu primera línea decide si te leen o te scrollean.\n\nPosty abre cada caption con gancho. Probalo y mirá la diferencia.',
     ],
   },
@@ -1055,6 +1083,8 @@ module.exports = {
   HOUSE_CTA_VARIANTS,
   houseHashtags,
   houseCta,
+  houseHashtagIndex,
+  houseCtaIndex,
   AUTO_RULE_COPY,
   DOGFOOD_PUSH_TITLE,
   DOGFOOD_EMAIL_SUBJECT,
