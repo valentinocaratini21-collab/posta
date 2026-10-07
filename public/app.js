@@ -3685,6 +3685,42 @@ async function chatSend() {
     })();
     return;
   }
+  // "diagnostico semana" → chequea todos los gates de la generación semanal.
+  if (/diagn[oó]stico semana/i.test(sendText)) {
+    (async () => {
+      try {
+        const sayId = 'diagWeekSay' + Date.now();
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a" id="${sayId}">Revisando por qué no se genera tu semana… 🔍</div>`);
+        chatScroll();
+        const r = await api.post('/api/diag/week-test', {}, { timeout: 90000 });
+        const el = document.getElementById(sayId);
+        if (r && r.ok && r.diag) {
+          const d = r.diag;
+          let msg = '📋 <b>Diagnóstico de tu semana:</b><br><br>';
+          msg += `Plan activo: ${d.planOk ? '✅' : '❌'}<br>`;
+          msg += `Créditos IA: ${d.aiOk ? '✅' : '❌ ' + esc(d.aiErr || '')}<br>`;
+          msg += `Datos del negocio: ${d.dnaOk ? '✅' : '❌ (falta descripción)'}<br>`;
+          msg += `Posteos existentes: ${d.existing}<br>`;
+          msg += `Generación en curso: ${d.running ? '⚠️ sí (trabada?)' : 'no'}<br>`;
+          if (d.ideasOk === true) msg += `Ideas: ✅ (${d.ideasCount})<br>`;
+          else if (d.ideasOk === false) msg += `Ideas: ❌ ${esc(d.ideasErr || '')}<br>`;
+          if (!d.planOk) msg += '<br>❌ Tu plan no está activo.';
+          else if (!d.aiOk) msg += '<br>❌ Se acabaron los créditos de IA.';
+          else if (!d.dnaOk) msg += '<br>❌ Falta la descripción de tu negocio en Ajustes.';
+          else if (d.ideasOk === false) msg += '<br>❌ La IA no está respondiendo.';
+          else msg += '<br>✅ Todo ok — la generación debería estar corriendo.';
+          if (el) el.innerHTML = msg;
+        } else {
+          if (el) el.innerHTML = `❌ No se pudo diagnosticar: ${esc((r && r.error) || 'error desconocido')}`;
+        }
+        chatScroll();
+      } catch (e) {
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg a">No pude correr el diagnóstico: ${esc(e.message || '')}</div>`);
+        chatScroll();
+      }
+    })();
+    return;
+  }
   // "generar semana que viene" → ejecuta el sweep semanal manualmente.
   if (/generar semana que viene/i.test(sendText)) {
     (async () => {
