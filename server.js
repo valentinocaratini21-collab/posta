@@ -7477,10 +7477,10 @@ app.post('/api/diag/week-test', requireAuth, express.json(), async (req, res) =>
     // Gate 6: OpenAI key
     const key = openaiKeyFor(uid) || process.env.OPENAI_API_KEY || '';
     diag.hasKey = !!key;
-    // Gate 7: probar generateIdeas (1 llamada real)
+    // Gate 7: probar generateIdeas (1 llamada real, EN MODO ESTRICTO como el pipeline)
     if (diag.planOk && diag.aiOk && diag.dnaOk && diag.hasKey) {
       try {
-        const ideas = await generateIdeas(ideasInputFor(uid), key);
+        const ideas = await generateIdeas(ideasInputFor(uid), key, { strict: true });
         diag.ideasOk = true;
         diag.ideasCount = (ideas || []).length;
       } catch (e) {
@@ -9298,7 +9298,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v85';
+const BUILD_ID = '20261008-v86';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

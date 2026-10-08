@@ -8452,7 +8452,8 @@ function bindSchedule() {
         });
       }
       msg += `En curso: ${d.running ? '⚠️' : 'no'}<br>`;
-      if (d.ideasOk === false) msg += `IA: ❌ ${esc((d.ideasErr || '').slice(0, 100))}<br>`;
+      if (d.ideasOk === true) msg += `Ideas IA: ✅ (${d.ideasCount || 0})<br>`;
+      else if (d.ideasOk === false) msg += `Ideas IA: ❌ ${esc((d.ideasErr || '').slice(0, 120))}<br>`;
       msg += '</div>';
       if (out) out.innerHTML = msg;
     } catch (e) {
