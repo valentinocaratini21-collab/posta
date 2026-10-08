@@ -7209,6 +7209,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // qa_audit, y la imagen se entrega igual. Mora (11:00) lee esa tabla y
   // convierte cada defecto en una regla del pipeline.
   let qa = null;
+  let qaAuditId = null; // Mora 2026-10-08: id de la fila de auditoría, para linkearla con su imagen.
   try {
     qa = await qaImageB64(b64, {
       headline: cleanHeadline,
@@ -7221,7 +7222,12 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
     try {
       db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
-      db.prepare('INSERT INTO qa_audit (passed, result) VALUES (?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000));
+      // Mora 2026-10-08: la fila guarda el path de la imagen para que la revisión
+      // visual sea posible (antes no había forma de mapear auditoría → imagen).
+      // Migración aditiva: la tabla vieja no tiene la columna y el ADD COLUMN la agrega.
+      try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
+      const auditInfo = db.prepare('INSERT INTO qa_audit (passed, result) VALUES (?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000));
+      qaAuditId = auditInfo && auditInfo.lastInsertRowid ? auditInfo.lastInsertRowid : null;
     } catch (e) { console.error('[qa-audit] db:', e.message); }
   }
   // Chequeo automático de marca (Style Lock): DESACTIVADO (2026-10-02, causa timeouts).
@@ -7269,6 +7275,11 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   }
   */
   const imgName = saveImageB64(b64);
+  // Mora 2026-10-08: linkear la fila de auditoría con su imagen (revisión visual de Mora).
+  if (qaAuditId) {
+    try { db.prepare('UPDATE qa_audit SET image_path = ? WHERE id = ?').run(`/media/${imgName}`, qaAuditId); }
+    catch (e) { console.error('[qa-audit] image_path:', e.message); }
+  }
   // Componer el titular con código (si hay): la imagen sale limpia de la IA
   // y el texto se renderiza perfecto — siempre entra, nunca se recorta.
   if (cleanHeadline) {
@@ -9325,12 +9336,15 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v87';
+const BUILD_ID = '20261008-v88';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
     db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
-    const rows = db.prepare("SELECT id, created_at, passed, substr(result,1,1200) AS result FROM qa_audit ORDER BY id DESC LIMIT 100").all();
+    // Mora 2026-10-08: exponer image_path cuando la columna existe (migración aditiva en el insert).
+    let hasPath = false;
+    try { hasPath = db.prepare("PRAGMA table_info(qa_audit)").all().some(c => c.name === 'image_path'); } catch (e) {}
+    const rows = db.prepare(`SELECT id, created_at, passed${hasPath ? ', image_path' : ''}, substr(result,1,1200) AS result FROM qa_audit ORDER BY id DESC LIMIT 100`).all();
     const stats = db.prepare("SELECT COUNT(*) AS n, SUM(passed) AS ok FROM qa_audit WHERE created_at > datetime('now','-7 days')").get();
     res.json({ ok: true, stats, rows });
   } catch (e) { res.json({ ok: false, error: e.message }); }
