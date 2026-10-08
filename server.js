@@ -7483,6 +7483,33 @@ app.post('/api/diag/week-test', requireAuth, express.json(), async (req, res) =>
         const ideas = await generateIdeas(ideasInputFor(uid), key, { strict: true });
         diag.ideasOk = true;
         diag.ideasCount = (ideas || []).length;
+        // Gate 8: probar generación de imagen (1 imagen de prueba, la causa más probable)
+        if (diag.ideasOk && ideas.length > 0) {
+          try {
+            const testIdea = ideas[0];
+            const imgPath = await conceptShotGenerateQueued({
+              uid,
+              idea: testIdea.titulo || 'test',
+              tipo: testIdea.tipo || 'tip',
+              headline: '',
+              refs: [],
+            });
+            diag.imageOk = true;
+            diag.imagePath = String(imgPath || '').slice(0, 80);
+            // Limpiar la imagen de prueba (no ensuciar la semana)
+            try {
+              if (imgPath && imgPath.startsWith('/media/')) {
+                const fs = require('fs');
+                const path = require('path');
+                const full = path.join(MEDIA_DIR, path.basename(imgPath));
+                if (fs.existsSync(full)) fs.unlinkSync(full);
+              }
+            } catch (e) {}
+          } catch (e) {
+            diag.imageOk = false;
+            diag.imageErr = String(e.message || e).slice(0, 300);
+          }
+        }
       } catch (e) {
         diag.ideasOk = false;
         diag.ideasErr = String(e.message || e).slice(0, 300);
@@ -9298,7 +9325,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v86';
+const BUILD_ID = '20261008-v87';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

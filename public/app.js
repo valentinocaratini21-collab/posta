@@ -8454,6 +8454,8 @@ function bindSchedule() {
       msg += `En curso: ${d.running ? '⚠️' : 'no'}<br>`;
       if (d.ideasOk === true) msg += `Ideas IA: ✅ (${d.ideasCount || 0})<br>`;
       else if (d.ideasOk === false) msg += `Ideas IA: ❌ ${esc((d.ideasErr || '').slice(0, 120))}<br>`;
+      if (d.imageOk === true) msg += `Imagen IA: ✅<br>`;
+      else if (d.imageOk === false) msg += `Imagen IA: ❌ ${esc((d.imageErr || '').slice(0, 150))}<br>`;
       msg += '</div>';
       if (out) out.innerHTML = msg;
     } catch (e) {
