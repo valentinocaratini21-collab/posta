@@ -85,7 +85,7 @@ let refreshClientBrief = () => Promise.resolve({ ok: false, error: 'módulo no d
 let briefBlockFor = () => '';
 try { ({ refreshClientBrief, briefBlockFor } = require('./client-brief')); }
 catch (e) { console.error('[init] client-brief no disponible:', e.message); }
-// Estilos de imagen curados (image-styles.js): "secret codes" para gpt-image-1
+// Estilos de imagen curados (image-styles.js): "secret codes" para gpt-image-2
 // (/food, /flatlay, /legoify...). Auto-pick por intención del posteo.
 // Mismo patrón defensivo: sin módulo, pickStyle devuelve null y nada cambia.
 let getStyle = () => null;
@@ -3810,15 +3810,27 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
   try {
     const tz = userTz(uid);
     const wk = mondayKeyOf(tzToday(tz));
+    // 2026-10-07: el fundador nunca debería tener needs_review=1 (sus posteos
+    // se ocultaban y el /api/posts los filtraba — causa raíz del "armando tu
+    // semana" eterno). Liberar PRIMERO, antes de contar.
+    try {
+      let isFounder = false;
+      try { isFounder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+      if (isFounder) {
+        const r = db.prepare(`UPDATE posts SET needs_review = 0 WHERE user_id = ? AND COALESCE(needs_review, 0) = 1 AND status IN ('draft','scheduled')`).run(uid);
+        if (r.changes > 0) console.log(`[week-ensure] fundador ${uid}: ${r.changes} posteos liberados de revisión`);
+      }
+    } catch (e) { console.error('[week-ensure] liberar revisión:', e.message); }
     // ¿Ya hay trabajo de esta semana? (borradores o programados, no cancelados)
+    // Solo contar los VISIBLES (needs_review=0), que son los que ve el frontend.
     let n = 0;
     try {
-      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, wk).n || 0;
+      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND COALESCE(needs_review,0)=0`).get(uid, wk).n || 0;
     } catch (e) { /* DB sin week_key: seguir */ }
     // Fallback: borradores sin week_key (pipeline viejo) también cuentan.
     if (!n) {
       try {
-        n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key IS NULL)`).get(uid).n || 0;
+        n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key IS NULL) AND COALESCE(needs_review,0)=0`).get(uid).n || 0;
       } catch (e) {}
     }
     if (n > 0) return res.json({ ok: true, generating: false, count: n, week_key: wk });
@@ -4564,7 +4576,12 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
     // scheduleAllDrafts ya filtra lo que no está a la altura).
-    const needRev = autopilot.trustLevel(db, uid) === 0 ? 1 : 0;
+    // 2026-10-07: el fundador nunca pasa por revisión (sus posteos se
+    // ocultaban por needs_review=1 y el /api/posts los filtraba — causa raíz
+    // del "armando tu semana" eterno de Valentino).
+    let isFounder = false;
+    try { isFounder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+    const needRev = (!isFounder && autopilot.trustLevel(db, uid) === 0) ? 1 : 0;
     let created = 0;
     let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
@@ -6551,7 +6568,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       `Sin texto, sin letras, sin logos, sin marcas de agua. Calidad de fotografía comercial profesional.` +
       styleFragFor(style, settings, profile);
     const form = new FormData();
-    form.append('model', 'gpt-image-1');
+    form.append('model', 'gpt-image-2');
     form.append('prompt', prompt);
     // UNA sola imagen: OpenAI rechaza múltiples campos 'image' ("Duplicate parameter").
     const p0 = absRefs[0];
@@ -6572,7 +6589,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       throw new Error(`OpenAI ${r.status}: ${t.slice(0, 200)}`);
     }
     const data = await r.json();
-    costs.trackUsage({ feature: 'concept-shot', userId: req.session.userId, model: 'gpt-image-1', images: 1, json: data });
+    costs.trackUsage({ feature: 'concept-shot', userId: req.session.userId, model: 'gpt-image-2', images: 1, json: data });
     const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
     if (!b64) throw new Error('OpenAI no devolvió imagen');
     const name = saveImageB64(b64);
@@ -6587,7 +6604,7 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
 
 // ---------- Motor de imágenes nivel agencia ----------
 // Expande un brief corto en un prompt de imagen publicitaria premium (gpt-4o-mini),
-// que después se renderiza con gpt-image-1 en /api/concept-shot o /api/product-shot.
+// que después se renderiza con gpt-image-2 en /api/concept-shot o /api/product-shot.
 
 // brand_colors llega como string JSON '["#2793C8","#FEC14D"]' o '' → extrae hex válidos.
 function parseBrandHexes(brandColorsRaw) {
@@ -6639,7 +6656,7 @@ function learningsLineOf(learnings) {
   return bits.join(' | ');
 }
 // Llama a gpt-4o-mini como director de arte publicitario y devuelve el prompt
-// expandido listo para gpt-image-1. REGLA DURA: jamás inventar datos del negocio
+// expandido listo para gpt-image-2. REGLA DURA: jamás inventar datos del negocio
 // (precios, direcciones, promos, teléfonos) en el texto de la imagen: solo el
 // headline provisto, tal cual, o ningún texto si viene vacío.
 async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock }, apiKey) {
@@ -6692,6 +6709,7 @@ El prompt DEBE exigir:
 - "sin marca de agua".
 - Si el brief trae un ángulo estratégico, la escena tiene que EXPRESARLO visualmente (no describirlo con texto).
 - IDENTIDAD PROPIA (draft 76, revisión 2026-09-29): la estética es del RUBRO del cliente con SU paleta — NUNCA imites el estilo visual de marcas famosas (nada de estética "Netflix"/streaming, Spotify, McDonald's, Apple...). Prohibido el fondo negro-rojo cinematográfico genérico y cualquier look que parezca otra marca.
+- IDENTIDAD-RUBRO (Mora, revisión 2026-10-07, id 13 — fallo REAL: "personaje animado que no refleja la identidad del rubro"): el personaje animado / mascota de dibujos solo se usa cuando refleja la identidad REAL del rubro. JAMÁS metas un personaje de dibujitos en una escena de un rubro que vende lo real (cafetería, panadería, gastronomía, estética...): ahí la escena es fotográfica del producto/lugar real, sin dibujitos. La mascota solo aparece en escenas donde el rubro la admite (la marca @posty.hacetodo sí la admite para hablar de sí misma; el cliente que vende café, no).
 - Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
 - ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
 - PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
@@ -6889,13 +6907,13 @@ function qaDedupe7d(uid, headline) {
     return { ok: true };
   } catch (e) { return { ok: true }; } // ante cualquier duda, no bloquea
 }
-// Llama a gpt-image-1 con refs (edits) o sin refs (generations). Devuelve el b64.
+// Llama a gpt-image-2 con refs (edits) o sin refs (generations). Devuelve el b64.
 // Lanza Error con el mensaje de OpenAI recortado si falla.
 async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
   let r;
   if (absRefs.length) {
     const form = new FormData();
-    form.append('model', 'gpt-image-1');
+    form.append('model', 'gpt-image-2');
     form.append('prompt', prompt + ' ' + (refNote || 'IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.'));
     // UNA sola imagen de referencia: OpenAI rechaza múltiples campos 'image'
     // ("Duplicate parameter"). Va la primera (la de mayor prioridad: logo > producto > fotos).
@@ -6916,7 +6934,7 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-image-1', prompt, size: '1024x1536', quality: costs.IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
+      body: JSON.stringify({ model: 'gpt-image-2', prompt, size: '1024x1536', quality: costs.IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
       signal: AbortSignal.timeout(120000),
     });
   }
@@ -6925,7 +6943,7 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     throw new Error(`OpenAI ${r.status}: ${t.slice(0, 160)}`);
   }
   const data = await r.json();
-  costs.trackUsage({ feature: 'concept-shot', userId: uid, model: 'gpt-image-1', images: 1, json: data });
+  costs.trackUsage({ feature: 'concept-shot', userId: uid, model: 'gpt-image-2', images: 1, json: data });
   const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
   if (!b64) throw new Error('OpenAI no devolvió imagen');
   return b64;
@@ -6970,11 +6988,11 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
     res.status(isOpenAI ? 502 : 500).json({ error: 'No se pudo expandir el brief: ' + e.message.slice(0, 200) });
   }
 });
-// Genera una imagen de concepto nivel agencia con gpt-image-1.
+// Genera una imagen de concepto nivel agencia con gpt-image-2.
 // Con refs válidas (fotos del usuario) → images/edits (el MISMO producto, otra escena).
 // Sin refs → images/generations (escena 100% sintética con la paleta del cliente).
 // Motor de concept-shot como función reusable: brief expandido + imagen con
-// gpt-image-1 + QA de visión (máx 1 reintento) + guardado. Devuelve el path
+// gpt-image-2 + QA de visión (máx 1 reintento) + guardado. Devuelve el path
 // público (/media/...). Lanza si falla (el llamador decide el status HTTP).
 //
 // PRE-GENERACIÓN: cuando el chat cierra una idea, el servidor arranca la imagen
@@ -7381,13 +7399,13 @@ app.post('/api/diag/image-test', requireAuth, express.json(), async (req, res) =
     const key = process.env.OPENAI_API_KEY || '';
     const diag = { hasKey: !!key, keyPrefix: key ? key.slice(0, 7) + '...' : null };
     if (!key) return res.json({ ok: false, diag, error: 'Sin OPENAI_API_KEY en el servidor' });
-    // Llamada mínima a gpt-image-1
+    // Llamada mínima a gpt-image-2
     let r;
     try {
       r = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: 'gpt-image-1', prompt: 'A simple red circle on white background', size: '1024x1024', quality: 'low' }),
+        body: JSON.stringify({ model: 'gpt-image-2', prompt: 'A simple red circle on white background', size: '1024x1024', quality: 'low' }),
         signal: AbortSignal.timeout(60000),
       });
     } catch (e) {
@@ -7537,7 +7555,7 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
 
 // Restylear la foto ACTUAL de un borrador con un estilo elegido ("🎨 Restylear
 // mi foto"). A diferencia de /photo-style (que genera una foto nueva), acá la
-// foto del cliente es la BASE: gpt-image-1 EDITS mantiene el MISMO producto,
+// foto del cliente es la BASE: gpt-image-2 EDITS mantiene el MISMO producto,
 // solo cambia el estilo. Mantiene caption, hashtags y horario.
 app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
@@ -7575,7 +7593,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
   }
 });
 
-// "✨ Mejorar foto": rescate de fotos mediocres. Un tap → gpt-image-1 EDITS
+// "✨ Mejorar foto": rescate de fotos mediocres. Un tap → gpt-image-2 EDITS
 // arregla luz, balance de blancos, exposición y nitidez MANTENIENDO la misma
 // foto (misma composición, mismos sujetos). Sin brief, sin vueltas.
 app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, express.json(), async (req, res) => {
@@ -9269,7 +9287,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261007-v83';
+const BUILD_ID = '20261007-v84';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
