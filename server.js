@@ -7460,6 +7460,17 @@ app.post('/api/diag/week-test', requireAuth, express.json(), async (req, res) =>
       const wk = mondayKeyOf(tzToday(tz));
       diag.weekKey = wk;
       diag.existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, wk).n || 0;
+      // 2026-10-08: detalle de imágenes (Valentino reporta que no aparecen).
+      try {
+        const rows = db.prepare(`SELECT id, image_path, needs_review FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') ORDER BY id DESC LIMIT 5`).all(uid, wk);
+        diag.posts = rows.map(r => ({
+          id: r.id,
+          hasImage: !!(r.image_path && String(r.image_path).trim()),
+          imagePath: String(r.image_path || '').slice(0, 80),
+          needsReview: r.needs_review || 0,
+        }));
+        diag.withoutImage = diag.posts.filter(p => !p.hasImage).length;
+      } catch (e) { diag.postsErr = e.message; }
     } catch (e) { diag.existing = -1; diag.existingErr = e.message; }
     // Gate 5: NEXTWEEK_RUNNING
     diag.running = nextweekRunningFresh(uid);
@@ -9287,7 +9298,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261007-v84';
+const BUILD_ID = '20261008-v85';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

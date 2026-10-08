@@ -8443,6 +8443,14 @@ function bindSchedule() {
       msg += `Plan: ${d.planOk ? '✅' : '❌'}<br>`;
       msg += `Créditos IA: ${d.aiOk ? '✅' : '❌ ' + esc(d.aiErr || '')}<br>`;
       msg += `Datos negocio: ${d.dnaOk ? '✅' : '❌'}<br>`;
+      msg += `Posteos: ${d.existing || 0}<br>`;
+      if (d.posts && d.posts.length) {
+        const noImg = d.posts.filter(p => !p.hasImage).length;
+        msg += `Sin imagen: ${noImg > 0 ? '❌ ' + noImg : '✅ 0'}<br>`;
+        d.posts.slice(0, 3).forEach(p => {
+          msg += `<small>#${p.id}: ${p.hasImage ? '🖼️ ' + esc(p.imagePath.slice(0, 40)) : '❌ sin imagen'}</small><br>`;
+        });
+      }
       msg += `En curso: ${d.running ? '⚠️' : 'no'}<br>`;
       if (d.ideasOk === false) msg += `IA: ❌ ${esc((d.ideasErr || '').slice(0, 100))}<br>`;
       msg += '</div>';
