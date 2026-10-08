@@ -4722,6 +4722,14 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'draft' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, weekKey);
       await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
     } catch (e) { console.error(`[pipeline:${tag}] extras historias/reels:`, e.message); }
+    // 2026-10-08: si no se creó NADA, es un fallo (no un éxito vacío).
+    // Antes retornaba ok:true con created:0 y el retry lo borraba como si
+    // hubiera funcionado — por eso la semana de Valentino nunca se reintentó.
+    if (created === 0) {
+      const failReason = imgFailCount > 0 ? 'img_fail' : 'no_ideas';
+      console.error(`[pipeline:${tag}] usuario ${uid}: 0 posteos creados (${imgFailCount} fallos de imagen)`);
+      return { ok: false, reason: failReason, created: 0, imgFailCount };
+    }
     return { ok: true, created };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
@@ -9343,7 +9351,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v89';
+const BUILD_ID = '20261008-v90';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
