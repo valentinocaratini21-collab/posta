@@ -7471,6 +7471,13 @@ app.post('/api/diag/week-test', requireAuth, express.json(), async (req, res) =>
       const wk = mondayKeyOf(tzToday(tz));
       diag.weekKey = wk;
       diag.existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, wk).n || 0;
+      // 2026-10-08: último fallo registrado (si la generación falló, acá está el porqué).
+      try {
+        const f = db.prepare(`SELECT reason, attempts, created_at FROM sweep_failures WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`).get(uid);
+        if (f) {
+          diag.lastFailure = { reason: String(f.reason || '').slice(0, 200), attempts: f.attempts, at: f.created_at };
+        }
+      } catch (e) {}
       // 2026-10-08: detalle de imágenes (Valentino reporta que no aparecen).
       try {
         const rows = db.prepare(`SELECT id, image_path, needs_review FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') ORDER BY id DESC LIMIT 5`).all(uid, wk);
@@ -9336,7 +9343,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v88';
+const BUILD_ID = '20261008-v89';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

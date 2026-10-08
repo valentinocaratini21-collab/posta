@@ -8456,6 +8456,7 @@ function bindSchedule() {
       else if (d.ideasOk === false) msg += `Ideas IA: ❌ ${esc((d.ideasErr || '').slice(0, 120))}<br>`;
       if (d.imageOk === true) msg += `Imagen IA: ✅<br>`;
       else if (d.imageOk === false) msg += `Imagen IA: ❌ ${esc((d.imageErr || '').slice(0, 150))}<br>`;
+      if (d.lastFailure) msg += `Último fallo: ⚠️ ${esc(d.lastFailure.reason.slice(0, 120))}<br>`;
       msg += '</div>';
       if (out) out.innerHTML = msg;
     } catch (e) {
