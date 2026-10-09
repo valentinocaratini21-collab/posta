@@ -6719,11 +6719,14 @@ async function expandArtBrief({ headline, tipo, angle, businessName, category, p
     ? `LÍNEA VISUAL OBLIGATORIA — el cliente ya tiene un Instagram con una estética definida y TUS imágenes deben parecer del MISMO feed:\n${String(visualStyle).trim()}`
     : '';
   const fam = CONCEPT_FAMILIES[tipo] || 'contenido visual atractivo de alto nivel';
-  // REGLA DURA: la IA genera la imagen 100% LIMPIA, sin ningún texto.
-  // El titular se compone DESPUÉS con código (composite-headline.py): tipografía
-  // perfecta, siempre entra completo, nunca se recorta ni se escribe mal.
-  // El headline viaja igual en el brief para que la escena acompañe el tema.
-  const textRule = `SIN texto en la imagen: ni letras, ni palabras, ni números, ni precios, ni direcciones, ni teléfonos. La imagen debe estar 100% limpia de texto — el titular se agrega después por separado.`;
+  // TEXTO EN LA IMAGEN (2026-10-09, reversa de Valentino: "yo si quiero que tengan text"):
+  // las imágenes SÍ llevan texto — pero el titular lo compone el código DESPUÉS
+  // (composite-headline.py): el generador NO lo hornea (saldría duplicado).
+  // La vara nueva: el texto en la imagen ya no es defecto automático; el texto
+  // mal hecho (inglés, garbled, typos, claims inventados) SÍ sigue siendo defecto.
+  // PROHIBIDO inventar texto: ni precios, ni direcciones, ni teléfonos, ni promos,
+  // ni nombres de producto no provistos, ni logos/iconos de marcas reales.
+  const textRule = `TEXTO EN LA IMAGEN (reversa 2026-10-09): la imagen generada NO lleva el titular horneado — el titular lo compone el código DESPUÉS por separado; si lo horneás, sale duplicado. Lo que cambió: el texto en la imagen ya no es un defecto automático. PROHIBIDO inventar texto: ni una palabra en inglés, ni texto garbled/truncado/ilegible, ni precios, ni direcciones, ni teléfonos, ni promos, ni nombres de producto no provistos, ni logos o iconos de marcas reales. Si la escena incluye pantallas, carteles, vidrieras, interfaces, celulares, etiquetas o ropa con estampas: todo va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible.`;
   const r = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -6740,8 +6743,7 @@ El prompt DEBE exigir:
 - La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
 - Estética publicitaria premium: incluí los marcadores "fotografía comercial profesional" y "high-end advertising".
 - FORMATO VERTICAL 4:5, optimizado para verse en un CELULAR: es una pieza de Instagram, no un banner de web.
-- TEXTO EN LA IMAGEN (2026-10-09, reversa de Valentino: "yo si quiero que tengan text"): la imagen SÍ puede llevar el titular horneado. Vara: español rioplatense, CERO typos, legible en celular, corto (máx 6 palabras). PROHIBIDO: inglés, texto garbled/cortado, claims inventados, logos de marcas. Si el titular no sale perfecto, preferir imagen sin texto antes que texto mediocre.
-- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. Si la imagen lleva titular horneado, va en el tercio superior con tipografía grande y legible.
+- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. El titular lo compone el código DESPUÉS en el tercio superior: esa zona queda limpia y despejada para él.
 - Los colores EXACTOS de la paleta del cliente integrados EN la escena (props, vestuario, packaging, detalles del ambiente): ${hexes.join(', ') || 'sin paleta definida, usá colores armónicos del rubro'}. NUNCA como fondo plano de color.
 - "${textRule}"
 - "sin marca de agua".
@@ -9381,7 +9383,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261009-v93';
+const BUILD_ID = '20261009-v94';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
