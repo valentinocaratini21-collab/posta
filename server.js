@@ -4572,8 +4572,17 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   NEXTWEEK_RUNNING.set(uid, Date.now());
   try {
     try {
-      const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled'`).get(uid, weekKey).n || 0;
+      // 2026-10-08: solo contar borradores/programados VISIBLES (igual que
+      // /api/week/ensure). Antes contaba también los 'failed' y devolvía
+      // 'already_exists' aunque no hubiera nada que mostrar — la semana de
+      // Valentino quedó bloqueada 5 días por posteos fallidos invisibles.
+      const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, weekKey).n || 0;
       if (n > 0) return { ok: false, reason: 'already_exists' };
+      // Limpiar posteos fallidos de esta semana para empezar de cero.
+      try {
+        const del = db.prepare(`DELETE FROM posts WHERE user_id = ? AND week_key = ? AND status = 'failed'`).run(uid, weekKey);
+        if (del.changes > 0) console.log(`[pipeline:${tag}] usuario ${uid}: ${del.changes} posteos fallidos limpiados`);
+      } catch (e) {}
     } catch (e) { /* DB sin week_key: seguir */ }
     // Gate de ADN "no generar a ciegas" (mismo umbral que /api/ideas).
     const profile = getProfile(uid);
@@ -9372,7 +9381,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v91';
+const BUILD_ID = '20261008-v92';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
