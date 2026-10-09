@@ -6740,8 +6740,8 @@ El prompt DEBE exigir:
 - La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
 - Estética publicitaria premium: incluí los marcadores "fotografía comercial profesional" y "high-end advertising".
 - FORMATO VERTICAL 4:5, optimizado para verse en un CELULAR: es una pieza de Instagram, no un banner de web.
-- PROHIBIDO RENDERIZAR TEXTO (2026-10-06, causa raíz de 19/20 fallas de la auditoría del 4-5/10: la instrucción vieja pedía "el titular GRANDE en la imagen" y el generador horneaba palabras en inglés, typos como "Backgnina"/"inatogram"/"Iratigran", claims inventados y logos de marcas): la imagen sale 100% SIN letras, palabras ni números — el titular NO se dibuja en la imagen, NO se inventa texto "parecido al titular", NO hay texto de escena ni de relleno. El titular se compone DESPUÉS por código (composite-headline.py) en el tercio superior reservado.
-- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. El tercio superior queda LIMPIO para el titular que agrega el código después.
+- TEXTO EN LA IMAGEN (2026-10-09, reversa de Valentino: "yo si quiero que tengan text"): la imagen SÍ puede llevar el titular horneado. Vara: español rioplatense, CERO typos, legible en celular, corto (máx 6 palabras). PROHIBIDO: inglés, texto garbled/cortado, claims inventados, logos de marcas. Si el titular no sale perfecto, preferir imagen sin texto antes que texto mediocre.
+- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. Si la imagen lleva titular horneado, va en el tercio superior con tipografía grande y legible.
 - Los colores EXACTOS de la paleta del cliente integrados EN la escena (props, vestuario, packaging, detalles del ambiente): ${hexes.join(', ') || 'sin paleta definida, usá colores armónicos del rubro'}. NUNCA como fondo plano de color.
 - "${textRule}"
 - "sin marca de agua".
@@ -9381,7 +9381,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v92';
+const BUILD_ID = '20261009-v93';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
