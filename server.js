@@ -3853,14 +3853,32 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
       }
     } catch (e) { /* si falla el chequeo, dejar que el pipeline decida */ }
     // Disparar en segundo plano: la respuesta vuelve al toque.
+    // 2026-10-08: guardar el resultado para que el frontend lo pueda mostrar
+    // (antes el error se perdía en los logs del servidor).
     generateWeekDrafts(uid, { weekKey: wk, tag: 'ensure', quiet: false })
-      .then(r => console.log(`[week-ensure] usuario ${uid} semana ${wk}:`, r.ok ? `${r.created} creados` : `falló (${r.reason})`))
-      .catch(e => console.error('[week-ensure] pipeline:', e.message));
+      .then(r => {
+        console.log(`[week-ensure] usuario ${uid} semana ${wk}:`, r.ok ? `${r.created} creados` : `falló (${r.reason})`);
+        try { LAST_WEEK_RESULT.set(uid, { ...r, at: Date.now(), weekKey: wk }); } catch (e) {}
+      })
+      .catch(e => {
+        console.error('[week-ensure] pipeline:', e.message);
+        try { LAST_WEEK_RESULT.set(uid, { ok: false, reason: 'exception', error: String(e.message || e).slice(0, 300), at: Date.now(), weekKey: wk }); } catch (e2) {}
+      });
     return res.json({ ok: true, generating: true, count: 0, week_key: wk });
   } catch (e) {
     console.error('[week-ensure]:', e.message);
     return res.status(500).json({ ok: false, error: 'No se pudo verificar la semana.' });
   }
+});
+
+// 2026-10-08: devuelve el último resultado de generateWeekDrafts para el
+// usuario (éxito o error exacto). El frontend lo consulta para mostrar el
+// error en pantalla en vez del spinner eterno.
+app.get('/api/week/last-result', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const r = LAST_WEEK_RESULT.get(uid);
+  if (!r) return res.json({ ok: true, has: false });
+  return res.json({ ok: true, has: true, result: r });
 });
 
 // Fix auditoría #2 (2026-09-30): "⚡ Rearmar mi semana" del welcome honesto.
@@ -4466,6 +4484,9 @@ app.post('/api/posts/:id/signal', requireAuth, (req, res) => {
 // usuario lo puede convertir).
 // Guard en memoria (mismo proceso que el cron): una sola corrida por usuario.
 const NEXTWEEK_RUNNING = new Map(); // uid -> timestamp de inicio
+// 2026-10-08: último resultado de generateWeekDrafts por usuario, para que el
+// frontend muestre el error exacto sin adivinar.
+const LAST_WEEK_RESULT = new Map(); // uid -> {ok, reason, error, created, at, weekKey}
 // Limpia corridas trabadas: si una generación lleva más de 15 min, se asume
 // colgada y se libera para reintentar (2026-10-06: fix del "armando tu semana"
 // eterno — la corrida anterior de Valentino quedó marcada y nunca se liberó).
@@ -9351,7 +9372,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261008-v90';
+const BUILD_ID = '20261008-v91';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

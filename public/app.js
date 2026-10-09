@@ -8464,6 +8464,30 @@ function bindSchedule() {
     }
     diagBtn.disabled = false;
   };
+  // 2026-10-08: chequeo AUTOMÁTICO del último resultado (sin que el usuario
+  // toque nada). Si la generación falló, mostrar el error en pantalla.
+  (async () => {
+    const genEl = $('#hsGenerating');
+    if (!genEl) return;
+    // Esperar 45s (dar tiempo a que la generación termine o falle).
+    await new Promise(r => setTimeout(r, 45000));
+    if (!document.querySelector('#hsGenerating')) return; // ya se fue
+    try {
+      const lr = await api.get('/api/week/last-result').catch(() => null);
+      if (lr && lr.has && lr.result && lr.result.ok === false) {
+        const out = $('#hsDiagOut');
+        if (out) {
+          const r = lr.result;
+          out.innerHTML = `<div style="font-size:13px;line-height:1.7;background:#fff3f3;border:1px solid #fcc;border-radius:12px;padding:12px">` +
+            `<b>❌ La generación falló:</b><br>` +
+            `Motivo: <b>${esc(r.reason || 'desconocido')}</b><br>` +
+            (r.error ? `<small>${esc(String(r.error).slice(0, 200))}</small><br>` : '') +
+            (r.imgFailCount ? `Imágenes fallidas: ${r.imgFailCount}<br>` : '') +
+            `</div>`;
+        }
+      }
+    } catch (e) {}
+  })();
   // Días libres: el fantasma "+" lleva al chat a pedirle algo a Posty para ese día.
   $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => { location.hash = '#/app/chat'; });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
