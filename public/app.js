@@ -8473,30 +8473,14 @@ function bindSchedule() {
   const hsPrev = $('#hsPrev');
   const hsNext = $('#hsNext');
   if (weekList) {
-    const cardAt = (i) => {
-      const cards = Array.from(weekList.children);
-      return cards[Math.max(0, Math.min(i, cards.length - 1))];
-    };
-    const currentIdx = () => {
+    const step = () => {
       try {
-        const cards = Array.from(weekList.children);
-        if (!cards.length) return 0;
-        const mid = weekList.scrollLeft + weekList.clientWidth / 2;
-        let best = 0, bestDist = Infinity;
-        cards.forEach((c, i) => {
-          const cx = c.offsetLeft + c.offsetWidth / 2;
-          const d = Math.abs(cx - mid);
-          if (d < bestDist) { bestDist = d; best = i; }
-        });
-        return best;
-      } catch (e) { return 0; }
+        const c = weekList.querySelector('.igmock-fixed');
+        return c ? c.offsetWidth + 12 : weekList.clientWidth * 0.8;
+      } catch (e) { return 300; }
     };
-    const goTo = (i) => {
-      const c = cardAt(i);
-      if (c) weekList.scrollTo({ left: c.offsetLeft - 12, behavior: 'smooth' });
-    };
-    if (hsPrev) hsPrev.onclick = () => goTo(currentIdx() - 1);
-    if (hsNext) hsNext.onclick = () => goTo(currentIdx() + 1);
+    if (hsPrev) hsPrev.onclick = () => weekList.scrollBy({ left: -step(), behavior: 'smooth' });
+    if (hsNext) hsNext.onclick = () => weekList.scrollBy({ left: step(), behavior: 'smooth' });
   }
   // toque nada). Si la generación falló, mostrar el error en pantalla.
   (async () => {
