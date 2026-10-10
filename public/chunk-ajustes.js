@@ -198,6 +198,12 @@ function ajustesView() {
   ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>📊 Tus números</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Cómo viene rindiendo tu Instagram.</p>
+    <div class="st-grid" id="stGrid">${['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores'].map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${l}</div>${i === 0 ? '<div id="stDelta"></div>' : ''}</div>`).join('')}</div>
+    <div id="stBest"></div>
+    <div id="stRate"></div>
+  </div></div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>📸 App de Meta</h4>
@@ -225,6 +231,8 @@ function bindSettings() {
     h.onclick = tg;
     h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
   });
+  // 2026-10-10: "Tus números" vive en Ajustes (pedido de Valentino)
+  try { if (typeof bindStats === 'function' && document.getElementById('stGrid')) bindStats(); } catch (e) {}
   // --- Autopiloto (4 puntos, 2026-10-02) ---
   const btnAp = $('#btnAutopilotToggle');
   if (btnAp) {
