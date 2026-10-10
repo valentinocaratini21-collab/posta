@@ -2148,8 +2148,20 @@ function pickRejectReason() {
       try { await api.post(`/api/posts/${id}/signal`, { signal: 'approved' }); } catch (e) {}
       try { await api.post('/api/funnel', { event: 'week_accepted' }); } catch (e) {}
       track('draft_accept', { id });
-      const last = REVIEW_DRAFTS.filter(d => d.id !== id).length === 0;
-      if (last) {
+      // 2026-10-10: el festejo de "semana completa" solo si NO quedan borradores.
+      // REVIEW_DRAFTS puede estar vacío en el home (el carrusel usa allPosts).
+      let remaining = 0;
+      try {
+        const cards = document.querySelectorAll('#hsWeekList .igmock-fixed');
+        // Contar tarjetas que todavía son borrador (tienen botón Aceptar, distinto al recién aceptado)
+        cards.forEach(c => {
+          const btn = c.querySelector('[data-revaccept]');
+          if (btn && +btn.dataset.revaccept !== id && !btn.disabled) remaining++;
+        });
+        // Fallback: REVIEW_DRAFTS si el carrusel no está visible
+        if (!cards.length) remaining = REVIEW_DRAFTS.filter(d => d.id !== id).length;
+      } catch (e) { remaining = REVIEW_DRAFTS.filter(d => d.id !== id).length; }
+      if (remaining === 0) {
         // Festejo: aceptar se siente como un logro, no como un trámite
         streakModalShell(`
           <div class="big-emoji">🎉</div>
@@ -4263,10 +4275,22 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
     try {
       // Día propuesto: hoy + i días, 10:00 hora local.
+      // 2026-10-10: si ya pasó esa hora, correr al día siguiente (nunca en el pasado).
       const now = new Date();
-      const dt = new Date(now.getTime() + i * 86400000);
-      const ymd = dt.toLocaleDateString('en-CA', { timeZone: tz });
-      const iso = `${ymd}T10:00:00`;
+      let dt = new Date(now.getTime() + i * 86400000);
+      let ymd = dt.toLocaleDateString('en-CA', { timeZone: tz });
+      let iso = `${ymd}T10:00:00`;
+      // Chequear si 10:00 de ese día ya pasó en la zona del cliente
+      const tenAm = new Date(`${ymd}T10:00:00`);
+      // Comparar en hora local aproximada: si now > 10am del día propuesto, +1 día
+      const nowYmd = now.toLocaleDateString('en-CA', { timeZone: tz });
+      if (ymd === nowYmd) {
+        try {
+          const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now);
+          const h = parseInt(parts, 10);
+          if (h >= 10) { dt = new Date(dt.getTime() + 86400000); ymd = dt.toLocaleDateString('en-CA', { timeZone: tz }); iso = `${ymd}T10:00:00`; }
+        } catch (e) {}
+      }
       const lbl = new Date(ymd + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
       return { label: `📅 ${lbl} · 10:00`, iso };
     } catch (e) { return { label: '📝 Borrador', iso: null }; }
