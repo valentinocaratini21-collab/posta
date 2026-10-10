@@ -4253,7 +4253,6 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
     const prop = proposedFor(d, i);
-    const badge = d.status === 'scheduled' ? '📮' : '📝';
     const capFull = String(d.caption || d.source_topic || '');
     const acts = `<div class="pcard-actions hs-acts">
         <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
@@ -4267,7 +4266,6 @@ function homeWeekHTML(posts, quota, generating, noDna) {
         <button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button></div>
       <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
       <div class="igmock-foot">
-        <div class="igmock-when">${badge} ${esc(when)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</div>
         ${capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : ''}
         ${acts}
       </div>
