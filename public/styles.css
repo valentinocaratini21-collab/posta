@@ -1841,6 +1841,15 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-week-list{display:flex;flex-direction:row;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:8px;scrollbar-width:none}
 .hs-week-list::-webkit-scrollbar{display:none}
 .hs-week-list .igmock-fixed{flex:0 0 85%;max-width:380px;scroll-snap-align:center}
+/* 2026-10-09: en desktop se ven 3 posteos a la vez (pedido de Valentino) */
+@media (min-width:768px){
+  .hs-week-list .igmock-fixed{flex:0 0 calc(33.333% - 9px);max-width:none}
+}
+/* 2026-10-09: flechas del carrusel */
+.hs-nav{display:inline-flex;align-items:center;gap:10px}
+.hs-nav button{width:32px;height:32px;border-radius:50%;border:1px solid #dbe4ee;background:#fff;font-size:20px;line-height:1;color:var(--cel);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0 0 2px}
+.hs-nav button:active{transform:scale(.94)}
+.hs-nav b{font-size:13px;min-width:38px;text-align:center}
 /* 2026-10-09: puntitos del carrusel */
 .hs-dots{display:flex;gap:8px;justify-content:center;padding:10px 0 4px}
 .hs-dots i{width:8px;height:8px;border-radius:50%;background:#cbd5e1;transition:background .2s,transform .2s}
