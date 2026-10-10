@@ -2141,7 +2141,9 @@ function pickRejectReason() {
     try {
       const ta = document.querySelector(`[data-revcap="${id}"]`);
       const winp = document.querySelector(`#reviewCard [data-revwhen="${id}"]`);
-      const when = (winp && winp.value) ? new Date(winp.value).toISOString() : null;
+      // 2026-10-09: en el carrusel del home no hay picker — usar el día propuesto.
+      const proposed = b.dataset.proposed;
+      const when = (winp && winp.value) ? new Date(winp.value).toISOString() : (proposed ? new Date(proposed).toISOString() : null);
       await api.patch('/api/posts/' + id, { scheduled_at: when, caption: ta ? ta.value : undefined });
       try { await api.post(`/api/posts/${id}/signal`, { signal: 'approved' }); } catch (e) {}
       try { await api.post('/api/funnel', { event: 'week_accepted' }); } catch (e) {}
@@ -4230,17 +4232,31 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
   // 2026-10-05: 5 tarjetas FIJAS en columna (no carrusel), caption completo,
   // botones Aceptar/Editar/Imagen/Eliminar. Pedido de Valentino.
+  // 2026-10-09: cada borrador muestra arriba el día propuesto (se programa ahí al aceptar).
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const proposedFor = (d, i) => {
+    if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
+    try {
+      // Día propuesto: hoy + i días, 10:00 hora local.
+      const now = new Date();
+      const dt = new Date(now.getTime() + i * 86400000);
+      const ymd = dt.toLocaleDateString('en-CA', { timeZone: tz });
+      const iso = `${ymd}T10:00:00`;
+      const lbl = new Date(ymd + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
+      return { label: `📅 ${lbl} · 10:00`, iso };
+    } catch (e) { return { label: '📝 Borrador', iso: null }; }
+  };
   const cards = list.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
     const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
-    const when = d.scheduled_at ? '📮 ' + homeWhenLabel(d.scheduled_at) : '📝 Borrador';
+    const prop = proposedFor(d, i);
     const badge = d.status === 'scheduled' ? '📮' : '📝';
     const capFull = String(d.caption || d.source_topic || '');
     const acts = `<div class="pcard-actions hs-acts">
-        <button type="button" data-revaccept="${esc(String(d.id))}" class="pcard-accept">✅ Aceptar</button>
+        <button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept">✅ Aceptar</button>
         <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
         ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
         <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
@@ -4248,6 +4264,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     return `<div class="igmock igmock-fixed" data-post-id="${esc(String(d.id))}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
         <span class="igmock-count">${i + 1} de ${list.length}</span></div>
+      <div class="igmock-when-top">${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</div>
       <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
       <div class="igmock-foot">
         <div class="igmock-when">${badge} ${esc(when)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</div>
@@ -8305,29 +8322,6 @@ async function scheduleView() {
     ${homeWeekBlock}
     ${homeChatBlock}
     ${armBlock}
-    <div class="sched-top">
-      <div><h2 style="margin:0">📅 Schedule</h2>
-      <p class="sub" style="margin:4px 0 0">Los que ya aceptaste — salen solos a la hora indicada.</p></div>
-      <div class="sched-nav">
-        ${(sk && sk.current > 0) ? `<button type="button" class="sched-streak" id="schedStreakPill" aria-label="Ver mi racha">🔥 ${sk.current}</button>` : ''}
-        <button class="btn btn-ghost btn-sm" id="schedPrev" ${SCHED_DAY_OFFSET <= 0 ? 'disabled' : ''} aria-label="Día anterior">‹</button>
-        <button class="btn btn-ghost btn-sm" id="schedToday">Hoy</button>
-        <button class="btn btn-ghost btn-sm" id="schedNext" aria-label="Día siguiente">›</button>
-      </div>
-    </div>
-    <div class="sched-daylabel">${esc(dayLabel)}</div>
-    <div class="sched-pulse">${pulseHTML}</div>
-    ${!drafts.length && empty
-      ? '' // el armBlock de arriba ya invita a armar la semana
-      : empty
-      ? `<div class="sched-emptyhero">
-           <img src="ai-avatar.png" alt="Posty">
-           <div><b>Tu día está vacío… por ahora 😏</b>
-           <p>Programá tus borradores de arriba 👆 y aparecen acá, con su hora. Yo me ocupo de que salgan solos.</p></div>
-         </div>`
-      : `<div class="sched-grid">${cells}</div>
-         ${nextPostHTML}
-         <p class="hint" style="margin-top:10px">Tocá un posteo para verlo en grande 🔍</p>`}
   </div>`;
 }
 /* ---------- 📊 TUS NÚMEROS: stats reales de Instagram ---------- */
