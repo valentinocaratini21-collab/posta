@@ -119,4 +119,13 @@ module.exports = [
   { code: '/cafe-trabajo', name: 'Café y laptop', brandSafe: true,
     rubros: ['cafeteria'],
     prompt: 'Digital nomad photography: laptop open beside a flat white on a café table, notebook and phone, warm productive light, shallow depth of field, modern work-from-café lifestyle mood.' },
+  { code: '/cafe-momentomerienda', name: 'Momento merienda', brandSafe: true,
+    rubros: ['cafeteria'],
+    prompt: 'Hands breaking open a buttery medialuna, flaky layers and steam, classic glass cup of cafe con leche beside it on a marble bar counter, warm morning window light, porteno ritual mood, documentary candid feel, upper third clean for a headline.' },
+  { code: '/cafe-baristaaccion', name: 'Barista en acción', brandSafe: true,
+    rubros: ['cafeteria'],
+    prompt: 'Barista mid-pour of latte art in motion, milk stream frozen, focused face visible, apron with house identity, warm cafe light, craft and oficio pride, unposed working moment, upper third clean for a headline.' },
+  { code: '/cafe-mesaservida', name: 'Mesa servida social', brandSafe: true,
+    rubros: ['cafeteria'],
+    prompt: 'Bar table with two complete meriendas (cafe con leche, medialunas, tostadas), hands of two people reaching in, warm morning light through the window, social ritual moment, candid and inviting, upper third clean for a headline.' },
 ];

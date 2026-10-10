@@ -232,15 +232,36 @@ function cortar(t, max) {
 // oración. Prefiere la primera oración si entra en el límite; si no, recorta por
 // palabras y retrocede hasta una palabra "firme". Tope de caracteres para que el
 // brief (que corta en 80) jamás lo mutile.
-function makeHeadline(text, maxWords = 6, maxChars = 70) {
+function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   const s = String(text || '').replace(/\s+/g, ' ').trim();
   if (!s) return '';
   // Guard 2026-10-06 (propuesta Juli, QA captions): titulares de 1-2 palabras
   // ("Lunes.") no venden y salen del makeHeadline cuando el caption arranca con
   // una escena corta. Se toma la primera oración con >=3 palabras entre las 3
   // primeras; si ninguna califica, se usan las primeras 8 palabras del texto.
-  const sentences = (s.match(/[^.!?…]+[.!?…]/g) || [s]).slice(0, 3);
-  let seed = sentences.find(c => c.trim().split(' ').filter(Boolean).length >= 3);
+  const sentences = (s.match(/[^.!?…]+[.!?…]/g) || [s]).slice(0, 5);
+  // C1 (2026-10-10, Uma): prioridad a la "palabra-dinero" del rubro.
+  // Cada rubro tiene SU palabra que vende en el titular; si aparece en el caption,
+  // esa oración gana aunque no sea la primera.
+  let seed = null;
+  if (rubro) {
+    const r = String(rubro).toLowerCase();
+    const hasWords = (c) => c.trim().split(' ').filter(Boolean).length >= 3;
+    if (/gastronom|cafeter|bar\b|parrilla|pizzer/.test(r)) {
+      // Precio explícito: "$39.900", "$10.000"
+      seed = sentences.find(c => hasWords(c) && /\$\s?\d/.test(c));
+    } else if (/belleza|estetica|estética|peluquer|barber/.test(r)) {
+      // Técnica brandeada: entre comillas o 2+ palabras con mayúscula sostenida
+      seed = sentences.find(c => hasWords(c) && (/"[^"]{3,}"/.test(c) || /\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+/.test(c)));
+    } else if (/moda|ropa|tienda|indumentaria/.test(r)) {
+      // Día+hora o escasez cuantificada: "sábado 10hs", "1.000 piezas", "stock"
+      seed = sentences.find(c => hasWords(c) && (/\b(lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b/i.test(c) || /\d[\d.]*\s?(piezas|unidades|stock)/i.test(c)));
+    } else if (/fitness|gimnasio|gym|entrenamiento/.test(r)) {
+      // Hook de negación: "no es solo…", "≠", "dejé de…"
+      seed = sentences.find(c => hasWords(c) && (/\bno es solo\b/i.test(c) || /≠/.test(c) || /\bdej[ée] de\b/i.test(c)));
+    }
+  }
+  if (!seed) seed = sentences.slice(0, 3).find(c => c.trim().split(' ').filter(Boolean).length >= 3);
   if (!seed) seed = s.split(' ').filter(Boolean).slice(0, 8).join(' ');
   seed = seed.trim();
   // 1) La oración elegida: si entra en el límite de palabras, va entera.
@@ -6751,6 +6772,7 @@ El prompt DEBE exigir:
 - IDENTIDAD PROPIA (draft 76, revisión 2026-09-29): la estética es del RUBRO del cliente con SU paleta — NUNCA imites el estilo visual de marcas famosas (nada de estética "Netflix"/streaming, Spotify, McDonald's, Apple...). Prohibido el fondo negro-rojo cinematográfico genérico y cualquier look que parezca otra marca.
 - IDENTIDAD-RUBRO (Mora, revisión 2026-10-07, id 13 — fallo REAL: "personaje animado que no refleja la identidad del rubro"): el personaje animado / mascota de dibujos solo se usa cuando refleja la identidad REAL del rubro. JAMÁS metas un personaje de dibujitos en una escena de un rubro que vende lo real (cafetería, panadería, gastronomía, estética...): ahí la escena es fotográfica del producto/lugar real, sin dibujitos. La mascota solo aparece en escenas donde el rubro la admite (la marca @posty.hacetodo sí la admite para hablar de sí misma; el cliente que vende café, no).
 - Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
+- MOMENTO, NO BODEGÓN (2026-10-10, Uma — datos de engagement): en gastronomía, cafetería y moda, la escena por DEFECTO es ACCIÓN/PERSONA/MOMENTO, no bodegón estático. El bodegón perfecto no vende; el momento real sí. Preferir: manos en acción (cocinando, sirviendo, cortando), POV en primera persona desde la cocina o el mostrador, cliente usando el producto, behind-the-scenes del local en movimiento, el dueño hablando a cámara. El plato/producto solo, quieto y perfecto sobre fondo lindo es la VARIANTE, no el default. En los demás rubros, mismo principio: si hay una persona que pueda protagonizar el momento, que lo protagonice.
 - ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
 - PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
 - BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible — CERO texto legible en la imagen, sin excepción: lo que naturalmente llevaría texto (pantallas, carteles, etiquetas, vidrieras, ropa con estampa) va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible; el ÚNICO texto de la pieza es el titular y lo agrega el código DESPUÉS, nunca el generador; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
@@ -9383,7 +9405,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261010-v105';
+const BUILD_ID = '20261010-v106';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

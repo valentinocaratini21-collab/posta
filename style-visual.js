@@ -24,7 +24,7 @@ const MAX_IMAGES = 6;
 const MAX_BYTES = 3 * 1024 * 1024; // 3MB por imagen
 const VISION_MODEL = 'gpt-4o';
 
-const SYSTEM_PROMPT = 'Sos un director de arte. Analizás 6 posteos de Instagram de un negocio y devolvés SOLO JSON con: recurring_subject (qué sujeto/objeto/personaje se repite, o \'ninguno\'), subject_always_present (bool), text_overlay (\'titular grande siempre\' / \'texto mínimo\' / \'sin texto\' + estilo), palette (hasta 5 hex), composition (ej: \'personaje centrado, fondo simple\'), mood (ej: \'cálido y cercano\'), notes (1 línea). Todo en español rioplatense, conciso.';
+const SYSTEM_PROMPT = 'Sos un director de arte. Analizás 6 posteos de Instagram de un negocio y devolvés SOLO JSON con: recurring_subject (qué sujeto/objeto/personaje se repite, o \'ninguno\'), subject_always_present (bool), text_overlay (\'titular grande siempre\' / \'texto mínimo\' / \'sin texto\' + estilo), palette (hasta 5 hex), composition (ej: \'personaje centrado, fondo simple\'), mood (ej: \'cálido y cercano\'), face_frequency (\'siempre\'/\'a veces\'/\'nunca\'), lighting_type (\'natural\'/\'artificial\'/\'mixta\'), notes (1 línea). Todo en español rioplatense, conciso.';
 
 function getOpenAiKey(db, userId) {
   try {
@@ -128,6 +128,8 @@ function parseProfile(data) {
       palette,
       composition: typeof j.composition === 'string' ? j.composition.trim() : '',
       mood: typeof j.mood === 'string' ? j.mood.trim() : '',
+      face_frequency: ['siempre','a veces','nunca'].includes(j.face_frequency) ? j.face_frequency : '',
+      lighting_type: ['natural','artificial','mixta'].includes(j.lighting_type) ? j.lighting_type : '',
       notes: typeof j.notes === 'string' ? j.notes.trim() : '',
     };
   } catch (_) {

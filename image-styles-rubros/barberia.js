@@ -52,7 +52,7 @@ module.exports = [
     prompt: 'Clipper detail macro: premium cordless machine with engraved blade, dramatic rim light, 100mm macro lens, dark metal background, barber tool fetish photography, pro-grade hardware, with rich detail and natural color.' },
   { code: '/barb-antesdespuesfade', name: 'Antes y después del fade', brandSafe: true,
     rubros: ['barberia'],
-    prompt: 'Before-and-after fade reveal: split composition overgrown hair versus surgical fade, even studio light, 50mm lens, transformation storytelling, barber results showcase, dramatic contrast, with vivid detail and true-to-life color.' },
+    prompt: 'Barber transformation story arc: client talking to camera BEFORE the cut with overgrown hair, then the reveal with a fresh fade and the shop cape branded with the local identity, celebration with the barber, candid energy, upper third clean for a hook headline.' },
   { code: '/barb-cortenino', name: 'Corte de niño', brandSafe: true,
     rubros: ['barberia'],
     prompt: 'Kids haircut moment: smiling boy with fresh textured crop, booster seat, bright cheerful daylight, 50mm lens, family-friendly barbershop warmth, proud little client, fun atmosphere, with tack-sharp detail and natural tones.' },
