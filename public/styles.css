@@ -1841,6 +1841,10 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-week-list{display:flex;flex-direction:row;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:8px;scrollbar-width:none}
 .hs-week-list::-webkit-scrollbar{display:none}
 .hs-week-list .igmock-fixed{flex:0 0 85%;max-width:380px;scroll-snap-align:center}
+/* 2026-10-09: puntitos del carrusel */
+.hs-dots{display:flex;gap:8px;justify-content:center;padding:10px 0 4px}
+.hs-dots i{width:8px;height:8px;border-radius:50%;background:#cbd5e1;transition:background .2s,transform .2s}
+.hs-dots i.on{background:var(--cel);transform:scale(1.25)}
 .igmock-fixed{max-width:520px}
 .igmock-fixed .igmock-cap{display:block;-webkit-line-clamp:unset;overflow:visible;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
 .pcard-accept{background:var(--cel);color:#fff;font-weight:800}

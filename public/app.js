@@ -4257,9 +4257,14 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     </div>`;
   }).join('');
   const qLabel = qTotal > 0 ? `${Math.min(qUsed, qTotal)}/${qTotal}` : `${list.length}`;
+  // 2026-10-09: puntitos de carrusel (pedido de Valentino) — muestran en cuál estás.
+  const dots = list.length > 1
+    ? `<div class="hs-dots" id="hsDots">${list.map((_, i) => `<i class="${i === 0 ? 'on' : ''}" data-dot="${i}"></i>`).join('')}</div>`
+    : '';
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b><span>${qLabel}</span></div>
-    <div class="hs-week-list">${cards}</div>
+    <div class="hs-week-list" id="hsWeekList">${cards}</div>
+    ${dots}
   </div>`;
 }
 function homeWhenLabel(iso) {
@@ -8464,7 +8469,36 @@ function bindSchedule() {
     }
     diagBtn.disabled = false;
   };
-  // 2026-10-08: chequeo AUTOMÁTICO del último resultado (sin que el usuario
+  // 2026-10-09: puntitos del carrusel — se actualizan al deslizar.
+  const weekList = $('#hsWeekList');
+  const dotsBox = $('#hsDots');
+  if (weekList && dotsBox) {
+    const dots = Array.from(dotsBox.querySelectorAll('i'));
+    const updateDots = () => {
+      try {
+        const cards = Array.from(weekList.children);
+        if (!cards.length) return;
+        const mid = weekList.scrollLeft + weekList.clientWidth / 2;
+        let best = 0, bestDist = Infinity;
+        cards.forEach((c, i) => {
+          const cx = c.offsetLeft + c.offsetWidth / 2;
+          const d = Math.abs(cx - mid);
+          if (d < bestDist) { bestDist = d; best = i; }
+        });
+        dots.forEach((dt, i) => dt.classList.toggle('on', i === best));
+      } catch (e) {}
+    };
+    weekList.addEventListener('scroll', updateDots, { passive: true });
+    dots.forEach((dt, i) => {
+      dt.style.cursor = 'pointer';
+      dt.onclick = () => {
+        try {
+          const cards = Array.from(weekList.children);
+          if (cards[i]) weekList.scrollTo({ left: cards[i].offsetLeft - 20, behavior: 'smooth' });
+        } catch (e) {}
+      };
+    });
+  }
   // toque nada). Si la generación falló, mostrar el error en pantalla.
   (async () => {
     const genEl = $('#hsGenerating');
