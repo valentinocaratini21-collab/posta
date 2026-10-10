@@ -2912,6 +2912,31 @@ async function renderChatPreviews_OLD(force) {
   if (!force && RENDER_PREV_BUSY === tituloKey) return;
   if (!force) RENDER_PREV_BUSY = tituloKey;
   const stopPrevThinking = () => stopPostyThinking($('#chatPrevThinking'));
+  // FOTO-CLIENTE (2026-10-10, pedido de Valentino): si la idea trae photo_index,
+  // la foto del cliente ES la imagen — no se genera nada con IA.
+  if (Number.isInteger(idea.photo_index) && CHAT_PHOTOS.length) {
+    const up = CHAT_PHOTOS[0];
+    if (up && up.file_path) {
+      RENDER_PREV_FOR = tituloKey; RENDER_PREV_BUSY = null;
+      CHAT_PREVIEWS = [{ kind: 'photo', cv: null, path: up.file_path, style: null, styleName: '' }];
+      CHAT_PREV_SEL = 0;
+      stopPrevThinking();
+      box.innerHTML = '';
+      const d = document.createElement('div');
+      d.className = 'chat-prev sel chat-prev-single';
+      const img = document.createElement('img');
+      img.src = up.file_path;
+      img.alt = 'Tu foto';
+      d.appendChild(img);
+      const tag = document.createElement('span');
+      tag.className = 'pv-tag';
+      tag.textContent = '📷 Tu foto';
+      d.appendChild(tag);
+      box.appendChild(d);
+      renderChatStoryboard();
+      return;
+    }
+  }
   // Si ya hay un preview, NO lo borramos: queda visible mientras se genera la nueva.
   // Solo mostramos "generando" si no hay nada que mostrar.
   const hadPreview = box.querySelector('img');
