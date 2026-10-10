@@ -348,7 +348,7 @@ html{scroll-behavior:smooth}
         <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana 👀</button>
         <p class="tiny" style="margin-top:10px">Tu semana lista en ~30 segundos.</p>
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
-        <p class="tiny" style="margin-top:6px">🔒 Conectás tu cuenta con Meta — sin compartir tu contraseña</p>
+        <p class="tiny" style="margin-top:6px">Solo tu @ público — sin contraseña, sin permisos</p>
         <p style="text-align:center;margin-top:14px"><button type="button" class="linklike" id="photoOptLink">📷 Subir una foto de mi negocio (opcional)</button></p>
         <div id="photoOptBox" style="display:none;margin-top:10px;text-align:center">
           <input type="file" id="optPhoto" accept="image/jpeg,image/png,image/webp" style="font-size:14px;max-width:100%">
@@ -386,7 +386,7 @@ html{scroll-behavior:smooth}
     <div class="steps3">
       <div class="step3"><div class="n">1</div><div><b>Pasame tu @</b><p>10 segundos: solo tu Instagram, nada más.</p></div></div>
       <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
-      <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo publico</b><p>Nada sale sin tu OK. Y cada semana se repite en automático.</p></div></div>
+      <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo la armo</b><p>Nada sale sin tu OK.</p></div></div>
     </div>
   </div>
 
@@ -508,7 +508,7 @@ html{scroll-behavior:smooth}
             </select>
           </div>
           <div class="field"><label>¿Qué es lo principal que vendés u ofrecés?</label><input type="text" id="b_producto" placeholder="Ej: hamburguesas smash, cortes de pelo…" maxlength="120" autocomplete="off"></div>
-          <div class="field"><label>¿Qué te hace diferente?</label><input type="text" id="b_diferencial" placeholder="Ej: ingredientes frescos todos los días…" maxlength="200" autocomplete="off"></div>
+          <div class="field"><label>¿Qué dicen tus clientes de vos?</label><input type="text" id="b_diferencial" placeholder="Ej: que las porciones son gigantes…" maxlength="200" autocomplete="off"></div>
           <div class="err" id="briefErr"></div>
           <button class="btn btn-primary btn-block" id="btnBriefGo">Afinar mi semana ✨</button>
           <p class="tiny">La vuelvo a armar con tu detalle.</p>
@@ -711,7 +711,7 @@ function show(id) {
 (async function init() {
   trk('prueba_view');
  try {
-  const catOpts = Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  const catOpts = `<option value="" selected disabled>Elegí tu rubro 👇</option>` + Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('#f_cat').innerHTML = catOpts;
   $('#pf_cat').innerHTML = catOpts;
   // Prueba en 1 campo: el primer paso es solo el @
@@ -851,6 +851,7 @@ function startTrialFallback() {
   const err = $('#obErr');
   const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
   if (!biz) return fail('Contanos el nombre de tu negocio 🙂');
+  if (!$('#f_cat').value) return fail('Elegí tu rubro así los posteos salen a medida 👇');
   err.style.display = 'none';
   GEN_PREFILL = false;
   TRIAL_BIZ = biz;
@@ -862,6 +863,7 @@ function startTrialFallback() {
 function startTrialPrefill() {
   const name = $('#pf_name').value.trim();
   if (!name) { toast('Contanos el nombre de tu negocio 🙂'); try { $('#pf_name').focus(); } catch (e) {} return; }
+  if (!$('#pf_cat').value) { toast('Elegí tu rubro así los posteos salen a medida 👇'); try { $('#pf_cat').focus(); } catch (e) {} return; }
   GEN_PREFILL = true;
   TRIAL_BIZ = name;
   TRIAL_DESC = '';
@@ -878,8 +880,8 @@ const TRIAL_QS = [
     options: [['vender', '🛒', 'Vender más'], ['seguidores', '📣', 'Más seguidores'], ['lanzamiento', '🚀', 'Lanzar algo nuevo'], ['fidelizar', '💛', 'Fidelizar clientes']] },
   { key: 'producto', type: 'text', title: '¿Qué es lo principal que vendés u ofrecés?', sub: 'Con tus palabras, cortito ✍️',
     ph: 'Ej: hamburguesas smash, cortes de pelo…', cta: 'Continuar →', max: 120 },
-  { key: 'diferencial', type: 'text', title: '¿Qué te hace diferente?', sub: 'Eso que tu competencia no tiene 💪',
-    ph: 'Ej: ingredientes frescos todos los días…', cta: 'Ver mis posteos ✨', max: 200 },
+  { key: 'diferencial', type: 'text', title: '¿Qué dicen tus clientes de vos?', sub: 'Lo que te repiten los que vuelven 💬',
+    ph: 'Ej: que las porciones son gigantes…', cta: 'Ver mis posteos ✨', max: 200 },
 ];
 let qIdx = 0;
 let TRIAL_BIZ = '';
