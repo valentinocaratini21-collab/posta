@@ -4256,18 +4256,14 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       </div>
     </div>`;
   }).join('');
-  // 2026-10-09: header con flechas de carrusel (pedido de Valentino).
-  const nav = list.length > 1
-    ? `<span class="hs-nav"><button type="button" id="hsPrev" aria-label="Anterior">‹</button><b id="hsPos">1/${list.length}</b><button type="button" id="hsNext" aria-label="Siguiente">›</button></span>`
-    : `<span>${qTotal > 0 ? `${Math.min(qUsed, qTotal)}/${qTotal}` : `${list.length}`}</span>`;
-  // 2026-10-09: puntitos de carrusel (pedido de Valentino) — muestran en cuál estás.
-  const dots = list.length > 1
-    ? `<div class="hs-dots" id="hsDots">${list.map((_, i) => `<i class="${i === 0 ? 'on' : ''}" data-dot="${i}"></i>`).join('')}</div>`
-    : '';
+  // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b>${nav}</div>
-    <div class="hs-week-list" id="hsWeekList">${cards}</div>
-    ${dots}
+    <div class="hs-week-head"><b>Tu semana</b></div>
+    <div class="hs-carousel">
+      <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
+      <div class="hs-week-list" id="hsWeekList">${cards}</div>
+      <button type="button" class="hs-side" id="hsNext" aria-label="Siguiente">›</button>
+    </div>
   </div>`;
 }
 function homeWhenLabel(iso) {
@@ -8472,14 +8468,11 @@ function bindSchedule() {
     }
     diagBtn.disabled = false;
   };
-  // 2026-10-09: puntitos del carrusel — se actualizan al deslizar.
+  // 2026-10-09: flechas laterales del carrusel.
   const weekList = $('#hsWeekList');
-  const dotsBox = $('#hsDots');
-  const hsPos = $('#hsPos');
   const hsPrev = $('#hsPrev');
   const hsNext = $('#hsNext');
   if (weekList) {
-    const dots = dotsBox ? Array.from(dotsBox.querySelectorAll('i')) : [];
     const cardAt = (i) => {
       const cards = Array.from(weekList.children);
       return cards[Math.max(0, Math.min(i, cards.length - 1))];
@@ -8498,24 +8491,12 @@ function bindSchedule() {
         return best;
       } catch (e) { return 0; }
     };
-    const updateDots = () => {
-      const best = currentIdx();
-      const cards = Array.from(weekList.children);
-      dots.forEach((dt, i) => dt.classList.toggle('on', i === best));
-      if (hsPos && cards.length) hsPos.textContent = `${best + 1}/${cards.length}`;
-    };
     const goTo = (i) => {
       const c = cardAt(i);
       if (c) weekList.scrollTo({ left: c.offsetLeft - 12, behavior: 'smooth' });
     };
-    weekList.addEventListener('scroll', updateDots, { passive: true });
-    dots.forEach((dt, i) => {
-      dt.style.cursor = 'pointer';
-      dt.onclick = () => goTo(i);
-    });
     if (hsPrev) hsPrev.onclick = () => goTo(currentIdx() - 1);
     if (hsNext) hsNext.onclick = () => goTo(currentIdx() + 1);
-    updateDots();
   }
   // toque nada). Si la generación falló, mostrar el error en pantalla.
   (async () => {
