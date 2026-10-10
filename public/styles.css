@@ -1837,7 +1837,10 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-done p{font-size:13px;color:var(--mut);margin:6px 0 0;line-height:1.5}
 
 /* Home 2026-10-05: 5 tarjetas FIJAS en columna (pedido de Valentino) */
-.hs-week-list{display:flex;flex-direction:column;gap:16px}
+/* 2026-10-09: carrusel horizontal (pedido de Valentino) — deslizar a la izquierda */
+.hs-week-list{display:flex;flex-direction:row;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:8px;scrollbar-width:none}
+.hs-week-list::-webkit-scrollbar{display:none}
+.hs-week-list .igmock-fixed{flex:0 0 85%;max-width:380px;scroll-snap-align:center}
 .igmock-fixed{max-width:520px}
 .igmock-fixed .igmock-cap{display:block;-webkit-line-clamp:unset;overflow:visible;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
 .pcard-accept{background:var(--cel);color:#fff;font-weight:800}
