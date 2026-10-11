@@ -2325,9 +2325,22 @@ async function doAcceptAll(btn) {
   }
   if (b) { b.disabled = true; b.textContent = 'Aceptando…'; }
   try {
-    const items = $$('#reviewCard [data-revwhen]')
+    // 2026-10-11: funciona tanto en #reviewCard (con datetime inputs) como en
+    // el carrusel del home (con data-proposed en los botones Aceptar).
+    let items = $$('#reviewCard [data-revwhen]')
       .map((inp) => ({ id: +inp.dataset.revwhen, scheduled_at: inp.value ? new Date(inp.value).toISOString() : null }))
       .filter((it) => it.id > 0);
+    if (!items.length) {
+      // Carrusel del home: botones Aceptar con data-proposed
+      items = $$('#hsWeekList [data-revaccept]')
+        .filter((btn) => !btn.disabled)
+        .map((btn) => {
+          const id = +btn.dataset.revaccept;
+          const prop = btn.dataset.proposed;
+          return { id, scheduled_at: prop ? new Date(prop).toISOString() : null };
+        })
+        .filter((it) => it.id > 0);
+    }
     const r = await api.post('/api/posts/accept-all', { items });
     const n = (r && r.accepted) || 0;
     if (!n) throw new Error('No había borradores pendientes');
@@ -4320,7 +4333,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   }).join('');
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b></div>
+    <div class="hs-week-head"><b>Tu semana</b>${list.length > 1 ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
       <div class="hs-week-list" id="hsWeekList">${cards}</div>
@@ -8358,6 +8371,10 @@ async function scheduleView() {
   const homeWeekBlock = homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
   const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
+    <div class="hs-brand-head">
+      <img src="ai-avatar.png" alt="Posty" class="hs-brand-ava">
+      <div class="hs-brand-txt"><b>Posty<span style="color:var(--cel)">.</span></b><span>Tu semana, lista sola</span></div>
+    </div>
     ${trialBanner}
     ${dogfoodBlock}
     ${expBanner}
@@ -8507,6 +8524,9 @@ function bindSchedule() {
     }
     diagBtn.disabled = false;
   };
+  // 2026-10-11: botón "Aceptar todo" arriba del carrusel (pedido de Valentino).
+  const hsAcceptAll = $('#hsAcceptAll');
+  if (hsAcceptAll) hsAcceptAll.onclick = () => doAcceptAll(hsAcceptAll);
   // 2026-10-09: flechas laterales del carrusel.
   const weekList = $('#hsWeekList');
   const hsPrev = $('#hsPrev');

@@ -1845,7 +1845,14 @@ textarea.in{resize:vertical;min-height:96px}
 @media (min-width:768px){
   .hs-week-list .igmock-fixed{flex:0 0 calc(33.333% - 9px);max-width:none}
 }
-/* 2026-10-09: día propuesto arriba de la imagen en cada tarjeta */
+/* 2026-10-11: header con logo/avatar arriba de Schedule (pedido de Valentino) */
+.hs-brand-head{display:flex;align-items:center;gap:12px;padding:6px 4px 14px}
+.hs-brand-ava{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--cel)}
+.hs-brand-txt{display:flex;flex-direction:column}
+.hs-brand-txt b{font-size:20px}
+.hs-brand-txt span{font-size:12.5px;color:var(--mut)}
+/* 2026-10-11: botón Aceptar todo arriba del carrusel */
+.hs-week-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .igmock-when-top{font-size:13px;font-weight:700;color:var(--cel);padding:8px 12px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
 .pcard-accept-top{padding:6px 14px;font-size:13px;border-radius:999px}
 /* 2026-10-09: flechas laterales del carrusel (pedido de Valentino) */
