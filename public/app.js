@@ -4325,7 +4325,9 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
         <span class="igmock-count">${i + 1} de ${list.length}</span></div>
       <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
-        <button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button></div>
+        ${d.status === 'scheduled'
+          ? `<span class="pcard-scheduled">📮 Programado</span>`
+          : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`}</div>
       <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
       <div class="igmock-foot">
         ${capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : ''}
@@ -4335,7 +4337,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   }).join('');
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b>${list.length > 1 ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
+    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
       <div class="hs-week-list" id="hsWeekList">${cards}</div>
