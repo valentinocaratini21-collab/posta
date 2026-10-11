@@ -4348,7 +4348,13 @@ function homeWeekHTML(posts, quota, generating, noDna) {
 function homeWhenLabel(iso) {
   try {
     const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
-    const d = new Date(String(iso).replace(' ', 'T') + 'Z');
+    let s = String(iso || '').trim();
+    if (!s) return '';
+    // Normalizar: "YYYY-MM-DD HH:MM:SS" → ISO con Z; si ya trae zona, no duplicar.
+    s = s.replace(' ', 'T');
+    if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+    const d = new Date(s);
+    if (isNaN(d)) return '';
     const day = d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', timeZone: tz });
     const hh = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: tz });
     return `${day} · ${hh}`;
