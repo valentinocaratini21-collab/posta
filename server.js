@@ -4071,19 +4071,28 @@ function acceptAllDrafts(uid, items, opts) {
   // Solo pendientes: respeta rechazados (no se tocan) y omite los ya aprobados.
   const pending = pool.filter((d) => (d.approval || 'pending') === 'pending');
   if (!pending.length) return { ok: false, reason: 'no_pending' };
-  // Cupo: todos de una o nada (mismo criterio que /api/posts/schedule-all).
+  // Cupo: se aceptan hasta el límite del plan (2026-10-11, pedido de Valentino:
+  // "si el máximo es 5, aceptame 5" — antes era todo o nada y fallaba).
   const qf = quotaFor(uid, 'image');
   const qr = quotaFor(uid, 'video');
   const qs = quotaFor(uid, 'story');
-  const feedBillable = pending.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
-  const reelBillable = pending.filter((d) => d.media_type === 'video').length;
-  const storyBillable = pending.filter((d) => d.media_type === 'story').length;
-  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left) {
+  let feedLeft = qf.left, reelLeft = qr.left, storyLeft = qs.left;
+  const toAccept = [];
+  for (const d of pending) {
+    if (d.media_type === 'video') {
+      if (reelLeft > 0) { toAccept.push(d); reelLeft--; }
+    } else if (d.media_type === 'story') {
+      if (storyLeft > 0) { toAccept.push(d); storyLeft--; }
+    } else {
+      if (feedLeft > 0) { toAccept.push(d); feedLeft--; }
+    }
+  }
+  if (!toAccept.length) {
     return { ok: false, reason: 'plan_limit', quota: qf };
   }
   const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='' WHERE id=?`);
   let n = 0;
-  for (const d of pending) {
+  for (const d of toAccept) {
     const when = whenById[d.id] || (d.scheduled_at ? String(d.scheduled_at).slice(0, 19).replace('T', ' ') : null);
     if (!when) continue; // sin hora no se puede programar: se saltea
     upd.run(when, d.id);
@@ -4091,7 +4100,7 @@ function acceptAllDrafts(uid, items, opts) {
     n++;
   }
   try { track(uid, 'accept_all', String(n)); } catch (e) {}
-  return { ok: true, accepted: n };
+  return { ok: true, accepted: n, partial: toAccept.length < pending.length, total: pending.length };
 }
 
 // POST /api/posts/accept-all — "✅ Aceptar todos" (tarjeta "Revisá tu semana").
@@ -9405,7 +9414,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261011-v108';
+const BUILD_ID = '20261011-v109';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

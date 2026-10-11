@@ -2349,6 +2349,8 @@ async function doAcceptAll(btn) {
     try { paintWeekPill(); } catch (e) {}
     toast(n === 1
       ? `✅ <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada 👌`
+      : (r && r.partial)
+      ? `✅ <b>Acepté ${n} (tu plan cubre ${n} por semana).</b><br>Te quedan ${r.total - n} borradores para la próxima 👌`
       : `✅ <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada 👌`);
     render();
   } catch (e) {
