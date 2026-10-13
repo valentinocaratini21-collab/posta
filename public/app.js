@@ -6086,6 +6086,7 @@ function humanError(err) {
   if (!err) return '';
   const e = String(err);
   if (/only photo or video/i.test(e)) return 'Instagram no pudo leer la imagen. Reintentá en unos minutos.';
+  if (/no está accesible en internet|no pudo descargar la imagen/i.test(e)) return 'La imagen no está accesible — Instagram no la pudo descargar. Regenerá la imagen desde el posteo.';
   if (/190|token.*expir|invalid.+token|oauth/i.test(e)) return 'Tu conexión con Instagram venció. Reconectala en Ajustes → Instagram.';
   if (/permission|scope|not authorized/i.test(e)) return 'Falta un permiso de Instagram. Reconectá tu cuenta en Ajustes.';
   if (/429|rate limit/i.test(e)) return 'Instagram nos pidió esperar un poco. Reintentá en unos minutos.';

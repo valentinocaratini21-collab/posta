@@ -233,8 +233,13 @@ function cortar(t, max) {
 // palabras y retrocede hasta una palabra "firme". Tope de caracteres para que el
 // brief (que corta en 80) jamás lo mutile.
 function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
-  const s = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!s) return '';
+  const sRaw = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!sRaw) return '';
+  // PRECIO-33 (2026-10-11, fallo real): el punto de miles NO es fin de oración
+  // ("La docena a $12.500" salía como "La docena a $12."). Se protege el
+  // dígito.punto.dígito con un marcador antes de dividir en oraciones y se
+  // restaura al devolver: el precio sale ENTERO o no sale.
+  const s = sRaw.replace(/(\d)\.(?=\d)/g, '$1\u0001');
   // Guard 2026-10-06 (propuesta Juli, QA captions): titulares de 1-2 palabras
   // ("Lunes.") no venden y salen del makeHeadline cuando el caption arranca con
   // una escena corta. Se toma la primera oración con >=3 palabras entre las 3
@@ -247,7 +252,7 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   if (rubro) {
     const r = String(rubro).toLowerCase();
     const hasWords = (c) => c.trim().split(' ').filter(Boolean).length >= 3;
-    if (/gastronom|cafeter|bar\b|parrilla|pizzer/.test(r)) {
+    if (/gastronom|cafeter|bar\b|parrilla|pizzer|panader|rotiser|helader|reposter|pasteler|carnicer/.test(r)) {
       // Precio explícito: "$39.900", "$10.000"
       seed = sentences.find(c => hasWords(c) && /\$\s?\d/.test(c));
     } else if (/belleza|estetica|estética|peluquer|barber/.test(r)) {
@@ -280,7 +285,7 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     const i = c.lastIndexOf(' ');
     out = sinColgada((i > maxChars * 0.4 ? c.slice(0, i) : c).trim().split(' ').filter(Boolean)).join(' ');
   }
-  return out;
+  return out.replace(/\u0001/g, '.');
 }
 const app = express();
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -6848,8 +6853,8 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
 {"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
-- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. Si la imagen NO lleva texto → true.
-- headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. Si la imagen NO lleva texto → true.
+- headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
@@ -9414,7 +9419,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261011-v111';
+const BUILD_ID = '20261013-v112';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -54,6 +54,7 @@ const CAPTION_CHECKLIST = [
   '6. El caption tiene que MATCHEAR lo que muestra la imagen: no prometas, describas ni vendas lo que no se ve en la foto/video.',
   '7. Si el negocio es argentino: escribí en rioplatense con voseo ("vos"), siempre.',
   '8. Prohibido el GRITO: nunca uses MAYÚSCULAS para énfasis en el cuerpo del caption ("SUS fotos", "YA ESTÁ ARMADA"); si algo merece énfasis, que lo diga la frase, no el formato. Prohibido asteriscos para énfasis (*así*): en Instagram se ven literales y delatan que lo escribió una IA.',
+  '9. Rotá tus propios recursos entre posteos consecutivos del mismo cliente: el emoji no va siempre en el mismo lugar (a veces en el cuerpo, a veces ninguno); el cierre del mecanismo no termina siempre con las mismas palabras (alterná "sin tarjeta" con "sin compromiso", "sin atarte a nada", o cerrá distinto); y nunca repitas la misma idea-concepto dos posteos seguidos (si el anterior cerró con "solo tenés que aprobar", este posteo aprueba implícito y cierra con otra idea). Los humanos no repiten sus propios recursos; la repetición es la firma más visible de la IA.',
 ].join('\n');
 
 function isArgentineClient(db, userId) {

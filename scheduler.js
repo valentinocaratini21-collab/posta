@@ -10,11 +10,39 @@ const { firstPublishNudge } = require('./first-publish-nudge');
 
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   const file = path.basename(imagePath);
-  const base =
+  let base =
     imageBaseUrl ||
     process.env.IMAGE_BASE_URL ||
-    (reqHost ? `http://${reqHost}` : 'http://localhost:3000');
+    (reqHost ? `http://${reqHost}` : '');
+  // 2026-10-13: bases muertas — el dominio viejo (postahacetodo.com) ya no
+  // responde y localhost no es alcanzable desde internet. Con cualquiera de
+  // las dos, Instagram no puede descargar la imagen y la publicación falla
+  // ("Only photo or video" / contenedor en ERROR). Caer al dominio canónico.
+  if (!base || /postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) {
+    base = 'https://postyhacetodo.com';
+  }
   return `${base.replace(/\/$/, '')}/media/${file}`;
+}
+
+// 2026-10-13: pre-flight — antes de publicar, verificamos que la URL pública
+// de la imagen responda 200 con contenido imagen/video. Si ni nosotros
+// podemos bajarla, Instagram tampoco: no quemar el intento de publicación.
+async function checkPublicMedia(url) {
+  const ctl = new AbortController();
+  const to = setTimeout(() => ctl.abort(), 15000);
+  try {
+    let resp = await fetch(url, { method: 'HEAD', signal: ctl.signal });
+    if (resp.status === 405 || resp.status === 501) {
+      resp = await fetch(url, { method: 'GET', signal: ctl.signal });
+      try { if (resp.body) await resp.body.cancel(); } catch (e) {}
+    }
+    const ct = (resp.headers.get('content-type') || '').toLowerCase();
+    return resp.ok && (!ct || ct.startsWith('image/') || ct.startsWith('video/'));
+  } catch (e) {
+    return false;
+  } finally {
+    clearTimeout(to);
+  }
 }
 
 function getSettings(db, userId) {
@@ -63,6 +91,18 @@ async function publishSinglePost(db, post, opts = {}) {
       try { carouselUrls = JSON.parse(post.carousel_paths || '[]'); } catch (e) { carouselUrls = []; }
       if (!Array.isArray(carouselUrls) || !carouselUrls.length) carouselUrls = [post.image_path];
       carouselUrls = carouselUrls.filter(Boolean).map(p => publicImageUrl(p, settings.image_base_url));
+    }
+    // 2026-10-13: pre-flight de URL pública (solo publicación real, no demo).
+    // Si la imagen no se puede descargar desde internet, fallar acá con el
+    // motivo real en vez de dejar que Instagram rechace el contenedor.
+    if (!demoMode) {
+      const urlsToCheck = isCarousel ? carouselUrls : [mediaUrl];
+      for (const u of urlsToCheck) {
+        const reachable = await checkPublicMedia(u);
+        if (!reachable) {
+          throw new Error('La imagen de este posteo no está accesible en internet — Instagram no la pudo descargar.');
+        }
+      }
     }
     const result =
       post.media_type === 'video'
