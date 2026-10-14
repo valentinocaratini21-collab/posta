@@ -3825,9 +3825,10 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
 });
 
 // POST /api/week/ensure — garantiza que la semana actual tenga sus posteos.
-// Idempotente por usuario: si ya hay borradores/programados de la semana,
-// no hace nada. Si está vacío, dispara generateWeekDrafts en segundo plano
-// y devuelve { generating: true }. El frontend lo llama al abrir el home
+// Idempotente por usuario: si la semana ya alcanzó el objetivo del plan, no
+// hace nada. Si falta alguno (semana vacía O parcial), dispara
+// generateWeekDrafts en segundo plano — que crea SOLO el déficit — y
+// devuelve { generating: true }. El frontend lo llama al abrir el home
 // (sin bloquear la UI) y refresca hasta que aparecen las tarjetas.
 // (2026-10-05: pedido de Valentino — los 5 posteos tienen que estar listos
 // al entrar a la app, sin comandos ni recargas.)
@@ -3851,7 +3852,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
     // Solo contar los VISIBLES (needs_review=0), que son los que ve el frontend.
     let n = 0;
     try {
-      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND COALESCE(needs_review,0)=0`).get(uid, wk).n || 0;
+      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND COALESCE(needs_review,0)=0`).get(uid, wk).n || 0;
     } catch (e) { /* DB sin week_key: seguir */ }
     // Fallback: borradores sin week_key (pipeline viejo) también cuentan.
     if (!n) {
@@ -3859,9 +3860,17 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND (week_key = '' OR week_key IS NULL) AND COALESCE(needs_review,0)=0`).get(uid).n || 0;
       } catch (e) {}
     }
-    if (n > 0) return res.json({ ok: true, generating: false, count: n, week_key: wk });
+    // 2026-10-14: la semana se completa SOLA hasta el objetivo del plan
+    // (pedido de Valentino). Antes, con n>0 no se hacía nada y la semana
+    // parcial quedaba incompleta para siempre.
+    let target = 3;
+    try {
+      const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
+      target = (getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN).postsPerWeek) || 3;
+    } catch (e) {}
+    if (n >= target) return res.json({ ok: true, generating: false, count: n, complete: true, week_key: wk });
     // ¿Ya hay una generación en curso? No duplicar.
-    if (nextweekRunningFresh(uid)) return res.json({ ok: true, generating: true, count: 0, week_key: wk });
+    if (nextweekRunningFresh(uid)) return res.json({ ok: true, generating: true, count: n, missing: target - n, week_key: wk });
     if (!planOrTrialOk(uid)) return res.json({ ok: false, generating: false, reason: 'no_plan', week_key: wk });
     // Gate de ADN "no generar a ciegas" (MISMA lógica que generateWeekDrafts):
     // si la cuenta no tiene descripción del negocio ni producto_estrella, no
@@ -3878,6 +3887,15 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         return res.json({ ok: true, generating: false, reason: 'no_dna', week_key: wk });
       }
     } catch (e) { /* si falla el chequeo, dejar que el pipeline decida */ }
+    // Cooldown anti-loop (2026-10-14): si la última corrida de ESTA semana
+    // falló hace menos de 10 minutos, no re-disparar en cada apertura de la
+    // app. La red de reintentos (sweep cada 3h + backfill diario) sigue.
+    try {
+      const last = LAST_WEEK_RESULT.get(uid);
+      if (last && last.weekKey === wk && !last.ok && last.reason !== 'running' && Date.now() - (last.at || 0) < 10 * 60 * 1000) {
+        return res.json({ ok: true, generating: false, reason: last.reason || 'retry_cooldown', count: n, week_key: wk });
+      }
+    } catch (e) {}
     // Disparar en segundo plano: la respuesta vuelve al toque.
     // 2026-10-08: guardar el resultado para que el frontend lo pueda mostrar
     // (antes el error se perdía en los logs del servidor).
@@ -3890,7 +3908,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
         console.error('[week-ensure] pipeline:', e.message);
         try { LAST_WEEK_RESULT.set(uid, { ok: false, reason: 'exception', error: String(e.message || e).slice(0, 300), at: Date.now(), weekKey: wk }); } catch (e2) {}
       });
-    return res.json({ ok: true, generating: true, count: 0, week_key: wk });
+    return res.json({ ok: true, generating: true, count: n, missing: target - n, week_key: wk });
   } catch (e) {
     console.error('[week-ensure]:', e.message);
     return res.status(500).json({ ok: false, error: 'No se pudo verificar la semana.' });
@@ -4605,28 +4623,41 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   catch (e) { console.error(`[pipeline:${tag}] kill-switch, skip usuario ${uid}`); return { ok: false, reason: 'ai_cap' }; }
   if (nextweekRunningFresh(uid)) { console.log(`[pipeline:${tag}] usuario ${uid}: ya hay una corrida en curso, skip`); return { ok: false, reason: 'running' }; }
   NEXTWEEK_RUNNING.set(uid, Date.now());
+  // 2026-10-14: SEMANA PARCIAL (pedido de Valentino) — la semana se completa
+  // sola hasta el objetivo del plan. Antes, con que existiera 1 posteo el
+  // guard devolvía 'already_exists' y la semana quedaba incompleta para
+  // siempre. Ahora: existing >= objetivo → completa; 0 < existing <
+  // objetivo → se genera SOLO el déficit; existing = 0 → como siempre.
+  let ppw = 3, existing = 0, deficit = 0;
   try {
     try {
-      // 2026-10-08: solo contar borradores/programados VISIBLES (igual que
-      // /api/week/ensure). Antes contaba también los 'failed' y devolvía
-      // 'already_exists' aunque no hubiera nada que mostrar — la semana de
-      // Valentino quedó bloqueada 5 días por posteos fallidos invisibles.
-      const n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled')`).get(uid, weekKey).n || 0;
-      if (n > 0) return { ok: false, reason: 'already_exists' };
-      // Limpiar posteos fallidos de esta semana para empezar de cero.
+      const u0 = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
+      ppw = (getPlan(u0.plan_status === 'active' ? u0.plan : TRIAL_PLAN).postsPerWeek) || 3;
+    } catch (e) {}
+    try {
+      // Solo feed (image/carousel): historias y reels tienen su propio cupo
+      // y no cuentan para el objetivo de posteos de la semana.
+      existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel')`).get(uid, weekKey).n || 0;
+    } catch (e) { /* DB sin week_key: existing=0, generación completa */ }
+    if (existing >= ppw) return { ok: true, reason: 'already_complete', created: 0, existing };
+    deficit = ppw - existing;
+    if (existing === 0) {
+      // Limpiar posteos fallidos de esta semana para empezar de cero. (Solo
+      // desde cero: en modo completar, los fallidos quedan visibles para que
+      // el usuario los reintente.)
       try {
         const del = db.prepare(`DELETE FROM posts WHERE user_id = ? AND week_key = ? AND status = 'failed'`).run(uid, weekKey);
         if (del.changes > 0) console.log(`[pipeline:${tag}] usuario ${uid}: ${del.changes} posteos fallidos limpiados`);
       } catch (e) {}
-    } catch (e) { /* DB sin week_key: seguir */ }
+    } else {
+      console.log(`[pipeline:${tag}] usuario ${uid}: semana parcial ${existing}/${ppw} — completando ${deficit}`);
+    }
     // Gate de ADN "no generar a ciegas" (mismo umbral que /api/ideas).
     const profile = getProfile(uid);
     const dna = readDna(uid);
     const descOk = (profile.description || '').trim().length >= 20;
     const dnaOk = (dna.producto_estrella || '').trim().length >= 3;
     if (!descOk && !dnaOk) { console.log(`[pipeline:${tag}] usuario ${uid}: sin ADN mínimo, no se genera a ciegas`); return { ok: false, reason: 'no_dna' }; }
-    const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid) || {};
-    const ppw = (getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN).postsPerWeek) || 3;
     const key = openaiKeyFor(uid);
     // Resiliencia (2026-10-05): si la generación de ideas tira (IA caída,
     // saldo 0, input inesperado), NO propagar la excepción al sweep: devolver
@@ -4634,7 +4665,18 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     let ideas;
     try { ideas = await generateIdeas(ideasInputFor(uid), key, { strict: true }); }
     catch (e) { console.error(`[pipeline:${tag}] ideas falló:`, e.message); return { ok: false, reason: 'ai_error', error: e.message }; }
-    const picks = ideas.slice(0, ppw);
+    // 2026-10-14: en modo completar, no repetir temas que la semana ya
+    // tiene y traer 2 ideas extra de buffer por si alguna imagen falla
+    // (el cupo exacto lo garantiza el claim de slots del worker).
+    let pool = ideas;
+    if (existing > 0) {
+      try {
+        const rows = db.prepare(`SELECT source_topic FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled'`).all(uid, weekKey);
+        const seen = new Set(rows.map(r => String(r.source_topic || '').trim().toLowerCase()).filter(Boolean));
+        pool = ideas.filter(id => !seen.has(String(id.titulo || '').trim().toLowerCase()));
+      } catch (e) {}
+    }
+    const picks = existing > 0 ? pool.slice(0, deficit + 2) : pool.slice(0, ppw);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`);
@@ -4654,6 +4696,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     const usedStyles = [];
     // Pool de 3 en paralelo (igual que el autopilot del browser).
     let nextIdx = 0;
+    // Cupo exacto de slots: en modo completar NUNCA crear más que el déficit
+    // (claim sincrónico entre workers; se libera si ese slot falla, así otra
+    // idea del buffer puede ocuparlo en la misma corrida).
+    const cap = existing > 0 ? deficit : picks.length;
+    let claimed = 0;
     // Carousel automático: como máximo 1 por semana, para la idea más
     // carousel-friendly (tips/educativo). El claim es sincrónico: sin race
     // entre los 3 workers.
@@ -4675,6 +4722,8 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       while (true) {
         const i = nextIdx++;
         if (i >= picks.length) return;
+        if (claimed >= cap) return;
+        claimed++;
         const idea = picks[i];
         let isCarousel = false;
         try {
@@ -4688,7 +4737,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           if (!caption) throw new Error('caption vacío');
           recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
-          if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); continue; }
+          if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); claimed--; continue; }
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
           const headline = makeHeadline(caption.split('\n')[0], 6)
             || makeHeadline(idea.titulo, 5);
@@ -4744,6 +4793,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           if (!imagePath) {
             console.error(`[pipeline:${tag}] "${idea.titulo || i}": sin imagen IA tras 3 intentos, se salta (no se crea borrador plano)`);
             imgFailCount++;
+            claimed--;
             continue;
           }
           insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
@@ -4762,6 +4812,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           }
           created++;
         } catch (e) {
+          claimed--;
           console.error(`[pipeline:${tag}] borrador "${idea.titulo || i}" falló:`, e.message);
         }
       }
@@ -4782,7 +4833,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     // Historias + reels del plan: reusan las imágenes recién generadas.
     // Va en try/catch propio: si falla, el autopilot de feed queda intacto.
-    try {
+    // 2026-10-14: SOLO en generación desde cero — generateWeekExtras NO es
+    // idempotente (inserta siempre el cupo completo): en modo completar
+    // duplicaría las historias/reels que la semana ya tiene.
+    if (existing === 0) try {
       const { generateWeekExtras } = require('./story-reel');
       const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'draft' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, weekKey);
       await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
@@ -4795,7 +4849,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       console.error(`[pipeline:${tag}] usuario ${uid}: 0 posteos creados (${imgFailCount} fallos de imagen)`);
       return { ok: false, reason: failReason, created: 0, imgFailCount };
     }
-    return { ok: true, created };
+    return { ok: true, created, existing, deficit };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
   }
@@ -9419,7 +9473,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261014-v113';
+const BUILD_ID = '20261014-v114';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

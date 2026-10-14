@@ -4349,6 +4349,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
+    ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
       <div class="hs-week-list" id="hsWeekList">${cards}</div>
@@ -4388,17 +4389,17 @@ async function chatView() {
   // plano (sin bloquear). El home muestra "armando" y refresca solo.
   let weekGenerating = false;
   let weekNoDna = false;
-  if (!nDrafts && !nSched) {
-    try {
-      const er = await api.post('/api/week/ensure', {}).catch(() => null);
-      weekGenerating = !!(er && (er.generating || er.count > 0));
-      weekNoDna = !!(er && er.reason === 'no_dna');
-      if (er && er.generating) {
-        // Refrescar en 20s para mostrar las tarjetas cuando aparezcan.
-        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 20000);
-      }
-    } catch (e) {}
-  }
+  // 2026-10-14: ensure corre SIEMPRE, no solo con la semana vacía — si la
+  // semana está parcial, el backend crea los posteos que faltan solo.
+  try {
+    const er = await api.post('/api/week/ensure', {}).catch(() => null);
+    weekGenerating = !!(er && er.generating);
+    weekNoDna = !!(er && er.reason === 'no_dna' && !nDrafts && !nSched);
+    if (er && er.generating) {
+      // Refrescar en 20s para mostrar las tarjetas cuando aparezcan.
+      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 20000);
+    }
+  } catch (e) {}
   return `
   <div class="chat-home hs-home">
     <div class="hs-top">
@@ -4455,7 +4456,7 @@ async function bindChatView() {
   try { await maybePostyNudge(forced || undefined); } catch (e) {}
   // Home: si está "armando tu semana", refrescar solo hasta que aparezcan (máx 2 min).
   try {
-    if (document.querySelector('.hs-generating') && (location.hash || '').startsWith('#/app/chat')) {
+    if (document.querySelector('.hs-generating, .hs-completing') && (location.hash || '').startsWith('#/app/chat')) {
       let n = 0;
       try { n = Number(sessionStorage.getItem('hs_gen_retry') || 0); } catch (e) {}
       if (n < 8) {
@@ -8291,16 +8292,16 @@ async function scheduleView() {
   // plano (sin bloquear). El home muestra "armando" y refresca solo.
   let weekGenerating = false;
   let weekNoDna = false;
-  if (!drafts.length && !schedPosts.length) {
-    try {
-      const er = await api.post('/api/week/ensure', {}).catch(() => null);
-      weekGenerating = !!(er && (er.generating || er.count > 0));
-      weekNoDna = !!(er && er.reason === 'no_dna');
-      if (er && er.generating) {
-        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 20000);
-      }
-    } catch (e) {}
-  }
+  // 2026-10-14: ensure corre SIEMPRE, no solo con la semana vacía — si la
+  // semana está parcial, el backend crea los posteos que faltan solo.
+  try {
+    const er = await api.post('/api/week/ensure', {}).catch(() => null);
+    weekGenerating = !!(er && er.generating);
+    weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
+    if (er && er.generating) {
+      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 20000);
+    }
+  } catch (e) {}
   let quota = null;
   try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
   const slots = suggestSlots(drafts.length, schedPosts);
