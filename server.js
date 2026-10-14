@@ -2140,7 +2140,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     // tarjeta "IDEA LISTA", ya va a estar lista en vez de hacerlo esperar.
     // REACTIVADA (2026-10-04): la generación on-demand sincrónica falla por
     // timeout del proxy (respuesta vacía → "Detalle: Error"). La cola por
-    // usuario (GEN_QUEUE) ya evita los 429s, y el preview reutiliza la imagen
+    // usuario (tope de 3 en paralelo) ya acota los 429s, y el preview reutiliza la imagen
     // (draftFromPreview) así que no hay doble gasto.
     if (out.idea && (out.idea.titulo || out.idea.title)) pregenIdeaImage(uidChat, out.idea);
     res.json({ reply: out.reply, idea: out.idea || null, ideas: out.ideas || null, edit: editApplied, publish: publishApplied, revert: revertApplied, dna: dnaSaved, options: out.options || null, showDrafts });
@@ -7161,18 +7161,34 @@ app.post('/api/ideas/pregen-image', requireAuth, express.json(), (req, res) => {
   if (!e) return res.json({ ok: true, status: 'missing' });
   res.json({ ok: true, status: e.status, path: e.path || null, error: e.error || null });
 });
-// Cola por usuario: una sola generación de imagen a la vez. Evita el 429 de
-// OpenAI cuando la pre-generación y el on-demand se pisan (o el usuario
-// toca "Otra imagen" varias veces seguidas).
-const GEN_QUEUE = new Map(); // uid -> Promise (la última encolada)
+// Concurrencia por usuario: hasta 3 generaciones de imagen a la vez
+// (2026-10-14, pedido de Valentino). Antes era una cola estricta de a 1 —
+// puesta para evitar el 429 de OpenAI cuando la pre-generación y el
+// on-demand se pisaban — pero hacía la semana demasiado lenta: 5 imágenes
+// en serie ≈ 5 minutos. Con 3 en paralelo la semana cae a ~2 min y el
+// tope sigue acotando la ráfaga; si igual aparece un 429, los reintentos
+// con backoff del pipeline lo absorben.
+const GEN_SLOTS = new Map(); // uid -> { running, waiters: [] }
+const GEN_MAX_PARALLEL = 3;
 function conceptShotGenerateQueued(args) {
   const uid = args.uid;
-  const prev = GEN_QUEUE.get(uid) || Promise.resolve();
-  const next = prev.catch(() => {}).then(() => conceptShotGenerateInner(args));
-  const tracked = next.catch(() => {});
-  GEN_QUEUE.set(uid, tracked);
-  tracked.finally(() => { if (GEN_QUEUE.get(uid) === tracked) GEN_QUEUE.delete(uid); });
-  return next;
+  let s = GEN_SLOTS.get(uid);
+  if (!s) { s = { running: 0, waiters: [] }; GEN_SLOTS.set(uid, s); }
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      s.running++;
+      conceptShotGenerateInner(args)
+        .then(resolve, reject)
+        .finally(() => {
+          s.running--;
+          const next = s.waiters.shift();
+          if (next) next();
+          else if (s.running <= 0) GEN_SLOTS.delete(uid);
+        });
+    };
+    if (s.running < GEN_MAX_PARALLEL) run();
+    else s.waiters.push(run);
+  });
 }
 async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
@@ -9473,7 +9489,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261014-v114';
+const BUILD_ID = '20261014-v115';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
