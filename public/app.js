@@ -4335,9 +4335,20 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       </div>
     </div>`;
   }).join('');
+  // 2026-10-14 (pedido de Valentino): contador visible de la semana — cuántos
+  // posteos van y cuántos quedan del plan, para que el cliente sepa cómo viene.
+  const qLeft = Math.max(0, qTotal - qUsed);
+  const qPct = qTotal > 0 ? Math.min(100, Math.round((qUsed / qTotal) * 100)) : 0;
+  const quotaLine = qTotal > 0 ? `<div class="hs-quota">
+      <div class="hs-quota-txt">${qUsed >= qTotal
+        ? `🎉 <b>¡Semana completa!</b> ${qUsed} de ${qTotal} posteos listos`
+        : `📊 <b>${qUsed} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
+      <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
+    </div>` : '';
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
+    ${quotaLine}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
       <div class="hs-week-list" id="hsWeekList">${cards}</div>
