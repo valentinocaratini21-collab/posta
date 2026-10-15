@@ -4695,6 +4695,17 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         pool = ideas.filter(id => !seen.has(String(id.titulo || '').trim().toLowerCase()));
       } catch (e) {}
     }
+    // Pool corto (2026-10-15): si las ideas no alcanzan para el déficit
+    // (+buffer), UNA regeneración y fusión sin repetir títulos. Sin esto,
+    // una respuesta corta de la IA dejaba la semana incompleta en silencio.
+    if (pool.length < deficit + 2) {
+      try {
+        const more = await generateIdeas(ideasInputFor(uid), key, { strict: true });
+        const have = new Set(pool.map(i => String(i.titulo || '').trim().toLowerCase()));
+        for (const m of more) { const t = String(m.titulo || '').trim().toLowerCase(); if (t && !have.has(t)) { pool.push(m); have.add(t); } }
+        console.log(`[pipeline:${tag}] usuario ${uid}: pool de ideas reforzado → ${pool.length}`);
+      } catch (e) { console.error(`[pipeline:${tag}] refuerzo de ideas falló:`, e.message); }
+    }
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
@@ -9847,7 +9858,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v126';
+const BUILD_ID = '20261015-v127';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
