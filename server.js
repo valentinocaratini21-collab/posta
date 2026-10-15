@@ -7875,6 +7875,15 @@ let STRESS_RUN = null;
 function stressFounderOk(req) {
   try { return !!(costs.isFounderEmail && costs.isFounderEmail(req.session.userId)); } catch (e) { return false; }
 }
+// Gate de la prueba: sesión de fundador (la página) O token admin (el
+// conector posta-admin, para que bamboo dispare y monitoree la corrida sin
+// pedirle pasos a Valentino). Mismo ADMIN_TOKEN que el panel de analytics.
+function stressGate(req, res, next) {
+  if (stressFounderOk(req)) return next();
+  const token = process.env.ADMIN_TOKEN || '';
+  if (token && req.query && req.query.token === token) return next();
+  return res.status(403).json({ ok: false, error: 'no autorizado' });
+}
 function stressDeleteUser(uid) {
   try {
     const posts = db.prepare('SELECT image_path, carousel_paths FROM posts WHERE user_id = ?').all(uid);
@@ -7959,19 +7968,16 @@ async function stressRunAll(n) {
   STRESS_RUN.finishedAt = new Date().toISOString();
   console.log('[stress] corrida terminada:', STRESS_RUN.accounts.map(a => `${a.business}:${a.status}:${a.created || 0}`).join(' · '));
 }
-app.post('/api/diag/stress', requireAuth, express.json(), async (req, res) => {
-  if (!stressFounderOk(req)) return res.status(403).json({ ok: false, error: 'no autorizado' });
+app.post('/api/diag/stress', stressGate, express.json(), async (req, res) => {
   if (STRESS_RUN && STRESS_RUN.running) return res.json({ ok: true, already: true, runId: STRESS_RUN.id });
   const n = Math.max(1, Math.min(parseInt((req.body && req.body.n) || 10, 10) || 10, STRESS_RUBROS.length));
   stressRunAll(n).catch(e => console.error('[stress]', e.message));
   res.json({ ok: true, started: true, n });
 });
-app.get('/api/diag/stress/results', requireAuth, (req, res) => {
-  if (!stressFounderOk(req)) return res.status(403).json({ ok: false, error: 'no autorizado' });
+app.get('/api/diag/stress/results', stressGate, (req, res) => {
   res.json({ ok: true, run: STRESS_RUN, diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })() });
 });
-app.post('/api/diag/stress/cleanup', requireAuth, express.json(), async (req, res) => {
-  if (!stressFounderOk(req)) return res.status(403).json({ ok: false, error: 'no autorizado' });
+app.post('/api/diag/stress/cleanup', stressGate, express.json(), async (req, res) => {
   if (STRESS_RUN && STRESS_RUN.running) return res.json({ ok: false, error: 'esperá a que termine la corrida' });
   let users = 0;
   try {
@@ -9821,7 +9827,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v124';
+const BUILD_ID = '20261015-v125';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
