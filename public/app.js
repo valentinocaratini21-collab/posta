@@ -4311,14 +4311,17 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   const cards = list.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
-    const media = !d.image_path ? '<span class="pcard-nothumb">📝</span>'
+    // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
+    const isPending = !d.image_path && d.status === 'draft';
+    const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
+      : !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
     const prop = proposedFor(d, i);
     const capFull = String(d.caption || d.source_topic || '');
     const acts = `<div class="pcard-actions hs-acts">
         <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
-        ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+        ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
         <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
       </div>`;
     return `<div class="igmock igmock-fixed" data-post-id="${esc(String(d.id))}">
@@ -4327,8 +4330,12 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
         ${d.status === 'scheduled'
           ? `<span class="pcard-scheduled">📮 Programado</span>`
-          : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`}</div>
-      <button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>
+          : isPending
+            ? `<span class="pcard-creating">⏳ Creando…</span>`
+            : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`}</div>
+      ${isPending
+        ? `<div class="igmock-media igmock-pending">${media}</div>`
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>`}
       <div class="igmock-foot">
         ${capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : ''}
         ${acts}
@@ -4395,9 +4402,9 @@ async function chatView() {
     const er = await api.post('/api/week/ensure', {}).catch(() => null);
     weekGenerating = !!(er && er.generating);
     weekNoDna = !!(er && er.reason === 'no_dna' && !nDrafts && !nSched);
-    if (er && er.generating) {
-      // Refrescar en 20s para mostrar las tarjetas cuando aparezcan.
-      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 20000);
+    if ((er && er.generating) || posts.some(p => !p.image_path && p.status === 'draft')) {
+      // Refrescar en 8s para mostrar las tarjetas cuando aparezcan.
+      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
   return `
@@ -4456,12 +4463,12 @@ async function bindChatView() {
   try { await maybePostyNudge(forced || undefined); } catch (e) {}
   // Home: si está "armando tu semana", refrescar solo hasta que aparezcan (máx 2 min).
   try {
-    if (document.querySelector('.hs-generating, .hs-completing') && (location.hash || '').startsWith('#/app/chat')) {
+    if (document.querySelector('.hs-generating, .hs-completing, .igmock-pending') && (location.hash || '').startsWith('#/app/chat')) {
       let n = 0;
       try { n = Number(sessionStorage.getItem('hs_gen_retry') || 0); } catch (e) {}
-      if (n < 8) {
+      if (n < 24) {
         try { sessionStorage.setItem('hs_gen_retry', String(n + 1)); } catch (e) {}
-        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 15000);
+        setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/chat')) render(); } catch (e) {} }, 5000);
       } else {
         try { sessionStorage.removeItem('hs_gen_retry'); } catch (e) {}
       }
@@ -8298,8 +8305,8 @@ async function scheduleView() {
     const er = await api.post('/api/week/ensure', {}).catch(() => null);
     weekGenerating = !!(er && er.generating);
     weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
-    if (er && er.generating) {
-      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 20000);
+    if ((er && er.generating) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
+      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/schedule')) render(); } catch (e) {} }, 8000);
     }
   } catch (e) {}
   let quota = null;

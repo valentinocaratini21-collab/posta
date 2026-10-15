@@ -3810,8 +3810,8 @@ app.post('/api/posts/rebuild-week', requireAuth, requireTrialValid, async (req, 
   const qwk = String(((req.body || {}).week_key) || '');
   if (/^\d{4}-\d{2}-\d{2}$/.test(qwk)) wk = qwk;
   const drafts = wk === curWk
-    ? db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND (week_key = '' OR week_key = ?) ORDER BY id ASC`).all(uid, curWk)
-    : db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND week_key = ? ORDER BY id ASC`).all(uid, wk);
+    ? db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' AND (week_key = '' OR week_key = ?) ORDER BY id ASC`).all(uid, curWk)
+    : db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' AND week_key = ? ORDER BY id ASC`).all(uid, wk);
   if (!drafts.length) return res.status(400).json({ error: 'No hay borradores para reconstruir' });
   try {
     vaciarYMarcar(uid, drafts, wk);
@@ -3852,7 +3852,7 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
     // Solo contar los VISIBLES (needs_review=0), que son los que ve el frontend.
     let n = 0;
     try {
-      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND COALESCE(needs_review,0)=0`).get(uid, wk).n || 0;
+      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND COALESCE(image_path,'') != '' AND COALESCE(needs_review,0)=0`).get(uid, wk).n || 0;
     } catch (e) { /* DB sin week_key: seguir */ }
     // Fallback: borradores sin week_key (pipeline viejo) también cuentan.
     if (!n) {
@@ -4086,7 +4086,7 @@ function acceptAllDrafts(uid, items, opts) {
   }
   const ph = ids.map(() => '?').join(',');
   const drafts = db.prepare(
-    `SELECT * FROM posts WHERE id IN (${ph}) AND user_id = ? AND status = 'draft'`
+    `SELECT * FROM posts WHERE id IN (${ph}) AND user_id = ? AND status = 'draft' AND COALESCE(image_path,'') != ''`
   ).all(...ids, uid);
   const pool = (opts && opts.includeNeedsReview)
     ? drafts
@@ -4637,7 +4637,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     try {
       // Solo feed (image/carousel): historias y reels tienen su propio cupo
       // y no cuentan para el objetivo de posteos de la semana.
-      existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel')`).get(uid, weekKey).n || 0;
+      existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND COALESCE(image_path,'') != ''`).get(uid, weekKey).n || 0;
     } catch (e) { /* DB sin week_key: existing=0, generación completa */ }
     if (existing >= ppw) return { ok: true, reason: 'already_complete', created: 0, existing };
     deficit = ppw - existing;
@@ -4726,6 +4726,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         claimed++;
         const idea = picks[i];
         let isCarousel = false;
+        let pendingId = null; // tarjeta inmediata (se crea más abajo, tras el texto)
         try {
           const ri = resolveExplicitIntent({ tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '' });
           if (!carouselClaimed && (ri.intent === 'tips' || ri.intent === 'educativo')) { carouselClaimed = true; isCarousel = true; }
@@ -4743,6 +4744,18 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             || makeHeadline(idea.titulo, 5);
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
+          // 2026-10-14: TARJETA INMEDIATA (pedido de Valentino) — el borrador
+          // nace AHORA con su texto y sin imagen: la tarjeta aparece en la
+          // app en segundos ("creando imagen…") y la imagen se completa en
+          // la MISMA fila cuando llega. Si la imagen falla tras los
+          // reintentos, la fila se borra: nunca persiste un posteo sin
+          // imagen real (la invariante de siempre).
+          if (!isCarousel) {
+            try {
+              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''));
+              pendingId = info && info.lastInsertRowid;
+            } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
+          }
           // INVARIANTE: todo borrador sale con imagen real de IA, nunca solo
           // palabras y nunca un bloque plano. Si la IA falla tras los
           // reintentos, la idea se salta (no se crea el borrador).
@@ -4792,11 +4805,25 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // (8:00) + ensure al abrir reintentan la semana.
           if (!imagePath) {
             console.error(`[pipeline:${tag}] "${idea.titulo || i}": sin imagen IA tras 3 intentos, se salta (no se crea borrador plano)`);
+            // Tarjeta inmediata: sin imagen no hay posteo — borrar la fila.
+            if (pendingId) { try { db.prepare('DELETE FROM posts WHERE id = ?').run(pendingId); } catch (e) {} }
             imgFailCount++;
             claimed--;
             continue;
           }
-          insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
+          if (pendingId) {
+            // Completar la tarjeta inmediata con la imagen y el estilo.
+            const upd = db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?, product_ref = ? WHERE id = ?`)
+              .run(imagePath, finalCode, finalReason, finalIntent, finalProductRef, pendingId);
+            if (!upd.changes) {
+              // El usuario borró la tarjeta mientras se creaba: no resucita.
+              try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(imagePath))); } catch (e) {}
+              claimed--;
+              continue;
+            }
+          } else {
+            insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
+          }
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
             const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 5);
@@ -4813,6 +4840,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           created++;
         } catch (e) {
           claimed--;
+          // Si la tarjeta inmediata quedó creada y algo explotó antes de
+          // completarla, borrarla: nunca una tarjeta fantasma sin imagen.
+          try { if (pendingId) db.prepare('DELETE FROM posts WHERE id = ? AND COALESCE(image_path, \'\') = \'\'').run(pendingId); } catch (e2) {}
           console.error(`[pipeline:${tag}] borrador "${idea.titulo || i}" falló:`, e.message);
         }
       }
@@ -5121,7 +5151,7 @@ function assignScheduleSlots(uid, drafts) {
 }
 
 function scheduleAllDrafts(uid) {
-  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [] };
   // FASE 0 — qualityGate: solo lo bueno sale solo. El borrador que no pasa
   // el gate queda en 'draft' con needs_review=1 (cola de revisión humana) y
@@ -5221,7 +5251,7 @@ function autoWeekEnabled(uid) {
 
 app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
   const uid = req.session.userId;
-  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 ORDER BY created_at ASC`).all(uid);
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) {
     let pending = 0;
     try { pending = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=1`).get(uid).n || 0; } catch (e) {}
@@ -7352,31 +7382,9 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // QA de visión en MODO AUDITORÍA (2026-10-04): valida pero NO regenera.
   // El 2026-10-02 se desactivó porque los reintentos encadenados causaban
   // timeouts (hasta 6 reintentos = 15 min por imagen). En auditoría no hay
-  // reintentos: se corre el QA una sola vez, se registra el resultado en
-  // qa_audit, y la imagen se entrega igual. Mora (11:00) lee esa tabla y
-  // convierte cada defecto en una regla del pipeline.
-  let qa = null;
-  let qaAuditId = null; // Mora 2026-10-08: id de la fila de auditoría, para linkearla con su imagen.
-  try {
-    qa = await qaImageB64(b64, {
-      headline: cleanHeadline,
-      paletteHex: hexes,
-      dnaFacts: qaFactsLine(dna),
-    }, key);
-  } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  if (qa) {
-    const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
-    try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
-    try {
-      db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
-      // Mora 2026-10-08: la fila guarda el path de la imagen para que la revisión
-      // visual sea posible (antes no había forma de mapear auditoría → imagen).
-      // Migración aditiva: la tabla vieja no tiene la columna y el ADD COLUMN la agrega.
-      try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
-      const auditInfo = db.prepare('INSERT INTO qa_audit (passed, result) VALUES (?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000));
-      qaAuditId = auditInfo && auditInfo.lastInsertRowid ? auditInfo.lastInsertRowid : null;
-    } catch (e) { console.error('[qa-audit] db:', e.message); }
-  }
+  // El QA visual corre DESACOPLADO, después de guardar la imagen (bloque
+  // tras saveImageB64): es solo auditoría — la imagen se entrega igual —
+  // y esperarlo sumaba ~20s a cada posteo sin cambiar el resultado.
   // Chequeo automático de marca (Style Lock): DESACTIVADO (2026-10-02, causa timeouts).
   /*
   // línea visual. Si algún flag es false → regenerar pidiendo explícitamente lo
@@ -7422,11 +7430,26 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   }
   */
   const imgName = saveImageB64(b64);
-  // Mora 2026-10-08: linkear la fila de auditoría con su imagen (revisión visual de Mora).
-  if (qaAuditId) {
-    try { db.prepare('UPDATE qa_audit SET image_path = ? WHERE id = ?').run(`/media/${imgName}`, qaAuditId); }
-    catch (e) { console.error('[qa-audit] image_path:', e.message); }
-  }
+  // QA de auditoría DESACOPLADO (2026-10-14): corre en segundo plano ya con
+  // el image_path (Mora lee qa_audit igual que siempre) y el posteo no lo
+  // espera. Antes este await sumaba ~20s a la aparición de cada tarjeta.
+  (async () => {
+    try {
+      const qa = await qaImageB64(b64, {
+        headline: cleanHeadline,
+        paletteHex: hexes,
+        dnaFacts: qaFactsLine(dna),
+      }, key);
+      if (!qa) return;
+      const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
+      try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
+      try {
+        db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
+        try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
+        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), `/media/${imgName}`);
+      } catch (e) { console.error('[qa-audit] db:', e.message); }
+    } catch (e) { console.error('[concept-shot] qa:', e.message); }
+  })();
   // Componer el titular con código (si hay): la imagen sale limpia de la IA
   // y el texto se renderiza perfecto — siempre entra, nunca se recorta.
   if (cleanHeadline) {
@@ -9490,7 +9513,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261014-v116';
+const BUILD_ID = '20261014-v117';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

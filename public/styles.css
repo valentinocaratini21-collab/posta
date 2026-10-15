@@ -1860,6 +1860,12 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-quota-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cel),#35b06f)}
 /* 2026-10-14: aviso mientras Posty completa una semana parcial */
 .hs-completing{margin:0 0 10px;padding:9px 12px;border-radius:10px;background:#EAF4FA;color:#14648F;font-size:13.5px;font-weight:600}
+/* 2026-10-14: tarjeta inmediata — la imagen se está creando */
+.igmock-pending{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/5;background:linear-gradient(160deg,#EAF4FA,#FDF3D8);cursor:default}
+.pcard-pending-art{display:flex;flex-direction:column;align-items:center;gap:8px;color:#14648F;font-size:15px}
+.ppa-spark{font-size:40px;animation:ppaPulse 1.2s ease-in-out infinite}
+@keyframes ppaPulse{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.18);opacity:1}}
+.pcard-creating{background:#FEF3C7;color:#92400E;border-radius:99px;padding:4px 10px;font-size:12.5px;font-weight:700;white-space:nowrap}
 .igmock-when-top{font-size:13px;font-weight:700;color:var(--cel);padding:8px 12px 0;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
 .pcard-accept-top{padding:6px 14px;font-size:13px;border-radius:999px}
 .pcard-scheduled{display:inline-block;padding:6px 14px;font-size:13px;font-weight:800;border-radius:999px;background:#E5F6EC;color:#1a7a3a}
