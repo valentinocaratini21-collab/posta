@@ -7852,6 +7852,171 @@ app.post('/api/diag/week-test', requireAuth, express.json(), async (req, res) =>
   }
 });
 
+// ── PRUEBA DE RUBROS (2026-10-15, pedido de Valentino) ──────────────────
+// Stress test founder-only: crea N cuentas sintéticas de rubros distintos
+// (ADN completo, como un cliente real de la prueba), les genera la semana
+// con el pipeline REAL y mide: tiempo a la primera tarjeta, tiempo total,
+// posteos creados vs plan y —con un juez IA— si cada posteo es del topic
+// del negocio. Resultados en vivo en /diag/stress. La limpieza borra
+// cuentas, posteos y archivos: producción no queda contaminada.
+const STRESS_RUBROS = [
+  { key: 'panaderia', business: 'La Espiga Dorada', category: 'Panadería y café', producto: 'Medialunas de manteca recién horneadas', desc: 'Panadería de barrio en Palermo: horneamos medialunas, panes de masa madre y facturas todos los días desde las 7. Café de especialidad para llevar o tomar en el local.', colors: '#B07D3C,#FFF3E0,#4E2E1B', cliente: 'Vecinos del barrio y oficinistas de la zona', diferencial: 'Horneamos en tandas chicas todo el día: siempre sale algo recién hecho' },
+  { key: 'peluqueria', business: 'Corte Fino Barbería', category: 'Peluquería y barbería', producto: 'Corte y arreglo de barba con navaja y toalla caliente', desc: 'Barbería clásica en Caballito: cortes modernos, arreglo de barba con toalla caliente y productos propios. Turnos por WhatsApp, sin esperas largas.', colors: '#1F2937,#D6C08A,#FFFFFF', cliente: 'Hombres de 20 a 45 años del barrio', diferencial: 'Turno garantizado: entrás y te atendemos a tu hora' },
+  { key: 'gym', business: 'Fuerza Total', category: 'Gimnasio y entrenamiento', producto: 'Planes de musculación y entrenamiento funcional', desc: 'Gimnasio en Belgrano con sala de musculación completa, clases de funcional y spinning todos los días. Primera clase gratis y planes sin permanencia.', colors: '#E11D48,#111827,#FACC15', cliente: 'Personas de 25 a 40 que quieren constancia sin aburrirse', diferencial: 'Rutina personalizada incluida en todos los planes' },
+  { key: 'veterinaria', business: 'Patitas', category: 'Veterinaria y pet shop', producto: 'Vacunación, consultas y peluquería canina', desc: 'Clínica veterinaria en Villa Urquiza: consultas, vacunas, cirugía menor y peluquería canina. Trato familiar y recordatorios de vacunas por WhatsApp.', colors: '#0E7490,#A5F3FC,#134E4A', cliente: 'Familias con perros y gatos del barrio', diferencial: 'La misma veterinaria atiende siempre a tu mascota' },
+  { key: 'indumentaria', business: 'Urbana Sur', category: 'Indumentaria urbana', producto: 'Buzos oversize y remeras gráficas de edición limitada', desc: 'Marca de ropa urbana hecha en Buenos Aires: buzos oversize, remeras gráficas y drops limitados cada mes. Envíos a todo el país y cambios sin costo.', colors: '#111111,#F5F5F5,#F97316', cliente: 'Jóvenes de 18 a 30 que siguen el streetwear', diferencial: 'Drops chicos: lo que comprás no lo tiene todo el mundo' },
+  { key: 'pizzeria', business: 'La Nonna', category: 'Pizzería', producto: 'Pizza a la piedra estilo napolitano con masa de fermentación lenta', desc: 'Pizzería familiar en San Telmo desde 1998: pizza a la piedra en horno a leña, masa de fermentación lenta de 48 horas y delivery propio en la zona.', colors: '#B91C1C,#FEF3C7,#14532D', cliente: 'Familias y grupos de amigos del barrio', diferencial: 'Masa de 48 horas: liviana, no caés pesado' },
+  { key: 'floreria', business: 'Flores del Jardín', category: 'Florería', producto: 'Ramos de flores de estación armados en el día', desc: 'Florería en Recoleta: ramos de estación, arreglos para eventos y suscripción semanal para oficinas y restaurantes. Delivery en el día en CABA.', colors: '#DB2777,#FCE7F3,#166534', cliente: 'Personas que regalan flores y empresas con oficinas', diferencial: 'Las flores llegan el mismo día, armadas esa mañana' },
+  { key: 'optica', business: 'Visión Clara', category: 'Óptica', producto: 'Anteojos recetados listos en 1 hora y lentes de sol originales', desc: 'Óptica en Microcentro: anteojos recetados listos en una hora, lentes de sol de marcas originales y examen visual sin turno previo.', colors: '#1D4ED8,#E0F2FE,#0F172A', cliente: 'Oficinistas y estudiantes que usan anteojos a diario', diferencial: 'Te vas con tus anteojos el mismo día' },
+  { key: 'taller', business: 'Motores RA', category: 'Taller mecánico', producto: 'Service completo, frenos y diagnóstico computarizado', desc: 'Taller mecánico en Warnes: service completo, frenos, distribución y diagnóstico computarizado de todas las marcas. Presupuesto sin cargo y garantía escrita.', colors: '#374151,#FBBF24,#111827', cliente: 'Dueños de autos de 5 a 15 años de antigüedad', diferencial: 'Te mostramos las piezas cambiadas y la garantía es escrita' },
+  { key: 'heladeria', business: 'Dulce Frío', category: 'Heladería artesanal', producto: 'Helado artesanal de dulce de leche y sabores de estación', desc: 'Heladería artesanal: dulce de leche propio, sabores de estación con fruta real y opciones sin TACC. Cucuruchos y vasitos hechos en el local.', colors: '#7C3AED,#FDE68A,#FFF7ED', cliente: 'Familias y parejas que pasean por el barrio', diferencial: 'Sabores de estación que rotan cada mes' },
+];
+let STRESS_RUN = null;
+function stressFounderOk(req) {
+  try { return !!(costs.isFounderEmail && costs.isFounderEmail(req.session.userId)); } catch (e) { return false; }
+}
+function stressDeleteUser(uid) {
+  try {
+    const posts = db.prepare('SELECT image_path, carousel_paths FROM posts WHERE user_id = ?').all(uid);
+    for (const p of posts) {
+      const files = [p.image_path];
+      try { (JSON.parse(p.carousel_paths || '[]') || []).forEach(x => files.push(x)); } catch (e) {}
+      for (const f of files) { if (f) { try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(String(f)))); } catch (e) {} } }
+    }
+  } catch (e) {}
+  for (const t of ['posts', 'profiles', 'settings', 'business_dna', 'content_learnings', 'events']) {
+    try { db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(uid); } catch (e) {}
+  }
+  try { db.prepare('DELETE FROM users WHERE id = ?').run(uid); } catch (e) {}
+}
+async function stressJudgePost(apiKey, def, post) {
+  try {
+    const prompt = `Sos un auditor de contenido de Instagram. Negocio: "${def.business}" (rubro: ${def.category}). Producto estrella: ${def.producto}. Descripción: ${def.desc}\nPosteo generado — tema: "${post.source_topic || ''}". Caption: "${String(post.caption || '').slice(0, 400)}"\n¿El posteo habla de ESTE negocio/rubro y le sirve a ESTE cliente? Respondé SOLO un JSON: {"on_topic": true o false, "score": 1 a 5, "why": "una línea corta"}`;
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 120, temperature: 0.2 }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!r.ok) return { on_topic: null, score: null, why: 'juez sin respuesta' };
+    const d = await r.json();
+    const txt = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return { on_topic: null, score: null, why: 'juez ilegible' };
+    const j = JSON.parse(m[0]);
+    return { on_topic: !!j.on_topic, score: j.score || null, why: String(j.why || '').slice(0, 140) };
+  } catch (e) { return { on_topic: null, score: null, why: 'juez error: ' + String(e.message || e).slice(0, 80) }; }
+}
+async function stressRunAccount(def, acc) {
+  const email = `stress+${def.key}@posty.test`;
+  const prev = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (prev) stressDeleteUser(prev.id);
+  const hash = bcrypt.hashSync(crypto.randomBytes(8).toString('hex'), 10);
+  const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, trial_ends_at) VALUES (?, ?, ?, ?)').run(email, hash, newReferralCode(), Date.now() + 3 * 86400000);
+  const uid = r.lastInsertRowid;
+  acc.userId = uid;
+  getProfile(uid); getSettings(uid);
+  db.prepare(`UPDATE profiles SET business_name = ?, category = ?, description = ?, updated_at = datetime('now') WHERE user_id = ?`).run(def.business, def.category, def.desc, uid);
+  try { db.prepare('UPDATE settings SET brand_colors = ? WHERE user_id = ?').run(def.colors, uid); } catch (e) {}
+  writeDna(uid, { producto_estrella: def.producto, cliente_ideal: def.cliente, diferencial: def.diferencial, tono: 'cercano, rioplatense' });
+  const wk = mondayKeyOf(tzToday(userTz(uid)));
+  acc.weekKey = wk;
+  const t0 = Date.now();
+  let tFirst = null;
+  const watcher = setInterval(() => {
+    try { const n = db.prepare("SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft'").get(uid).n; if (n > 0 && !tFirst) tFirst = Date.now(); } catch (e) {}
+  }, 1000);
+  let result = null;
+  try { result = await generateWeekDrafts(uid, { weekKey: wk, tag: 'stress' }); }
+  finally { clearInterval(watcher); }
+  acc.tFirstCardS = tFirst ? Math.round((tFirst - t0) / 1000) : null;
+  acc.tTotalS = Math.round((Date.now() - t0) / 1000);
+  acc.result = result;
+  const posts = db.prepare("SELECT id, image_path, caption, source_topic, media_type, carousel_paths FROM posts WHERE user_id = ? AND status = 'draft' ORDER BY id ASC").all(uid);
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  acc.posts = [];
+  for (const p of posts) {
+    const verdict = apiKey ? await stressJudgePost(apiKey, def, p) : { on_topic: null, score: null, why: 'sin key' };
+    acc.posts.push({ id: p.id, image: p.image_path || '', mediaType: p.media_type, topic: p.source_topic || '', caption: String(p.caption || '').slice(0, 220), verdict });
+  }
+  acc.created = posts.length;
+  return acc;
+}
+async function stressRunAll(n) {
+  const defs = STRESS_RUBROS.slice(0, n);
+  STRESS_RUN = { id: Date.now(), startedAt: new Date().toISOString(), running: true, accounts: defs.map(d => ({ key: d.key, rubro: d.category, business: d.business, status: 'pending', posts: [] })) };
+  const jobs = defs.map((d, i) => [d, STRESS_RUN.accounts[i]]);
+  async function lane() {
+    while (jobs.length) {
+      const [def, acc] = jobs.shift();
+      acc.status = 'running';
+      try { await stressRunAccount(def, acc); acc.status = acc.result && acc.result.ok ? 'done' : 'failed'; if (!acc.result || !acc.result.ok) acc.error = (acc.result && (acc.result.reason || 'error')) || 'error'; }
+      catch (e) { acc.status = 'failed'; acc.error = String(e.message || e).slice(0, 200); }
+    }
+  }
+  try { await Promise.all([lane(), lane(), lane()]); } catch (e) {}
+  STRESS_RUN.running = false;
+  STRESS_RUN.finishedAt = new Date().toISOString();
+  console.log('[stress] corrida terminada:', STRESS_RUN.accounts.map(a => `${a.business}:${a.status}:${a.created || 0}`).join(' · '));
+}
+app.post('/api/diag/stress', requireAuth, express.json(), async (req, res) => {
+  if (!stressFounderOk(req)) return res.status(403).json({ ok: false, error: 'no autorizado' });
+  if (STRESS_RUN && STRESS_RUN.running) return res.json({ ok: true, already: true, runId: STRESS_RUN.id });
+  const n = Math.max(1, Math.min(parseInt((req.body && req.body.n) || 10, 10) || 10, STRESS_RUBROS.length));
+  stressRunAll(n).catch(e => console.error('[stress]', e.message));
+  res.json({ ok: true, started: true, n });
+});
+app.get('/api/diag/stress/results', requireAuth, (req, res) => {
+  if (!stressFounderOk(req)) return res.status(403).json({ ok: false, error: 'no autorizado' });
+  res.json({ ok: true, run: STRESS_RUN, diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })() });
+});
+app.post('/api/diag/stress/cleanup', requireAuth, express.json(), async (req, res) => {
+  if (!stressFounderOk(req)) return res.status(403).json({ ok: false, error: 'no autorizado' });
+  if (STRESS_RUN && STRESS_RUN.running) return res.json({ ok: false, error: 'esperá a que termine la corrida' });
+  let users = 0;
+  try {
+    const rows = db.prepare("SELECT id FROM users WHERE email LIKE 'stress+%@posty.test'").all();
+    for (const u of rows) { stressDeleteUser(u.id); users++; }
+  } catch (e) {}
+  STRESS_RUN = null;
+  res.json({ ok: true, deletedUsers: users });
+});
+app.get('/diag/stress', requireAuth, (req, res) => {
+  if (!stressFounderOk(req)) return res.status(403).send('No autorizado');
+  res.type('html').send(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty — Prueba de rubros</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;background:#F6FAFD;color:#0A1E33;margin:0;padding:16px}h1{font-size:22px;margin:4px 0}.card{background:#fff;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 1px 4px rgba(10,30,51,.08)}button{background:#2793C8;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px;cursor:pointer}button.ghost{background:#fff;color:#2793C8;border:1px solid #2793C8}.chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}.ok{background:#DCFCE7;color:#166534}.bad{background:#FEE2E2;color:#991B1B}.run{background:#FEF9C3;color:#854D0E}.pend{background:#E5E7EB;color:#374151}img.thumb{width:86px;height:108px;object-fit:cover;border-radius:8px;margin:0 6px 6px 0}small{color:#64748B}.post{display:inline-block;vertical-align:top;width:100px;margin-right:4px}.post p{font-size:10px;margin:2px 0;line-height:1.3}</style></head>
+<body><h1>🧪 Prueba de rubros — Posty</h1><p><small>10 cuentas sintéticas, semana real del pipeline. Se mide: primera tarjeta, tiempo total, posteos vs plan (5) y topic por posteo.</small></p>
+<button id="go">▶ Probar 10 rubros</button> <button id="clean" class="ghost">🗑 Limpiar prueba</button> <span id="meta"></span>
+<div id="out"><p><small>Todavía no hay corrida. Tocá “Probar 10 rubros”.</small></p></div>
+<script>
+const out = document.getElementById('out'), meta = document.getElementById('meta');
+function chip(st){ return st==='done'?'<span class="chip ok">lista</span>':st==='failed'?'<span class="chip bad">falló</span>':st==='running'?'<span class="chip run">generando…</span>':'<span class="chip pend">en cola</span>'; }
+function render(run, disk){
+  meta.textContent = disk != null ? ' · disco libre: ' + disk + ' MB' : '';
+  if (!run) { out.innerHTML = '<p><small>Sin corrida activa.</small></p>'; return; }
+  let h = '<p><small>Corrida ' + (run.running ? 'EN CURSO' : 'terminada') + ' · inicio ' + run.startedAt + '</small></p>';
+  for (const a of run.accounts) {
+    const onT = (a.posts || []).filter(p => p.verdict && p.verdict.on_topic === true).length;
+    const offT = (a.posts || []).filter(p => p.verdict && p.verdict.on_topic === false).length;
+    h += '<div class="card"><b>' + a.business + '</b> <small>' + a.rubro + '</small> ' + chip(a.status);
+    if (a.status === 'failed') h += ' <small style="color:#991B1B">' + (a.error || '') + '</small>';
+    if (a.tTotalS != null) h += '<br><small>⏱ primera tarjeta: ' + (a.tFirstCardS != null ? a.tFirstCardS + 's' : '—') + ' · total: ' + Math.floor(a.tTotalS / 60) + 'm ' + (a.tTotalS % 60) + 's · posteos: ' + (a.created || 0) + '/5 · on-topic: ' + onT + (offT ? ' · ❌ ' + offT + ' fuera de topic' : '') + '</small>';
+    h += '<div style="margin-top:8px">';
+    for (const p of (a.posts || [])) {
+      const v = p.verdict || {};
+      h += '<div class="post">' + (p.image ? '<img class="thumb" src="' + p.image + '">' : '<div class="thumb" style="background:#eee"></div>') + '<p><b>' + (p.topic || '') + '</b></p><p>' + (v.on_topic === true ? '✅' : v.on_topic === false ? '❌' : '•') + ' ' + (v.why || '') + '</p></div>';
+    }
+    h += '</div></div>';
+  }
+  out.innerHTML = h;
+}
+async function poll(){ try { const r = await fetch('/api/diag/stress/results'); const d = await r.json(); render(d.run, d.diskFreeMB); if (d.run && d.run.running) setTimeout(poll, 8000); } catch (e) {} }
+document.getElementById('go').onclick = async () => { await fetch('/api/diag/stress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ n: 10 }) }); poll(); };
+document.getElementById('clean').onclick = async () => { const r = await fetch('/api/diag/stress/cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); const d = await r.json(); alert(d.ok ? 'Prueba limpiada: ' + d.deletedUsers + ' cuentas borradas' : (d.error || 'error')); poll(); };
+poll();
+</script></body></html>`);
+});
+
 app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -9656,7 +9821,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v123';
+const BUILD_ID = '20261015-v124';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
