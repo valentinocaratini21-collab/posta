@@ -4695,7 +4695,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         pool = ideas.filter(id => !seen.has(String(id.titulo || '').trim().toLowerCase()));
       } catch (e) {}
     }
-    const picks = existing > 0 ? pool.slice(0, deficit + 2) : pool.slice(0, ppw);
+    const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`);
@@ -4711,6 +4711,16 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     let created = 0;
     let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
     let firstImgError = ''; // 2026-10-14: primer error de imagen, para diagnóstico visible (last-result)
+    // Contabilidad por slot (2026-10-15): cada slot que no produce posteo
+    // registra su motivo. La prueba de rubros mostró semanas de 3/5 con
+    // ok:true y ninguna explicación: eso no vuelve a pasar — el resultado
+    // de la corrida lleva slotFails y el primer error de cada clase.
+    const slotFails = { img: 0, dup: 0, content: 0, other: 0 };
+    const slotErrs = {};
+    function noteSlotFail(cls, err) {
+      slotFails[cls] = (slotFails[cls] || 0) + 1;
+      if (err && !slotErrs[cls]) slotErrs[cls] = String((err && err.message) || err).slice(0, 200);
+    }
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
     // entre borradores (lo comparten los 5 workers del pool).
     const usedStyles = [];
@@ -4719,7 +4729,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // Cupo exacto de slots: en modo completar NUNCA crear más que el déficit
     // (claim sincrónico entre workers; se libera si ese slot falla, así otra
     // idea del buffer puede ocuparlo en la misma corrida).
-    const cap = existing > 0 ? deficit : picks.length;
+    const cap = deficit;
     let claimed = 0;
     // Guarda final anti-sobrecreación (2026-10-15, pedido de Valentino:
     // "si quedan 2, que se generen 2 nomás"): además del claim exacto de
@@ -4773,7 +4783,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           if (!caption) throw new Error('caption vacío');
           recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
-          if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); claimed--; continue; }
+          if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); noteSlotFail('dup', 'caption duplicado en 24h'); claimed--; continue; }
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
           const headline = makeHeadline(caption.split('\n')[0], 6)
             || makeHeadline(idea.titulo, 5);
@@ -4844,6 +4854,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             // Tarjeta inmediata: sin imagen no hay posteo — borrar la fila.
             if (pendingId) { try { db.prepare('DELETE FROM posts WHERE id = ?').run(pendingId); } catch (e) {} }
             imgFailCount++;
+            noteSlotFail('img', firstImgError);
             claimed--;
             continue;
           }
@@ -4886,6 +4897,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           created++;
         } catch (e) {
           claimed--;
+          noteSlotFail(/caption/i.test(String(e.message || '')) ? 'content' : 'other', e);
           // Si la tarjeta inmediata quedó creada y algo explotó antes de
           // completarla, borrarla: nunca una tarjeta fantasma sin imagen.
           try { if (pendingId) db.prepare('DELETE FROM posts WHERE id = ? AND COALESCE(image_path, \'\') = \'\'').run(pendingId); } catch (e2) {}
@@ -4926,7 +4938,15 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       console.error(`[pipeline:${tag}] usuario ${uid}: 0 posteos creados (${imgFailCount} fallos de imagen)`);
       return { ok: false, reason: failReason, created: 0, imgFailCount, error: firstImgError || undefined };
     }
-    return { ok: true, created, existing, deficit };
+    // 2026-10-15: semana PARCIAL (created < déficit) ya no es un éxito
+    // silencioso: queda registrada para el loop de reintentos (el sweep la
+    // completa) y el resultado lo dice con sus motivos por slot.
+    if (created < deficit) {
+      try { recordSweepFailure(uid, weekKey, 'partial_week'); } catch (e) {}
+      console.error(`[pipeline:${tag}] usuario ${uid}: semana parcial ${created}/${deficit} — slotFails: ${JSON.stringify(slotFails)} errs: ${JSON.stringify(slotErrs)}`);
+      return { ok: true, created, existing, deficit, incomplete: true, slotFails, slotErrs };
+    }
+    return { ok: true, created, existing, deficit, slotFails };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
   }
@@ -9827,7 +9847,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v125';
+const BUILD_ID = '20261015-v126';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
