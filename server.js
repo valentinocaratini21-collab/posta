@@ -7983,19 +7983,37 @@ async function stressRunAccount(def, acc) {
   acc.tFirstCardS = tFirst ? Math.round((tFirst - t0) / 1000) : null;
   acc.tTotalS = Math.round((Date.now() - t0) / 1000);
   acc.result = result;
-  const posts = db.prepare("SELECT id, image_path, caption, source_topic, media_type, carousel_paths FROM posts WHERE user_id = ? AND status = 'draft' ORDER BY id ASC").all(uid);
+  const posts = db.prepare("SELECT id, image_path, caption, hashtags, source_topic, media_type, carousel_paths FROM posts WHERE user_id = ? AND status = 'draft' ORDER BY id ASC").all(uid);
   const apiKey = process.env.OPENAI_API_KEY || '';
   acc.posts = [];
   for (const p of posts) {
     const verdict = apiKey ? await stressJudgePost(apiKey, def, p) : { on_topic: null, score: null, why: 'sin key' };
-    acc.posts.push({ id: p.id, image: p.image_path || '', mediaType: p.media_type, topic: p.source_topic || '', caption: String(p.caption || '').slice(0, 220), verdict });
+    let images = p.image_path ? [p.image_path] : [];
+    try { const cp = JSON.parse(p.carousel_paths || '[]'); if (Array.isArray(cp) && cp.length) images = cp; } catch (e) {}
+    acc.posts.push({ id: p.id, image: p.image_path || '', images, mediaType: p.media_type, topic: p.source_topic || '', caption: String(p.caption || ''), hashtags: String(p.hashtags || ''), verdict });
   }
   acc.created = posts.length;
   return acc;
 }
+// Persistencia de la corrida (2026-10-15): el snapshot vive en la DB
+// (fila única) para que la página sobreviva a reinicios/deploys.
+function stressSaveRun() {
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS stress_runs (id INTEGER PRIMARY KEY CHECK (id = 1), run_json TEXT, updated_at TEXT)");
+    db.prepare("INSERT INTO stress_runs (id, run_json, updated_at) VALUES (1, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET run_json = excluded.run_json, updated_at = excluded.updated_at").run(JSON.stringify(STRESS_RUN));
+  } catch (e) {}
+}
+function stressLoadRun() {
+  try {
+    const r = db.prepare('SELECT run_json FROM stress_runs WHERE id = 1').get();
+    if (r && r.run_json) { const run = JSON.parse(r.run_json); if (run && run.running) run.running = false; return run; }
+  } catch (e) {}
+  return null;
+}
 async function stressRunAll(n) {
   const defs = STRESS_RUBROS.slice(0, n);
   STRESS_RUN = { id: Date.now(), startedAt: new Date().toISOString(), running: true, accounts: defs.map(d => ({ key: d.key, rubro: d.category, business: d.business, status: 'pending', posts: [] })) };
+  stressSaveRun();
   const jobs = defs.map((d, i) => [d, STRESS_RUN.accounts[i]]);
   async function lane() {
     while (jobs.length) {
@@ -8003,11 +8021,13 @@ async function stressRunAll(n) {
       acc.status = 'running';
       try { await stressRunAccount(def, acc); acc.status = acc.result && acc.result.ok ? 'done' : 'failed'; if (!acc.result || !acc.result.ok) acc.error = (acc.result && (acc.result.reason || 'error')) || 'error'; }
       catch (e) { acc.status = 'failed'; acc.error = String(e.message || e).slice(0, 200); }
+      stressSaveRun();
     }
   }
   try { await Promise.all([lane(), lane(), lane()]); } catch (e) {}
   STRESS_RUN.running = false;
   STRESS_RUN.finishedAt = new Date().toISOString();
+  stressSaveRun();
   console.log('[stress] corrida terminada:', STRESS_RUN.accounts.map(a => `${a.business}:${a.status}:${a.created || 0}`).join(' · '));
 }
 app.post('/api/diag/stress', stressGate, express.json(), async (req, res) => {
@@ -8017,7 +8037,7 @@ app.post('/api/diag/stress', stressGate, express.json(), async (req, res) => {
   res.json({ ok: true, started: true, n });
 });
 app.get('/api/diag/stress/results', stressGate, (req, res) => {
-  res.json({ ok: true, run: STRESS_RUN, diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })() });
+  res.json({ ok: true, run: STRESS_RUN || stressLoadRun(), diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })() });
 });
 app.post('/api/diag/stress/cleanup', stressGate, express.json(), async (req, res) => {
   if (STRESS_RUN && STRESS_RUN.running) return res.json({ ok: false, error: 'esperá a que termine la corrida' });
@@ -8027,35 +8047,65 @@ app.post('/api/diag/stress/cleanup', stressGate, express.json(), async (req, res
     for (const u of rows) { stressDeleteUser(u.id); users++; }
   } catch (e) {}
   STRESS_RUN = null;
+  try { db.prepare('DELETE FROM stress_runs WHERE id = 1').run(); } catch (e) {}
   res.json({ ok: true, deletedUsers: users });
 });
 app.get('/diag/stress', requireAuth, (req, res) => {
   if (!stressFounderOk(req)) return res.status(403).send('No autorizado');
   res.type('html').send(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty — Prueba de rubros</title>
-<style>body{font-family:-apple-system,system-ui,sans-serif;background:#F6FAFD;color:#0A1E33;margin:0;padding:16px}h1{font-size:22px;margin:4px 0}.card{background:#fff;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 1px 4px rgba(10,30,51,.08)}button{background:#2793C8;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px;cursor:pointer}button.ghost{background:#fff;color:#2793C8;border:1px solid #2793C8}.chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}.ok{background:#DCFCE7;color:#166534}.bad{background:#FEE2E2;color:#991B1B}.run{background:#FEF9C3;color:#854D0E}.pend{background:#E5E7EB;color:#374151}img.thumb{width:86px;height:108px;object-fit:cover;border-radius:8px;margin:0 6px 6px 0}small{color:#64748B}.post{display:inline-block;vertical-align:top;width:100px;margin-right:4px}.post p{font-size:10px;margin:2px 0;line-height:1.3}</style></head>
+<style>body{font-family:-apple-system,system-ui,sans-serif;background:#F6FAFD;color:#0A1E33;margin:0;padding:16px}h1{font-size:22px;margin:4px 0}.card{background:#fff;border-radius:14px;padding:14px;margin:12px 0;box-shadow:0 1px 4px rgba(10,30,51,.08)}button{background:#2793C8;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px;cursor:pointer}button.ghost{background:#fff;color:#2793C8;border:1px solid #2793C8}.chip{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600}.ok{background:#DCFCE7;color:#166534}.bad{background:#FEE2E2;color:#991B1B}.run{background:#FEF9C3;color:#854D0E}.pend{background:#E5E7EB;color:#374151}img.thumb{width:86px;height:108px;object-fit:cover;border-radius:8px;margin:0 6px 6px 0}small{color:#64748B}.post{display:inline-block;vertical-align:top;width:100px;margin-right:4px;cursor:pointer}.post p{font-size:10px;margin:2px 0;line-height:1.3}.post:hover img.thumb{outline:2px solid #2793C8}
+#modal{position:fixed;inset:0;background:rgba(10,30,51,.72);display:none;z-index:50;overflow:auto;padding:18px 12px}
+#modal .box{background:#fff;border-radius:16px;max-width:520px;margin:0 auto;padding:16px}
+#modal img.big{width:100%;max-height:62vh;object-fit:contain;border-radius:10px;background:#F1F5F9}
+#modal .cap{white-space:pre-wrap;font-size:14px;line-height:1.55;margin-top:10px}
+#modal .tags{color:#2793C8;font-size:13px;margin-top:6px;word-break:break-word}
+#modal .thumbs img{width:52px;height:64px;object-fit:cover;border-radius:6px;margin:6px 4px 0 0;cursor:pointer}
+#mclose{float:right;background:#F1F5F9;color:#0A1E33;border-radius:999px;padding:6px 12px}
+</style></head>
 <body><h1>🧪 Prueba de rubros — Posty</h1><p><small>10 cuentas sintéticas, semana real del pipeline. Se mide: primera tarjeta, tiempo total, posteos vs plan (5) y topic por posteo.</small></p>
 <button id="go">▶ Probar 10 rubros</button> <button id="clean" class="ghost">🗑 Limpiar prueba</button> <span id="meta"></span>
 <div id="out"><p><small>Todavía no hay corrida. Tocá “Probar 10 rubros”.</small></p></div>
+<div id="modal"><div class="box"><button id="mclose">✕ Cerrar</button><div id="mcontent"></div></div></div>
 <script>
 const out = document.getElementById('out'), meta = document.getElementById('meta');
+let CUR = null;
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function chip(st){ return st==='done'?'<span class="chip ok">lista</span>':st==='failed'?'<span class="chip bad">falló</span>':st==='running'?'<span class="chip run">generando…</span>':'<span class="chip pend">en cola</span>'; }
+function openPost(ai, pi){
+  const a = CUR.accounts[ai], p = a.posts[pi]; if (!p) return;
+  const v = p.verdict || {};
+  const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  let h = '<h3 style="margin:2px 0">' + esc(a.business) + ' <small>' + esc(a.rubro) + '</small></h3>';
+  h += '<p style="margin:4px 0"><b>' + esc(p.topic || '') + '</b> ' + (p.mediaType === 'carousel' ? '<span class="chip pend">carousel</span>' : '') + '</p>';
+  if (imgs.length) { h += '<img class="big" id="mbig" src="' + esc(imgs[0]) + '">'; if (imgs.length > 1) { h += '<div class="thumbs">' + imgs.map(u => '<img src="' + esc(u) + '" onclick="document.getElementById(\'mbig\').src=this.src">').join('') + '</div>'; } }
+  h += '<div class="cap">' + esc(p.caption || '') + '</div>';
+  if (p.hashtags) h += '<div class="tags">' + esc(p.hashtags) + '</div>';
+  h += '<p style="margin-top:10px">' + (v.on_topic === true ? '<span class="chip ok">✅ on-topic' + (v.score ? ' · ' + v.score + '/5' : '') + '</span>' : v.on_topic === false ? '<span class="chip bad">❌ fuera de topic</span>' : '') + ' <small>' + esc(v.why || '') + '</small></p>';
+  document.getElementById('mcontent').innerHTML = h;
+  document.getElementById('modal').style.display = 'block';
+}
+function closeModal(){ document.getElementById('modal').style.display = 'none'; }
+document.getElementById('mclose').onclick = closeModal;
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 function render(run, disk){
+  CUR = run;
   meta.textContent = disk != null ? ' · disco libre: ' + disk + ' MB' : '';
   if (!run) { out.innerHTML = '<p><small>Sin corrida activa.</small></p>'; return; }
-  let h = '<p><small>Corrida ' + (run.running ? 'EN CURSO' : 'terminada') + ' · inicio ' + run.startedAt + '</small></p>';
-  for (const a of run.accounts) {
+  let h = '<p><small>Corrida ' + (run.running ? 'EN CURSO' : 'terminada') + ' · inicio ' + run.startedAt + ' · tocá un posteo para verlo en grande</small></p>';
+  run.accounts.forEach((a, ai) => {
     const onT = (a.posts || []).filter(p => p.verdict && p.verdict.on_topic === true).length;
     const offT = (a.posts || []).filter(p => p.verdict && p.verdict.on_topic === false).length;
     h += '<div class="card"><b>' + a.business + '</b> <small>' + a.rubro + '</small> ' + chip(a.status);
     if (a.status === 'failed') h += ' <small style="color:#991B1B">' + (a.error || '') + '</small>';
     if (a.tTotalS != null) h += '<br><small>⏱ primera tarjeta: ' + (a.tFirstCardS != null ? a.tFirstCardS + 's' : '—') + ' · total: ' + Math.floor(a.tTotalS / 60) + 'm ' + (a.tTotalS % 60) + 's · posteos: ' + (a.created || 0) + '/5 · on-topic: ' + onT + (offT ? ' · ❌ ' + offT + ' fuera de topic' : '') + '</small>';
     h += '<div style="margin-top:8px">';
-    for (const p of (a.posts || [])) {
+    (a.posts || []).forEach((p, pi) => {
       const v = p.verdict || {};
-      h += '<div class="post">' + (p.image ? '<img class="thumb" src="' + p.image + '">' : '<div class="thumb" style="background:#eee"></div>') + '<p><b>' + (p.topic || '') + '</b></p><p>' + (v.on_topic === true ? '✅' : v.on_topic === false ? '❌' : '•') + ' ' + (v.why || '') + '</p></div>';
-    }
+      h += '<div class="post" onclick="openPost(' + ai + ',' + pi + ')">' + (p.image ? '<img class="thumb" src="' + p.image + '">' : '<div class="thumb" style="background:#eee"></div>') + '<p><b>' + esc(p.topic || '') + '</b></p><p>' + (v.on_topic === true ? '✅' : v.on_topic === false ? '❌' : '•') + ' ' + esc(v.why || '') + '</p></div>';
+    });
     h += '</div></div>';
-  }
+  });
   out.innerHTML = h;
 }
 async function poll(){ try { const r = await fetch('/api/diag/stress/results'); const d = await r.json(); render(d.run, d.diskFreeMB); if (d.run && d.run.running) setTimeout(poll, 8000); } catch (e) {} }
@@ -9869,7 +9919,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v128';
+const BUILD_ID = '20261015-v129';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
