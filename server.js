@@ -3852,7 +3852,9 @@ app.post('/api/week/ensure', requireAuth, requireTrialValid, async (req, res) =>
     // Solo contar los VISIBLES (needs_review=0), que son los que ve el frontend.
     let n = 0;
     try {
-      n = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND COALESCE(image_path,'') != '' AND COALESCE(needs_review,0)=0`).get(uid, wk).n || 0;
+      // Ocupación unificada (mismo criterio que el pipeline y el cupo):
+      // incluye publicados y programados por fecha, no solo week_key.
+      n = weekOccupancyRows(uid, wk).filter(p => !p.needs_review).length;
     } catch (e) { /* DB sin week_key: seguir */ }
     // Fallback: borradores sin week_key (pipeline viejo) también cuentan.
     if (!n) {
@@ -4616,6 +4618,21 @@ function primaryBrandHex(uid) {
 }
 // Genera los borradores de una semana (week_key = lunes 'YYYY-MM-DD').
 // Idempotente por (usuario, semana): si ya existen, no hace nada.
+// Ocupación REAL de una semana (2026-10-15): posteos feed con imagen que ya
+// ocupan la semana, por etiqueta (week_key) O por fecha de publicación
+// dentro del rango lun–dom, INCLUYENDO los ya publicados. Es el mismo
+// criterio que el cupo (que cuenta por scheduled_at): antes el pipeline
+// contaba solo week_key + draft/scheduled, así una semana con 2 publicados
+// y 1 programado (creado otra semana) le figuraba VACÍA y generaba los 5
+// de más — lo vio Valentino ("quedaban 2 e hizo 5"). Un solo helper para
+// que el armador, el chequeo de completitud y el cupo nunca se contradigan.
+function weekOccupancyRows(uid, weekKey) {
+  try {
+    return db.prepare(`SELECT * FROM posts WHERE user_id = ? AND media_type IN ('image','carousel')
+      AND COALESCE(image_path,'') != '' AND status IN ('draft','scheduled','published')
+      AND (week_key = ? OR (scheduled_at IS NOT NULL AND date(scheduled_at) >= date(?) AND date(scheduled_at) < date(?, '+7 days')))`).all(uid, weekKey, weekKey, weekKey);
+  } catch (e) { return []; }
+}
 async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // Kill-switch diario también para el pipeline en segundo plano: se aborta en
   // silencio (el usuario lo reintenta mañana; nada se rompe).
@@ -4636,9 +4653,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     } catch (e) {}
     try {
       // Solo feed (image/carousel): historias y reels tienen su propio cupo
-      // y no cuentan para el objetivo de posteos de la semana.
-      existing = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND status IN ('draft','scheduled') AND media_type IN ('image','carousel') AND COALESCE(image_path,'') != ''`).get(uid, weekKey).n || 0;
-    } catch (e) { /* DB sin week_key: existing=0, generación completa */ }
+      // y no cuentan para el objetivo de posteos de la semana. Criterio de
+      // ocupación unificado (weekOccupancyRows): incluye publicados y los
+      // programados para esta semana aunque se hayan creado en otra.
+      existing = weekOccupancyRows(uid, weekKey).length;
+    } catch (e) { /* sin datos: existing=0, generación completa */ }
     if (existing >= ppw) return { ok: true, reason: 'already_complete', created: 0, existing };
     deficit = ppw - existing;
     if (existing === 0) {
@@ -4671,7 +4690,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     let pool = ideas;
     if (existing > 0) {
       try {
-        const rows = db.prepare(`SELECT source_topic FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled'`).all(uid, weekKey);
+        const rows = weekOccupancyRows(uid, weekKey);
         const seen = new Set(rows.map(r => String(r.source_topic || '').trim().toLowerCase()).filter(Boolean));
         pool = ideas.filter(id => !seen.has(String(id.titulo || '').trim().toLowerCase()));
       } catch (e) {}
@@ -9612,7 +9631,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v121';
+const BUILD_ID = '20261015-v122';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
