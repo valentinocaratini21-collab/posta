@@ -4752,8 +4752,16 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // ocupación+created es siempre consistente: crear más que el déficit
     // es imposible.
     let weekFullStop = false;
+    // IDs de los posteos creados por ESTA corrida: la guarda los excluye
+    // de la ocupación en vivo (si no, cada posteo cuenta doble —ocupación
+    // + created— y la semana se frenaba en 3 de 5; bug v123 detectado por
+    // la prueba de rubros del 2026-10-15).
+    const runCreatedIds = new Set();
     function weekFullNow() {
-      try { return weekOccupancyRows(uid, weekKey).length + created >= ppw; } catch (e) { return false; }
+      try {
+        const external = weekOccupancyRows(uid, weekKey).filter(r => !runCreatedIds.has(r.id)).length;
+        return external + created >= ppw;
+      } catch (e) { return false; }
     }
     // Carousel automático: como máximo 1 por semana, para la idea más
     // carousel-friendly (tips/educativo). El claim es sincrónico: sin race
@@ -4810,6 +4818,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             try {
               const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''));
               pendingId = info && info.lastInsertRowid;
+              if (pendingId) runCreatedIds.add(pendingId);
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
           }
           // INVARIANTE: todo borrador sale con imagen real de IA, nunca solo
@@ -4889,13 +4898,14 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               continue;
             }
           } else {
-            insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
+            if (insInfo && insInfo.lastInsertRowid) runCreatedIds.add(insInfo.lastInsertRowid);
           }
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
             if (weekFullNow()) { console.log(`[pipeline:${tag}] semana completa al guardar — carousel descartado`); weekFullStop = true; return; }
             const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 5);
-            db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
+            const carInfo = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
               carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review,
               style_code, style_reason, intent, product_ref, hook_id)
               VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?)`)
@@ -4904,6 +4914,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                 weekKey, (needRev || carouselGen.needsReview) ? 1 : 0,
                 'carousel', `carousel automático (${carouselGen.slidePaths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId);
+            if (carInfo && carInfo.lastInsertRowid) runCreatedIds.add(carInfo.lastInsertRowid);
           }
           created++;
         } catch (e) {
@@ -9858,7 +9869,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v127';
+const BUILD_ID = '20261015-v128';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
