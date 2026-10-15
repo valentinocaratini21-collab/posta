@@ -4721,6 +4721,19 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // idea del buffer puede ocuparlo en la misma corrida).
     const cap = existing > 0 ? deficit : picks.length;
     let claimed = 0;
+    // Guarda final anti-sobrecreación (2026-10-15, pedido de Valentino:
+    // "si quedan 2, que se generen 2 nomás"): además del claim exacto de
+    // slots, antes de guardar cada posteo se RECUENTA la ocupación real de
+    // la semana (weekOccupancyRows + los creados por esta corrida). Si el
+    // cupo se completó mientras tanto (el usuario aceptó/programó a mano u
+    // otra corrida), el slot no se guarda y los workers se detienen. Como
+    // entre el insert y created++ no hay awaits (JS single-thread), la suma
+    // ocupación+created es siempre consistente: crear más que el déficit
+    // es imposible.
+    let weekFullStop = false;
+    function weekFullNow() {
+      try { return weekOccupancyRows(uid, weekKey).length + created >= ppw; } catch (e) { return false; }
+    }
     // Carousel automático: como máximo 1 por semana, para la idea más
     // carousel-friendly (tips/educativo). El claim es sincrónico: sin race
     // entre los 3 workers.
@@ -4740,9 +4753,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     async function worker() {
       while (true) {
+        if (weekFullStop) return;
         const i = nextIdx++;
         if (i >= picks.length) return;
         if (claimed >= cap) return;
+        if (weekFullNow()) { weekFullStop = true; return; }
         claimed++;
         const idea = picks[i];
         let isCarousel = false;
@@ -4832,6 +4847,15 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             claimed--;
             continue;
           }
+          if (weekFullNow()) {
+            // La semana se completó mientras se creaba la imagen (otro
+            // actor): no guardar este posteo ni su imagen.
+            console.log(`[pipeline:${tag}] semana completa al guardar — slot descartado`);
+            if (pendingId) { try { db.prepare('DELETE FROM posts WHERE id = ?').run(pendingId); } catch (e) {} }
+            try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(imagePath))); } catch (e) {}
+            weekFullStop = true;
+            return;
+          }
           if (pendingId) {
             // Completar la tarjeta inmediata con la imagen y el estilo.
             const upd = db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?, product_ref = ? WHERE id = ?`)
@@ -4847,6 +4871,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           }
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
+            if (weekFullNow()) { console.log(`[pipeline:${tag}] semana completa al guardar — carousel descartado`); weekFullStop = true; return; }
             const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 5);
             db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
               carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review,
@@ -9631,7 +9656,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v122';
+const BUILD_ID = '20261015-v123';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
