@@ -6782,11 +6782,77 @@ function parseBrandHexes(brandColorsRaw) {
   return [];
 }
 // Guarda un b64 de imagen en MEDIA_DIR y devuelve el nombre del archivo.
+// Ante ENOSPC (disco lleno — causa raíz del img_fail del 2026-10-15: el
+// volumen se llenó de media huérfana y TODA escritura de imagen explotaba),
+// corre la limpieza de emergencia y reintenta una vez: el producto se
+// auto-repara sin esperar un deploy.
 function saveImageB64(b64) {
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
-  fs.writeFileSync(path.join(MEDIA_DIR, name), Buffer.from(b64, 'base64'));
+  const full = path.join(MEDIA_DIR, name);
+  try {
+    fs.writeFileSync(full, Buffer.from(b64, 'base64'));
+  } catch (e) {
+    if (e && e.code === 'ENOSPC') {
+      console.error('[media] ENOSPC al guardar — limpieza de emergencia y reintento');
+      mediaJanitor(true);
+      fs.writeFileSync(full, Buffer.from(b64, 'base64'));
+    } else throw e;
+  }
   return name;
 }
+// ── Limpieza de media (2026-10-15) ─────────────────────────────────────
+// NUNCA hubo retención: cada imagen/reel generado quedaba en el volumen
+// para siempre y el disco se llenó (ENOSPC → img_fail 5/5). El janitor
+// borra SOLO archivos que ningún registro de la DB referencia (posteos,
+// fotos de perfil, logos, settings) — jamás toca un archivo referenciado.
+// Normal: huérfanos de +48 h. Agresivo (disco crítico o ENOSPC): cualquier
+// edad. Corre al boot y cada hora.
+function referencedMediaNames() {
+  const names = new Set();
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
+  for (const t of tables) {
+    const cols = db.prepare(`PRAGMA table_info("${t}")`).all().map(c => c.name);
+    for (const col of cols) {
+      let rows = [];
+      try { rows = db.prepare(`SELECT "${col}" AS v FROM "${t}" WHERE typeof("${col}") = 'text'`).all(); } catch (e) { continue; }
+      for (const r of rows) {
+        for (const m of String(r.v || '').matchAll(/[A-Za-z0-9_.-]+\.(?:png|jpe?g|webp|gif|mp4|mov)/gi)) names.add(m[0]);
+      }
+    }
+  }
+  return names;
+}
+function diskFreeBytes() {
+  try { const s = fs.statfsSync(DATA_DIR); return s.bfree * s.bsize; } catch (e) { return null; }
+}
+function mediaJanitor(aggressive = false) {
+  try {
+    const refs = referencedMediaNames();
+    const files = fs.readdirSync(MEDIA_DIR);
+    const now = Date.now();
+    const minAge = aggressive ? 0 : 48 * 3600 * 1000;
+    let deleted = 0, freed = 0, kept = 0;
+    for (const f of files) {
+      if (refs.has(f)) { kept++; continue; }
+      const full = path.join(MEDIA_DIR, f);
+      let st; try { st = fs.statSync(full); } catch (e) { continue; }
+      if (!st.isFile()) continue;
+      if (now - st.mtimeMs < minAge) { kept++; continue; }
+      try { fs.unlinkSync(full); deleted++; freed += st.size; } catch (e) {}
+    }
+    const free = diskFreeBytes();
+    console.log(`[janitor] huérfanos borrados: ${deleted} (${Math.round(freed / 1048576)} MB), conservados: ${kept}, disco libre: ${free != null ? Math.round(free / 1048576) + ' MB' : '?'}`);
+    return { deleted, freed, free };
+  } catch (e) { console.error('[janitor]', e.message); return { deleted: 0, freed: 0, free: null }; }
+}
+setTimeout(() => { // boot: si el disco está crítico, limpieza agresiva inmediata
+  const free = diskFreeBytes();
+  mediaJanitor(free != null && free < 300 * 1048576);
+}, 15000).unref();
+setInterval(() => {
+  const free = diskFreeBytes();
+  mediaJanitor(free != null && free < 150 * 1048576);
+}, 3600000).unref();
 // Familia visual según tipo de contenido: qué escena pide cada concepto.
 const CONCEPT_FAMILIES = {
   promo: 'oferta irresistible, producto héroe en escena',
@@ -9546,7 +9612,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v120';
+const BUILD_ID = '20261015-v121';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -9562,6 +9628,8 @@ app.get('/api/qa-audit', (req, res) => {
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
   openai: Boolean(process.env.OPENAI_API_KEY),
+  // Disco libre del volumen de datos (MB): vigila la causa del ENOSPC 2026-10-15.
+  diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })(),
 }));
 // Diagnóstico admin: últimos errores de generación (requiere login).
 app.get('/api/diag', requireAuth, (req, res) => res.json({ ok: true, build: BUILD_ID, errors: LAST_ERRORS }));
