@@ -4692,7 +4692,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     let created = 0;
     let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
-    // entre borradores (lo comparten los 3 workers del pool).
+    // entre borradores (lo comparten los 5 workers del pool).
     const usedStyles = [];
     // Pool de 3 en paralelo (igual que el autopilot del browser).
     let nextIdx = 0;
@@ -4817,7 +4817,8 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         }
       }
     }
-    await Promise.all([worker(), worker(), worker()]);
+    // 5 workers: la semana entera (5 posteos) sale en una sola oleada.
+    await Promise.all([worker(), worker(), worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
     // Si la semana quedó incompleta por fallos de imagen IA, alimentar el
     // loop de reintentos (v72): el cron cada 3h la regenera con reason 'img_fail'.
@@ -7161,15 +7162,15 @@ app.post('/api/ideas/pregen-image', requireAuth, express.json(), (req, res) => {
   if (!e) return res.json({ ok: true, status: 'missing' });
   res.json({ ok: true, status: e.status, path: e.path || null, error: e.error || null });
 });
-// Concurrencia por usuario: hasta 3 generaciones de imagen a la vez
+// Concurrencia por usuario: hasta 5 generaciones de imagen a la vez
 // (2026-10-14, pedido de Valentino). Antes era una cola estricta de a 1 —
 // puesta para evitar el 429 de OpenAI cuando la pre-generación y el
 // on-demand se pisaban — pero hacía la semana demasiado lenta: 5 imágenes
-// en serie ≈ 5 minutos. Con 3 en paralelo la semana cae a ~2 min y el
-// tope sigue acotando la ráfaga; si igual aparece un 429, los reintentos
-// con backoff del pipeline lo absorben.
+// en serie ≈ 5 minutos. Se probó con 3 y siguió lento para su vara: con 5
+// la semana completa sale en una sola oleada, en lo que tarda UNA imagen.
+// Si aparece un 429, los reintentos con backoff del pipeline lo absorben.
 const GEN_SLOTS = new Map(); // uid -> { running, waiters: [] }
-const GEN_MAX_PARALLEL = 3;
+const GEN_MAX_PARALLEL = 5;
 function conceptShotGenerateQueued(args) {
   const uid = args.uid;
   let s = GEN_SLOTS.get(uid);
@@ -9489,7 +9490,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261014-v115';
+const BUILD_ID = '20261014-v116';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
