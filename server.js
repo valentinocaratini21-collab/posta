@@ -4691,6 +4691,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     const needRev = (!isFounder && autopilot.trustLevel(db, uid) === 0) ? 1 : 0;
     let created = 0;
     let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
+    let firstImgError = ''; // 2026-10-14: primer error de imagen, para diagnóstico visible (last-result)
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
     // entre borradores (lo comparten los 5 workers del pool).
     const usedStyles = [];
@@ -4789,6 +4790,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               usedStyles, styleOut, productRef,
             });
           } catch (e) {
+            if (!firstImgError) firstImgError = String((e && e.message) || e).slice(0, 300);
             console.error(`[pipeline:${tag}] IA imagen falló (intento ${attempt + 1}/3):`, e.message);
             if (attempt < 2) await new Promise(r => setTimeout(r, 4000 * (attempt + 1)));
           }
@@ -4878,7 +4880,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     if (created === 0) {
       const failReason = imgFailCount > 0 ? 'img_fail' : 'no_ideas';
       console.error(`[pipeline:${tag}] usuario ${uid}: 0 posteos creados (${imgFailCount} fallos de imagen)`);
-      return { ok: false, reason: failReason, created: 0, imgFailCount };
+      return { ok: false, reason: failReason, created: 0, imgFailCount, error: firstImgError || undefined };
     }
     return { ok: true, created, existing, deficit };
   } finally {
@@ -9513,7 +9515,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261014-v117';
+const BUILD_ID = '20261014-v118';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
