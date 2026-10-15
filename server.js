@@ -6727,29 +6727,36 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
       `Tema del posteo: ${idea || 'novedad'}. ${angle || ''} ` +
       `Sin texto, sin letras, sin logos, sin marcas de agua. Calidad de fotografía comercial profesional.` +
       styleFragFor(style, settings, profile);
-    const form = new FormData();
-    form.append('model', 'gpt-image-2');
-    form.append('prompt', prompt);
-    // UNA sola imagen: OpenAI rechaza múltiples campos 'image' ("Duplicate parameter").
-    const p0 = absRefs[0];
-    const buf = fs.readFileSync(p0);
-    const ext = path.extname(p0).toLowerCase();
-    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-    form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
-    form.append('size', '1024x1024');
-    form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY)
-    const r = await fetch('https://api.openai.com/v1/images/edits', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(120000),
-    });
-    if (!r.ok) {
-      const t = await r.text().catch(() => '');
-      throw new Error(`OpenAI ${r.status}: ${t.slice(0, 200)}`);
+    // Fallback de modelo (2026-10-15): si gpt-image-2 rechaza, reintenta con
+    // gpt-image-1 (mismo criterio que genConceptImage; latch compartido).
+    const models = GPT_IMAGE_2_DOWN ? ['gpt-image-1'] : ['gpt-image-2', 'gpt-image-1'];
+    let r = null, usedModel = models[0], lastErr = '';
+    for (const m of models) {
+      usedModel = m;
+      const form = new FormData();
+      form.append('model', m);
+      form.append('prompt', prompt);
+      // UNA sola imagen: OpenAI rechaza múltiples campos 'image' ("Duplicate parameter").
+      const p0 = absRefs[0];
+      const buf = fs.readFileSync(p0);
+      const ext = path.extname(p0).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
+      form.append('size', '1024x1024');
+      form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY)
+      r = await fetch('https://api.openai.com/v1/images/edits', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+        signal: AbortSignal.timeout(120000),
+      });
+      if (r.ok) break;
+      lastErr = await r.text().catch(() => '');
+      if (m === 'gpt-image-2') { GPT_IMAGE_2_DOWN = true; console.error('[product-shot] gpt-image-2 rechazó; fallback a gpt-image-1:', lastErr.slice(0, 160)); }
     }
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${lastErr.slice(0, 200)}`);
     const data = await r.json();
-    costs.trackUsage({ feature: 'concept-shot', userId: req.session.userId, model: 'gpt-image-2', images: 1, json: data });
+    costs.trackUsage({ feature: 'concept-shot', userId: req.session.userId, model: usedModel, images: 1, json: data });
     const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
     if (!b64) throw new Error('OpenAI no devolvió imagen');
     const name = saveImageB64(b64);
@@ -7070,13 +7077,37 @@ function qaDedupe7d(uid, headline) {
     return { ok: true };
   } catch (e) { return { ok: true }; } // ante cualquier duda, no bloquea
 }
-// Llama a gpt-image-2 con refs (edits) o sin refs (generations). Devuelve el b64.
-// Lanza Error con el mensaje de OpenAI recortado si falla.
+// Genera la imagen con gpt-image-2 y, si OpenAI lo rechaza, cae a
+// gpt-image-1 (el modelo con el que el pipeline funcionó siempre; la
+// migración a gpt-image-2 nunca tuvo identificador confirmado — ítem del
+// equipo del 2026-10-07). El primer fallo marca el modelo como caído por
+// el resto del proceso para no pagar el error en cada imagen. Si AMBOS
+// fallan, el error combinado trae los dos mensajes de OpenAI (visible en
+// /api/week/last-result vía firstImgError).
+let GPT_IMAGE_2_DOWN = false;
 async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
+  if (!GPT_IMAGE_2_DOWN) {
+    try {
+      return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-2');
+    } catch (e) {
+      GPT_IMAGE_2_DOWN = true;
+      console.error('[concept-shot] gpt-image-2 rechazó la generación; fallback a gpt-image-1 por este proceso:', e.message);
+      try {
+        return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1');
+      } catch (e2) {
+        throw new Error(`gpt-image-2: ${e.message} || gpt-image-1: ${e2.message}`);
+      }
+    }
+  }
+  return genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1');
+}
+// Llama al modelo dado con refs (edits) o sin refs (generations). Devuelve el b64.
+// Lanza Error con el mensaje de OpenAI recortado si falla.
+async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model) {
   let r;
   if (absRefs.length) {
     const form = new FormData();
-    form.append('model', 'gpt-image-2');
+    form.append('model', model);
     form.append('prompt', prompt + ' ' + (refNote || 'IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.'));
     // UNA sola imagen de referencia: OpenAI rechaza múltiples campos 'image'
     // ("Duplicate parameter"). Va la primera (la de mayor prioridad: logo > producto > fotos).
@@ -7097,7 +7128,7 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: 'gpt-image-2', prompt, size: '1024x1536', quality: costs.IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
+      body: JSON.stringify({ model, prompt, size: '1024x1536', quality: costs.IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
       signal: AbortSignal.timeout(120000),
     });
   }
@@ -7106,7 +7137,7 @@ async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
     throw new Error(`OpenAI ${r.status}: ${t.slice(0, 160)}`);
   }
   const data = await r.json();
-  costs.trackUsage({ feature: 'concept-shot', userId: uid, model: 'gpt-image-2', images: 1, json: data });
+  costs.trackUsage({ feature: 'concept-shot', userId: uid, model, images: 1, json: data });
   const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
   if (!b64) throw new Error('OpenAI no devolvió imagen');
   return b64;
@@ -9515,7 +9546,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261014-v118';
+const BUILD_ID = '20261015-v119';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
