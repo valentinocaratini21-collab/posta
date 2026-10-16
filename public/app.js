@@ -5091,6 +5091,9 @@ function pcSetImage(id, path) {
 }
 // --- Bottom sheet: cambiar imagen (3 caminos) ---
 let PC_STYLES_CACHE = null;
+function pcCloseSheet() {
+  document.querySelectorAll('.pcsheet-backdrop').forEach(x => { try { x.remove(); } catch (e) {} });
+}
 async function pcLoadStyleUI(id, root) {
   const recBox = root.querySelector('.pcsheet-recbtns');
   const allBox = root.querySelector('.pcsheet-all');
