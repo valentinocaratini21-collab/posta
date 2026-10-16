@@ -1888,15 +1888,21 @@ textarea.in{resize:vertical;min-height:96px}
 /* Variante liviana: placeholder borroso mientras carga la real */
 .vimg{background-size:cover;background-position:center;background-repeat:no-repeat}
 
-/* Posty haciendo malabares mientras carga (2026-10-16, pedido de
-   Valentino: el logo en las cargas "no hace malabares"). Componente único
-   para TODAS las esperas: avatar que rebota suave + 3 pelotas en cascada
-   con los colores de marca. */
-.pjwrap{position:relative;display:inline-block;line-height:0}
+/* Posty haciendo malabares mientras carga (2026-10-16). V2 — escenario:
+   Valentino marcó que la V1 no malabareaba "de la manera correcta": las
+   pelotas orbitaban pegadas a la cara. Ahora hay un ESCENARIO más grande
+   que el avatar: las pelotas salen de los costados (las "manos"), suben
+   BIEN arriba de la cabeza con tiempo de gravedad (lento en la cima,
+   rápido en las manos) y caen del otro lado — cascada de 3 pelotas. */
+.pjwrap{position:relative;display:inline-block;width:148px;height:112px;line-height:0}
+.pjwrap.big{width:196px;height:152px}
+.pj-ava-box{position:absolute;left:0;right:0;bottom:4px;text-align:center;line-height:0}
 .pj-ava{border-radius:50%;object-fit:cover;animation:pj-bob 1.14s ease-in-out infinite}
 @keyframes pj-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
-.pj-ball{position:absolute;left:50%;top:44%;width:15px;height:15px;margin:-7px 0 0 -7px;border-radius:50%;box-shadow:0 2px 6px rgba(10,30,51,.28);z-index:2;pointer-events:none}
-.pj-ball.b1{background:#FEC14D;animation:pj-cascade 1.14s ease-in-out infinite}
-.pj-ball.b2{background:#2793C8;animation:pj-cascade 1.14s ease-in-out infinite;animation-delay:-.38s}
-.pj-ball.b3{background:#0A1E33;animation:pj-cascade 1.14s ease-in-out infinite;animation-delay:-.76s}
-@keyframes pj-cascade{0%{transform:translate(-38px,10px)}25%{transform:translate(0,-38px)}50%{transform:translate(38px,10px)}75%{transform:translate(0,-38px)}100%{transform:translate(-38px,10px)}}
+.pj-ball{position:absolute;left:50%;top:50%;width:15px;height:15px;margin:-7px 0 0 -7px;border-radius:50%;box-shadow:0 2px 6px rgba(10,30,51,.28);z-index:2;pointer-events:none}
+.pj-ball.b1{background:#FEC14D;animation:pj-cascade 1.14s infinite}
+.pj-ball.b2{background:#2793C8;animation:pj-cascade 1.14s infinite;animation-delay:-.38s}
+.pj-ball.b3{background:#0A1E33;animation:pj-cascade 1.14s infinite;animation-delay:-.76s}
+.pjwrap.big .pj-ball{animation-name:pj-cascade-lg}
+@keyframes pj-cascade{0%{transform:translate(-52px,26px);animation-timing-function:ease-out}28%{transform:translate(0,-44px);animation-timing-function:ease-in}50%{transform:translate(52px,26px);animation-timing-function:ease-out}78%{transform:translate(0,-44px);animation-timing-function:ease-in}100%{transform:translate(-52px,26px)}}
+@keyframes pj-cascade-lg{0%{transform:translate(-68px,34px);animation-timing-function:ease-out}28%{transform:translate(0,-58px);animation-timing-function:ease-in}50%{transform:translate(68px,34px);animation-timing-function:ease-out}78%{transform:translate(0,-58px);animation-timing-function:ease-in}100%{transform:translate(-68px,34px)}}
