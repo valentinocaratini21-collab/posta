@@ -768,6 +768,12 @@ module.exports = [
 ]),
   // ---- deco ----
   ...([
+  { code: "/deco-antesdespues", name: "Antes y después del mismo rincón", brandSafe: true,
+    rubros: ["deco"],
+    prompt: "The SAME room corner from the identical camera angle in a split frame: left side dated and cluttered, right side transformed with new textiles, a plant and warm light, dramatic home-makeover contrast, interior transformation photography, 28mm wide composition." },
+  { code: "/deco-duenamuestra", name: "La dueña muestra su local", brandSafe: true,
+    rubros: ["deco"],
+    prompt: "Home-decor shop owner proudly presenting a styled corner of her own store, holding a cushion from the new collection, warm boutique light, 35mm inviting shot, authentic small-business interior photography, upper third clean." },
   { code: "/deco-livingnordico", name: "Living nórdico en luz de mañana", brandSafe: true,
     rubros: ["deco"],
     prompt: "Scandinavian living room bathed in soft morning sunlight through sheer curtains, light oak sofa, wool throw, birch coffee table, editorial interior photography, 35mm wide composition, airy minimalist styling." },
@@ -1388,7 +1394,7 @@ module.exports = [
     prompt: "Valentine bouquet of red roses and baby's breath with a heart card, romantic dim lighting, 85mm shallow close shot, passionate Valentine photography, subtle lens flare and crisp detail, cinematic warm tones." },
   { code: "/flor-diamadre", name: "Ramo para el Día de la Madre", brandSafe: true,
     rubros: ["flores"],
-    prompt: "Mother's Day bouquet of pastel roses and lilies in a keepsake vase, handwritten card beside, soft morning light, 60mm tender shot, heartfelt gift photography, balanced exposure with rich texture detail, inviting warm palette." },
+    prompt: "Mother's Day bouquet of pastel roses and lilies being HANDED OVER with both hands at a doorstep, the mother's hands receiving it — a real gift moment, never a still life — handwritten card tucked in, soft morning light, 60mm tender shot, heartfelt gift photography, inviting warm palette." },
   { code: "/flor-suscripcion", name: "Suscripción semanal de flores", brandSafe: true,
     rubros: ["flores"],
     prompt: "Delivery person handing a fresh weekly bouquet at a doorstep, smiling recipient, bright daylight, 50mm lifestyle shot, convenient flower-subscription photography, clean background separation, professional commercial polish throughout." },
@@ -2031,6 +2037,12 @@ module.exports = [
 ]),
   // ---- mascotas ----
   ...([
+  { code: "/masc-antesdespuesgrooming", name: "Antes y después del grooming", brandSafe: true,
+    rubros: ["mascotas"],
+    prompt: "Split-frame before-and-after grooming transformation of the SAME dog on the same grooming table: left scruffy and overgrown, right fluffy, trimmed and proud wearing a bandana, bright pet-salon light, 50mm joyful shot, irresistible pet-grooming photography." },
+  { code: "/masc-groomerpersonaje", name: "El groomer personaje", brandSafe: true,
+    rubros: ["mascotas"],
+    prompt: "Charismatic dog groomer in an apron holding up a freshly groomed poodle, both looking at the camera, colorful pet-salon interior, bright cheerful light, 35mm personality shot, characterful groomer photography, upper third clean." },
   { code: "/masc-cachorroconsulta", name: "Cachorro en camilla veterinaria", brandSafe: true,
     rubros: ["mascotas"],
     prompt: "Golden retriever puppy sitting on a vet exam table while the vet gently checks its ear, bright clean clinic lighting, 50mm eye-level shot, heartwarming veterinary photography." },

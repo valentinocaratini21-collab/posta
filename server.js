@@ -232,6 +232,56 @@ function cortar(t, max) {
 // oración. Prefiere la primera oración si entra en el límite; si no, recorta por
 // palabras y retrocede hasta una palabra "firme". Tope de caracteres para que el
 // brief (que corta en 80) jamás lo mutile.
+// Rubro del cliente para el C1 (makeHeadline rubro-aware): null si no hay.
+const rubroOf = (uid) => { try { const pr = getProfile(uid); return (pr && pr.category) || null; } catch (e) { return null; } };
+// Efeméride con criterio (2026-10-16): la fecha comercial SOLO fuerza la
+// idea N°1 en rubros donde regalar tiene sentido. Evidencia (prueba de
+// rubros del 2026-10-15): el único posteo fuera de topic en 99 fue la
+// efeméride forzada en una barbería de hombres (Día de la Madre). Para los
+// demás rubros la fecha no entra: su semana habla de SU negocio.
+const EPHEMERIS_GIFT_OK = /flor|gastro|helad|pastel|panad|cafeter|cafe|joya|indument|ropa|moda|belleza|estetic|estétic|spa|deco|hogar|perfum|chocolat|regal|libro|juguete|tecno|electr|peluquer/i;
+function ephemerisFor(profile) {
+  const eph = upcomingEphemeris(12)[0] || null;
+  if (!eph) return null;
+  const cat = String((profile && profile.category) || '');
+  const biz = String((profile && profile.business_name) || '');
+  if (/barber/i.test(cat + ' ' + biz)) return null;
+  return EPHEMERIS_GIFT_OK.test(cat) ? eph : null;
+}
+// C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
+// todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
+// (1) el rubro elige la "palabra-dinero" (qué oración gana) — familias:
+// gastronomía=precio, mascotas/deco=transformación, belleza=técnica
+// brandeada, moda=día/stock, fitness=hook de negación; una efeméride con
+// precio o fecha gana sobre cualquier familia; (2) sentence case: solo la
+// primera palabra lleva mayúscula, salvo nombres propios (mayúscula en
+// TODAS sus apariciones a mitad de oración) y siglas; (3) jamás terminar
+// en puntuación débil ni en palabra colgada; (4) jamás empalmar dos
+// oraciones en un titular.
+function headlineCase(out, raw) {
+  const toks = String(raw || '').split(/\s+/).filter(Boolean);
+  const stats = new Map();
+  toks.forEach((t, i) => {
+    const clean = t.replace(/[^\p{L}\p{N}$]/gu, '');
+    if (!clean) return;
+    const initial = i === 0 || /[.!?…]$/.test(toks[i - 1] || '');
+    const key = clean.toLowerCase();
+    const e = stats.get(key) || { capNonInitial: 0, lowNonInitial: 0 };
+    if (!initial) { if (/^\p{Lu}/u.test(clean)) e.capNonInitial++; else e.lowNonInitial++; }
+    stats.set(key, e);
+  });
+  const keep = new Set();
+  for (const [k, e] of stats) {
+    if (e.capNonInitial > 0 && e.lowNonInitial === 0 && !HEADLINE_DANGLING.has(k)) keep.add(k);
+  }
+  return String(out || '').split(' ').map((w, i) => {
+    const clean = w.replace(/[^\p{L}\p{N}$]/gu, '');
+    const low = clean.toLowerCase();
+    if (/^\p{Lu}{2,}$/u.test(clean)) return w; // sigla (IG, MP): intacta
+    if (i === 0) return w.charAt(0).toUpperCase() + (keep.has(low) ? w.slice(1) : w.slice(1).toLowerCase());
+    return keep.has(low) ? w : w.toLowerCase();
+  }).join(' ');
+}
 function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   const sRaw = String(text || '').replace(/\s+/g, ' ').trim();
   if (!sRaw) return '';
@@ -245,19 +295,27 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   // una escena corta. Se toma la primera oración con >=3 palabras entre las 3
   // primeras; si ninguna califica, se usan las primeras 8 palabras del texto.
   const sentences = (s.match(/[^.!?…]+[.!?…]/g) || [s]).slice(0, 5);
-  // C1 (2026-10-10, Uma): prioridad a la "palabra-dinero" del rubro.
-  // Cada rubro tiene SU palabra que vende en el titular; si aparece en el caption,
-  // esa oración gana aunque no sea la primera.
-  let seed = null;
-  if (rubro) {
+  const hasWords = (c) => c.trim().split(' ').filter(Boolean).length >= 3;
+  // ESTACIONAL (M53): efeméride comercial + precio o fecha → esa oración gana
+  // sobre cualquier familia de rubro.
+  let seed = sentences.find(c => hasWords(c) &&
+    /día de la madre|día del padre|día del niño|día del amigo|navidad|año nuevo|reyes|san valentín|hot sale|cyber monday|black friday/i.test(c) &&
+    (/\$\s?\d/.test(c) || /\b(hasta el|el|este)\s+\d{1,2}\b/i.test(c) || /\b(domingo|lunes|martes|miércoles|jueves|viernes|sábado)\b/i.test(c)));
+  if (!seed && rubro) {
     const r = String(rubro).toLowerCase();
-    const hasWords = (c) => c.trim().split(' ').filter(Boolean).length >= 3;
-    if (/gastronom|cafeter|bar\b|parrilla|pizzer|panader|rotiser|helader|reposter|pasteler|carnicer/.test(r)) {
+    // C1 (2026-10-10, Uma): prioridad a la "palabra-dinero" del rubro.
+    if (/mascota|veterinar|pet\s?shop|grooming|peluquer[ií]a canina/.test(r)) {
+      // Transformación (antes/desp ués) o precio.
+      seed = sentences.find(c => hasWords(c) && (/\b(antes|después|despues|quedó|quedo|bañ|look nuevo|transform)/i.test(c) || /\$\s?\d/.test(c)));
+    } else if (/deco|hogar|muebl|interior/.test(r)) {
+      // Transformación (antes/desp ués, renovación) o precio.
+      seed = sentences.find(c => hasWords(c) && (/\b(antes|después|despues|renova|quedó|quedo|transform)/i.test(c) || /\$\s?\d/.test(c)));
+    } else if (/gastronom|cafeter|bar\b|parrilla|pizzer|panader|rotiser|helader|reposter|pasteler|carnicer/.test(r)) {
       // Precio explícito: "$39.900", "$10.000"
       seed = sentences.find(c => hasWords(c) && /\$\s?\d/.test(c));
     } else if (/belleza|estetica|estética|peluquer|barber/.test(r)) {
       // Técnica brandeada: entre comillas o 2+ palabras con mayúscula sostenida
-      seed = sentences.find(c => hasWords(c) && (/"[^"]{3,}"/.test(c) || /\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+/.test(c)));
+      seed = sentences.find(c => hasWords(c) && (/\"[^\"]{3,}\"/.test(c) || /\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+/.test(c)));
     } else if (/moda|ropa|tienda|indumentaria/.test(r)) {
       // Día+hora o escasez cuantificada: "sábado 10hs", "1.000 piezas", "stock"
       seed = sentences.find(c => hasWords(c) && (/\b(lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b/i.test(c) || /\d[\d.]*\s?(piezas|unidades|stock)/i.test(c)));
@@ -267,7 +325,8 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     }
   }
   if (!seed) seed = sentences.slice(0, 3).find(c => c.trim().split(' ').filter(Boolean).length >= 3);
-  if (!seed) seed = s.split(' ').filter(Boolean).slice(0, 8).join(' ');
+  // Sin empalmes: el fallback de últimas toma palabras SOLO de la primera oración.
+  if (!seed) seed = String(s.split(/[.!?…]/)[0] || s).split(' ').filter(Boolean).slice(0, 8).join(' ');
   seed = seed.trim();
   // 1) La oración elegida: si entra en el límite de palabras, va entera.
   const fw = seed.split(' ').filter(Boolean);
@@ -285,6 +344,10 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     const i = c.lastIndexOf(' ');
     out = sinColgada((i > maxChars * 0.4 ? c.slice(0, i) : c).trim().split(' ').filter(Boolean)).join(' ');
   }
+  // 4) Jamás terminar en puntuación débil + re-chequeo de colgada tras el strip.
+  out = sinColgada(out.replace(/[,;:]+$/, '').trim().split(' ').filter(Boolean)).join(' ').replace(/[,;:]+$/, '').trim();
+  // 5) Sentence case con nombres propios y siglas preservados.
+  out = headlineCase(out, sRaw);
   return out.replace(/\u0001/g, '.');
 }
 const app = express();
@@ -2023,7 +2086,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           const tipoForImg = post.tipo || '';
           regenJobs.push((async () => {
             try {
-              const headline = makeHeadline(capForImg.split('\n')[0], 6) || makeHeadline(capForImg, 5);
+              const headline = makeHeadline(capForImg.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(capForImg, 5, 70, rubroOf(uid));
               const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [] });
               if (newPath) {
                 db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id);
@@ -2774,7 +2837,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
   const hashtags = String((content && content.hashtags) || '');
-  const headline = makeHeadline(caption.split('\n')[0], 6) || makeHeadline(idea.titulo, 5);
+  const headline = makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.titulo, 5, 70, rubroOf(uid));
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
   const styleOut2 = {};
@@ -3307,7 +3370,7 @@ function ideasInputFor(uid) {
     goal: profile.goal,
     taste: tasteProfile(uid),
     recentTopics,
-    ephemeris: upcomingEphemeris(12)[0] || null,
+    ephemeris: ephemerisFor(profile),
     learnings: getContentLearnings(uid),
     styleRules,
     excluded: excludedTopicsLine(uid),
@@ -4285,7 +4348,7 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
       const caption = (out.captions && out.captions[0]) || '';
       if (!caption.trim()) throw new Error('La IA no devolvió texto');
       // Titular corto y COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
-      const headline = makeHeadline(String(caption).split('\n')[0], 6);
+      const headline = makeHeadline(String(caption).split('\n')[0], 6, 70, (profile && profile.category) || null);
       const imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: topic, porque: angles[i] }, tipo, headline, refs, apiKey: key,
       });
@@ -4643,6 +4706,19 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // silencio (el usuario lo reintenta mañana; nada se rompe).
   try { costs.assertAiOk(uid); }
   catch (e) { console.error(`[pipeline:${tag}] kill-switch, skip usuario ${uid}`); return { ok: false, reason: 'ai_cap' }; }
+  // Gate de plan REAL (2026-10-16, paywall sincero): el cartel "necesitás
+  // un plan activo" no tenía bloqueo propio detrás — dependía de que cada
+  // llamador filtrara. Defensa en profundidad en la entrada del pipeline:
+  // genera el fundador, un plan activo o un trial vigente; nadie más. La
+  // misma regla que comunica el cartel, ahora también en el servidor.
+  try {
+    let founderGate = false;
+    try { founderGate = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+    if (!founderGate && !planOrTrialOk(uid)) {
+      console.log(`[pipeline:${tag}] usuario ${uid}: sin plan ni trial vigente — no se genera`);
+      return { ok: false, reason: 'no_plan', created: 0 };
+    }
+  } catch (e) { /* el gate es defensa en profundidad: si la lectura falla, no bloquea */ }
   if (nextweekRunningFresh(uid)) { console.log(`[pipeline:${tag}] usuario ${uid}: ya hay una corrida en curso, skip`); return { ok: false, reason: 'running' }; }
   NEXTWEEK_RUNNING.set(uid, Date.now());
   // 2026-10-14: SEMANA PARCIAL (pedido de Valentino) — la semana se completa
@@ -4809,8 +4885,8 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
           if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); noteSlotFail('dup', 'caption duplicado en 24h'); claimed--; continue; }
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
-          const headline = makeHeadline(caption.split('\n')[0], 6)
-            || makeHeadline(idea.titulo, 5);
+          const headline = makeHeadline(caption.split('\n')[0], 6, 70, (profile && profile.category) || null)
+            || makeHeadline(idea.titulo, 5, 70, (profile && profile.category) || null);
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
           // 2026-10-14: TARJETA INMEDIATA (pedido de Valentino) — el borrador
@@ -4949,10 +5025,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     // Historias + reels del plan: reusan las imágenes recién generadas.
     // Va en try/catch propio: si falla, el autopilot de feed queda intacto.
-    // 2026-10-14: SOLO en generación desde cero — generateWeekExtras NO es
-    // idempotente (inserta siempre el cupo completo): en modo completar
-    // duplicaría las historias/reels que la semana ya tiene.
-    if (existing === 0) try {
+    // 2026-10-16: generateWeekExtras es idempotente (genera solo el
+    // déficit) → corre también en modo completar: una semana completada
+    // en dos tandas recibe las historias/reels que le faltan.
+    try {
       const { generateWeekExtras } = require('./story-reel');
       const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'draft' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, weekKey);
       await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
@@ -7634,26 +7710,6 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   }
   */
   const imgName = saveImageB64(b64);
-  // QA de auditoría DESACOPLADO (2026-10-14): corre en segundo plano ya con
-  // el image_path (Mora lee qa_audit igual que siempre) y el posteo no lo
-  // espera. Antes este await sumaba ~20s a la aparición de cada tarjeta.
-  (async () => {
-    try {
-      const qa = await qaImageB64(b64, {
-        headline: cleanHeadline,
-        paletteHex: hexes,
-        dnaFacts: qaFactsLine(dna),
-      }, key);
-      if (!qa) return;
-      const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
-      try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
-      try {
-        db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
-        try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
-        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), `/media/${imgName}`);
-      } catch (e) { console.error('[qa-audit] db:', e.message); }
-    } catch (e) { console.error('[concept-shot] qa:', e.message); }
-  })();
   // Componer el titular con código (si hay): la imagen sale limpia de la IA
   // y el texto se renderiza perfecto — siempre entra, nunca se recorta.
   if (cleanHeadline) {
@@ -7671,6 +7727,36 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       console.error('[concept-shot] composite titular falló, sigo con imagen limpia:', e.message);
     }
   }
+  // QA de auditoría DESACOPLADO (2026-10-14; reubicado 2026-10-16): corre
+  // en segundo plano (el posteo no lo espera) y audita el ARCHIVO FINAL —
+  // con el titular ya compuesto — que es lo que el cliente ve y lo que
+  // Mora revisa en qa_audit con su image_path. Antes auditaba la imagen
+  // cruda ANTES del composite: los defectos del titular compuesto (la
+  // clase de la antena tras la "o") eran invisibles para la auditoría.
+  // Si la visión no devuelve veredicto, la fila se escribe igual con
+  // passed NULL: el hueco de cobertura queda visible, no silencioso.
+  (async () => {
+    try {
+      let finalB64 = b64;
+      try { finalB64 = fs.readFileSync(path.join(MEDIA_DIR, imgName)).toString('base64'); } catch (e) {}
+      const qa = await qaImageB64(finalB64, {
+        headline: cleanHeadline,
+        paletteHex: hexes,
+        dnaFacts: qaFactsLine(dna),
+      }, key);
+      try {
+        db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
+        try { db.exec("ALTER TABLE qa_audit ADD COLUMN image_path TEXT"); } catch (e) { /* ya existe */ }
+        if (!qa) {
+          db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(null, JSON.stringify({ qa_unavailable: true }), `/media/${imgName}`);
+          return;
+        }
+        const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
+        try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
+        db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), `/media/${imgName}`);
+      } catch (e) { console.error('[qa-audit] db:', e.message); }
+    } catch (e) { console.error('[concept-shot] qa:', e.message); }
+  })();
   return `/media/${imgName}`;
 }
 
@@ -8188,7 +8274,7 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
-    const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6) || '';
+    const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
     const styleOut = {};
     const newPath = await conceptShotGenerateQueued({
       uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut,
@@ -8226,7 +8312,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absBase || !fs.existsSync(absBase))
       return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para restylear' });
-    const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6) || '';
+    const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
     const styleOut = {};
     const newPath = await conceptShotGenerateQueued({
       uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline,
@@ -9938,7 +10024,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v130';
+const BUILD_ID = '20261016-v131';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

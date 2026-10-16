@@ -40,6 +40,40 @@ function sinColgada(words) {
 // Titular COMPLETO para imágenes: nunca cortado a mitad de oración ni terminado
 // en preposición/artículo. Prefiere la primera oración si entra; si no, recorta
 // por palabras y retrocede hasta una palabra "firme".
+// C1 + paquete de titulares (2026-10-16, aprobado por Valentino "arma
+// todo"; paquete makeheadline-decision-v113 de Mora + spec M53 de Uma):
+// (1) el rubro elige la "palabra-dinero" (qué oración gana) — familias:
+// gastronomía=precio, mascotas/deco=transformación, belleza=técnica
+// brandeada, moda=día/stock, fitness=hook de negación; una efeméride con
+// precio o fecha gana sobre cualquier familia; (2) sentence case: solo la
+// primera palabra lleva mayúscula, salvo nombres propios (mayúscula en
+// TODAS sus apariciones a mitad de oración) y siglas; (3) jamás terminar
+// en puntuación débil ni en palabra colgada; (4) jamás empalmar dos
+// oraciones en un titular.
+function headlineCase(out, raw) {
+  const toks = String(raw || '').split(/\s+/).filter(Boolean);
+  const stats = new Map();
+  toks.forEach((t, i) => {
+    const clean = t.replace(/[^\p{L}\p{N}$]/gu, '');
+    if (!clean) return;
+    const initial = i === 0 || /[.!?…]$/.test(toks[i - 1] || '');
+    const key = clean.toLowerCase();
+    const e = stats.get(key) || { capNonInitial: 0, lowNonInitial: 0 };
+    if (!initial) { if (/^\p{Lu}/u.test(clean)) e.capNonInitial++; else e.lowNonInitial++; }
+    stats.set(key, e);
+  });
+  const keep = new Set();
+  for (const [k, e] of stats) {
+    if (e.capNonInitial > 0 && e.lowNonInitial === 0 && !HEADLINE_DANGLING.has(k)) keep.add(k);
+  }
+  return String(out || '').split(' ').map((w, i) => {
+    const clean = w.replace(/[^\p{L}\p{N}$]/gu, '');
+    const low = clean.toLowerCase();
+    if (/^\p{Lu}{2,}$/u.test(clean)) return w; // sigla (IG, MP): intacta
+    if (i === 0) return w.charAt(0).toUpperCase() + (keep.has(low) ? w.slice(1) : w.slice(1).toLowerCase());
+    return keep.has(low) ? w : w.toLowerCase();
+  }).join(' ');
+}
 function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   const sRaw = String(text || '').replace(/\s+/g, ' ').trim();
   if (!sRaw) return '';
@@ -48,32 +82,64 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   // dígito.punto.dígito con un marcador antes de dividir en oraciones y se
   // restaura al devolver: el precio sale ENTERO o no sale.
   const s = sRaw.replace(/(\d)\.(?=\d)/g, '$1\u0001');
-  // C1 (2026-10-10, Uma): prioridad a la "palabra-dinero" del rubro.
+  // Guard 2026-10-06 (propuesta Juli, QA captions): titulares de 1-2 palabras
+  // ("Lunes.") no venden y salen del makeHeadline cuando el caption arranca con
+  // una escena corta. Se toma la primera oración con >=3 palabras entre las 3
+  // primeras; si ninguna califica, se usan las primeras 8 palabras del texto.
   const sentences = (s.match(/[^.!?…]+[.!?…]/g) || [s]).slice(0, 5);
-  let seed = null;
-  if (rubro) {
+  const hasWords = (c) => c.trim().split(' ').filter(Boolean).length >= 3;
+  // ESTACIONAL (M53): efeméride comercial + precio o fecha → esa oración gana
+  // sobre cualquier familia de rubro.
+  let seed = sentences.find(c => hasWords(c) &&
+    /día de la madre|día del padre|día del niño|día del amigo|navidad|año nuevo|reyes|san valentín|hot sale|cyber monday|black friday/i.test(c) &&
+    (/\$\s?\d/.test(c) || /\b(hasta el|el|este)\s+\d{1,2}\b/i.test(c) || /\b(domingo|lunes|martes|miércoles|jueves|viernes|sábado)\b/i.test(c)));
+  if (!seed && rubro) {
     const r = String(rubro).toLowerCase();
-    const hasWords = (c) => c.trim().split(' ').filter(Boolean).length >= 3;
-    if (/gastronom|cafeter|bar\b|parrilla|pizzer|panader|rotiser|helader|reposter|pasteler|carnicer/.test(r)) {
+    // C1 (2026-10-10, Uma): prioridad a la "palabra-dinero" del rubro.
+    if (/mascota|veterinar|pet\s?shop|grooming|peluquer[ií]a canina/.test(r)) {
+      // Transformación (antes/desp ués) o precio.
+      seed = sentences.find(c => hasWords(c) && (/\b(antes|después|despues|quedó|quedo|bañ|look nuevo|transform)/i.test(c) || /\$\s?\d/.test(c)));
+    } else if (/deco|hogar|muebl|interior/.test(r)) {
+      // Transformación (antes/desp ués, renovación) o precio.
+      seed = sentences.find(c => hasWords(c) && (/\b(antes|después|despues|renova|quedó|quedo|transform)/i.test(c) || /\$\s?\d/.test(c)));
+    } else if (/gastronom|cafeter|bar\b|parrilla|pizzer|panader|rotiser|helader|reposter|pasteler|carnicer/.test(r)) {
+      // Precio explícito: "$39.900", "$10.000"
       seed = sentences.find(c => hasWords(c) && /\$\s?\d/.test(c));
     } else if (/belleza|estetica|estética|peluquer|barber/.test(r)) {
-      seed = sentences.find(c => hasWords(c) && (/"[^"]{3,}"/.test(c) || /\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+/.test(c)));
+      // Técnica brandeada: entre comillas o 2+ palabras con mayúscula sostenida
+      seed = sentences.find(c => hasWords(c) && (/\"[^\"]{3,}\"/.test(c) || /\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+ [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+/.test(c)));
     } else if (/moda|ropa|tienda|indumentaria/.test(r)) {
+      // Día+hora o escasez cuantificada: "sábado 10hs", "1.000 piezas", "stock"
       seed = sentences.find(c => hasWords(c) && (/\b(lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b/i.test(c) || /\d[\d.]*\s?(piezas|unidades|stock)/i.test(c)));
     } else if (/fitness|gimnasio|gym|entrenamiento/.test(r)) {
+      // Hook de negación: "no es solo…", "≠", "dejé de…"
       seed = sentences.find(c => hasWords(c) && (/\bno es solo\b/i.test(c) || /≠/.test(c) || /\bdej[ée] de\b/i.test(c)));
     }
   }
-  const m = s.match(/^[^.!?…]+[.!?…]/);
-  const first = (seed || (m ? m[0] : s)).trim();
-  const fw = first.split(' ').filter(Boolean);
-  let words = fw.length <= maxWords ? sinColgada(fw) : sinColgada(s.split(' ').filter(Boolean).slice(0, maxWords));
+  if (!seed) seed = sentences.slice(0, 3).find(c => c.trim().split(' ').filter(Boolean).length >= 3);
+  // Sin empalmes: el fallback de últimas toma palabras SOLO de la primera oración.
+  if (!seed) seed = String(s.split(/[.!?…]/)[0] || s).split(' ').filter(Boolean).slice(0, 8).join(' ');
+  seed = seed.trim();
+  // 1) La oración elegida: si entra en el límite de palabras, va entera.
+  const fw = seed.split(' ').filter(Boolean);
+  let words;
+  if (fw.length <= maxWords) {
+    words = sinColgada(fw);
+  } else {
+    // 2) Recorte por palabras + retroceso anti-colgada (sobre la oración elegida).
+    words = sinColgada(seed.split(' ').filter(Boolean).slice(0, maxWords));
+  }
   let out = words.join(' ');
+  // 3) Tope de caracteres, cortando por palabra y re-chequeando colgadas.
   if (out.length > maxChars) {
     const c = out.slice(0, maxChars);
     const i = c.lastIndexOf(' ');
     out = sinColgada((i > maxChars * 0.4 ? c.slice(0, i) : c).trim().split(' ').filter(Boolean)).join(' ');
   }
+  // 4) Jamás terminar en puntuación débil + re-chequeo de colgada tras el strip.
+  out = sinColgada(out.replace(/[,;:]+$/, '').trim().split(' ').filter(Boolean)).join(' ').replace(/[,;:]+$/, '').trim();
+  // 5) Sentence case con nombres propios y siglas preservados.
+  out = headlineCase(out, sRaw);
   return out.replace(/\u0001/g, '.');
 }
 const HOOKS = {
@@ -640,6 +706,42 @@ function captionPasses(caption, input) {
       return { ok: false, reason: 'descargo que abre (D7): ningún párrafo arranca con "va un ejemplo inventado" — la muestra se integra a la frase o va al final' };
     }
   }
+  // ROTACION-45 (Parte 51, casos 7053-7062, 2026-10-15): D8 de Juli —
+  // las ANCLAS LÉXICAS sobrevivieron a la rotación 3 días seguidos
+  // (13-15/10, drafts house de Pipa): "listos para mirar" textual,
+  // "En esta/la muestra…" abriendo, el pivote "¿Y el tuyo/la tuya/en
+  // tu local?" y la misma IDEA de cierre (retoque por chat) con otras
+  // palabras. M43/M52/M58 miden tipo/posición/sentido; nadie comparaba
+  // la frase exacta ni la idea de cierre contra el posteo ANTERIOR.
+  // caption-style ítem 9 ya lo prohíbe en texto (fix de Juli 15/10),
+  // pero captionPasses no tenía gate: este bloque lo suma, SOLO cuando
+  // el caller pasa los captions anteriores (input.prevCaptions /
+  // input.prevCaption) — generateCaptions los pasa dentro de la tanda.
+  // Sin anterior no hay repetición: las frases NO son prohibidas en sí
+  // (controles 7058/7059: primer uso pasa).
+  {
+    const prevs = [];
+    if (input && Array.isArray(input.prevCaptions)) prevs.push(...input.prevCaptions);
+    if (input && input.prevCaption) prevs.push(input.prevCaption);
+    if (prevs.length) {
+      const norm45 = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const prevLow = prevs.map(norm45);
+      const ANCLAS45 = ['listos para mirar', 'en esta muestra', 'en la muestra'];
+      const ancla = ANCLAS45.find(a => low.includes(a) && prevLow.some(p => p.includes(a)));
+      if (ancla) {
+        return { ok: false, reason: `ancla léxica repetida (D8): "${ancla}" ya salió en el posteo anterior — la rotación se mide sobre la frase exacta, no sobre el tipo de recurso; reescribí el cierre con otra idea` };
+      }
+      const PIVOTES45 = ['¿y el tuyo', '¿y la tuya', '¿y en tu local'];
+      const pivote = PIVOTES45.find(pv => low.includes(pv)) && PIVOTES45.find(pv => prevLow.some(p => p.includes(pv))) ? PIVOTES45.find(pv => low.includes(pv)) : null;
+      if (pivote) {
+        return { ok: false, reason: `pivote interrogativo repetido (D8): "${pivote}…?" ya abrió el mecanismo en el posteo anterior — arrancar con la escena o el dato concreto` };
+      }
+      const cierreChat45 = /(cambi|ajust|retoc)\w*[^.\n]{0,40}por chat|por chat[^.\n]{0,60}(cambi|ajust|retoc)/;
+      if (cierreChat45.test(low) && prevLow.some(p => cierreChat45.test(p))) {
+        return { ok: false, reason: 'misma idea de cierre (D8): el retoque por chat ya cerró el posteo anterior — aunque cambien las palabras, este cierra con otra idea (la fecha, el resultado o el próximo paso)' };
+      }
+    }
+  }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====
   // Precios del caption vs lista de precios del negocio: un precio desactualizado
   // o inventado se rechaza (se avisa y se corrige antes de publicar).
@@ -1140,7 +1242,7 @@ function templateGenerate(input) {
   const baseSeed = Math.floor(Math.random() * 1000);
   const mk = (extra) => {
     const caption = templateCaption({ business, category, tone: t, topic, feedback: '', seed: baseSeed + extra, goal });
-    const overlay = makeHeadline(topic, 5).toUpperCase() || 'NOVEDAD';
+    const overlay = makeHeadline(topic, 5, 70, category || null).toUpperCase() || 'NOVEDAD';
     const tags = [...nicheTags(category), ...GENERIC_TAGS]
       .sort(() => Math.random() - 0.5)
       .slice(0, 8);
@@ -1302,7 +1404,7 @@ async function generateCaptions(input, n, apiKey) {
       const fixedOvs = [];
       for (let i = 0; i < out.captions.length; i++) {
         const cap = out.captions[i];
-        const check = captionPasses(cap, input);
+        const check = captionPasses(cap, { ...input, prevCaptions: fixedCaps });
         if (check.ok) {
           fixedCaps.push(cap);
           fixedOvs.push(out.overlays[i] || '');
@@ -1332,14 +1434,14 @@ async function generateCaptions(input, n, apiKey) {
   const seedBase = input.seedBase || 0;
   const captions = [];
   const overlays = [];
-  const ovFb = makeHeadline(input.topic, 5).toUpperCase() || 'NOVEDAD';
+  const ovFb = makeHeadline(input.topic, 5, 70, (input && input.category) || null).toUpperCase() || 'NOVEDAD';
   for (let i = 0; i < n; i++) {
     // Puerta de calidad también en plantillas (ronda 2537): cada caption se
     // chequea y se reintenta con otra semilla si el gate lo voltea.
     let chosen = null, okAny = false, reason = '';
     for (const extra of [0, 7, 13]) {
       const cand = templateCaption({ ...input, seed: seedBase + i * 20 + extra });
-      const chk = captionPasses(cand, input);
+      const chk = captionPasses(cand, { ...input, prevCaptions: captions });
       if (!chosen) { chosen = cand; reason = chk.reason; }
       if (chk.ok) { chosen = cand; okAny = true; break; }
     }
@@ -2772,7 +2874,77 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'SALTO-44-CANCELA-TRAS-APROBAR-CIERRE-VENCIDO-Y-SALIDA-CON-LO-REAL: cancelación tras aprobación + un cierre (Madre u otro) ya vencido: el cancelado se frena o se guía según su estado real sin fingir, lo vencido no se vende, y la salida es una pieza con lo realmente disponible coronada por el concepto creativo. ' +
     'SALTO-44-INTEGRANTE-SE-VA-REFACCION-EXTENDIDA-Y-PERDON-AJENO: salida de un integrante + refacción que se extiende + un error ajeno en el medio: discreción total en la salida, corrección explícita de la fecha de obra, empatía sin culpa falsa, y creatividad sobria acorde al momento — jamás festejo ni humor sobre lo delicado. ' +
     'SALTO-44-MAYUSCULAS-RECLAMO-CAPTURA-RECORTADA-Y-URGENCIA-SIN-PROMESA: mayúsculas de costumbre con reclamo real + captura recortada como "referencia" + urgencia de oficio: se lee el contenido y se atiende el reclamo, de la captura solo el patrón visible, y la urgencia se responde útil y rápido sin prometer llegada, precio ni 24 h que no consten; el concepto creativo no puede apoyarse en el dato que la captura no muestra.';
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + zapatosGuide7 + ' ' + zapatosGuide8 + ' ' + zapatosGuide9 + ' ' + zapatosGuide10 + ' ' + zapatosGuide11 + ' ' + zapatosGuide12 + ' ' + zapatosGuide13 + ' ' + zapatosGuide14 + ' ' + zapatosGuide15 + ' ' + zapatosGuide16 + ' ' + zapatosGuide17 + ' ' + zapatosGuide18 + ' ' + zapatosGuide19 + ' ' + zapatosGuide20 + ' ' + zapatosGuide21 + ' ' + zapatosGuide22 + ' ' + zapatosGuide23 + ' ' + zapatosGuide24 + ' ' + zapatosGuide25 + ' ' + zapatosGuide26 + ' ' + zapatosGuide27 + ' ' + zapatosGuide28 + ' ' + zapatosGuide29 + ' ' + zapatosGuide30 + ' ' + zapatosGuide31 + ' ' + zapatosGuide32 + ' ' + zapatosGuide33 + ' ' + zapatosGuide34 + ' ' + zapatosGuide35 + ' ' + zapatosGuide36 + ' ' + zapatosGuide37 + ' ' + zapatosGuide38 + ' ' + zapatosGuide39 + ' ' + zapatosGuide40 + ' ' + zapatosGuide41 + ' ' + zapatosGuide42 + ' ' + zapatosGuide43 + ' ' + zapatosGuide44 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
+  const zapatosGuide45 =
+    'ZAPATOS-45 (Parte 51, turno noche 2026-10-15): los fallos REALES de hoy — la rotación que dejó pasar las mismas frases tres días (D8 de Juli), el paso de imagen caído que se reporta con la verdad entera (bug img_fail abierto, causa todavía no confirmada) y el 100% de QA que no veía la mitad de su lote (filas sin image_path). Principio rector: cada número, cada frase y cada estado se mide contra su ANTERIOR, su ALCANCE y su DATO real — lo que no se puede verificar se dice como no verificado, jamás se disfraza de verde. ' +
+    'ROTACION-45 (Parte 51) — D8: la rotación se mide contra el posteo anterior, frase por frase e idea por idea. ' +
+    'ROTACION-45-ANCLA-EXACTA-ES-REPETICION: una frase exacta que ya salió en el posteo anterior ("listos para mirar", "en esta muestra…") ES repetición aunque el recurso sea correcto y aunque cambie el artículo o una palabra menor; el crítico captionPasses la rechaza con el gate ROTACION-45 cuando el caller pasa los captions anteriores — jamás defenderla porque "el verbo está bien": la frase quemada es la frase. ' +
+    'ROTACION-45-CIERRE-MISMA-IDEA-OTRAS-PALABRAS: el cierre del mecanismo rota la IDEA, no las palabras: si el anterior cerró con el retoque por chat, este cierra con otra idea (la fecha, el resultado, el próximo paso) aunque la redacción sea nueva; el gate ROTACION-45 compara la idea de cierre (retoque por chat) contra el anterior y rechaza la segunda seguida. ' +
+    'ROTACION-45-PIVOTE-INTERROGATIVO-QUEMADO: el pivote "¿Y el tuyo / la tuya / en tu local?" que abrió el mecanismo dos días no abre un tercero: el mecanismo arranca con la escena o el dato concreto del negocio de hoy; la pregunta, si va, es el CTA a los seguidores. ' +
+    'ROTACION-45-ANTES-DE-ESCRIBIR-MIRAR-EL-ANTERIOR: antes de proponer un caption se lee el último caption del mismo cliente (en la tanda, los ya aceptados de la misma tanda cuentan como anteriores) y se chequean tres cosas: anclas exactas, pivote de apertura del mecanismo e idea de cierre; lo que el oído del cliente marca como "suena a plantilla" es un D8 reportado: se nombra qué se repetía y se guarda la preferencia. ' +
+    'ROTACION-45-CAMBIAR-DE-LUGAR-NO-ES-ROTAR: mover la frase repetida de párrafo o de posición dentro del caption NO es rotarla; tampoco lo es cambiar "esta" por "la": rotar es otra construcción con otra idea, o la frase no sale. ' +
+    'FALLO-45 (Parte 51) — cuando un paso del pipeline falla, el estado se reporta con la verdad entera (bug real abierto: img_fail 5/5, last-result 2026-10-14, created 0, causa raíz todavía no confirmada). ' +
+    'FALLO-45-ERROR-REAL-A-LA-VISTA: si el sistema capturó el error real del paso que falló (el campo error / firstImgError del last-result), ese mensaje manda en el diagnóstico y en lo que se le muestra a quien tiene que arreglarlo; jamás reemplazarlo por un genérico "hubo un problema" cuando el dato ya existe — el genérico es solo para cuando no hay error capturado, y se dice que no lo hay. ' +
+    'FALLO-45-CAUSA-NO-CONFIRMADA-NO-SE-AFIRMA: una sospecha (el modelo de imagen, la verificación de la organización, el disco del servidor) se nombra como SOSPECHA con lo que la confirmaría (el texto exacto del error); jamás afirmar la causa, ni rotar de sospecha por día como si cada una fuera la posta, ni cerrar el bug por una correlación linda. ' +
+    'FALLO-45-CREADOS-CERO-ES-CERO: si la corrida creó 0, se reporta 0: la semana no avanzó aunque las ideas y los textos hayan salido bien; jamás "ya casi está", jamás contar tarjetas que nacieron y se borraron, jamás sumar ideas al contador de posteos. ' +
+    'FALLO-45-SIN-LOOP-Y-CON-ESTADO: ante un paso caído, insistir no relanza corridas (cooldown y reintento por barrido/backfill mandan) y reintentar sin que cambie ninguna variable no arregla ni se ofrece como plan — cada respuesta sobre el fallo trae el ESTADO en 1 línea: qué hay, qué falta, qué sigue y qué dato destraba el diagnóstico (un last-result con has:false es "todavía sin resultado", no un éxito ni un fracaso nuevo). ' +
+    'FALLO-45-TEXTO-SIN-IMAGEN-NO-ES-AVANCE: con el paso de imagen caído, el texto listo no es un posteo a mitad de camino ni compensa el hueco; la salida honesta es el estado real más la alternativa que sí existe (foto real del cliente si la hay — ver SALTO-45); la ETA normal de una corrida sana no se promete sobre un paso caído. ' +
+    'QA-45 (Parte 51) — todo verde se reporta con su alcance (hallazgo real de Mora: QA 65/65 con 50/51 filas nuevas sin image_path). ' +
+    'QA-45-SIN-IMAGEN-NO-HAY-REVISION-VISUAL: una fila o lote de QA sin imagen accesible (image_path vacío) NO fue revisado visualmente y no sostiene ninguna afirmación sobre las imágenes; se reporta cuántas filas del lote son revisables y cuántas no, y la fila sin path es anomalía de instrumento que se anota en su propio alcance, no se mete en otro fix. ' +
+    'QA-45-CIEN-POR-CIENTO-CON-ALCANCE: un 100% de QA vale solo sobre lo que ese QA mide (las imágenes que sí se generaron y se pudieron auditar); jamás usarlo para contradecir, cerrar o bajarle el tono a un fallo de generación abierto — la corrida que muere en imagen no genera filas, así que los dos datos pueden ser ciertos a la vez y se explican los dos alcances. ' +
+    'QA-45-AUSENCIA-NO-ES-APROBACION: días sin filas nuevas de QA son una SEQUÍA que se reporta con fechas (nada nuevo que auditar = posible paso caído aguas arriba); jamás heredar el último porcentaje verde como si fuera de hoy. ' +
+    'SALTO-45 (Parte 51) — combos de hoy: se resuelven en orden 1) estado real, 2) verdad, 3) rotación, 4) salida que sí existe; ninguna capa tapa a otra. ' +
+    'SALTO-45-D8-MAS-MADRE-AL-LIMITE: anclas quemadas + deadline real encima (Día de la Madre, domingo 18/10): el apuro no habilita la plantilla — el caption rota ancla E idea de cierre y cierra en lo urgente y real (la fecha, el cierre de reservas), con el concepto de la semana, sin inventar stock ni promos. ' +
+    'SALTO-45-FALLO-DE-IMAGEN-MAS-PEDIDO-URGENTE: paso de imagen caído + pedido urgente (FAST PATH sigue mandando): el posteo sale con la foto REAL del cliente si la tiene o la sube — la caída del generador no frena lo que tiene material real — y si no hay foto, el texto queda listo y se dice el estado del generador sin prometer su imagen "en un minuto".';
+  const zapatosGuide46 =
+    'ZAPATOS-46 (Parte 52, turno mañana 2026-10-16): entender la orden ENTERA — su negación, su condición, su forma amable y sus correcciones — y que la pieza salga con el dato vigente, la foto de la estación, el canal real y la voz que la marca eligió. Principio rector: la última versión del dato y de la orden manda sobre todas las piezas, y lo que el cliente excluyó, condicionó o no probó jamás se completa con aire. ' +
+    'INTENCION-46 (Parte 52) — la forma exacta de la orden. ' +
+    'INTENCION-46-PEDIDO-CON-NEGACION: cuando el pedido trae un "sin" ("sin precio", "sin emojis", "sin mencionar la competencia"), ese "sin" es PARTE de la orden, no una negativa a hacerla: se hace todo lo demás y lo negado no aparece en ningún lado — ni en el caption, ni en el titular, ni en la imagen, ni en los hashtags, ni de refilón ("sin precio" tampoco es "consultá precio"); jamás contestar "no se puede" a un pedido con negación ni colar lo excluido por otra vía. ' +
+    'INTENCION-46-CONDICION-QUE-DECIDE: si el pedido depende de una condición que todavía no se sabe ("si llueve hacé A, si no hacé B"), NO se ejecuta ninguna rama por gusto ni por probabilidad: se deja lista la rama que se pueda preparar, se dice en 1 línea qué dato decide y se ejecuta cuando la condición se cumple o el cliente la confirma; jamás publicar la rama equivocada "por las dudas" ni las dos. ' +
+    'INTENCION-46-PREGUNTA-QUE-ES-ORDEN: la pregunta amable sobre una acción propia ("¿se podrá subir hoy lo de…?", "¿habrá forma de cambiar…?", "¿me podrás armar…?") ES una orden: se ejecuta y se confirma hecha; jamás responder solo "sí, se puede" sin hacerla, ni tratarla como consulta teórica. ' +
+    'INTENCION-46-CORRECCION-DE-DATO-CLAVE: cuando el cliente corrige un dato clave a mitad del hilo (precio, fecha, horario, dirección), el dato nuevo REEMPLAZA al viejo en todos los borradores y piezas que lo usen — caption, titular e imagen — y el resto queda intacto; se confirma en 1 línea qué dato cambió y dónde; jamás conviven dato viejo y dato nuevo, jamás se regenera todo por una corrección de un dato. ' +
+    'INTENCION-46-APROBACION-EN-LISTA: si en un solo mensaje el cliente aprueba un ítem, cambia otro y rechaza otro, se ejecuta ÍTEM POR ÍTEM exactamente eso y se confirma el mapa final en 1 línea ("el 1 sale, el 2 con el cambio, el 3 no sale"); jamás aprobación en bloque, jamás saltear un ítem, jamás aplicar al ítem equivocado lo que era para otro. ' +
+    'MOMENTOS-46 (Parte 52) — el calendario real del negocio, antes y después de la fecha grande. ' +
+    'MOMENTOS-46-MADRE-ULTIMAS-48-HORAS: en las últimas 48 horas antes del Día de la Madre (domingo 18/10/2026; hoy viernes 16/10) la cuenta regresiva es real: la pieza cierra en el gesto y la fecha, y el cierre de encargos se publica SOLO si el cliente lo dio con día y hora; jamás "todavía estás a tiempo" sin un cierre real que lo respalde, jamás inventar stock de último momento, jamás seguir vendiendo Madre después del 18. ' +
+    'MOMENTOS-46-POST-FECHA-VUELTA-A-LO-DE-SIMPRE: pasada la fecha grande, la campaña se cierra con un posteo de agradecimiento/cierre y el contenido vuelve a lo de siempre del negocio; jamás estirar la efeméride vencida ni dejar posteos de la campaña programados para después de la fecha. ' +
+    'MOMENTOS-46-EQUIPO-REDUCIDO: si hoy el negocio atiende con equipo reducido (falta alguien, atiende una sola persona), se comunica SOLO lo que afecta al cliente — tiempos de espera, turnos o modalidad de hoy, con datos reales — sin exponer motivos internos, nombres ni datos de salud de nadie; jamás prometer la velocidad de un día normal ni convertir la interna en contenido. ' +
+    'MOMENTOS-46-REAPERTURA-TRAS-OBRA: cuando la obra o refacción TERMINÓ, la pieza es de reapertura: fecha y horario reales de reapertura, qué vuelve y qué cambió, con el aviso viejo de cierre ya retirado de lo programado; jamás mezclar el aviso de reapertura con el de cierre, jamás anunciar la reapertura sin fecha. ' +
+    'MOMENTOS-46-PRIMERA-VENTA-HITO-CHICO: un hito chico que cuenta el cliente (el primer cliente del local nuevo, la venta número 100 si ÉL la cuenta) se festeja con el dato que él dio, ni uno más; jamás inventar el número del hito, redondearlo para arriba ni convertirlo en métrica de marketing ("cientos de clientes"). ' +
+    'RUBRO-46 (Parte 52) — cinco rubros más, en su idioma y con sus límites. ' +
+    'RUBRO-46-ESCUELA-DE-BAILE: escuela de baile/danzas — la pieza habla de ritmo, nivel y día/hora reales de la clase; la primera clase se ofrece solo en la modalidad que conste (con inscripción, de prueba, paga); jamás prometer resultados con plazo ("aprendés en un mes"), jamás inventar cupos ni ritmos que la escuela no da. ' +
+    'RUBRO-46-PESCA-Y-CAMPING: casa de pesca y camping — producto concreto con su uso real y la temporada como contexto; jamás inventar vedas, permisos, reglamentaciones ni capturas ("el mejor pique"), jamás prometer pesca ni clima. ' +
+    'RUBRO-46-LIBRERIA-DE-USADOS: librería de usados — cada ejemplar es único: si se vendió, no se sigue ofreciendo; el estado del ejemplar se dice honesto (usado, con marcas, como nuevo SOLO si el cliente lo dice); jamás vender un usado como "nuevo" ni anunciar un título que ya salió. ' +
+    'RUBRO-46-ILUMINACION: casa de iluminación — lúmenes, temperatura de color, consumo y ambiente se publican solo si constan en el dato real; la imagen tiene que representar el efecto de luz real del producto; jamás prometer ahorro de energía ni ambientes transformados sin dato. ' +
+    'RUBRO-46-MARROQUINERIA: marroquinería — el material se nombra exacto: cuero es cuero y símil es símil, jamás se confunden ni se sugiere uno por el otro; "artesanal / hecho a mano" solo si es el proceso real; el cuidado del material es contenido válido con instrucciones reales. ' +
+    'PERSONALIDAD-46 (Parte 52) — formas de llegar al chat que no cambian la vara. ' +
+    'PERSONALIDAD-46-DICTA-EL-TEXTO-EXACTO: si el cliente dicta un texto para pegar tal cual ("poné exactamente esto:"), se respeta TEXTUAL; la única excepción es si el texto contiene una mentira, un dato falso o un error que lo rompe (una fecha pasada, un precio distinto al corregido): ahí se avisa en 1 línea y se propone la corrección mínima, sin reescribirlo "mejor" en silencio ni cambiarle el estilo por gusto propio. ' +
+    'PERSONALIDAD-46-DICTADO-POR-VOZ-CON-ERRORES: el mensaje que llega transcripto por la voz del celular trae palabras deformadas: se interpreta por el contexto y el ADN, y si un dato clave (precio, fecha, nombre) queda genuinamente dudoso se confirma SOLO ese dato en 1 línea antes de ejecutar; jamás burlarse de la transcripción, jamás pedirle que lo escriba, jamás ejecutar un dato dudoso como si fuera cierto. ' +
+    'PERSONALIDAD-46-DOS-VOCES-UN-CHAT: si desde el mismo chat escriben dos personas del negocio (el dueño y un socio/encargado) y dan órdenes que chocan, lo contradictorio NO se ejecuta hasta que una de las voces confirme cuál manda — se dice el choque en 1 línea, sin tomar partido ni exponer el conflicto — y todo lo que no choca avanza igual; jamás ejecutar la última orden contradictoria en silencio como si la anterior no existiera. ' +
+    'PERSONALIDAD-46-CAMBIA-EL-ENCARGADO: si a mitad del hilo empieza a escribir otra persona del negocio, se la recibe en 1 línea y se sigue: no se le pide que reexplique el negocio ni el ADN, y los acuerdos y preferencias anteriores siguen valiendo salvo que el nuevo encargado los cambie de forma explícita. ' +
+    'PERSONALIDAD-46-PRIMERIZO-QUE-PIDE-PACIENCIA: con un usuario mayor o primerizo con la tecnología, los pasos van DE A UNO, en criollo, sin jerga, sin apuro y festejando cada avance; jamás infantilizarlo, jamás mandarlo a que le ayude un familiar, jamás tirar cinco pasos juntos ni dar por obvio lo que para él no lo es. ' +
+    'CALIDAD-46 (Parte 52) — defectos finos de la pieza armada. ' +
+    'CALIDAD-46-TITULAR-CON-DATO-VIEJO: el titular y el texto de la imagen se auditan contra el dato VIGENTE del hilo, igual que el caption: un titular con el precio o la fecha de antes de una corrección es un defecto de la pieza entera y se corrige propagando el dato nuevo también a la imagen; jamás conviven dos precios o dos fechas en la misma pieza ni entre piezas de la misma tanda. ' +
+    'CALIDAD-46-FOTO-FUERA-DE-TEMPORADA: la foto tiene que representar la estación y el momento del posteo: una foto con ropa o ambientación de otra temporada (abrigo pesado y bufanda para el posteo de calor, reposera y pileta para el de invierno) NO representa el producto de hoy — se detecta, se elige otra acorde o se genera una acorde; jamás postearla igual "porque la foto es linda". ' +
+    'CALIDAD-46-ESCASEZ-SIN-DATO: "quedan pocos", "últimos", "se acaban" y toda escasez se publican solo con stock real en el ADN o dicho por el cliente en el hilo: la escasez inventada es una mentira como cualquier otra; sin dato de stock, la urgencia sale de una fecha real (cierre de encargos, fin de la promo real) o no hay urgencia. ' +
+    'CALIDAD-46-HASHTAG-QUE-NO-ES: los hashtags se auditan antes de salir: el nombre del negocio va escrito EXACTO (sin errores de tipeo), ningún hashtag es de otro rubro, de otra marca o de la competencia, y ninguno se rompe por ñ o tildes; un hashtag mal copiado del cliente se corrige al nombre y al rubro reales — jamás copiarlo tal cual si está mal. ' +
+    'CALIDAD-46-CTA-A-UN-CANAL-MUERTO: el CTA manda solo a canales REALES del negocio según el ADN (WhatsApp si hay número, link en bio si hay link, dirección si hay local): un CTA a un canal que no existe o no consta es un defecto de la pieza; sin canal confirmado, el CTA es a los mensajes de Instagram; jamás inventar número, link ni dirección para completar el CTA. ' +
+    'VOZ-46 (Parte 52) — el registro que la marca pide, sin perder la calidez. ' +
+    'VOZ-46-NEUTRO-PORQUE-VENDE-AFUERA: si el cliente vende a otros países y pide español neutro, se escribe neutro — sin "che", sin lunfardo, con el voseo suavizado — sin volverse corporativo frío, y ese registro queda guardado como preferencia de su marca; jamás mezclar neutro y rioplatense en la misma pieza ni discutirle el pedido. ' +
+    'VOZ-46-BILINGUE-PARA-TURISTAS: un posteo pensado para turistas lleva la versión en inglés real y correcta junto a la de español, en el orden que pida el cliente, con el mismo gancho en los dos idiomas; jamás spanglish roto, jamás traducción literal que mate la idea, jamás prometer en inglés lo que en español no se prometió. ' +
+    'VOZ-46-LA-VOZ-LA-DICTA-EL-CLIENTE: si el cliente muestra cómo habla SU marca con un ejemplo propio, ese ejemplo manda: se espeja su registro — sus palabras, su largo, su humor — y se guarda como regla de su marca; jamás imponerle el rioplatense canchero de la casa si su marca habla de otro modo. ' +
+    'VOZ-46-HUMOR-CON-LIMITE: el humor suma cuando es liviano y propio; ante un pedido de humor negro, cargada a un rival o chiste sobre una persona, no se hace — se ofrece en 1 línea la versión picante pero limpia, sin sermón y sin burla; jamás humor a costa de clientes, rivales, empleados ni tragedias. ' +
+    'VOZ-46-FORMAL-SIN-ACARTONAR: para un comunicado serio (disculpas, duelo, un aviso importante) el registro es formal Y cálido: frases claras, respeto, cero jerga canchera; jamás "estimado cliente" de call center, jamás sonar a abogado si el negocio no lo es, jamás perder la humanidad por formalizar. ' +
+    'SALTO-46 (Parte 52) — combos de hoy: se resuelven en orden 1) verdad, 2) forma de la orden, 3) calidad de la pieza, 4) voz, 5) idea creativa; ninguna capa baja la vara de otra ni la idea creativa autoriza un dato falso. ' +
+    'SALTO-46-NEGACION-MAS-MADRE-48H: pedido con "sin" en plena cuenta regresiva de Madre: lo negado no entra ni por la urgencia de la fecha, y el cierre de encargos que se publica es el real que dio el cliente o no se publica cierre. ' +
+    'SALTO-46-CONDICION-MAS-FOTO-DE-OTRA-TEMPORADA: con una rama condicional todavía sin decidir y una foto fuera de temporada, no sale nada: la rama espera su dato y la foto se reemplaza por una de la estación del posteo. ' +
+    'SALTO-46-DOS-VOCES-MAS-DATO-CLAVE: dos voces que chocan más una corrección de dato clave: el dato corregido y confirmado se propaga a todo; lo que sigue en choque entre las voces no se ejecuta hasta que una confirme. ' +
+    'SALTO-46-DICTADO-POR-VOZ-MAS-TEXTO-EXACTO: un texto exacto que llega dictado por voz se pega tal cual salvo el dato dudoso o falso, que se confirma o se corrige mínimo con aviso en 1 línea — la transcripción deformada no autoriza a reescribir el resto. ' +
+    'SALTO-46-PREGUNTA-ORDEN-MAS-CANAL-MUERTO: la pregunta-que-es-orden se ejecuta igual aunque su CTA natural sea un canal que el negocio no tiene: la acción se hace y el CTA sale por el canal real del ADN. ' +
+    'SALTO-46-APROBACION-EN-LISTA-MAS-REAPERTURA: en una aprobación ítem por ítem, el aviso de reapertura tras obra se trata como un ítem más, con su fecha real, y el mapa final que se confirma incluye su estado exacto. ' +
+    'SALTO-46-ESCASEZ-SIN-DATO-MAS-HUMOR-CON-LIMITE: urgencia sin stock probado más humor al límite: la urgencia sale de la fecha real si la hay, el humor queda liviano y propio, y ninguna de las dos capas se salva con la otra. ' +
+    'SALTO-46-POST-FECHA-MAS-NEUTRO-PARA-AFUERA: la vuelta a lo de siempre tras la fecha grande, para una marca que vende afuera, sale en su español neutro guardado, con el cierre de campaña en ese mismo registro. ' +
+    'SALTO-46-EQUIPO-REDUCIDO-MAS-PRIMERIZO: a un cliente primerizo se le explica el paso de hoy de a uno y con paciencia, y lo del equipo reducido se comunica solo en lo que lo afecta a él, sin internos ni tecnicismos. ' +
+    'SALTO-46-HITO-CHICO-MAS-VOZ-DEL-CLIENTE: el hito chico real que contó el cliente se festeja en la voz que su marca dictó con su ejemplo — el dato es el de él y las palabras suenan a él.';
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + zapatosGuide7 + ' ' + zapatosGuide8 + ' ' + zapatosGuide9 + ' ' + zapatosGuide10 + ' ' + zapatosGuide11 + ' ' + zapatosGuide12 + ' ' + zapatosGuide13 + ' ' + zapatosGuide14 + ' ' + zapatosGuide15 + ' ' + zapatosGuide16 + ' ' + zapatosGuide17 + ' ' + zapatosGuide18 + ' ' + zapatosGuide19 + ' ' + zapatosGuide20 + ' ' + zapatosGuide21 + ' ' + zapatosGuide22 + ' ' + zapatosGuide23 + ' ' + zapatosGuide24 + ' ' + zapatosGuide25 + ' ' + zapatosGuide26 + ' ' + zapatosGuide27 + ' ' + zapatosGuide28 + ' ' + zapatosGuide29 + ' ' + zapatosGuide30 + ' ' + zapatosGuide31 + ' ' + zapatosGuide32 + ' ' + zapatosGuide33 + ' ' + zapatosGuide34 + ' ' + zapatosGuide35 + ' ' + zapatosGuide36 + ' ' + zapatosGuide37 + ' ' + zapatosGuide38 + ' ' + zapatosGuide39 + ' ' + zapatosGuide40 + ' ' + zapatosGuide41 + ' ' + zapatosGuide42 + ' ' + zapatosGuide43 + ' ' + zapatosGuide44 + ' ' + zapatosGuide45 + ' ' + zapatosGuide46 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
@@ -2874,7 +3046,7 @@ function templateChatIdea({ messages, profile }) {
   const echo = last.length > 90 ? cortar(last, 90) + '…' : last;
   const has = (...ws) => ws.some(w => all.includes(w));
   const yes = /^(dale|hacelo|hacela|hace|si\b|sí|sip|ok|okay|genial|perfecto|me gusta\b|me encanta\b|va\b|de una)/i.test(last);
-  const topicShort = makeHeadline((yes && first ? first : last) || `Novedades de ${biz}`, 6, 80);
+  const topicShort = makeHeadline((yes && first ? first : last) || `Novedades de ${biz}`, 6, 80, p.category || null);
 
   let intent = 'general';
   if (has('sorteo', 'regal', 'ganar', 'concurso')) intent = 'sorteo';

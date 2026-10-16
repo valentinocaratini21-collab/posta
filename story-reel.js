@@ -132,8 +132,24 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   const rev = needsReview ? 1 : 0;
   let stories = 0, reels = 0;
 
+  // IDEMPOTENCIA (2026-10-16): se genera SOLO el déficit. Antes esta
+  // función insertaba siempre el cupo completo y por eso el pipeline solo
+  // podía llamarla desde cero — una semana completada en dos tandas nunca
+  // recibía las historias/reels que le faltaban.
+  const have = { story: 0, video: 0 };
+  try {
+    for (const row of db.prepare(`SELECT media_type, COUNT(*) AS n FROM posts WHERE user_id = ? AND week_key = ? AND media_type IN ('story','video') AND status IN ('draft','scheduled','published') GROUP BY media_type`).all(uid, weekKey)) {
+      if (row.media_type === 'story') have.story = row.n;
+      if (row.media_type === 'video') have.video = row.n;
+    }
+  } catch (e) {}
+  if (have.story >= nStories && have.video >= nReels) {
+    console.log(`[extras:${tag}] usuario ${uid} semana ${weekKey}: extras ya completos (${have.story} historias, ${have.video} reels)`);
+    return { stories: 0, reels: 0, plan: plan.id, already: true };
+  }
+
   // Historias: round-robin sobre los posteos (cada historia usa otro posteo).
-  for (let i = 0; i < nStories; i++) {
+  for (let i = have.story; i < nStories; i++) {
     const post = feed[i % feed.length];
     try {
       const src = localFile(mediaDir, post.image_path);
@@ -150,7 +166,7 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   }
 
   // Reels: cada reel rota 4 imágenes distintas de la semana.
-  for (let i = 0; i < nReels; i++) {
+  for (let i = have.video; i < nReels; i++) {
     try {
       const items = [];
       for (let k = 0; k < 4; k++) {
