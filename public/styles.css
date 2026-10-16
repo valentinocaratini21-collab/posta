@@ -1906,3 +1906,5 @@ textarea.in{resize:vertical;min-height:96px}
 .pjwrap.big .pj-ball{animation-name:pj-cascade-lg}
 @keyframes pj-cascade{0%{transform:translate(-52px,26px);animation-timing-function:ease-out}28%{transform:translate(0,-44px);animation-timing-function:ease-in}50%{transform:translate(52px,26px);animation-timing-function:ease-out}78%{transform:translate(0,-44px);animation-timing-function:ease-in}100%{transform:translate(-52px,26px)}}
 @keyframes pj-cascade-lg{0%{transform:translate(-68px,34px);animation-timing-function:ease-out}28%{transform:translate(0,-58px);animation-timing-function:ease-in}50%{transform:translate(68px,34px);animation-timing-function:ease-out}78%{transform:translate(0,-58px);animation-timing-function:ease-in}100%{transform:translate(-68px,34px)}}
+
+.pcsheet-opt small{display:block;font-size:12px;font-weight:500;opacity:.62;margin-top:2px}

@@ -148,7 +148,12 @@ const GOLDEN_TARGET = 5; // posteos aprobados para "graduarse" (sacar las ruedit
 function trainingWheelsActive(uid) {
   if (!TRAINING_WHEELS_ON) return false;
   try {
-    const u = db.prepare('SELECT training_wheels FROM users WHERE id = ?').get(uid);
+    const u = db.prepare('SELECT training_wheels, autopilot_enabled FROM users WHERE id = ?').get(uid);
+    // Modo automático (2026-10-16, decisión de Valentino): los posteos se
+    // publican solos, sin aprobación — con publicación automática activa
+    // no hay rueditas ni revisión obligatoria. El filtro de calidad de
+    // scheduleAllDrafts sigue siendo la línea de defensa.
+    if (u && u.autopilot_enabled) return false;
     if (u && u.training_wheels === 0) return false;
     const pub = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'`).get(uid).n || 0;
     if (pub >= GOLDEN_TARGET) return false;
@@ -960,7 +965,7 @@ app.post('/api/auth/register', (req, res) => {
     const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
     const utmS = String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
-    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign) VALUES (?, ?, ?, ?, ?, ?, ?)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
+    const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
     req.session.userId = r.lastInsertRowid;
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
@@ -1098,7 +1103,7 @@ app.get('/api/auth/magic', (req, res) => {
       const utm = (payload.utm && typeof payload.utm === 'object') ? payload.utm : {};
       const utmS = String(utm.source || '').slice(0, 40);
       const utmC = String(utm.campaign || '').slice(0, 80);
-      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign) VALUES (?, '', ?, ?, ?, ?, ?)")
+      const r = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1)")
         .run(email, code, referredBy, trialEnds, utmS, utmC);
       const userId = r.lastInsertRowid;
       try {
@@ -1517,7 +1522,7 @@ app.get('/api/autopilot', requireAuth, (req, res) => {
       ok: true,
       enabled: !!(u && u.autopilot_enabled),
       clean_approvals: clean,
-      unlocked: tl >= 2 || clean >= 10 || !!(u && u.autopilot_offered) || !!(u && u.autopilot_enabled),
+      unlocked: true, // 2026-10-16: la publicación automática es el modo normal; el toggle es el control, no un premio
       progress: Math.min(10, clean),
       trust_level: tl,
       // En nivel 1 el aviso pre-publicación es obligatorio (freno de
@@ -1544,12 +1549,19 @@ app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
     const enabled = !!req.body.enabled;
     const uid = req.session.userId;
     if (enabled) {
-      // Opt-in explícito al autopiloto pleno: sube directo al nivel 2.
-      db.prepare(`UPDATE users SET autopilot_enabled = 1, trust_level = CASE WHEN COALESCE(trust_level, 0) < 2 THEN 2 ELSE trust_level END WHERE id = ?`).run(uid);
+      // Publicación automática (2026-10-16): nivel 1 — sale solo y el
+      // aviso previo de 30 min actúa de freno de emergencia en cada posteo.
+      db.prepare(`UPDATE users SET autopilot_enabled = 1, trust_level = CASE WHEN COALESCE(trust_level, 0) < 1 THEN 1 ELSE trust_level END WHERE id = ?`).run(uid);
     } else {
-      // Apagarlo baja al nivel 1: sigue publicando solo pero con el aviso
-      // pre-publicación como freno de emergencia (puede frenar cada posteo).
-      db.prepare(`UPDATE users SET autopilot_enabled = 0, trust_level = CASE WHEN COALESCE(trust_level, 0) > 1 THEN 1 ELSE trust_level END WHERE id = ?`).run(uid);
+      // Modo manual REAL: nivel 0 (nada sale sin aprobación) y todo lo que
+      // el sistema había programado solo y aún no salió se frena — vuelve
+      // a borrador. Lo que el usuario aceptó a mano no se toca.
+      db.prepare(`UPDATE users SET autopilot_enabled = 0, trust_level = 0 WHERE id = ?`).run(uid);
+      try {
+        const r = db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending'
+          WHERE user_id = ? AND status = 'scheduled' AND COALESCE(auto_published, 0) = 1`).run(uid);
+        if (r.changes) console.log(`[autopilot] usuario ${uid}: ${r.changes} posteos automáticos frenados al pasar a manual`);
+      } catch (e) {}
     }
     console.log(`[autopilot] usuario ${uid} ${enabled ? 'ACTIVÓ' : 'desactivó'} el autopiloto`);
     res.json({ ok: true, enabled });
@@ -3985,7 +3997,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
   } else if (action === 'unschedule') {
     // Frenar el autopiloto (2026-10-02): vuelve a borrador, no se publica.
-    db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0 WHERE id=?`).run(post.id);
+    db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending' WHERE id=?`).run(post.id);
     console.log(`[autopilot] usuario ${req.session.userId} frenó el post ${post.id}`);
   } else if (action === 'save-draft') {
     // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
@@ -8547,7 +8559,7 @@ async function stressRunAccount(def, acc) {
   const prev = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
   if (prev) stressDeleteUser(prev.id);
   const hash = bcrypt.hashSync(crypto.randomBytes(8).toString('hex'), 10);
-  const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, trial_ends_at) VALUES (?, ?, ?, ?)').run(email, hash, newReferralCode(), Date.now() + 3 * 86400000);
+  const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, trial_ends_at, trust_level, autopilot_enabled) VALUES (?, ?, ?, ?, 1, 1)').run(email, hash, newReferralCode(), Date.now() + 3 * 86400000);
   const uid = r.lastInsertRowid;
   acc.userId = uid;
   getProfile(uid); getSettings(uid);
@@ -10503,7 +10515,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v148';
+const BUILD_ID = '20261016-v149';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

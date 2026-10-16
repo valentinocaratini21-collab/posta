@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261010-v106'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261016-v149'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -4370,6 +4370,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     const prop = proposedFor(d, i);
     const capFull = String(d.caption || d.source_topic || '');
     const acts = `<div class="pcard-actions hs-acts">
+        ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
         <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
         ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
         <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
@@ -4976,6 +4977,7 @@ function postCardHTML(p, opts) {
   const actions = isPub ? '' : `<div class="pcard-actions">
       ${isV ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
       <button type="button" data-pc-act="skip">⏭️ Saltar</button>
+      ${String(p.status) === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
       ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
     </div>`;
   return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
@@ -5060,7 +5062,11 @@ async function pcSaveCap(card, id, btn) {
 }
 // --- Loading + imagen inline en todas las tarjetas del posteo ---
 function pcSetLoading(id, on, label) {
-  document.querySelectorAll('[data-post-id="' + id + '"] .pcard-media').forEach(m => {
+  // Las dos superficies: .pcard-media (tarjeta) y .igmock-media (Schedule).
+  // Buscar una sola dejaba la otra sin indicador y sin refresco (2026-10-16).
+  document.querySelectorAll('[data-post-id="' + id + '"]').forEach(card => {
+    const m = card.querySelector('.pcard-media, .igmock-media');
+    if (!m) return;
     let ov = m.querySelector('.pcard-loading');
     if (on) {
       if (!ov) { ov = document.createElement('div'); ov.className = 'pcard-loading'; m.appendChild(ov); }
@@ -5069,10 +5075,18 @@ function pcSetLoading(id, on, label) {
   });
 }
 function pcSetImage(id, path) {
-  document.querySelectorAll('[data-post-id="' + id + '"] .pcard-media').forEach(m => {
+  // Se ve EN EL MOMENTO: se cambia el src en todas las tarjetas del posteo
+  // con un cache-buster (la media sale con caché de 30 días: sin esto, si la
+  // ruta se repitiera, el navegador seguiría mostrando la vieja) y el visor
+  // en grande queda apuntando a la imagen nueva.
+  const bust = path + (String(path).includes('?') ? '&' : '?') + 'v=' + Date.now();
+  document.querySelectorAll('[data-post-id="' + id + '"]').forEach(card => {
+    const m = card.querySelector('.pcard-media, .igmock-media');
+    if (!m) return;
     const img = m.querySelector('img');
-    if (img) img.src = path;
-    else m.innerHTML = '<img src="' + esc(path) + '" alt="" loading="lazy">';
+    if (img) img.src = bust;
+    else m.innerHTML = '<img src="' + esc(bust) + '" alt="" loading="lazy">';
+    if (m.dataset && m.dataset.lightbox !== undefined) m.dataset.lightbox = path;
   });
 }
 // --- Bottom sheet: cambiar imagen (3 caminos) ---
@@ -5104,13 +5118,13 @@ function pcOpenImageSheet(id) {
   bd.innerHTML = `<div class="pcsheet" data-post-id="${esc(String(id))}" role="dialog" aria-modal="true">
     <div class="pcsheet-handle"></div>
     <div class="pcsheet-title">Cambiar imagen</div>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-style">🎨 Otro estilo</button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-style">🎨 Otro estilo<small>La rehago con otro look — se ve al momento</small></button>
     <div class="pcsheet-stylewrap" hidden>
       <select class="pcsheet-select" aria-label="Elegí un estilo"><option value="">Cargando estilos…</option></select>
     </div>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto</button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto<small>Subí una foto tuya y la uso para este posteo</small></button>
     <input type="file" accept="image/*" class="pcsheet-file" hidden>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta</button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta<small>Retoco la actual: luz, color y nitidez</small></button>
     <button type="button" class="pcsheet-close" data-pc-act="img-close">Cerrar</button>
     <div class="pcsheet-msg"></div>
   </div>`;
@@ -5159,6 +5173,17 @@ async function pcUploadPhoto(id, file) {
     toast('✅ Foto actualizada');
   } catch (e) { toast('No se pudo subir: ' + esc((e && e.message) || 'probá de nuevo')); }
   pcSetLoading(id, false);
+}
+// --- Frenar un posteo programado (vuelve a borrador; se re-acepta cuando quieran) ---
+async function pcHold(id) {
+  try {
+    await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'unschedule' });
+  } catch (e) {
+    toast('No se pudo frenar: ' + esc((e && e.message) || 'probá de nuevo'));
+    return;
+  }
+  toast('⏸ Posteo frenado — no va a salir. Cuando quieras, aceptalo de nuevo.');
+  try { render(); } catch (e) {}
 }
 // --- Saltar con deshacer (5s) + armar otro ---
 async function pcSkip(id, card) {
@@ -5219,6 +5244,7 @@ function pcOnClick(e) {
   const id = root.dataset.postId;
   const act = el.dataset.pcAct;
   if (act === 'open') { location.hash = '#/app/post/' + encodeURIComponent(id); return; }
+  if (act === 'hold') { pcHold(id); return; }
   if (act === 'edit-cap') { pcStartEdit(root); return; }
   if (act === 'save-cap') { pcSaveCap(root, id, el); return; }
   if (act === 'cancel-cap') { pcCancelEdit(root); return; }

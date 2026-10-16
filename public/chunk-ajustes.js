@@ -180,8 +180,8 @@ function ajustesView() {
   <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Autopiloto</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cuando está activado, Posty publica solo los posteos que pasan el filtro de calidad. Si algo no está a la altura, va a revisión manual y te avisa.</p>
+  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Publicación automática</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
       <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
@@ -242,21 +242,17 @@ function bindSettings() {
         const on = !!(r && r.enabled);
         const unlocked = !!(r && r.unlocked);
         const prog = (r && r.progress) || 0;
-        if (!unlocked) {
-          btnAp.textContent = `🔒 Desbloqueá (${prog}/10)`;
-          btnAp.disabled = true;
-          $('#autopilotStatus').textContent = 'Aprobá 10 posteos sin editarlos y se desbloquea.';
-          $('#autopilotInfo').textContent = 'El autopiloto se gana con confianza: cuando Posty demuestra que la pega, te ofrece soltarle las riendas.';
+        if (false) {
         } else {
           btnAp.disabled = false;
           btnAp.textContent = on ? '🟢 Activado' : '⚪ Activar';
           btnAp.classList.toggle('btn-primary', !on);
           $('#autopilotStatus').textContent = on
-            ? 'Posty publica solo lo que pasa el filtro de calidad. Te aviso 30 min antes.'
-            : 'Todo pasa por tu aprobación.';
+            ? 'Tus posteos salen solos. Te aviso 30 min antes de cada uno, por si querés frenarlo.'
+            : 'Modo manual: nada se publica sin tu aprobación.';
           $('#autopilotInfo').textContent = on
-            ? 'El filtro chequea: imagen válida, caption con contenido, hashtags y que no sea duplicado. Score mínimo: 70/100.'
-            : '';
+            ? 'El filtro de calidad chequea cada posteo antes de programarlo: imagen válida, caption con contenido, hashtags y que no sea duplicado.'
+            : 'Al activarla, las semanas nuevas se programan solas. Lo ya programado a mano no se toca.';
         }
       } catch (e) {
         btnAp.textContent = 'Error';
