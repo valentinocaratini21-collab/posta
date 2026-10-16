@@ -163,6 +163,8 @@ db.exec(`CREATE TABLE IF NOT EXISTS rebuild_counts (
   PRIMARY KEY (user_id, week_key)
 );`);
 try { db.exec(`ALTER TABLE post_signals ADD COLUMN caption TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE post_signals ADD COLUMN style_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE post_signals ADD COLUMN tipo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN best_hour INTEGER DEFAULT 19`); } catch (e) { /* ya existe */ }
 db.exec(`CREATE TABLE IF NOT EXISTS post_metrics (
   post_id INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,

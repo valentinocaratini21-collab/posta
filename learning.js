@@ -203,6 +203,24 @@ function getClientBoosts(db, userId) {
       -0.5, 1.0
     );
   }
+  // Señales de gusto del cliente (sus dedos en la app: aprobó / rechazó /
+  // editó borradores, post_signals con style_code desde v136). Un estilo que
+  // el cliente rechaza seguido baja aunque rinda en alcance; el que aprueba
+  // siempre, sube. Se suma al boost de rendimiento y se reclampa.
+  try {
+    const tRows = db.prepare(
+      `SELECT style_code AS code,
+              SUM(CASE WHEN client_signal = 'approved' THEN 1 ELSE 0 END) AS ok,
+              SUM(CASE WHEN client_signal = 'rejected' THEN 1 ELSE 0 END) AS no
+         FROM post_signals
+        WHERE user_id = ? AND COALESCE(style_code, '') != ''
+        GROUP BY style_code`
+    ).all(userId);
+    for (const t of tRows) {
+      const adj = clamp(0.35 * (t.ok || 0) - 0.45 * (t.no || 0), -0.5, 0.6);
+      if (adj !== 0) boosts[t.code] = clamp((boosts[t.code] || 0) + adj, -0.5, 1.0);
+    }
+  } catch (e) { /* post_signals sin style_code en DBs viejas: solo rendimiento */ }
   return boosts;
 }
 

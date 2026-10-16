@@ -4781,14 +4781,15 @@ function recordSignal(userId, post, signal) {
     const prof = getProfile(userId) || {};
     const wk = postWeekKey(post, tz);
     db.prepare(`
-      INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at)
-      VALUES (?,?,?,?,?,?,?,?,datetime('now'))
+      INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo)
+      VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?)
       ON CONFLICT(user_id, post_id) DO UPDATE SET
         client_signal=excluded.client_signal, caption=excluded.caption, hashtags=excluded.hashtags,
         scheduled_for=excluded.scheduled_for, rubro=excluded.rubro,
         week_key=excluded.week_key, updated_at=datetime('now'),
+        style_code=excluded.style_code, tipo=excluded.tipo,
         auto_signal=0 -- FASE 5: la señal manual pisa la auto-marcada
-    `).run(userId, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', prof.category || '', signal, wk);
+    `).run(userId, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', prof.category || '', signal, wk, post.style_code || '', post.tipo || '');
   } catch (e) { console.error('[posta] recordSignal:', e.message); }
 }
 
@@ -5025,6 +5026,20 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
     // entre borradores (lo comparten los 5 workers del pool).
     const usedStyles = [];
+    // Director de semana: cada posteo cumple un ROL DE ESCENA distinto para
+    // que la semana se vea diseñada (variada), no generada en serie. La
+    // rotación arranca en un punto distinto cada semana (hash de weekKey).
+    const SCENE_ROLES = [
+      'la PERSONA en acción — el momento humano: manos trabajando, el oficio en vivo, alguien usando el producto',
+      'el PRODUCTO protagonista — el héroe del negocio en primer plano, irresistible',
+      'el LUGAR — el local con su ambiente y su vida, como invitando a entrar',
+      'el DETALLE en primer plano — textura, material, cercanía que da ganas de tocar',
+      'DETRÁS DE ESCENA — el equipo trabajando, el proceso, lo que el cliente nunca ve',
+    ];
+    let sceneRoleIdx = 0;
+    for (const ch of String(weekKey || '')) sceneRoleIdx += ch.charCodeAt(0);
+    sceneRoleIdx = sceneRoleIdx % SCENE_ROLES.length;
+    const nextSceneRole = () => SCENE_ROLES[(sceneRoleIdx++) % SCENE_ROLES.length];
     // Pool de 3 en paralelo (igual que el autopilot del browser).
     let nextIdx = 0;
     // Cupo exacto de slots: en modo completar NUNCA crear más que el déficit
@@ -5141,7 +5156,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try {
             imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
-              usedStyles, styleOut, productRef,
+              usedStyles, styleOut, productRef, sceneRole: nextSceneRole(),
             });
           } catch (e) {
             if (!firstImgError) firstImgError = String((e && e.message) || e).slice(0, 300);
@@ -7358,6 +7373,34 @@ function rememberPrompt(mediaPath, prompt) {
   } catch (e) {}
 }
 function promptForMedia(mediaPath) { return promptByMedia.get(mediaPath) || ''; }
+// Línea de gustos según las ACCIONES del cliente en la app (aprobó / rechazó
+// borradores): la señal más honesta de qué registro visual le va. Necesita
+// al menos 2 señales del mismo signo para nombrar un estilo o tipo.
+function clientTasteLine(uid) {
+  try {
+    const rows = db.prepare(
+      `SELECT client_signal AS s, style_code AS code, tipo,
+              COUNT(*) AS n
+         FROM post_signals
+        WHERE user_id = ? AND client_signal IN ('approved', 'rejected')
+          AND created_at >= datetime('now', '-90 days')
+        GROUP BY client_signal, style_code, tipo`
+    ).all(uid);
+    const okStyles = new Set(), noStyles = new Set(), okTipos = new Set(), noTipos = new Set();
+    for (const r of rows) {
+      if (r.n < 2) continue;
+      const tgt = r.s === 'approved' ? [okStyles, okTipos] : [noStyles, noTipos];
+      if (r.code) tgt[0].add(r.code);
+      if (r.tipo) tgt[1].add(r.tipo);
+    }
+    const bits = [];
+    if (okStyles.size) bits.push(`aprueba seguido los estilos ${[...okStyles].slice(0, 3).join(', ')}`);
+    if (okTipos.size) bits.push(`le van los posteos de tipo ${[...okTipos].slice(0, 3).join(', ')}`);
+    if (noStyles.size) bits.push(`suele rechazar los estilos ${[...noStyles].slice(0, 3).join(', ')}`);
+    if (noTipos.size) bits.push(`no le van los posteos de tipo ${[...noTipos].slice(0, 3).join(', ')}`);
+    return bits.length ? `Según sus acciones en la app (lo que aprueba y lo que descarta): ${bits.join('; ')}. Respetá ese gusto.` : '';
+  } catch (e) { return ''; }
+}
 // Memoria visual del cliente: los estilos que más rindieron EN SU cuenta
 // (posts publicados con métricas). Sin datos suficientes → '' (el brief
 // queda como siempre). Es la herencia que hace cada prompt más "suyo".
@@ -7370,7 +7413,7 @@ function topStyleMemoryLine(uid) {
     return rows.map(x => `${x.code} (alcance prom. ${Math.round(x.r || 0)})`).join(', ');
   } catch (e) { return ''; }
 }
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine }, apiKey) {
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole }, apiKey) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
   // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
@@ -7440,7 +7483,7 @@ Familia visual: ${fam}
 ${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
 ${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
 ${dnaBits ? `Contexto del negocio: ${String(dnaBits).slice(0, 300)}` : ''}
-${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
+${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${sceneRole ? `\nRol de escena de este posteo dentro de la semana (cada posteo de la semana cumple un rol distinto — la semana completa debe verse variada): ${String(sceneRole).slice(0, 220)}. El momento y el contexto TIENEN que cumplir ese rol.` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
       ],
     }),
     signal: AbortSignal.timeout(60000),
@@ -7725,7 +7768,7 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
       paletteHex: parseBrandHexes(settings.brand_colors),
       dnaBits: dnaBitsLine(readDna(uid)),
       learningsLine: learningsLineOf(getContentLearnings(uid)),
-      memoryLine: topStyleMemoryLine(uid),
+      memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid)].filter(Boolean).join(' '),
       styleRules,
       visualStyle,
     }), apiKey);
@@ -7808,7 +7851,7 @@ function conceptShotGenerateQueued(args) {
     else s.waiters.push(run);
   });
 }
-async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '' }) {
+async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -7844,7 +7887,8 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     paletteHex: hexes,
     dnaBits: dnaBitsLine(dna),
     learningsLine: learningsLineOf(getContentLearnings(uid)),
-    memoryLine: topStyleMemoryLine(uid),
+    memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid)].filter(Boolean).join(' '),
+    sceneRole,
     styleRules,
     visualStyle,
   };
@@ -10371,7 +10415,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v135';
+const BUILD_ID = '20261016-v136';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
