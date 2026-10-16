@@ -4009,12 +4009,23 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
           message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
       }
     }
+    // Integridad de agenda (2026-10-16): jamás un posteo 'scheduled' sin
+    // fecha (quedaba fantasma, no publicaba nunca) ni dos del feed el mismo
+    // día. Sin fecha o con el día ocupado → próximo día libre del asignador.
+    let finalWhen = scheduled_at || post.scheduled_at;
+    if (!finalWhen || scheduleDayTaken(req.session.userId, post, finalWhen)) {
+      try { const slots = assignScheduleSlots(req.session.userId, [post]); if (slots.get(post.id)) finalWhen = slots.get(post.id); } catch (e) {}
+    }
+    if (!finalWhen) {
+      db.prepare(`UPDATE posts SET caption=?, hashtags=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, post.id);
+      return res.json({ ok: true, warning: 'sin_dia_libre' });
+    }
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=? WHERE id=?`).run(
-      scheduled_at || post.scheduled_at, caption ?? post.caption, hashtags ?? post.hashtags,
+      finalWhen, caption ?? post.caption, hashtags ?? post.hashtags,
       // "Posty te avisa": si cambió la hora programada, se re-arma el aviso de
       // aprobación (3h antes). Si el posteo estaba rechazado y el usuario lo
       // vuelve a programar a mano, es una intención nueva: vuelve a 'pending'.
-      (scheduled_at || post.scheduled_at) !== post.scheduled_at ? 0 : (post.notified || 0),
+      finalWhen !== post.scheduled_at ? 0 : (post.notified || 0),
       post.approval === 'rejected' ? 'pending' : (post.approval || 'pending'),
       post.id
     );
@@ -4426,7 +4437,13 @@ function acceptAllDrafts(uid, items, opts) {
   const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='' WHERE id=?`);
   let n = 0;
   for (const d of toAccept) {
-    const when = whenById[d.id] || (d.scheduled_at ? String(d.scheduled_at).slice(0, 19).replace('T', ' ') : null);
+    let when = whenById[d.id] || (d.scheduled_at ? String(d.scheduled_at).slice(0, 19).replace('T', ' ') : null);
+    // Integridad de agenda (2026-10-16): sin fecha o con el día ocupado
+    // (por otro posteo o por uno aceptado recién en este mismo lote), el
+    // asignador da el próximo día libre. Nunca dos el mismo día.
+    if (!when || scheduleDayTaken(uid, d, when)) {
+      try { const s = assignScheduleSlots(uid, [d]); if (s.get(d.id)) when = s.get(d.id); } catch (e) {}
+    }
     if (!when) continue; // sin hora no se puede programar: se saltea
     upd.run(when, d.id);
     try { recordSignal(uid, d, 'approved'); } catch (e) {}
@@ -5549,6 +5566,25 @@ function vaciarYMarcar(uid, drafts, wk) {
 // ocupados. No toca la DB: devuelve Map id → 'YYYY-MM-DD HH:MM:SS' (UTC).
 // Extraído de scheduleAllDrafts (FASE 2) para reutilizar la misma política en
 // el publish firmado de la semana y en el email de preview.
+// ¿El día (hora del cliente) de `whenIso` ya tiene un posteo de la misma
+// clase (feed vs historia) programado o publicado? Regla de agenda de
+// Posty: un posteo de feed por día por cliente (2026-10-16).
+function scheduleDayTaken(uid, post, whenIso) {
+  try {
+    const tz = userTz(uid);
+    const k = ymdInTz(whenIso, tz);
+    if (!k) return false;
+    const isStory = post && post.media_type === 'story';
+    const rows = db.prepare(`SELECT scheduled_at, media_type FROM posts
+      WHERE user_id = ? AND status IN ('scheduled','published') AND scheduled_at IS NOT NULL AND id != ?`).all(uid, (post && post.id) || 0);
+    for (const r of rows) {
+      if ((r.media_type === 'story') !== isStory) continue;
+      if (ymdInTz(r.scheduled_at, tz) === k) return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 function assignScheduleSlots(uid, drafts) {
   const tz = userTz(uid);
   let bestHour = 19;
@@ -10467,7 +10503,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v143';
+const BUILD_ID = '20261016-v144';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

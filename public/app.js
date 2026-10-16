@@ -4309,27 +4309,52 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   // botones Aceptar/Editar/Imagen/Eliminar. Pedido de Valentino.
   // 2026-10-09: cada borrador muestra arriba el día propuesto (se programa ahí al aceptar).
   const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  // Propuestas de día para los borradores: DÍAS DISTINTOS, saltando los que
+  // ya tienen un posteo real (publicado o programado). Antes salían de
+  // "hoy + índice" y el corrimiento de las 10:00 hacía que dos posteos
+  // cayeran "mañana" (reporte de Valentino, 2026-10-16). Las historias
+  // tienen su propio carril, igual que en el servidor.
+  const proposedIsos = (() => {
+    const map = new Map();
+    try {
+      const dayKey = (v) => new Date(v).toLocaleDateString('en-CA', { timeZone: tz });
+      const takenFeed = new Set(), takenStory = new Set();
+      for (const p of all) {
+        if (!p || !p.scheduled_at) continue;
+        if (p.status !== 'published' && p.status !== 'scheduled') continue;
+        (String(p.media_type) === 'story' ? takenStory : takenFeed).add(dayKey(p.scheduled_at));
+      }
+      const now = new Date();
+      const hourNow = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now), 10);
+      // Base: hoy si todavía no pasaron las 10:00 del cliente; si no, mañana.
+      const cursorFeed = new Date(now.getTime() + (hourNow >= 10 ? 86400000 : 0));
+      const cursorStory = new Date(cursorFeed.getTime());
+      const nextFree = (cursor, taken) => {
+        let d = new Date(cursor.getTime());
+        for (let k = 0; k < 21; k++) {
+          const ymd = d.toLocaleDateString('en-CA', { timeZone: tz });
+          if (!taken.has(ymd)) { taken.add(ymd); return { iso: `${ymd}T10:00:00`, next: new Date(d.getTime() + 86400000) }; }
+          d = new Date(d.getTime() + 86400000);
+        }
+        return null;
+      };
+      let cf = cursorFeed, cs = cursorStory;
+      for (const d of list) {
+        if (!d || d.scheduled_at) continue;
+        const isStory = String(d.media_type) === 'story';
+        const r = isStory ? nextFree(cs, takenStory) : nextFree(cf, takenFeed);
+        if (r) { map.set(d.id, { iso: r.iso }); if (isStory) cs = r.next; else cf = r.next; }
+      }
+    } catch (e) {}
+    return map;
+  })();
+
   const proposedFor = (d, i) => {
     if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
     try {
-      // Día propuesto: hoy + i días, 10:00 hora local.
-      // 2026-10-10: si ya pasó esa hora, correr al día siguiente (nunca en el pasado).
-      const now = new Date();
-      let dt = new Date(now.getTime() + i * 86400000);
-      let ymd = dt.toLocaleDateString('en-CA', { timeZone: tz });
-      let iso = `${ymd}T10:00:00`;
-      // Chequear si 10:00 de ese día ya pasó en la zona del cliente
-      const tenAm = new Date(`${ymd}T10:00:00`);
-      // Comparar en hora local aproximada: si now > 10am del día propuesto, +1 día
-      const nowYmd = now.toLocaleDateString('en-CA', { timeZone: tz });
-      if (ymd === nowYmd) {
-        try {
-          const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now);
-          const h = parseInt(parts, 10);
-          if (h >= 10) { dt = new Date(dt.getTime() + 86400000); ymd = dt.toLocaleDateString('en-CA', { timeZone: tz }); iso = `${ymd}T10:00:00`; }
-        } catch (e) {}
-      }
-      const lbl = new Date(ymd + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
+      const iso = (proposedIsos.get(d.id) || {}).iso || null;
+      if (!iso) return { label: '📝 Borrador', iso: null };
+      const lbl = new Date(iso.slice(0, 10) + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
       return { label: `📅 ${lbl} · 10:00`, iso };
     } catch (e) { return { label: '📝 Borrador', iso: null }; }
   };
