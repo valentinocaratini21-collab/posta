@@ -433,7 +433,13 @@ app.use('/media', express.static(MEDIA_DIR, {
   maxAge: '30d', immutable: true,
 }));
 app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res, fp) => { if (/\.(js|css|html)$/.test(fp)) res.setHeader('Cache-Control', 'no-cache'); },
+  setHeaders: (res, fp) => {
+    // JS/CSS: la URL lleva la versión (?v= en index.html, que sigue
+    // no-cache) — cada deploy es una URL nueva, así que pueden cachear
+    // 30 días inmutable: abrir la app no re-baja el código cada vez.
+    if (/\.(js|css)$/.test(fp)) res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    else if (/\.html$/.test(fp)) res.setHeader('Cache-Control', 'no-cache');
+  },
 }));
 
 const requireAuth = (req, res, next) => {
@@ -3475,6 +3481,7 @@ app.post('/api/media', requireAuth, express.raw({ type: 'image/*', limit: '15mb'
   const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
   const filePath = `/media/${name}`;
+  if (kind !== 'video') makeVariantsAsync(path.join(MEDIA_DIR, name));
   // La foto subida en el chat también queda en su librería: así el servidor
   // puede resolverla cuando Posty la elige (photo_index) en un ```edit.
   // FIX-FANTASMA: ?kind=design para diseños generados (renderDesignImage), que
@@ -3675,6 +3682,7 @@ app.post('/api/album/photo', requireAuth, express.raw({ type: 'image/*', limit: 
     const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
     fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
     const filePath = `/media/${name}`;
+    makeVariantsAsync(path.join(MEDIA_DIR, name));
     const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(uid, filePath, 'photo');
     const assetId = ins.lastInsertRowid;
     // Misión: la primera foto de la semana la cumple.
@@ -7196,6 +7204,15 @@ function parseBrandHexes(brandColorsRaw) {
 // corre la limpieza de emergencia y reintenta una vez: el producto se
 // auto-repara sin esperar un deploy.
 const JPEG_PY = "import sys\nfrom PIL import Image\nfrom io import BytesIO\nim = Image.open(BytesIO(sys.stdin.buffer.read()))\nim = im.convert('RGB')\nif im.width > 1080:\n    im = im.resize((1080, round(im.height * 1080 / im.width)), Image.LANCZOS)\nout = BytesIO()\nim.save(out, 'JPEG', quality=85, optimize=True)\nsys.stdout.buffer.write(out.getvalue())\n";
+// Variantes livianas en segundo plano (subidas del cliente): no bloquea la
+// respuesta de la subida; si la foto no se puede procesar (HEIC, etc.), la
+// app cae a la maestra y listo.
+function makeVariantsAsync(absPath) {
+  try {
+    const { execFile } = require('child_process');
+    execFile('python3', [path.join(__dirname, 'media-variants.py'), '--in', absPath], { timeout: 25000 }, () => {});
+  } catch (e) {}
+}
 function saveImageB64(b64) {
   // Peso (2026-10-16, pedido de Valentino: "imágenes cada vez más
   // livianas"): el maestro PNG de la IA pesa ~2 MB → se transcodifica a
@@ -10427,7 +10444,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v137';
+const BUILD_ID = '20261016-v138';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

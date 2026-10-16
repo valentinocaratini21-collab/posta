@@ -14,6 +14,17 @@ window.__imgFb = function (el) {
   el.dataset.fbk = '1';
   if (el.dataset.full) el.src = el.dataset.full;
 };
+// Precarga silenciosa de las variantes de la semana: cuando el
+// cliente desliza o entra a mirar, las imágenes ya están en caché.
+function prefetchMedia(list) {
+  try {
+    (list || []).slice(0, 12).forEach((d) => {
+      if (!d || !d.image_path || d.media_type === 'video') return;
+      const im = new Image();
+      im.src = mv(d.image_path, 640);
+    });
+  } catch (e) {}
+}
 // Corta un texto SIN partir palabras a la mitad: si el corte cae dentro de una
 // palabra, retrocede al espacio anterior. Nunca devuelve "efecti".
 const cortar = (t, max) => {
@@ -1648,6 +1659,7 @@ function tipoBadge(t) {
   return `<span class="tipo-badge">${map[t][0]} ${map[t][1]}</span>`;
 }
 function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
+  prefetchMedia(drafts);
   const n = drafts.length;
   // Cabecera estilo Instagram: el borrador se muestra como el posteo que va a ser (WYSIWYG).
   const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
@@ -4246,6 +4258,7 @@ function bindChat() {
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
 function homeWeekHTML(posts, quota, generating, noDna) {
+  prefetchMedia(posts);
   const q = quota || {};
   const qTotal = Number(q.limit) || 0;
   const qUsed = Math.max(0, Number(q.used) || 0);
@@ -4458,7 +4471,7 @@ async function bindAlbumCard() {
     ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
     : '';
   const grid = (data.photos || []).length
-    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${data.photos.map(ph => `<img src="${esc(ph.path)}" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
+    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${data.photos.map(ph => `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
     : `<div style="font-size:13.5px;opacity:.75;margin:6px 0">Todavía no hay fotos tuyas. La primera que mandes se convierte en posteo ✨</div>`;
   box.innerHTML = `
   <div class="card" style="margin-top:14px">
