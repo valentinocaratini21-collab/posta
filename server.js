@@ -3527,6 +3527,192 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
   res.json({ ok: true, id: r.lastInsertRowid, path: filePath, kind });
 });
 
+// ================= ÁLBUM DEL NEGOCIO + MISIÓN FOTO (2026-10-16) =========
+// El paquete para que el cliente mande fotos propias seguido (su foto es
+// el mejor insumo: auténtica, gratis, inmediata): (1) una MISIÓN concreta
+// por semana según su rubro — pedir "fotos" en abstracto paraliza, una
+// misión de 10 segundos no; (2) el ÁLBUM visible con progreso por
+// categoría; (3) el FESTEJO inmediato: la primera foto de la semana se
+// convierte sola en un posteo terminado con SU foto de base; (4) el
+// reporte de rendimiento con SUS números cuando existen (post_metrics).
+const ALBUM_TARGETS = { producto: 3, local: 2, equipo: 2 };
+function albumMissionPick(profile, weekKey) {
+  const eph = ephemerisFor(profile);
+  if (eph) return { tag: 'producto', text: `Se viene ${eph.name}: sacale una foto a lo que estás preparando ${eph.emoji || '📸'}` };
+  const cat = String((profile && profile.category) || '').toLowerCase();
+  let star = 'tu producto estrella';
+  if (/gastronom|panader|helader|pizzer|cafeter|rotiser|pasteler/.test(cat)) star = 'tu plato estrella';
+  else if (/moda|indument|ropa/.test(cat)) star = 'la prenda que más sale';
+  else if (/belleza|estetic|peluquer|barber|spa/.test(cat)) star = 'un trabajo del que estés orgulloso';
+  const list = [
+    { tag: 'producto', text: `Sacale una foto a ${star}, así como sale 📸` },
+    { tag: 'local', text: 'Mostrá tu local: la entrada o el rincón que más te guste 📸' },
+    { tag: 'equipo', text: /mascota|veterinar/.test(cat) ? 'Una foto con un cliente de cuatro patas recién atendido 🐾' : 'Una foto tuya o de tu equipo en acción, en pleno trabajo 📸' },
+    { tag: 'producto', text: '¿Qué hay de nuevo esta semana en tu negocio? Sacale una foto 📸' },
+    { tag: 'local', text: 'Un detalle de tu local que tus clientes aman: ese, en foto 📸' },
+    { tag: 'equipo', text: 'Manos a la obra: una foto de cómo se hace, del proceso 📸' },
+  ];
+  const wk = Math.floor(Date.parse(weekKey + 'T12:00:00Z') / (7 * 86400000)) || 0;
+  return list[Math.abs(wk) % list.length];
+}
+function albumMission(uid) {
+  const tz = userTz(uid);
+  const weekKey = mondayKeyOf(tzToday(tz));
+  let row = null;
+  try { row = db.prepare('SELECT * FROM album_missions WHERE user_id = ? AND week_key = ?').get(uid, weekKey); } catch (e) {}
+  if (!row) {
+    const pick = albumMissionPick(getProfile(uid) || {}, weekKey);
+    try {
+      db.prepare('INSERT OR IGNORE INTO album_missions (user_id, week_key, mission_tag, mission_text) VALUES (?,?,?,?)').run(uid, weekKey, pick.tag, pick.text);
+      row = db.prepare('SELECT * FROM album_missions WHERE user_id = ? AND week_key = ?').get(uid, weekKey);
+    } catch (e) {}
+    if (!row) row = { week_key: weekKey, mission_tag: pick.tag, mission_text: pick.text, done_at: '', photo_id: 0, post_id: 0 };
+  }
+  return row;
+}
+async function tagAlbumPhoto(uid, assetId, filePath) {
+  try {
+    const key = openaiKeyFor(uid);
+    if (!key) return;
+    const abs = path.join(MEDIA_DIR, path.basename(String(filePath)));
+    if (!fs.existsSync(abs)) return;
+    const b64 = fs.readFileSync(abs).toString('base64');
+    const mime = /\.png$/i.test(filePath) ? 'image/png' : /\.webp$/i.test(filePath) ? 'image/webp' : 'image/jpeg';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 8,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: 'Clasificá esta foto de un negocio en UNA sola palabra: producto (un producto, plato o prenda en primer plano), local (el espacio, interior o frente del negocio), equipo (personas trabajando o el dueño), otro. Respondé solo la palabra, sin punto.' },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } },
+        ] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    const w = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').toLowerCase().trim();
+    const tag = ['producto', 'local', 'equipo'].includes(w) ? w : 'otro';
+    db.prepare('UPDATE assets SET album_tag = ? WHERE id = ?').run(tag, assetId);
+  } catch (e) { /* clasificar nunca bloquea */ }
+}
+// El festejo: la primera foto de la semana se convierte en un posteo
+// terminado con ESA foto de base (edición IA: el producto queda idéntico,
+// mejora luz/encuadre/fondo). Un solo posteo-festejo por semana.
+async function celebratePhotoPost(uid, assetId, filePath) {
+  try {
+    costs.assertAiOk(uid);
+    const key = openaiKeyFor(uid);
+    if (!key) return;
+    const mission = albumMission(uid);
+    if (mission.post_id) return; // ya hubo festejo esta semana
+    const profile = getProfile(uid) || {};
+    const titulo = 'Lo nuevo de mi negocio, en foto real';
+    const content = await generateContent(contentInputFor(uid, titulo, 'foto', 0), key);
+    const caption = String((content && content.caption) || '').trim();
+    if (!caption) return;
+    const hashtags = String((content && content.hashtags) || '');
+    const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    const imagePath = await conceptShotGenerateQueued({
+      uid,
+      idea: { titulo, porque: 'El cliente subió esta foto REAL de su negocio: usala como base y mejorala (luz, encuadre, fondo prolijo) manteniendo el producto y la escena EXACTAMENTE iguales.' },
+      tipo: 'foto', headline, refs: [filePath], apiKey: key,
+    });
+    if (!imagePath) return;
+    const tz = userTz(uid);
+    const weekKey = mondayKeyOf(tzToday(tz));
+    const needRev = trainingWheelsActive(uid) ? 1 : 0;
+    const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why)
+      VALUES (?,?,?,?, 'draft', 'image', ?, 'album', 1, ?, 'foto', 'Posteo creado desde la foto real que subió el cliente')`)
+      .run(uid, imagePath, caption, hashtags, needRev, weekKey);
+    try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
+    console.log(`[album] usuario ${uid}: foto ${assetId} convertida en el posteo ${ins.lastInsertRowid} ✨`);
+    try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+  } catch (e) { console.error('[album] festejo:', e.message); }
+}
+app.get('/api/album', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const photos = db.prepare(`SELECT id, file_path, album_tag, created_at FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 20`).all(uid);
+    // Clasificación perezosa: hasta 3 sin clasificar por visita, en 2º plano.
+    let lazy = 0;
+    for (const ph of photos) {
+      if (!ph.album_tag && lazy < 3) { lazy++; tagAlbumPhoto(uid, ph.id, ph.file_path); }
+    }
+    const counts = { producto: 0, local: 0, equipo: 0, otro: 0 };
+    for (const ph of photos) { if (counts[ph.album_tag] !== undefined) counts[ph.album_tag]++; }
+    const mission = albumMission(uid);
+    let perf = null;
+    try {
+      const r = db.prepare(`SELECT SUM(CASE WHEN p.client_photo = 1 THEN 1 ELSE 0 END) AS nFoto,
+        AVG(CASE WHEN p.client_photo = 1 THEN m.reach END) AS reachFoto,
+        SUM(CASE WHEN p.client_photo = 0 THEN 1 ELSE 0 END) AS nSin,
+        AVG(CASE WHEN p.client_photo = 0 THEN m.reach END) AS reachSin
+        FROM posts p JOIN post_metrics m ON m.post_id = p.id
+        WHERE p.user_id = ? AND p.status = 'published'`).get(uid);
+      if (r && r.nFoto >= 1 && r.reachFoto) {
+        perf = { foto: Math.round(r.reachFoto), n: r.nFoto };
+        if (r.nSin >= 1 && r.reachSin) perf.sin = Math.round(r.reachSin);
+      }
+    } catch (e) {}
+    res.json({
+      ok: true,
+      photos: photos.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '' })),
+      counts, targets: ALBUM_TARGETS,
+      mission: { text: mission.mission_text, tag: mission.mission_tag, done: !!mission.done_at, post_id: mission.post_id || 0 },
+      perf,
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/album/photo', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'photo'`).get(uid).c;
+    if (n >= 20) return res.status(400).json({ error: '¡20 fotos! Con esas me alcanza y sobra 📸 Borrá alguna desde tu biblioteca si querés sumar más.' });
+    const ct = req.get('Content-Type') || '';
+    const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
+    const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+    fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
+    const filePath = `/media/${name}`;
+    const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind) VALUES (?,?,?)').run(uid, filePath, 'photo');
+    const assetId = ins.lastInsertRowid;
+    // Misión: la primera foto de la semana la cumple.
+    const mission = albumMission(uid);
+    let missionDone = !!mission.done_at;
+    if (!missionDone) {
+      try { db.prepare(`UPDATE album_missions SET done_at = datetime('now'), photo_id = ? WHERE user_id = ? AND week_key = ?`).run(assetId, uid, mission.week_key); missionDone = true; } catch (e) {}
+    }
+    res.json({ ok: true, id: assetId, path: filePath, mission_done: missionDone });
+    // Segundo plano: clasificar + festejo (un posteo por semana).
+    tagAlbumPhoto(uid, assetId, filePath);
+    celebratePhotoPost(uid, assetId, filePath);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Push de la misión: lunes ~10:00 hora local del cliente, una vez por
+// semana. Corre cada 30 min y filtra por la hora local de cada usuario.
+setInterval(() => {
+  try {
+    const users = db.prepare('SELECT id FROM users').all();
+    for (const u of users) {
+      try {
+        let founder = false;
+        try { founder = !!(costs.isFounderEmail && costs.isFounderEmail(u.id)); } catch (e) {}
+        if (!founder && !planOrTrialOk(u.id)) continue;
+        const tz = userTz(u.id);
+        const now = new Date();
+        const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+        const hr = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now));
+        if (wd !== 'Mon' || hr !== 10) continue;
+        const mission = albumMission(u.id);
+        if (!mission || mission.pushed_at || mission.done_at) continue;
+        push.sendPush(u.id, { title: '📸 Misión foto de la semana', body: mission.mission_text, url: '/#/app/semana' }).catch(() => {});
+        try { db.prepare(`UPDATE album_missions SET pushed_at = datetime('now') WHERE user_id = ? AND week_key = ?`).run(u.id, mission.week_key); } catch (e) {}
+      } catch (e) {}
+    }
+  } catch (e) {}
+}, 30 * 60 * 1000);
+
 // Logo auto-extraído (ver extractLogoCandidate en style-visual.js).
 // GET: devuelve la candidata pendiente, o path:null si no hay (o el archivo ya no existe).
 app.get('/api/brand/logo-candidate', requireAuth, (req, res) => {
@@ -10065,7 +10251,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v132';
+const BUILD_ID = '20261016-v133';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

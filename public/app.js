@@ -4418,12 +4418,72 @@ async function chatView() {
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
     <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
+    <div id="albumCard"></div>
   </div>`;
+}
+
+
+// ---------- Álbum del negocio + misión foto (2026-10-16) ----------
+// La foto propia es el mejor insumo de Posty: esta tarjeta la pide con
+// una misión concreta por semana, muestra el álbum con su progreso y
+// convierte la primera foto de la semana en un posteo (festejo server).
+async function bindAlbumCard() {
+  const box = document.getElementById('albumCard');
+  if (!box) return;
+  let data = null;
+  try { data = await api.get('/api/album'); } catch (e) {}
+  if (!data || !data.ok) { box.innerHTML = ''; return; }
+  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'tu negocio';
+  const t = data.targets || { producto: 3, local: 2, equipo: 2 };
+  const n = data.counts || {};
+  const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? '✅' : '📷'} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
+  const complete = (n.producto || 0) >= t.producto && (n.local || 0) >= t.local && (n.equipo || 0) >= t.equipo;
+  const mission = data.mission || {};
+  const missionHTML = mission.done
+    ? `<div style="background:#E7F6EC;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px">✅ <b>¡Misión cumplida!</b> Tu foto ya está trabajando por ${esc(biz)}.${mission.post_id ? ' Posty la convirtió en un posteo de tu semana ✨' : ''}</div>`
+    : `<div style="background:#FFF7E0;border:1.5px dashed #FEC14D;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px">🎯 <b>Misión foto de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio 📸')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty la arregla y la convierte en posteo.</span></div>`;
+  const perfHTML = data.perf
+    ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
+    : '';
+  const grid = (data.photos || []).length
+    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${data.photos.map(ph => `<img src="${esc(ph.path)}" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
+    : `<div style="font-size:13.5px;opacity:.75;margin:6px 0">Todavía no hay fotos tuyas. La primera que mandes se convierte en posteo ✨</div>`;
+  box.innerHTML = `
+  <div class="card" style="margin-top:14px">
+    <div style="font-size:16px"><b>📸 El álbum de ${esc(biz)}</b></div>
+    <div style="font-size:13px;opacity:.75">Los posteos con tus fotos reales rinden más: son TU negocio, no uno parecido.</div>
+    ${missionHTML}
+    <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}${complete ? '<div style="font-size:14px;margin-top:6px">🎉 <b>¡Álbum completo!</b> Posty tiene todo para que tus posteos sean 100% tuyos.</div>' : ''}</div>
+    ${perfHTML}
+    ${grid}
+    <label class="btn btn-primary btn-block" style="margin:6px 0 0;cursor:pointer">
+      📸 Mandar una foto
+      <input type="file" id="albumFile" accept="image/*" style="display:none">
+    </label>
+    <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
+  </div>`;
+  const inp = document.getElementById('albumFile');
+  if (inp) inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const msg = document.getElementById('albumMsg');
+    if (msg) msg.textContent = 'Subiendo… 📤';
+    try {
+      const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(120000) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
+      if (msg) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
+      setTimeout(() => { try { bindAlbumCard(); } catch (e) {} }, 2500);
+    } catch (e) {
+      if (msg) msg.textContent = '😅 ' + (e.message || 'No pude subirla. Probá de nuevo.');
+    }
+  };
 }
 
 async function bindChatView() {
   bindChat();
   bindReview();
+  try { bindAlbumCard(); } catch (e) {}
   // Home simple: tocar un posteo del carrusel lo abre en grande (patrón data-lightbox).
   $$('.hs-week [data-lightbox]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();

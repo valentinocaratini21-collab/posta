@@ -83,6 +83,20 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_embed_url TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN preferred_palette INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN pexels_key TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Álbum del negocio (2026-10-16): clasificación de las fotos del cliente
+// (producto|local|equipo|clientes|otro) y misiones semanales de foto.
+try { db.exec(`ALTER TABLE assets ADD COLUMN album_tag TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+db.exec(`CREATE TABLE IF NOT EXISTS album_missions (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  mission_tag TEXT DEFAULT '',
+  mission_text TEXT DEFAULT '',
+  pushed_at TEXT DEFAULT '',
+  done_at TEXT DEFAULT '',
+  photo_id INTEGER DEFAULT 0,
+  post_id INTEGER DEFAULT 0,
+  PRIMARY KEY (user_id, week_key)
+)`);
 // Estilos de imagen (image-styles.js): estilo usado en cada borrador + motivo del pick.
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
