@@ -7300,7 +7300,64 @@ function learningsLineOf(learnings) {
 // expandido listo para gpt-image-2. REGLA DURA: jamás inventar datos del negocio
 // (precios, direcciones, promos, teléfonos) en el texto de la imagen: solo el
 // headline provisto, tal cual, o ningún texto si viene vacío.
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock }, apiKey) {
+// ===== Prompt perfecto (2026-10-16): estructura garantizada por código =====
+// El director de arte devuelve 5 bloques (JSON) y el CÓDIGO ensambla el
+// prompt final: la línea visual abre tal cual, la paleta va verbatim, la
+// zona del titular se dimensiona según el largo REAL del titular, y el
+// bloque AVOID (con las exclusiones del rubro) cierra siempre idéntico.
+// Lo que antes dependía de que el modelo "se acordara" de cumplir, ahora
+// es imposible de omitir. Si el JSON falla, se usa el texto crudo como
+// núcleo y los bloques garantizados se agregan igual: nunca peor que antes.
+const PROMPT_AVOID_BASE = 'AVOID: generic stock-photo or image-bank aesthetic; deformed hands, fingers, faces or proportions — anatomy always natural and realistic; any readable text, letters or numbers anywhere in the image — anything that would naturally carry text (screens, signs, price tags, labels, storefronts, printed clothing) stays BLANK, OFF, EMPTY or BLURRED until illegible; logos, icons or recognizable aesthetics of real brands; watermarks or stock-site seals; flat gray backgrounds or empty studio voids without atmosphere; any decorative element covering the product — the product is always the visual center.';
+function rubroAvoidFor(category) {
+  const r = String(category || '').toLowerCase();
+  if (/gastronom|cafeter|panader|pizzer|rotiser|helader|pasteler|carnicer/.test(r)) return ' Also avoid: dishes from cuisines other than this business\'s own; readable menus, chalkboards or price tags; raw meat on display (unless the business is a butcher shop).';
+  if (/belleza|estetic|estética|peluquer|barber|spa|manicur/.test(r)) return ' Also avoid: medical instruments, needles, blood, or anything clinical.';
+  if (/mascota|veterinar|pet/.test(r)) return ' Also avoid: animals looking ill, sad or dirty-caged; punishment collars or muzzles as the focus.';
+  if (/fitness|gimnasio|gym|entrenamiento/.test(r)) return ' Also avoid: extreme bodybuilder physiques; rusty or broken equipment.'
+  if (/moda|indument|ropa|tienda/.test(r)) return ' Also avoid: clearance-sale racks with price signs; wrinkled or messy garments; mannequins as the main subject.'
+  if (/deco|hogar|muebl|interior/.test(r)) return ' Also avoid: the empty real-estate-render look; bare rooms with no lived-in detail.'
+  if (/flor/.test(r)) return ' Also avoid: wilted or dying flowers; funeral wreaths unless explicitly requested.'
+  return '';
+}
+function headlineZoneLine(headline) {
+  const w = String(headline || '').trim().split(/\s+/).filter(Boolean).length;
+  const pct = w >= 5 ? 40 : w >= 3 ? 33 : 30;
+  return `HEADLINE ZONE: the top ${pct}% of the frame is a clean, soft, uncluttered background reserved for a headline that code adds later — no subject, prop, hand, sign or sharp element may enter that zone; the subject and the action live from the middle of the frame down, with generous margins from every edge.`;
+}
+function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headline, category }) {
+  const parts = [];
+  if (visualStyle && String(visualStyle).trim()) parts.push(String(visualStyle).trim());
+  const order = ['sujeto', 'momento', 'contexto', 'luz', 'composicion'];
+  const core = [];
+  if (blocks) {
+    for (const k of order) {
+      const v = String((blocks && blocks[k]) || '').trim().replace(/\.$/, '');
+      if (v) core.push(v);
+    }
+  }
+  if (core.length) parts.push(core.join('. ') + '.');
+  else if (rawText && String(rawText).trim()) parts.push(String(rawText).trim());
+  const hexes = Array.isArray(paletteHex) ? paletteHex : [];
+  if (hexes.length) parts.push(`The client's exact brand colors (${hexes.join(', ')}) are woven into the scene through props, clothing, packaging and set details — integrated in the world of the photo, never as a flat color background.`);
+  parts.push(headlineZoneLine(headline));
+  parts.push(PROMPT_AVOID_BASE + rubroAvoidFor(category));
+  if (visualStyle && String(visualStyle).trim()) parts.push("If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it.");
+  return parts.join('\n');
+}
+// Memoria visual del cliente: los estilos que más rindieron EN SU cuenta
+// (posts publicados con métricas). Sin datos suficientes → '' (el brief
+// queda como siempre). Es la herencia que hace cada prompt más "suyo".
+function topStyleMemoryLine(uid) {
+  try {
+    const tot = db.prepare(`SELECT COUNT(*) AS n FROM posts p JOIN post_metrics m ON m.post_id = p.id WHERE p.user_id = ? AND p.status = 'published' AND COALESCE(p.style_code, '') != ''`).get(uid);
+    if (!tot || tot.n < 2) return '';
+    const rows = db.prepare(`SELECT p.style_code AS code, AVG(m.reach) AS r FROM posts p JOIN post_metrics m ON m.post_id = p.id WHERE p.user_id = ? AND p.status = 'published' AND COALESCE(p.style_code, '') != '' GROUP BY p.style_code ORDER BY r DESC LIMIT 3`).all(uid);
+    if (!rows.length) return '';
+    return rows.map(x => `${x.code} (alcance prom. ${Math.round(x.r || 0)})`).join(', ');
+  } catch (e) { return ''; }
+}
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine }, apiKey) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
   // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
@@ -7336,9 +7393,11 @@ async function expandArtBrief({ headline, tipo, angle, businessName, category, p
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       temperature: 0.7,
+      max_tokens: 600,
+      response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content:
-`Sos un director de arte publicitario de clase mundial. Expandís un brief corto en UN prompt de imagen publicitaria (en inglés), listo para un generador de imágenes. Devolvé SOLO el prompt, sin explicaciones ni comillas.
+`Sos un director de arte publicitario de clase mundial. Expandís un brief corto en los bloques de un prompt de imagen publicitaria (en inglés). Devolvé SOLO un JSON válido, sin explicaciones ni markdown, con exactamente estas 5 claves (cada una, una o dos frases concretas de hasta 30 palabras): {"sujeto": el producto/persona protagonista exacto, con su nombre y aspecto; "momento": la acción o momento vivo que está pasando (nunca la cosa quieta); "contexto": el lugar real del negocio, nombrando UN detalle verificable del brief o, si no hay ninguno, el elemento más específico del rubro (el horno, el mostrador, la camilla); "luz": la iluminación física (fuente, dirección, hora); "composicion": plano, lente y qué va en primer plano y en el fondo}. El prompt final lo ensambla el código con tus bloques: NO escribas la paleta, NI la zona del titular, NI bloque AVOID, NI reglas — eso lo agrega el código siempre igual.
 
 El prompt DEBE exigir:
 - Una escena CONCRETA y ESPECÍFICA del rubro (nada genérico: describí objetos, ambiente, fondo, detalles tangibles).
@@ -7346,7 +7405,7 @@ El prompt DEBE exigir:
 - La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
 - Estética publicitaria premium: incluí los marcadores "fotografía comercial profesional" y "high-end advertising".
 - FORMATO VERTICAL 4:5, optimizado para verse en un CELULAR: es una pieza de Instagram, no un banner de web.
-- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. El titular lo compone el código DESPUÉS en el tercio superior: esa zona queda limpia y despejada para él.
+- ZONA SEGURA: lo importante (producto, caras) va del centro hacia abajo, con margen generoso — NADA importante pegado a los bordes, porque Instagram recorta. El titular lo compone el código DESPUÉS en la zona superior: esa zona queda limpia y despejada (el código agrega la instrucción exacta de zona según el largo del titular).
 - Los colores EXACTOS de la paleta del cliente integrados EN la escena (props, vestuario, packaging, detalles del ambiente): ${hexes.join(', ') || 'sin paleta definida, usá colores armónicos del rubro'}. NUNCA como fondo plano de color.
 - "${textRule}"
 - "sin marca de agua".
@@ -7356,8 +7415,8 @@ El prompt DEBE exigir:
 - Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
 - MOMENTO, NO BODEGÓN (2026-10-10, Uma — datos de engagement): en gastronomía, cafetería y moda, la escena por DEFECTO es ACCIÓN/PERSONA/MOMENTO, no bodegón estático. El bodegón perfecto no vende; el momento real sí. Preferir: manos en acción (cocinando, sirviendo, cortando), POV en primera persona desde la cocina o el mostrador, cliente usando el producto, behind-the-scenes del local en movimiento, el dueño hablando a cámara. El plato/producto solo, quieto y perfecto sobre fondo lindo es la VARIANTE, no el default. En los demás rubros, mismo principio: si hay una persona que pueda protagonizar el momento, que lo protagonice.
 - ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
-- PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", el prompt generado EMPIEZA con ese bloque (es lo primero del prompt: los generadores ponderan el inicio) y TERMINA con esta línea de cierre, textual: "If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it."
-- BLOQUE DE RECHAZO OBLIGATORIO: el prompt generado TERMINA (justo antes de la línea de cierre, si la hay) con un bloque "AVOID:" que prohíba explícitamente: estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible — CERO texto legible en la imagen, sin excepción: lo que naturalmente llevaría texto (pantallas, carteles, etiquetas, vidrieras, ropa con estampa) va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible; el ÚNICO texto de la pieza es el titular y lo agrega el código DESPUÉS, nunca el generador; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
+- PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", tus bloques tienen que CONVIVIR con ella (misma luz, mismo espíritu, mismo feed). El código la antepone tal cual al prompt final y cierra con la línea de supremacía: vos solo asegurate de que ningún bloque la contradiga.
+- PROHIBICIONES QUE TUS BLOQUES DEBEN RESPETAR (el bloque AVOID formal lo agrega el código al final, siempre idéntico; tus bloques jamás deben pedir ni insinuar lo prohibido): estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible — CERO texto legible en la imagen, sin excepción: lo que naturalmente llevaría texto (pantallas, carteles, etiquetas, vidrieras, ropa con estampa) va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible; el ÚNICO texto de la pieza es el titular y lo agrega el código DESPUÉS, nunca el generador; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
 - Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
 - VARA DE CALIDAD (piezas de referencia aprobadas 2026-10-03): la imagen tiene que sentirse PREMIUM y profesional — composición limpia con aire, un protagonista claro, iluminación cuidada, acabado de publicidad de alto nivel. Nada de estética amateur, genérica o de "IA barata". REGLA DE ZONA DEL TITULAR (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular en posteos publicados): el tercio superior de la imagen es ZONA LIMPIA RESERVADA — solo fondo suave, desenfocado o degradado liso; NINGÚN sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido puede asomarse ni tocar esa zona. El protagonista y la acción viven del centro hacia abajo. El titular se compone después por código en ese tercio superior y tiene que respirar: nada detrás que lo choque ni le compita.
 - REGLA ZERO-TEXT (reemplaza draft 75 — fallas reales 2026-10-05: el generador horneaba texto en inglés, typos como "Backgnina"/"inatogram", logos de marcas reales y claims inventados en pantallas y carteles): CERO texto legible en la imagen — ni una palabra, ni una letra, ni un número, en ningún idioma. Si la escena incluye pantallas, carteles, vidrieras, interfaces, celulares, etiquetas, ropa con estampas o fondos con letras: TODO va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible — nunca palabras "reales del negocio", nunca iconos de marcas reales. El ÚNICO texto que lleva la pieza es el titular, que se compone DESPUÉS por código.
@@ -7368,7 +7427,7 @@ Familia visual: ${fam}
 ${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
 ${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
 ${dnaBits ? `Contexto del negocio: ${String(dnaBits).slice(0, 300)}` : ''}
-${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
+${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
       ],
     }),
     signal: AbortSignal.timeout(60000),
@@ -7381,7 +7440,14 @@ ${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 
   costs.trackUsage({ feature: 'concept-shot', model: 'gpt-4o-mini', json: j });
   const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
   if (!content.trim()) throw new Error('brief vacío de OpenAI');
-  return content.trim();
+  // Ensamblado garantizado: bloques del director + bloques de código.
+  // Si el JSON viene roto, el texto crudo es el núcleo (nunca peor que antes).
+  let blocks = null;
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed === 'object' && (parsed.sujeto || parsed.momento || parsed.contexto)) blocks = parsed;
+  } catch (e) {}
+  return assembleImagePrompt({ blocks, rawText: blocks ? '' : content.trim(), visualStyle, paletteHex: hexes, headline, category });
 }
 // idea puede venir como string u objeto {titulo, porque, angulo, headline}.
 function parseIdea(idea) {
@@ -7646,6 +7712,7 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
       paletteHex: parseBrandHexes(settings.brand_colors),
       dnaBits: dnaBitsLine(readDna(uid)),
       learningsLine: learningsLineOf(getContentLearnings(uid)),
+      memoryLine: topStyleMemoryLine(uid),
       styleRules,
       visualStyle,
     }), apiKey);
@@ -7764,6 +7831,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     paletteHex: hexes,
     dnaBits: dnaBitsLine(dna),
     learningsLine: learningsLineOf(getContentLearnings(uid)),
+    memoryLine: topStyleMemoryLine(uid),
     styleRules,
     visualStyle,
   };
@@ -10251,7 +10319,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v133';
+const BUILD_ID = '20261016-v134';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
