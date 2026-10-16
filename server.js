@@ -2891,11 +2891,11 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     }
   }
   if (!imagePath) return { ok: false, reason: 'no_image' };
-  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id)
-    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`)
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
       String(idea.porque || '').slice(0, 500), weekKey || '', trainingWheelsActive(uid) ? 1 : 0,
-      String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''));
+      String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath));
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
   return { ok: true, id: r.lastInsertRowid };
 }
@@ -4999,7 +4999,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
-    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?)`);
+    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
     // scheduleAllDrafts ya filtra lo que no está a la altura).
@@ -5106,7 +5106,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // imagen real (la invariante de siempre).
           if (!isCarousel) {
             try {
-              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''));
+              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''), '');
               pendingId = info && info.lastInsertRowid;
               if (pendingId) runCreatedIds.add(pendingId);
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
@@ -5188,7 +5188,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               continue;
             }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId);
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath));
             if (insInfo && insInfo.lastInsertRowid) runCreatedIds.add(insInfo.lastInsertRowid);
           }
           } else {
@@ -7345,6 +7345,19 @@ function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headlin
   if (visualStyle && String(visualStyle).trim()) parts.push("If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it.");
   return parts.join('\n');
 }
+// Prompt exacto por imagen (medición prompt↔alcance): el generador registra
+// el prompt final que produjo cada archivo; los INSERT de posteos lo leen de
+// acá y lo guardan en posts.image_prompt. En memoria (el dato que importa
+// es el que queda en la fila del posteo).
+const promptByMedia = new Map();
+function rememberPrompt(mediaPath, prompt) {
+  try {
+    if (!mediaPath || !prompt) return;
+    promptByMedia.set(mediaPath, String(prompt).slice(0, 4000));
+    if (promptByMedia.size > 300) promptByMedia.delete(promptByMedia.keys().next().value);
+  } catch (e) {}
+}
+function promptForMedia(mediaPath) { return promptByMedia.get(mediaPath) || ''; }
 // Memoria visual del cliente: los estilos que más rindieron EN SU cuenta
 // (posts publicados con métricas). Sin datos suficientes → '' (el brief
 // queda como siempre). Es la herencia que hace cada prompt más "suyo".
@@ -8011,12 +8024,14 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     try {
       const { execFileSync } = require('child_process');
       const imgPath = path.join(MEDIA_DIR, imgName);
-      execFileSync('python3', [
+      const compArgs = [
         path.join(__dirname, 'composite-headline.py'),
         '--in', imgPath,
         '--headline', cleanHeadline,
         '--out', imgPath,
-      ], { timeout: 30000 });
+      ];
+      if (hexes && hexes[0]) compArgs.push('--grade', String(hexes[0])); // look de color del feed
+      execFileSync('python3', compArgs, { timeout: 30000 });
       console.log(`[concept-shot] titular compuesto: "${cleanHeadline.slice(0, 40)}"`);
     } catch (e) {
       console.error('[concept-shot] composite titular falló, sigo con imagen limpia:', e.message);
@@ -8049,9 +8064,46 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
         const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
         try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
         db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), `/media/${imgName}`);
+        // ===== Reintento CORRECTIVO (2026-10-16): si la auditoría encontró un
+        // defecto DURO, se regenera UNA vez con la corrección explícita en el
+        // prompt y se reemplaza la imagen del borrador. Corre en background
+        // (la entrega no espera: lección 2026-10-02, nada de reintentos en
+        // cadena bloqueando) y solo si el posteo sigue en 'draft'. =====
+        const hardFail = qa && (qa.texto_ok === false || qa.anatomia_ok === false || qa.claims_ok === false || qa.headline_clear === false);
+        if (hardFail) {
+          try {
+            const post = db.prepare("SELECT id FROM posts WHERE user_id = ? AND image_path = ? AND status = 'draft' ORDER BY id DESC LIMIT 1").get(uid, `/media/${imgName}`);
+            if (post) {
+              const fixes = [];
+              if (qa.texto_ok === false) fixes.push('the previous attempt had readable or garbled baked-in text — regenerate with absolutely NO text, letters or numbers anywhere: every sign, screen, label and storefront blank, off or blurred until illegible');
+              if (qa.anatomia_ok === false) fixes.push('the previous attempt had deformed anatomy — natural hands, fingers and faces only; show fewer hands if needed');
+              if (qa.claims_ok === false) fixes.push('the previous attempt showed an invented price, promotion or claim — show only the real product and scene, no prices, no offers, no claim-like elements');
+              if (qa.headline_clear === false) fixes.push('elements intruded into the top headline zone — keep the entire top zone clean, soft and completely empty');
+              if (qa.detalle) fixes.push(`specific defect to fix: ${String(qa.detalle).slice(0, 140)}`);
+              const corrPrompt = `${withStyle(prompt)}\nCORRECTION — the previous version of this image failed quality control: ${fixes.join('; ')}. Regenerate fixing exactly that, keeping the same subject, scene, palette and style.`;
+              const nb64 = await genConceptImage(key, corrPrompt, absRefs, refNote, uid);
+              const nName = saveImageB64(nb64);
+              if (cleanHeadline) {
+                try {
+                  const { execFileSync } = require('child_process');
+                  const nPath = path.join(MEDIA_DIR, nName);
+                  const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', nPath, '--headline', cleanHeadline, '--out', nPath];
+                  if (hexes && hexes[0]) cArgs.push('--grade', String(hexes[0]));
+                  execFileSync('python3', cArgs, { timeout: 30000 });
+                } catch (e) { console.error('[qa-correct] composite:', e.message); }
+              }
+              const upd = db.prepare("UPDATE posts SET image_path = ?, image_prompt = ? WHERE id = ? AND status = 'draft'").run(`/media/${nName}`, corrPrompt.slice(0, 4000), post.id);
+              if (upd.changes) {
+                rememberPrompt(`/media/${nName}`, corrPrompt);
+                console.log(`[qa-correct] post ${post.id}: imagen corregida tras QA duro (${fixes.length} correcciones)`);
+              }
+            }
+          } catch (e) { console.error('[qa-correct]', e.message); }
+        }
       } catch (e) { console.error('[qa-audit] db:', e.message); }
     } catch (e) { console.error('[concept-shot] qa:', e.message); }
   })();
+  try { rememberPrompt(`/media/${imgName}`, withStyle(prompt)); } catch (e) {}
   return `/media/${imgName}`;
 }
 
@@ -10319,7 +10371,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v134';
+const BUILD_ID = '20261016-v135';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

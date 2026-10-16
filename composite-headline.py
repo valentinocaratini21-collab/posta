@@ -39,10 +39,19 @@ def main():
     ap.add_argument('--in', dest='inp', required=True)
     ap.add_argument('--headline', default='')
     ap.add_argument('--out', required=True)
+    ap.add_argument('--grade', default='')  # hex de marca: look de color sutil y unificado del feed
     a = ap.parse_args()
 
     headline = str(a.headline or '').strip()
     img = Image.open(a.inp).convert('RGB')
+    if a.grade:
+        try:
+            from PIL import ImageColor, ImageEnhance
+            tint = Image.new('RGB', img.size, ImageColor.getrgb(a.grade))
+            img = Image.blend(img, tint, 0.05)
+            img = ImageEnhance.Color(img).enhance(1.04)
+        except Exception:
+            pass
     W, H = img.size
 
     if not headline:

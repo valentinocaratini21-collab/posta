@@ -649,6 +649,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN trial_pause_notified INTEGER DEFAULT
 //   o generado. Sirve la heurística de first_pick.
 try { db.exec(`ALTER TABLE posts ADD COLUMN source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN client_photo INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN image_prompt TEXT`); } catch (e) { /* ya existe */ } // prompt exacto que generó la imagen (medición prompt↔alcance)
 // Backfill: filas importadas antes de esta migración (source='') se marcan
 // 'trial' por el prefijo de image_path que solo escribe importTrialWeek.
 // client_photo queda en 0 para esas filas (no se puede determinar a posteriori

@@ -56,7 +56,7 @@ function activeStyleRules(db, userId) {
 // Devuelve file_path tal como están guardados; el llamador los mapea a disco.
 function realPhotoPaths(db, userId, limit = 2) {
   try {
-    return db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC, id DESC LIMIT ?`)
+    return db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY (CASE WHEN album_tag = 'producto' THEN 0 ELSE 1 END), created_at DESC, id DESC LIMIT ?`)
       .all(userId, limit)
       .map((r) => String(r.file_path || '').trim())
       .filter(Boolean);
