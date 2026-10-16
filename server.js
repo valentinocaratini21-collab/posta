@@ -4007,7 +4007,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     if (caption !== undefined && caption !== post.caption) {
       try { require('./style-learn').learnFromCaptionEdit(db, req.session.userId, post.caption, caption); } catch (e) {}
     }
-    db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, post.id);
+    db.prepare(`UPDATE posts SET caption=?, hashtags=?, image_path=?, prev_image_path=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, image_path || post.image_path, (image_path && image_path !== post.image_path) ? (post.image_path || '') : (post.prev_image_path || ''), post.id);
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto en revisión
     return res.json({ ok: true });
   } else {
@@ -8805,14 +8805,16 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if ((post.img_redos || 0) >= 1)
+      return res.json({ ok: false, redo_used: true, error: 'Ya usaste el rehacer de este posteo. Podés volver a la imagen anterior o usar una foto tuya 📷' });
     const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
     const styleOut = {};
     const newPath = await conceptShotGenerateQueued({
       uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut,
     });
     if (!newPath) throw new Error('sin imagen');
-    db.prepare('UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ? WHERE id = ?')
-      .run(String(newPath), st.code, String(styleOut.reason || ''), String(styleOut.intent || ''), postId);
+    db.prepare('UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?')
+      .run(String(newPath), st.code, String(styleOut.reason || ''), String(styleOut.intent || ''), String(post.image_path || ''), postId);
     res.json({ ok: true, path: newPath, style: st.code, reason: styleOut.reason || '' });
   } catch (e) {
     console.error('[photo-style]', e.message);
@@ -8839,6 +8841,8 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if ((post.img_redos || 0) >= 1)
+      return res.json({ ok: false, redo_used: true, error: 'Ya usaste el rehacer de este posteo. Podés volver a la imagen anterior o usar una foto tuya 📷' });
     const basePath = String(post.image_path || '');
     const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absBase || !fs.existsSync(absBase))
@@ -8851,8 +8855,8 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     });
     if (!newPath) throw new Error('sin imagen');
     db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?,
-      source_topic = COALESCE(NULLIF(source_topic,''), 'restyle') WHERE id = ?`)
-      .run(String(newPath), st.code, `restyle de tu foto con ${st.code}`, String(styleOut.intent || ''), postId);
+      source_topic = COALESCE(NULLIF(source_topic,''), 'restyle'), prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?`)
+      .run(String(newPath), st.code, `restyle de tu foto con ${st.code}`, String(styleOut.intent || ''), String(post.image_path || ''), postId);
     res.json({ ok: true, path: newPath, style: st.code });
   } catch (e) {
     console.error('[photo-restyle]', e.message);
@@ -8876,6 +8880,8 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    if ((post.img_redos || 0) >= 1)
+      return res.json({ ok: false, redo_used: true, error: 'Ya usaste el rehacer de este posteo. Podés volver a la imagen anterior o usar una foto tuya 📷' });
     const basePath = String(post.image_path || '');
     const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absBase || !fs.existsSync(absBase))
@@ -8887,12 +8893,34 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
       'Enhance this photo professionally: fix lighting, white balance, exposure, sharpness and contrast. Keep the EXACT same composition, subjects, framing and colors — it must remain recognizably the SAME photo, just professionally finished. Do not add, remove or move anything.',
       [absBase], null, uid);
     const newPath = `/media/${saveImageB64(b64)}`;
-    db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), postId);
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
     res.json({ ok: true, path: newPath });
   } catch (e) {
     console.error('[photo-enhance]', e.message);
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
     res.status(502).json({ ok: false, error: String(e.message || 'No se pudo mejorar la foto').slice(0, 200) });
+  }
+});
+
+// "↩️ Volver a la anterior": recupera la imagen que el posteo tenía antes del
+// último cambio (rehacer, mejora o foto subida). Gratis y reversible: la
+// imagen actual pasa a ser la "anterior". No consume el crédito de rehacer.
+app.post('/api/drafts/:id/photo-revert', requireAuth, express.json(), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const postId = Number(req.params.id);
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
+      return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
+    const prev = String(post.prev_image_path || '');
+    if (!prev) return res.json({ ok: false, error: 'Este posteo no tiene una imagen anterior para recuperar' });
+    db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ? WHERE id = ?')
+      .run(prev, String(post.image_path || ''), postId);
+    res.json({ ok: true, path: prev });
+  } catch (e) {
+    console.error('[photo-revert]', e.message);
+    res.status(500).json({ ok: false, error: 'No se pudo volver a la imagen anterior' });
   }
 });
 
@@ -10555,7 +10583,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v151';
+const BUILD_ID = '20261016-v152';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

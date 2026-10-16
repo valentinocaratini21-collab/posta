@@ -5131,6 +5131,8 @@ function pcOpenImageSheet(id) {
     <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto<small>Subí una foto tuya y la uso para este posteo</small></button>
     <input type="file" accept="image/*" class="pcsheet-file" hidden>
     <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta<small>Retoco la actual: luz, color y nitidez</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-revert" hidden>↩️ Volver a la anterior<small>Recuperás la imagen que tenía antes del cambio — gratis</small></button>
+    <div class="pcsheet-note"></div>
     <button type="button" class="pcsheet-close" data-pc-act="img-close">Cerrar</button>
     <div class="pcsheet-msg"></div>
   </div>`;
@@ -5139,6 +5141,27 @@ function pcOpenImageSheet(id) {
   const sheet = bd.querySelector('.pcsheet');
   const file = sheet.querySelector('.pcsheet-file');
   file.addEventListener('change', () => { if (file.files && file.files[0]) pcUploadPhoto(id, file.files[0]); });
+  // Estado del rehacer (1 por posteo): se lee del servidor al abrir.
+  (async () => {
+    try {
+      const r = await api.get('/api/posts/' + encodeURIComponent(id));
+      const post = r && r.post;
+      if (!post || !document.body.contains(bd)) return;
+      const note = sheet.querySelector('.pcsheet-note');
+      if ((post.img_redos || 0) >= 1) {
+        sheet.querySelectorAll('[data-pc-act="img-style"], [data-pc-act="img-enhance"]').forEach(b => {
+          b.disabled = true; b.classList.add('pcsheet-off');
+        });
+        if (note) note.textContent = 'Ya usaste el rehacer de este posteo. Podés volver a la anterior o usar una foto tuya.';
+      } else if (note) {
+        note.textContent = 'Te queda 1 rehacer con IA para este posteo.';
+      }
+      if (post.prev_image_path) {
+        const rb = sheet.querySelector('[data-pc-act="img-revert"]');
+        if (rb) rb.hidden = false;
+      }
+    } catch (e) {}
+  })();
 }
 function pcSheetMsg(id, html) {
   const m = document.querySelector('.pcsheet[data-post-id="' + id + '"] .pcsheet-msg');
@@ -5160,6 +5183,16 @@ async function pcEnhance(id) {
   try {
     const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
     if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Foto mejorada'); }
+    else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
+  } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
+  pcSetLoading(id, false);
+}
+async function pcRevert(id) {
+  pcCloseSheet();
+  pcSetLoading(id, true, '⏳ Volviendo a la anterior…');
+  try {
+    const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-revert', {}, { timeout: 60000 });
+    if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('↩️ Volvimos a la imagen anterior'); }
     else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
   } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
   pcSetLoading(id, false);
@@ -5286,6 +5319,7 @@ function pcOnClick(e) {
   }
   if (act === 'img-upload') { const f = root.querySelector('.pcsheet-file'); if (f) f.click(); return; }
   if (act === 'img-enhance') { pcEnhance(id); return; }
+  if (act === 'img-revert') { pcRevert(id); return; }
   if (act === 'img-close') { pcCloseSheet(); return; }
 }
 if (!window.__pcardBound) {

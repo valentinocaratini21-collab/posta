@@ -1915,3 +1915,6 @@ textarea.in{resize:vertical;min-height:96px}
 .pcsheet-all{display:flex;flex-wrap:wrap;gap:6px;max-height:230px;overflow-y:auto;padding:8px 2px}
 .pcsheet-chip{border:1.5px solid #dbe5ee;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
 .pcsheet-chip:active{transform:scale(.97)}
+
+.pcsheet-note{font-size:12.5px;color:#5b6b7c;text-align:center;padding:10px 8px 2px;line-height:1.45}
+.pcsheet-opt.pcsheet-off{opacity:.45}
