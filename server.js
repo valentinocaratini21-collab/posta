@@ -2392,6 +2392,29 @@ app.post('/api/admin/generate-week', requireAdminToken, express.json(), (req, re
     res.json({ ok: true, started: true, user_id: uid, email: user.email, week_key: weekKey });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// Inspección y freno de emergencia por usuario (2026-10-16): ver qué tiene
+// programado un usuario y frenar TODA su publicación (vuelve a borrador +
+// piloto automático apagado). Nació porque la cuenta propia de Posty se
+// auto-posteaba historias diarias sin que nadie lo pidiera.
+app.get('/api/admin/user-posts', requireAdminToken, (req, res) => {
+  const uid = Number(req.query.user_id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  try {
+    const user = db.prepare('SELECT id, email, plan, plan_status, autopilot_enabled, trust_level FROM users WHERE id = ?').get(uid) || null;
+    const posts = db.prepare(`SELECT id, media_type, status, scheduled_at, tipo, substr(caption, 1, 90) AS cap, created_at FROM posts WHERE user_id = ? ORDER BY id DESC LIMIT 80`).all(uid);
+    res.json({ ok: true, user, posts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, res) => {
+  const uid = Number((req.body || {}).user_id) || 0;
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  try {
+    const upd = db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL WHERE user_id = ? AND status = 'scheduled'`).run(uid);
+    db.prepare('UPDATE users SET autopilot_enabled = 0 WHERE id = ?').run(uid);
+    console.log(`[admin] stop-publishing uid=${uid}: ${upd.changes} posteos desprogramados, autopilot off`);
+    res.json({ ok: true, user_id: uid, unscheduled: upd.changes });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
   const totals = {};
@@ -10444,7 +10467,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v138';
+const BUILD_ID = '20261016-v139';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

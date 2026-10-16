@@ -39,8 +39,12 @@ function clean(s, max) {
 function buildStoryContent(type, ctx) {
   const c = ctx || {};
   if (type === 'poll') {
-    const a = clean(c.pollA, 40) || 'Medialunas';
-    const b = clean(c.pollB, 40) || 'Tostadas';
+    // Sin opciones REALES del negocio no hay encuesta: jamás inventar el
+    // contenido (antes caía a 'Medialunas/Tostadas' y esa encuesta de
+    // panadería salía en cuentas de cualquier rubro — bug 2026-10-16).
+    const a = clean(c.pollA, 40);
+    const b = clean(c.pollB, 40);
+    if (!a || !b) return null;
     return { headline: '¿Vos qué elegís?', sub: `A) ${a}    B) ${b}` };
   }
   if (type === 'question') {
@@ -135,9 +139,15 @@ async function dailyStories(db, deps) {
     users = db.prepare(
       `SELECT DISTINCT p.user_id AS id FROM posts p
        JOIN settings s ON s.user_id = p.user_id
+       JOIN users u ON u.id = p.user_id
        WHERE p.media_type = 'image' AND p.status IN ('published','scheduled')
-         AND s.ig_user_id IS NOT NULL AND s.ig_user_id != ''`
+         AND s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
+         AND COALESCE(u.autopilot_enabled, 0) = 1`
     ).all();
+    // Las historias diarias nacen PROGRAMADAS (se publican sin revisión):
+    // eso ES piloto automático — solo para cuentas que lo activaron. Sin
+    // esta puerta, cualquier cuenta conectada recibía historias solas
+    // (así se posteaba sola la cuenta de @posty.hacetodo, 2026-10-16).
   } catch (e) { out.errors.push('users: ' + e.message); return out; }
   const today = new Date().toISOString().slice(0, 10);
   for (const u of users) {
