@@ -4,17 +4,27 @@
 # código: tipografía perfecta, siempre entra, nunca se recorta ni se escribe mal.
 # Uso: python3 composite-headline.py --in /path/limpia.png --headline "..." --out /path/final.png
 import argparse
+import os
 import sys
+
+# Tipografía de diseño (2026-10-16): Montserrat empaquetada en fonts/ —
+# la misma familia de la web de Posty. DejaVu (la fuente de sistema que se
+# usaba) hacía que cada titular se viera a generador de memes; Montserrat
+# ExtraBold es lo que usan las piezas de venta. Fallback: DejaVu.
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
 
 
 def load_font(bold, size):
     from PIL import ImageFont
-    names = ['DejaVuSans-Bold.ttf', 'DejaVuSans.ttf'] if bold else ['DejaVuSans.ttf']
+    names = (['Montserrat-800.ttf', 'Montserrat-700.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSans.ttf']
+             if bold else
+             ['Montserrat-700.ttf', 'Montserrat-600.ttf', 'DejaVuSans.ttf'])
     for name in names:
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            continue
+        for cand in (os.path.join(FONT_DIR, name), name):
+            try:
+                return ImageFont.truetype(cand, size)
+            except Exception:
+                continue
     return ImageFont.load_default()
 
 
@@ -82,28 +92,73 @@ def main():
         img.save(a.out)
         return
 
-    # Fondo sutil detrás del texto para legibilidad (degradado superior).
-    line_h = int(size * 1.25)
+    # Fondo ADAPTATIVO detrás del texto (2026-10-16): se mide la luz real
+    # de la zona del titular y se actúa en consecuencia — desenfoque suave
+    # del fondo (calma las fotos cargadas) + degradado cuya fuerza depende
+    # de esa luz (foto clara → más oscurecimiento; foto oscura → apenas).
+    # Antes: degradado fijo que en fotos claras dejaba el texto ilegible.
+    line_h = int(size * 1.2)
     text_h = line_h * len(lines)
+    grad_h = top_y + text_h + int(H * 0.055)
+    zone = img.crop((0, 0, W, grad_h)).resize((1, 1))
+    lum = (0.299 * zone.getpixel((0, 0))[0] + 0.587 * zone.getpixel((0, 0))[1]
+           + 0.114 * zone.getpixel((0, 0))[2])
+    alpha_max = 80 if lum < 90 else 130 if lum < 150 else 175 if lum < 200 else 215
+    try:
+        from PIL import ImageFilter
+        soft = img.crop((0, 0, W, grad_h)).filter(ImageFilter.GaussianBlur(radius=max(6, W * 0.012)))
+        mask = Image.new('L', (1, grad_h))
+        for yy in range(grad_h):
+            mask.putpixel((0, yy), 255 if yy < grad_h * 0.8 else int(255 * (1 - (yy - grad_h * 0.8) / max(grad_h * 0.2, 1))))
+        mask = mask.resize((W, grad_h))
+        img.paste(soft, (0, 0), mask)
+    except Exception:
+        pass
     overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
     od = ImageDraw.Draw(overlay)
-    grad_h = top_y + text_h + int(H * 0.04)
-    for y in range(grad_h):
-        alpha = int(110 * (1 - y / max(grad_h, 1)))
-        od.line([(0, y), (W, y)], fill=(0, 0, 0, alpha))
+    for yy in range(grad_h):
+        alpha = int(alpha_max * (1 - yy / max(grad_h, 1)))
+        od.line([(0, yy), (W, yy)], fill=(0, 0, 0, alpha))
     img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+
+    # Sombra SUAVE: capa de texto en negro, desenfocada, apenas corrida —
+    # reemplaza la sombra dura corrida (3,3) que se veía barata.
+    shadow = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    yy = top_y + max(2, int(size * 0.045))
+    for line in lines:
+        lw = sd.textlength(line, font=font)
+        sd.text(((W - lw) / 2, yy), line, font=font, fill=(0, 0, 0, 165))
+        yy += line_h
+    try:
+        from PIL import ImageFilter
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=max(2, W * 0.003)))
+    except Exception:
+        pass
+    img = Image.alpha_composite(img.convert('RGBA'), shadow).convert('RGB')
     draw = ImageDraw.Draw(img)
 
-    # Texto blanco con sombra para que se lea sobre cualquier fondo.
+    # Texto principal.
     y = top_y
     for line in lines:
         lw = draw.textlength(line, font=font)
         x = (W - lw) / 2
-        # Sombra.
-        draw.text((x + 3, y + 3), line, font=font, fill=(0, 0, 0, 180))
-        # Texto principal.
         draw.text((x, y), line, font=font, fill=(255, 255, 255))
         y += line_h
+
+    # Barra de acento con el color primario del cliente (llega por --grade):
+    # la firma de diseño que unifica cada posteo con su marca.
+    if a.grade:
+        try:
+            from PIL import ImageColor
+            ac = ImageColor.getrgb(str(a.grade).strip())
+            bar_w = int(W * 0.14)
+            bar_h = max(6, int(W * 0.009))
+            bx = (W - bar_w) // 2
+            by = top_y + text_h + int(H * 0.02)
+            draw.rounded_rectangle([bx, by, bx + bar_w, by + bar_h], radius=bar_h // 2, fill=ac)
+        except Exception:
+            pass
 
     img.save(a.out)
     # Variantes livianas de la pieza FINAL (con titular) para la UI.

@@ -20,12 +20,18 @@ def hexcolor(h, default):
 
 
 def load_font(bold, size):
+    import os
     from PIL import ImageFont
-    for name in (['DejaVuSans-Bold.ttf', 'DejaVuSans.ttf'] if bold else ['DejaVuSans.ttf', 'DejaVuSans-Bold.ttf']):
-        try:
-            return ImageFont.truetype(name, size)
-        except Exception:
-            continue
+    fdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+    names = (['Montserrat-800.ttf', 'Montserrat-700.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSans.ttf']
+             if bold else
+             ['Montserrat-600.ttf', 'Montserrat-700.ttf', 'DejaVuSans.ttf', 'DejaVuSans-Bold.ttf'])
+    for name in names:
+        for cand in (os.path.join(fdir, name), name):
+            try:
+                return ImageFont.truetype(cand, size)
+            except Exception:
+                continue
     return ImageFont.load_default()
 
 
