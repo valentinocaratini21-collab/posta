@@ -8744,9 +8744,49 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
 });
 
 // Estilos de imagen disponibles (para el picker "✨ Estilo" en borradores).
+// Estilos para el selector "Otro estilo" (2026-10-16, v150): SOLO los del
+// rubro del cliente (antes se devolvían los 1.255 del catálogo y el selector
+// era inutilizable) + 5 recomendados para el posteo puntual (intención del
+// posteo ∩ rubro, ordenados por lo que a este cliente ya le funcionó).
 app.get('/api/image-styles', requireAuth, (req, res) => {
-  try { res.json({ ok: true, styles: listStyles() }); }
-  catch (e) { res.json({ ok: true, styles: [] }); }
+  try {
+    const uid = req.session.userId;
+    const IS = require('./image-styles');
+    const pr = (() => { try { return getProfile(uid); } catch (e) { return null; } })();
+    const rubro = (pr && pr.category) || null;
+    const biz = (pr && (pr.business_name || pr.name)) || '';
+    let forbSet = new Set();
+    try { forbSet = new Set(IS.forbiddenStyles({ rubro, businessName: biz }).map(f => f.code)); } catch (e) {}
+    const okStyle = (s) => !!(s && s.brandSafe && !forbSet.has(s.code));
+    let all = IS.STYLES.filter(s => okStyle(s) && IS.rubroMatch(s, rubro));
+    if (!all.length) all = IS.STYLES.filter(s => okStyle(s) && (s.rubros || []).includes('otro'));
+    const used = {};
+    try {
+      db.prepare("SELECT style_code, COUNT(*) AS c FROM posts WHERE user_id = ? AND COALESCE(style_code,'') != '' GROUP BY style_code").all(uid)
+        .forEach(r => { used[r.style_code] = r.c; });
+    } catch (e) {}
+    let recommended = [];
+    const postId = Number(req.query.post || 0);
+    if (postId) {
+      const post = db.prepare('SELECT tipo, style_code FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+      if (post) {
+        const intent = IS.intentFromTipo(post.tipo) || 'producto';
+        const inAll = new Set(all.map(s => s.code));
+        const cand = (IS.INTENT_STYLES[intent] || []).map(IS.getStyle)
+          .filter(s => okStyle(s) && inAll.has(s.code) && s.code !== post.style_code);
+        cand.sort((a, b) => (used[b.code] || 0) - (used[a.code] || 0));
+        recommended = cand.slice(0, 5);
+        if (recommended.length < 5) {
+          const seen = new Set(recommended.map(s => s.code));
+          const extra = all.filter(s => s.code !== post.style_code && !seen.has(s.code))
+            .sort((a, b) => (used[b.code] || 0) - (used[a.code] || 0));
+          recommended = recommended.concat(extra.slice(0, 5 - recommended.length));
+        }
+      }
+    }
+    const slim = (s) => ({ code: s.code, name: s.name });
+    res.json({ ok: true, rubro, styles: all.map(slim), recommended: recommended.map(slim) });
+  } catch (e) { res.json({ ok: true, styles: [], recommended: [] }); }
 });
 
 // Regenerar SOLO la foto de un borrador con un estilo elegido (picker "✨ Estilo").
@@ -10515,7 +10555,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v149';
+const BUILD_ID = '20261016-v150';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

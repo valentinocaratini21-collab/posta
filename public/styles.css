@@ -1908,3 +1908,10 @@ textarea.in{resize:vertical;min-height:96px}
 @keyframes pj-cascade-lg{0%{transform:translate(-68px,34px);animation-timing-function:ease-out}28%{transform:translate(0,-58px);animation-timing-function:ease-in}50%{transform:translate(68px,34px);animation-timing-function:ease-out}78%{transform:translate(0,-58px);animation-timing-function:ease-in}100%{transform:translate(-68px,34px)}}
 
 .pcsheet-opt small{display:block;font-size:12px;font-weight:500;opacity:.62;margin-top:2px}
+
+.pcsheet-reclabel{font-size:12.5px;font-weight:700;color:var(--dim,#5b6b7c);padding:8px 2px 4px}
+.pcsheet-loading{font-size:13px;color:var(--dim,#5b6b7c);padding:8px 2px}
+.pcsheet-rec{border-color:#FEC14D;background:#FFF9EC}
+.pcsheet-all{display:flex;flex-wrap:wrap;gap:6px;max-height:230px;overflow-y:auto;padding:8px 2px}
+.pcsheet-chip{border:1.5px solid #dbe5ee;background:#fff;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.pcsheet-chip:active{transform:scale(.97)}

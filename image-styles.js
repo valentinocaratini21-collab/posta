@@ -251,7 +251,7 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
   };
 }
 
-// Fragmento que se suma AL FINAL del prompt de gpt-image-1, DESPUÉS del
+// Fragmento que se suma AL FINAL del prompt de gpt-image-2, DESPUÉS del
 // Style Lock visual. La línea de supremacía de paleta es innegociable:
 // el estilo jamás cambia los colores de marca.
 function styleFragment(style, paletteHex) {
@@ -266,4 +266,4 @@ function styleFragment(style, paletteHex) {
   ].join('\n');
 }
 
-module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment };
+module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch };

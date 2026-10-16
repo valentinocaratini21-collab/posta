@@ -5091,25 +5091,24 @@ function pcSetImage(id, path) {
 }
 // --- Bottom sheet: cambiar imagen (3 caminos) ---
 let PC_STYLES_CACHE = null;
-function pcCloseSheet() {
-  document.querySelectorAll('.pcsheet-backdrop').forEach(x => { try { x.remove(); } catch (e) {} });
-}
-async function pcLoadStyles(sel) {
-  if (PC_STYLES_CACHE) { pcFillStyles(sel, PC_STYLES_CACHE); return; }
-  try {
-    const r = await api.get('/api/image-styles');
-    PC_STYLES_CACHE = ((r && r.styles) || []).filter(s => s && (s.code || s.id));
-  } catch (e) { PC_STYLES_CACHE = []; }
-  pcFillStyles(sel, PC_STYLES_CACHE);
-}
-function pcFillStyles(sel, styles) {
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Elegí un estilo…</option>' + styles.map(s => {
-    const code = String(s.code || s.id || '');
-    const label = String(s.name || s.label || code);
-    return '<option value="' + esc(code) + '">' + esc(label) + '</option>';
-  }).join('');
-  sel.dataset.loaded = '1';
+async function pcLoadStyleUI(id, root) {
+  const recBox = root.querySelector('.pcsheet-recbtns');
+  const allBox = root.querySelector('.pcsheet-all');
+  const countEl = root.querySelector('.pcsheet-allcount');
+  let data = null;
+  try { data = await api.get('/api/image-styles?post=' + encodeURIComponent(id)); } catch (e) {}
+  const styles = (data && data.styles && data.styles.length) ? data.styles : (PC_STYLES_CACHE || []);
+  if (styles.length) PC_STYLES_CACHE = styles;
+  const rec = (data && data.recommended) || [];
+  if (recBox) {
+    recBox.innerHTML = rec.length
+      ? rec.map(s => '<button type="button" class="pcsheet-opt pcsheet-rec" data-pc-act="img-pick" data-code="' + esc(String(s.code)) + '">' + esc(String(s.name)) + '</button>').join('')
+      : '<div class="pcsheet-loading">Sin recomendaciones por ahora — probá Sorprendeme 🎲</div>';
+  }
+  if (allBox) {
+    allBox.innerHTML = styles.map(s => '<button type="button" class="pcsheet-chip" data-pc-act="img-pick" data-code="' + esc(String(s.code)) + '">' + esc(String(s.name)) + '</button>').join('');
+  }
+  if (countEl) countEl.textContent = styles.length ? styles.length + ' estilos pensados para negocios como el tuyo' : '';
 }
 function pcOpenImageSheet(id) {
   pcCloseSheet();
@@ -5120,7 +5119,11 @@ function pcOpenImageSheet(id) {
     <div class="pcsheet-title">Cambiar imagen</div>
     <button type="button" class="pcsheet-opt" data-pc-act="img-style">🎨 Otro estilo<small>La rehago con otro look — se ve al momento</small></button>
     <div class="pcsheet-stylewrap" hidden>
-      <select class="pcsheet-select" aria-label="Elegí un estilo"><option value="">Cargando estilos…</option></select>
+      <div class="pcsheet-reclabel">✨ Para este posteo, te recomiendo:</div>
+      <div class="pcsheet-recbtns"><div class="pcsheet-loading">Cargando…</div></div>
+      <button type="button" class="pcsheet-opt" data-pc-act="img-surprise">🎲 Sorprendeme<small>Posty elige un look de tu rubro por vos</small></button>
+      <button type="button" class="pcsheet-opt" data-pc-act="img-all">📚 Ver todos los de mi rubro<small class="pcsheet-allcount"></small></button>
+      <div class="pcsheet-all" hidden></div>
     </div>
     <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto<small>Subí una foto tuya y la uso para este posteo</small></button>
     <input type="file" accept="image/*" class="pcsheet-file" hidden>
@@ -5131,8 +5134,6 @@ function pcOpenImageSheet(id) {
   document.body.appendChild(bd);
   bd.addEventListener('click', (e) => { if (e.target === bd) pcCloseSheet(); });
   const sheet = bd.querySelector('.pcsheet');
-  const sel = sheet.querySelector('.pcsheet-select');
-  sel.addEventListener('change', () => { if (sel.value) pcRestyle(id, sel.value); });
   const file = sheet.querySelector('.pcsheet-file');
   file.addEventListener('change', () => { if (file.files && file.files[0]) pcUploadPhoto(id, file.files[0]); });
 }
@@ -5253,12 +5254,31 @@ function pcOnClick(e) {
   if (act === 'approve') { pcApprove(id, root, el); return; }
   if (act === 'img-style') {
     const wrap = root.querySelector('.pcsheet-stylewrap');
-    const sel = root.querySelector('.pcsheet-select');
     if (wrap) {
       const show = wrap.hidden;
       wrap.hidden = !show;
-      if (show && sel && !sel.dataset.loaded) pcLoadStyles(sel);
+      if (show) pcLoadStyleUI(id, root);
     }
+    return;
+  }
+  if (act === 'img-pick') {
+    const code = el.dataset.code || '';
+    if (code) pcRestyle(id, code);
+    return;
+  }
+  if (act === 'img-surprise') {
+    const list = PC_STYLES_CACHE || [];
+    if (list.length) {
+      const pick = list[Math.floor(Math.random() * list.length)];
+      if (pick && pick.code) pcRestyle(id, pick.code);
+    } else {
+      pcSheetMsg(id, 'Esperá un segundo y probá de nuevo 🎲');
+    }
+    return;
+  }
+  if (act === 'img-all') {
+    const all = root.querySelector('.pcsheet-all');
+    if (all) all.hidden = !all.hidden;
     return;
   }
   if (act === 'img-upload') { const f = root.querySelector('.pcsheet-file'); if (f) f.click(); return; }
