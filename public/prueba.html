@@ -88,6 +88,16 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tk-head{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px}
 .tk-head h2{margin:0;text-align:left;min-width:0}
 .tk-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 4px 14px rgba(39,147,200,.25)}
+/* Posty malabareando mientras genera (componente pj) */
+.pjwrap{position:relative;display:inline-block;line-height:0}
+.pj-ava{border-radius:50%;object-fit:cover;animation:pj-bob 1.14s ease-in-out infinite}
+@keyframes pj-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
+.pj-ball{position:absolute;left:50%;top:44%;width:15px;height:15px;margin:-7px 0 0 -7px;border-radius:50%;box-shadow:0 2px 6px rgba(10,30,51,.28);z-index:2;pointer-events:none}
+.pj-ball.b1{background:#FEC14D;animation:pj-cascade 1.14s ease-in-out infinite}
+.pj-ball.b2{background:#2793C8;animation:pj-cascade 1.14s ease-in-out infinite;animation-delay:-.38s}
+.pj-ball.b3{background:#0A1E33;animation:pj-cascade 1.14s ease-in-out infinite;animation-delay:-.76s}
+@keyframes pj-cascade{0%{transform:translate(-38px,10px)}25%{transform:translate(0,-38px)}50%{transform:translate(38px,10px)}75%{transform:translate(0,-38px)}100%{transform:translate(-38px,10px)}}
+
 .tstep{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 18px;margin-bottom:10px;text-align:left;opacity:.45;transition:all .3s}
 .tstep.act{opacity:1;border-color:var(--cel);box-shadow:0 6px 18px rgba(39,147,200,.12)}
 .tstep.done{opacity:1;border-color:#cde9d6}
@@ -426,7 +436,7 @@ html{scroll-behavior:smooth}
     <div class="tracker">
       <span class="pill">TRABAJANDO PARA VOS ⚙️</span>
       <div class="tk-head">
-        <img src="ai-avatar.png" alt="Posty" class="tk-avatar">
+        <span class="pjwrap"><img src="ai-avatar.png" alt="Posty" class="tk-avatar pj-ava"><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span>
         <h2 id="tkTitle">Armando tu semana…</h2>
       </div>
       <p class="sub">Esto es lo que haríamos por vos cada semana, en automático.</p>

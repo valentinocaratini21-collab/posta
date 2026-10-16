@@ -21,11 +21,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261016b-tarjeta">
+<link rel="stylesheet" href="/styles.css?v=20261016c">
 </head>
 <body>
 <div id="app"></div>
-<script src="/app.js?v=121"></script>
+<div id="posty-boot" aria-hidden="true">
+  <span class="pjwrap"><img class="pj-ava" src="ai-avatar.png" alt="" width="92" height="92"><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span>
+  <div class="pb-word">posty<span>.</span></div>
+</div>
+<style>
+#posty-boot{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;pointer-events:none;font-family:Montserrat,system-ui,sans-serif}
+#posty-boot .pb-word{font-weight:800;font-size:30px;color:#0A1E33;letter-spacing:-.5px}
+#posty-boot .pb-word span{color:#FEC14D}
+#posty-boot img{border-radius:50%;box-shadow:0 10px 28px rgba(39,147,200,.4)}
+.pjwrap{position:relative;display:inline-block;line-height:0}
+.pj-ava{animation:pj-bob 1.14s ease-in-out infinite}
+@keyframes pj-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
+.pj-ball{position:absolute;left:50%;top:44%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;box-shadow:0 2px 6px rgba(10,30,51,.28);z-index:2}
+.pj-ball.b1{background:#FEC14D;animation:pj-cascade 1.14s ease-in-out infinite}
+.pj-ball.b2{background:#2793C8;animation:pj-cascade 1.14s ease-in-out infinite;animation-delay:-.38s}
+.pj-ball.b3{background:#0A1E33;animation:pj-cascade 1.14s ease-in-out infinite;animation-delay:-.76s}
+@keyframes pj-cascade{0%{transform:translate(-40px,11px)}25%{transform:translate(0,-40px)}50%{transform:translate(40px,11px)}75%{transform:translate(0,-40px)}100%{transform:translate(-40px,11px)}}
+</style>
+<script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
+<script src="/app.js?v=122"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {

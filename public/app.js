@@ -4274,7 +4274,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
     // no corra en este caso.
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
-    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <div class="hs-gen-ava"><span class="pjwrap"><img class="pj-ava" src="ai-avatar.png" alt="Posty"><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
     <b>Para armar tu semana necesito conocer tu negocio 👇</b>
     <p>Contame de qué se trata en 2 minutos y la armo sola ✨</p>
     <a class="btn btn-primary btn-block" href="#/app/ajustes" style="margin-top:4px">Contar de mi negocio</a>
@@ -4282,7 +4282,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // Si estamos generando (ensure disparado), mostrar "armando" aunque
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
-    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <div class="hs-gen-ava"><span class="pjwrap"><img class="pj-ava" src="ai-avatar.png" alt="Posty"><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
@@ -4293,12 +4293,12 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // la semana está completa (no un spinner eterno).
     const everHad = all.length > 0;
     if (everHad) return `<div class="hs-done">
-      <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+      <div class="hs-gen-ava"><span class="pjwrap"><img class="pj-ava" src="ai-avatar.png" alt="Posty"><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
       <b>Tu semana está completa 🎉</b>
       <p>Todo publicado. La próxima se arma sola ✨</p>
     </div>`;
     return `<div class="hs-generating" id="hsGenerating">
-    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <div class="hs-gen-ava"><span class="pjwrap"><img class="pj-ava" src="ai-avatar.png" alt="Posty"><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
@@ -8061,6 +8061,8 @@ const GOALS = [
 
 /* ---------- ROUTER ---------- */
 async function render() {
+  // La app ya pintó: chau splash de carga (index.html).
+  try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado
   try {
