@@ -130,7 +130,10 @@ def main():
         except Exception as e:
             print('brand-card: logo ignorado:', e, file=sys.stderr)
 
-    img.save(a.out, 'PNG')
+    if a.out.lower().endswith('.jpg'):
+        img.convert('RGB').save(a.out, 'JPEG', quality=88, optimize=True)
+    else:
+        img.save(a.out, 'PNG')
     print('ok', a.out)
 
 

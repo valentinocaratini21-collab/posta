@@ -2,7 +2,7 @@
 // bloques de color planos sin foto (regla de Valentino, 2026-10-05).
 //
 // Cadena de fallback para la imagen de un borrador:
-//   1) foto IA (gpt-image-1, vía generateFn inyectada por server.js)
+//   1) foto IA (gpt-image-2, vía generateFn inyectada por server.js)
 //   2) tarjeta de marca con PIL (fondo color de marca o foto del cliente +
 //      titular + logo) — solo último recurso técnico
 //   3) PNG sólido con el color primario de la marca (PIL, una línea)
@@ -27,7 +27,7 @@ const { execFileSync } = require('child_process');
 const BRAND_CARD_PY = path.join(__dirname, 'brand-card.py');
 
 function freshName(prefix) {
-  return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.png`;
+  return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.jpg`;
 }
 
 // Nivel 2: tarjeta de marca renderizada con PIL. Nunca crashea por assets
@@ -53,7 +53,7 @@ function solidPng({ hex, outDir, _forceFail }) {
   const full = h.length === 3 ? h.split('').map(c => c + c).join('') : (h + '0A1E33').slice(0, 6);
   const r = parseInt(full.slice(0, 2), 16), g = parseInt(full.slice(2, 4), 16), b = parseInt(full.slice(4, 6), 16);
   execFileSync('python3', ['-c',
-    `from PIL import Image; Image.new('RGB',(1080,1350),(${r},${g},${b})).save(${JSON.stringify(out)},'PNG')`,
+    `from PIL import Image; Image.new('RGB',(1080,1350),(${r},${g},${b})).save(${JSON.stringify(out)},'JPEG',quality=85)`,
   ], { timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] });
   if (!fs.existsSync(out)) throw new Error('no se generó el sólido');
   return out;

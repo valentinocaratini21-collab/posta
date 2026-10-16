@@ -363,7 +363,12 @@ app.use(
     cookie: { maxAge: 365 * 24 * 3600 * 1000, httpOnly: true, secure: process.env.COOKIE_SECURE === '1' },
   })
 );
-app.use('/media', express.static(MEDIA_DIR));
+app.use('/media', express.static(MEDIA_DIR, {
+  // Los nombres de archivo son únicos por generación (el contenido bajo
+  // un nombre nunca cambia): caché larga e inmutable → el Schedule y las
+  // vistas repintan al instante sin re-descargar las imágenes.
+  maxAge: '30d', immutable: true,
+}));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, fp) => { if (/\.(js|css|html)$/.test(fp)) res.setHeader('Cache-Control', 'no-cache'); },
 }));
@@ -6872,16 +6877,30 @@ function parseBrandHexes(brandColorsRaw) {
 // volumen se llenó de media huérfana y TODA escritura de imagen explotaba),
 // corre la limpieza de emergencia y reintenta una vez: el producto se
 // auto-repara sin esperar un deploy.
+const JPEG_PY = "import sys\nfrom PIL import Image\nfrom io import BytesIO\nim = Image.open(BytesIO(sys.stdin.buffer.read()))\nim = im.convert('RGB')\nif im.width > 1080:\n    im = im.resize((1080, round(im.height * 1080 / im.width)), Image.LANCZOS)\nout = BytesIO()\nim.save(out, 'JPEG', quality=85, optimize=True)\nsys.stdout.buffer.write(out.getvalue())\n";
 function saveImageB64(b64) {
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.png`;
+  // Peso (2026-10-16, pedido de Valentino: "imágenes cada vez más
+  // livianas"): el maestro PNG de la IA pesa ~2 MB → se transcodifica a
+  // JPEG q85 (~250-350 KB, ~6× más liviano): el Schedule carga al instante
+  // en el celular, el volumen dura meses más y Meta acepta JPEG
+  // nativamente. Si la transcodificación falla, cae al PNG original:
+  // guardar la imagen nunca depende de este paso.
+  let buf = Buffer.from(b64, 'base64');
+  let ext = 'png';
+  try {
+    const { execFileSync } = require('child_process');
+    const conv = execFileSync('python3', ['-c', JPEG_PY], { input: buf, maxBuffer: 32 * 1024 * 1024, timeout: 20000 });
+    if (conv && conv.length > 0) { buf = conv; ext = 'jpg'; }
+  } catch (e) { /* fallback: PNG original */ }
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
   const full = path.join(MEDIA_DIR, name);
   try {
-    fs.writeFileSync(full, Buffer.from(b64, 'base64'));
+    fs.writeFileSync(full, buf);
   } catch (e) {
     if (e && e.code === 'ENOSPC') {
       console.error('[media] ENOSPC al guardar — limpieza de emergencia y reintento');
       mediaJanitor(true);
-      fs.writeFileSync(full, Buffer.from(b64, 'base64'));
+      fs.writeFileSync(full, buf);
     } else throw e;
   }
   return name;
@@ -7268,7 +7287,7 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     const ext = path.extname(p0).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
-    form.append('size', '1024x1536'); // vertical 4:5: formato ideal para celular e Instagram
+    form.append('size', '1024x1280'); // vertical 4:5 REAL (1024x1536 era 2:3: píxeles de más que el composite recortaba — más lento y más pesado)
     form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY): medium en vez de auto (auto puede resolver a high = 4x)
     r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
@@ -7280,7 +7299,7 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, prompt, size: '1024x1536', quality: costs.IMAGE_QUALITY }), // config en costs.js (env IMAGE_QUALITY)
+      body: JSON.stringify({ model, prompt, size: '1024x1280', quality: costs.IMAGE_QUALITY }), // 4:5 real (ver rama edits); config en costs.js (env IMAGE_QUALITY)
       signal: AbortSignal.timeout(120000),
     });
   }
@@ -9919,7 +9938,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261015-v129';
+const BUILD_ID = '20261016-v130';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
