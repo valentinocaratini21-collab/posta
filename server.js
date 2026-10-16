@@ -2401,7 +2401,7 @@ app.get('/api/admin/user-posts', requireAdminToken, (req, res) => {
   if (!uid) return res.status(400).json({ error: 'falta user_id' });
   try {
     const user = db.prepare('SELECT id, email, plan, plan_status, autopilot_enabled, trust_level FROM users WHERE id = ?').get(uid) || null;
-    const posts = db.prepare(`SELECT id, media_type, status, scheduled_at, tipo, substr(caption, 1, 90) AS cap, created_at FROM posts WHERE user_id = ? ORDER BY id DESC LIMIT 80`).all(uid);
+    const posts = db.prepare(`SELECT id, media_type, status, scheduled_at, tipo, week_key, substr(caption, 1, 90) AS cap, created_at FROM posts WHERE user_id = ? ORDER BY id DESC LIMIT 80`).all(uid);
     res.json({ ok: true, user, posts });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -10503,7 +10503,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v144';
+const BUILD_ID = '20261016-v145';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
