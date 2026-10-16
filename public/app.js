@@ -445,8 +445,19 @@ function landingView(cfg) {
     <div class="hero-cta">
       <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
     </div>
-    <div class="hero-note">Sin tarjeta · probalo gratis · Cancelá cuando quieras</div>
+    <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <div class="hero-note" style="margin-top:10px"><a href="/auditoria" style="color:var(--cel);font-weight:800;text-decoration:none">🔍 ¿Tu Instagram vende? Audit gratis →</a></div>
+    <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
+      <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana en Posty</span><span class="lp-week-badge">Lista para aprobar</span></div>
+      <div class="lp-week-grid">
+        <div class="lp-day"><img loading="lazy" src="post-food.png" alt="Posteo de gastronomía hecho por Posty"><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+        <div class="lp-day"><img loading="lazy" src="post-moda.png" alt="Posteo de moda hecho por Posty"><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+        <div class="lp-day"><img loading="lazy" src="post-barber.png" alt="Posteo de barbería hecho por Posty"><div class="lp-day-meta"><b>Mié</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+        <div class="lp-day"><img loading="lazy" src="post-belleza.png" alt="Posteo de belleza hecho por Posty"><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+        <div class="lp-day"><img loading="lazy" src="post-mascotas.png" alt="Posteo de mascotas hecho por Posty"><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+      </div>
+      <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, listos para aprobar con un toque.</p>
+    </div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
       <div class="pz-ba-row">
@@ -461,21 +472,19 @@ function landingView(cfg) {
         </div>
       </div>
     </div>
-    <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷</div>
-    <div class="mock-row">
-      <div class="phone"><div class="screen">
-        <img src="hero-post.jpg" alt="Ejemplo de posteo creado por Posty">
-        <div class="cap"><b>tu_negocio</b> 🔥 Nuevo ingreso que te va a encantar... <br><span style="color:#2793C8">#modaargentina #emprendedoresargentinos</span></div>
-      </div></div>
-      <div class="phone"><div class="screen">
-        <video src="hero-reel2.mp4" poster="hero-reel2-poster.jpg" autoplay muted loop playsinline preload="metadata"></video>
-        <div class="cap"><b>Pet Shop Huella</b> 🎬 Su reel de la semana, hecho por Posty...</div>
-      </div></div>
+    <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
+  </div></div>
+  <div class="lp-stats"><div class="wrap">
+    <div class="lp-stats-grid">
+      <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">5 posteos</div><div class="lp-stat-t">por semana, listos para aprobar</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$1.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
-    <h2>Hecho por Posty 🤖</h2>
-    <p class="lede">Diseños y videos que armo en minutos, para cualquier rubro. Imaginá tu negocio acá 👇</p>
+    <h2>Esto es lo que hace Posty 🤖</h2>
+    <p class="lede">Piezas reales que armamos en minutos, para cualquier rubro: con tus fotos, tus colores y tu voz. Imaginá tu negocio acá 👇</p>
     <div class="show-row">
       <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posty"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
       <div class="phone sm"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
@@ -496,6 +505,7 @@ function landingView(cfg) {
       <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
       <div class="step"><div class="num">3</div><h3>Vos aprobás, yo publico</h3><p>Tu semana queda programada a la mejor hora. Nada sale sin tu OK.</p></div>
     </div>
+    <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio y un toque para aprobar. El resto lo hacemos nosotros.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
@@ -510,11 +520,13 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div>
     <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$39.900</b>.</p>
+    <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Nada sale sin tu OK</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
+    <div class="lp-offer"><b>La oferta es simple:</b> probás 3 días gratis, ves tu semana armada antes de pagar un peso y, si no te encanta, no pagás nada. Sin tarjeta, sin contrato, sin letra chica.</div>
     <div class="country-toggle">
       <button class="${country === 'AR' ? 'on' : ''}" data-country="AR" onclick="switchPlansCountry('AR')">🇦🇷 Argentina</button>
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
@@ -523,6 +535,7 @@ function landingView(cfg) {
     <div class="scarcity" id="scarcityLine">🔥 Solo <b>50 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
+    <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
@@ -541,6 +554,13 @@ function landingView(cfg) {
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     </div>
+  </div></div>
+  <div class="lp-final"><div class="wrap">
+    <img class="hero-posty lp-final-ava" src="ai-avatar.png" alt="Posty, tu community manager">
+    <h2>Tu primera semana ya puede estar armada</h2>
+    <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
+    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
+    <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
