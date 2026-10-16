@@ -4994,7 +4994,7 @@ function pcCancelEdit(card) {
   if (!card) return;
   const ed = card.querySelector('.pcard-edit');
   if (ed) ed.remove();
-  const capEl = card.querySelector('.pcard-cap');
+  const capEl = card.querySelector('.pcard-cap, .igmock-cap');
   if (capEl) capEl.style.display = '';
 }
 async function pcSaveCap(card, id, btn) {
@@ -5010,9 +5010,12 @@ async function pcSaveCap(card, id, btn) {
     toast('No se pudo guardar: ' + esc((e && e.message) || 'probá de nuevo'));
     return;
   }
-  // Actualiza todas las tarjetas visibles de este posteo.
+  // Actualiza todas las tarjetas visibles de este posteo. OJO: el caption
+  // vive en .pcard-cap (tarjeta) o en .igmock-cap (vista tipo Instagram de
+  // Schedule): si se busca una sola clase, la otra queda oculta tras
+  // guardar y el caption "desaparece" hasta refrescar (bug 2026-10-16).
   document.querySelectorAll('[data-post-id="' + id + '"]').forEach(c => {
-    const ce = c.querySelector('.pcard-cap');
+    const ce = c.querySelector('.pcard-cap, .igmock-cap');
     if (ce) { ce.dataset.full = v; ce.textContent = v; ce.style.display = ''; }
     const we = c.querySelector('.pcard-edit');
     if (we) we.remove();
