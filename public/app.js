@@ -4396,11 +4396,22 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   // posteos van y cuántos quedan del plan, para que el cliente sepa cómo viene.
   const qLeft = Math.max(0, qTotal - qUsed);
   const qPct = qTotal > 0 ? Math.min(100, Math.round((qUsed / qTotal) * 100)) : 0;
+  // Explicación de desborde (2026-10-16, pedido de Valentino): si hay más
+  // borradores de feed que cupo libre esta semana, el resto YA es la semana
+  // que viene — y la pantalla lo dice, para que nadie se pregunte "¿por qué
+  // hay 4 si me queda 1?". Sin esta línea el estado era correcto pero
+  // inentendible.
+  const feedDrafts = list.filter(pp => pp.status === 'draft' && !/^(story|video)$/.test(String(pp.media_type || 'image'))).length;
+  const rollover = Math.max(0, feedDrafts - qLeft);
+  const nextLine = rollover > 0
+    ? `<div class="hs-quota-next">✨ Ya están armados <b>${rollover} de ${qTotal}</b> de la semana que viene</div>`
+    : '';
   const quotaLine = qTotal > 0 ? `<div class="hs-quota">
       <div class="hs-quota-txt">${qUsed >= qTotal
         ? `🎉 <b>¡Semana completa!</b> ${qUsed} de ${qTotal} posteos listos`
         : `📊 <b>${qUsed} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
+      ${nextLine}
     </div>` : '';
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">

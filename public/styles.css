@@ -1856,6 +1856,7 @@ textarea.in{resize:vertical;min-height:96px}
 /* 2026-10-14: contador de la semana (hechos / quedan) */
 .hs-quota{margin:0 0 12px}
 .hs-quota-txt{font-size:13.5px;color:var(--ink,#0A1E33);margin-bottom:6px}
+.hs-quota-next{font-size:13px;color:var(--ink,#0A1E33);opacity:.85;margin-top:7px}
 .hs-quota-bar{height:8px;border-radius:99px;background:#E3EEF5;overflow:hidden}
 .hs-quota-bar span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--cel),#35b06f)}
 /* 2026-10-14: aviso mientras Posty completa una semana parcial */
