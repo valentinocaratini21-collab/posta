@@ -2,6 +2,18 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Variante liviana de una imagen /media (la maestra no se toca: es la que
+// se publica). @640.webp para tarjetas, @24.webp de placeholder borroso.
+// Si la variante no existe (imágenes viejas), __imgFb cae a la maestra.
+function mv(src, w) {
+  if (!src || typeof src !== 'string' || src.indexOf('/media/') !== 0) return src;
+  return src.replace(/\.(jpe?g|png)$/i, '@' + w + '.webp');
+}
+window.__imgFb = function (el) {
+  if (!el || el.dataset.fbk) return;
+  el.dataset.fbk = '1';
+  if (el.dataset.full) el.src = el.dataset.full;
+};
 // Corta un texto SIN partir palabras a la mitad: si el corte cae dentro de una
 // palabra, retrocede al espacio anterior. Nunca devuelve "efecti".
 const cortar = (t, max) => {
@@ -1672,7 +1684,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
               <div class="carslide-track">
                 ${cpaths.map((p, k) => `
                 <div class="carslide">
-                  <img src="${esc(p)}" data-lightbox="${esc(p)}" alt="Foto ${k + 1} del carrusel">
+                  <img src="${esc(mv(p, 640))}" data-full="${esc(p)}" data-lightbox="${esc(p)}" onerror="__imgFb(this)" loading="lazy" alt="Foto ${k + 1} del carrusel">
                   <span class="carslide-num">${k + 1}/${cpaths.length}</span>
                 </div>`).join('')}
               </div>
@@ -1687,7 +1699,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           }
           return `${d.media_type === 'video'
             ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata" data-lightbox="${esc(d.image_path)}" data-video="1"></video>`
-            : `<img src="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" alt="Diseño del borrador ${i + 1}">`}
+            : `<img class="vimg" src="${esc(mv(d.image_path, 640))}" style="background-image:url('${esc(mv(d.image_path, 24))}')" data-full="${esc(d.image_path)}" data-lightbox="${esc(d.image_path)}" onerror="__imgFb(this)" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'} alt="Diseño del borrador ${i + 1}">`}
           ${d.media_type === 'video' ? `<span class="igmock-badge">🎬 Reel</span>` : ''}
           ${d.media_type === 'story' ? `<span class="igmock-badge">📱 Historia</span>` : ''}`;
         })()}

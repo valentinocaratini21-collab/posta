@@ -1883,3 +1883,6 @@ textarea.in{resize:vertical;min-height:96px}
 .igmock-fixed .igmock-cap{display:block;-webkit-line-clamp:unset;overflow:visible;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
 .pcard-accept{background:var(--cel);color:#fff;font-weight:800}
 .pcard-accept:disabled{opacity:.6}
+
+/* Variante liviana: placeholder borroso mientras carga la real */
+.vimg{background-size:cover;background-position:center;background-repeat:no-repeat}

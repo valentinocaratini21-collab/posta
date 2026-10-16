@@ -7221,6 +7221,12 @@ function saveImageB64(b64) {
       fs.writeFileSync(full, buf);
     } else throw e;
   }
+  // Variantes livianas para la UI (2026-10-16): @640.webp para las tarjetas
+  // y @24.webp de placeholder. La maestra queda intacta (es la que se
+  // publica). Best-effort: si falla, la app usa la maestra y listo.
+  try {
+    execFileSync('python3', [path.join(__dirname, 'media-variants.py'), '--in', full], { timeout: 15000 });
+  } catch (e) { /* sin variantes: fallback a la maestra */ }
   return name;
 }
 // ── Limpieza de media (2026-10-15) ─────────────────────────────────────
@@ -7251,6 +7257,12 @@ function diskFreeBytes() {
 function mediaJanitor(aggressive = false) {
   try {
     const refs = referencedMediaNames();
+    // Las variantes (@640/@24) de un archivo referenciado también viven.
+    for (const r of [...refs]) {
+      const base = r.replace(/\.(jpe?g|png|webp)$/i, '');
+      refs.add(`${base}@640.webp`);
+      refs.add(`${base}@24.webp`);
+    }
     const files = fs.readdirSync(MEDIA_DIR);
     const now = Date.now();
     const minAge = aggressive ? 0 : 48 * 3600 * 1000;
@@ -10415,7 +10427,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v136';
+const BUILD_ID = '20261016-v137';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

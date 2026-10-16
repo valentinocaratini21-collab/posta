@@ -106,6 +106,16 @@ def main():
         y += line_h
 
     img.save(a.out)
+    # Variantes livianas de la pieza FINAL (con titular) para la UI.
+    try:
+        base = a.out.rsplit('.', 1)[0]
+        for wdt, q, suf in ((640, 78, '@640.webp'), (24, 60, '@24.webp')):
+            if img.width > wdt:
+                img.resize((wdt, max(1, round(img.height * wdt / img.width))), Image.LANCZOS).save(base + suf, 'WEBP', quality=q)
+            else:
+                img.save(base + suf, 'WEBP', quality=q)
+    except Exception:
+        pass
     print('ok')
 
 
