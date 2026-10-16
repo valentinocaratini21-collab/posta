@@ -44,7 +44,7 @@ const INTENTS = ['promo', 'tips', 'testimonio', 'lanzamiento', 'viral', 'social'
 
 const HOOKS = [
   // ---- promo ----
-  { id: 'h01', intents: ['promo'], formula: 'Esta semana {tema} está más barato en {negocio}: te contamos por qué', ejemplo: 'Esta semana la merienda está más barata en Café Alvear: te contamos por qué', nota: 'Urgencia honesta: el precio baja con motivo real, no con truco.' },
+  { id: 'h01', intents: ['promo'], formula: 'Esta semana {tema} sale menos en {negocio}: te contamos por qué', ejemplo: 'Esta semana la merienda está más barata en Café Alvear: te contamos por qué', nota: 'Urgencia honesta: el precio baja con motivo real, no con truco.' },
   { id: 'h02', intents: ['promo'], formula: 'Si te tentaba {tema}, este es el momento: en {negocio} lo bajamos de precio', ejemplo: 'Si te tentaba el curso de barista, este es el momento: en Tostado Club lo bajamos de precio', nota: 'Invitación cómplice: habla de algo que el lector ya quería.' },
   { id: 'h03', intents: ['promo'], formula: 'Hacé la cuenta: {tema} en {negocio} te sale menos que hacerlo en casa', ejemplo: 'Hacé la cuenta: el almuerzo ejecutivo en La Esquina te sale menos que hacerlo en casa', nota: 'Número concreto: invita a verificar, no a creer.' },
   { id: 'h04', intents: ['promo'], formula: 'No es liquidación ni Black Friday: {negocio} bajó {tema} porque nos sobra stock', ejemplo: 'No es liquidación ni Black Friday: Verde Tienda bajó las macetas porque nos sobra stock', nota: 'Confesión honesta: la razón del descuento es real y se dice.' },
@@ -152,6 +152,57 @@ function pickHook({ intent, usedHookIds = [] } = {}) {
   return Object.assign({}, fallback, { reused: true });
 }
 
+// ---------------------------------------------------------------------------
+// COMPATIBILIDAD hook↔tema (2026-10-16) — la falla que no vuelve:
+// un caption salió "Esta semana Regalá mamá una presencia digital con Posty
+// está más barato en Posty.:" porque el motor metía el tema (una FRASE con
+// verbo) dentro de una fórmula de precio sin validar nada. Reglas:
+//  - El {tema} de una fórmula es un SUSTANTIVO corto (1-7 palabras), nunca
+//    una frase con verbo ni una orden: si arranca con imperativo, no encaja.
+//  - El tema no puede contener el nombre del negocio (sale duplicado).
+//  - Los hooks de PRECIO exigen precio/promo REAL en la idea: sin precio,
+//    "está más barato" es gramaticalmente roto y además un claim falso.
+// ---------------------------------------------------------------------------
+const IMPERATIVE_START = /^(regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire)\b/i;
+const PRICE_FORMULA = /más barato|bajamos de precio|bajó|sin margen|te sale menos|descuento|liquidación/i;
+
+function hookFits(hook, { tema, negocio, hasPrice } = {}) {
+  const t = String(tema || '').trim();
+  if (!hook || !hook.formula) return false;
+  if (PRICE_FORMULA.test(hook.formula) && !hasPrice) return false;
+  if (hook.formula.includes('{tema}')) {
+    if (!t) return false;
+    const words = t.split(/\s+/);
+    if (words.length > 7) return false;
+    if (t.length > 60) return false;
+    if (IMPERATIVE_START.test(t)) return false;
+    if (/[¡!¿?:]/.test(t) || t.includes('—')) return false;
+    // Artículo duplicado: si la fórmula ya pone "El {tema}", un tema que
+    // arranca con artículo sale "El la línea…" — no encaja.
+    const pre = hook.formula.split('{tema}')[0] || '';
+    if (/\b(el|la|los|las|El|La|Los|Las)\s+$/.test(pre) && /^(el|la|los|las|un|una)\s/i.test(t)) return false;
+    const biz = String(negocio || '').trim().toLowerCase();
+    if (biz && t.toLowerCase().includes(biz)) return false;
+  }
+  return true;
+}
+
+// Detector determinista de empalmes en la primera línea: puntuación
+// huérfana ("Posty.:"), el negocio repetido, o una apertura desmesurada.
+function captionOpenIsGarbled(caption, negocio) {
+  const first = String(caption || '').split('\n')[0].trim();
+  if (!first) return false;
+  if (/[.,:;]{2,}/.test(first.replace(/\.\.\./g, ''))) return true;
+  if (/\w\.:(?!\/)/.test(first)) return true;
+  const biz = String(negocio || '').trim().toLowerCase();
+  if (biz && biz.length >= 3) {
+    const hits = first.toLowerCase().split(biz).length - 1;
+    if (hits >= 2) return true;
+  }
+  if (first.split(/\s+/).length > 26) return true;
+  return false;
+}
+
 // Renderiza la fórmula reemplazando {tema} y {negocio}.
 // Slots faltantes -> '' limpio: sin llaves colgadas, sin dobles espacios.
 function renderHook(hook, { tema, negocio } = {}) {
@@ -199,5 +250,7 @@ module.exports = {
   pickHook,
   renderHook,
   ensureCaptionOpensWithHook,
+  hookFits,
+  captionOpenIsGarbled,
   hookIntentMap,
 };

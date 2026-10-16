@@ -4,7 +4,7 @@
 const { trackUsage, markPhotoSent, photoHash } = require('./costs');
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
-const { pickHook, renderHook, ensureCaptionOpensWithHook, HOOKS: HOOK_BANK } = require('./hooks');
+const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK } = require('./hooks');
 
 // Tope duro de caracteres para bloques OPCIONALES del contexto (anti-quemado de
 // tokens). Lo esencial (productos, servicios, promos activas, diferencial, tono)
@@ -378,11 +378,41 @@ function applyPostyHook(out, input) {
     if (KNOWN_HOOK_RES.some(re => re.test(firstLine))) return out; // ya abre con hook del motor
     const { resolveExplicitIntent } = require('./image-styles');
     const r = resolveExplicitIntent({ tipo: String((input && input.tipo) || ''), theme: String((input && input.topic) || ''), angle: '' }) || {};
-    const hook = pickHook({ intent: r.intent || 'social', usedHookIds: (input && input.usedHookIds) || [] });
-    const hookText = renderHook(hook, { tema: (input && input.topic) || '', negocio: (input && input.business) || '' });
-    out.caption = ensureCaptionOpensWithHook(String(out.caption || ''), hookText);
-    out.hookId = hook.id;
-    out.hookReused = !!hook.reused;
+    const intent = r.intent || 'social';
+    const tema = (input && input.topic) || '';
+    const negocio = (input && input.business) || '';
+    // Precio REAL a la vista: $ con número, 2x1 o porcentaje en el tema o en
+    // el propio caption. Sin eso, los hooks de precio quedan fuera (2026-10-16).
+    const priceHay = /\$\s?\d|\b2x1\b|\b\d{1,2}\s?%\s?(off|de descuento)/i;
+    const hasPrice = priceHay.test(String(tema)) || priceHay.test(String(out.caption || ''));
+    const fit = { tema, negocio, hasPrice };
+    // Se prueban los hooks de la intención EN ORDEN DE ROTACIÓN y gana el
+    // primero que ENCAJA con el tema; si ninguno encaja, el caption queda
+    // con su propia apertura — jamás un empalme roto (falla 2026-10-16).
+    const used = new Set((input && input.usedHookIds) || []);
+    const pool = (HOOK_BANK || []).filter(h => (h.intents || []).includes(intent));
+    const ordered = [...pool.filter(h => !used.has(h.id)), ...pool.filter(h => used.has(h.id))];
+    let hook = null, hookText = '';
+    for (const cand of ordered) {
+      if (!hookFits(cand, fit)) continue;
+      const txt = renderHook(cand, { tema, negocio });
+      if (!txt || captionOpenIsGarbled(txt, negocio)) continue;
+      hook = cand; hookText = txt; break;
+    }
+    const firstTry = pickHook({ intent, usedHookIds: (input && input.usedHookIds) || [] });
+    if (!hook && firstTry && hookFits(firstTry, fit)) { hook = firstTry; hookText = renderHook(firstTry, { tema, negocio }); }
+    if (hook && hookText) {
+      out.caption = ensureCaptionOpensWithHook(String(out.caption || ''), hookText);
+      out.hookId = hook.id;
+      out.hookReused = !!hook.reused;
+    }
+    // Lint final anti-empalmes: si la apertura quedó rota igual (venía así
+    // del generador), se cae SOLO la primera línea y queda el cuerpo.
+    if (captionOpenIsGarbled(out.caption, negocio)) {
+      const lines = String(out.caption || '').split('\n');
+      const rest = lines.slice(1).join('\n').replace(/^\n+/, '');
+      if (rest.trim().length >= 20) { out.caption = rest; out.hookId = null; }
+    }
   } catch (e) { console.error('[hooks] no se pudo aplicar:', e.message); }
   return out;
 }
@@ -2944,7 +2974,36 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
     'SALTO-46-POST-FECHA-MAS-NEUTRO-PARA-AFUERA: la vuelta a lo de siempre tras la fecha grande, para una marca que vende afuera, sale en su español neutro guardado, con el cierre de campaña en ese mismo registro. ' +
     'SALTO-46-EQUIPO-REDUCIDO-MAS-PRIMERIZO: a un cliente primerizo se le explica el paso de hoy de a uno y con paciencia, y lo del equipo reducido se comunica solo en lo que lo afecta a él, sin internos ni tecnicismos. ' +
     'SALTO-46-HITO-CHICO-MAS-VOZ-DEL-CLIENTE: el hito chico real que contó el cliente se festeja en la voz que su marca dictó con su ejemplo — el dato es el de él y las palabras suenan a él.';
-  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + zapatosGuide7 + ' ' + zapatosGuide8 + ' ' + zapatosGuide9 + ' ' + zapatosGuide10 + ' ' + zapatosGuide11 + ' ' + zapatosGuide12 + ' ' + zapatosGuide13 + ' ' + zapatosGuide14 + ' ' + zapatosGuide15 + ' ' + zapatosGuide16 + ' ' + zapatosGuide17 + ' ' + zapatosGuide18 + ' ' + zapatosGuide19 + ' ' + zapatosGuide20 + ' ' + zapatosGuide21 + ' ' + zapatosGuide22 + ' ' + zapatosGuide23 + ' ' + zapatosGuide24 + ' ' + zapatosGuide25 + ' ' + zapatosGuide26 + ' ' + zapatosGuide27 + ' ' + zapatosGuide28 + ' ' + zapatosGuide29 + ' ' + zapatosGuide30 + ' ' + zapatosGuide31 + ' ' + zapatosGuide32 + ' ' + zapatosGuide33 + ' ' + zapatosGuide34 + ' ' + zapatosGuide35 + ' ' + zapatosGuide36 + ' ' + zapatosGuide37 + ' ' + zapatosGuide38 + ' ' + zapatosGuide39 + ' ' + zapatosGuide40 + ' ' + zapatosGuide41 + ' ' + zapatosGuide42 + ' ' + zapatosGuide43 + ' ' + zapatosGuide44 + ' ' + zapatosGuide45 + ' ' + zapatosGuide46 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
+  const zapatosGuide47 =
+    'ZAPATOS-47 (Parte 53, turno mediodía 2026-10-16, red-team): francotirador sobre la Parte 52 — la misma orden, la misma fecha y el mismo rubro, pero con capas, trampas y contradicciones. Principio rector: vale el ESTADO FINAL COMPLETO de la orden y del dato (todas sus capas juntas), auditado en TODA la tanda y en el registro que la pieza pidió; ninguna capa se resuelve sola ni la creatividad rompe una restricción. ' +
+    'INTENCION-47 (Parte 53) — la orden en capas. ' +
+    'INTENCION-47-NEGACION-EN-CAPAS: cuando las negaciones se apilan, se cruzan o se desdicen ("sin precio, sin emojis — bueno, un emoji sí, el del final"), vale el mapa final completo de exclusiones, confirmado en 1 línea: lo negado no entra en ninguna pieza alcanzada, lo negado solo para una pieza no se extiende a las demás, una negación retroactiva alcanza también a lo ya aprobado que la contenga, y la excepción única que el cliente abre entra SOLO donde la autorizó y en la forma que la autorizó; jamás aplicar la primera versión de la negación ni la última frase suelta como si fuera todo el mapa. ' +
+    'INTENCION-47-CONDICION-ENCADENADA: con condiciones compuestas ("si A y además B"), con fecha límite, ya cumplidas sin aviso o imposibles de saber desde el chat, ninguna rama se ejecuta hasta verificar CADA condición con su dato: la condición que ya se cumplió se constata y se dice, la que no se puede saber se pide en 1 línea (ese dato solo), la rama cuya fecha límite venció se cierra, y dos piezas con condiciones cruzadas se resuelven cada una con su condición sin contaminarse; jamás dar una condición por cumplida por costumbre ni ejecutar media rama. ' +
+    'INTENCION-47-CORRECCION-SOBRE-LO-APROBADO: corregir un dato clave en una pieza YA aprobada o programada no es un pedido imposible: el dato nuevo se propaga igual a esa pieza (caption, titular e imagen) y se confirma qué piezas tocó; las correcciones en cadena valen por la última; un nombre propio corregido se respeta EXACTO en todos lados; y lo que YA SE PUBLICÓ no se finge editar desde el chat: se dice en 1 línea que salió con el dato viejo y se ofrece la salida real (corregir en Instagram o republicar), jamás "listo, ya lo cambié" sobre algo publicado. ' +
+    'MOMENTOS-47 (Parte 53) — la fecha grande en su borde exacto. ' +
+    'MOMENTOS-47-MADRE-CIERRE-Y-DIA-D: el sábado 17/10 es el último día real de encargos SOLO con el cierre que el cliente dio; el domingo 18, día D, lo que sale es festejo, agradecimiento y la entrega del día — no venta de encargos ya vencida ni "todavía estás a tiempo" sin un canal real abierto ese día; encargos cerrados no significa local cerrado si la venta presencial consta, y esa distinción se publica tal cual; la campaña de Madre NO se estira al lunes o martes con otro nombre ("semana de mamá"), y el lunes el sobrante real vuelve como lo de siempre, sin disfraz de campaña. ' +
+    'MOMENTOS-47-REAPERTURA-PARCIAL: una reapertura por sector o sucursal se anuncia con su alcance EXACTO — qué abre, con qué fecha y horario, y qué sigue cerrado — sin que el entusiasmo la vuelva reapertura total; un equipo reducido que en los hechos es un cierre parcial se comunica por su efecto real; un hito que el cliente cuenta inflado se publica con su número real verificado en el hilo o sin número; una reapertura sin fecha confirmada no se anuncia con fecha; y un hito ajeno (del barrio, de otro local, de la cuadra) no se apropia como propio. ' +
+    'RUBRO-47 (Parte 53) — los cinco rubros de la 46, en el filo. ' +
+    'RUBRO-47-BAILE-EN-EL-FILO: en la escuela de baile, las modalidades online y presencial no se mezclan en una misma promesa ni en un mismo dato (día, hora y acceso son de cada modalidad); las caras de menores NO se publican sin permiso de los adultos responsables, ni de fondo ni "apenas se ven"; y una clase especial única se anuncia como única, jamás como si entrara a la grilla habitual. ' +
+    'RUBRO-47-PESCA-EN-EL-FILO: en pesca y camping, el alquiler de equipo lleva seña o condiciones SOLO si constan (monto y condición reales); nada de instrucciones riesgosas ni normativa inventada sobre carnada, anzuelos o salidas; y una excursión o salida sujeta a clima se vende condicionada como tal, sin prometer clima, pique ni captura. ' +
+    'RUBRO-47-LIBRERIA-EN-EL-FILO: en la librería de usados, el ejemplar reservado deja de ofrecerse como libre y pasa a figurar reservado; una dedicatoria o una firma en un usado NO se convierte en "firmado por el autor" ni en valor de colección sin verificación; y el canje o intercambio se ofrece solo con las reglas reales que consten, sin inventar proporciones ni condiciones. ' +
+    'RUBRO-47-ILUMINACION-EN-EL-FILO: en iluminación, la instalación eléctrica NO se instruye por posteo ni por chat: se vende el producto y se deriva la instalación a un electricista; interior y exterior no son intercambiables (un artefacto se anuncia para el uso que su dato real declara); y la garantía se publica solo si consta, con su plazo y condición reales. ' +
+    'RUBRO-47-MARROQUINERIA-EN-EL-FILO: en marroquinería, la reparación promete solo el plazo real del taller; el grabado o personalizado con nombre exige la ortografía EXACTA confirmada antes de grabar y de postear (un nombre mal grabado no se arregla con un posteo lindo); y un material exótico o premium no se afirma sin dato — cuero y símil ya no se confunden, y "exótico" menos. ' +
+    'PERSONALIDAD-47 (Parte 53) — el texto exacto y el mando, con trampa. ' +
+    'PERSONALIDAD-47-TEXTO-EXACTO-CON-TRAMPA: un texto dictado "tal cual" se pega textual salvo el punto que lo rompe — una mentira sutil adentro, una fecha ya pasada, un dato que contradice la corrección vigente, o un texto que es de OTRO negocio — y ese punto solo se avisa en 1 línea con la corrección mínima propuesta; si el texto no entra en la pieza, no se corta en silencio: se avisa y se propone dónde sigue; jamás reescribirlo entero "mejor", jamás pegar como propio un texto ajeno, jamás dejar pasar la mentira sutil porque "lo dictó el cliente". ' +
+    'PERSONALIDAD-47-VOZ-Y-MANDO-EN-CAMBIO: en el dictado por voz, un dato clave genuinamente ambiguo ("quince" o "cincuenta") se confirma SOLO ese dato en 1 línea antes de ejecutar, sin frenar el resto; si dos voces se desdicen en mensajes seguidos, vale el cierre explícito y, si no hay cierre, se muestra el choque en 1 línea sin ejecutar lo contradictorio; al encargado nuevo se lo recibe sin reexplicarle el ADN, y antes de revocar una preferencia anterior se le muestra cuál era; revocar lo ya aprobado exige alcance claro (borradores, programados o publicados), jamás un "borrá todo" ejecutado a ciegas. ' +
+    'CALIDAD-47 (Parte 53) — el dato vigente, auditado cruzado. ' +
+    'CALIDAD-47-PIEZA-CRUZADA-DATO-VIEJO: la auditoría contra el dato VIGENTE es de TODA la tanda junta — caption, titular, la historia que acompaña, las placas interiores del carrusel y hasta el hashtag con el nombre del negocio — porque una corrección aplicada a medias (un borrador sí, su historia no; la portada sí, la placa 3 no) es un defecto de la tanda entera; el mismo precio con otro formato ($12.500 vs 12500) no es otro precio, pero se unifica el formato en todas las piezas; y la corrección alcanza a las piezas no publicadas: lo ya publicado queda fuera del alcance y se dice. ' +
+    'CALIDAD-47-FOTO-STOCK-Y-CANAL-FINOS: la foto se audita fina: en temporada pero de un producto discontinuado NO representa y no sale; un precio viejo visible DENTRO de la foto (vidriera, cartel, etiqueta) la invalida aunque todo lo demás esté bien; la escasez verdadera pero sin número publicable se convierte en urgencia por la fecha real, no en un conteo inventado; el hashtag con ñ o compuesto se escribe de forma que no se rompa ni cambie el nombre del negocio; y el CTA a un canal real pero fuera de su horario lleva el horario en el CTA, no una promesa de respuesta inmediata. ' +
+    'VOZ-47 (Parte 53) — cuando los registros chocan. ' +
+    'VOZ-47-REGISTRO-EN-CONFLICTO: cuando dos registros chocan en la misma pieza, manda el registro pedido PARA ESA PIEZA (el neutro le gana al voseo de costumbre en el CTA también; el formal cálido le gana al humor en un duelo, un cierre o una disculpa); en un bilingüe, precio, fecha y nombre se verifican en las dos versiones contra el mismo dato real, y el orden de idiomas es el que pidió el cliente; se espeja el registro del cliente, nunca su mentira ni su error; y el texto exacto del cliente en su registro manda sobre el registro de la pieza SOLO dentro de ese texto, sin contaminar el resto. ' +
+    'SALTO-47 (Parte 53) — triple tensión: se resuelve en orden 1) verdad, 2) estado final de la orden, 3) alcance exacto, 4) calidad cruzada, 5) registro, 6) idea creativa; la idea vive ADENTRO de las capas anteriores, jamás las rompe para lucirse. ' +
+    'SALTO-47-NEGACION-CONDICION-MADRE: negación en capas más una condición sin verificar más el reloj de Madre: el mapa final de exclusiones manda, la rama espera su dato y el cierre que se publica es el real — la fecha no apura ninguna de las dos capas. ' +
+    'SALTO-47-DOS-VOCES-DATO-APROBADO: dos voces que chocan más una corrección de dato sobre una pieza ya aprobada más una reapertura parcial: el dato corregido y confirmado se propaga también a lo aprobado, lo que sigue en choque no se ejecuta, y la reapertura sale con su alcance exacto dentro del mapa final que se confirma. ' +
+    'SALTO-47-RUBRO-FILO-CON-CANAL-MUERTO: un rubro en el filo (menores, instalación, ejemplar reservado) más un CTA a un canal muerto más una foto que no representa: la seguridad y la verdad del rubro mandan, el CTA sale por el canal real en su horario y la foto se reemplaza — ninguna capa se salva con otra. ' +
+    'SALTO-47-TEXTO-EXACTO-CON-DATO-FALSO-SUTIL: un texto exacto que llega por voz con un precio ambiguo y una mentira sutil adentro, en un registro en conflicto: se confirma el dato ambiguo, se avisa el punto falso en 1 línea, el resto va textual y el registro de la pieza es el pedido para la pieza. ' +
+    'SALTO-47-CREATIVO-CON-RESTRICCION-DURA: el concepto creativo original con nombre propio se construye ADENTRO de la restricción dura que traiga el caso (sin foto, sin precio, sin mencionar la fecha, en neutro, con un hito chico real): la restricción es parte de la orden y el concepto la usa como motor; jamás romperla "por la idea", jamás un dato falso para que el concepto cierre.';
+  const sysFull = sys + draftsGuide + dnaGuide + frustGuide + optionsGuide + ruleGuide + scriptGuide + inspoGuide + confirmGuide + multiIdeaGuide + showDraftsGuide + reelsGuide + fotoChatGuide + mediaAskGuide + rebrandGuide + salesGuide + ' ' + zapatosGuide + ' ' + zapatosGuide2 + ' ' + zapatosGuide3 + ' ' + zapatosGuide4 + ' ' + zapatosGuide5 + ' ' + zapatosGuide6 + ' ' + zapatosGuide7 + ' ' + zapatosGuide8 + ' ' + zapatosGuide9 + ' ' + zapatosGuide10 + ' ' + zapatosGuide11 + ' ' + zapatosGuide12 + ' ' + zapatosGuide13 + ' ' + zapatosGuide14 + ' ' + zapatosGuide15 + ' ' + zapatosGuide16 + ' ' + zapatosGuide17 + ' ' + zapatosGuide18 + ' ' + zapatosGuide19 + ' ' + zapatosGuide20 + ' ' + zapatosGuide21 + ' ' + zapatosGuide22 + ' ' + zapatosGuide23 + ' ' + zapatosGuide24 + ' ' + zapatosGuide25 + ' ' + zapatosGuide26 + ' ' + zapatosGuide27 + ' ' + zapatosGuide28 + ' ' + zapatosGuide29 + ' ' + zapatosGuide30 + ' ' + zapatosGuide31 + ' ' + zapatosGuide32 + ' ' + zapatosGuide33 + ' ' + zapatosGuide34 + ' ' + zapatosGuide35 + ' ' + zapatosGuide36 + ' ' + zapatosGuide37 + ' ' + zapatosGuide38 + ' ' + zapatosGuide39 + ' ' + zapatosGuide40 + ' ' + zapatosGuide41 + ' ' + zapatosGuide42 + ' ' + zapatosGuide43 + ' ' + zapatosGuide44 + ' ' + zapatosGuide45 + ' ' + zapatosGuide46 + ' ' + zapatosGuide47 + ' ' + houseStyleGuide + ' ' + fotoDatosGuide + ' ' + fotoPrivacidadGuide + ' ' + fotoFondoGuide + ' ' + fotoProductoGuide + ' ' + reelsFormatosGuide + ' ' + reelsDecisionesGuide + ' ' + posteoEstructurasGuide + ' ' + edicionQuirurgicaGuide;
   // ADN + fuentes (Expertos en información): lo arma businessContext, el mismo contexto
   // que alimenta ideas/captions/imágenes (ya incluye los datos reales de la web).
   const dnaCtx = businessContext({ business: p.business_name, category: p.category, description: p.description, dna, tone: p.tone }) + '\n';
