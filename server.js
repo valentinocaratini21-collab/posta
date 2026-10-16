@@ -2363,6 +2363,29 @@ function funnelUniques(name, days) {
   } catch (e) {}
   return ids;
 }
+// Rescate sin sesión del cliente (pedido de Rina, 2026-10-09): genera la
+// semana de un cliente trabado desde el panel admin, sin pedirle que abra
+// nada. Fire-and-forget: el pipeline corre en segundo plano y el resultado
+// se verifica en su Schedule. Gate: ADMIN_TOKEN.
+app.post('/api/admin/generate-week', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    let uid = Number(body.user_id || req.query.user_id || 0) || 0;
+    if (!uid && (body.email || req.query.email)) {
+      const u = db.prepare('SELECT id FROM users WHERE email = ?').get(String(body.email || req.query.email).trim().toLowerCase());
+      if (u) uid = u.id;
+    }
+    if (!uid) return res.status(400).json({ ok: false, error: 'Falta user_id o email válido' });
+    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(uid);
+    if (!user) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    const tz = userTz(uid);
+    const weekKey = mondayKeyOf(tzToday(tz));
+    generateWeekDrafts(uid, { weekKey, tag: 'admin-rescue' })
+      .then(r => console.log(`[admin-rescue] usuario ${uid}:`, JSON.stringify(r).slice(0, 200)))
+      .catch(e => console.error('[admin-rescue]', e.message));
+    res.json({ ok: true, started: true, user_id: uid, email: user.email, week_key: weekKey });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
   const totals = {};
@@ -5041,6 +5064,24 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       console.error(`[pipeline:${tag}] usuario ${uid}: 0 posteos creados (${imgFailCount} fallos de imagen)`);
       return { ok: false, reason: failReason, created: 0, imgFailCount, error: firstImgError || undefined };
     }
+    // PILOTO AUTOMÁTICO TOTAL (2026-10-16): el eslabón que faltaba del
+    // sistema de autopilot que ya existía (users.autopilot_enabled +
+    // trust levels + quality gate): cuando se genera una semana nueva,
+    // al cliente que YA activó el autopiloto se le programa sola y solo
+    // le llega el aviso — la tesis autopilot hasta el final.
+    // scheduleAllDrafts aplica su gate de calidad fail-closed, el cupo
+    // del plan y solo toca borradores que no necesitan revisión. Sin
+    // autopilot o con rueditas: como siempre, espera su aprobación.
+    try {
+      const uA = db.prepare('SELECT autopilot_enabled FROM users WHERE id = ?').get(uid);
+      if (uA && uA.autopilot_enabled && !trainingWheelsActive(uid)) {
+        const rA = scheduleAllDrafts(uid);
+        if (rA && rA.ok && rA.scheduled && rA.scheduled.length) {
+          console.log(`[pipeline:${tag}] piloto automático total: usuario ${uid}: ${rA.scheduled.length} posteos programados solos`);
+          try { push.sendPush(uid, { title: 'Tu semana se publica sola ✨', body: `${rA.scheduled.length} posteos quedaron programados en sus mejores horarios.`, url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
+        }
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] piloto automático:`, e.message); }
     // 2026-10-15: semana PARCIAL (created < déficit) ya no es un éxito
     // silencioso: queda registrada para el loop de reintentos (el sweep la
     // completa) y el resultado lo dice con sus motivos por slot.
@@ -10024,7 +10065,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v131';
+const BUILD_ID = '20261016-v132';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
