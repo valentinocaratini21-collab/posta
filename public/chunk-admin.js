@@ -58,6 +58,7 @@ async function bindAdmin() {
   }
   card.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-soft btn-sm" data-atab="home">🏠 Panel</button>
       <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
       <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
       <button class="btn btn-soft btn-sm" data-atab="users">Por usuario</button>
@@ -86,6 +87,156 @@ async function bindAdmin() {
     document.body.appendChild(a); a.click(); a.remove();
   };
   const bar = (pct) => `<div style="height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.max(1, Math.min(100, pct))}%;background:var(--cel);border-radius:99px"></div></div>`;
+  const adm$ = (v) => '$' + Math.round(v || 0).toLocaleString('es-AR');
+  // ---------- Panel principal (v170): PLATA → pulso → clientes → ficha ----------
+  // Una sola pantalla, dos niveles máximo. Todo sale de /api/admin/overview y
+  // /api/admin/client/:id.
+  async function showHome() {
+    body.innerHTML = `<div class="d">⏳ Cargando panel…</div>`;
+    let r;
+    try { r = await adminApi('overview'); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar el panel.</div>`; return; }
+    const M = r.money || {}, P = r.pulse || {};
+    const moneyBlock = (m, title, big) => `
+      <div style="flex:1;min-width:240px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px">
+        <div style="font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px">${title} · ${esc(m.label || '')}</div>
+        <div style="font-size:${big ? '32px' : '24px'};font-weight:800;margin:6px 0 2px">${adm$(m.net_ars)}</div>
+        <div style="font-size:11px;color:var(--mut);margin-bottom:10px">neto en limpio</div>
+        ${[
+          ['Ingresos · suscripciones (estimado)', adm$(m.subs_estimated_ars)],
+          ['Ingresos · comisiones de pauta (cobrado)', adm$(m.fees_ars)],
+          ['Gasto IA', 'US$ ' + (m.ai_usd || 0) + ' ≈ ' + adm$(m.ai_ars)],
+          ['Gastos fijos', adm$(m.fixed_ars)],
+        ].map(([k, v]) => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span style="color:var(--mut)">${k}</span><b>${v}</b></div>`).join('')}
+      </div>`;
+    const planChips = (P.active_by_plan || []).map(p => `<span style="background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:12px"><b>${esc(p.plan)}</b> · ${p.n}</span>`).join(' ') || '<span class="d">Sin suscripciones activas</span>';
+    body.innerHTML = `
+      <h4 style="margin:0 0 8px">💰 Plata</h4>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+        ${moneyBlock(M.current || {}, 'Este mes', true)}
+        ${moneyBlock(M.previous || {}, 'Mes pasado', false)}
+      </div>
+      <p class="d" style="margin:0 0 14px">Suscripciones: estimado por suscripciones activas (MercadoPago no registra cada cobro en nuestra base). Comisiones de pauta: cobradas, se reconocen cuando el cliente carga crédito. IA convertida a ${adm$(M.rate || 1425)}/US$.</p>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px">
+        <b style="font-size:13px">Gastos fijos del mes</b>
+        ${(M.fixed_expenses || []).map(f => `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(f.label)}</span><span><b>${adm$(f.amount_ars)}</b> <button class="btn btn-soft btn-sm" data-fxdel="${f.id}" style="margin-left:6px">✕</button></span></div>`).join('') || '<div class="d" style="margin-top:6px">Sin gastos fijos cargados: el neto todavía no los descuenta. Cargá Railway, dominio y lo que pagues todos los meses.</div>'}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <input id="fxLabel" type="text" placeholder="Ej: Railway" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;flex:1;min-width:130px">
+          <input id="fxAmt" type="number" min="0" step="any" placeholder="$ /mes" style="font-size:16px;border:2px solid var(--line);border-radius:10px;padding:8px;width:120px">
+          <button class="btn btn-primary btn-sm" id="fxAdd">Agregar</button>
+        </div>
+        <div id="fxMsg" style="font-size:12px;margin-top:6px"></div>
+      </div>
+      <h4 style="margin:0 0 8px">📈 Pulso</h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Clientes</div><div style="font-size:19px;font-weight:800">${P.total_users || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Trials activos</div><div style="font-size:19px;font-weight:800">${P.trials_active || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Publicados esta semana</div><div style="font-size:19px;font-weight:800">${P.published_this_week || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Programados</div><div style="font-size:19px;font-weight:800">${P.scheduled || 0}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">QA imágenes 7d</div><div style="font-size:19px;font-weight:800">${P.qa_7d ? P.qa_7d.pct + '%' : '—'}</div><div style="font-size:11px;color:var(--mut)">${P.qa_7d ? P.qa_7d.ok + '/' + P.qa_7d.n + ' aprobadas' : 'sin datos'}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">Disco libre</div><div style="font-size:19px;font-weight:800">${P.disk_free_mb != null ? P.disk_free_mb + ' MB' : '—'}</div></div>
+      </div>
+      <div style="margin-bottom:6px;font-size:12.5px;color:var(--mut)">Suscripciones activas por plan</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${(P.next_trial_expiries || []).length ? '10' : '16'}px">${planChips}</div>
+      ${(P.next_trial_expiries || []).length ? `<div style="font-size:12.5px;margin-bottom:16px;color:var(--mut)">⏳ Próximos vencimientos de prueba: ${P.next_trial_expiries.map(t => `${esc(t.email)} (${esc(t.ends_at)})`).join(' · ')}</div>` : ''}
+      <h4 style="margin:0 0 8px">👥 Clientes</h4>
+      <div class="field"><input id="adCliQ" placeholder="Buscar por negocio, email o @IG…" style="width:100%;font-size:16px"></div>
+      <div id="adCliList"></div>`;
+    const fxAdd = $('#fxAdd');
+    if (fxAdd) fxAdd.onclick = async () => {
+      const label = ($('#fxLabel').value || '').trim();
+      const amt = parseFloat($('#fxAmt').value);
+      const msg = $('#fxMsg');
+      if (!label || !(amt >= 0)) { msg.innerHTML = `<span style="color:var(--red-d)">Nombre y monto válido.</span>`; return; }
+      try { await adminApi('fixed-expenses', 'POST', { label, amount_ars: amt }); showHome(); }
+      catch (e) { msg.innerHTML = `<span style="color:var(--red-d)">No se pudo guardar.</span>`; }
+    };
+    body.querySelectorAll('[data-fxdel]').forEach(b => b.onclick = async () => {
+      try { await adminApi('fixed-expenses/delete', 'POST', { id: Number(b.dataset.fxdel) }); showHome(); }
+      catch (e) { alert('No se pudo borrar'); }
+    });
+    const clients = r.clients || [];
+    const listEl = $('#adCliList');
+    const renderClients = (q) => {
+      const qq = (q || '').trim().toLowerCase();
+      const rows = clients.filter(u => !qq || [u.business_name || '', u.email || '', u.ig_username || ''].join(' ').toLowerCase().includes(qq));
+      listEl.innerHTML = rows.map(u => {
+        const st = u.plan_status === 'trial' ? '🟡 trial' + (u.trial_ends_at ? ' · vence ' + new Date(Number(u.trial_ends_at)).toISOString().slice(0, 10) : '')
+          : u.plan_status === 'active' ? '🟢 activo' : esc(u.plan_status || '');
+        return `
+        <button class="btn btn-ghost btn-block" data-cli="${u.id}" style="text-align:left;margin-bottom:6px">
+          <b>${esc(u.business_name || u.email)}</b>${u.ig_username ? ' <span style="color:var(--mut)">@' + esc(String(u.ig_username).replace(/^@/, '')) + '</span>' : ''}<br>
+          <span style="font-size:11px;color:var(--mut)">${esc(u.plan || '')} · ${st} · ${u.ig_connected ? '📷 IG conectado' : 'sin IG'} · ${u.posts_published || 0} publicados · últ. act. ${esc((u.last_activity || u.created_at || '').slice(0, 10))}</span>
+        </button>`;
+      }).join('') || '<div class="d">Sin clientes para ese criterio.</div>';
+      listEl.querySelectorAll('[data-cli]').forEach(b => b.onclick = () => showClient(Number(b.dataset.cli)));
+    };
+    renderClients('');
+    const qIn = $('#adCliQ');
+    if (qIn) qIn.oninput = () => renderClients(qIn.value);
+  }
+  async function showClient(uid) {
+    body.innerHTML = `<div class="d">⏳ Cargando ficha…</div>`;
+    let r;
+    try { r = await adminApi('client/' + uid); }
+    catch (e) { body.innerHTML = `<div class="err">No se pudo cargar la ficha.</div>`; return; }
+    const u = r.user || {}, pr = r.profile || {};
+    const cents$ = (c) => adm$((Number(c) || 0) / 100);
+    const stIco = { published: '🟢', scheduled: '🗓', draft: '📝', failed: '🔴', publishing: '⏳' };
+    body.innerHTML = `
+      <button class="btn btn-soft btn-sm" id="cliBack" style="margin-bottom:12px">← Volver al panel</button>
+      <div style="margin-bottom:14px">
+        <div style="font-size:19px;font-weight:800">${esc(pr.business_name || u.email)}</div>
+        <div style="font-size:12.5px;color:var(--mut)">${esc(u.email)}${pr.ig_username ? ' · @' + esc(String(pr.ig_username).replace(/^@/, '')) : ''}${pr.category ? ' · ' + esc(pr.category) : ''} · cliente desde ${esc((u.created_at || '').slice(0, 10))}</div>
+        ${pr.description ? `<div style="font-size:12.5px;margin-top:6px">${esc(pr.description)}</div>` : ''}
+        ${pr.monthly_goal ? `<div style="font-size:12.5px;margin-top:4px">🎯 Foco del mes: ${esc(pr.monthly_goal)}</div>` : ''}
+      </div>
+      <h4 style="margin:0 0 8px">💳 Suscripción</h4>
+      <div style="font-size:13px;margin-bottom:16px;line-height:1.9">
+        Plan <b>${esc(u.plan_name || u.plan || '')}</b> (${adm$(u.plan_price)}/mes) · Estado <b>${esc(u.plan_status || '')}</b><br>
+        ${u.plan_status === 'trial' ? `Trial vence: <b>${u.trial_ends_at ? esc(new Date(Number(u.trial_ends_at)).toISOString().slice(0, 10)) : '—'}</b><br>` : ''}
+        ${r.referrer_email ? `Referido por: ${esc(r.referrer_email)}<br>` : ''}
+        Piloto automático: ${u.autopilot_enabled ? 'ON' : 'off'} · Seguidores IG: ${u.ig_followers || 0}
+      </div>
+      <h4 style="margin:0 0 8px">📸 Posteos (${(r.posts || []).length} recientes)</h4>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+        ${(r.posts || []).map(p => `
+          <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden">
+            ${p.image_url ? `<img src="${esc(p.image_url)}" style="width:100%;aspect-ratio:4/5;object-fit:cover;display:block" loading="lazy">` : '<div style="aspect-ratio:4/5;background:var(--bg2)"></div>'}
+            <div style="padding:6px;font-size:10.5px;line-height:1.5">
+              <div>${stIco[p.status] || '•'} ${esc(p.status)}${p.media_type === 'video' ? ' 🎬' : ''}</div>
+              <div style="color:var(--mut)">${esc((p.published_at || p.scheduled_at || p.created_at || '').slice(0, 10))}</div>
+              <div>❤️ ${p.m_likes != null ? p.m_likes : (p.ig_likes || 0)} · 💬 ${p.m_comments != null ? p.m_comments : (p.ig_comments || 0)}${p.reach ? ' · 👁 ' + p.reach : ''}</div>
+              <div style="color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((p.caption || '').split('\n')[0])}</div>
+            </div>
+          </div>`).join('') || '<div class="d">Sin posteos todavía.</div>'}
+      </div>
+      <h4 style="margin:0 0 8px">💸 Su plata con Posty</h4>
+      <div style="font-size:13px;line-height:1.9;margin-bottom:6px">
+        Gasto IA total: <b>US$ ${r.ai ? r.ai.total_usd : 0}</b> · este mes: <b>US$ ${r.ai ? r.ai.month_usd : 0}</b> (${r.ai ? r.ai.calls : 0} llamadas)<br>
+        ${r.ai && r.ai.by_feature && r.ai.by_feature.length ? r.ai.by_feature.map(f => `<span style="font-size:11.5px;color:var(--mut)">${esc(f.feature)}: US$ ${f.usd}</span>`).join(' · ') + '<br>' : ''}
+        Billetera de pauta: <b>${r.ads && r.ads.wallet ? cents$(r.ads.wallet.balance_cents) : '$0'}</b>
+      </div>
+      ${((r.ads && r.ads.boosts) || []).map(b => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--line)">🚀 Boost #${b.id} · ${esc(b.status)} · presupuesto ${cents$(b.budget_cents)} · fee ${cents$(b.fee_cents)} · gastado ${cents$(b.last_spend_cents)} · alcance ${b.last_reach || 0}${b.error ? ' · <span style="color:var(--red-d)">' + esc(String(b.error).slice(0, 80)) + '</span>' : ''}</div>`).join('')}
+      <h4 style="margin:16px 0 8px">📥 Bandejas pendientes</h4>
+      <div style="font-size:13px;margin-bottom:16px">💬 Comentarios: <b>${r.queues ? r.queues.comments : 0}</b> · 📩 DMs: <b>${r.queues ? r.queues.dms : 0}</b> · ⭐ Reseñas: <b>${r.queues ? r.queues.reviews : 0}</b></div>
+      <h4 style="margin:0 0 8px">🕐 Actividad reciente</h4>
+      ${(r.activity || []).map(e => `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px"><span style="color:var(--mut);font-size:10.5px">${esc((e.created_at || '').slice(5, 16).replace(' ', ' · '))}</span> <b style="font-family:monospace;font-size:11.5px">${esc(e.name)}</b></div>`).join('') || '<div class="d">Sin actividad registrada.</div>'}
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+        <button class="btn btn-soft btn-sm" id="cliStop">🛑 Frenar publicación de este cliente</button>
+        <span id="cliStopMsg" style="font-size:12px;margin-left:8px"></span>
+      </div>`;
+    const back = $('#cliBack');
+    if (back) back.onclick = showHome;
+    const stop = $('#cliStop');
+    if (stop) stop.onclick = async () => {
+      if (!confirm('¿Frenar la publicación? Lo programado vuelve a borrador y se apaga el piloto automático.')) return;
+      try {
+        const rr = await adminApi('stop-publishing', 'POST', { user_id: uid });
+        $('#cliStopMsg').innerHTML = `<span style="color:var(--green-d)">Frenado ✅ (${rr.unscheduled || 0} desprogramados)</span>`;
+      } catch (e) { $('#cliStopMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo frenar.</span>`; }
+    };
+  }
   async function showFunnel() {
     body.innerHTML = `<div class="d">⏳ Cargando funnel…</div>`;
     let r;
@@ -445,7 +596,7 @@ async function bindAdmin() {
   $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
     $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
     b.classList.add('btn-primary');
-    ({ funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
+    ({ home: showHome, funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
   });
   // Banner de alertas: la info tiene que buscar al dueño
   try {
@@ -459,6 +610,6 @@ async function bindAdmin() {
       card.insertBefore(bar, card.firstChild);
     }
   } catch (e) {}
-  const f0 = $('#adminCard [data-atab="funnel"]'); if (f0) f0.click();
+  const f0 = $('#adminCard [data-atab="home"]'); if (f0) f0.click();
   const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
 }

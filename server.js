@@ -2928,6 +2928,159 @@ app.get('/api/admin/users', requireAdminToken, (req, res) => {
   res.json({ ok: true, users: rows });
 });
 
+// ---------- Panel de control (v170): plata, pulso, clientes y ficha ----------
+// Vara de Valentino: MUY simple y MUY completo. Una pantalla principal con la
+// PLATA arriba (ingresos − gasto IA − gastos fijos = neto en limpio), el pulso
+// del negocio y la lista de clientes; la ficha trae TODO de un cliente en una
+// sola llamada. Fuentes de plata (honestidad ante todo):
+//  · Suscripciones: NO hay tabla de cobros (MercadoPago cobra por fuera y no
+//    queda registro por cobro en la DB) → se ESTIMA desde las suscripciones
+//    activas (mp_base_amount real si está cargado; si no, precio de lista del
+//    plan). La UI lo etiqueta "estimado por suscripciones activas".
+//  · Comisiones de pauta: ad_transactions kind='fee_earned' — plata registrada
+//    y cobrada (el fee se reconoce al cargar crédito). Etiqueta "cobrado".
+//  · Gasto de IA: api_costs.est_cost_usd real, convertido a ARS con ARS_PER_USD
+//    (mismo default 1425 que costs.js).
+//  · Gastos fijos: tabla admin_fixed_expenses, editable desde el panel.
+//    Arranca en 0/vacía — jamás un número inventado.
+const ARS_USD_RATE = Math.max(1, parseFloat(process.env.ARS_PER_USD || '1425') || 1425);
+const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function monthWindow(offset) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1);
+  const f = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01';
+  return { from: f(start), to: f(end), label: MESES_ES[start.getMonth()] + ' ' + start.getFullYear() };
+}
+function subsIncomeEstimate() {
+  const actives = db.prepare(`SELECT plan, mp_base_amount FROM users WHERE plan_status = 'active'`).all();
+  let total = 0;
+  for (const u of actives) {
+    const base = Number(u.mp_base_amount) || 0;
+    if (base > 0) { total += base; continue; }
+    const pl = (PLANS && PLANS[u.plan]) || null;
+    if (pl && pl.price) total += Number(pl.price) || 0;
+  }
+  return { total: Math.round(total), count: actives.length };
+}
+function monthMoney(offset, fixedTotal) {
+  const w = monthWindow(offset);
+  const fees = db.prepare(`SELECT COALESCE(SUM(amount_cents), 0) AS s FROM ad_transactions
+    WHERE kind = 'fee_earned' AND created_at >= ? AND created_at < ?`).get(w.from, w.to);
+  const ai = db.prepare(`SELECT COALESCE(SUM(est_cost_usd), 0) AS s FROM api_costs
+    WHERE ts >= ? AND ts < ?`).get(w.from, w.to);
+  const subs = subsIncomeEstimate();
+  const feesArs = Math.round((Number(fees.s) || 0) / 100);
+  const aiUsd = Math.round((Number(ai.s) || 0) * 100) / 100;
+  const aiArs = Math.round(aiUsd * ARS_USD_RATE);
+  const fixed = Math.round(fixedTotal || 0);
+  const income = subs.total + feesArs;
+  return { label: w.label, from: w.from, subs_estimated_ars: subs.total, subs_count: subs.count,
+    fees_ars: feesArs, ai_usd: aiUsd, ai_ars: aiArs, fixed_ars: fixed,
+    income_ars: income, net_ars: income - aiArs - fixed };
+}
+app.get('/api/admin/overview', requireAdminToken, (req, res) => {
+  try {
+    let fixed = [];
+    try { fixed = db.prepare('SELECT id, label, amount_ars FROM admin_fixed_expenses ORDER BY id').all(); } catch (e) {}
+    const fixedTotal = fixed.reduce((s, f) => s + (Number(f.amount_ars) || 0), 0);
+    const totalUsers = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    const byPlan = db.prepare(`SELECT plan, COUNT(*) AS n FROM users WHERE plan_status = 'active' GROUP BY plan ORDER BY n DESC`).all();
+    const nowMs = Date.now();
+    const trialRows = db.prepare(`SELECT email, trial_ends_at FROM users WHERE plan_status = 'trial'`).all();
+    const trialsActive = trialRows.filter(t => !t.trial_ends_at || Number(t.trial_ends_at) > nowMs);
+    const nextExpiries = trialsActive.filter(t => t.trial_ends_at)
+      .sort((a, b) => Number(a.trial_ends_at) - Number(b.trial_ends_at)).slice(0, 5)
+      .map(t => ({ email: t.email, ends_at: new Date(Number(t.trial_ends_at)).toISOString().slice(0, 10) }));
+    const d = new Date();
+    const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+    const mondayStr = monday.getFullYear() + '-' + String(monday.getMonth() + 1).padStart(2, '0') + '-' + String(monday.getDate()).padStart(2, '0');
+    const publishedWeek = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE status = 'published' AND published_at >= ?`).get(mondayStr).n;
+    const scheduled = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE status = 'scheduled'`).get().n;
+    let qa = null;
+    try {
+      const s = db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(passed), 0) AS ok FROM qa_audit WHERE created_at > datetime('now', '-7 days')").get();
+      if (s && s.n) qa = { n: s.n, ok: s.ok, pct: Math.round(s.ok / s.n * 1000) / 10 };
+    } catch (e) {}
+    const freeB = diskFreeBytes();
+    const clients = db.prepare(`SELECT u.id, u.email, u.plan, u.plan_status, u.created_at, u.trial_ends_at,
+        pr.business_name, pr.category, pr.ig_username, pr.ig_connected,
+        (SELECT MAX(e.created_at) FROM events e WHERE e.user_id = u.id) AS last_activity,
+        (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.status = 'published') AS posts_published
+      FROM users u LEFT JOIN profiles pr ON pr.user_id = u.id
+      ORDER BY COALESCE(last_activity, u.created_at) DESC LIMIT 300`).all();
+    res.json({ ok: true,
+      money: { rate: ARS_USD_RATE, current: monthMoney(0, fixedTotal), previous: monthMoney(-1, fixedTotal), fixed_expenses: fixed },
+      pulse: { total_users: totalUsers, active_by_plan: byPlan, trials_active: trialsActive.length,
+        next_trial_expiries: nextExpiries, published_this_week: publishedWeek, scheduled,
+        qa_7d: qa, disk_free_mb: freeB != null ? Math.round(freeB / 1048576) : null },
+      clients });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/admin/fixed-expenses', requireAdminToken, express.json(), (req, res) => {
+  const label = String((req.body || {}).label || '').trim().slice(0, 60);
+  const amount = Number((req.body || {}).amount_ars);
+  if (!label || !(amount >= 0)) return res.status(400).json({ ok: false, error: 'Etiqueta y monto válido (puede ser 0).' });
+  try {
+    const r = db.prepare('INSERT INTO admin_fixed_expenses (label, amount_ars) VALUES (?, ?)').run(label, amount);
+    res.json({ ok: true, id: r.lastInsertRowid });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/admin/fixed-expenses/delete', requireAdminToken, express.json(), (req, res) => {
+  const id = Number((req.body || {}).id) || 0;
+  if (!id) return res.status(400).json({ ok: false, error: 'Falta id' });
+  try { db.prepare('DELETE FROM admin_fixed_expenses WHERE id = ?').run(id); res.json({ ok: true }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/admin/client/:id', requireAdminToken, (req, res) => {
+  const uid = Number(req.params.id) || 0;
+  if (!uid) return res.status(400).json({ ok: false, error: 'Falta id' });
+  try {
+    const user = db.prepare(`SELECT id, email, created_at, plan, plan_status, mp_base_amount, mp_mult,
+        trial_ends_at, trial_extended_until, referral_code, referred_by, referral_discount,
+        autopilot_enabled, trust_level, ig_followers, cancel_reason, utm_source, utm_campaign, client_name
+      FROM users WHERE id = ?`).get(uid);
+    if (!user) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    const profile = db.prepare(`SELECT business_name, category, tone, description, ig_username, ig_connected, goal, monthly_goal
+      FROM profiles WHERE user_id = ?`).get(uid) || {};
+    let referrer = null;
+    if (user.referred_by) {
+      const r = db.prepare('SELECT email FROM users WHERE id = ?').get(user.referred_by);
+      if (r) referrer = r.email;
+    }
+    const pl = getPlan(user.plan);
+    const postsRaw = db.prepare(`SELECT p.id, p.media_type, p.status, p.image_path, p.caption,
+        p.scheduled_at, p.published_at, p.created_at, p.ig_permalink, p.ig_likes, p.ig_comments, p.tipo, p.week_key,
+        m.reach, m.likes AS m_likes, m.comments AS m_comments
+      FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ? ORDER BY p.id DESC LIMIT 60`).all(uid);
+    const posts = postsRaw.map(p => { const o = { ...p }; o.image_url = absImageUrl(uid, p.image_path); delete o.image_path; return o; });
+    const postCounts = db.prepare(`SELECT status, COUNT(*) AS n FROM posts WHERE user_id = ? GROUP BY status`).all(uid);
+    const aiTotal = db.prepare('SELECT COALESCE(SUM(est_cost_usd), 0) AS s, COUNT(*) AS calls FROM api_costs WHERE user_id = ?').get(uid);
+    const w = monthWindow(0);
+    const aiMonth = db.prepare('SELECT COALESCE(SUM(est_cost_usd), 0) AS s FROM api_costs WHERE user_id = ? AND ts >= ? AND ts < ?').get(uid, w.from, w.to);
+    const aiByFeature = db.prepare(`SELECT feature, COUNT(*) AS calls, COALESCE(SUM(est_cost_usd), 0) AS usd
+      FROM api_costs WHERE user_id = ? GROUP BY feature ORDER BY usd DESC LIMIT 12`).all(uid);
+    const wallet = db.prepare('SELECT balance_cents, currency, updated_at FROM ad_wallets WHERE user_id = ?').get(uid) || null;
+    const boosts = db.prepare(`SELECT id, post_id, status, budget_cents, fee_cents, last_spend_cents, last_reach,
+        last_impressions, duration_days, error, created_at, started_at
+      FROM ad_boosts WHERE user_id = ? ORDER BY id DESC LIMIT 20`).all(uid);
+    const adTx = db.prepare(`SELECT kind, amount_cents, note, created_at FROM ad_transactions
+      WHERE user_id = ? ORDER BY id DESC LIMIT 15`).all(uid);
+    const pend = (t) => { try { return db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE user_id = ? AND status = 'pending'`).get(uid).n; } catch (e) { return 0; } };
+    const activity = db.prepare(`SELECT name, props, created_at FROM events WHERE user_id = ? ORDER BY id DESC LIMIT 30`).all(uid);
+    res.json({ ok: true,
+      user: { ...user, plan_name: pl ? pl.name : user.plan, plan_price: pl ? pl.price : 0 },
+      profile, referrer_email: referrer, posts, post_counts: postCounts,
+      ai: { total_usd: Math.round((Number(aiTotal.s) || 0) * 100) / 100, calls: aiTotal.calls,
+        month_usd: Math.round((Number(aiMonth.s) || 0) * 100) / 100,
+        by_feature: aiByFeature.map(f => ({ feature: f.feature, calls: f.calls, usd: Math.round((Number(f.usd) || 0) * 10000) / 10000 })) },
+      ads: { wallet, boosts, transactions: adTx },
+      queues: { comments: pend('comment_queue'), dms: pend('dm_queue'), reviews: pend('review_queue') },
+      activity });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // ---------- "Primera semana con rueditas": cola de revisión ----------
 // Los borradores con needs_review=1 los revisa el equipo (o un agente) antes de
 // que el cliente los vea. API JSON para consumo por máquina, con ADMIN_TOKEN.
@@ -11047,7 +11200,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v169';
+const BUILD_ID = '20261017-v170';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

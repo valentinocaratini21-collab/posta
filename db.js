@@ -648,6 +648,15 @@ try { db.exec(`ALTER TABLE users ADD COLUMN cancel_reason TEXT DEFAULT ''`); } c
 try { db.exec(`ALTER TABLE users ADD COLUMN utm_source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN utm_campaign TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Gasto en ads (carga manual): para CAC cuando se prenda publicidad.
+// Gastos fijos mensuales del negocio (Railway, dominio, etc.) — los carga el
+// admin desde el Panel (v170) para calcular el neto en limpio. Arranca vacía:
+// NUNCA se siembra un número inventado.
+db.exec(`CREATE TABLE IF NOT EXISTS admin_fixed_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  label TEXT NOT NULL DEFAULT '',
+  amount_ars REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 db.exec(`CREATE TABLE IF NOT EXISTS ad_spend (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   date TEXT NOT NULL,
