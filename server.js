@@ -10497,11 +10497,16 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   let btn = hexOk(fields.btn) ? String(fields.btn).trim().toUpperCase() : pal[1];
   let colorSource = 'rubro';
   let igPic = null, igName = '';
+  let igProfPromise = null;
   if (ig) {
+    // Una sola promesa de perfil, reutilizable: la carrera de 2,5s define
+    // colores/foto para el diseño y la MISMA promesa alimenta la proyección
+    // de perfil (v184) sin fetches duplicados.
+    igProfPromise = demo.fetchIgProfile(ig).catch(() => null);
     try {
       // Instagram lento no frena la prueba: a los 2,5s seguimos con los
       // datos del formulario (el fetch sigue de fondo, sin efecto).
-      const prof = await Promise.race([demo.fetchIgProfile(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
+      const prof = await Promise.race([igProfPromise, new Promise((r) => setTimeout(() => r(null), 2500))]);
       if (prof) {
         igPic = prof.pic; igName = prof.name;
         if (!hexOk(fields.accent) && prof.colors && prof.colors[0]) {
@@ -10511,6 +10516,26 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         }
       }
     } catch (e) { /* fallback silencioso */ }
+  }
+  // ---------- Proyección de perfil (v184): su perfil HOY vs CON Posty ------
+  // Fetch completo del perfil real (bio, conteos, grilla) EN PARALELO con la
+  // generación: nunca la espera ni la frena. Carrera de ~3s: si el perfil
+  // llega, se emite el evento 'profile' apenas está (la proyección se pinta
+  // durante la generación) y viaja en el payload final para la tarjeta de
+  // resultados y el cache. Si pierde la carrera o falla (IG privado, IG
+  // caído), la proyección no existe y el flujo queda idéntico al de siempre.
+  let trialProfile = null;
+  if (ig) {
+    const profilePromise = (async () => {
+      try {
+        const known = await Promise.race([igProfPromise, new Promise((r) => setTimeout(() => r(null), 4500))]);
+        const data = await feedAudit.fetchAuditData(ig, null, known || undefined);
+        return feedAudit.trialProfileFromAudit(data, igPic);
+      } catch (e) { return null; }
+    })();
+    Promise.race([profilePromise, new Promise((r) => setTimeout(() => r(null), 3000))])
+      .then((p) => { if (p) { trialProfile = p; send('profile', { profile: p }); } })
+      .catch(() => {});
   }
   if (!business) return fail('Contanos el nombre de tu negocio');
   if (!demo.CATEGORIES.includes(category)) return fail('Rubro inválido');
@@ -10654,6 +10679,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       business, ig, category,
       accent, btn, color_source: colorSource,
       ig_pic: igPic, ig_name: igName,
+      profile: trialProfile,
       ideas: ideas.slice(0, 6),
       posts,
       design: {
@@ -11364,7 +11390,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v184';
+const BUILD_ID = '20261017-v185';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

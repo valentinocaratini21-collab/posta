@@ -340,6 +340,60 @@ html{scroll-behavior:smooth}
 .brief-toggle .bt-arrow{transition:transform .2s;color:var(--cel);flex-shrink:0}
 .brief-toggle[aria-expanded="true"] .bt-arrow{transform:rotate(180deg)}
 .brief-body{padding:20px;border-top:1px solid var(--line)}
+/* PROYECCIÓN DE PERFIL (v184): su perfil HOY vs CON Posty — mismo recurso
+   de contraste arrastrable de la landing (pz-drag), en versión compacta. */
+#projBox{max-width:480px;margin:26px auto 0}
+.pfp-card{background:#fff;border:1.5px solid var(--line);border-radius:20px;box-shadow:0 12px 40px rgba(10,30,51,.07);overflow:hidden;text-align:left}
+.pfp-head{display:flex;align-items:center;gap:8px;padding:14px 16px 8px}
+.pfp-head b{font-size:16px;color:var(--navy)}
+.pfp-tag{margin-left:auto;background:var(--bg2);color:var(--cel);font-weight:800;font-size:11px;letter-spacing:.4px;padding:5px 11px;border-radius:99px;white-space:nowrap}
+.pfp-btn{border:none;background:var(--bg2);width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;color:var(--navy);flex-shrink:0;font-family:inherit}
+.pfp-label{padding:0 16px 12px;color:var(--mut);font-size:13px;line-height:1.5;margin:0}
+.pfp-stage{--pos:50%;position:relative;margin:0 16px;border:1px solid var(--line);border-radius:16px;overflow:hidden;touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:#fff}
+.pfp-stage:focus-within{outline:2px solid var(--cel);outline-offset:3px}
+.pfp-layer{padding:14px}
+.pfp-layer-hoy{position:absolute;inset:0;background:#FBFCFD;clip-path:inset(0 calc(100% - var(--pos)) 0 0);z-index:1}
+.pfp-stage img{-webkit-user-drag:none}
+.pfp-prof{display:flex;align-items:center;gap:12px}
+.pfp-ava{position:relative;width:62px;height:62px;border-radius:50%;background:linear-gradient(45deg,#FEDA75,#FA7E1E,#D62976,#962FBF,#4F5BD5);flex-shrink:0}
+.pfp-ava i{position:absolute;inset:3px;border-radius:50%;font-style:normal;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;color:var(--navy);background:#E8EDF2}
+.pfp-ava img{position:absolute;inset:3px;width:calc(100% - 6px);height:calc(100% - 6px);border-radius:50%;object-fit:cover;display:block;border:2px solid #fff;background:#E8EDF2;z-index:1;box-sizing:border-box}
+.pfp-layer-hoy .pfp-ava{background:#C9D6DF}
+.pfp-who{min-width:0}
+.pfp-who b{display:block;font-size:15px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfp-who span{font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.pfp-stats{display:flex;gap:8px;margin:12px 0 0;text-align:center}
+.pfp-stat{flex:1}
+.pfp-stat b{display:block;font-size:15px;color:var(--navy)}
+.pfp-stat span{font-size:12px;color:var(--mut)}
+.pfp-bio{font-size:13px;line-height:1.45;color:var(--navy);margin:10px 0 0;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pfp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:12px}
+.pfp-cell{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#EDF2F6}
+.pfp-cell img,.pfp-cell video{width:100%;height:100%;object-fit:cover;display:block}
+.pfp-cell .pfp-vb{position:absolute;top:5px;right:5px;background:rgba(10,30,51,.75);color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:99px}
+.pfp-cell-wait{position:absolute;inset:0;background:linear-gradient(120deg,#EDF2F6 30%,#F8FCFE 50%,#EDF2F6 70%);background-size:200% 100%;animation:pfpShine 1.4s infinite}
+@keyframes pfpShine{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.pfp-ptag{position:absolute;top:10px;font-size:11px;font-weight:900;letter-spacing:.6px;padding:5px 11px;border-radius:99px;z-index:4;pointer-events:none}
+.pfp-ptag.hoy{left:10px;background:var(--navy);color:#fff}
+.pfp-ptag.posty{right:10px;background:var(--yl);color:var(--navy)}
+.pfp-bar{position:absolute;top:0;bottom:0;left:var(--pos);width:3px;margin-left:-1.5px;background:#fff;box-shadow:0 0 0 1px rgba(10,30,51,.18),0 0 14px rgba(10,30,51,.25);z-index:3;pointer-events:none}
+.pfp-knob{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:#fff;border:2px solid var(--cel);color:var(--cel);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 4px 14px rgba(10,30,51,.28)}
+.pfp-stage:not(.touched) .pfp-knob{animation:pfpKnob 2.2s ease-in-out infinite}
+@keyframes pfpKnob{0%,100%{margin-left:0}50%{margin-left:10px}}
+.pfp-range{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:140px;height:22px;opacity:0;z-index:5;cursor:ew-resize;margin:0}
+.pfp-hint{text-align:center;color:var(--mut);font-size:12.5px;margin:10px 16px 0}
+.pfp-extra{padding:12px 16px 16px}
+.pfp-hls{display:flex;gap:14px;overflow-x:auto;padding:2px 0 4px}
+.pfp-hl{text-align:center;flex-shrink:0;width:62px}
+.pfp-hlring{width:56px;height:56px;border-radius:50%;padding:2px;background:linear-gradient(45deg,#FEDA75,#D62976,#962FBF);margin:0 auto}
+.pfp-hlring img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;border:2px solid #fff;background:#E8EDF2;box-sizing:border-box}
+.pfp-hl span{display:block;font-size:11px;color:var(--navy);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfp-act{display:flex;align-items:center;gap:9px;background:var(--bg2);border-radius:12px;padding:11px 13px;font-size:13px;color:var(--navy);margin-top:10px;line-height:1.45}
+.pfp-act .dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:pulse 1.6s infinite}
+.pfp-styles{font-size:12.5px;color:var(--mut);margin:10px 0 0;line-height:1.5}
+.pfp-styles b{color:var(--navy)}
+.pfp-card.min .pfp-body{display:none}
+@media(max-width:420px){#projBox{margin-top:20px}.pfp-layer{padding:12px}.pfp-ava{width:54px;height:54px}}
 </style>
 </head>
 <body>
@@ -476,6 +530,9 @@ html{scroll-behavior:smooth}
         </div>
       </div>
     </div>
+
+    <!-- Proyección de perfil (v184): se llena por JS si el perfil real llegó -->
+    <div id="projBox" style="display:none"></div>
 
     <div class="sec">
       <h3>Así se ve en tu feed 📱</h3>
@@ -1050,7 +1107,7 @@ async function generateWithStream(fd) {
   STREAM_DONE = false; STREAM_ERRORED = false; STREAM_N = 0;
   enterStreamingMode();
   try {
-    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, done: onStreamDone, error: onStreamError });
+    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, done: onStreamDone, error: onStreamError });
   } catch (e) { /* cae al chequeo de abajo */ }
   if (!STREAM_DONE && !STREAM_ERRORED) onStreamError({ error: 'Se cortó la conexión.' });
   return true;
@@ -1086,6 +1143,11 @@ async function readSSE(body, handlers) {
 }
 function enterStreamingMode() {
   trackerStop();
+  // Proyección de perfil (v184): estado limpio; aparece solo si llega el
+  // evento 'profile' del stream.
+  PROJ = projFresh('live');
+  const pb = $('#projBox');
+  if (pb) { pb.style.display = 'none'; pb.innerHTML = ''; }
   const ig = cleanIg($('#f_ig').value);
   $('#rTitle').textContent = 'Armando tu semana… ⚙️';
   $('#rSub').textContent = 'Mirá cómo la armo en vivo 👇';
@@ -1125,6 +1187,7 @@ function onStreamPost(d) {
   const feed = $('#rWeek');
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
+  projAddPiece(idx, p);
   $('#rStreamFill').style.width = Math.min(95, Math.round((STREAM_N / 6) * 100)) + '%';
   const ti = Math.min(TK_STEPS.length - 1, STREAM_N);
   $('#rStreamText').textContent = TK_STEPS[ti][1];
@@ -1145,6 +1208,207 @@ function onStreamError(d) {
   $('#rStreamErrMsg').textContent = ((d && d.error) || 'No pudimos armar tu semana.') + ' Probá de nuevo 🙂';
   $('#rStreamErr').style.display = 'block';
 }
+// ---------- PROYECCIÓN DE PERFIL (v184): su perfil HOY vs CON Posty ----------
+// El servidor manda el perfil REAL del visitante (evento 'profile' del
+// stream, o el campo profile del payload final): identidad, bio y conteos
+// tal cual vinieron de Instagram + sus fotos recientes. La proyección NO
+// inventa números: el lado CON Posty repite los mismos conteos reales y
+// solo cambia el CONTENIDO (su semana nueva en la grilla). Si el perfil no
+// llega (privado, IG lento), el bloque nunca aparece y el flujo es el de
+// siempre.
+let PROJ = null; // { profile, piecesArr, mode:'live'|'card', closed, min, pos, scrolled }
+function projFresh(mode) {
+  return { profile: null, piecesArr: [], mode, closed: false, min: false, pos: 50, scrolled: false };
+}
+function projCategory() {
+  if (TRIAL && TRIAL.category) return TRIAL.category;
+  try { return (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value) || 'otro'; } catch (e) { return 'otro'; }
+}
+function fmtCount(n) {
+  if (n == null || isNaN(n)) return '';
+  n = Number(n);
+  if (n < 1000) return String(n);
+  if (n < 10000) return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (n < 1000000) { const v = n / 1000; return (v >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toString().replace('.', ',')) + ' mil'; }
+  const v = n / 1000000;
+  return (Math.round(v * 10) / 10).toString().replace('.', ',') + ' M';
+}
+const PROJ_HL = {
+  gastronomia: ['Menú', 'Promos', 'El local', 'Clientes'],
+  cafeteria: ['Menú', 'Promos', 'El local', 'Clientes'],
+  bar: ['La carta', 'Promos', 'El local', 'Clientes'],
+  belleza: ['Trabajos', 'Promos', 'El local', 'Clientes'],
+  barberia: ['Trabajos', 'Promos', 'El local', 'Clientes'],
+  moda: ['Nuevo', 'Promos', 'La tienda', 'Clientes'],
+  mascotas: ['Clientes', 'Promos', 'El local', 'Servicios'],
+  fitness: ['Rutinas', 'Promos', 'El gym', 'Alumnos'],
+};
+const PROJ_HL_IMG = ['hl-menu.jpg', 'hl-promos.jpg', 'hl-local.jpg', 'hl-clientes.jpg'];
+const PROJ_CROPS = ['50% 20%', '50% 80%', '20% 50%', '80% 50%'];
+
+function projAvaHTML(p) {
+  const initial = esc(((p.name || p.handle || 'P').trim().charAt(0) || 'P').toUpperCase());
+  const pic = p.pic || (TRIAL && TRIAL.ig_pic) || '';
+  return `<span class="pfp-ava"><i>${initial}</i>${pic ? `<img src="${pic}" alt="" onerror="this.remove()">` : ''}</span>`;
+}
+function projStatsHTML(p) {
+  const items = [];
+  if (p.posts_count != null) items.push([fmtCount(p.posts_count), 'publicaciones']);
+  if (p.followers != null) items.push([fmtCount(p.followers), 'seguidores']);
+  if (p.following != null) items.push([fmtCount(p.following), 'seguidos']);
+  if (!items.length) return '';
+  return `<div class="pfp-stats">${items.map(([n, l]) => `<div class="pfp-stat"><b>${n}</b><span>${l}</span></div>`).join('')}</div>`;
+}
+function projHoyCellHTML(url) {
+  // Sin foto (o si la foto dejó de cargar): celda neutra, NUNCA una foto ajena.
+  if (!url) return `<div class="pfp-cell"></div>`;
+  return `<div class="pfp-cell"><img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()"></div>`;
+}
+function projPieceMediaHTML(post, crop) {
+  if (!post) return '';
+  const st = crop ? ` style="object-position:${crop}"` : '';
+  if (post.type === 'video' && post.video) return `<video src="${post.video}" muted loop autoplay playsinline${st}></video><span class="pfp-vb">▶ REEL</span>`;
+  if (post.image) return `<img src="${post.image}" alt="" loading="lazy"${st}>`;
+  if (post.video) return `<video src="${post.video}" muted loop autoplay playsinline${st}></video><span class="pfp-vb">▶ REEL</span>`;
+  return '';
+}
+function projAfterCellHTML(i) {
+  const arr = (PROJ && PROJ.piecesArr) || [];
+  let html = '';
+  if (i < 5) html = arr[i] ? projPieceMediaHTML(arr[i]) : '';
+  else {
+    const src = arr.length ? arr[(i - 5) % arr.length] : null;
+    html = src ? projPieceMediaHTML(src, PROJ_CROPS[i - 5]) : '';
+  }
+  return html || '<div class="pfp-cell-wait"></div>';
+}
+function projLayerHTML(side) {
+  const p = PROJ.profile;
+  const grid = side === 'hoy'
+    ? Array.from({ length: 9 }, (_, i) => projHoyCellHTML((p.photos || [])[i])).join('')
+    : Array.from({ length: 9 }, (_, i) => `<div class="pfp-cell">${projAfterCellHTML(i)}</div>`).join('');
+  return `<div class="pfp-prof">${projAvaHTML(p)}<div class="pfp-who"><b>${esc(p.name || p.handle || '')}</b><span>@${esc(p.handle || '')}</span></div></div>`
+    + projStatsHTML(p)
+    + (p.bio ? `<p class="pfp-bio">${esc(p.bio)}</p>` : '')
+    + `<div class="pfp-grid${side === 'hoy' ? '' : ' pfp-grid-after'}">${grid}</div>`;
+}
+function renderProj() {
+  const box = $('#projBox');
+  if (!box) return;
+  if (!PROJ || !PROJ.profile || PROJ.closed) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const p = PROJ.profile;
+  const hls = PROJ_HL[projCategory()] || ['Destacados', 'Promos', 'El local', 'Clientes'];
+  const firstPiece = (PROJ.piecesArr || []).filter(Boolean)[0];
+  const hlThumbs = hls.map((label, i) => {
+    const src = (i === 0 && firstPiece && firstPiece.image) ? firstPiece.image : PROJ_HL_IMG[i];
+    return `<div class="pfp-hl"><div class="pfp-hlring"><img src="${src}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></div><span>${esc(label)}</span></div>`;
+  }).join('');
+  const styles = [...new Set((PROJ.piecesArr || []).map((x) => x && x.style_name).filter(Boolean))];
+  const actLine = PROJ.mode === 'card'
+    ? '🐾 Posty armó tu semana y la dejó programada — vos solo aprobás'
+    : '🐾 Posty está armando tu semana…';
+  const btns = PROJ.mode === 'card'
+    ? `<button type="button" class="pfp-btn" id="pfpMin" title="Minimizar">${PROJ.min ? '＋' : '－'}</button><button type="button" class="pfp-btn" id="pfpClose" title="Cerrar">✕</button>`
+    : '';
+  box.innerHTML = `<div class="pfp-card${PROJ.min ? ' min' : ''}">
+    <div class="pfp-head"><b>✨ Tu perfil, con Posty</b><span class="pfp-tag">PROYECCIÓN</span>${btns}</div>
+    <p class="pfp-label">Proyección: así se vería tu perfil con Posty — tu misma cuenta, con contenido nuevo cada semana.</p>
+    <div class="pfp-body">
+      <div class="pfp-stage" id="pfpStage" style="--pos:${PROJ.pos}%">
+        <div class="pfp-layer">${projLayerHTML('posty')}</div>
+        <div class="pfp-layer pfp-layer-hoy">${projLayerHTML('hoy')}</div>
+        <span class="pfp-ptag hoy">HOY</span><span class="pfp-ptag posty">CON POSTY</span>
+        <div class="pfp-bar"><span class="pfp-knob">⇄</span></div>
+        <input class="pfp-range" id="pfpRange" type="range" min="4" max="96" step="1" value="${Math.round(PROJ.pos)}" aria-label="Comparar tu perfil: arrastrá para ver tu Instagram hoy, a la izquierda, y con Posty, a la derecha">
+      </div>
+      <p class="pfp-hint">👆 Arrastrá la línea para comparar</p>
+      <div class="pfp-extra">
+        <div class="pfp-hls">${hlThumbs}</div>
+        <div class="pfp-act"><span class="dot"></span><span>${actLine}</span></div>
+        ${styles.length ? `<p class="pfp-styles">🎨 <b>Estilos de tu semana:</b> ${styles.map(esc).join(' · ')}</p>` : ''}
+      </div>
+    </div>
+  </div>`;
+  box.style.display = 'block';
+  bindProjDrag();
+  const c = $('#pfpClose'); if (c) c.onclick = () => { PROJ.closed = true; renderProj(); };
+  const m = $('#pfpMin'); if (m) m.onclick = () => { PROJ.min = !PROJ.min; renderProj(); };
+}
+function bindProjDrag() {
+  const stage = $('#pfpStage');
+  if (!stage || stage.dataset.bound || !PROJ) return;
+  stage.dataset.bound = '1';
+  const range = $('#pfpRange');
+  const setPos = (p) => {
+    p = Math.max(4, Math.min(96, p));
+    PROJ.pos = p;
+    stage.style.setProperty('--pos', p + '%');
+    if (range) range.value = Math.round(p);
+  };
+  let on = false;
+  const fromEvent = (e) => { const r = stage.getBoundingClientRect(); if (r.width) setPos(((e.clientX - r.left) / r.width) * 100); };
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.target === range) return;
+    on = true; stage.classList.add('touched');
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    fromEvent(e);
+  });
+  stage.addEventListener('pointermove', (e) => { if (on) fromEvent(e); });
+  ['pointerup', 'pointercancel'].forEach((ev) => stage.addEventListener(ev, () => { on = false; }));
+  if (range) range.addEventListener('input', () => { stage.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
+}
+function onStreamProfile(d) {
+  if (!d || !d.profile || !d.profile.handle) return;
+  if (!PROJ) PROJ = projFresh('live');
+  if (PROJ.closed) return;
+  PROJ.profile = d.profile;
+  trk('prueba_profile', {});
+  renderProj();
+  const box = $('#projBox');
+  if (box && !PROJ.scrolled) {
+    PROJ.scrolled = true;
+    setTimeout(() => { try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 250);
+  }
+}
+// Cada pieza que llega por el stream llena su celda de la grilla CON Posty
+// (y los motivos que la repiten), sin re-renderizar toda la tarjeta.
+function projAddPiece(idx, post) {
+  if (!PROJ || !PROJ.profile || PROJ.closed || !post) return;
+  PROJ.piecesArr = PROJ.piecesArr || [];
+  PROJ.piecesArr[idx] = post;
+  const grid = document.querySelector('.pfp-grid-after');
+  if (!grid) { renderProj(); return; }
+  const cells = grid.children;
+  for (let i = 0; i < 9; i++) {
+    if (i === idx || i >= 5) { const c = cells[i]; if (c) c.innerHTML = projAfterCellHTML(i); }
+  }
+  // Línea de estilos de la semana (aparece con el primer estilo nombrado)
+  const styles = [...new Set(PROJ.piecesArr.map((x) => x && x.style_name).filter(Boolean))];
+  const extra = document.querySelector('.pfp-extra');
+  if (extra && styles.length) {
+    let line = extra.querySelector('.pfp-styles');
+    if (!line) {
+      line = document.createElement('p');
+      line.className = 'pfp-styles';
+      extra.appendChild(line);
+    }
+    line.innerHTML = `🎨 <b>Estilos de tu semana:</b> ${styles.map(esc).join(' · ')}`;
+  }
+}
+// Resultados: la tarjeta compacta se arma desde el payload final (sirve
+// también para la semana restaurada de IndexedDB o del link del email).
+function projFromTrial() {
+  const t = TRIAL;
+  if (t && t.profile && t.profile.handle) {
+    const wasClosed = !!(PROJ && PROJ.closed);
+    PROJ = projFresh('card');
+    PROJ.closed = wasClosed;
+    PROJ.profile = t.profile;
+    PROJ.piecesArr = (t.posts || []).slice(0, 5);
+  }
+  renderProj();
+}
+
 // Final común del clásico y del stream: guarda en idb y muestra resultados.
 function finishGeneration(data, genSecs) {
   trackerStop();
@@ -1202,6 +1466,10 @@ function renderResults() {
 
   // Semana (extraída a función para re-renderizar cuando el chat edita textos)
   renderWeek();
+
+  // Proyección de perfil (v184): tarjeta compacta arriba de la semana,
+  // solo si el payload trae el perfil real del visitante.
+  projFromTrial();
 
   // Header del mockup de teléfono: foto de perfil + @
   try {

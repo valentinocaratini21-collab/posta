@@ -128,7 +128,7 @@ function parseEmbedPosts(html) {
 // ---------------------------------------------------------------------------
 // Datos públicos del perfil + posteos (best-effort)
 // ---------------------------------------------------------------------------
-async function fetchAuditData(handle, fetchOverride) {
+async function fetchAuditData(handle, fetchOverride, profOverride) {
   const ig = sanitizeHandle(handle);
   if (!ig) return { ok: false, error: 'Pasame tu @ de Instagram' };
   let html = null;
@@ -140,12 +140,21 @@ async function fetchAuditData(handle, fetchOverride) {
   const seg = html.split(String.fromCharCode(92) + '"').join('"');
   const f = (rx) => { const m = rx.exec(seg); return m ? m[1] : null; };
   const posts = parseEmbedPosts(html);
-  // Foto de perfil (best-effort, para mostrar en el reporte)
+  // Foto de perfil (best-effort, para mostrar en el reporte). Si el llamador
+  // ya trajo el perfil (profOverride = resultado de demo.fetchIgProfile),
+  // no se repite la descarga.
   let pic = null, fullName = '';
-  try {
-    const prof = await demo.fetchIgProfile(ig);
-    if (prof) { pic = prof.pic || null; fullName = prof.name || ''; }
-  } catch (_) {}
+  if (profOverride) {
+    pic = profOverride.pic || null;
+    fullName = profOverride.name || '';
+  } else {
+    try {
+      const prof = await demo.fetchIgProfile(ig);
+      if (prof) { pic = prof.pic || null; fullName = prof.name || ''; }
+    } catch (_) {}
+  }
+  // Seguidos: el embed lo trae como "following_count" o como edge_follow.
+  const followingRaw = f(/"following_count":(\d+)/) || f(/"edge_follow":\{"count":(\d+)/);
   return {
     ok: true,
     profile: {
@@ -154,10 +163,34 @@ async function fetchAuditData(handle, fetchOverride) {
       bio,
       followers: f(/"followers_count":(\d+)/) ? parseInt(f(/"followers_count":(\d+)/), 10) : null,
       posts_count: f(/"posts_count":(\d+)/) ? parseInt(f(/"posts_count":(\d+)/), 10) : null,
+      following: followingRaw ? parseInt(followingRaw, 10) : null,
       category: demo.categoryFromText(bio + ' ' + fullName),
       pic,
     },
     posts,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Proyección de perfil para /prueba (v184): forma compacta y publicable del
+// perfil real del visitante (identidad + conteos TAL CUAL vinieron + hasta 9
+// fotos recientes de su grilla). Es la materia prima del "su perfil HOY vs
+// CON Posty": NINGÚN número se toca ni se completa — lo que no vino, va null
+// y el front lo oculta. fallbackPic: la foto ya descargada por el llamador.
+// ---------------------------------------------------------------------------
+function trialProfileFromAudit(data, fallbackPic) {
+  if (!data || !data.ok || !data.profile || !data.profile.handle) return null;
+  const p = data.profile;
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  return {
+    handle: p.handle,
+    name: p.name || '',
+    bio: p.bio || '',
+    followers: num(p.followers),
+    posts_count: num(p.posts_count),
+    following: num(p.following),
+    pic: p.pic || fallbackPic || null,
+    photos: (data.posts || []).map((x) => (x && x.thumb) || null).filter(Boolean).slice(0, 9),
   };
 }
 
@@ -464,5 +497,7 @@ module.exports = {
   containsCliche,
   CLICHES,
   parseEmbedPosts,
+  fetchAuditData,
+  trialProfileFromAudit,
   AUDIT_LIMIT_PER_DAY,
 };
