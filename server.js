@@ -1550,6 +1550,8 @@ app.get('/api/auth/me', (req, res) => {
       plan: user.plan || TRIAL_PLAN,
       plan_status: user.plan_status || 'trial',
       posts_per_week: plan.postsPerWeek,
+      reels_per_week: plan.reelsPerWeek || 0,
+      stories_per_week: plan.storiesPerWeek || 0,
       is_trial: user.plan_status !== 'active',
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
@@ -10680,7 +10682,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v158';
+const BUILD_ID = '20261016-v159';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -1,7 +1,8 @@
 // Planes de Posta — UN SOLO LUGAR para cambiar precios.
 // AR: precios en ARS (pesos argentinos). UY: precios en UYU (pesos uruguayos).
 // postsPerWeek = posts que arma el autopilot por semana.
-// reelsPerWeek / storiesPerWeek = reels e historias semanales (pipeline en construcción).
+// reelsPerWeek / storiesPerWeek = reels e historias semanales (los genera
+// story-reel.js generateWeekExtras, idempotente por déficit, en cada semana).
 //
 // TECHO DE IA (vara de Valentino, 2026-10-02): el costo variable de IA por usuario/mes
 // no puede superar el 5% del precio del plan (Esencial: $2.000 ARS/mes). Se enforcea
@@ -23,12 +24,13 @@ const PLANS_AR = {
     price: 39900,
     currency: 'ARS',
     postsPerWeek: 5,
-    reelsPerWeek: 0,
+    reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
     ai: AI_LIMITS.esencial,
     features: [
-      '5 posts por semana, armados con un clic',
+      '5 posteos por semana, automáticos',
+      '1 reel por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -40,12 +42,13 @@ const PLANS_AR = {
     price: 79900,
     currency: 'ARS',
     postsPerWeek: 7,
-    reelsPerWeek: 0,
+    reelsPerWeek: 3,
     storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
     ai: AI_LIMITS.pro,
     features: [
-      '7 posts por semana, armados con un clic',
+      '7 posteos por semana, automáticos',
+      '3 reels por semana',
       '3 historias por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
@@ -65,7 +68,7 @@ const PLANS_AR = {
     tagline: 'Presencia total, todos los días',
     ai: AI_LIMITS.total,
     features: [
-      '7 posts por semana, armados con un clic',
+      '7 posteos por semana, automáticos',
       '5 reels por semana',
       'Historias todos los días',
       'Ideas estratégicas para tu negocio',
@@ -85,12 +88,13 @@ const PLANS_UY = {
     price: 890,
     currency: 'UYU',
     postsPerWeek: 5,
-    reelsPerWeek: 0,
+    reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
     ai: AI_LIMITS.esencial,
     features: [
-      '5 posts por semana, armados con un clic',
+      '5 posteos por semana, automáticos',
+      '1 reel por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
       'Publicación automática programada',
@@ -102,12 +106,13 @@ const PLANS_UY = {
     price: 1790,
     currency: 'UYU',
     postsPerWeek: 7,
-    reelsPerWeek: 0,
+    reelsPerWeek: 3,
     storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
     ai: AI_LIMITS.pro,
     features: [
-      '7 posts por semana, armados con un clic',
+      '7 posteos por semana, automáticos',
+      '3 reels por semana',
       '3 historias por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
@@ -127,7 +132,7 @@ const PLANS_UY = {
     tagline: 'Presencia total, todos los días',
     ai: AI_LIMITS.total,
     features: [
-      '7 posts por semana, armados con un clic',
+      '7 posteos por semana, automáticos',
       '5 reels por semana',
       'Historias todos los días',
       'Ideas estratégicas para tu negocio',

@@ -1693,8 +1693,8 @@ function autopilotCardHTML(tag) {
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Armemos tu semana</h3>
-    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Salen solos — y si algo no te gusta, lo frenás o lo cambiás en un toque.</p>
-    <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
+    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y reels con tus fotos. Salen solos — y si algo no te gusta, lo frenás o lo cambiás en un toque.</p>
+    <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos${(ME && ME.reels_per_week) ? ` + ${ME.reels_per_week} reel${ME.reels_per_week > 1 ? 'es' : ''} 🎬` : ''} por semana${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
         ${opts}
