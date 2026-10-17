@@ -7,7 +7,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://postyhacetodo.com/prueba">
 <meta property="og:title" content="Posty te arma tu semana de posteos — gratis">
-<meta property="og:description" content="Contanos tu negocio en 30 segundos y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. Probalo gratis, sin tarjeta.">
+<meta property="og:description" content="Contanos tu negocio en 1 minuto y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. Probalo gratis, sin tarjeta.">
 <meta property="og:image" content="https://postyhacetodo.com/og-prueba.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -365,7 +365,7 @@ html{scroll-behavior:smooth}
       <div id="stepIg">
         <div class="field"><label>Tu Instagram</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty trae tu nombre, tu rubro y tu foto de perfil.</div></div>
         <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana 👀</button>
-        <p class="tiny" style="margin-top:10px">Tu semana lista en ~30 segundos.</p>
+        <p class="tiny" style="margin-top:10px">Tu semana lista en ~1 minuto.</p>
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
         <p class="tiny" style="margin-top:6px">Solo tu @ público — sin contraseña, sin permisos</p>
         <p style="text-align:center;margin-top:14px"><button type="button" class="linklike" id="photoOptLink">📷 Subir una foto de mi negocio (opcional)</button></p>
@@ -394,7 +394,7 @@ html{scroll-behavior:smooth}
         <div class="field"><label>Nombre de tu negocio *</label><input type="text" id="f_biz" placeholder="Ej: Café Martínez" maxlength="60" autocomplete="off"></div>
         <div class="field"><label>Rubro *</label><select id="f_cat"></select></div>
         <button class="btn btn-primary btn-block" id="btnGo2">Ver mi semana 👀</button>
-        <p class="tiny" style="margin-top:10px">Tu semana lista en ~30 segundos.</p>
+        <p class="tiny" style="margin-top:10px">Tu semana lista en ~1 minuto.</p>
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
       </div>
     </div>
@@ -1738,9 +1738,19 @@ function closeReg() {
         if (Object.keys(pf).length) body.trial_profile = pf;
       }
     } catch (e) {}
-    await pj('/api/auth/magic-request', body);
+    const resp = await pj('/api/auth/magic-request', body);
     try { localStorage.removeItem('posta_ref'); } catch (e) {}
     const m = document.querySelector('#ovReg .modal');
+    if (resp && resp.session) {
+      // Sesión inmediata: la cuenta ya quedó abierta en este navegador.
+      m.innerHTML = `<button class="x" id="xReg">✕</button>
+      <h2 style="margin-top:18px">¡Ya estás adentro! 🎉</h2>
+      <p class="msub">Tu semana quedó guardada en tu cuenta y <b>se publica sola</b>. También te mandamos un link a tu email para entrar desde otros dispositivos.</p>
+      <a class="btn btn-primary btn-block" href="/" style="margin-top:14px">Entrar a mi cuenta →</a>
+      <p class="tiny">Sin tarjeta · Desde $39.900/mes al terminar · Cancelá cuando quieras</p>`;
+      $('#xReg').onclick = closeReg;
+      return;
+    }
     m.innerHTML = `<button class="x" id="xReg">✕</button>
       <h2 style="margin-top:18px">Revisá tu email 👀</h2>
       <p class="msub">📧 <b>Te mandamos un link a tu email</b><br>Tocalo y entrás directo, sin contraseña. Vale 15 minutos.</p>

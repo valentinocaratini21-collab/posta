@@ -407,7 +407,7 @@ function pzRefBandHTML() {
 function refreshScarcity() {
   fetch('/api/capacity').then(r => r.json()).then(c => {
     const el = document.getElementById('scarcityLine');
-    if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — cada negocio lleva trabajo personalizado.`;
+    if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
   }).catch(() => {});
 }
 function landingView(cfg) {
@@ -441,14 +441,14 @@ function landingView(cfg) {
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
     <h1>Tu semana de Instagram,<br><span class="hl">hecha en 1 minuto</span></h1>
-    <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b>. Vos solo aprobás — yo me ocupo de todo.</p>
+    <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Vos no hacés nada: solo frenás si algo no te cierra.</p>
     <div class="hero-cta">
       <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
     </div>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <div class="hero-note" style="margin-top:10px"><a href="/auditoria" style="color:var(--cel);font-weight:800;text-decoration:none">🔍 ¿Tu Instagram vende? Audit gratis →</a></div>
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
-      <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana en Posty</span><span class="lp-week-badge">Lista para aprobar</span></div>
+      <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
       <div class="lp-week-grid">
         <div class="lp-day"><img loading="lazy" src="post-food.png" alt="Posteo de gastronomía hecho por Posty"><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
         <div class="lp-day"><img loading="lazy" src="post-moda.png" alt="Posteo de moda hecho por Posty"><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
@@ -456,7 +456,7 @@ function landingView(cfg) {
         <div class="lp-day"><img loading="lazy" src="post-belleza.png" alt="Posteo de belleza hecho por Posty"><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
         <div class="lp-day"><img loading="lazy" src="post-mascotas.png" alt="Posteo de mascotas hecho por Posty"><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
       </div>
-      <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, listos para aprobar con un toque.</p>
+      <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
     </div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
@@ -477,7 +477,7 @@ function landingView(cfg) {
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">5 posteos</div><div class="lp-stat-t">por semana, listos para aprobar</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">5 posteos</div><div class="lp-stat-t">por semana, publicados solos</div></div>
       <div class="lp-stat"><div class="lp-stat-n">$1.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
@@ -503,9 +503,9 @@ function landingView(cfg) {
     <div class="steps">
       <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
-      <div class="step"><div class="num">3</div><h3>Vos aprobás, yo publico</h3><p>Tu semana queda programada a la mejor hora. Nada sale sin tu OK.</p></div>
+      <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
     </div>
-    <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio y un toque para aprobar. El resto lo hacemos nosotros.</p>
+    <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
@@ -532,7 +532,7 @@ function landingView(cfg) {
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
     </div>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
-    <div class="scarcity" id="scarcityLine">🔥 Solo <b>50 lugares</b> por mes — cada negocio lleva trabajo personalizado.</div>
+    <div class="scarcity" id="scarcityLine">🔥 Solo <b>50 lugares</b> por mes — acompañamos personalmente a cada negocio que entra.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
@@ -564,7 +564,7 @@ function landingView(cfg) {
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
-    <span>Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
+    <span>Posty, tu community manager con IA · Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
   </div></div>
   <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">✨ Probar gratis</a></div></div>`;
@@ -1589,7 +1589,7 @@ function autopilotCardHTML(tag) {
   return `
   <div class="card card-hi-yl" id="autopilotCard-${t}">
     <h3>🚀 Armemos tu semana</h3>
-    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Vos revisás y aprobás — al aceptar, salen solos.</p>
+    <p style="color:var(--mut);font-size:13px;line-height:1.6;margin-bottom:6px">Textos, diseños y un reel con tus fotos. Salen solos — y si algo no te gusta, lo frenás o lo cambiás en un toque.</p>
     <p style="font-size:11.5px;color:var(--dim);margin-bottom:16px">Tu plan: <b>${esc(planTag)}</b> · ${ppw} posteos por semana (1 es reel 🎬)${assetPhotos().length || assetVideos().length ? ` · 🖼️ usamos tus fotos y videos` : ''}${assetLogo() ? ' · con tu logo' : ''}</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <select id="apCount-${t}" style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;color:var(--txt);font-size:16px;padding:12px 14px;font-family:inherit;font-weight:600">
@@ -7466,7 +7466,7 @@ function showStreakCelebration(sk) {
   streakModalShell(`
     ${isFirst ? '<img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">' : `<div class="big-emoji">${lv.emoji}</div>`}
     <h3 style="margin:12px 0 4px">${isFirst ? '¡Tu primera semana! 🎉' : (sk.leveledUp ? (biz ? `¡${esc(biz)} subió a ${esc(lv.name)}!` : '¡Subiste de nivel!') : '¡Racha en marcha!')}</h3>
-    ${isFirst ? '<p style="font-size:15px;margin:0 0 6px;color:var(--mut)">La primera de muchas. Yo armo, vos aprobás — así de fácil va a ser siempre 💪</p>' : ''}
+    ${isFirst ? '<p style="font-size:15px;margin:0 0 6px;color:var(--mut)">La primera de muchas. Yo armo, yo publico — vos a mirar cómo crece 💪</p>' : ''}
     <p style="font-size:16px;margin:0 0 6px"><b>⚡ +100 pts</b> · ${pts} pts en total</p>
     <p style="font-size:15px;margin:0 0 6px"><b>${sk.current} ${sk.current === 1 ? 'semana seguida' : 'semanas seguidas'}</b>${lv.name ? ` · ${esc(lv.name)}` : ''}</p>
     ${streakNextTxt(sk)}
@@ -9192,7 +9192,7 @@ function maybeAskPushPostIg() {
       <div class="pz-exp-modal" role="dialog" aria-modal="true">
         <img src="ai-avatar.png" alt="Posty" style="width:64px;height:64px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.35)">
         <h2>¿Te aviso antes de cada posteo? 👀</h2>
-        <p class="pz-exp-sub">Te lo muestro 3 horas antes y lo aprobás con un toque.</p>
+        <p class="pz-exp-sub">Te lo muestro 3 horas antes — y si no te cierra, lo frenás con un toque.</p>
         <button class="btn btn-primary btn-block" id="apvPushYes">Sí, avisame</button>
         <button class="btn btn-soft btn-block" id="apvPushNo" style="margin-top:8px">Ahora no</button>
       </div>`;

@@ -1049,6 +1049,7 @@ function applyTrialProfile(userId, tp) {
 app.post('/api/auth/magic-request', async (req, res) => {
   const { email, trial_ig, ref, utm, trial_profile } = req.body || {};
   const em = String(email || '').trim().toLowerCase();
+  let sessionNow = false;
   try {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return res.json({ ok: true });
     // Rate limit: máx 5 tokens por hora por email
@@ -1071,8 +1072,43 @@ app.post('/api/auth/magic-request', async (req, res) => {
       try { await magicLinkEmail(em, link); }
       catch (e) { console.error('[magic] email:', e.message); }
     }
+    // Sesión inmediata (2026-10-16, auditoría #3): si el email NO tiene
+    // cuenta y el pedido trae la prueba recién hecha en ESTE navegador, la
+    // cuenta se crea acá mismo (espejo exacto del canje) y la sesión queda
+    // abierta — el pico de emoción ya no depende de que el email llegue en
+    // 15 minutos. El link sigue viajando como respaldo (otros dispositivos).
+    // Un email CON cuenta jamás recibe sesión sin canjear el link.
+    try {
+      const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(em);
+      if (!existing && (trial_ig || trial_profile)) {
+        const code = newReferralCode();
+        let referredBy = null;
+        const refCode = String(ref || '').trim().toLowerCase().slice(0, 16);
+        if (/^[a-z0-9]{4,16}$/.test(refCode)) {
+          const referrer = db.prepare('SELECT id FROM users WHERE referral_code = ?').get(refCode);
+          if (referrer && referrer.id) referredBy = referrer.id;
+        }
+        const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
+        const utmO = (utm && typeof utm === 'object') ? utm : {};
+        const r2 = db.prepare("INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, '', ?, ?, ?, ?, ?, 1, 1)")
+          .run(em, code, referredBy, trialEnds, String(utmO.source || '').slice(0, 40), String(utmO.campaign || '').slice(0, 80));
+        const userId = r2.lastInsertRowid;
+        try {
+          const expBiz = (trial_profile && trial_profile.business_name) || null;
+          const nImp = importTrialWeek(userId, trial_ig, expBiz);
+          if (nImp) console.log(`[posta] semana de prueba importada (sesión inmediata): ${nImp} borradores → usuario ${userId}`);
+          recordTrialImport(userId, trial_ig, nImp, false);
+          streakFromTrialImport(userId, nImp);
+        } catch (e) { console.error('[posta] importTrialWeek (inmediata):', e.message); }
+        applyTrialProfile(userId, trial_profile);
+        track(userId, 'registered');
+        evTrack(userId, 'account_created', {});
+        req.session.userId = userId;
+        sessionNow = true;
+      }
+    } catch (e) { console.error('[magic] sesión inmediata:', e.message); }
   } catch (e) { console.error('[magic] request:', e.message); }
-  res.json({ ok: true });
+  res.json({ ok: true, session: sessionNow });
 });
 
 // Canjea el magic link: token de un solo uso, 15 min de vida.
@@ -10583,7 +10619,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v153';
+const BUILD_ID = '20261016-v154';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
