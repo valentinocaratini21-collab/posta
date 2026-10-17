@@ -5205,6 +5205,14 @@ async function chatView() {
 // La foto propia es el mejor insumo de Posty: esta tarjeta la pide con
 // una misión concreta por semana, muestra el álbum con su progreso y
 // convierte la primera foto de la semana en un posteo (festejo server).
+// v183: estado del bloque "Fotos de esta semana" según cuántas fotos subió
+// ESTA semana (meta del ritual semanal: 3–5). Función pura (testeable).
+function albumWeekState(n) {
+  n = Number(n) || 0;
+  if (n >= 3) return { key: 'full', text: '¡Perfecto! Esta semana sale con tus fotos ✨' };
+  if (n >= 1) return { key: 'some', text: `¡Van ${n}! Con 3 ya trabajamos bárbaro 📸` };
+  return { key: 'none', text: 'Todavía no nos pasaste fotos esta semana: Posty crea las imágenes por vos, pero con las tuyas sale tu negocio real.' };
+}
 async function bindAlbumCard() {
   const box = document.getElementById('albumCard');
   if (!box) return;
@@ -5217,9 +5225,28 @@ async function bindAlbumCard() {
   const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? '✅' : '📷'} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
   const complete = (n.producto || 0) >= t.producto && (n.local || 0) >= t.local && (n.equipo || 0) >= t.equipo;
   const mission = data.mission || {};
-  const missionHTML = mission.done
-    ? `<div style="background:#E7F6EC;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px">✅ <b>¡Misión cumplida!</b> Tu foto ya está trabajando por ${esc(biz)}.${mission.post_id ? ' Posty la convirtió en un posteo de tu semana ✨' : ''}</div>`
-    : `<div style="background:#FFF7E0;border:1.5px dashed #FEC14D;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:14px">🎯 <b>Misión foto de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio 📸')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty la arregla y la convierte en posteo.</span></div>`;
+  // v183 — Bloque "esta semana" A LA VISTA: el ritual semanal pide 3–5 fotos
+  // (push + email de los lunes) y ESTE bloque es donde se suben: contador de
+  // la semana (lun–dom, viene de /api/album), estado con la voz de Posty, la
+  // idea de la misión conviviendo como sugerencia y el botón grande ADENTRO.
+  const wk = data.week || { photos: 0, videos: 0, goal_min: 3, goal_max: 5 };
+  const wst = albumWeekState(wk.photos || 0);
+  const weekDone = wst.key === 'full';
+  const missionLine = mission.done
+    ? `<div style="font-size:13.5px;margin-top:8px">✅ <b>¡Misión cumplida!</b> Tu foto ya está trabajando por ${esc(biz)}.${mission.post_id ? ' Posty la convirtió en un posteo de tu semana ✨' : ''}</div>`
+    : `<div style="font-size:13.5px;margin-top:8px">💡 <b>Idea de la semana:</b> ${esc(mission.text || 'Sacale una foto a tu negocio 📸')}<br><span style="font-size:12.5px;opacity:.75">Mandala como salga — Posty la arregla y la convierte en posteo.</span></div>`;
+  const weekBlockHTML = `
+    <div id="albumWeekBlock" style="background:${weekDone ? '#E7F6EC' : '#FFF7E0'};border:1.5px ${weekDone ? 'solid #BFE6CC' : 'dashed #FEC14D'};border-radius:12px;padding:12px;margin:10px 0">
+      <div style="font-size:15px"><b>📸 Fotos de esta semana</b></div>
+      <div style="font-size:14px;margin-top:4px">${esc(wst.text)}</div>
+      <div style="font-size:12.5px;opacity:.8;margin-top:4px">📷 <b>${wk.photos || 0}</b> de ${wk.goal_min || 3}–${wk.goal_max || 5} esta semana${wk.videos ? ` · 🎬 <b>${wk.videos}</b> video${wk.videos === 1 ? '' : 's'} esta semana` : ''}</div>
+      ${missionLine}
+      <label class="btn btn-primary btn-block" style="margin:10px 0 0;cursor:pointer">
+        📸 Subir fotos o videos
+        <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
+      </label>
+      <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
+    </div>`;
   const perfHTML = data.perf
     ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
     : '';
@@ -5239,17 +5266,28 @@ async function bindAlbumCard() {
     <div style="font-size:17px"><b>📸 Las fotos de tu negocio</b></div>
     <div style="font-size:13.5px;opacity:.8">Cuantas más fotos y videos nos pasás, mejores y más tuyos salen tus posteos.</div>
     ${countHTML}
-    ${missionHTML}
+    ${weekBlockHTML}
     <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}${complete ? '<div style="font-size:14px;margin-top:6px">🎉 <b>¡Álbum completo!</b> Posty tiene todo para que tus posteos sean 100% tuyos.</div>' : ''}</div>
     ${perfHTML}
     ${grid}
-    <label class="btn btn-primary btn-block" style="margin:6px 0 0;cursor:pointer">
-      📸 Subir fotos o videos
-      <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
-    </label>
-    <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
   </div>`;
+  // v183: deep link del ritual (push/email → ?fotos=semana): enfocar el
+  // bloque de fotos de la semana UNA sola vez por carga de la app.
+  try {
+    if (!window.__albumFocusDone) {
+      const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+      if (q.get('fotos')) {
+        window.__albumFocusDone = true;
+        const blk = document.getElementById('albumWeekBlock');
+        if (blk) {
+          blk.classList.add('album-focus');
+          setTimeout(() => { try { blk.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 400);
+          setTimeout(() => { try { blk.classList.remove('album-focus'); } catch (e) {} }, 5000);
+        }
+      }
+    }
+  } catch (e) {}
   const inp = document.getElementById('albumFile');
   if (inp) inp.onchange = async () => {
     const files = Array.from(inp.files || []);

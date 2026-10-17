@@ -314,4 +314,37 @@ function magicLinkEmail(email, link) {
   return sendEmail({ to: email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail };
+// Ritual semanal de fotos (v183): el pedido de 3 a 5 fotos para los posteos
+// de la semana. Lo dispara albumRitualSweep (server.js) los lunes ~10:00 hora
+// local del cliente, junto con el push de la misión, con dedupe semanal.
+// missionText: la idea de la semana de la Misión Foto (convive como
+// sugerencia concreta de qué fotografiar). El botón aterriza DIRECTO en el
+// bloque de fotos de la semana (?fotos=semana lo enfoca en la app).
+function photoRitualEmail(user, baseUrl, missionText) {
+  const name = (user.name || '').trim();
+  const cta = `${baseUrl}/#/app/schedule?fotos=semana`;
+  const subject = 'Esta semana, ¿me pasás 3 a 5 fotos de tu negocio? 📸';
+  const idea = String(missionText || '').replace(/</g, '&lt;').trim();
+  const ideaLine = idea ? `
+    <div style="background:#fff;border:1.5px dashed #FEC14D;border-radius:12px;padding:14px 16px;margin:0 0 20px">
+      <p style="font-size:14px;line-height:1.55;margin:0;color:#47617A">💡 <b style="color:#0A1E33">Idea de la semana:</b> ${idea}</p>
+    </div>` : '';
+  const html = emailShell(`
+    <p style="font-size:16px;margin:0 0 12px">Hola${name ? `, ${name}` : ''} 👋 Soy <b>Posty</b>.</p>
+    <p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#47617A">
+      Estoy armando los posteos de esta semana y quiero que salgan con <b>tu negocio real</b>,
+      no con fotos genéricas. ¿Me pasás <b>3 a 5 fotos</b>? Las que tengas en el celular,
+      como salgan — yo las arreglo y las convierto en posteos ✨
+    </p>
+    ${ideaLine}
+    <p style="text-align:center;margin:0 0 16px">
+      <a href="${cta}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">📸 Subir mis fotos</a>
+    </p>
+    <p style="font-size:13.5px;line-height:1.6;margin:0;color:#47617A">
+      ¿Llegás a menos, o a ninguna? No pasa nada: creo las imágenes yo, como siempre.
+      Pero con las tuyas, tus posteos venden el doble 😉
+    </p>`);
+  return sendEmail({ to: user.email, subject, html });
+}
+
+module.exports = { emailConfigured, sendEmail, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };

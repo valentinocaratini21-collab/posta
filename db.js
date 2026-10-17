@@ -103,6 +103,9 @@ db.exec(`CREATE TABLE IF NOT EXISTS album_missions (
   post_id INTEGER DEFAULT 0,
   PRIMARY KEY (user_id, week_key)
 )`);
+// Ritual semanal de fotos (v183): el email del pedido (push + email, lunes
+// ~10:00 local) se marca acá para no repetir dentro de la misma semana.
+try { db.exec(`ALTER TABLE album_missions ADD COLUMN emailed_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Estilos de imagen (image-styles.js): estilo usado en cada borrador + motivo del pick.
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

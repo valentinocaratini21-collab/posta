@@ -1923,6 +1923,11 @@ textarea.in{resize:vertical;min-height:96px}
 @keyframes pj-cascade{0%{transform:translate(-52px,26px);animation-timing-function:ease-out}28%{transform:translate(0,-44px);animation-timing-function:ease-in}50%{transform:translate(52px,26px);animation-timing-function:ease-out}78%{transform:translate(0,-44px);animation-timing-function:ease-in}100%{transform:translate(-52px,26px)}}
 @keyframes pj-cascade-lg{0%{transform:translate(-68px,34px);animation-timing-function:ease-out}28%{transform:translate(0,-58px);animation-timing-function:ease-in}50%{transform:translate(68px,34px);animation-timing-function:ease-out}78%{transform:translate(0,-58px);animation-timing-function:ease-in}100%{transform:translate(-68px,34px)}}
 
+/* v183: resaltado del bloque de fotos de la semana al llegar del deep link
+   del ritual (push/email con ?fotos=semana). */
+.album-focus{animation:albumFocusPulse 1.15s ease-in-out 4}
+@keyframes albumFocusPulse{0%,100%{box-shadow:0 0 0 0 rgba(254,193,77,0)}50%{box-shadow:0 0 0 5px rgba(254,193,77,.9)}}
+
 .pcsheet-opt small{display:block;font-size:12px;font-weight:500;opacity:.62;margin-top:2px}
 
 .pcsheet-reclabel{font-size:12.5px;font-weight:700;color:var(--dim,#5b6b7c);padding:8px 2px 4px}

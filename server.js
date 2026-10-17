@@ -4061,6 +4061,23 @@ app.get('/api/album', requireAuth, (req, res) => {
     const counts = { producto: 0, local: 0, equipo: 0, otro: 0 };
     for (const ph of photos) { if (counts[ph.album_tag] !== undefined) counts[ph.album_tag]++; }
     const mission = albumMission(uid);
+    // v183 — Ritual semanal: fotos/videos de ESTA semana (lun–dom en la zona
+    // del cliente). Misma definición de semana que el cupo y posts.week_key:
+    // mondayKeyOf(tzToday(tz)). El bloque "esta semana" de la tarjeta cuenta
+    // contra la meta de 3–5 fotos que pide el ritual (push + email del lunes).
+    let weekPhotos = 0, weekVideos = 0;
+    const weekKeyNow = mondayKeyOf(tzToday(userTz(uid)));
+    try {
+      const tzA = userTz(uid);
+      const sunKey = shiftDays(weekKeyNow, 6);
+      const rowsW = db.prepare(`SELECT kind, created_at FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).all(uid);
+      for (const r of rowsW) {
+        const ymd = ymdInTz(r.created_at, tzA);
+        if (ymd && ymd >= weekKeyNow && ymd <= sunKey) {
+          if (r.kind === 'video') weekVideos++; else weekPhotos++;
+        }
+      }
+    } catch (e) {}
     let perf = null;
     try {
       const r = db.prepare(`SELECT SUM(CASE WHEN p.client_photo = 1 THEN 1 ELSE 0 END) AS nFoto,
@@ -4079,6 +4096,7 @@ app.get('/api/album', requireAuth, (req, res) => {
       photos: rows.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '' })),
       videos: rows.length - photos.length,
       counts, targets: ALBUM_TARGETS,
+      week: { photos: weekPhotos, videos: weekVideos, goal_min: 3, goal_max: 5, week_key: weekKeyNow },
       mission: { text: mission.mission_text, tag: mission.mission_tag, done: !!mission.done_at, post_id: mission.post_id || 0 },
       perf,
     });
@@ -4158,29 +4176,73 @@ app.use('/api/album/photo', (err, req, res, next) => {
   }
   next(err);
 });
-// Push de la misión: lunes ~10:00 hora local del cliente, una vez por
-// semana. Corre cada 30 min y filtra por la hora local de cada usuario.
-setInterval(() => {
-  try {
-    const users = db.prepare('SELECT id FROM users').all();
-    for (const u of users) {
-      try {
-        let founder = false;
-        try { founder = !!(costs.isFounderEmail && costs.isFounderEmail(u.id)); } catch (e) {}
-        if (!founder && !planOrTrialOk(u.id)) continue;
-        const tz = userTz(u.id);
-        const now = new Date();
-        const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
-        const hr = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now));
-        if (wd !== 'Mon' || hr !== 10) continue;
-        const mission = albumMission(u.id);
-        if (!mission || mission.pushed_at || mission.done_at) continue;
-        push.sendPush(u.id, { title: '📸 Misión foto de la semana', body: mission.mission_text, url: '/#/app/semana' }).catch(() => {});
-        try { db.prepare(`UPDATE album_missions SET pushed_at = datetime('now') WHERE user_id = ? AND week_key = ?`).run(u.id, mission.week_key); } catch (e) {}
-      } catch (e) {}
-    }
-  } catch (e) {}
-}, 30 * 60 * 1000);
+// ================= RITUAL SEMANAL DE FOTOS (v183) =================
+// Una vez por semana (lunes ~10:00 hora local del cliente) Posty le pide al
+// cliente 3 a 5 fotos para los posteos de esa semana — por PUSH y por EMAIL.
+// Evolución de la Misión Foto (mismo ciclo, misma tabla album_missions, sin
+// sistema paralelo). Si manda menos — o ninguna — la semana se genera igual
+// con imágenes creadas por Posty: el ritual NUNCA traba la generación, solo
+// pide. Dedupe semanal por canal: pushed_at / emailed_at (user_id+week_key).
+// Si ya subió fotos esta semana (done_at), no se pide de nuevo.
+// Audiencia push: la histórica de la misión (fundador o plan/trial vigente).
+// Audiencia email: el criterio de los emails semanales actuales (plan/trial
+// vigente + email + sin opt-out + cuenta con más de 1 día) y SIN cuentas
+// fundadoras/dogfood (costs.FOUNDER_EMAILS: la id 12 no recibe este email).
+// Ambos canales aterrizan en el bloque de fotos de la semana (?fotos=semana).
+// opts (solo tests): now = instante a evaluar; pushFn/emailFn = senders.
+async function albumRitualSweep(opts = {}) {
+  const now = opts.now ? new Date(opts.now) : new Date();
+  const pushFn = opts.pushFn || ((uid, payload) => push.sendPush(uid, payload));
+  let users = [];
+  try { users = db.prepare('SELECT id FROM users').all(); } catch (e) { return { pushed: 0, emailed: 0 }; }
+  let pushed = 0, emailed = 0;
+  for (const u of users) {
+    try {
+      let founder = false;
+      try { founder = !!(costs.isFounderEmail && costs.isFounderEmail(u.id)); } catch (e) {}
+      if (!founder && !planOrTrialOk(u.id)) continue;
+      const tz = userTz(u.id);
+      const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+      const hr = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now));
+      if (wd !== 'Mon' || hr !== 10) continue;
+      const mission = albumMission(u.id);
+      if (!mission || mission.done_at) continue; // ya nos pasó fotos esta semana
+      // --- Push: el pedido, con la idea de la semana como sugerencia.
+      if (!mission.pushed_at) {
+        try {
+          await pushFn(u.id, {
+            title: '📸 Fotos de esta semana: ¿me pasás 3 a 5?',
+            body: `${mission.mission_text} Con 3 a 5 fotos tuyas, esta semana sale con tu negocio real ✨`,
+            url: '/#/app/schedule?fotos=semana',
+          });
+        } catch (e) {}
+        try { db.prepare(`UPDATE album_missions SET pushed_at = datetime('now') WHERE user_id = ? AND week_key = ?`).run(u.id, mission.week_key); pushed++; } catch (e) {}
+      }
+      // --- Email: el mismo pedido, con botón directo a la subida.
+      if (!mission.emailed_at && !founder && planOrTrialOk(u.id)) {
+        try {
+          const urow = db.prepare('SELECT id, email, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo FROM users WHERE id = ?').get(u.id);
+          const ageOk = !!(urow && urow.created_at && (Date.parse(String(urow.created_at).replace(' ', 'T') + 'Z') < now.getTime() - 86400000));
+          if (urow && urow.email && !urow.oo && ageOk) {
+            const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+            const r = opts.emailFn
+              ? await opts.emailFn(urow, base, mission.mission_text)
+              : await require('./email').photoRitualEmail(urow, base, mission.mission_text);
+            // skipped = sin RESEND_API_KEY: se marca igual (no reintentar toda
+            // la semana); un error real de Resend NO marca y reintenta en el
+            // próximo tick dentro de la ventana del lunes 10:00.
+            if (r && (r.ok || r.skipped)) {
+              try { db.prepare(`UPDATE album_missions SET emailed_at = datetime('now') WHERE user_id = ? AND week_key = ?`).run(u.id, mission.week_key); emailed++; } catch (e) {}
+            }
+          }
+        } catch (e) { console.error('[ritual-fotos] email:', e.message); }
+      }
+    } catch (e) {}
+  }
+  if (pushed || emailed) console.log(`[ritual-fotos] push: ${pushed}, email: ${emailed}`);
+  return { pushed, emailed };
+}
+setInterval(() => { albumRitualSweep().catch(() => {}); }, 30 * 60 * 1000);
 
 // Logo auto-extraído (ver extractLogoCandidate en style-visual.js).
 // GET: devuelve la candidata pendiente, o path:null si no hay (o el archivo ya no existe).
@@ -11302,7 +11364,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v182';
+const BUILD_ID = '20261017-v183';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -11473,4 +11535,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep };
