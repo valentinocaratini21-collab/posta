@@ -1983,3 +1983,8 @@ textarea.in{resize:vertical;min-height:96px}
   .lp-igform{flex-direction:column}
   .lp-igform button{width:100%}
 }
+
+/* v156 — tarjeta de reporte semanal en Schedule */
+.hs-report{background:#fff;border:2px solid #E3EDF4;border-radius:16px;padding:16px 18px;margin:14px 0 4px;text-align:left}
+.hs-report-title{font-weight:800;font-size:17px;color:#0A1E33;margin-bottom:8px}
+.hs-report-line{font-size:15px;color:#33506B;line-height:1.55;padding:3px 0}

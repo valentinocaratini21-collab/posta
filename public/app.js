@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261016-v149'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261016-v156'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -409,6 +409,43 @@ function refreshScarcity() {
     const el = document.getElementById('scarcityLine');
     if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
   }).catch(() => {});
+}
+// Tarjeta de reporte semanal (2026-10-17): hace VISIBLE el trabajo de
+// Posty — lo publicado la semana pasada con su engagement real, lo que ya
+// está en camino y la próxima fecha que vende. Se llena sola tras el render
+// de Schedule; lunes a miércoles muestra el reporte completo y cualquier
+// día muestra el aviso de oportunidad si lo hay.
+async function enhanceWeekReport() {
+  const slot = document.getElementById('hs-report');
+  if (!slot || slot.dataset.done) return;
+  slot.dataset.done = '1';
+  try {
+    const r = await api.get('/api/week/report');
+    if (!r || !r.ok) return;
+    const day = new Date().getDay(); // 1=lun ... 3=mié
+    const showFull = r.has && day >= 1 && day <= 3;
+    const opp = r.opportunity;
+    if (!showFull && !opp) return;
+    let h = '<div class="hs-report">';
+    if (showFull) {
+      h += `<div class="hs-report-title">🎉 Tu semana pasada en Posty</div>`;
+      let line = `📸 <b>${r.n}</b> posteo${r.n === 1 ? '' : 's'} publicado${r.n === 1 ? '' : 's'}`;
+      if (r.stories) line += ` · 📱 <b>${r.stories}</b> historia${r.stories === 1 ? '' : 's'}`;
+      h += `<div class="hs-report-line">${line}</div>`;
+      const eng = [];
+      if (r.likes) eng.push(`❤️ ${r.likes} likes`);
+      if (r.comments) eng.push(`💬 ${r.comments} comentarios`);
+      if (r.reach) eng.push(`👁️ ${Number(r.reach).toLocaleString('es-AR')} alcance`);
+      if (eng.length) h += `<div class="hs-report-line">${eng.join(' · ')}</div>`;
+      if (r.best) h += `<div class="hs-report-line">🏆 Tu mejor posteo: “${esc(r.best.caption)}…” (${r.best.likes} ❤️ · ${r.best.comments} 💬)</div>`;
+      if (r.nextCount) h += `<div class="hs-report-line">✨ Y ya hay <b>${r.nextCount}</b> posteos en camino para esta semana</div>`;
+    }
+    if (opp) {
+      h += `<div class="hs-report-line">📅 <b>Se viene ${esc(opp.name)}</b> ${opp.daysLeft === 0 ? '¡hoy!' : opp.daysLeft === 1 ? '¡mañana!' : `en ${opp.daysLeft} días`} — tu semana va a tener un posteo especial ✨</div>`;
+    }
+    h += '</div>';
+    slot.innerHTML = h;
+  } catch (e) {}
 }
 function lpGoTrial(e) {
   if (e) e.preventDefault();
@@ -4506,6 +4543,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   return `<div class="hs-week">
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
+    <div id="hs-report"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
     <div class="hs-carousel">
       <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
@@ -8234,6 +8272,8 @@ const GOALS = [
 async function render() {
   // La app ya pintó: chau splash de carga (index.html).
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
+  // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
+  setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 60);
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado
   try {

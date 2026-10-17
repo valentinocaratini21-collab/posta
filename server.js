@@ -1010,6 +1010,57 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Reporte semanal + oportunidad (tarjeta en Schedule, 2026-10-17) ----------
+// La tarjeta "Tu semana pasada en Posty" hace VISIBLE el trabajo: posteos e
+// historias publicados, engagement real (ig_*), el mejor posteo, lo que ya
+// está en camino y la próxima fecha que vende para su rubro. El resumen por
+// chat/push de los lunes ya existe (weeklyWowSummary); esto es la superficie
+// en la pantalla principal. Sin datos → has:false y la tarjeta no se muestra.
+app.get('/api/week/report', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const stats = db.prepare(`
+      SELECT COUNT(*) AS n, COALESCE(SUM(ig_likes), 0) AS likes,
+             COALESCE(SUM(ig_comments), 0) AS comments,
+             COALESCE(SUM(ig_reach), 0) AS reach
+      FROM posts WHERE user_id = ? AND status = 'published' AND media_type != 'story'
+      AND published_at > datetime('now', '-7 days')`).get(uid);
+    const stories = db.prepare(`
+      SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'
+      AND media_type = 'story' AND published_at > datetime('now', '-7 days')`).get(uid);
+    const best = db.prepare(`
+      SELECT caption, ig_likes, ig_comments FROM posts
+      WHERE user_id = ? AND status = 'published' AND media_type != 'story'
+      AND published_at > datetime('now', '-7 days')
+      ORDER BY (COALESCE(ig_likes, 0) + COALESCE(ig_comments, 0) * 3) DESC LIMIT 1`).get(uid);
+    const next = db.prepare(`
+      SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status IN ('scheduled', 'draft')
+      AND media_type IN ('image', 'carousel', 'video')`).get(uid);
+    let opportunity = null;
+    try {
+      const eph = ephemerisFor(getProfile(uid));
+      if (eph && eph.date) {
+        const daysLeft = Math.round((new Date(eph.date + 'T12:00:00Z') - Date.now()) / 86400000);
+        if (daysLeft >= 0 && daysLeft <= 14) opportunity = { name: eph.name || eph.title || 'una fecha especial', daysLeft };
+      }
+    } catch (e) {}
+    res.json({
+      ok: true,
+      has: !!((stats && stats.n) || (stories && stories.n)),
+      n: (stats && stats.n) || 0,
+      stories: (stories && stories.n) || 0,
+      likes: (stats && stats.likes) || 0,
+      comments: (stats && stats.comments) || 0,
+      reach: (stats && stats.reach) || 0,
+      best: best && (best.ig_likes > 0 || best.ig_comments > 0)
+        ? { caption: String(best.caption || '').split('\n')[0].slice(0, 60), likes: best.ig_likes || 0, comments: best.ig_comments || 0 }
+        : null,
+      nextCount: (next && next.n) || 0,
+      opportunity,
+    });
+  } catch (e) { res.json({ ok: false }); }
+});
+
 // ---------- Magic link (entrar sin contraseña) ----------
 // Aplica el perfil de la prueba a un usuario NUEVO, espejando lo que hoy hace
 // el cliente de prueba.html tras /api/auth/register (mismo catMap, mismos
@@ -1522,12 +1573,12 @@ app.get('/api/profile', requireAuth, (req, res) => {
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
-  const { business_name, category, tone, description, ig_username, competitors, goal } = req.body || {};
+  const { business_name, category, tone, description, ig_username, competitors, goal, monthly_goal } = req.body || {};
   if (!(business_name || '').trim()) return res.status(400).json({ error: '¿Cómo se llama tu negocio? Lo necesito para arrancar 🏪' });
   getProfile(req.session.userId);
   db.prepare(
-    `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, updated_at=datetime('now') WHERE user_id=?`
-  ).run(business_name || '', category || 'otro', tone || 'canchero', (description || '').slice(0, 600), ig_username || '', competitors || '', goal || '', req.session.userId);
+    `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, monthly_goal=?, updated_at=datetime('now') WHERE user_id=?`
+  ).run(business_name || '', category || 'otro', tone || 'canchero', (description || '').slice(0, 600), ig_username || '', competitors || '', goal || '', String(monthly_goal || '').slice(0, 120), req.session.userId);
   res.json({ ok: true });
 });
 
@@ -7512,6 +7563,16 @@ function promptForMedia(mediaPath) { return promptByMedia.get(mediaPath) || ''; 
 // Línea de gustos según las ACCIONES del cliente en la app (aprobó / rechazó
 // borradores): la señal más honesta de qué registro visual le va. Necesita
 // al menos 2 señales del mismo signo para nombrar un estilo o tipo.
+// Objetivo del mes (2026-10-17): la orden directa del dueño en Ajustes
+// ("este mes quiero vender más X") inclina TODAS las ideas de la semana.
+function monthlyGoalLine(uid) {
+  try {
+    const pr = getProfile(uid);
+    const g = String((pr && pr.monthly_goal) || '').trim();
+    if (!g) return '';
+    return `OBJETIVO DEL MES DEL DUEÑO: "${g}" — que las ideas de esta semana empujen hacia eso, sin forzarlo si no encaja con el rubro.`;
+  } catch (e) { return ''; }
+}
 function clientTasteLine(uid) {
   try {
     const rows = db.prepare(
@@ -7904,7 +7965,7 @@ app.post('/api/image-brief', requireAuth, async (req, res) => {
       paletteHex: parseBrandHexes(settings.brand_colors),
       dnaBits: dnaBitsLine(readDna(uid)),
       learningsLine: learningsLineOf(getContentLearnings(uid)),
-      memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid)].filter(Boolean).join(' '),
+      memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid), monthlyGoalLine(uid)].filter(Boolean).join(' '),
       styleRules,
       visualStyle,
     }), apiKey);
@@ -8023,7 +8084,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     paletteHex: hexes,
     dnaBits: dnaBitsLine(dna),
     learningsLine: learningsLineOf(getContentLearnings(uid)),
-    memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid)].filter(Boolean).join(' '),
+    memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid), monthlyGoalLine(uid)].filter(Boolean).join(' '),
     sceneRole,
     styleRules,
     visualStyle,
@@ -10619,7 +10680,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v155';
+const BUILD_ID = '20261016-v156';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

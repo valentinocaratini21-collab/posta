@@ -77,6 +77,7 @@ CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at);
 // Migraciones livianas para DBs existentes
 try { db.exec(`ALTER TABLE profiles ADD COLUMN competitors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE profiles ADD COLUMN monthly_goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN timezone TEXT DEFAULT 'America/Argentina/Buenos_Aires'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_issued_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }

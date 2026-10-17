@@ -115,6 +115,31 @@ async function publishSinglePost(db, post, opts = {}) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
+    // Historia gemela (2026-10-17): cada posteo de feed publicado sale
+    // también como historia el mismo día (+3 h), sin trabajo del cliente.
+    // Se crea con el generador de historias (tipo repost: la foto del
+    // posteo sobre la tarjeta de marca) y queda marcada source='twin'.
+    // Tope: 2 gemelas por día por usuario (ritmo sano de historias).
+    try {
+      if (!isStory && !demoMode && (post.media_type === 'image' || post.media_type === 'carousel')) {
+        const twinsToday = db.prepare(
+          `SELECT COUNT(*) AS c FROM posts WHERE user_id = ? AND source = 'twin' AND date(created_at) = date('now')`
+        ).get(post.user_id).c;
+        if (twinsToday < 2) {
+          const deps = proStoryDeps(db);
+          const ctx = { postCaption: String(post.caption || '').split('\n')[0] };
+          const abs = post.image_path && post.image_path.startsWith('/media/')
+            ? path.join(PRO_MEDIA_DIR, path.basename(post.image_path)) : null;
+          if (abs && fs.existsSync(abs)) ctx.postImageAbs = abs;
+          const twin = require('./stories').generateStory({
+            db, uid: post.user_id, type: 'repost', ctx,
+            brand: deps.getBrand(post.user_id), mediaDir: deps.mediaDir,
+            scheduleAt: new Date(Date.now() + 3 * 3600 * 1000).toISOString(),
+          });
+          if (twin && twin.id) db.prepare(`UPDATE posts SET source = 'twin' WHERE id = ?`).run(twin.id);
+        }
+      }
+    } catch (e) { console.error('[twin-story]', e.message); }
     // "Posty te avisa": la primera publicación del usuario marca el inicio de
     // su primera semana (durante esos 7 días los posteos requieren aprobación
     // explícita). Vale para cualquier vía de publicación (scheduler o "ahora").

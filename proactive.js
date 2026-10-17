@@ -158,8 +158,43 @@ function checkTriggers(db, userId) {
     }
   } catch (e) {}
 
-  // 6. Oportunidad (clima/fecha) — se implementa con reactive.js existente.
-  // Por ahora lo dejamos como placeholder para no duplicar.
+  // 6. Oportunidad (fecha que vende) — implementado 2026-10-17.
+  // Si en 4-9 días cae una efeméride comercial que aplica al rubro del
+  // cliente (mismo criterio que usa la generación: rubros regalables, sin
+  // barbería — ver ephemerisFor en server.js), Posty avisa UNA vez por
+  // fecha: el posteo especial entra solo en la semana porque la generación
+  // fuerza la idea N°1 dentro de la ventana de 12 días. Dedupe por fecha
+  // en proactive_log con título propio ([oportunidad:YYYY-MM-DD]).
+  try {
+    const EPH_GIFT_OK = /flor|gastro|helad|pastel|panad|cafeter|cafe|joya|indument|ropa|moda|belleza|estetic|estétic|spa|deco|hogar|perfum|chocolat|regal|libro|juguete|tecno|electr|peluquer/i;
+    const prof = db.prepare('SELECT category, business_name FROM profiles WHERE user_id = ?').get(userId);
+    const cat = String((prof && prof.category) || '');
+    const biz = String((prof && prof.business_name) || '');
+    if (prof && !/barber/i.test(cat + ' ' + biz) && EPH_GIFT_OK.test(cat)) {
+      const { upcomingEphemeris } = require('./ephemeris');
+      const list = upcomingEphemeris(9) || [];
+      for (const eph of list) {
+        const daysLeft = Math.round((new Date(eph.date + 'T12:00:00Z') - Date.now()) / 86400000);
+        if (daysLeft < 4 || daysLeft > 9) continue;
+        const key = `[oportunidad:${eph.date}]`;
+        const seen = db.prepare('SELECT id FROM proactive_log WHERE user_id = ? AND idea_title = ? LIMIT 1').get(userId, key);
+        if (seen) continue;
+        const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const dd = new Date(eph.date + 'T12:00:00Z');
+        const fecha = `${dd.getUTCDate()} de ${MESES[dd.getUTCMonth()]}`;
+        const nm = eph.name || 'una fecha especial';
+        triggers.push({
+          type: 'oportunidad',
+          priority: 6,
+          message: `📅 ¡Se viene ${nm}!\n\nEs el ${fecha} (en ${daysLeft} días). Tu semana va a tener un posteo especial por la fecha — sale solo, como todo ✨\n\nSi querés empujar algo puntual (una promo, un producto), contame por acá y lo sumo.`,
+          push_title: `📅 Se viene ${nm}`,
+          push_body: 'Tu semana va a tener un posteo especial. Sale solo ✨',
+          markSent: () => { try { db.prepare('INSERT INTO proactive_log (user_id, idea_title) VALUES (?, ?)').run(userId, key); } catch (e) {} },
+        });
+        break;
+      }
+    }
+  } catch (e) {}
 
   // Devolver el de mayor prioridad (menor número).
   triggers.sort((a, b) => a.priority - b.priority);

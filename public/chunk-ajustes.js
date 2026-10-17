@@ -90,6 +90,7 @@ function ajustesView() {
       <div class="field"><label>Objetivo</label><select id="s_goal">
         ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
       </select></div>
+      <div class="field"><label>🎯 Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más cortes los viernes" maxlength="120"><div class="hint">Lo que querés empujar ESTE mes. Posty inclina todos los posteos a esto — cambialo cuando quieras.</div></div>
     </div>
     <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
       <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
@@ -344,7 +345,7 @@ function bindSettings() {
   let profDirty = false;
   const dirtyEl = $('#profDirty');
   function markDirty() { if (!profDirty) { profDirty = true; if (dirtyEl) dirtyEl.style.display = ''; } }
-  ['s_biz', 's_iguser', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_desc'].forEach(id => {
+  ['s_biz', 's_iguser', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_mgoal', 's_desc'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', markDirty);
     if (el) el.addEventListener('change', markDirty);
@@ -357,6 +358,7 @@ function bindSettings() {
       category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
       tone: $('#s_tone').value, description: $('#s_desc').value,
       competitors: compChips.join(', '), goal: $('#s_goal').value,
+      monthly_goal: $('#s_mgoal') ? $('#s_mgoal').value : '',
     });
     await api.put('/api/settings', { timezone: $('#s_tz').value });
     $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
