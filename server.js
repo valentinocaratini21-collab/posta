@@ -3945,6 +3945,9 @@ function albumMission(uid) {
 }
 async function tagAlbumPhoto(uid, assetId, filePath) {
   try {
+    // v181: los videos del álbum NO se clasifican por imagen (llevan tag
+    // 'video' de nacimiento); mandar un .mp4 como imagen rompería la llamada.
+    if (!/\.(jpe?g|png|webp)$/i.test(String(filePath || ''))) return;
     const key = openaiKeyFor(uid);
     if (!key) return;
     const abs = path.join(MEDIA_DIR, path.basename(String(filePath)));
@@ -4006,7 +4009,10 @@ async function celebratePhotoPost(uid, assetId, filePath) {
 app.get('/api/album', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
-    const photos = db.prepare(`SELECT id, file_path, album_tag, created_at FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 20`).all(uid);
+    // v181: el álbum incluye los VIDEOS del cliente (kind='video', con
+    // miniatura en thumb_path). Los counts de progreso son solo de fotos.
+    const rows = db.prepare(`SELECT id, file_path, album_tag, kind, thumb_path, created_at FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
+    const photos = rows.filter(r => r.kind === 'photo');
     // Clasificación perezosa: hasta 3 sin clasificar por visita, en 2º plano.
     let lazy = 0;
     for (const ph of photos) {
@@ -4030,20 +4036,62 @@ app.get('/api/album', requireAuth, (req, res) => {
     } catch (e) {}
     res.json({
       ok: true,
-      photos: photos.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '' })),
+      photos: rows.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '' })),
+      videos: rows.length - photos.length,
       counts, targets: ALBUM_TARGETS,
       mission: { text: mission.mission_text, tag: mission.mission_tag, done: !!mission.done_at, post_id: mission.post_id || 0 },
       perf,
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
-app.post('/api/album/photo', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), async (req, res) => {
+// Subida al álbum (v181): fotos como siempre (≤15 MB) y VIDEOS del cliente
+// (mp4/mov, ≤60 MB, ≤90 s validados con ffprobe). El tope de 20 ítems es
+// TOTAL (fotos + videos) para cuidar el disco del volumen. Los videos
+// quedan con miniatura (thumb_path) y tag 'video' — no se clasifican por
+// imagen ni disparan el festejo (eso es de fotos). Posty los usa como
+// material estrella de los reels (reel-engine).
+const _albumRawImg = express.raw({ type: 'image/*', limit: '15mb' });
+const _albumRawVid = express.raw({ type: 'video/*', limit: '60mb' });
+function albumVideoDuration(absFile) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', absFile],
+      { timeout: 20000 }, (err, out) => resolve(err ? 0 : (parseFloat(out) || 0)));
+  });
+}
+function albumVideoThumb(absFile, dur, thumbAbs) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    execFile('ffmpeg', ['-y', '-v', 'error', '-ss', String(Math.min(1, Math.max(0.1, dur / 2))), '-i', absFile, '-frames:v', '1', '-q:v', '4', thumbAbs],
+      { timeout: 30000 }, (err) => resolve(!err));
+  });
+}
+app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req, res) => {
   try {
     const uid = req.session.userId;
-    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
-    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'photo'`).get(uid).c;
-    if (n >= 20) return res.status(400).json({ error: '¡20 fotos! Con esas me alcanza y sobra 📸 Borrá alguna desde tu biblioteca si querés sumar más.' });
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Archivo vacío' });
     const ct = req.get('Content-Type') || '';
+    const isVideo = ct.startsWith('video/');
+    const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).get(uid).c;
+    if (n >= 20) return res.status(400).json({ error: '¡Tu álbum llegó a 20 archivos! Con eso Posty trabaja de sobra 📸 Borrá algo desde tu biblioteca si querés sumar más.' });
+    if (isVideo) {
+      if (!/mp4|quicktime/i.test(ct)) return res.status(400).json({ error: 'Ese formato de video no lo puedo usar 😅 Probá con un MP4 o MOV (el que sale del celular anda perfecto).' });
+      const ext = ct.includes('quicktime') ? 'mov' : 'mp4';
+      const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
+      const abs = path.join(MEDIA_DIR, name);
+      fs.writeFileSync(abs, req.body);
+      const dur = await albumVideoDuration(abs);
+      if (!dur) { try { fs.unlinkSync(abs); } catch (e) {} return res.status(400).json({ error: 'No pude leer ese video 😅 Probá con otro.' }); }
+      if (dur > 90) { try { fs.unlinkSync(abs); } catch (e) {} return res.status(400).json({ error: 'Ese video dura más de 90 segundos 🎬 Subí uno más corto y Posty lo usa en tus reels.' }); }
+      const thumbName = `${name}.thumb.jpg`;
+      const thumbAbs = path.join(MEDIA_DIR, thumbName);
+      const thumbOk = await albumVideoThumb(abs, dur, thumbAbs);
+      const thumbPath = thumbOk && fs.existsSync(thumbAbs) ? `/media/${thumbName}` : '';
+      const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, album_tag, thumb_path) VALUES (?,?,?,?,?)')
+        .run(uid, `/media/${name}`, 'video', 'video', thumbPath);
+      console.log(`[album] usuario ${uid}: video ${name} (${Math.round(dur)}s) guardado 🎬`);
+      return res.json({ ok: true, id: ins.lastInsertRowid, path: `/media/${name}`, kind: 'video', thumb: thumbPath, mission_done: false });
+    }
     const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
     const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
     fs.writeFileSync(path.join(MEDIA_DIR, name), req.body);
@@ -4057,11 +4105,18 @@ app.post('/api/album/photo', requireAuth, express.raw({ type: 'image/*', limit: 
     if (!missionDone) {
       try { db.prepare(`UPDATE album_missions SET done_at = datetime('now'), photo_id = ? WHERE user_id = ? AND week_key = ?`).run(assetId, uid, mission.week_key); missionDone = true; } catch (e) {}
     }
-    res.json({ ok: true, id: assetId, path: filePath, mission_done: missionDone });
+    res.json({ ok: true, id: assetId, path: filePath, kind: 'photo', mission_done: missionDone });
     // Segundo plano: clasificar + festejo (un posteo por semana).
     tagAlbumPhoto(uid, assetId, filePath);
     celebratePhotoPost(uid, assetId, filePath);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// Peso excedido en la subida del álbum → mensaje amable (no el 500 de Express).
+app.use('/api/album/photo', (err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(400).json({ error: 'Ese archivo es muy pesado 😅 Fotos hasta 15 MB y videos hasta 60 MB.' });
+  }
+  next(err);
 });
 // Push de la misión: lunes ~10:00 hora local del cliente, una vez por
 // semana. Corre cada 30 min y filtra por la hora local de cada usuario.
@@ -11210,7 +11265,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v180';
+const BUILD_ID = '20261017-v181';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

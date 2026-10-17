@@ -90,7 +90,8 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN preferred_palette INTEGER DEFAULT
 try { db.exec(`ALTER TABLE settings ADD COLUMN pexels_key TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Álbum del negocio (2026-10-16): clasificación de las fotos del cliente
 // (producto|local|equipo|clientes|otro) y misiones semanales de foto.
-try { db.exec(`ALTER TABLE assets ADD COLUMN album_tag TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+/* Las ALTER de assets viven DESPUÉS de su CREATE TABLE (más abajo): acá la
+   tabla todavía no existe en una DB nueva y el ALTER fallaba en silencio. */
 db.exec(`CREATE TABLE IF NOT EXISTS album_missions (
   user_id INTEGER NOT NULL,
   week_key TEXT NOT NULL,
@@ -286,10 +287,13 @@ CREATE TABLE IF NOT EXISTS assets (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   file_path TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'photo',
+  thumb_path TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(user_id, kind);
 `);
+try { db.exec(`ALTER TABLE assets ADD COLUMN album_tag TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN thumb_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 // Demo pública: rate limit de generaciones por IP por día (5/día)
 db.exec(`

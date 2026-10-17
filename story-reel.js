@@ -95,7 +95,10 @@ async function makeStoryImage({ srcFile, caption, outFile }) {
   }
 }
 
-// Reel ~16s: 4 escenas de 4s con ken burns (lo hace renderVideo).
+// Reel LEGADO (~16s: 4 escenas de 4s con ken burns, sin audio, caption
+// volcado en una línea): queda SOLO como fallback del motor v2 (reel-engine)
+// — si el motor nuevo falla en runtime, un reel mediocre es mejor que
+// ninguno y el scheduler ni se entera. Auditoría Fase 0 en reel-engine.js.
 async function makeReelVideo({ items, mediaDir }) {
   if (!ffmpegAvailable()) throw new Error('ffmpeg no disponible');
   const scenes = items.slice(0, 4).map((it) => ({
@@ -106,6 +109,87 @@ async function makeReelVideo({ items, mediaDir }) {
   if (!scenes.length) throw new Error('sin escenas para el reel');
   const out = await renderVideo({ scenes, mediaDir });
   return out; // { file, url, duration }
+}
+
+// Primera línea "publicable" de un caption: sin hashtags ni emojis, con la
+// primera letra en mayúscula. Es el gancho real del posteo (lo que la
+// cuenta publica como apertura), no un título inventado.
+function hookFromCaption(caption) {
+  const first = String(caption || '').split('\n').map(s => s.trim()).find(Boolean) || '';
+  const clean = first.replace(/#\S+/g, '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  // Si la primera línea es un párrafo, el gancho es su primera oración: el
+  // motor (fitText) necesita frases completas, no cortes a mitad de idea.
+  if (clean.length > 64) {
+    const s1 = (clean.split(/[.!?]\s+/)[0] || '').trim();
+    if (s1.length >= 12 && s1.length < clean.length) return s1.charAt(0).toUpperCase() + s1.slice(1);
+  }
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+function beatFromCaption(caption, hook) {
+  const lines = String(caption || '').split('\n').map(s => s.trim()).filter(Boolean);
+  for (const ln of lines) {
+    const clean = ln.replace(/#\S+/g, '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '').replace(/\s+/g, ' ').trim();
+    if (clean && clean !== hook && clean.length >= 12) return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+  const sentences = String(caption || '').split(/[.!?]\s+/).map(s => s.trim()).filter(Boolean);
+  if (sentences[1]) {
+    const clean = sentences[1].replace(/#\S+/g, '').replace(/\s+/g, ' ').trim();
+    if (clean) return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+  return '';
+}
+
+// Reel v2 (reel-engine): videos del álbum primero; fotos del posteo +
+// álbum (+ stock del rubro si falta material). Devuelve null si no hay
+// material suficiente (el llamador decide el fallback).
+async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
+  const { buildReelPro, moodForCategory } = require('./reel-engine');
+  const { pickStockPhoto, stockRubroFor } = require('./stock');
+  const profile = (() => { try { return db.prepare('SELECT business_name, category, ig_username FROM profiles WHERE user_id = ?').get(uid) || {}; } catch (e) { return {}; } })();
+  let brandHex = '';
+  try {
+    const s = db.prepare('SELECT brand_colors FROM settings WHERE user_id = ?').get(uid);
+    const m = String((s && s.brand_colors) || '').match(/#?[0-9a-fA-F]{6}/);
+    if (m) brandHex = m[0].startsWith('#') ? m[0] : '#' + m[0];
+  } catch (e) {}
+  const albumFiles = (kind, limit) => {
+    try {
+      return db.prepare('SELECT file_path FROM assets WHERE user_id = ? AND kind = ? ORDER BY created_at DESC LIMIT ?')
+        .all(uid, kind, limit).map(r => localFile(mediaDir, r.file_path)).filter(Boolean);
+    } catch (e) { return []; }
+  };
+  const videos = albumFiles('video', 3);
+  const albumPhotos = albumFiles('photo', 6);
+  const feedPhotos = (feedPosts || []).map(p => localFile(mediaDir, p.image_path)).filter(Boolean);
+  const photos = [...new Set([...feedPhotos, ...albumPhotos])];
+  // Stock del rubro como relleno si el material propio no alcanza.
+  if (photos.length + videos.length < 3 && profile.category) {
+    for (let k = 0; k < 3 && photos.length + videos.length < 3; k++) {
+      const sp = pickStockPhoto(profile.category, `${uid}-reel-${salt}-${k}`);
+      if (sp && !photos.includes(sp)) photos.push(sp);
+    }
+  }
+  if (photos.length + videos.length < 2) return null;
+  // Rotación por índice de reel: que dos reels de la semana no salgan iguales.
+  const rot = (arr, n) => arr.length > 1 ? arr.map((_, i) => arr[(i + n) % arr.length]) : arr;
+  const post0 = (feedPosts || [])[salt % Math.max(1, (feedPosts || []).length)] || (feedPosts || [])[0] || {};
+  const hook = hookFromCaption(post0.caption) || shortText(post0.source_topic || '', 50);
+  const mid = beatFromCaption(post0.caption, hookFromCaption(post0.caption)) || shortText(post0.source_angle || '', 52);
+  const handle = profile.ig_username ? '@' + String(profile.ig_username).replace(/^@/, '') : (profile.business_name || '');
+  return buildReelPro({
+    mediaDir,
+    photos: rot(photos, salt * 2).slice(0, 5),
+    videos: rot(videos, salt),
+    // SIN shortText acá: el motor ajusta el tamaño de fuente para que la
+    // frase entre COMPLETA (fitText); cortar antes dejaba ganchos a medias.
+    hook: String(hook || '').slice(0, 90),
+    mid: String(mid || '').slice(0, 90),
+    cta: '¡Seguinos!',
+    handle,
+    brandHex,
+    mood: moodForCategory(profile.category, stockRubroFor(profile.category)),
+  });
 }
 
 function localFile(mediaDir, imagePath) {
@@ -165,7 +249,9 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
     }
   }
 
-  // Reels: cada reel rota 4 imágenes distintas de la semana.
+  // Reels: motor v2 (reel-engine) primero — videos del álbum + fotos con
+  // ritmo, textos por tiempos y música. Fallback al legado si el motor
+  // nuevo falla o no hay material (POSTY_REELS_V2=0 lo apaga del todo).
   for (let i = have.video; i < nReels; i++) {
     try {
       const items = [];
@@ -174,8 +260,15 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
         const f = localFile(mediaDir, post.image_path);
         if (f && !items.some(it => it.file === f)) items.push({ file: f, text: post.caption || post.source_topic || '' });
       }
-      if (items.length < 2) { console.log(`[extras:${tag}] reel ${i + 1}: pocas imágenes, skip`); continue; }
-      const out = await makeReelVideo({ items, mediaDir });
+      let out = null;
+      if (process.env.POSTY_REELS_V2 !== '0') {
+        try { out = await makeReelVideoPro({ db, uid, feedPosts: feed, mediaDir, salt: i }); }
+        catch (e) { console.error(`[extras:${tag}] reel v2 falló (sigo con el legado):`, e.message); }
+      }
+      if (!out) {
+        if (items.length < 2) { console.log(`[extras:${tag}] reel ${i + 1}: pocas imágenes, skip`); continue; }
+        out = await makeReelVideo({ items, mediaDir });
+      }
       const post0 = feed[i % feed.length];
       ins.run(uid, out.url, post0.caption || '', post0.hashtags || '', 'video',
         post0.source_topic || '', post0.source_angle || '', post0.tipo || '',
@@ -190,4 +283,4 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   return { stories, reels, plan: plan.id };
 }
 
-module.exports = { makeStoryImage, makeReelVideo, generateWeekExtras, STORY_HOUR };
+module.exports = { makeStoryImage, makeReelVideo, makeReelVideoPro, generateWeekExtras, STORY_HOUR };

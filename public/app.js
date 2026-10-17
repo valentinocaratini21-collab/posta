@@ -5223,12 +5223,16 @@ async function bindAlbumCard() {
   const perfHTML = data.perf
     ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
     : '';
-  const totalFotos = (data.photos || []).length;
-  const countHTML = totalFotos > 0
-    ? `<div style="font-size:13.5px;margin-top:4px">📷 Ya tenés <b>${totalFotos}</b> foto${totalFotos === 1 ? '' : 's'} en tu álbum — Posty las usa en tus posteos.</div>`
+  const items = data.photos || [];
+  const nFotos = items.filter(ph => ph.kind !== 'video').length;
+  const nVideos = items.filter(ph => ph.kind === 'video').length;
+  const countHTML = items.length > 0
+    ? `<div style="font-size:13.5px;margin-top:4px">📷 Ya tenés <b>${nFotos}</b> foto${nFotos === 1 ? '' : 's'}${nVideos ? ` y <b>${nVideos}</b> video${nVideos === 1 ? '' : 's'}` : ''} en tu álbum — Posty los usa en tus posteos y reels.</div>`
     : '';
-  const grid = totalFotos
-    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${data.photos.map(ph => `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
+  const grid = items.length
+    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => ph.kind === 'video'
+      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span></div>`
+      : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
     : `<div style="font-size:14px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
   <div class="card" style="margin-top:14px">
@@ -5240,9 +5244,10 @@ async function bindAlbumCard() {
     ${perfHTML}
     ${grid}
     <label class="btn btn-primary btn-block" style="margin:6px 0 0;cursor:pointer">
-      📸 Subir fotos
-      <input type="file" id="albumFile" accept="image/*" multiple style="display:none">
+      📸 Subir fotos o videos
+      <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
     </label>
+    <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
   </div>`;
   const inp = document.getElementById('albumFile');
@@ -5251,23 +5256,27 @@ async function bindAlbumCard() {
     if (!files.length) return;
     const msg = document.getElementById('albumMsg');
     let okCount = 0;
+    let okVideos = 0;
     let lastErr = '';
-    // Subida secuencial: el servidor festeja/clasifica cada una en 2º plano.
+    // Subida secuencial: el servidor festeja/clasifica cada foto en 2º plano.
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
+      const isVid = (f.type || '').startsWith('video/');
       if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}… 📤` : 'Subiendo… 📤';
       try {
-        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(120000) });
+        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(isVid ? 300000 : 120000) });
         const d = await r.json().catch(() => ({}));
         if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
         okCount++;
+        if (isVid || d.kind === 'video') okVideos++;
       } catch (e) {
         lastErr = e.message || 'No pude subirla. Probá de nuevo.';
         break; // ej.: llegó al tope de 20 — no tiene sentido seguir
       }
     }
     if (msg) {
-      if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} fotos nuevas!</b> Posty ya las tiene para tus posteos ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
+      if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
+      else if (okCount && okVideos) msg.innerHTML = '✅ <b>¡Video guardado!</b> Posty lo va a usar en tus reels 🎬';
       else if (okCount) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
       else msg.textContent = '😅 ' + (lastErr || 'No pude subirla. Probá de nuevo.');
     }
