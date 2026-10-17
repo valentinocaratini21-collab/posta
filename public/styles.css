@@ -2180,3 +2180,21 @@ textarea.in{resize:vertical;min-height:96px}
 .lp-crate.on{border-color:var(--cel);background:var(--cel-soft);color:var(--cel)}
 .lp-calc-out{background:#EAF6FD;border-radius:14px;padding:16px 18px;font-size:15.5px;line-height:1.65;color:var(--txt)}
 .lp-calc-cm{text-align:center;margin-top:20px;color:var(--mut);font-size:15.5px}
+/* ---------- v177: semana por rubro + bloque control ---------- */
+.lp-wchips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:16px 0 4px}
+.lp-wchip{font-family:inherit;font-size:14px;font-weight:700;padding:8px 15px;border-radius:999px;border:2px solid #D7E5EE;background:#fff;color:#0A1E33;cursor:pointer;transition:border-color .15s,background .15s,color .15s}
+.lp-wchip:hover{border-color:var(--cel)}
+.lp-wchip.on{background:var(--cel);border-color:var(--cel);color:#fff}
+.lp-week-grid{transition:opacity .16s ease}
+.lp-week-grid.lp-week-swap{opacity:0}
+.lp-week-bridge{text-align:center;font-size:15px;color:var(--mut);margin:12px 2px 2px}
+.lp-week-bridge a{color:var(--cel);font-weight:800;text-decoration:none}
+.lp-week-bridge a:hover{text-decoration:underline}
+.lp-ctl-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:32px;text-align:left}
+.lp-ctl-card{background:#fff;border:2px solid #E3EDF4;border-radius:18px;padding:20px}
+.lp-ctl-ico{font-size:30px;line-height:1;margin-bottom:10px}
+.lp-ctl-card b{display:block;font-size:16.5px;color:#0A1E33;margin-bottom:5px}
+.lp-ctl-card p{margin:0;font-size:14px;color:var(--mut);line-height:1.5}
+.lp-ctl-close{text-align:center;font-size:18px;color:#0A1E33;margin:26px 0 0}
+@media(max-width:900px){.lp-ctl-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.lp-ctl-grid{grid-template-columns:1fr}}

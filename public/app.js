@@ -716,6 +716,56 @@ function lpCalcUpdate() {
   out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$1.330 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
 }
 
+/* ---------- v177: la semana de tu rubro ---------- */
+const LP_WEEK_ICONS = '<svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span>';
+const LP_WEEK_DAYS = [
+  { d: 'Lun', cls: 'lp-day-ok', t: '✓ Publicado · lun 10:32' },
+  { d: 'Mar', cls: 'lp-day-ok', t: '✓ Publicado · mar 11:06' },
+  { d: 'Mié', cls: 'lp-day-sched', t: '📮 Programado · mié 18:30' },
+  { d: 'Jue', cls: 'lp-day-sched', t: '📮 Programado · jue 11:00' },
+  { d: 'Vie', cls: 'lp-day-sched', t: '📮 Programado · vie 12:15' }
+];
+const LP_WEEK = {
+  mixto: { ejemplo: 'con negocios de varios rubros', cards: [
+    { u: 'cafe.aurora', l: 'C', c: '#FDEBD2', img: 'ig-cafe.jpg', alt: 'Posteo de Instagram de una cafetería hecho por Posty' },
+    { u: 'tiendacora', l: 'T', c: '#E4F0FA', img: 'ig-moda.jpg', alt: 'Posteo de Instagram de una tienda de ropa hecho por Posty' },
+    { u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', img: 'ig-barber.jpg', alt: 'Posteo de Instagram de una barbería hecho por Posty' },
+    { u: 'estetica.alma', l: 'A', c: '#FBE4EC', img: 'ig-belleza.jpg', alt: 'Posteo de Instagram de una estética hecho por Posty' },
+    { u: 'petshop.huella', l: 'H', c: '#E2F2E4', img: 'ig-mascotas.jpg', alt: 'Posteo de Instagram de un pet shop hecho por Posty' }
+  ] },
+  cafeteria: { ejemplo: 'de una cafetería', u: 'cafe.aurora', l: 'C', c: '#FDEBD2', alt: 'Posteo de Instagram de Café Aurora hecho por Posty', imgs: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg'] },
+  barberia: { ejemplo: 'de una barbería', u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', alt: 'Posteo de Instagram de El Corte Barbería hecho por Posty', imgs: ['ig-barber.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-8.jpg'] },
+  moda: { ejemplo: 'de una tienda de moda', u: 'tiendacora', l: 'T', c: '#E4F0FA', alt: 'Posteo de Instagram de Tienda Cora hecho por Posty', imgs: ['ig-moda.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-8.jpg'] },
+  belleza: { ejemplo: 'de una estética', u: 'estetica.alma', l: 'A', c: '#FBE4EC', alt: 'Posteo de Instagram de Estética Alma hecho por Posty', imgs: ['ig-belleza.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-8.jpg'] },
+  mascotas: { ejemplo: 'de un pet shop', u: 'petshop.huella', l: 'H', c: '#E2F2E4', alt: 'Posteo de Instagram de Pet Shop Huella hecho por Posty', imgs: ['ig-mascotas.jpg', 'gt-petshop-2.jpg', 'gt-petshop-4.jpg', 'gt-petshop-6.jpg', 'gt-petshop-8.jpg'] },
+  fitness: { ejemplo: 'de un gimnasio', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Posteo de Instagram de Gym Norte hecho por Posty', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] }
+};
+function lpWeekCardHTML(card, day) {
+  return `<div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Posteo</span></div><div class="${day.cls}">${day.t}</div></div>`;
+}
+function lpWeekSet(key, btn) {
+  const data = LP_WEEK[key] || LP_WEEK.mixto;
+  document.querySelectorAll('.lp-wchip').forEach((b) => b.classList.toggle('on', b === btn));
+  const grid = document.getElementById('lpWeekGrid');
+  const bridge = document.getElementById('lpWeekBridge');
+  const apply = () => {
+    if (grid) {
+      const cards = key === 'mixto'
+        ? data.cards.map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i]))
+        : data.imgs.map((img, i) => lpWeekCardHTML({ u: data.u, l: data.l, c: data.c, img, alt: data.alt }, LP_WEEK_DAYS[i]));
+      grid.innerHTML = cards.join('');
+      grid.classList.remove('lp-week-swap');
+    }
+    if (bridge) bridge.innerHTML = `Esto es un ejemplo ${data.ejemplo}. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a>`;
+  };
+  if (grid) { grid.classList.add('lp-week-swap'); setTimeout(apply, 170); } else apply();
+}
+function lpWeekToForm() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => { const i = document.getElementById('lpIg'); if (i) i.focus({ preventScroll: true }); }, 500);
+  return false;
+}
+
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -804,7 +854,16 @@ function landingView(cfg) {
   <div class="section lp-week-sec"><div class="wrap">
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
       <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
-      <div class="lp-week-grid">
+      <div class="lp-wchips" role="group" aria-label="Ver la semana de un rubro">
+        <button type="button" class="lp-wchip on" onclick="lpWeekSet('mixto', this)">⭐ Ejemplo mixto</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('cafeteria', this)">☕ Cafetería</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('barberia', this)">💈 Barbería</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('moda', this)">👕 Moda</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('belleza', this)">💅 Belleza</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('mascotas', this)">🐶 Mascotas</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('fitness', this)">🏋️ Fitness</button>
+      </div>
+      <div class="lp-week-grid" id="lpWeekGrid">
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FDEBD2">C</i></span><b>cafe.aurora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · lun 10:32</div></div>
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E4F0FA">T</i></span><b>tiendacora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · mar 11:06</div></div>
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E9E4DC">E</i></span><b>elcorte.barberia</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mié</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · mié 18:30</div></div>
@@ -812,6 +871,7 @@ function landingView(cfg) {
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · vie 12:15</div></div>
       </div>
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
+      <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a></p>
     </div>
   </div></div>
   <div class="lp-stats"><div class="wrap">
@@ -985,6 +1045,17 @@ function landingView(cfg) {
       <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$1.330 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
     </div>
     <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>$300.000+ por mes</b>.</p>
+  </div></div>
+  <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
+    <h2>Tranqui: vos siempre tenés el freno de mano</h2>
+    <p class="lede">Posty trabaja solo, pero nada sale sin que puedas frenarlo. Así de simple:</p>
+    <div class="lp-ctl-grid">
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">🔔</div><b>Te avisa antes</b><p>30 minutos antes de publicar cada posteo te llega el aviso. Lo ves venir, siempre.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">⏸</div><b>Frenás con un toque</b><p>El botón Frenar lo vuelve a borrador al instante. Sin explicaciones, sin vueltas.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">🎨</div><b>¿No te cierra la imagen?</b><p>Tenés 1 rehacer con otro estilo por posteo, gratis. Posty la arma de nuevo.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">↩️</div><b>Volvés a la anterior</b><p>Si el rehacer no te gusta, volvés a la imagen anterior cuando quieras.</p></div>
+    </div>
+    <p class="lp-ctl-close">Posty trabaja solo. <b>Vos mandás.</b></p>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
