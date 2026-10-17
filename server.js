@@ -3368,6 +3368,43 @@ app.post('/api/comments/:id/dismiss', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Mensajes directos de Instagram: responder en un toque ----------
+app.get('/api/dms', requireAuth, (req, res) => {
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, username, text, suggested, ig_conversation_id, created_at FROM dm_queue
+      WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
+  } catch (e) { /* tabla nueva */ }
+  res.json({ dms: rows });
+});
+app.post('/api/dms/refresh', requireAuth, requireTrialValid, async (req, res) => {
+  try {
+    const { syncDMs } = require('./insights');
+    const st = getSettings(req.session.userId) || {};
+    const n = await syncDMs(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    res.json({ ok: true, fresh: n });
+  } catch (e) {
+    res.status(500).json({ error: 'No pude revisar tus mensajes 😅 Probá de nuevo' });
+  }
+});
+app.post('/api/dms/:id/reply', requireAuth, async (req, res) => {
+  try {
+    const { sendDM } = require('./insights');
+    const d = db.prepare('SELECT * FROM dm_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!d || d.status !== 'pending') return res.status(404).json({ error: 'Ese mensaje se me perdió 😅 Actualizá y probá de nuevo' });
+    const message = String((req.body && req.body.message) || d.suggested || '').slice(0, 1000);
+    if (!message.trim()) return res.status(400).json({ error: 'Escribí la respuesta primero ✍️' });
+    await sendDM(db, req.session.userId, d.ig_sender_id, message);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'No pudimos responder: ' + String(e.message).slice(0, 120) });
+  }
+});
+app.post('/api/dms/:id/dismiss', requireAuth, (req, res) => {
+  try { db.prepare(`UPDATE dm_queue SET status='dismissed' WHERE id = ? AND user_id = ?`).run(req.params.id, req.session.userId); } catch (e) {}
+  res.json({ ok: true });
+});
+
 // Sugerencia de arranque (first_pick): qué posteo mirar primero.
 // Determinista y explicable:
 //   1. borrador cuya imagen usa una FOTO REAL del cliente (client_photo=1,
@@ -7127,6 +7164,11 @@ app.post('/api/proactive-comments-ask', requireAuth, async (req, res) => {
       const st = getSettings(uid) || {};
       await syncComments(db, uid, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
     } catch (e) {}
+    try {
+      const { syncDMs } = require('./insights');
+      const st2 = getSettings(uid) || {};
+      await syncDMs(db, uid, suggestReply, st2.openai_key || process.env.OPENAI_API_KEY || '');
+    } catch (e) {}
     let n = 0;
     try { n = db.prepare(`SELECT COUNT(*) AS n FROM comment_queue WHERE user_id = ? AND status = 'pending'`).get(uid).n || 0; }
     catch (e) {}
@@ -10745,7 +10787,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v163';
+const BUILD_ID = '20261017-v164';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

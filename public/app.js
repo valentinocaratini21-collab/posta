@@ -3966,6 +3966,12 @@ async function chatSend() {
     showWeekInChat();
     return;
   }
+  // "mensajes" → la IA trae los DMs pendientes de Instagram y deja la respuesta lista, acá en el chat
+  if (/\b(mensajes?|dms?|directos?|privados?|bandeja)\b/i.test(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
+    showDMsInChat();
+    return;
+  }
   // "comentarios" → la IA trae los pendientes de Instagram y deja la respuesta lista, acá en el chat
   if (/\bcomentarios?\b/i.test(sendText) && !/sin comentarios/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
@@ -4037,6 +4043,69 @@ function bindChatComments() {
         setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatcm="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
       } catch (e) {
         b.disabled = false; b.textContent = act === 'reply' ? '💬 Responder' : 'Descartar';
+        if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
+      }
+    };
+  });
+}
+
+// Mensajes directos de IG dentro del chat: espejo de comentarios, respuesta lista en un toque.
+async function showDMsInChat() {
+  const box = $('#chatBox');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatDmTyping">⏳ Revisando tus mensajes…</div>`);
+  chatScroll();
+  let list = [];
+  try { const r = await api.get('/api/dms'); list = (r && r.dms) || []; } catch (e) {}
+  if (!list.length) {
+    try { await api.post('/api/dms/refresh', {}); const r2 = await api.get('/api/dms'); list = (r2 && r2.dms) || []; } catch (e) {}
+  }
+  const t = $('#chatDmTyping'); if (t) t.remove();
+  const html = list.length ? `
+    <div class="chat-msg ai" style="max-width:100%">
+      <div style="font-weight:800;margin-bottom:4px">📩 ${list.length} ${list.length === 1 ? 'mensaje' : 'mensajes'} para responder</div>
+      <div style="font-size:11.5px;color:var(--mut);margin-bottom:8px">Te dejé la respuesta lista — la editás si querés y sale en un toque.</div>
+      ${list.map(d => `
+      <div data-chatdm="${d.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:12.5px;margin-bottom:6px"><b>@${esc(d.username || '')}</b>: ${esc(d.text || '')}</div>
+        <textarea class="in" data-chatdmreply="${d.id}" rows="2" style="font-size:16px" aria-label="Respuesta sugerida">${esc(d.suggested || '')}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" data-chatdmdo="reply" data-id="${d.id}">📩 Responder</button>
+          <button class="btn btn-ghost btn-sm" data-chatdmdo="dismiss" data-id="${d.id}">Descartar</button>
+        </div>
+        <div class="hint" data-chatdmmsg="${d.id}" style="margin:6px 0 0"></div>
+      </div>`).join('')}
+    </div>`
+    : `<div class="chat-msg ai">📩 No tenés mensajes pendientes — bandeja al día 👌</div>`;
+  box.insertAdjacentHTML('beforeend', html);
+  const say = list.length ? `Te muestro los ${list.length} mensajes para responder 👆` : 'No tenés mensajes pendientes.';
+  CHAT.push({ role: 'assistant', text: say });
+  try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
+  bindChatDMs();
+  chatScroll();
+}
+function bindChatDMs() {
+  document.querySelectorAll('#chatBox [data-chatdmdo]').forEach(b => {
+    if (b.dataset.bound) return; b.dataset.bound = '1';
+    b.onclick = async () => {
+      const id = b.dataset.id, act = b.dataset.chatdmdo;
+      const msg = document.querySelector(`#chatBox [data-chatdmmsg="${id}"]`);
+      b.disabled = true;
+      try {
+        if (act === 'reply') {
+          const ta = document.querySelector(`#chatBox [data-chatdmreply="${id}"]`);
+          const message = (ta && ta.value || '').trim();
+          if (!message) throw new Error('La respuesta está vacía');
+          b.textContent = '⏳ Enviando...';
+          await api.post(`/api/dms/${id}/reply`, { message });
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondido en Instagram</span>';
+        } else {
+          await api.post(`/api/dms/${id}/dismiss`, {});
+          if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartado</span>';
+        }
+        setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatdm="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
+      } catch (e) {
+        b.disabled = false; b.textContent = act === 'reply' ? '📩 Responder' : 'Descartar';
         if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
       }
     };

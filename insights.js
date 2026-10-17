@@ -120,6 +120,71 @@ async function replyComment(db, userId, igCommentId, message) {
   return true;
 }
 
+// Baja los DMs nuevos (últimos 7 días) y genera respuesta sugerida.
+// Espejo de syncComments: solo cuenta el ÚLTIMO mensaje de cada conversación;
+// si lo mandó el propio negocio, la conversación ya está respondida.
+// Devuelve cuántos nuevos encontró.
+async function syncDMs(db, userId, suggestFn, apiKey) {
+  const creds = getCreds(db, userId);
+  if (!creds) return 0;
+  const profile = db.prepare('SELECT business_name, category, tone, ig_username FROM profiles WHERE user_id = ?').get(userId) || {};
+  let convs;
+  try {
+    convs = await igGet(`/${creds.igUserId}/conversations`, creds.accessToken, {
+      platform: 'instagram',
+      fields: 'id,participants{username,id},messages.limit(8){id,message,from{id,username},created_time}',
+    });
+  } catch (e) { console.error('[dms] conversations:', e.message); return 0; }
+  let fresh = 0;
+  const since = Date.now() - 7 * 86400000;
+  for (const conv of (convs.data || [])) {
+    const msgs = (conv.messages && conv.messages.data) || [];
+    if (!msgs.length) continue;
+    const last = msgs[0]; // la API devuelve los mensajes del más nuevo al más viejo
+    if (!last || !last.from || !last.id) continue;
+    // Si el último mensaje lo mandó el negocio, ya respondió: saltear.
+    if (String(last.from.id) === String(creds.igUserId)) continue;
+    const text = String(last.message || '');
+    if (!text) continue;
+    if (last.created_time && new Date(last.created_time).getTime() < since) continue;
+    const exists = db.prepare('SELECT id FROM dm_queue WHERE ig_message_id = ?').get(last.id);
+    if (exists) continue;
+    let username = String(last.from.username || '');
+    if (!username) {
+      const other = ((conv.participants && conv.participants.data) || []).find(p => String(p.id) !== String(creds.igUserId));
+      username = other ? String(other.username || '') : '';
+    }
+    let suggested = '';
+    try {
+      suggested = await suggestFn(
+        { business: profile.business_name, category: profile.category, tone: profile.tone, username, commentText: text },
+        apiKey
+      );
+    } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+    db.prepare(
+      `INSERT INTO dm_queue (user_id, ig_conversation_id, ig_message_id, ig_sender_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,?, 'pending')`
+    ).run(userId, String(conv.id || ''), last.id, String(last.from.id), username, text.slice(0, 500), String(suggested).slice(0, 300));
+    fresh++;
+  }
+  return fresh;
+}
+
+// Manda un DM en Instagram (espejo de replyComment).
+async function sendDM(db, userId, recipientIgId, message) {
+  const creds = getCreds(db, userId);
+  if (!creds) throw new Error('Instagram no conectado');
+  const r = await fetch(`${IG_HOST}/${API_VERSION}/${creds.igUserId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipient: { id: String(recipientIgId) }, message: { text: String(message).slice(0, 1000) }, access_token: creds.accessToken }),
+    signal: AbortSignal.timeout(25000),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) throw new Error((data.error && data.error.message) || `IG ${r.status}`);
+  db.prepare(`UPDATE dm_queue SET status='replied' WHERE user_id = ? AND ig_sender_id = ? AND status='pending'`).run(userId, String(recipientIgId));
+  return true;
+}
+
 // Seguidores del perfil de IG: un solo llamado liviano, se cachea en users.ig_followers.
 // Devuelve null si la API falla (nunca inventa números).
 async function fetchFollowers(igUserId, accessToken) {
@@ -134,4 +199,4 @@ async function fetchFollowers(igUserId, accessToken) {
   }
 }
 
-module.exports = { getCreds, fetchMediaInsights, fetchBestHour, syncComments, replyComment, fetchFollowers };
+module.exports = { getCreds, fetchMediaInsights, fetchBestHour, syncComments, replyComment, syncDMs, sendDM, fetchFollowers };

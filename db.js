@@ -209,6 +209,19 @@ db.exec(`CREATE TABLE IF NOT EXISTS comment_queue (
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
+// Bandeja de mensajes directos (DMs): espejo de comment_queue.
+db.exec(`CREATE TABLE IF NOT EXISTS dm_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ig_conversation_id TEXT DEFAULT '',
+  ig_message_id TEXT NOT NULL UNIQUE,
+  ig_sender_id TEXT DEFAULT '',
+  username TEXT DEFAULT '',
+  text TEXT DEFAULT '',
+  suggested TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 // Billetera de publicidad + pautas (boost de posteos ganadores)
 db.exec(`CREATE TABLE IF NOT EXISTS ad_wallets (
   user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
