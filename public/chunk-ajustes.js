@@ -12,7 +12,7 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : 'marca';
+  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('pagina') ? 'pagina' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
@@ -192,6 +192,23 @@ function ajustesView() {
     <div id="ggZone"><p class="hint">Cargando…</p></div>
     <div id="ggMsg"></div>
   </div></div>
+  <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 Tu página</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty 🐾</p>
+    <div class="field"><label>Tu dirección</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:13.5px;color:var(--mut)">postyhacetodo.com/p/</span>
+        <input id="s_slug" value="${esc(p.page_slug || '')}" maxlength="40" style="flex:1;min-width:150px" autocomplete="off" autocapitalize="none">
+        <button class="btn btn-ghost btn-sm" id="btnCopyPage" type="button" style="flex:none">📋 Copiar link</button>
+      </div>
+      <div class="hint">Solo letras minúsculas, números y guiones. Si la dirección está libre, queda para vos.</div></div>
+    <div class="field"><label>💬 WhatsApp de tu negocio</label><input id="s_whats" value="${esc(p.whatsapp || '')}" placeholder="Ej.: 5491123456789" inputmode="tel" maxlength="20" autocomplete="off"><div class="hint">El número al que te escriben tus clientes, con código de país (Argentina: 54 9 + tu número). Aparece como botón grande en tu página.</div></div>
+    <div class="field"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="s_pageon" ${p.page_enabled === 0 ? '' : 'checked'}> Página visible para todos</label><div class="hint">Si la apagás, tu link muestra "página no disponible". Solo se ven posteos ya publicados — nunca borradores.</div></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary btn-sm" id="btnSavePage" type="button">Guardar página</button>
+      <span id="pageMsg"></span>
+      <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página →</a>
+    </div>
+  </div></div>
   <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
@@ -314,6 +331,33 @@ function bindSettings() {
   });
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
+  // --- Página pública del negocio (v169) ---
+  const btnCopyPage = $('#btnCopyPage');
+  if (btnCopyPage) btnCopyPage.onclick = async () => {
+    const slug = (($('#s_slug') && $('#s_slug').value.trim()) || (PROFILE && PROFILE.page_slug) || '');
+    const url = 'https://postyhacetodo.com/p/' + slug.replace(/^\/+/, '');
+    try { await navigator.clipboard.writeText(url); btnCopyPage.textContent = '✅ ¡Copiado!'; setTimeout(() => { btnCopyPage.textContent = '📋 Copiar link'; }, 1800); }
+    catch (e) { window.prompt('Copiá tu link:', url); }
+  };
+  const btnSavePage = $('#btnSavePage');
+  if (btnSavePage) btnSavePage.onclick = async () => {
+    const msg = $('#pageMsg');
+    btnSavePage.disabled = true;
+    try {
+      await api.put('/api/profile', {
+        whatsapp: $('#s_whats') ? $('#s_whats').value : '',
+        page_slug: $('#s_slug') ? $('#s_slug').value : '',
+        page_enabled: $('#s_pageon') ? $('#s_pageon').checked : true,
+      });
+      PROFILE = await api.get('/api/profile');
+      if ($('#s_slug') && PROFILE.page_slug) $('#s_slug').value = PROFILE.page_slug;
+      const pv = $('#pagePreviewLink'); if (pv && PROFILE.page_slug) pv.href = '/p/' + PROFILE.page_slug;
+      if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ ¡Página guardada!</span>';
+    } catch (e) {
+      if (msg) msg.innerHTML = '<span style="color:#c0392b;font-size:12.5px">' + esc((e && e.message) || 'No se pudo guardar 😅') + '</span>';
+    }
+    btnSavePage.disabled = false;
+  };
   // 2026-10-10: "Tus números" vive en Ajustes (pedido de Valentino)
   try { if (typeof bindStats === 'function' && document.getElementById('stGrid')) bindStats(); } catch (e) {}
   // --- Autopiloto (4 puntos, 2026-10-02) ---

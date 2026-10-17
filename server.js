@@ -481,6 +481,32 @@ function trialEffectiveEnd(u) {
   return base;
 }
 
+// ---------- Página pública del negocio (v169): /p/<slug> ----------
+// Slug desde el nombre del negocio: minúsculas, sin acentos, [a-z0-9-], máx 40.
+function slugifyBiz(name) {
+  let s = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  s = s.slice(0, 40).replace(/-+$/g, '');
+  return s;
+}
+// Garantiza que el usuario tenga page_slug único; lo genera desde business_name
+// la primera vez que se necesita (al leer el perfil o al pedir la página).
+function ensurePageSlug(userId) {
+  const p = getProfile(userId);
+  const cur = String(p.page_slug || '').trim();
+  if (/^[a-z0-9][a-z0-9-]{1,39}$/.test(cur)) return cur;
+  let base = slugifyBiz(p.business_name) || 'negocio';
+  let candidate = base;
+  let n = 2;
+  while (db.prepare('SELECT user_id FROM profiles WHERE page_slug = ? AND user_id != ?').get(candidate, userId)) {
+    const suf = '-' + n;
+    candidate = base.slice(0, 40 - suf.length) + suf;
+    n++;
+  }
+  db.prepare(`UPDATE profiles SET page_slug = ?, updated_at = datetime('now') WHERE user_id = ?`).run(candidate, userId);
+  return candidate;
+}
+
 function getProfile(userId) {
   let p = db.prepare('SELECT * FROM profiles WHERE user_id = ?').get(userId);
   if (!p) {
@@ -1562,6 +1588,8 @@ app.get('/api/auth/me', (req, res) => {
 // ---------- Perfil del negocio ----------
 app.get('/api/profile', requireAuth, (req, res) => {
   const p = getProfile(req.session.userId);
+  // Página pública (v169): el slug existe desde la primera vez que se mira el perfil.
+  try { p.page_slug = ensurePageSlug(req.session.userId); } catch (e) { /* no bloquear el perfil */ }
   let pending = false;
   const at = req.session.igAttemptAt;
   if (at && !p.ig_connected && Date.now() - at < 15 * 60 * 1000) pending = true;
@@ -1575,13 +1603,37 @@ app.get('/api/profile', requireAuth, (req, res) => {
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
-  const { business_name, category, tone, description, ig_username, competitors, goal, monthly_goal } = req.body || {};
-  if (!(business_name || '').trim()) return res.status(400).json({ error: '¿Cómo se llama tu negocio? Lo necesito para arrancar 🏪' });
-  getProfile(req.session.userId);
-  db.prepare(
-    `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, monthly_goal=?, updated_at=datetime('now') WHERE user_id=?`
-  ).run(business_name || '', category || 'otro', tone || 'canchero', (description || '').slice(0, 600), ig_username || '', competitors || '', goal || '', String(monthly_goal || '').slice(0, 120), req.session.userId);
-  res.json({ ok: true });
+  const { business_name, category, tone, description, ig_username, competitors, goal, monthly_goal, whatsapp, page_slug, page_enabled } = req.body || {};
+  const uid = req.session.userId;
+  getProfile(uid);
+  // Página pública + WhatsApp (v169): se guardan si vienen en el body, sin
+  // exigir el resto del form de perfil (la sección "Tu página" guarda sola).
+  let pageTouched = false;
+  if (whatsapp !== undefined || page_slug !== undefined || page_enabled !== undefined) {
+    const sets = [];
+    const vals = [];
+    if (whatsapp !== undefined) { sets.push('whatsapp=?'); vals.push(String(whatsapp || '').replace(/\D/g, '').slice(0, 20)); }
+    if (page_enabled !== undefined) { sets.push('page_enabled=?'); vals.push(page_enabled ? 1 : 0); }
+    if (page_slug !== undefined) {
+      const s = slugifyBiz(page_slug);
+      if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(s)) return res.status(400).json({ error: 'Esa dirección no vale 😅 Usá solo letras, números y guiones (ej.: mi-negocio)' });
+      const taken = db.prepare('SELECT user_id FROM profiles WHERE page_slug = ? AND user_id != ?').get(s, uid);
+      if (taken) return res.status(400).json({ error: 'Esa dirección ya la usa otro negocio 😅 Probá sumándole tu barrio o tu rubro' });
+      sets.push('page_slug=?'); vals.push(s);
+    }
+    if (sets.length) {
+      db.prepare(`UPDATE profiles SET ${sets.join(', ')}, updated_at=datetime('now') WHERE user_id=?`).run(...vals, uid);
+      pageTouched = true;
+    }
+  }
+  if ((business_name || '').trim()) {
+    db.prepare(
+      `UPDATE profiles SET business_name=?, category=?, tone=?, description=?, ig_username=?, competitors=?, goal=?, monthly_goal=?, updated_at=datetime('now') WHERE user_id=?`
+    ).run(business_name || '', category || 'otro', tone || 'canchero', (description || '').slice(0, 600), ig_username || '', competitors || '', goal || '', String(monthly_goal || '').slice(0, 120), uid);
+    return res.json({ ok: true });
+  }
+  if (pageTouched) return res.json({ ok: true });
+  return res.status(400).json({ error: '¿Cómo se llama tu negocio? Lo necesito para arrancar 🏪' });
 });
 
 function validTimezone(tz) {
@@ -10995,7 +11047,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v168';
+const BUILD_ID = '20261017-v169';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -11016,6 +11068,130 @@ app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
 }));
 // Diagnóstico admin: últimos errores de generación (requiere login).
 app.get('/api/diag', requireAuth, (req, res) => res.json({ ok: true, build: BUILD_ID, errors: LAST_ERRORS }));
+
+// ---------- Página pública del negocio (v169): GET /p/:slug ----------
+// Link para la bio de IG del cliente. HTML server-side, sin depender del SPA.
+// REGLA DURA DE PRIVACIDAD: solo posteos status='published' — jamás drafts,
+// scheduled ni failed. Si el slug no existe o la página está apagada → 404.
+function escPub(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function pubPageShell({ title, desc, ogImage, brand, accent, body }) {
+  return `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${escPub(title)}</title>
+<meta name="description" content="${escPub(desc)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${escPub(title)}">
+<meta property="og:description" content="${escPub(desc)}">
+${ogImage ? `<meta property="og:image" content="${escPub(ogImage)}">` : ''}
+<link rel="icon" href="/favicon.ico">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#f6f9fb; color:#0A1E33; -webkit-font-smoothing:antialiased; }
+  .band { background:${brand}; color:#fff; padding:34px 20px 26px; text-align:center; }
+  .band h1 { font-size:27px; line-height:1.15; font-weight:800; letter-spacing:-.02em; }
+  .band .ig { display:inline-block; margin-top:8px; color:#fff; opacity:.92; font-size:15px; text-decoration:none; font-weight:600; }
+  .chip { display:inline-block; margin-top:10px; background:${accent}; color:#0A1E33; font-size:12px; font-weight:700; padding:4px 11px; border-radius:999px; text-transform:capitalize; }
+  .wrap { max-width:560px; margin:0 auto; padding:20px 16px 8px; }
+  .desc { font-size:15.5px; line-height:1.5; color:#33475c; text-align:center; white-space:pre-line; }
+  .goal { margin:16px auto 0; background:#fff; border:1.5px solid ${accent}; border-radius:14px; padding:12px 14px; font-size:14.5px; line-height:1.45; text-align:center; }
+  .cta-wa { display:block; margin:20px auto 0; max-width:420px; background:#25D366; color:#fff; font-size:17px; font-weight:800; text-align:center; text-decoration:none; padding:15px 18px; border-radius:16px; box-shadow:0 6px 18px rgba(37,211,102,.35); }
+  .cta-ig { display:block; margin:10px auto 0; max-width:420px; background:#fff; color:${brand}; border:2px solid ${brand}; font-size:15.5px; font-weight:700; text-align:center; text-decoration:none; padding:12px 18px; border-radius:16px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-top:22px; }
+  @media (min-width:720px) { .grid { grid-template-columns:repeat(3,1fr); } .band h1 { font-size:32px; } }
+  .cell { border-radius:12px; overflow:hidden; background:#e8eef3; aspect-ratio:4/5; display:block; }
+  .cell img, .cell video { width:100%; height:100%; object-fit:cover; display:block; }
+  .empty { text-align:center; color:#5b7186; font-size:15px; padding:28px 10px 6px; line-height:1.5; }
+  .foot { margin-top:30px; background:#0A1E33; color:#fff; text-align:center; padding:22px 18px calc(22px + env(safe-area-inset-bottom)); font-size:14.5px; line-height:1.5; }
+  .foot a { color:${accent}; font-weight:800; text-decoration:none; }
+  .nf { text-align:center; padding:56px 20px; }
+  .nf .big { font-size:44px; }
+  .nf h1 { font-size:22px; margin:14px 0 8px; }
+  .nf p { color:#5b7186; font-size:15px; line-height:1.5; }
+  .nf a.btn { display:inline-block; margin-top:18px; background:#2793C8; color:#fff; font-weight:800; text-decoration:none; padding:13px 22px; border-radius:14px; }
+</style></head>
+<body>${body}</body></html>`;
+}
+app.get('/p/:slug', (req, res) => {
+  try {
+    const slug = String(req.params.slug || '').toLowerCase().trim();
+    const prof = db.prepare('SELECT * FROM profiles WHERE page_slug = ? AND page_enabled = 1').get(slug);
+    if (!prof) {
+      res.status(404);
+      return res.send(pubPageShell({
+        title: 'Página no disponible · Posty', desc: 'Esta página no está disponible.', ogImage: '', brand: '#2793C8', accent: '#FEC14D',
+        body: `<div class="nf"><div class="big">🐾</div><h1>Esta página no está disponible</h1><p>El negocio que buscás todavía no prendió su página,<br>o el link cambió.</p><a class="btn" href="/">Conocé Posty</a></div>
+        <div class="foot">Hecho con <b>Posty</b> 🐾 — <a href="/prueba">¿Querés lo mismo para tu negocio?</a></div>`,
+      }));
+    }
+    const uid = prof.user_id;
+    let brand = '#2793C8', accent = '#FEC14D';
+    try {
+      const hexes = parseBrandHexes((getSettings(uid) || {}).brand_colors);
+      if (hexes[0]) brand = hexes[0];
+      if (hexes[1]) accent = hexes[1];
+    } catch (e) { /* fallback Posty */ }
+    const biz = String(prof.business_name || '').trim() || 'Mi negocio';
+    const igUser = String(prof.ig_username || '').replace(/^@/, '').trim();
+    const cat = String(prof.category || '').trim();
+    const desc = String(prof.description || '').trim()
+      || `Seguí el día a día de ${biz} y no te pierdas ninguna novedad.`;
+    const goal = String(prof.monthly_goal || '').trim();
+    const waDigits = String(prof.whatsapp || '').replace(/\D/g, '');
+    const posts = db.prepare(
+      `SELECT image_path, media_type, carousel_paths, ig_permalink FROM posts
+       WHERE user_id = ? AND status = 'published' AND media_type IN ('image','carousel','video')
+       ORDER BY COALESCE(published_at, created_at) DESC, id DESC LIMIT 12`
+    ).all(uid);
+    const okMedia = (u) => typeof u === 'string' && (u.startsWith('/media/') || u.startsWith('https://'));
+    const host = req.get('host') || 'postyhacetodo.com';
+    let ogImage = '';
+    const cells = [];
+    for (const post of posts) {
+      let media = post.image_path || '';
+      if (post.media_type === 'carousel' && post.carousel_paths) {
+        try { const arr = JSON.parse(post.carousel_paths); if (Array.isArray(arr) && arr.length) media = String(arr[0]); } catch (e) { /* portada */ }
+      }
+      if (!okMedia(media)) continue;
+      const isVideo = post.media_type === 'video' || /\.mp4($|\?)/i.test(media);
+      if (!isVideo && !ogImage) ogImage = media.startsWith('https://') ? media : `https://${host}${media}`;
+      const inner = isVideo
+        ? `<video src="${escPub(media)}" muted loop playsinline autoplay preload="metadata"></video>`
+        : `<img src="${escPub(media)}" alt="${escPub(biz)}" loading="lazy">`;
+      const link = /^https:\/\//.test(String(post.ig_permalink || ''))
+        ? String(post.ig_permalink) : '';
+      cells.push(link
+        ? `<a class="cell" href="${escPub(link)}" target="_blank" rel="noopener">${inner}</a>`
+        : `<span class="cell">${inner}</span>`);
+    }
+    const body = `
+    <div class="band">
+      <h1>${escPub(biz)}</h1>
+      ${igUser ? `<a class="ig" href="https://instagram.com/${escPub(igUser)}" target="_blank" rel="noopener">@${escPub(igUser)}</a>` : ''}
+      ${cat && cat !== 'otro' ? `<div><span class="chip">${escPub(cat)}</span></div>` : ''}
+    </div>
+    <div class="wrap">
+      <p class="desc">${escPub(desc)}</p>
+      ${goal ? `<div class="goal">🎯 <b>Este mes:</b> ${escPub(goal)}</div>` : ''}
+      ${waDigits.length >= 8 && waDigits.length <= 15 ? `<a class="cta-wa" href="https://wa.me/${waDigits}" target="_blank" rel="noopener">💬 Escribinos por WhatsApp</a>` : ''}
+      ${igUser ? `<a class="cta-ig" href="https://instagram.com/${escPub(igUser)}" target="_blank" rel="noopener">📸 Seguinos en Instagram</a>` : ''}
+      ${cells.length ? `<div class="grid">${cells.join('')}</div>` : `<p class="empty">Todavía no hay posteos publicados por acá.<br>¡Volvé pronto! 😊</p>`}
+    </div>
+    <div class="foot">Hecho con <b>Posty</b> 🐾<br>¿Querés lo mismo para tu negocio? <a href="/prueba">Probalo gratis →</a></div>`;
+    res.set('Cache-Control', 'public, max-age=120');
+    return res.send(pubPageShell({ title: `${biz} · Posty`, desc, ogImage, brand, accent, body }));
+  } catch (e) {
+    console.error('[pub-page]', e.message);
+    res.status(500);
+    return res.send(pubPageShell({
+      title: 'Algo salió mal · Posty', desc: 'Algo salió mal.', ogImage: '', brand: '#2793C8', accent: '#FEC14D',
+      body: `<div class="nf"><div class="big">🐾</div><h1>Algo salió mal</h1><p>Probá de nuevo en un ratito.</p><a class="btn" href="/">Ir a Posty</a></div>`,
+    }));
+  }
+});
 
 // SPA fallback
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
