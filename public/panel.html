@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Posty · Panel de control</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#2793C8">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css?v=20261016k">
+<style>
+  .panel-top{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .panel-top-in{max-width:980px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:10px}
+  .panel-logo{font-size:21px;font-weight:800;letter-spacing:-.5px;color:var(--txt);text-decoration:none}
+  .panel-logo .pdot{color:#FEC14D}
+  .panel-title{font-size:14px;font-weight:700;color:var(--txt)}
+  .panel-tag{margin-left:auto;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:3px 10px;white-space:nowrap}
+  .panel-wrap{max-width:980px;margin:0 auto;padding:18px 16px 30px}
+  .panel-foot{max-width:980px;margin:0 auto;padding:0 16px 26px;font-size:11px;color:var(--dim)}
+</style>
+</head>
+<body>
+<header class="panel-top">
+  <div class="panel-top-in">
+    <a class="panel-logo" href="/panel">posty<span class="pdot">.</span></a>
+    <span class="panel-title">Panel de control</span>
+    <span class="panel-tag">Solo equipo</span>
+  </div>
+</header>
+<main class="panel-wrap" id="panelRoot">
+  <div class="card" style="text-align:center">⏳ Cargando panel…</div>
+</main>
+<footer class="panel-foot">Posty · Uso interno del equipo — no compartir este link con clientes.</footer>
+<script src="/panel.js?v=20261017-v171"></script>
+</body>
+</html>

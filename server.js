@@ -10002,6 +10002,16 @@ app.get('/prueba', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
 });
 
+// ---------- Panel de control standalone (solo equipo) ----------
+// El admin vive en chunk-admin.js y se monta con public/panel.js (shim de
+// los helpers de app.js) SIN pasar por la cuenta del cliente. La puerta es
+// la de siempre (token admin en el navegador). La ruta #/app/admin sigue
+// funcionando en paralelo.
+app.get('/panel', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'panel.html'));
+});
+
 // ---------- Feed Audit: auditoría IA del Instagram (lead magnet) ----------
 // Página pública /auditoria → POST /api/audit {ig} → reporte con score.
 // Cache 72h por @ (no consume intento), anti-spam 5/día por IP con reembolso.
@@ -11200,7 +11210,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v170';
+const BUILD_ID = '20261017-v171';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
