@@ -9727,7 +9727,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       fs.writeFileSync(photoPath, file.buffer);
     }
     // 6 ideas pensadas para SU negocio + semana Pro: 5 posteos (4 imágenes + 1 video)
-    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors }, null);
+    // Las ideas (LLM) solo viajan en el payload final: NO alimentan ni el
+    // spec ni los diseños ni los captions. Lanzarlas en paralelo con el
+    // render en vez de esperarlas antes saca ~1-2s del camino crítico.
+    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors }, null)).catch(() => []);
     const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5 });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
@@ -9742,7 +9745,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       business, ig, category,
       accent, btn, color_source: colorSource,
       ig_pic: igPic, ig_name: igName,
-      ideas: ideas.slice(0, 6),
+      ideas: (await ideasPromise).slice(0, 6),
       posts,
       design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
       week: buildTrialWeek(posts.length),
@@ -10742,7 +10745,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v161';
+const BUILD_ID = '20261016-v162';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
