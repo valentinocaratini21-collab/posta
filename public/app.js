@@ -507,7 +507,7 @@ function landingView(cfg) {
         <div class="lp-day"><img loading="lazy" src="post-food.png" alt="Posteo de gastronomía hecho por Posty"><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
         <div class="lp-day"><img loading="lazy" src="post-moda.png" alt="Posteo de moda hecho por Posty"><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
         <div class="lp-day"><img loading="lazy" src="post-barber.png" alt="Posteo de barbería hecho por Posty"><div class="lp-day-meta"><b>Mié</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
-        <div class="lp-day"><img loading="lazy" src="post-belleza.png" alt="Posteo de belleza hecho por Posty"><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+        <div class="lp-day"><img loading="lazy" src="post-belleza2.png" alt="Posteo de belleza hecho por Posty"><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
         <div class="lp-day"><img loading="lazy" src="post-mascotas.png" alt="Posteo de mascotas hecho por Posty"><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
       </div>
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
@@ -553,9 +553,9 @@ function landingView(cfg) {
       <div class="phone sm" data-rubro="gastronomia"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
       <div class="phone sm" data-rubro="moda"><div class="screen"><img loading="lazy" src="post-moda.png" alt="Diseño para tienda de ropa creado por Posty"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
       <div class="phone sm" data-rubro="barberia"><div class="screen"><img loading="lazy" src="post-barber.png" alt="Diseño para barbería creado por Posty"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
-      <div class="phone sm" data-rubro="belleza"><div class="screen"><img loading="lazy" src="post-belleza.png" alt="Diseño para estética creado por Posty"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
+      <div class="phone sm" data-rubro="belleza"><div class="screen"><img loading="lazy" src="post-belleza2.png" alt="Diseño para estética creado por Posty"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
       <div class="phone sm" data-rubro="mascotas"><div class="screen"><img loading="lazy" src="post-mascotas.png" alt="Diseño para pet shop creado por Posty"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
-      <div class="phone sm" data-rubro="fitness"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
+      <div class="phone sm" data-rubro="fitness"><div class="screen"><img loading="lazy" src="post-fitness2.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
       <div class="phone sm" data-rubro="gastronomia"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posty"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
     </div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero mi semana así 👀</a></div>
