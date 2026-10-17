@@ -7926,7 +7926,7 @@ function styleFragFor(styleCode, settings, profile) {
   try {
     const st = styleCode
       ? getStyle(styleCode)
-      : ((pickStyle({ theme: '', rubro: (profile && profile.category) || '' }) || {}).style || null);
+      : ((pickStyle({ theme: '', rubro: (profile && profile.category) || '', favorites: (settings && settings.user_id) ? getStyleFavorites(settings.user_id) : [] }) || {}).style || null);
     if (!st) return '';
     const hexes = (typeof parseBrandHexes === 'function' && settings) ? parseBrandHexes(settings.brand_colors) : [];
     return '\n' + styleFragment(st, hexes);
@@ -8773,7 +8773,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     const explicitIntent = (intent && IS[intent]) ? { intent, source: 'forced' } : known;
     stylePick = style
       ? { style: getStyle(style), reason: `estilo elegido manualmente (${style})`, intent: explicitIntent.intent || '', intentSource: explicitIntent.source === 'forced' ? 'explicit' : 'manual' }
-      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts });
+      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: getStyleFavorites(uid) });
     if (stylePick && stylePick.style) {
       styleFrag = styleFragment(stylePick.style, hexes);
       if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
@@ -9493,6 +9493,86 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
   }
 });
 
+// Pool de estilos válidos para el cliente: brandSafe, no prohibidos para
+// su rubro/negocio y con match de rubro (fallback 'otro'). Lo comparten el
+// selector de estilos, los favoritos y las muestras de la galería (v186).
+function userStylePool(uid) {
+  const IS = require('./image-styles');
+  const pr = (() => { try { return getProfile(uid); } catch (e) { return null; } })();
+  const rubro = (pr && pr.category) || null;
+  const biz = (pr && (pr.business_name || pr.name)) || '';
+  let forbSet = new Set();
+  try { forbSet = new Set(IS.forbiddenStyles({ rubro, businessName: biz }).map(f => f.code)); } catch (e) {}
+  const okStyle = (s) => !!(s && s.brandSafe && !forbSet.has(s.code));
+  let all = IS.STYLES.filter(s => okStyle(s) && IS.rubroMatch(s, rubro));
+  if (!all.length) all = IS.STYLES.filter(s => okStyle(s) && (s.rubros || []).includes('otro'));
+  return { IS, pr, rubro, biz, okStyle, all };
+}
+// Favoritos de estilo del cliente (hasta 3, elegidos con vista previa en
+// Ajustes): viven como JSON en settings.favorite_styles. La generación los
+// usa como pool preferido vía pickStyle({ favorites }).
+function getStyleFavorites(uid) {
+  try {
+    const s = getSettings(uid);
+    const arr = JSON.parse((s && s.favorite_styles) || '[]');
+    if (!Array.isArray(arr)) return [];
+    const IS = require('./image-styles');
+    const seen = new Set();
+    return arr.map(String).filter((c) => { if (seen.has(c) || !IS.getStyle(c)) return false; seen.add(c); return true; }).slice(0, 3);
+  } catch (e) { return []; }
+}
+// Muestra FIEL de un estilo, sin IA paga: se compone con el MISMO motor y
+// tratamiento que la prueba (demo_render.py + treatmentForStyle, v182)
+// sobre UNA foto stock del rubro (la misma para todos los estilos de ese
+// cliente: lo que cambia entre tarjetas es el estilo, no la foto), con su
+// nombre y su paleta. Caché en MEDIA_DIR: el nombre del archivo es hash de
+// (rubro, estilo, paleta, nombre) y /media lo sirve inmutable 30 días.
+const styleSampleInflight = new Map();
+async function renderStyleSample(uid, code) {
+  const { IS, pr, rubro, okStyle, all } = userStylePool(uid);
+  const style = IS.getStyle(code);
+  if (!style || !okStyle(style) || !all.some((s) => s.code === style.code)) return null;
+  const settings = (() => { try { return getSettings(uid); } catch (e) { return null; } })();
+  const hexes = parseBrandHexes((settings && settings.brand_colors) || '');
+  const catCols = (demo.CATEGORY_COLORS && demo.CATEGORY_COLORS[rubro]) || [];
+  const accent = hexes[0] || catCols[0] || '#2793C8';
+  const btn = hexes[1] || catCols[1] || '#FEC14D';
+  const biz = String((pr && (pr.business_name || pr.name)) || 'TU NEGOCIO').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
+  const stock = require('./stock');
+  const rubroKey = stock.stockRubroFor(rubro) || String(rubro || 'otro');
+  const key = crypto.createHash('sha1').update([rubroKey, style.code, accent, btn, biz].join('|')).digest('hex').slice(0, 16);
+  const name = `style-sample-nw-${key}.jpg`; // nw: sin watermark (v186) — el nombre nuevo invalida la caché de muestras viejas con la marca
+  const abs = path.join(MEDIA_DIR, name);
+  try { if (fs.existsSync(abs) && fs.statSync(abs).size > 1024) return { name, abs }; } catch (e) {}
+  if (styleSampleInflight.has(key)) return styleSampleInflight.get(key);
+  const job = (async () => {
+    let photo = null;
+    try { photo = stock.pickStockPhoto(rubro, 'style-sample'); } catch (e) {}
+    if (!photo) {
+      const fams = (demo.CATEGORY_PHOTOS && (demo.CATEGORY_PHOTOS[rubro] || demo.CATEGORY_PHOTOS.otro)) || [];
+      for (const fam of fams) {
+        const p = path.join(__dirname, 'public', 'demo-stock', fam + '.webp');
+        if (fs.existsSync(p)) { photo = p; break; }
+      }
+    }
+    if (!photo) return null;
+    const spec = [{
+      photo, style: style.code, style_name: style.name,
+      treatment: demo.treatmentForStyle(style),
+      kind: 'promo', tema: null, focus: 0.45, pill: '',
+      bar: biz, headline: 'Un posteo con tu marca',
+      subline: 'Así se compone con este estilo y tus colores',
+      cta: 'Lo quiero',
+    }];
+    const { bufs } = await demo.renderSpecPngs(spec, { accent, btn });
+    if (!bufs || !bufs[0] || bufs[0].length < 1024) return null;
+    fs.writeFileSync(abs, bufs[0]);
+    return { name, abs };
+  })();
+  styleSampleInflight.set(key, job);
+  try { return await job; } finally { styleSampleInflight.delete(key); }
+}
+
 // Estilos de imagen disponibles (para el picker "✨ Estilo" en borradores).
 // Estilos para el selector "Otro estilo" (2026-10-16, v150): SOLO los del
 // rubro del cliente (antes se devolvían los 1.255 del catálogo y el selector
@@ -9501,15 +9581,7 @@ app.post('/api/concept-shot', requireAuth, requireTrialValid, express.json(), as
 app.get('/api/image-styles', requireAuth, (req, res) => {
   try {
     const uid = req.session.userId;
-    const IS = require('./image-styles');
-    const pr = (() => { try { return getProfile(uid); } catch (e) { return null; } })();
-    const rubro = (pr && pr.category) || null;
-    const biz = (pr && (pr.business_name || pr.name)) || '';
-    let forbSet = new Set();
-    try { forbSet = new Set(IS.forbiddenStyles({ rubro, businessName: biz }).map(f => f.code)); } catch (e) {}
-    const okStyle = (s) => !!(s && s.brandSafe && !forbSet.has(s.code));
-    let all = IS.STYLES.filter(s => okStyle(s) && IS.rubroMatch(s, rubro));
-    if (!all.length) all = IS.STYLES.filter(s => okStyle(s) && (s.rubros || []).includes('otro'));
+    const { IS, rubro, okStyle, all } = userStylePool(uid);
     const used = {};
     try {
       db.prepare("SELECT style_code, COUNT(*) AS c FROM posts WHERE user_id = ? AND COALESCE(style_code,'') != '' GROUP BY style_code").all(uid)
@@ -9534,9 +9606,63 @@ app.get('/api/image-styles', requireAuth, (req, res) => {
         }
       }
     }
+    if (!postId) {
+      // Sin posteo puntual (galería "🎨 Estilos de tus posteos" de Ajustes,
+      // v186): recomendados del rubro = unión de las intenciones centrales
+      // del catálogo, filtrada al pool y ordenada por uso del cliente.
+      const inAll = new Set(all.map(s => s.code));
+      const seen = new Set();
+      for (const intent of ['producto', 'promo', 'tips', 'lanzamiento', 'testimonio']) {
+        for (const code of (IS.INTENT_STYLES[intent] || [])) {
+          const s = IS.getStyle(code);
+          if (s && okStyle(s) && inAll.has(s.code) && !seen.has(s.code)) { seen.add(s.code); recommended.push(s); }
+        }
+      }
+      recommended.sort((a, b) => (used[b.code] || 0) - (used[a.code] || 0));
+      recommended = recommended.slice(0, 8);
+    }
     const slim = (s) => ({ code: s.code, name: s.name });
-    res.json({ ok: true, rubro, styles: all.map(slim), recommended: recommended.map(slim) });
+    res.json({ ok: true, rubro, styles: all.map(slim), recommended: recommended.map(slim), favorites: getStyleFavorites(uid) });
   } catch (e) { res.json({ ok: true, styles: [], recommended: [] }); }
+});
+
+// Favoritos de estilo (v186): el cliente elige hasta 3 con vista previa en
+// Ajustes; la generación los prefiere. Guardar valida contra SU pool.
+app.get('/api/style-favorites', requireAuth, (req, res) => {
+  res.json({ ok: true, favorites: getStyleFavorites(req.session.userId) });
+});
+app.put('/api/style-favorites', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const { all } = userStylePool(uid);
+    const inPool = new Set(all.map((s) => s.code));
+    const raw = (req.body && Array.isArray(req.body.favorites)) ? req.body.favorites : [];
+    const clean = [];
+    for (const c of raw.map(String)) {
+      if (inPool.has(c) && !clean.includes(c)) clean.push(c);
+      if (clean.length >= 3) break;
+    }
+    getSettings(uid); // asegura la fila de settings
+    db.prepare('UPDATE settings SET favorite_styles = ? WHERE user_id = ?').run(JSON.stringify(clean), uid);
+    res.json({ ok: true, favorites: clean });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Muestra de un estilo para la galería y el menú de imagen (v186): JPEG
+// compuesto on-demand con el tratamiento real del estilo; después queda
+// cacheada en MEDIA_DIR y se sirve directo.
+app.get('/api/style-sample', requireAuth, async (req, res) => {
+  try {
+    const code = String(req.query.style || '');
+    if (!code) return res.status(400).json({ ok: false, error: 'Falta el estilo' });
+    const out = await renderStyleSample(req.session.userId, code);
+    if (!out) return res.status(404).json({ ok: false, error: 'Ese estilo no va con tu rubro' });
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    return res.sendFile(out.abs);
+  } catch (e) {
+    console.error('[style-sample]', e.message);
+    return res.status(500).json({ ok: false, error: 'No se pudo armar la muestra' });
+  }
 });
 
 // Regenerar SOLO la foto de un borrador con un estilo elegido (picker "✨ Estilo").
@@ -11390,7 +11516,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v185';
+const BUILD_ID = '20261017-v186';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

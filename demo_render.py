@@ -2,15 +2,15 @@
 """Render de la demo publica de Posta: posteos 1080x1350 estilo premium.
 
 9 estilos distintos (promo, editorial, nocturno, bloque, marco, sello, cita,
-tipografico, oferta): foto siempre, Montserrat, colores de marca, watermark
-"Hecho con Posta".
+tipografico, oferta): foto siempre, Montserrat, colores de marca.
+SIN watermark en los posteos (pedido de Valentino, 2026-10-17).
 
 Uso: python3 demo_render.py SPEC_JSON OUT_DIR
   SPEC_JSON: {"fonts_dir": "/ruta/a/fonts", "posts": [
       {"photo": "/ruta/foto.webp", "style": "promo", "focus": 0.5,
        "pill": "NUEVO", "bar": "CAFE MARTINEZ",
        "headline": "EL MAS PEDIDO", "subline": "El plato que todos...",
-       "cta": "Lo quiero probar", "watermark": "Hecho con Posta"}, ...]}
+       "cta": "Lo quiero probar"}, ...]}
   Genera OUT_DIR/post-0.png, post-1.png, ...
 
 Sin rutas hardcodeadas: todo llega por el spec. Sin emojis en los textos
@@ -339,7 +339,7 @@ def style_promo(fonts_dir, p, C, hs):
     y += 34
 
     y = cta_button(d, fonts_dir, y, p.get("cta", ""), C)
-    rtext(d, W - MX, H - 70, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 30), fill=C["watermark"])
+    rtext(d, W - MX, H - 70, p.get("watermark", ""), R(fonts_dir, 30), fill=C["watermark"])
     return img, y
 
 
@@ -382,7 +382,7 @@ def style_editorial(fonts_dir, p, C, hs):
     y += 30
     f3 = B(fonts_dir, 38)
     y = ltext(d, MX, y, str(p.get("cta", "")).upper(), f3, fill=C["accent"], tracking=4) + 28
-    rtext(d, W - MX, H - 64, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 28), fill=C["watermark"])
+    rtext(d, W - MX, H - 64, p.get("watermark", ""), R(fonts_dir, 28), fill=C["watermark"])
     return img, y
 
 
@@ -431,7 +431,7 @@ def style_nocturno(fonts_dir, p, C, hs):
     d.rounded_rectangle([MX, y, MX + bw, y + bh], radius=bh // 2, outline=white, width=5)
     ltext(d, MX + 60, y + bh // 2 - f3.size // 2 - 4, txt, f3, fill=white)
     y += bh
-    rtext(d, W - MX, H - 70, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 30), fill=(200, 210, 220))
+    rtext(d, W - MX, H - 70, p.get("watermark", ""), R(fonts_dir, 30), fill=(200, 210, 220))
     return img, y + 40
 
 
@@ -481,7 +481,7 @@ def style_bloque(fonts_dir, p, C, hs):
     d.rounded_rectangle([MX, y, MX + bw, y + bh], radius=bh // 2, fill=white)
     ltext(d, MX + 55, y + bh // 2 - f3.size // 2 - 4, txt, f3, fill=C["accent"])
     y += bh
-    rtext(d, W - MX, H - 56, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 28), fill=(235, 240, 245))
+    rtext(d, W - MX, H - 56, p.get("watermark", ""), R(fonts_dir, 28), fill=(235, 240, 245))
     return img, y + 16
 
 
@@ -524,7 +524,7 @@ def style_marco(fonts_dir, p, C, hs):
         y += 8
     y += 34
     y = cta_button(d, fonts_dir, y, p.get("cta", ""), C)
-    rtext(d, W - MX, H - 64, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 28), fill=C["watermark"])
+    rtext(d, W - MX, H - 64, p.get("watermark", ""), R(fonts_dir, 28), fill=C["watermark"])
     return img, y + 12
 
 
@@ -578,7 +578,7 @@ def style_sello(fonts_dir, p, C, hs):
     d.rounded_rectangle([W // 2 - bw / 2, y, W // 2 + bw / 2, y + bh], radius=bh // 2, fill=C["btn"])
     ltext(d, W // 2 - bw / 2 + 55, y + bh // 2 - f3.size // 2 - 4, txt, f3, fill=C["btn_text"])
     y += bh
-    rtext(d, W - MX, H - 64, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 28), fill=C["watermark"])
+    rtext(d, W - MX, H - 64, p.get("watermark", ""), R(fonts_dir, 28), fill=C["watermark"])
     return img, y + 12
 
 
@@ -630,7 +630,7 @@ def style_cita(fonts_dir, p, C, hs):
     ctext(d, W // 2, y, tag, f0, fill=C["accent"], tracking=8)
     y += 90
     y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=True)
-    rtext(d, W - MX, H - 70, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 30), fill=C["watermark"])
+    rtext(d, W - MX, H - 70, p.get("watermark", ""), R(fonts_dir, 30), fill=C["watermark"])
     return img, y + 20
 
 
@@ -689,12 +689,13 @@ def style_tipografico(fonts_dir, p, C, hs):
     # watermark con pastilla navy para que se lea sobre la foto
     d = ImageDraw.Draw(img)
     wf = R(fonts_dir, 28)
-    wt = p.get("watermark", "Hecho con Posta")
-    ww = tw(d, wt, wf) + 56
-    wh = 64
-    wx1, wy1 = W - MX, H - 36
-    d.rounded_rectangle([wx1 - ww, wy1 - wh, wx1, wy1], radius=wh // 2, fill=bg)
-    rtext(d, wx1 - 28, wy1 - wh // 2 - 14, wt, wf, fill=(235, 240, 245))
+    wt = p.get("watermark", "")
+    if wt:
+        ww = tw(d, wt, wf) + 56
+        wh = 64
+        wx1, wy1 = W - MX, H - 36
+        d.rounded_rectangle([wx1 - ww, wy1 - wh, wx1, wy1], radius=wh // 2, fill=bg)
+        rtext(d, wx1 - 28, wy1 - wh // 2 - 14, wt, wf, fill=(235, 240, 245))
     return img, y + 20
 
 
@@ -712,7 +713,7 @@ def style_oferta(fonts_dir, p, C, hs):
     ltext(d, MX, 110 - f0.size // 2, bar, f0, fill=white, tracking=8)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C, y=76)
-    rtext(d, W - MX, 172, p.get("watermark", "Hecho con Posta"), R(fonts_dir, 26), fill=(240, 246, 250))
+    rtext(d, W - MX, 172, p.get("watermark", ""), R(fonts_dir, 26), fill=(240, 246, 250))
 
     photo = load_photo(p["photo"], W, 500, focus)
     img.paste(photo, (0, 220))
@@ -937,13 +938,15 @@ def draw_bar_name(d, fonts_dir, p, dark_bg):
 
 
 def draw_footer(d, fonts_dir, p, dark_bg):
-    """Fila inferior: etiqueta del estilo (izquierda) + watermark (derecha)."""
+    """Fila inferior: solo la etiqueta del estilo (izquierda).
+
+    Sin watermark "Hecho con Posty" en los posteos (pedido de Valentino,
+    2026-10-17): el posteo es del cliente, no publicidad nuestra."""
     col = (198, 212, 226) if dark_bg else (110, 128, 148)
     name = str(p.get("style_name") or "").strip()
     if name:
         f = R(fonts_dir, 24)
         ltext(d, MX, H - 56, ("ESTILO · " + name).upper(), f, fill=col, tracking=3)
-    rtext(d, W - MX, H - 58, p.get("watermark", "Hecho con Posty"), R(fonts_dir, 26), fill=col)
 
 
 def _v2_base(fonts_dir, p, C):
