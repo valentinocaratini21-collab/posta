@@ -9,7 +9,8 @@
 // 'pending' y lo activa el equipo manualmente desde el panel admin.
 
 // % de gestión Posta sobre cada pauta (transparente para el cliente)
-const AD_FEE_PCT = 20;
+// 10% — fijado por Valentino el 2026-10-17 (antes 20%).
+const AD_FEE_PCT = 10;
 
 // Carga mínima de la billetera: $10.000 ARS
 const AD_MIN_TOPUP_CENTS = 1000000;

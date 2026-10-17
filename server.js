@@ -3149,7 +3149,7 @@ app.post('/api/ads/webhook', async (req, res) => {
     const cents = Math.round(Number(pay.transaction_amount || 0) * 100);
     if (!(cents > 0)) return res.status(200).json({ ok: true, ignored: true });
     const after = adWalletMove(userId, cents, 'topup', String(pay.id), 'Carga de crédito publicitario');
-    // El 20% se reconoce como ganancia de Posta EN EL MOMENTO DE LA CARGA (no espera a que usen el crédito).
+    // El 10% se reconoce como ganancia de Posta EN EL MOMENTO DE LA CARGA (no espera a que usen el crédito).
     // Es solo contabilidad interna: el cliente sigue viendo sus $10.000 completos en la billetera.
     try {
       const feeCents = Math.round(cents * AD_FEE_PCT / 100);
@@ -10787,7 +10787,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v164';
+const BUILD_ID = '20261017-v165';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
