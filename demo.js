@@ -75,13 +75,13 @@ const CATEGORY_LABELS = {
 const COUNTRIES = ['AR', 'UY'];
 
 // Familia fotográfica por rubro (8 fotos high-key en public/demo-stock/).
-// 59 fotos stock en public/demo-stock/: 9 familias ({fam}.webp original +
+// 65 fotos stock en public/demo-stock/: 10 familias ({fam}.webp original +
 // {fam}-1..N.webp). Cada rubro tiene un pool de ~10 fotos creibles; cada demo
 // usa 3 fotos distintas elegidas al azar del pool.
 function fam(f, n) { const a = [f]; for (let i = 1; i <= n; i++) a.push(f + '-' + i); return a; }
 const FASHION = fam('fashion', 6), FOOD = fam('food', 6), BEAUTY = fam('beauty', 6),
       FITNESS = fam('fitness', 5), PETS = fam('pets', 5), HOME = fam('home', 6),
-      LIFE = fam('lifestyle', 6), BAR = fam('bar', 5);
+      LIFE = fam('lifestyle', 6), BAR = fam('bar', 5), FLORES = fam('flores', 5);
 // OJO: office-3 y office-5 son fotos de un consultorio DENTAL (mal etiquetadas
 // como "oficina"): solo las usa el rubro salud. El resto de los rubros usa
 // la oficina genérica, para que un dentista nunca aparezca en otro negocio.
@@ -106,7 +106,7 @@ const CATEGORY_PHOTOS = {
   mascotas: [...PETS, ...HOME.slice(0, 3), ...LIFE.slice(0, 2)],
   hogar: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
   deco: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
-  flores: [...HOME.slice(0, 6), ...BEAUTY.slice(0, 3), 'beauty-5', ...LIFE.slice(0, 3)],
+  flores: [...FLORES],
   inmobiliaria: [...HOME.slice(0, 5), ...OFFICE.slice(0, 3), ...LIFE.slice(0, 2)],
   salud: [...DENTAL, ...OFFICE.slice(0, 2), ...BEAUTY.slice(0, 3), ...LIFE.slice(0, 3)],
   profesionales: [...OFFICE, ...HOME.slice(0, 2), ...LIFE.slice(0, 3)],
@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 2;
+const DEMO_ENGINE_V = 3;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -175,6 +175,15 @@ const PHOTO_TAGS = {
 // La familia food hereda la curaduría existente (pool de cafés CAFE_POOL):
 // temas genéricos de comida; las del pool de café suman 'cafe'.
 for (const f of fam('food', 6)) PHOTO_TAGS[f] = { temas: CAFE_POOL.includes(f) ? ['cafe', 'comida'] : ['comida'] };
+// Familia flores (2026-10-17): fotos REALES de florería de la biblioteca
+// curada (antes el rubro reusaba interiores de hogar y una "docena de rosas"
+// salía con foto de un comedor). Tags verificados a ojo sobre el archivo.
+PHOTO_TAGS['flores']   = { temas: ['flores', 'ramos', 'local'] };     // interior de florería con ramos en exhibición
+PHOTO_TAGS['flores-1'] = { temas: ['flores', 'ramos', 'rosas'] };     // ramos coloridos en la puerta de la florería
+PHOTO_TAGS['flores-2'] = { temas: ['flores', 'florero'] };            // exhibición de flores blancas
+PHOTO_TAGS['flores-3'] = { temas: ['flores', 'ramos', 'personas'] };  // florista sonriendo con un ramo
+PHOTO_TAGS['flores-4'] = { temas: ['flores', 'local', 'personas'] };  // florería de noche con clientes
+PHOTO_TAGS['flores-5'] = { temas: ['flores', 'ramos'] };              // puesto de flores al sol, ramos artesanales
 
 // Temas de foto PROHIBIDOS según el tema del posteo: la foto nunca puede ser
 // de OTRO servicio puntual (uñas vendiendo tintura fue el caso real).
