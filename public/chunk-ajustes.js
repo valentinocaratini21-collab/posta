@@ -12,7 +12,7 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('pagina') ? 'pagina' : 'marca';
+  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('pagina') ? 'pagina' : q.get('estilos') ? 'estilos' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
@@ -71,6 +71,12 @@ function ajustesView() {
       <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
     </div>
     <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
+  </div></div>
+  <div class="card ajsec${openSec==='estilos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Estilos de tus posteos</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos ✨</p>
+    <p style="color:var(--dim);font-size:11.5px;margin-bottom:14px">Muestras de estilo: así se compone un posteo con cada uno — con una foto de tu rubro, tu nombre y tus colores. Marcá hasta 3 favoritos y tus posteos nuevos van a salir con esos looks primero.</p>
+    <div id="styleGallery"><div style="color:var(--mut);font-size:12.5px">Cargando estilos…</div></div>
+    <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
   </div></div>
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
@@ -322,6 +328,51 @@ async function ggZoneLoad() {
   };
 }
 
+// v186: galería "🎨 Estilos de tus posteos" — muestras fieles (mismo motor
+// de composición que los posteos) y hasta 3 favoritos persistidos. Todo
+// opcional: sin favoritos, Posty elige como siempre.
+async function styleGalleryLoad() {
+  const box = document.getElementById('styleGallery');
+  if (!box) return;
+  const msg = document.getElementById('styleFavMsg');
+  let data = null;
+  try { data = await api.get('/api/image-styles'); } catch (e) {}
+  const rec = (data && data.recommended) || [];
+  let favs = ((data && data.favorites) || []).slice();
+  if (!rec.length) {
+    box.innerHTML = '<div style="color:var(--mut);font-size:12.5px">Por ahora no hay estilos para mostrarte — Posty sigue eligiendo por vos ✨</div>';
+    return;
+  }
+  const paint = () => {
+    box.innerHTML = '<div class="sgal-grid">' + rec.map((s) => {
+      const on = favs.includes(s.code);
+      return `<div class="sgal-card${on ? ' on' : ''}">
+        <img class="sgal-img" src="/api/style-sample?style=${encodeURIComponent(s.code)}" alt="Muestra del estilo ${esc(s.name)}" loading="lazy" onerror="this.style.opacity='0'">
+        <div class="sgal-name">${esc(s.name)}</div>
+        <button type="button" class="sgal-btn" data-sgal-code="${esc(s.code)}">${on ? '⭐ Favorito' : '☆ Marcar favorito'}</button>
+      </div>`;
+    }).join('') + '</div>';
+    box.querySelectorAll('[data-sgal-code]').forEach((b) => { b.onclick = () => toggle(b.getAttribute('data-sgal-code')); });
+  };
+  const toggle = async (code) => {
+    let next;
+    if (favs.includes(code)) next = favs.filter((c) => c !== code);
+    else {
+      if (favs.length >= 3) { if (msg) msg.textContent = 'Hasta 3 favoritos ⭐ — sacá uno para cambiarlo por otro.'; return; }
+      next = favs.concat([code]);
+    }
+    try {
+      const r = await api.put('/api/style-favorites', { favorites: next });
+      if (r && r.ok) {
+        favs = r.favorites || next;
+        if (msg) msg.textContent = favs.length ? '⭐ Guardado: tus posteos nuevos van a preferir estos estilos.' : 'Listo: sin favoritos, Posty elige por vos ✨';
+        paint();
+      } else if (msg) msg.textContent = 'No se pudo guardar — probá de nuevo.';
+    } catch (e) { if (msg) msg.textContent = 'No se pudo guardar — probá de nuevo.'; }
+  };
+  paint();
+}
+
 function bindSettings() {
   // Acordeón de secciones en móvil
   $$('.ajsec-h').forEach(h => {
@@ -331,6 +382,7 @@ function bindSettings() {
   });
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
+  try { styleGalleryLoad(); } catch (e) {}
   // --- Página pública del negocio (v169) ---
   const btnCopyPage = $('#btnCopyPage');
   if (btnCopyPage) btnCopyPage.onclick = async () => {

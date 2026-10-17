@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261017-v171'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261017-v186'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -737,9 +737,59 @@ const LP_WEEK = {
   barberia: { ejemplo: 'de una barbería', u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', alt: 'Posteo de Instagram de El Corte Barbería hecho por Posty', imgs: ['ig-barber.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-8.jpg'] },
   moda: { ejemplo: 'de una tienda de moda', u: 'tiendacora', l: 'T', c: '#E4F0FA', alt: 'Posteo de Instagram de Tienda Cora hecho por Posty', imgs: ['ig-moda.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-8.jpg'] },
   belleza: { ejemplo: 'de una estética', u: 'estetica.alma', l: 'A', c: '#FBE4EC', alt: 'Posteo de Instagram de Estética Alma hecho por Posty', imgs: ['ig-belleza.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-8.jpg'] },
-  mascotas: { ejemplo: 'de un pet shop', u: 'petshop.huella', l: 'H', c: '#E2F2E4', alt: 'Posteo de Instagram de Pet Shop Huella hecho por Posty', imgs: ['ig-mascotas.jpg', 'gt-petshop-2.jpg', 'gt-petshop-4.jpg', 'gt-petshop-6.jpg', 'gt-petshop-8.jpg'] },
+  mascotas: { ejemplo: 'de un pet shop', u: 'petshop.huella', l: 'H', c: '#E2F2E4', alt: 'Posteo de Instagram de Pet Shop Huella hecho por Posty', imgs: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-4.jpg', 'gt-petshop-6.jpg', 'gt-petshop-8.jpg'] },
   fitness: { ejemplo: 'de un gimnasio', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Posteo de Instagram de Gym Norte hecho por Posty', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] }
 };
+// v186 — Garantía "nunca la misma foto dos veces en una semana".
+// Pools de respaldo por rubro (la foto ig-* del rubro + las gt-* de su set
+// del carrusel) y ALIAS de identidad: archivos con nombre distinto que son
+// LA MISMA foto (recortes del mismo original; auditoría perceptual en
+// test-lp-week.js). Sin alias, el dedupe por nombre no ve el duplicado.
+const LP_WEEK_POOLS = {
+  cafeteria: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg', 'g-cappu.jpg', 'g-gourmet.jpg', 'g-platos.jpg', 'g-tres.jpg'],
+  barberia: ['ig-barber.jpg', 'gt-elcorte-1.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-3.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-5.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-7.jpg', 'gt-elcorte-8.jpg', 'gt-elcorte-9.jpg'],
+  moda: ['ig-moda.jpg', 'gt-tiendacora-1.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-3.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-5.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-7.jpg', 'gt-tiendacora-8.jpg', 'gt-tiendacora-9.jpg'],
+  belleza: ['ig-belleza.jpg', 'gt-esteticaalma-1.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-3.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-5.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-7.jpg', 'gt-esteticaalma-8.jpg', 'gt-esteticaalma-9.jpg'],
+  mascotas: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-2.jpg', 'gt-petshop-3.jpg', 'gt-petshop-4.jpg', 'gt-petshop-5.jpg', 'gt-petshop-6.jpg', 'gt-petshop-7.jpg', 'gt-petshop-8.jpg', 'gt-petshop-9.jpg'],
+  fitness: ['ig-fitness.jpg', 'gt-gymnorte-1.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-3.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-5.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-7.jpg', 'gt-gymnorte-8.jpg', 'gt-gymnorte-9.jpg']
+};
+const LP_WEEK_ALIAS = {
+  'gt-petshop-2.jpg': 'ig-mascotas.jpg',
+  'gt-tiendacora-3.jpg': 'ig-moda.jpg',
+  'gt-elcorte-1.jpg': 'ig-barber.jpg',
+  'gt-esteticaalma-3.jpg': 'ig-belleza.jpg',
+  'gt-gymnorte-5.jpg': 'ig-fitness.jpg'
+};
+// Tarjetas de respaldo del modo mixto (rubros que no están en las 5 de base).
+const LP_WEEK_EXTRA = [
+  { u: 'gymnorte', l: 'G', c: '#E6E0F5', img: 'ig-fitness.jpg', alt: 'Posteo de Instagram de un gimnasio hecho por Posty' },
+  { u: 'laesquina.resto', l: 'R', c: '#FDE8D8', img: 'ig-gastro.jpg', alt: 'Posteo de Instagram de un restaurante hecho por Posty' }
+];
+// Devuelve las 5 tarjetas de una semana SIN fotos repetidas: si una foto
+// (o su alias) ya salió, se avanza a la próxima no usada del pool del
+// rubro; en mixto se reemplaza la tarjeta entera por una de respaldo.
+function lpWeekCards(key) {
+  const data = LP_WEEK[key] || LP_WEEK.mixto;
+  const canon = (src) => LP_WEEK_ALIAS[src] || src;
+  const used = new Set();
+  const take = (img, pool) => {
+    if (!used.has(canon(img))) { used.add(canon(img)); return img; }
+    for (const cand of pool || []) {
+      if (!used.has(canon(cand))) { used.add(canon(cand)); return cand; }
+    }
+    return img; // sin alternativa en el pool: mejor la foto que un hueco
+  };
+  if (data.cards) {
+    return data.cards.map((card) => {
+      if (!used.has(canon(card.img))) { used.add(canon(card.img)); return card; }
+      const alt = LP_WEEK_EXTRA.find((c) => !used.has(canon(c.img)));
+      if (alt) { used.add(canon(alt.img)); return alt; }
+      return card;
+    });
+  }
+  const pool = LP_WEEK_POOLS[key] || data.imgs;
+  return data.imgs.map((img) => ({ u: data.u, l: data.l, c: data.c, img: take(img, pool), alt: data.alt }));
+}
 function lpWeekCardHTML(card, day) {
   return `<div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Posteo</span></div><div class="${day.cls}">${day.t}</div></div>`;
 }
@@ -750,9 +800,7 @@ function lpWeekSet(key, btn) {
   const bridge = document.getElementById('lpWeekBridge');
   const apply = () => {
     if (grid) {
-      const cards = key === 'mixto'
-        ? data.cards.map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i]))
-        : data.imgs.map((img, i) => lpWeekCardHTML({ u: data.u, l: data.l, c: data.c, img, alt: data.alt }, LP_WEEK_DAYS[i]));
+      const cards = lpWeekCards(key).map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i]));
       grid.innerHTML = cards.join('');
       grid.classList.remove('lp-week-swap');
     }
@@ -5913,7 +5961,7 @@ async function pcLoadStyleUI(id, root) {
   const rec = (data && data.recommended) || [];
   if (recBox) {
     recBox.innerHTML = rec.length
-      ? rec.map(s => '<button type="button" class="pcsheet-opt pcsheet-rec" data-pc-act="img-pick" data-code="' + esc(String(s.code)) + '">' + esc(String(s.name)) + '</button>').join('')
+      ? rec.map(s => '<button type="button" class="pcsheet-opt pcsheet-rec" data-pc-act="img-pick" data-code="' + esc(String(s.code)) + '"><img class="pcsheet-thumb" src="/api/style-sample?style=' + encodeURIComponent(String(s.code)) + '" alt="" loading="lazy" onerror="this.remove()"><span>' + esc(String(s.name)) + '</span></button>').join('')
       : '<div class="pcsheet-loading">Sin recomendaciones por ahora — probá Sorprendeme 🎲</div>';
   }
   if (allBox) {

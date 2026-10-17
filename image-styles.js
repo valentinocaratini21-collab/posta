@@ -204,7 +204,7 @@ function rubroMatch(style, rubro) {
 // La fantasía solo sale si la intención es 'viral'.
 // Prioridad de candidatos: 1) intención + rubro · 2) rubro brandSafe ·
 // 3) intención · 4) cualquiera brandSafe. (En viral se salta el 2.)
-function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {} } = {}) {
+function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [] } = {}) {
   let resolved, intentSource;
   if (intent && INTENT_STYLES[intent]) { resolved = intent; intentSource = 'explicit'; }
   else {
@@ -238,8 +238,12 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
     if (!Number.isFinite(v)) return 0;
     return Math.max(-0.5, Math.min(1, v));
   };
+  // Favoritos del cliente (v186, elegidos en Ajustes con vista previa):
+  // ordenan PRIMERO dentro del pool ya validado — un favorito prohibido o
+  // ya usado esta semana no está en cands y jamás resucita por esta vía.
+  const favSet = new Set((favorites || []).map(String));
   const scored = cands
-    .map((s) => ({ s, score: ranked.indexOf(s) * 100 + (matchesRubro(s) ? 0 : 10) - learnBoost(s.code) * 120 }))
+    .map((s) => ({ s, score: ranked.indexOf(s) * 100 + (matchesRubro(s) ? 0 : 10) - learnBoost(s.code) * 120 - (favSet.has(s.code) ? 100000 : 0) }))
     .sort((a, b) => a.score - b.score);
   const chosen = scored.length ? scored[0].s : null;
   if (!chosen) return null;

@@ -199,8 +199,8 @@ function shiftYmd(ymd, n) {
   const css = fs.readFileSync(path.join(__dirname, 'public', 'styles.css'), 'utf8');
   ok(css.includes('.album-focus') && css.includes('@keyframes albumFocusPulse'), 'styles.css trae .album-focus');
   const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
-  ok(html.includes('/app.js?v=152'), 'index.html sirve app.js?v=152');
-  ok(html.includes('/styles.css?v=20261017h'), 'index.html sirve styles.css?v=20261017h');
+  ok(html.includes('/app.js?v=153'), 'index.html sirve app.js?v=153');
+  ok(html.includes('/styles.css?v=20261017i'), 'index.html sirve styles.css?v=20261017i');
   // Auditoría estática (regla v151): helpers que usa la tarjeta, definidos.
   for (const fn of ['esc', 'mv', 'albumWeekState', 'bindAlbumCard']) {
     ok(new RegExp(`(function\\s+${fn}\\s*\\(|const\\s+${fn}\\s*=|let\\s+${fn}\\s*=)`).test(src), `helper definido: ${fn}`);
