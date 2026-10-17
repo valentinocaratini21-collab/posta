@@ -107,6 +107,15 @@ function generateStory({ db, uid, type, ctx, brand, mediaDir, scheduleAt = null 
   const b = brand || {};
   let photoAbs = null;
   if (type === 'repost' && ctx && ctx.postImageAbs && fs.existsSync(ctx.postImageAbs)) photoAbs = ctx.postImageAbs;
+  if (!photoAbs && type !== 'repost') {
+    // Fondo con foto real del rubro (biblioteca curada) en vez de fondo
+    // plano: la tarjeta de marca ya sabe componer foto + overlay + texto.
+    try {
+      const prof = db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(uid);
+      const { pickStockPhoto } = require('./stock');
+      photoAbs = pickStockPhoto(prof && prof.category, `${uid}:${type}:${new Date().toISOString().slice(0, 10)}`);
+    } catch (e) {}
+  }
   const mediaPath = renderStoryPng({
     headline: content.headline, sub: content.sub,
     business: b.business || '', bgHex: b.bgHex, textHex: b.textHex,

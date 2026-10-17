@@ -5324,6 +5324,45 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // color como terminado. El retry del sweep (cada 3h) + backfill
           // (8:00) + ensure al abrir reintentan la semana.
           if (!imagePath) {
+            // SALVAVIDAS STOCK (2026-10-17, pedido de Valentino): antes de
+            // perder el posteo, una foto real curada del rubro con el
+            // titular compuesto — foto real, jamás un bloque plano. Pasa
+            // por la misma QA de siempre: si no pega con el tema, la
+            // auditoría lo marca como cualquier otra imagen.
+            try {
+              const { pickStockPhoto } = require('./stock');
+              const stockAbs = pickStockPhoto(profile && profile.category, `${uid}:${weekKey}:${idea.titulo || i}`);
+              if (stockAbs) {
+                const sName = `stock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+                const sPath = path.join(MEDIA_DIR, sName);
+                fs.copyFileSync(stockAbs, sPath);
+                // Normalizar a 4:5 (1080x1350) como las imágenes IA: el
+                // stock viene en otros aspectos y IG recorta el feed a 4:5.
+                try {
+                  const { execFileSync } = require('child_process');
+                  const tmpP = sPath + '.tmp.jpg';
+                  execFileSync('ffmpeg', ['-y', '-v', 'error', '-i', sPath, '-vf', "crop='min(iw,ih*0.8)':'min(ih,iw/0.8)',scale=1080:1350", tmpP], { timeout: 20000 });
+                  fs.renameSync(tmpP, sPath);
+                } catch (e) { /* sin ffmpeg sigue la foto original */ }
+                if (headline) {
+                  try {
+                    const { execFileSync } = require('child_process');
+                    const cArgs = [path.join(__dirname, 'composite-headline.py'), '--in', sPath, '--headline', headline, '--out', sPath];
+                    try {
+                      const bc = JSON.parse((db.prepare('SELECT brand_colors FROM settings WHERE user_id = ?').get(uid) || {}).brand_colors || '[]');
+                      if (Array.isArray(bc) && /^#[0-9a-fA-F]{6}$/.test(bc[0] || '')) cArgs.push('--grade', String(bc[0]));
+                    } catch (e) {}
+                    execFileSync('python3', cArgs, { timeout: 30000 });
+                  } catch (e) { console.error(`[pipeline:${tag}] composite stock falló:`, e.message); }
+                }
+                makeVariantsAsync(sPath);
+                imagePath = `/media/${sName}`;
+                if (pendingId) { try { db.prepare("UPDATE posts SET source = 'stock' WHERE id = ?").run(pendingId); } catch (e) {} }
+                console.log(`[pipeline:${tag}] posteo rescatado con foto stock del rubro (${(profile && profile.category) || '?'})`);
+              }
+            } catch (e) { console.error(`[pipeline:${tag}] salvavidas stock falló:`, e.message); }
+          }
+          if (!imagePath) {
             console.error(`[pipeline:${tag}] "${idea.titulo || i}": sin imagen IA tras 3 intentos, se salta (no se crea borrador plano)`);
             // Tarjeta inmediata: sin imagen no hay posteo — borrar la fila.
             if (pendingId) { try { db.prepare('DELETE FROM posts WHERE id = ?').run(pendingId); } catch (e) {} }
@@ -10682,7 +10721,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v159';
+const BUILD_ID = '20261016-v160';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

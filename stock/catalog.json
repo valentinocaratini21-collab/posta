@@ -1,0 +1,530 @@
+{
+  "gastronomia": [
+    {
+      "file": "gastronomia/5531093.jpg",
+      "pexels_id": 5531093,
+      "alt": "Plato de pasta con carne y verduras en un restaurante",
+      "page_url": "https://www.pexels.com/photo/5531093/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "gastronomia/7243881.jpg",
+      "pexels_id": 7243881,
+      "alt": "Platos gourmet presentados en una mesa elegante",
+      "page_url": "https://www.pexels.com/photo/7243881/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "gastronomia/31235409.jpg",
+      "pexels_id": 31235409,
+      "alt": "Carne sellada en plato negro con guarniciones",
+      "page_url": "https://www.pexels.com/photo/31235409/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "gastronomia/39836909.jpg",
+      "pexels_id": 39836909,
+      "alt": "Corte de carne asada con chimichurri en tabla",
+      "page_url": "https://www.pexels.com/photo/39836909/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "gastronomia/34973513.jpg",
+      "pexels_id": 34973513,
+      "alt": "Dos platos gourmet con luz cálida sobre mesa de madera",
+      "page_url": "https://www.pexels.com/photo/34973513/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "gastronomia/1833349.jpg",
+      "pexels_id": 1833349,
+      "alt": "Brochettes de langostinos y rolls en plato de pizarra",
+      "page_url": "https://www.pexels.com/photo/1833349/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "cafeteria": [
+    {
+      "file": "cafeteria/34255748.jpg",
+      "pexels_id": 34255748,
+      "alt": "Barista con delantal sirviendo una taza de café con latte art",
+      "page_url": "https://www.pexels.com/photo/34255748/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "cafeteria/38576602.jpg",
+      "pexels_id": 38576602,
+      "alt": "Vaso de latte con arte sobre superficie cálida",
+      "page_url": "https://www.pexels.com/photo/38576602/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "cafeteria/36643337.jpg",
+      "pexels_id": 36643337,
+      "alt": "Barista vertiendo leche para hacer latte art",
+      "page_url": "https://www.pexels.com/photo/36643337/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "cafeteria/31139336.jpg",
+      "pexels_id": 31139336,
+      "alt": "Taza de cappuccino con corazón de latte art en mesa de madera",
+      "page_url": "https://www.pexels.com/photo/31139336/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "cafeteria/36791006.jpg",
+      "pexels_id": 36791006,
+      "alt": "Dos tazas de café con flores en mesa de mármol",
+      "page_url": "https://www.pexels.com/photo/36791006/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "cafeteria/28989967.jpg",
+      "pexels_id": 28989967,
+      "alt": "Tres cafés con latte art sobre una mesa",
+      "page_url": "https://www.pexels.com/photo/28989967/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "panaderia": [
+    {
+      "file": "panaderia/11381605.jpg",
+      "pexels_id": 11381605,
+      "alt": "Primer plano de panes rústicos recién horneados",
+      "page_url": "https://www.pexels.com/photo/11381605/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "panaderia/3789032.jpg",
+      "pexels_id": 3789032,
+      "alt": "Baguettes y panes artesanales en primer plano",
+      "page_url": "https://www.pexels.com/photo/3789032/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "panaderia/15009979.jpg",
+      "pexels_id": 15009979,
+      "alt": "Vitrina de panadería llena de panes dorados",
+      "page_url": "https://www.pexels.com/photo/15009979/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "panaderia/32626985.jpg",
+      "pexels_id": 32626985,
+      "alt": "Bandejas de ciabattas recién salidas del horno",
+      "page_url": "https://www.pexels.com/photo/32626985/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "panaderia/7966406.jpg",
+      "pexels_id": 7966406,
+      "alt": "Panadera sonriendo con un pan artesanal",
+      "page_url": "https://www.pexels.com/photo/7966406/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "panaderia/35837008.jpg",
+      "pexels_id": 35837008,
+      "alt": "Panes de campo rústicos en primer plano",
+      "page_url": "https://www.pexels.com/photo/35837008/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "pizzeria": [
+    {
+      "file": "pizzeria/5903389.jpg",
+      "pexels_id": 5903389,
+      "alt": "Pizzero sacando pizzas del horno",
+      "page_url": "https://www.pexels.com/photo/5903389/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "pizzeria/33927682.jpg",
+      "pexels_id": 33927682,
+      "alt": "Pizzero trabajando en un horno de ladrillos",
+      "page_url": "https://www.pexels.com/photo/33927682/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "pizzeria/18126737.jpg",
+      "pexels_id": 18126737,
+      "alt": "Pizzas cocinándose en horno a leña con llamas",
+      "page_url": "https://www.pexels.com/photo/18126737/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "pizzeria/35759997.jpg",
+      "pexels_id": 35759997,
+      "alt": "Pizza frente a un horno de azulejos tradicional",
+      "page_url": "https://www.pexels.com/photo/35759997/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "pizzeria/10673053.jpg",
+      "pexels_id": 10673053,
+      "alt": "Dos pizzas napolitanas vistas desde arriba",
+      "page_url": "https://www.pexels.com/photo/10673053/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "pizzeria/3343625.jpg",
+      "pexels_id": 3343625,
+      "alt": "Pizza de hongos dentro del horno a leña",
+      "page_url": "https://www.pexels.com/photo/3343625/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "heladeria": [
+    {
+      "file": "heladeria/34232605.jpg",
+      "pexels_id": 34232605,
+      "alt": "Vitrina de helados artesanales con sabores rotulados",
+      "page_url": "https://www.pexels.com/photo/34232605/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "heladeria/31140745.jpg",
+      "pexels_id": 31140745,
+      "alt": "Mostrador elegante de heladería",
+      "page_url": "https://www.pexels.com/photo/31140745/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "heladeria/12328966.jpg",
+      "pexels_id": 12328966,
+      "alt": "Bandejas de helado de colores en vitrina",
+      "page_url": "https://www.pexels.com/photo/12328966/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "heladeria/8713075.jpg",
+      "pexels_id": 8713075,
+      "alt": "Recipientes de helado con frutilla fresca",
+      "page_url": "https://www.pexels.com/photo/8713075/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "heladeria/1352278.jpg",
+      "pexels_id": 1352278,
+      "alt": "Vitrina de gelato de colores vibrantes",
+      "page_url": "https://www.pexels.com/photo/1352278/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "heladeria/23893379.jpg",
+      "pexels_id": 23893379,
+      "alt": "Dos cucuruchos de helado brindando",
+      "page_url": "https://www.pexels.com/photo/23893379/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "belleza": [
+    {
+      "file": "belleza/16041439.jpg",
+      "pexels_id": 16041439,
+      "alt": "Manicura limando uñas en primer plano",
+      "page_url": "https://www.pexels.com/photo/16041439/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "belleza/15202934.jpg",
+      "pexels_id": 15202934,
+      "alt": "Manicura trabajando en un salón de uñas",
+      "page_url": "https://www.pexels.com/photo/15202934/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "belleza/3997384.jpg",
+      "pexels_id": 3997384,
+      "alt": "Manos con manicura roja sobre la mesa del salón",
+      "page_url": "https://www.pexels.com/photo/3997384/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "belleza/696285.jpg",
+      "pexels_id": 696285,
+      "alt": "Peluquero secando el pelo de una clienta en el salón",
+      "page_url": "https://www.pexels.com/photo/696285/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "belleza/6502174.jpg",
+      "pexels_id": 6502174,
+      "alt": "Peluquera cortando el pelo rubio de una clienta",
+      "page_url": "https://www.pexels.com/photo/6502174/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "belleza/14615064.jpg",
+      "pexels_id": 14615064,
+      "alt": "Brushing con cepillo redondo en primer plano",
+      "page_url": "https://www.pexels.com/photo/14615064/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "barberia": [
+    {
+      "file": "barberia/9992819.jpg",
+      "pexels_id": 9992819,
+      "alt": "Barbero cortando el pelo a un cliente barbudo",
+      "page_url": "https://www.pexels.com/photo/9992819/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "barberia/39559269.jpg",
+      "pexels_id": 39559269,
+      "alt": "Corte con máquina en primer plano",
+      "page_url": "https://www.pexels.com/photo/39559269/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "barberia/4625623.jpg",
+      "pexels_id": 4625623,
+      "alt": "Barbero tatuado cortando el pelo a un cliente",
+      "page_url": "https://www.pexels.com/photo/4625623/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "barberia/4422102.jpg",
+      "pexels_id": 4422102,
+      "alt": "Barbero perfilando un corte con luz cálida",
+      "page_url": "https://www.pexels.com/photo/4422102/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "barberia/2061820.jpg",
+      "pexels_id": 2061820,
+      "alt": "Barbero trabajando en una barbería de estilo vintage",
+      "page_url": "https://www.pexels.com/photo/2061820/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "barberia/2076932.jpg",
+      "pexels_id": 2076932,
+      "alt": "Barbero cortando el pelo en una barbería clásica",
+      "page_url": "https://www.pexels.com/photo/2076932/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "moda": [
+    {
+      "file": "moda/37080685.jpg",
+      "pexels_id": 37080685,
+      "alt": "Interior luminoso de una tienda de ropa",
+      "page_url": "https://www.pexels.com/photo/37080685/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "moda/17293347.jpg",
+      "pexels_id": 17293347,
+      "alt": "Perchero con prendas en tonos neutros",
+      "page_url": "https://www.pexels.com/photo/17293347/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "moda/8387128.jpg",
+      "pexels_id": 8387128,
+      "alt": "Dos mujeres eligiendo jeans en una tienda",
+      "page_url": "https://www.pexels.com/photo/8387128/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "moda/36772528.jpg",
+      "pexels_id": 36772528,
+      "alt": "Maniquí y perchero en una boutique",
+      "page_url": "https://www.pexels.com/photo/36772528/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "moda/8307676.jpg",
+      "pexels_id": 8307676,
+      "alt": "Mujer eligiendo un vestido blanco en tienda minimalista",
+      "page_url": "https://www.pexels.com/photo/8307676/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "moda/38283677.jpg",
+      "pexels_id": 38283677,
+      "alt": "Prendas en perchas de madera en primer plano",
+      "page_url": "https://www.pexels.com/photo/38283677/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "fitness": [
+    {
+      "file": "fitness/9644820.jpg",
+      "pexels_id": 9644820,
+      "alt": "Hombre echándose magnesio en las manos en el gimnasio",
+      "page_url": "https://www.pexels.com/photo/9644820/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "fitness/6388366.jpg",
+      "pexels_id": 6388366,
+      "alt": "Hombre trepando una soga en un box de entrenamiento",
+      "page_url": "https://www.pexels.com/photo/6388366/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "fitness/4753996.jpg",
+      "pexels_id": 4753996,
+      "alt": "Mujer haciendo flexiones con mancuernas",
+      "page_url": "https://www.pexels.com/photo/4753996/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "fitness/4853254.jpg",
+      "pexels_id": 4853254,
+      "alt": "Pareja cargando discos en una barra frente a un mural",
+      "page_url": "https://www.pexels.com/photo/4853254/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "fitness/35419768.jpg",
+      "pexels_id": 35419768,
+      "alt": "Mujer flexionando frente al espejo del gimnasio",
+      "page_url": "https://www.pexels.com/photo/35419768/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "fitness/39635357.jpg",
+      "pexels_id": 39635357,
+      "alt": "Mujer con una barra en un gimnasio oscuro",
+      "page_url": "https://www.pexels.com/photo/39635357/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "mascotas": [
+    {
+      "file": "mascotas/23542061.jpg",
+      "pexels_id": 23542061,
+      "alt": "Schnauzer miniatura sobre la mesa de peluquería canina",
+      "page_url": "https://www.pexels.com/photo/23542061/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "mascotas/16544122.jpg",
+      "pexels_id": 16544122,
+      "alt": "Perro envuelto en una toalla después del baño",
+      "page_url": "https://www.pexels.com/photo/16544122/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "mascotas/19145877.jpg",
+      "pexels_id": 19145877,
+      "alt": "Yorkshire Terrier en sesión de peluquería canina",
+      "page_url": "https://www.pexels.com/photo/19145877/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "mascotas/6130997.jpg",
+      "pexels_id": 6130997,
+      "alt": "Peluquera canina con un Yorkshire sobre la mesa",
+      "page_url": "https://www.pexels.com/photo/6130997/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "mascotas/6131580.jpg",
+      "pexels_id": 6131580,
+      "alt": "Peluquera secando a un perro con secador profesional",
+      "page_url": "https://www.pexels.com/photo/6131580/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "mascotas/19145896.jpg",
+      "pexels_id": 19145896,
+      "alt": "Caniche negro siendo secado en la peluquería",
+      "page_url": "https://www.pexels.com/photo/19145896/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "deco": [
+    {
+      "file": "deco/35760081.jpg",
+      "pexels_id": 35760081,
+      "alt": "Rincón cálido con sillón, espejo y luces",
+      "page_url": "https://www.pexels.com/photo/35760081/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "deco/39654054.jpg",
+      "pexels_id": 39654054,
+      "alt": "Living con araña de cristal y cuadros vintage",
+      "page_url": "https://www.pexels.com/photo/39654054/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "deco/34325529.jpg",
+      "pexels_id": 34325529,
+      "alt": "Living con plantas y flores decorativas",
+      "page_url": "https://www.pexels.com/photo/34325529/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "deco/6209457.jpg",
+      "pexels_id": 6209457,
+      "alt": "Dormitorio luminoso con cómoda blanca y plantas",
+      "page_url": "https://www.pexels.com/photo/6209457/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "deco/6692615.jpg",
+      "pexels_id": 6692615,
+      "alt": "Estantes minimalistas con cerámica y plantas",
+      "page_url": "https://www.pexels.com/photo/6692615/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "deco/15625988.jpg",
+      "pexels_id": 15625988,
+      "alt": "Florero con pastos ornamentales y lámpara cálida",
+      "page_url": "https://www.pexels.com/photo/15625988/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ],
+  "floreria": [
+    {
+      "file": "floreria/38392600.jpg",
+      "pexels_id": 38392600,
+      "alt": "Ramos coloridos en la puerta de una florería",
+      "page_url": "https://www.pexels.com/photo/38392600/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "floreria/13298497.jpg",
+      "pexels_id": 13298497,
+      "alt": "Interior moderno de florería con ramos en exhibición",
+      "page_url": "https://www.pexels.com/photo/13298497/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "floreria/37063634.jpg",
+      "pexels_id": 37063634,
+      "alt": "Puesto de flores al sol con ramos artesanales",
+      "page_url": "https://www.pexels.com/photo/37063634/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "floreria/38688361.jpg",
+      "pexels_id": 38688361,
+      "alt": "Florista sonriendo con un ramo entre flores",
+      "page_url": "https://www.pexels.com/photo/38688361/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "floreria/15979836.jpg",
+      "pexels_id": 15979836,
+      "alt": "Florería acogedora de noche con clientes",
+      "page_url": "https://www.pexels.com/photo/15979836/",
+      "license": "Pexels License (uso comercial libre)"
+    },
+    {
+      "file": "floreria/38392601.jpg",
+      "pexels_id": 38392601,
+      "alt": "Exhibición de flores blancas en una florería",
+      "page_url": "https://www.pexels.com/photo/38392601/",
+      "license": "Pexels License (uso comercial libre)"
+    }
+  ]
+}
