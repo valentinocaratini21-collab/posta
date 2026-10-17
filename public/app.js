@@ -406,8 +406,13 @@ function pzRefBandHTML() {
 // vivo baja de /api/capacity (spots_total = MONTHLY_SPOTS en server.js).
 function refreshScarcity() {
   fetch('/api/capacity').then(r => r.json()).then(c => {
+    if (!c || typeof c.spots_left !== 'number') return;
     const el = document.getElementById('scarcityLine');
-    if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
+    if (el) el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
+    document.querySelectorAll('[data-spots]').forEach(s => {
+      s.innerHTML = `🔥 Quedan <b>${c.spots_left} de ${c.spots_total} lugares</b> este mes`;
+      s.hidden = false;
+    });
   }).catch(() => {});
 }
 // Tarjeta de reporte semanal (2026-10-17): hace VISIBLE el trabajo de
@@ -464,6 +469,7 @@ function lpFilterEx(rubro, btn) {
 }
 let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
 function lpInitHero() {
+  lpInitCarousel();
   // — Actividad en vivo "Posty trabajando": rota líneas ilustrativas del negocio de ejemplo.
   const line = document.getElementById('lpLiveLine');
   if (line) {
@@ -513,6 +519,203 @@ function lpInitHero() {
     if (range) range.addEventListener('input', () => { drag.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
   }
 }
+
+/* ---------- v176: carrusel de perfiles soñados (20 rubros) ---------- */
+const LP_PROFILES = [
+  { rubro: 'Cafetería', user: 'cafe.aurora', name: 'Café Aurora ☕', cat: 'Cafetería · Palermo', stats: ['128', '4.812', '96'],
+    bio: ['☕ Café de especialidad y brunch', '🥐 Medialunas recién horneadas, todos los días', '📍 Gorriti 4380 · 8 a 20 h'], link: 'cafe-aurora',
+    ava: 'ig-cafe.jpg', avaAlt: 'Foto de perfil de Café Aurora',
+    hls: [['hl-menu.jpg', 'Menú'], ['hl-promos.jpg', 'Promos'], ['hl-local.jpg', 'El local'], ['hl-clientes.jpg', 'Clientes']],
+    cells: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-pasta.jpg', 'g-latte.jpg', 'VIDEO', 'g-platos.jpg', 'g-vaso.jpg', 'g-tres.jpg', 'g-gourmet.jpg'],
+    cellAlt: 'Posteo de Instagram de Café Aurora' },
+  { rubro: 'Barbería', user: 'elcorte.barberia', name: 'El Corte Barbería 💈', cat: 'Barbería · Caballito', stats: ['96', '3.214', '88'],
+    bio: ['💈 Degradé, barba y diseño', '📲 Reservá tu turno desde el link', '📍 Av. Rivadavia 5120 · 10 a 20 h'], link: 'elcorte',
+    slug: 'elcorte', hls: ['Cortes', 'Barba', 'El local', 'Clientes'] },
+  { rubro: 'Moda', user: 'tiendacora', name: 'Tienda Cora 👕', cat: 'Tienda de ropa · Recoleta', stats: ['210', '6.540', '132'],
+    bio: ['👕 Nueva colección cada semana', '🛵 Envíos a todo el país', '📍 Santa Fe 2140 · 10 a 20 h'], link: 'tiendacora',
+    slug: 'tiendacora', hls: ['Nuevo', 'Looks', 'El local', 'Clientas'] },
+  { rubro: 'Belleza', user: 'estetica.alma', name: 'Estética Alma 💅', cat: 'Centro de estética · Belgrano', stats: ['154', '5.103', '117'],
+    bio: ['💅 Uñas, pestañas y cejas', '📲 Turnos por WhatsApp', '📍 Cabildo 2350 · 9 a 19 h'], link: 'estetica-alma',
+    slug: 'esteticaalma', hls: ['Uñas', 'Diseños', 'Promos', 'Clientas'] },
+  { rubro: 'Gastronomía', user: 'laesquina.resto', name: 'Parrilla La Esquina 🔥', cat: 'Parrilla · San Telmo', stats: ['187', '4.376', '95'],
+    bio: ['🔥 Parrilla y cocina criolla', '🍷 Vinos de bodegas chicas', '📍 Defensa 1135 · desde las 20 h'], link: 'laesquina',
+    slug: 'laesquina', hls: ['La carta', 'Promos', 'El local', 'Clientes'] },
+  { rubro: 'Panadería', user: 'eltrigodorado', name: 'El Trigo Dorado 🥐', cat: 'Panadería · Villa Crespo', stats: ['88', '2.845', '64'],
+    bio: ['🥐 Pan de masa madre, todos los días', '🎂 Tortas por encargo', '📍 Malabia 920 · 7:30 a 20 h'], link: 'eltrigodorado',
+    slug: 'eltrigodorado', hls: ['Del horno', 'Facturas', 'El local', 'Encargos'] },
+  { rubro: 'Pizzería', user: 'donroquepizza', name: 'Pizzería Don Roque 🍕', cat: 'Pizzería · Almagro', stats: ['143', '3.730', '71'],
+    bio: ['🍕 Pizza a la piedra en horno de barro', '🛵 Delivery en 30 min', '📍 Corrientes 4020 · 19 a 00 h'], link: 'donroque',
+    slug: 'donroque', hls: ['Pizzas', 'Promos', 'El horno', 'Clientes'] },
+  { rubro: 'Heladería', user: 'miogelato', name: 'Mío Gelato 🍦', cat: 'Heladería · Núñez', stats: ['76', '1.932', '58'],
+    bio: ['🍦 Gelato artesanal, 24 sabores', '🌱 Opciones sin TACC y veganas', '📍 Cabildo 3100 · 12 a 00 h'], link: 'miogelato',
+    slug: 'miogelato', hls: ['Sabores', 'Promos', 'El local', 'Clientes'] },
+  { rubro: 'Fitness', user: 'gymnorte', name: 'Gym Norte 💪', cat: 'Gimnasio · Belgrano', stats: ['167', '4.508', '143'],
+    bio: ['💪 Musculación y clases grupales', '🎟️ Primera clase sin cargo', '📍 Monroe 2620 · 6 a 23 h'], link: 'gymnorte',
+    slug: 'gymnorte', hls: ['Clases', 'Profes', 'El gym', 'Alumnos'] },
+  { rubro: 'Mascotas', user: 'petshop.huella', name: 'Pet Shop Huella 🐶', cat: 'Pet shop · Villa Crespo', stats: ['129', '3.366', '89'],
+    bio: ['🐶 Baño, corte y alimento balanceado', '🚗 Retiro y entrega a domicilio', '📍 Scalabrini Ortiz 780 · 9 a 20 h'], link: 'petshop-huella',
+    slug: 'petshop', hls: ['Baños', 'Cortes', 'Productos', 'Clientes'] },
+  { rubro: 'Deco', user: 'casalinda.deco', name: 'Casa Linda 🛋️', cat: 'Deco y hogar · Palermo', stats: ['203', '7.214', '156'],
+    bio: ['🛋️ Objetos que hacen hogar', '✨ Nuevos ingresos cada semana', '📍 Honduras 4750 · 10 a 19 h'], link: 'casalinda',
+    slug: 'casalinda', hls: ['Ambientes', 'Nuevos', 'El showroom', 'Clientes'] },
+  { rubro: 'Florería', user: 'elrosedal.flores', name: 'El Rosedal 💐', cat: 'Florería · Recoleta', stats: ['92', '2.410', '66'],
+    bio: ['💐 Ramos armados en el día', '🚚 Envíos en el día en CABA', '📍 Junín 1180 · 9 a 20 h'], link: 'elrosedal',
+    slug: 'elrosedal', hls: ['Ramos', 'Eventos', 'El local', 'Clientes'] },
+  { rubro: 'Cafetería', user: 'cafe.martinez', name: 'Café Martínez ☕', cat: 'Cafetería · Microcentro', stats: ['231', '8.930', '210'],
+    bio: ['☕ Café de especialidad al paso', '🥐 Medialunas y tostados', '📍 Florida 340 · 7 a 21 h'], link: 'cafe-martinez',
+    slug: 'cafemartinez', hls: ['Menú', 'Promos', 'El local', 'Clientes'] },
+  { rubro: 'Gastronomía', user: 'nonnarosa.cocina', name: 'Nonna Rosa 🍝', cat: 'Cocina italiana · Caballito', stats: ['118', '3.054', '77'],
+    bio: ['🍝 Pastas caseras, como las de la nonna', '📦 Viandas y pastas para llevar', '📍 Rojas 410 · 12 a 23 h'], link: 'nonnarosa',
+    slug: 'nonnarosa', hls: ['Pastas', 'La carta', 'El local', 'Clientes'] },
+  { rubro: 'Belleza', user: 'brillo.peluqueria', name: 'Brillo Peluquería ✂️', cat: 'Peluquería · Belgrano', stats: ['176', '5.672', '121'],
+    bio: ['✂️ Corte, color y peinados', '💇‍♀️ Diagnóstico capilar sin cargo', '📍 Juramento 2090 · 9 a 20 h'], link: 'brillo',
+    slug: 'brillo', hls: ['Cortes', 'Color', 'Peinados', 'Clientas'] },
+  { rubro: 'Barbería', user: 'navajaclub', name: 'Navaja Club 🪒', cat: 'Barbería · Palermo', stats: ['84', '2.208', '52'],
+    bio: ['🪒 Barbería clásica, ritual completo', '🥃 Tu corte incluye un trago', '📍 Gorriti 5020 · 11 a 21 h'], link: 'navajaclub',
+    slug: 'navajaclub', hls: ['Cortes', 'Barba', 'El local', 'Clientes'] },
+  { rubro: 'Moda', user: 'elvestidor.moda', name: 'El Vestidor 👗', cat: 'Boutique · Palermo Soho', stats: ['158', '4.940', '98'],
+    bio: ['👗 Prendas de autor, talles reales', '🆕 Cápsula nueva cada mes', '📍 Thames 1560 · 11 a 20 h'], link: 'elvestidor',
+    slug: 'elvestidor', hls: ['Nuevo', 'Looks', 'El local', 'Clientas'] },
+  { rubro: 'Fitness', user: 'box360', name: 'Box 360 🏋️', cat: 'Entrenamiento funcional · Núñez', stats: ['97', '2.765', '83'],
+    bio: ['🏋️ Funcional y cross training', '👥 Grupos reducidos, coach en piso', '📍 Libertador 7010 · 7 a 22 h'], link: 'box360',
+    slug: 'box360', hls: ['Clases', 'Profes', 'El box', 'Alumnos'] },
+  { rubro: 'Mascotas', user: 'patitas.peluqueria', name: 'Patitas 🐾', cat: 'Peluquería canina · Caballito', stats: ['111', '3.502', '74'],
+    bio: ['🐾 Baño y corte con turno', '💅 Corte de uñas y limpieza de oídos', '📍 Acoyte 560 · 9 a 19 h'], link: 'patitas',
+    slug: 'patitas', hls: ['Baños', 'Cortes', 'Antes y después', 'Clientes'] },
+  { rubro: 'Panadería', user: 'laespiga.pasteleria', name: 'La Espiga 🎂', cat: 'Pastelería · Villa Crespo', stats: ['139', '4.127', '69'],
+    bio: ['🎂 Pastelería artesanal', '☕ Meriendas y desayunos', '📍 Thames 890 · 8 a 20 h'], link: 'laespiga',
+    slug: 'laespiga', hls: ['Tortas', 'Facturas', 'Promos', 'Encargos'] }
+];
+function lpTiles(p) {
+  if (p.cells) return p.cells;
+  const out = [];
+  for (let k = 1; k <= 9; k++) out.push(`gt-${p.slug}-${k}.jpg`);
+  return out;
+}
+function lpProfileHTML(p) {
+  const tiles = lpTiles(p);
+  const ava = p.ava || tiles[0];
+  const avaAlt = p.avaAlt || ('Foto de perfil de ' + p.user);
+  const hlPairs = (p.hls[0] && Array.isArray(p.hls[0])) ? p.hls : p.hls.map((l, k) => [tiles[[1, 2, 4, 6][k]], l]);
+  const cells = tiles.map((t, k) => {
+    if (t === 'VIDEO') return `<span class="igp-cell-reel"><video src="showcase-reel-natural.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Reel de Instagram de ${p.name}: barista preparando latte art"></video><span class="igp-reel-badge">▶</span></span>`;
+    const img = `<img loading="lazy" src="${t}" alt="Posteo de Instagram de ${p.name}">`;
+    if (k === 4 && !p.cells) return `<span class="igp-cell-reel">${img}<span class="igp-reel-badge">▶</span></span>`;
+    return img;
+  }).join('');
+  return `<div class="phone igp-phone"><div class="screen"><div class="igp">
+    <div class="igp-top"><b>${p.user}</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"/></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img src="${ava}" alt="${avaAlt}"></span>
+      <div class="igp-stats"><div><b>${p.stats[0]}</b><span>publicaciones</span></div><div><b>${p.stats[1]}</b><span>seguidores</span></div><div><b>${p.stats[2]}</b><span>seguidos</span></div></div>
+    </div>
+    <div class="igp-bio"><b>${p.name}</b><span class="igp-cat">${p.cat}</span><p>${p.bio.join('<br>')}</p><span class="igp-link">postyhacetodo.com/p/${p.link}</span></div>
+    <div class="igp-btns"><span class="igp-btn primary">Seguir</span><span class="igp-btn">Mensaje</span></div>
+    <div class="igp-hls">${hlPairs.map(([img, l]) => `<div class="igp-hl"><span class="igp-hl-ring"><img loading="lazy" src="${img}" alt="Historia destacada: ${l}"></span><small>${l}</small></div>`).join('')}</div>
+    <div class="igp-grid">${cells}</div>
+  </div></div></div>`;
+}
+function lpCarSlidesHTML() {
+  return LP_PROFILES.map((p, i) => {
+    const near = (i === 0 || i === 1 || i === LP_PROFILES.length - 1);
+    return `<div class="lp-slide" data-i="${i}">${near ? lpProfileHTML(p) : '<div class="phone igp-phone lp-slide-ph"><div class="screen"><div class="igp-ph"></div></div></div>'}</div>`;
+  }).join('');
+}
+let LP_CAR_IDX = 0;
+function lpCarRender(i) {
+  const track = document.getElementById('lpCarTrack');
+  if (!track) return;
+  const n = LP_PROFILES.length;
+  i = ((i % n) + n) % n;
+  const slide = track.children[i];
+  if (slide && slide.querySelector('.lp-slide-ph')) slide.innerHTML = lpProfileHTML(LP_PROFILES[i]);
+}
+function lpCarEnsure(i) { lpCarRender(i - 1); lpCarRender(i); lpCarRender(i + 1); }
+function lpFillGrid(slide) {
+  if (!slide) return;
+  const grid = slide.querySelector('.igp-grid');
+  if (!grid || grid.dataset.filled) return;
+  grid.dataset.filled = '1';
+  grid.classList.add('igp-pre');
+  requestAnimationFrame(() => requestAnimationFrame(() => grid.classList.add('igp-go')));
+}
+function lpCarSync() {
+  const track = document.getElementById('lpCarTrack');
+  if (!track || !track.clientWidth) return;
+  const idx = Math.max(0, Math.min(LP_PROFILES.length - 1, Math.round(track.scrollLeft / track.clientWidth)));
+  LP_CAR_IDX = idx;
+  lpCarEnsure(idx);
+  const r = document.getElementById('lpCarRubro');
+  const c = document.getElementById('lpCarCount');
+  if (r) r.textContent = LP_PROFILES[idx].rubro;
+  if (c) c.textContent = (idx + 1) + ' / ' + LP_PROFILES.length;
+  lpFillGrid(track.children[idx]);
+}
+function lpCarStep(d) {
+  const track = document.getElementById('lpCarTrack');
+  if (!track) return;
+  const n = LP_PROFILES.length;
+  let next = LP_CAR_IDX + d;
+  if (next < 0) next = n - 1;
+  if (next >= n) next = 0;
+  lpCarEnsure(next);
+  track.scrollTo({ left: next * track.clientWidth, behavior: 'smooth' });
+}
+function lpInitCarousel() {
+  const track = document.getElementById('lpCarTrack');
+  if (!track || track.dataset.bound) return;
+  track.dataset.bound = '1';
+  lpCarEnsure(0);
+  let raf = false;
+  track.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = true;
+    requestAnimationFrame(() => { raf = false; lpCarSync(); });
+  }, { passive: true });
+  // Drag con mouse en desktop (el swipe táctil lo da el scroll nativo).
+  let drag = null;
+  track.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    drag = { x: e.clientX, sl: track.scrollLeft };
+    track.classList.add('dragging');
+    try { track.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  track.addEventListener('pointermove', (e) => { if (drag) track.scrollLeft = drag.sl - (e.clientX - drag.x); });
+  ['pointerup', 'pointercancel'].forEach((ev) => track.addEventListener(ev, () => { drag = null; track.classList.remove('dragging'); }));
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((es) => {
+      es.forEach((en) => { if (en.isIntersecting) { lpFillGrid(track.children[LP_CAR_IDX]); io.disconnect(); } });
+    }, { threshold: 0.25 });
+    io.observe(track);
+  } else lpFillGrid(track.children[0]);
+}
+/* ---------- v176: auditoría + calculadora ---------- */
+function lpGoAudit(e) {
+  if (e) e.preventDefault();
+  const inp = document.getElementById('lpAuditIg');
+  const ig = String((inp && inp.value) || '').replace(/^@/, '').trim().toLowerCase();
+  location.href = ig ? '/auditoria?ig=' + encodeURIComponent(ig) : '/auditoria';
+  return false;
+}
+let LP_CALC_RATE = 5000;
+function lpCalcRate(btn) {
+  LP_CALC_RATE = parseInt(btn.getAttribute('data-rate'), 10) || 5000;
+  document.querySelectorAll('.lp-crate').forEach((b) => b.classList.toggle('on', b === btn));
+  lpCalcUpdate();
+}
+function lpCalcUpdate() {
+  const inp = document.getElementById('lpCalcH');
+  const out = document.getElementById('lpCalcOut');
+  if (!inp || !out) return;
+  const h = parseInt(inp.value, 10) || 6;
+  const hv = document.getElementById('lpCalcHVal');
+  if (hv) hv.textContent = h + ' h';
+  const fmt = (n) => Math.round(n).toLocaleString('es-AR');
+  const horasMes = Math.round(h * 4.33);
+  const costo = h * 4.33 * LP_CALC_RATE;
+  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$1.330 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
+}
+
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -543,7 +746,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
-    <h1>Tu semana de Instagram,<br><span class="hl">hecha en 1 minuto</span></h1>
+    <h1>Tu Instagram vendiendo<br><span class="hl">todos los días, sin que muevas un dedo</span></h1>
     <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Posteos, reels, historias, comentarios, mensajes y pauta — todo tu Instagram, hecho por Posty. Vos no hacés nada: solo frenás si algo no te cierra.</p>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
@@ -551,35 +754,15 @@ function landingView(cfg) {
     </form>
     <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
-    <div class="hero-note" style="margin-top:10px"><a href="/auditoria" style="color:var(--cel);font-weight:800;text-decoration:none">🔍 ¿Tu Instagram vende? Audit gratis →</a></div>
+    <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show">
       <p class="lp-show-eyebrow">✨ Así queda tu Instagram con Posty</p>
-      <div class="phone igp-phone"><div class="screen"><div class="igp">
-        <div class="igp-top"><b>cafe.aurora</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"/></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
-        <div class="igp-head">
-          <span class="ig-ava ig-ava-lg"><img src="ig-cafe.jpg" alt="Foto de perfil de Café Aurora"></span>
-          <div class="igp-stats"><div><b>128</b><span>publicaciones</span></div><div><b>4.812</b><span>seguidores</span></div><div><b>96</b><span>seguidos</span></div></div>
-        </div>
-        <div class="igp-bio"><b>Café Aurora ☕</b><span class="igp-cat">Cafetería · Palermo</span><p>☕ Café de especialidad y brunch<br>🥐 Medialunas recién horneadas, todos los días<br>📍 Gorriti 4380 · 8 a 20 h</p><span class="igp-link">postyhacetodo.com/p/cafe-aurora</span></div>
-        <div class="igp-btns"><span class="igp-btn primary">Seguir</span><span class="igp-btn">Mensaje</span></div>
-        <div class="igp-hls">
-          <div class="igp-hl"><span class="igp-hl-ring"><img loading="lazy" src="hl-menu.jpg" alt="Historia destacada: Menú"></span><small>Menú</small></div>
-          <div class="igp-hl"><span class="igp-hl-ring"><img loading="lazy" src="hl-promos.jpg" alt="Historia destacada: Promos"></span><small>Promos</small></div>
-          <div class="igp-hl"><span class="igp-hl-ring"><img loading="lazy" src="hl-local.jpg" alt="Historia destacada: El local"></span><small>El local</small></div>
-          <div class="igp-hl"><span class="igp-hl-ring"><img loading="lazy" src="hl-clientes.jpg" alt="Historia destacada: Clientes"></span><small>Clientes</small></div>
-        </div>
-        <div class="igp-grid">
-          <img src="ig-cafe.jpg" alt="Posteo de Instagram de Café Aurora: el barista sirve un café con latte art">
-          <img loading="lazy" src="g-tazas.jpg" alt="Posteo de Instagram de Café Aurora: dos tazas de café con flores">
-          <img loading="lazy" src="g-pasta.jpg" alt="Posteo de Instagram de Café Aurora: plato de pasta del mediodía">
-          <img loading="lazy" src="g-latte.jpg" alt="Posteo de Instagram de Café Aurora: latte art en vivo">
-          <span class="igp-cell-reel"><video src="showcase-reel-natural.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Reel de Instagram de Café Aurora: barista preparando latte art"></video><span class="igp-reel-badge">▶</span></span>
-          <img loading="lazy" src="g-platos.jpg" alt="Posteo de Instagram de Café Aurora: platos del brunch">
-          <img loading="lazy" src="g-vaso.jpg" alt="Posteo de Instagram de Café Aurora: vaso de latte">
-          <img loading="lazy" src="g-tres.jpg" alt="Posteo de Instagram de Café Aurora: cafés en la mesa">
-          <img loading="lazy" src="g-gourmet.jpg" alt="Posteo de Instagram de Café Aurora: platos gourmet">
-        </div>
-      </div></div></div>
+      <div class="lp-car" id="lpCar">
+        <div class="lp-car-track" id="lpCarTrack">${lpCarSlidesHTML()}</div>
+        <button type="button" class="lp-car-btn lp-car-prev" onclick="lpCarStep(-1)" aria-label="Ver el perfil anterior">‹</button>
+        <button type="button" class="lp-car-btn lp-car-next" onclick="lpCarStep(1)" aria-label="Ver el perfil siguiente">›</button>
+      </div>
+      <div class="lp-car-meta"><span class="lp-car-rubro" id="lpCarRubro">Cafetería</span><span class="lp-car-count" id="lpCarCount">1 / 20</span></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
@@ -587,6 +770,7 @@ function landingView(cfg) {
           <button class="btn btn-primary" type="submit">Quiero mi perfil así →</button>
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
+        <p class="lp-spots" data-spots hidden></p>
       </div>
       <div class="lp-live" id="lpLive">
         <div class="lp-live-head"><span class="lp-live-dot"></span><b>Posty trabajando</b><span>así trabaja por este negocio, todos los días</span></div>
@@ -659,6 +843,27 @@ function landingView(cfg) {
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
   </div></div>
+  <div class="section lp-work" id="trabajando"><div class="wrap">
+    <h2>Así trabaja Posty, todos los días</h2>
+    <p class="lede">Esto pasa en tu cuenta mientras vos atendés tu negocio.</p>
+    <div class="lp-work-flex">
+      <div class="lp-work-vid"><video src="posty-trabajando.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Video real de Posty trabajando: arma un posteo y un reel para un café"></video></div>
+      <ul class="lp-work-list">
+        <li>🎨 <b>Arma tus posteos</b> con tus fotos, tus colores y tu tono.</li>
+        <li>🎬 <b>Crea tus reels</b> y los deja listos para publicarse solos.</li>
+        <li>📮 <b>Publica a la mejor hora</b> — y te avisa antes, por si querés frenar algo.</li>
+      </ul>
+    </div>
+  </div></div>
+  <div class="section lp-audit" id="auditoria"><div class="wrap" style="max-width:760px">
+    <h2>¿Tu Instagram está vendiendo?</h2>
+    <p class="lede">Posty analiza tu perfil <b>gratis</b> y te dice qué está frenando tus ventas: qué publicar, qué responder, qué mejorar.</p>
+    <form class="lp-igform lp-audit-form" onsubmit="return lpGoAudit(event)">
+      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+      <button class="btn btn-primary" type="submit">Auditar mi Instagram gratis</button>
+    </form>
+    <p class="lp-audit-note">Sin registrarte · El resultado llega en menos de un minuto</p>
+  </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
     <h2><svg class="ig-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.4" cy="6.6" r="1.15" fill="currentColor" stroke="none"/></svg>Esto es lo que hace Posty en Instagram 🤖</h2>
     <p class="lede">Posteos reales de Instagram que armamos en minutos, para cualquier rubro: con tus fotos, tus colores y tu voz. Imaginá tu negocio acá 👇</p>
@@ -673,13 +878,23 @@ function landingView(cfg) {
     </div>
     <div class="show-row">
       <div class="phone sm" data-rubro="gastronomia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FDEBD2">C</i></span><span class="ig-user"><b>cafe.aurora</b><span>Palermo, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería: el barista sirve un café con latte art"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>214 Me gusta</b></div><div class="ig-cap"><b>cafe.aurora</b>El primer café del día, como tiene que salir ☕✨ Gracias por elegirnos cada mañana. #cafedeespecialidad #brunch #palermo</div><div class="ig-comments">Ver los 18 comentarios</div></div></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
-      <div class="phone sm" data-rubro="gastronomia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FDEBD2">C</i></span><span class="ig-user"><b>cafe.martinez</b><span>Buenos Aires</span></span><span class="ig-dots">•••</span></div><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>486 Me gusta</b></div><div class="ig-cap"><b>cafe.martinez</b>Así preparamos tu café, todas las mañanas ☕🎬 #barista #cafe #cafeteria</div><div class="ig-comments">Ver los 32 comentarios</div></div></div><div class="cap"><b>▶ Reel</b> · Café Martínez</div></div>
       <div class="phone sm" data-rubro="moda"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E4F0FA">T</i></span><span class="ig-user"><b>tiendacora</b><span>Recoleta, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa: clientas mirando un jean"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>168 Me gusta</b></div><div class="ig-cap"><b>tiendacora</b>Llegó el jean que va con todo 👖✨ Ya está en el local y en la tienda online. #moda #nuevacoleccion #jeans</div><div class="ig-comments">Ver los 9 comentarios</div></div></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
       <div class="phone sm" data-rubro="barberia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E9E4DC">E</i></span><span class="ig-user"><b>elcorte.barberia</b><span>Caballito, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería: corte con tijera en primer plano"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>342 Me gusta</b></div><div class="ig-cap"><b>elcorte.barberia</b>Degradé limpio y barba alineada 🔥 Reservá tu turno desde el link en bio. #barberia #fade #barba</div><div class="ig-comments">Ver los 21 comentarios</div></div></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
       <div class="phone sm" data-rubro="belleza"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FBE4EC">A</i></span><span class="ig-user"><b>estetica.alma</b><span>Belgrano, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-belleza.jpg" alt="Posteo de Instagram de una estética: manos con manicura roja"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>257 Me gusta</b></div><div class="ig-cap"><b>estetica.alma</b>El rojo nunca falla ❤️‍🔥 Turnos de la semana abiertos — escribinos por DM. #uñas #manicura #nailart</div><div class="ig-comments">Ver los 14 comentarios</div></div></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
       <div class="phone sm" data-rubro="mascotas"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E2F2E4">H</i></span><span class="ig-user"><b>petshop.huella</b><span>Villa Crespo, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop: perrito recién bañado con toalla"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>428 Me gusta</b></div><div class="ig-cap"><b>petshop.huella</b>Recién bañado y feliz 🐶🛁 Reservá el turno de tu mascota por WhatsApp. #petshop #peluqueriacanina #perros</div><div class="ig-comments">Ver los 27 comentarios</div></div></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
       <div class="phone sm" data-rubro="fitness"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E6E0F5">G</i></span><span class="ig-user"><b>gymnorte</b><span>Belgrano, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-fitness.jpg" alt="Posteo de Instagram de un gimnasio: alumna preparándose para entrenar"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>193 Me gusta</b></div><div class="ig-cap"><b>gymnorte</b>Martes de fuerza 💪 Tu primera clase es sin cargo. Sumate. #gym #entrenamiento #fitness</div><div class="ig-comments">Ver los 11 comentarios</div></div></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
+      <div class="phone sm" data-rubro="gastronomia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FDEBD2">C</i></span><span class="ig-user"><b>cafe.martinez</b><span>Buenos Aires</span></span><span class="ig-dots">•••</span></div><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>486 Me gusta</b></div><div class="ig-cap"><b>cafe.martinez</b>Así preparamos tu café, todas las mañanas ☕🎬 #barista #cafe #cafeteria</div><div class="ig-comments">Ver los 32 comentarios</div></div></div><div class="cap"><b>▶ Reel</b> · Café Martínez</div></div>
+      <div class="phone sm" data-rubro="moda"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#F3E4FA">V</i></span><span class="ig-user"><b>elvestidor.moda</b><span>Palermo Soho, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="gt-elvestidor-3.jpg" alt="Posteo de Instagram de una boutique: prendas de autor en el local"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>203 Me gusta</b></div><div class="ig-cap"><b>elvestidor.moda</b>La cápsula de este mes llegó 👗 Prendas de autor, en talles reales. Pasá a probártelas. #moda #palermo #prendasdeautor</div><div class="ig-comments">Ver los 12 comentarios</div></div></div><div class="cap"><b>Moda</b> · El Vestidor</div></div>
+      <div class="phone sm" data-rubro="barberia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E9E4DC">N</i></span><span class="ig-user"><b>navajaclub</b><span>Palermo, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="gt-navajaclub-3.jpg" alt="Posteo de Instagram de una barbería clásica: servicio con navaja"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>289 Me gusta</b></div><div class="ig-cap"><b>navajaclub</b>El ritual completo: toalla caliente, navaja y un buen trago 🪒🥃 Reservá tu lugar. #barberia #navaja #palermo</div><div class="ig-comments">Ver los 19 comentarios</div></div></div><div class="cap"><b>Barbería</b> · Navaja Club</div></div>
+      <div class="phone sm" data-rubro="belleza"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FBE4EC">B</i></span><span class="ig-user"><b>brillo.peluqueria</b><span>Belgrano, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="gt-brillo-3.jpg" alt="Posteo de Instagram de una peluquería: trabajo de color en el salón"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>231 Me gusta</b></div><div class="ig-cap"><b>brillo.peluqueria</b>Color y luz, sin dañar tu pelo ✨ Diagnóstico capilar sin cargo esta semana. #peluqueria #color #belgrano</div><div class="ig-comments">Ver los 16 comentarios</div></div></div><div class="cap"><b>Belleza</b> · Brillo Peluquería</div></div>
+      <div class="phone sm" data-rubro="mascotas"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E2F2E4">P</i></span><span class="ig-user"><b>patitas.peluqueria</b><span>Caballito, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="gt-patitas-3.jpg" alt="Posteo de Instagram de una peluquería canina: perrito en la mesa de grooming"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>356 Me gusta</b></div><div class="ig-cap"><b>patitas.peluqueria</b>Salió de la pelu como nuevo 🐶✨ Baño, corte y mucho mimo. Turnos por WhatsApp. #peluqueriacanina #perros #caballito</div><div class="ig-comments">Ver los 24 comentarios</div></div></div><div class="cap"><b>Mascotas</b> · Patitas</div></div>
+      <div class="phone sm" data-rubro="fitness"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FDEBD2">B</i></span><span class="ig-user"><b>box360</b><span>Núñez, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="gt-box360-3.jpg" alt="Posteo de Instagram de un box de entrenamiento funcional"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>176 Me gusta</b></div><div class="ig-cap"><b>box360</b>Grupos reducidos, coach en piso y resultados reales 🏋️ Tu primera clase es gratis. #funcional #entrenamiento #nuñez</div><div class="ig-comments">Ver los 8 comentarios</div></div></div><div class="cap"><b>Fitness</b> · Box 360</div></div>
       <div class="phone sm" data-rubro="gastronomia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FDEBD2">L</i></span><span class="ig-user"><b>laesquina.resto</b><span>San Telmo, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="ig-gastro.jpg" alt="Posteo de Instagram de una parrilla: carne asada con chimichurri"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>376 Me gusta</b></div><div class="ig-cap"><b>laesquina.resto</b>La parrilla ya está prendida 🔥 Hoy desde las 20 h, como todos los viernes. #parrilla #asado #viernes</div><div class="ig-comments">Ver los 23 comentarios</div></div></div><div class="cap"><b>Gastronomía</b> · Parrilla La Esquina</div></div>
+      <div class="phone sm" data-rubro="moda"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E4F0FA">R</i></span><span class="ig-user"><b>roma.indumentaria</b><span>Flores, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="g2-moda-2.jpg" alt="Posteo de Instagram de una tienda de indumentaria: prendas básicas"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>154 Me gusta</b></div><div class="ig-cap"><b>roma.indumentaria</b>Básicos que combinan con todo 🤍 Nuevos ingresos de la semana, en el local y online. #indumentaria #basicos #moda</div><div class="ig-comments">Ver los 7 comentarios</div></div></div><div class="cap"><b>Moda</b> · Roma Indumentaria</div></div>
+      <div class="phone sm" data-rubro="barberia"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E9E4DC">C</i></span><span class="ig-user"><b>barberia.central</b><span>Once, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="g2-barber-5.jpg" alt="Posteo de Instagram de una barbería clásica de barrio"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>198 Me gusta</b></div><div class="ig-cap"><b>barberia.central</b>Clásicos de siempre, hechos como antes 💈 Sin turno: por orden de llegada. #barberia #clasica #buenosaires</div><div class="ig-comments">Ver los 11 comentarios</div></div></div><div class="cap"><b>Barbería</b> · Barbería Central</div></div>
+      <div class="phone sm" data-rubro="belleza"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#FBE4EC">L</i></span><span class="ig-user"><b>nailsbylu</b><span>Palermo, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="g2-belleza-6.jpg" alt="Posteo de Instagram de un estudio de uñas: francesitas recién hechas"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>274 Me gusta</b></div><div class="ig-cap"><b>nailsbylu</b>Francesitas que duran 💅 Semipermanente con turno en el día. #nails #semipermanente #uñas</div><div class="ig-comments">Ver los 21 comentarios</div></div></div><div class="cap"><b>Belleza</b> · Nails by Lu</div></div>
+      <div class="phone sm" data-rubro="mascotas"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E2F2E4">M</i></span><span class="ig-user"><b>mundomascota.pet</b><span>Belgrano, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="g4-mascotas-1.jpg" alt="Posteo de Instagram de un pet shop: perrito en la peluquería"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>167 Me gusta</b></div><div class="ig-cap"><b>mundomascota.pet</b>Todo para tu mejor amigo 🐾 Alimento, juguetes y los mejores consejos. #petshop #mascotas #belgrano</div><div class="ig-comments">Ver los 9 comentarios</div></div></div><div class="cap"><b>Mascotas</b> · Mundo Mascota</div></div>
+      <div class="phone sm" data-rubro="fitness"><div class="screen"><div class="ig-head"><span class="ig-ava"><i style="background:#E6E0F5">F</i></span><span class="ig-user"><b>funcionalsur</b><span>San Telmo, Buenos Aires</span></span><span class="ig-dots">•••</span></div><img loading="lazy" src="g4-fitness-1.jpg" alt="Posteo de Instagram de un gimnasio funcional: pareja entrenando con barra"><div class="ig-foot"><div class="ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="ig-likes"><b>149 Me gusta</b></div><div class="ig-cap"><b>funcionalsur</b>Entrená fuerte, cerca de casa 💪 Planes para todos los niveles. #fitness #funcional #santelmo</div><div class="ig-comments">Ver los 6 comentarios</div></div></div><div class="cap"><b>Fitness</b> · Funcional Sur</div></div>
     </div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero mi semana así 👀</a></div>
   </div></div>
@@ -695,7 +910,7 @@ function landingView(cfg) {
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
   <div class="section" id="trabajo"><div class="wrap">
-    <h2>Así trabaja Posty por vos 🐾</h2>
+    <h2>Así trabaja Posty por vos</h2>
     <p class="lede">Comunidad, crecimiento y ventas no pasan por arte de magia: pasan por hacer estas 9 cosas todas las semanas. Las hace Posty.</p>
     <div class="lp-jobs">
       <div class="lp-job"><div class="lp-job-i">🔍</div><h3>Estudia tu rubro</h3><p>Mira qué funciona en negocios como el tuyo y arma ideas para vender, no para rellenar.</p></div>
@@ -755,6 +970,22 @@ function landingView(cfg) {
     </div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero no hacer nada 😎</a></div>
   </div></div>
+  <div class="section lp-calc" id="calculadora"><div class="wrap" style="max-width:820px">
+    <h2>¿Cuánto te cuesta hoy tu Instagram?</h2>
+    <p class="lede">Mové el control y hacé la cuenta con tus números reales.</p>
+    <div class="lp-calc-box">
+      <label class="lp-calc-lab" for="lpCalcH">Horas que le dedicás por semana: <b id="lpCalcHVal">6 h</b></label>
+      <input type="range" id="lpCalcH" min="1" max="20" step="1" value="6" oninput="lpCalcUpdate()" aria-label="Horas por semana que le dedicás a tu Instagram">
+      <label class="lp-calc-lab" style="margin-top:16px">¿Cuánto vale tu hora?</label>
+      <div class="lp-calc-rates">
+        <button type="button" class="lp-crate" data-rate="3000" onclick="lpCalcRate(this)">$3.000</button>
+        <button type="button" class="lp-crate on" data-rate="5000" onclick="lpCalcRate(this)">$5.000</button>
+        <button type="button" class="lp-crate" data-rate="10000" onclick="lpCalcRate(this)">$10.000</button>
+      </div>
+      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$1.330 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
+    </div>
+    <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>$300.000+ por mes</b>.</p>
+  </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
@@ -796,6 +1027,7 @@ function landingView(cfg) {
     <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
     <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
+    <p class="lp-spots" data-spots hidden></p>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
