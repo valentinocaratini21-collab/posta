@@ -783,6 +783,7 @@ function show(id) {
       }
     } catch (e) {}
   }
+  if (DEEP_IG) { try { const fi = $('#f_ig'); if (fi && !fi.value) fi.value = '@' + DEEP_IG; } catch (e) {} }
   // ¿Ya generaste tu semana en este navegador? Mostrala directo.
   // (En otro navegador o dispositivo: completás el form con el mismo @
   // y el servidor te devuelve tu semana cacheada al instante.)

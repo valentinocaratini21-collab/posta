@@ -410,6 +410,19 @@ function refreshScarcity() {
     if (el && c && typeof c.spots_left === 'number') el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
   }).catch(() => {});
 }
+function lpGoTrial(e) {
+  if (e) e.preventDefault();
+  const inp = document.getElementById('lpIg');
+  const ig = String((inp && inp.value) || '').replace(/^@/, '').trim().toLowerCase();
+  location.href = ig ? '/prueba?ig=' + encodeURIComponent(ig) : '/prueba';
+  return false;
+}
+function lpFilterEx(rubro, btn) {
+  document.querySelectorAll('#ejemplos .phone[data-rubro]').forEach((el) => {
+    el.style.display = (rubro === 'todos' || el.getAttribute('data-rubro') === rubro) ? '' : 'none';
+  });
+  document.querySelectorAll('.lp-chip').forEach((b) => b.classList.toggle('on', b === btn));
+}
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -445,6 +458,11 @@ function landingView(cfg) {
     <div class="hero-cta">
       <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
     </div>
+    <form class="lp-igform" onsubmit="return lpGoTrial(event)">
+      <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+      <button class="btn btn-primary" type="submit">Ver mi semana →</button>
+    </form>
+    <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <div class="hero-note" style="margin-top:10px"><a href="/auditoria" style="color:var(--cel);font-weight:800;text-decoration:none">🔍 ¿Tu Instagram vende? Audit gratis →</a></div>
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
@@ -477,7 +495,7 @@ function landingView(cfg) {
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">5 posteos</div><div class="lp-stat-t">por semana, publicados solos</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">5 posteos</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
       <div class="lp-stat"><div class="lp-stat-n">$1.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
@@ -485,15 +503,24 @@ function landingView(cfg) {
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
     <h2>Esto es lo que hace Posty 🤖</h2>
     <p class="lede">Piezas reales que armamos en minutos, para cualquier rubro: con tus fotos, tus colores y tu voz. Imaginá tu negocio acá 👇</p>
+    <div class="lp-chips" aria-label="Ejemplos por rubro">
+      <button class="lp-chip on" onclick="lpFilterEx('todos', this)">Todos</button>
+      <button class="lp-chip" onclick="lpFilterEx('gastronomia', this)">🍽️ Gastronomía</button>
+      <button class="lp-chip" onclick="lpFilterEx('moda', this)">👕 Moda</button>
+      <button class="lp-chip" onclick="lpFilterEx('barberia', this)">💈 Barbería</button>
+      <button class="lp-chip" onclick="lpFilterEx('belleza', this)">💅 Belleza</button>
+      <button class="lp-chip" onclick="lpFilterEx('mascotas', this)">🐶 Mascotas</button>
+      <button class="lp-chip" onclick="lpFilterEx('fitness', this)">🏋️ Fitness</button>
+    </div>
     <div class="show-row">
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posty"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
-      <div class="phone sm"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-moda.png" alt="Diseño para tienda de ropa creado por Posty"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-barber.png" alt="Diseño para barbería creado por Posty"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-belleza.png" alt="Diseño para estética creado por Posty"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-mascotas.png" alt="Diseño para pet shop creado por Posty"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
-      <div class="phone sm"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posty"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
+      <div class="phone sm" data-rubro="gastronomia"><div class="screen"><img loading="lazy" src="post-food.png" alt="Diseño para restaurante creado por Posty"></div><div class="cap"><b>Gastronomía</b> · Café & brunch</div></div>
+      <div class="phone sm" data-rubro="gastronomia"><div class="screen"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline></video></div><div class="cap"><b>▶ Showreel</b> · Café Martínez</div></div>
+      <div class="phone sm" data-rubro="moda"><div class="screen"><img loading="lazy" src="post-moda.png" alt="Diseño para tienda de ropa creado por Posty"></div><div class="cap"><b>Moda</b> · Tienda Cora</div></div>
+      <div class="phone sm" data-rubro="barberia"><div class="screen"><img loading="lazy" src="post-barber.png" alt="Diseño para barbería creado por Posty"></div><div class="cap"><b>Barbería</b> · El Corte</div></div>
+      <div class="phone sm" data-rubro="belleza"><div class="screen"><img loading="lazy" src="post-belleza.png" alt="Diseño para estética creado por Posty"></div><div class="cap"><b>Belleza</b> · Estética Alma</div></div>
+      <div class="phone sm" data-rubro="mascotas"><div class="screen"><img loading="lazy" src="post-mascotas.png" alt="Diseño para pet shop creado por Posty"></div><div class="cap"><b>Mascotas</b> · Pet Shop Huella</div></div>
+      <div class="phone sm" data-rubro="fitness"><div class="screen"><img loading="lazy" src="post-fitness.png" alt="Diseño para gimnasio creado por Posty"></div><div class="cap"><b>Fitness</b> · Gym Norte</div></div>
+      <div class="phone sm" data-rubro="gastronomia"><div class="screen"><img loading="lazy" src="gastro-1.png" alt="Promo 2x1 para restaurante creada por Posty"></div><div class="cap"><b>Gastronomía</b> · Promo 2x1</div></div>
     </div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero mi semana así 👀</a></div>
   </div></div>
@@ -508,6 +535,18 @@ function landingView(cfg) {
     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
   </div></div>
+  <div class="section" id="trabajo"><div class="wrap">
+    <h2>Así trabaja Posty por vos 🐾</h2>
+    <p class="lede">Esto pasa cada semana, solo, sin que toques nada:</p>
+    <div class="lp-jobs">
+      <div class="lp-job"><div class="lp-job-i">🔍</div><h3>Estudia tu rubro</h3><p>Mira qué funciona en negocios como el tuyo y arma ideas para vender, no para rellenar.</p></div>
+      <div class="lp-job"><div class="lp-job-i">📅</div><h3>Caza las fechas que venden</h3><p>Día de la Madre, Navidad, el día de tu rubro: tu semana se adapta sola a lo que la gente está comprando.</p></div>
+      <div class="lp-job"><div class="lp-job-i">🎨</div><h3>Diseña con tu marca</h3><p>Tus fotos, tus colores y tu logo en cada pieza. Nada de plantillas iguales para todos.</p></div>
+      <div class="lp-job"><div class="lp-job-i">✍️</div><h3>Escribe como tu negocio</h3><p>Textos en rioplatense, con tu tono y cero errores. Como si los hubieras escrito vos.</p></div>
+      <div class="lp-job"><div class="lp-job-i">⏰</div><h3>Publica a la mejor hora</h3><p>Cada posteo sale cuando tu audiencia está mirando. Y te avisa antes, por si querés frenarlo.</p></div>
+      <div class="lp-job"><div class="lp-job-i">🧠</div><h3>Aprende de tus gustos</h3><p>Lo que te encanta se repite; lo que no, no vuelve. Cada semana se parece más a vos.</p></div>
+    </div>
+  </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
@@ -520,8 +559,37 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div>
     <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$39.900</b>.</p>
-    <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Nada sale sin tu OK</p>
+    <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
+  </div></div>
+  <div class="section" id="herramienta" style="background:var(--bg2)"><div class="wrap" style="max-width:920px">
+    <h2>Una herramienta te da trabajo. Posty te lo saca.</h2>
+    <p class="lede">Las apps de IA para redes son lindas… hasta que te sentás a usarlas: hay que pensar, escribir, diseñar, programar y publicar. Eso es un trabajo. Posty <b>es</b> el que lo hace.</p>
+    <div class="lp-vs">
+      <div class="lp-vs-col lp-vs-tool">
+        <h3>Con una herramienta de IA, vos…</h3>
+        <ul>
+          <li>✗ Pensás qué postear cada semana</li>
+          <li>✗ Escribís las instrucciones y los textos</li>
+          <li>✗ Editás los diseños hasta que queden bien</li>
+          <li>✗ Programás y publicás uno por uno</li>
+          <li>✗ Aprendés un panel nuevo y complicado</li>
+          <li>✗ Te acordás solo de las fechas importantes</li>
+        </ul>
+      </div>
+      <div class="lp-vs-col lp-vs-posty">
+        <h3>Con Posty, vos…</h3>
+        <ul>
+          <li>✓ <b>Nada.</b> La semana llega armada y se publica sola</li>
+          <li>✓ <b>Nada.</b> Escribe en tu tono, con tu marca</li>
+          <li>✓ <b>Nada.</b> Sale listo — y si algo no te gusta, lo frenás en un toque</li>
+          <li>✓ <b>Nada.</b> Sale a la mejor hora, siempre</li>
+          <li>✓ <b>Nada.</b> No hay panel que aprender: es tener el community manager</li>
+          <li>✓ <b>Nada.</b> Posty caza las fechas que venden por vos</li>
+        </ul>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero no hacer nada 😎</a></div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
@@ -545,11 +613,11 @@ function landingView(cfg) {
       <details><summary>¿Posty publica en mi cuenta real de Instagram?</summary><p>Sí. Conectás tu cuenta Business una vez y publico directamente en tu perfil con la API oficial de Meta. Y en la prueba gratis ya ves tu semana armada antes de registrarte.</p></details>
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
-      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Me lo decís por el chat y lo cambio, o lo eliminás antes de que se publique. Además aprendo de lo que te gusta para hacerlo cada vez mejor.</p></details>
+      <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta la imagen? La rehacés con otro estilo o volvés a la anterior, gratis. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
-      <details><summary>¿Publicás sin que yo lo apruebe?</summary><p>No. Todo queda como borrador y solo se publica lo que vos revisás y programás. Nada sale sin tu OK.</p></details>
+      <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: tu semana sale sola en los mejores horarios, sin que toques nada. Antes de cada publicación te aviso, y si algo no te cierra lo frenás con un toque. ¿Preferís aprobar todo a mano? También podés: apagás la publicación automática en Ajustes y nada sale sin tu OK.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
-      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta entra como borradores, listos para revisar.</p></details>
+      <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta ya queda publicándose sola (con aviso previo, por si querés frenar algo).</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
