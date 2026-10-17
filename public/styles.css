@@ -2108,3 +2108,28 @@ textarea.in{resize:vertical;min-height:96px}
 .pz-drag-hint{margin:14px auto 0;font-size:13.5px;color:var(--mut);font-weight:700;text-align:center}
 @media(max-width:760px){.pz-drag-layer{padding:14px}.pz-drag{border-radius:16px}}
 @media (prefers-reduced-motion: reduce){.lp-live-dot,.pz-drag:not(.touched) .pz-drag-knob{animation:none}}
+
+/* v175 — sección #cm: Posty es un community manager completo (comunidad, crecimiento, ventas) */
+.lp-cm-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px;text-align:left}
+.lp-cm-card{background:#fff;border:2px solid #E3EDF4;border-radius:18px;padding:22px}
+.lp-cm-i{font-size:30px;margin-bottom:8px}
+.lp-cm-card h3{margin:0 0 2px;font-size:19px;color:#0A1E33}
+.lp-cm-tag{margin:0 0 8px;font-weight:800;font-size:14.5px;color:#2793C8}
+.lp-cm-card p:last-child{margin:0;color:var(--mut,#5A7186);font-size:15px;line-height:1.55}
+.lp-cm-cmp{margin:34px auto 0;max-width:720px;border-radius:18px;overflow:hidden;border:1px solid #e3edf5;background:#fff;box-shadow:0 10px 30px rgba(10,30,51,.07);text-align:left}
+.lp-cm-row{display:grid;grid-template-columns:1.15fr 1fr 1fr;align-items:stretch}
+.lp-cm-row>div{padding:13px 12px;font-size:13px;line-height:1.4;border-bottom:1px solid #eef3f8;color:var(--mut)}
+.lp-cm-row:last-child>div{border-bottom:none}
+.lp-cm-row .crit{font-weight:700;color:var(--txt);background:#f7fafd}
+.lp-cm-row .win{background:#eaf6fd;font-weight:700;color:#0A1E33}
+.lp-cm-row.lp-cm-head>div{background:#0A1E33;color:#fff;font-weight:800;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;border-bottom:none;padding:14px 12px}
+.lp-cm-row.lp-cm-head .win{background:#2793C8;color:#fff}
+.lp-cm-close{text-align:center;font-size:17.5px;font-weight:800;color:#0A1E33;margin:28px auto 20px;max-width:640px;line-height:1.45}
+@media (max-width:760px){
+  .lp-cm-cards{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .lp-cm-row>div{padding:10px 8px;font-size:11px}
+  .lp-cm-row.lp-cm-head>div{font-size:10px}
+  .lp-cm-close{font-size:15.5px}
+}

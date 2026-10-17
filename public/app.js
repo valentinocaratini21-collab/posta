@@ -638,6 +638,27 @@ function landingView(cfg) {
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>
+  <div class="section" id="cm"><div class="wrap">
+    <h2>Un community manager hace mucho más que publicar</h2>
+    <p class="lede">Un Instagram que vende no se mantiene solo: hay que publicar seguido, conversar con la gente, responder todo y promocionar lo que funciona. Eso es lo que hace un community manager. Y cobra <b>$300.000 o más por mes</b>. <b>Posty hace ese mismo trabajo, todos los días.</b></p>
+    <div class="lp-cm-cards">
+      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Comunidad</h3><p class="lp-cm-tag">Que nadie quede sin respuesta</p><p>Responde comentarios y mensajes (con tu OK en un toque), contesta tus reseñas de Google, y arma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas. Una comunidad se construye conversando, no solo publicando.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>Crecimiento</h3><p class="lp-cm-tag">Que te descubra gente nueva</p><p>Detecta tus posteos que mejor andan y los potencia con pauta (vos fijás el tope), te da tu página pública lista para compartir con botón de WhatsApp, y cada mes trabaja con un foco de crecimiento que vos elegís.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🛒</div><h3>Ventas</h3><p class="lp-cm-tag">Que el seguidor se vuelva cliente</p><p>Posteos pensados para vender: tu producto, tus promos. Te avisa ANTES de cada fecha que vende (Día de la Madre, Hot Sale, Navidad…) para llegar listo, y cada perfil termina en un toque: WhatsApp directo a tu negocio.</p></div>
+    </div>
+    <div class="lp-cm-cmp" role="table" aria-label="Comparación entre un community manager tradicional y Posty">
+      <div class="lp-cm-row lp-cm-head" role="row"><div>El trabajo</div><div>Community manager</div><div class="win">Posty</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Publica posteos, reels e historias</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuida tus reseñas</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>$300.000+ por mes</div><div class="win">Desde $1.330 por día</div></div>
+    </div>
+    <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
+    <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
+  </div></div>
   <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
     <h2><svg class="ig-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5"/><circle cx="12" cy="12" r="4.1"/><circle cx="17.4" cy="6.6" r="1.15" fill="currentColor" stroke="none"/></svg>Esto es lo que hace Posty en Instagram 🤖</h2>
     <p class="lede">Posteos reales de Instagram que armamos en minutos, para cualquier rubro: con tus fotos, tus colores y tu voz. Imaginá tu negocio acá 👇</p>
@@ -675,7 +696,7 @@ function landingView(cfg) {
   </div></div>
   <div class="section" id="trabajo"><div class="wrap">
     <h2>Así trabaja Posty por vos 🐾</h2>
-    <p class="lede">Esto pasa cada semana, solo, sin que toques nada:</p>
+    <p class="lede">Comunidad, crecimiento y ventas no pasan por arte de magia: pasan por hacer estas 9 cosas todas las semanas. Las hace Posty.</p>
     <div class="lp-jobs">
       <div class="lp-job"><div class="lp-job-i">🔍</div><h3>Estudia tu rubro</h3><p>Mira qué funciona en negocios como el tuyo y arma ideas para vender, no para rellenar.</p></div>
       <div class="lp-job"><div class="lp-job-i">📅</div><h3>Caza las fechas que venden</h3><p>Día de la Madre, Navidad, el día de tu rubro: tu semana se adapta sola a lo que la gente está comprando.</p></div>
@@ -762,6 +783,7 @@ function landingView(cfg) {
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
       <details><summary>¿Cuándo veo mi primera semana?</summary><p>Ya mismo: en la prueba gratis la ves armada en 1 minuto, y al crear tu cuenta ya queda publicándose sola (con aviso previo, por si querés frenar algo).</p></details>
       <details><summary>¿Posty responde los comentarios y los mensajes de mi Instagram?</summary><p>Sí. Por cada comentario o mensaje que llega, Posty te prepara la respuesta en el tono de tu negocio: la mandás con un toque, la editás o la descartás. Nada se responde sin que lo apruebes vos.</p></details>
+      <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar, responder, promocionar y cuidar tu perfil — con tu aprobación en un toque cuando hace falta criterio humano. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
       <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo con pauta. Cargás crédito en la app, fijás cuánto querés gastar y listo: tu mejor contenido llega a mucha más gente.</p></details>
     </div>
     <div style="text-align:center;margin-top:44px">
