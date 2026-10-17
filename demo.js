@@ -145,6 +145,246 @@ function stockPhotos3(category, business) {
   return stockPhotosN(category, 3, business);
 }
 
+// ---------- Motor de la prueba v182: estilos reales + fotos con match ----------
+// DEMO_ENGINE_V versiona TODO lo que la prueba cachea (trial_cache del
+// servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
+// vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
+// public/prueba.html.
+const DEMO_ENGINE_V = 2;
+
+// Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
+// archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
+// masculina, peluquería, makeup, skincare y uñas bajo un mismo nombre).
+// `temas`: lo que la foto MUESTRA de forma específica. Una foto sin entrada
+// acá es "desconocida": solo se usa como último recurso genérico.
+const PHOTO_TAGS = {
+  'beauty':   { temas: ['barberia', 'pelo'] },        // barbero cortando a un hombre
+  'beauty-1': { temas: ['barberia', 'local'] },       // interior de barbería (poste de barbero)
+  'beauty-2': { temas: ['pelo', 'local'] },           // interior de peluquería (bachas)
+  'beauty-3': { temas: ['makeup'] },                  // brochas de maquillaje (flat lay)
+  'beauty-4': { temas: ['skincare', 'cosmetica'] },  // crema cosmética sobre mármol
+  'beauty-5': { temas: ['makeup', 'rostro'] },        // retrato femenino con makeup completo
+  'beauty-6': { temas: ['unas'] },                    // manos con esmaltado rojo
+  'fashion':   { temas: ['moda', 'retrato'] },
+  'fashion-1': { temas: ['moda', 'retrato'] },
+  'fashion-2': { temas: ['moda', 'local'] },
+  'lifestyle':   { temas: ['cafe', 'comida'] },       // mesa de café con latte art
+  'lifestyle-1': { temas: ['cafe', 'personas'] },    // dos amigas con café y medialunas
+  'lifestyle-2': { temas: ['playa', 'retrato', 'moda'] },
+};
+// La familia food hereda la curaduría existente (pool de cafés CAFE_POOL):
+// temas genéricos de comida; las del pool de café suman 'cafe'.
+for (const f of fam('food', 6)) PHOTO_TAGS[f] = { temas: CAFE_POOL.includes(f) ? ['cafe', 'comida'] : ['comida'] };
+
+// Temas de foto PROHIBIDOS según el tema del posteo: la foto nunca puede ser
+// de OTRO servicio puntual (uñas vendiendo tintura fue el caso real).
+const TEMA_CONFLICTS = {
+  pelo: ['unas', 'makeup', 'barberia'],
+  makeup: ['unas', 'pelo', 'barberia'],
+  unas: ['pelo', 'makeup', 'barberia'],
+  skincare: ['barberia', 'unas'],
+  barberia: ['unas', 'makeup'],
+};
+// Temas de foto prohibidos para TODA la semana según el público del negocio
+// (una maquilladora no recibe fotos de pelo ni de barbería en ningún posteo;
+// una barbería no recibe uñas ni makeup aunque el tema sea genérico).
+const AUDIENCE_FORBIDDEN_TEMAS = {
+  makeup: ['pelo', 'barberia', 'unas'],
+  belleza: ['barberia'],
+  barberia: ['unas', 'makeup'],
+};
+// La guarda de tags cubre las categorías cuyos pools usan las familias
+// taggeadas (beauty/fashion/lifestyle). El resto conserva la curaduría
+// actual (photo asignada por tema + pool del rubro).
+const TAG_GUARD_CATS = new Set(['belleza', 'makeup', 'barberia']);
+
+function photoTemas(famName) {
+  const t = PHOTO_TAGS[famName];
+  return t ? t.temas : null; // null = desconocida
+}
+
+// Elige la foto de un tema con match obligatorio. Rangos:
+//  1) la foto MUESTRA el tema del posteo (match exacto de tema)
+//  2) foto conocida y sin ningún tema prohibido (genérica válida del rubro)
+//  3) la foto curada del tema, si no está prohibida
+//  4) foto desconocida (sin tags: no se conoce conflicto)
+//  5) cualquier foto del pool sin temas prohibidos (puede repetir)
+function pickPhotoTagged(topic, poolFams, used, forbiddenTemas) {
+  const forb = new Set(forbiddenTemas || []);
+  if (topic && topic.tema) for (const c of (TEMA_CONFLICTS[topic.tema] || [])) forb.add(c);
+  const banned = (f) => { const t = photoTemas(f); return !!t && t.some((x) => forb.has(x)); };
+  // Match exacto = muestra el tema Y no muestra ningún tema prohibido (el
+  // barbero cortando pelo es "pelo", pero para una peluquería femenina es
+  // barbería: no es match).
+  const exact = (f) => { const t = photoTemas(f); return !!(topic && topic.tema && t && t.includes(topic.tema) && !t.some((x) => forb.has(x))); };
+  const knownSafe = (f) => { const t = photoTemas(f); return !!t && !t.some((x) => forb.has(x)); };
+  const tiers = [
+    (f) => exact(f),
+    (f) => knownSafe(f),
+    (f) => !!topic && topic.photo === f && !banned(f),
+    (f) => photoTemas(f) === null,
+    (f) => !banned(f),
+  ];
+  for (const tier of tiers) {
+    const hit = poolFams.find((f) => !used.has(f) && tier(f));
+    if (hit) return hit;
+  }
+  return poolFams.find((f) => !banned(f)) || poolFams[0];
+}
+
+// ---------- Subrubro: makeup NO es peluquería ----------
+// La palabra específica manda sobre la familia genérica: si el negocio se
+// describe como makeup/maquillaje, los ángulos son de maquillaje aunque la
+// categoría del select sea "belleza". Una barbería declarada (barbero/barba
+// en el texto) no se convierte en makeup por mencionar la palabra al pasar.
+const MAKEUP_RE = /maquillaje|make\s?-?\s?up|makeup/i;
+const BARBER_RE = /barber|barba|corte masculino|fade/i;
+function demoSubcat({ business, category, goal }) {
+  const text = `${business || ''} ${goal || ''}`;
+  if (!MAKEUP_RE.test(text)) return null;
+  if (category === 'belleza' || category === 'otro') return 'makeup';
+  if (category === 'barberia' && !BARBER_RE.test(text)) return 'makeup';
+  return null;
+}
+
+// ---------- Estilos REALES del catálogo del producto ----------
+// La prueba usa los mismos estilos que el selector "Otro estilo" del
+// producto (GET /api/image-styles): brandSafe, no prohibidos para el rubro
+// y con match de rubro. El demo NO llama IA: el estilo se materializa como
+// TRATAMIENTO VISUAL determinístico en demo_render.py (ver DEMO-STYLES.md).
+let _IS = null;
+function imageStyles() {
+  if (_IS) return _IS;
+  try { _IS = require('./image-styles'); } catch (e) { _IS = null; }
+  return _IS;
+}
+
+// Pool de estilos del rubro: MISMA lógica que GET /api/image-styles.
+function demoStylePool(category, business) {
+  const IS = imageStyles();
+  if (!IS) return [];
+  let forbSet = new Set();
+  try { forbSet = new Set(IS.forbiddenStyles({ rubro: category, businessName: business || '' }).map((f) => f.code)); } catch (e) {}
+  const ok = (s) => !!(s && s.brandSafe && !forbSet.has(s.code));
+  let all = IS.STYLES.filter((s) => ok(s) && IS.rubroMatch(s, category));
+  if (!all.length) all = IS.STYLES.filter((s) => ok(s) && (s.rubros || []).includes('otro'));
+  if (!all.length) all = IS.STYLES.filter(ok);
+  return all;
+}
+
+// Estilos que nombran OTRO servicio puntual quedan fuera según el público
+// (una maquilladora no recibe el estilo "Uñas con esmaltado perfecto").
+const STYLE_AUDIENCE_EXCLUDE = {
+  makeup: /u[nñ]as|nails|barb|peluquer|hair|pelo|peinado|depilac|cera|cejas|pestañas|brow|lash/i,
+  belleza: /barb/i,
+  barberia: /u[nñ]as|nails|makeup|maquillaje|lipstick|cosmetic/i,
+};
+
+// Tratamiento visual determinístico derivado de los campos del estilo
+// (code + prompt del catálogo). Mapeo documentado en DEMO-STYLES.md:
+//  - skeleton: duo (antes/después) · centro (cita) · velo (oscuro/cine) ·
+//    claro (luminoso/estudio) · abajo/arriba (degradé de marca, por hash)
+//  - grade: warm/vivid/soft/cool/neutral según el vocabulario del prompt
+//  - crop: 'tight' si el estilo es macro/detalle
+function treatmentForStyle(style) {
+  const code = String((style && style.code) || '').toLowerCase();
+  const pr = String((style && style.prompt) || '').toLowerCase();
+  const both = code + ' ' + pr;
+  let skeleton;
+  if (/before/.test(both) && /after|despu/.test(both)) skeleton = 'duo';
+  else if (code.includes('quote') || /\bquote\b/.test(pr)) skeleton = 'centro';
+  else if (/dark|night|neon|cinematic|noir|moody|midnight/.test(both)) skeleton = 'velo';
+  else if (/bright|airy|clean|minimal|studio|packshot|flat[ -]?lay/.test(both)) skeleton = 'claro';
+  else {
+    let h = 0;
+    for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    skeleton = h % 2 === 0 ? 'abajo' : 'arriba';
+  }
+  let grade = 'neutral';
+  if (/warm|golden|cozy|sunset|gold/.test(both)) grade = 'warm';
+  else if (/vibrant|pop|saturated|vivid|colorful/.test(both)) grade = 'vivid';
+  else if (/soft|pastel|muted|dreamy|gentle/.test(both)) grade = 'soft';
+  else if (/cool|fresh|blue/.test(both)) grade = 'cool';
+  const crop = /macro|close[ -]?up|detail|zoom/.test(both) ? 'tight' : 'normal';
+  return { skeleton, grade, crop };
+}
+
+const KIND_INTENT = { promo: 'promo', tip: 'tips', social: 'testimonio', novedad: 'lanzamiento', reserva: 'producto', sorteo: 'promo' };
+// El NOMBRE del estilo se imprime en la pieza: un estilo que nombra un plato
+// ("Hamburguesa", "Cazuela de mariscos") solo puede etiquetar un posteo DE
+// ESE plato. dishOf devuelve el plato canónico mencionado o null.
+const DISH_PATTERNS = [
+  ['burger', /hamburgues|burger/i], ['pizza', /pizza/i], ['sushi', /sushi/i],
+  ['taco', /taco|burrito/i], ['pasta', /pasta|fideos|ñoquis/i], ['risotto', /risotto/i],
+  ['cazuela', /cazuela/i], ['mariscos', /mariscos|marisco/i], ['provoleta', /provoleta/i],
+  ['milanesa', /milanesa/i], ['empanada', /empanada/i], ['asado', /asado|parrilla/i],
+  ['helado', /helado|ice ?cream/i], ['ramen', /ramen/i],
+  ['cafe', /caf[eé]|coffee|latte|cappuccino|espresso|capuchino/i],
+  ['croissant', /croissant|medialuna/i], ['brunch', /brunch/i],
+  ['pescado', /pescado|fish|salm[oó]n|at[uú]n/i], ['pollo', /pollo|chicken/i],
+  ['carne', /carne|meat|steak|bife/i], ['ensalada', /ensalada|salad/i],
+  ['sopa', /sopa|soup|caldo/i], ['postre', /postre|dessert|torta|pastel/i],
+];
+function dishOf(text) {
+  const t = String(text || '');
+  for (const [key, re] of DISH_PATTERNS) if (re.test(t)) return key;
+  return null;
+}
+
+// Elige UN estilo del catálogo por posteo: todos distintos, intención del
+// posteo primero (misma tabla INTENT_STYLES del producto), diversidad de
+// composición garantizada (≥3 esqueletos si hay 3+ posteos).
+function pickDemoStyles({ topics, category, subcat, business }) {
+  const IS = imageStyles();
+  if (!IS) return topics.map(() => null);
+  let pool = demoStylePool(category, business);
+  const excl = STYLE_AUDIENCE_EXCLUDE[subcat || category];
+  if (excl) pool = pool.filter((s) => !excl.test(s.code + ' ' + s.name));
+  if (!pool.length) pool = demoStylePool(category, business);
+  const used = new Set();
+  const usedSkeletons = new Set();
+  const picks = topics.map((t) => {
+    const intent = KIND_INTENT[t.kind] || 'producto';
+    const intentList = (IS.INTENT_STYLES && IS.INTENT_STYLES[intent]) || [];
+    let best = null, bestScore = -Infinity;
+    for (const s of pool) {
+      if (used.has(s.code)) continue;
+      const tr = treatmentForStyle(s);
+      let score = Math.random() * 9;
+      const ii = intentList.indexOf(s.code);
+      if (ii >= 0) score += 100 - ii;
+      // Un posteo de ANTES/DESPUÉS pide el estilo antes/después: la pieza
+      // tiene que mostrar lo que su etiqueta promete (skeleton duo).
+      if (/antes/i.test(String(t.tag || '')) && /before/.test(s.code)) score += 130;
+      // Un estilo que nombra un plato solo etiqueta posteos de ese plato.
+      const sd = dishOf(`${s.code} ${s.name}`);
+      if (sd && dishOf(`${t.headline} ${t.sub} ${t.tag}`) !== sd) score -= 200;
+      if (!usedSkeletons.has(tr.skeleton)) score += 40;
+      if (subcat === 'makeup' && /makeup|beauty|cosmet|glow|skin|lipstick|editorial/i.test(s.code + ' ' + s.name + ' ' + (s.prompt || ''))) score += 15;
+      if (score > bestScore) { bestScore = score; best = s; }
+    }
+    if (best) { used.add(best.code); usedSkeletons.add(treatmentForStyle(best).skeleton); }
+    return best;
+  });
+  // Reparación de diversidad: si quedaron <3 esqueletos, cambiar picks
+  // tardíos por estilos sin usar que aporten un esqueleto nuevo.
+  if (topics.length >= 3) {
+    const skels = new Set(picks.filter(Boolean).map((s) => treatmentForStyle(s).skeleton));
+    if (skels.size < 3) {
+      for (let i = picks.length - 1; i >= 0 && skels.size < 3; i--) {
+        const alt = pool.find((s) => !used.has(s.code) && !skels.has(treatmentForStyle(s).skeleton)
+          && ((IS.INTENT_STYLES[KIND_INTENT[topics[i].kind] || 'producto'] || []).includes(s.code) || true));
+        if (!alt) break;
+        if (picks[i]) used.delete(picks[i].code);
+        picks[i] = alt;
+        used.add(alt.code);
+        skels.add(treatmentForStyle(alt).skeleton);
+      }
+    }
+  }
+  return picks;
+}
+
 // ---------- Colores elegidos por el visitante ----------
 const DEMO_COLOR_DEFAULTS = { accent: '#2793C8', btn: '#FEC14D' };
 
@@ -423,12 +663,18 @@ function runDemoRender(args, timeoutMs = 90000) {
   });
 }
 
-// El 3er posteo sale como video: demo_video.py renderiza los frames con PIL
-// (zoom suave Ken Burns, 6 segundos, 1080×1350) y los codifica a MP4 con ffmpeg.
-function renderDemoVideo(pngPath, runDir, idx) {
+// El video de la semana: demo_video.py anima los diseños con zoom suave
+// (zoompan de ffmpeg). Con 2+ diseños hace un TOUR: recorre las piezas con
+// cortes cortos (como un reel de verdad); con 1 solo, el Ken Burns clásico
+// de 6 segundos.
+function renderDemoVideo(imagePaths, runDir, idx) {
   return new Promise((resolve, reject) => {
     const out = path.join(runDir, `post-${idx == null ? 2 : idx}.mp4`);
-    execFile('python3', [DEMO_VIDEO_SCRIPT, pngPath, out, '6'], (err, stdout, stderr) => {
+    const paths = (Array.isArray(imagePaths) ? imagePaths : [imagePaths]).filter(Boolean);
+    const args = paths.length >= 2
+      ? [DEMO_VIDEO_SCRIPT, '--tour', out, '1.4', ...paths]
+      : [DEMO_VIDEO_SCRIPT, paths[0], out, '6'];
+    execFile('python3', args, (err, stdout, stderr) => {
       if (err) return reject(new Error('video: ' + String(stderr || err.message).slice(0, 200)));
       try { resolve(fs.readFileSync(out)); }
       catch (e) { reject(e); }
@@ -444,45 +690,59 @@ function renderDemoVideo(pngPath, runDir, idx) {
 function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
-  const { topics: allTopics, goalLine } = applyGoal(captions.DEMO_TOPICS[cat], goal, goal_key, !!photoPath);
+  // Subrubro (makeup ≠ peluquería): cambia los ÁNGULOS, no la categoría.
+  const subcat = demoSubcat({ business, category: cat, goal });
+  const topicsBase = (subcat === 'makeup' && captions.DEMO_TOPICS.makeup)
+    ? captions.DEMO_TOPICS.makeup
+    : (captions.DEMO_TOPICS[cat] || captions.DEMO_TOPICS.otro);
+  const { topics: allTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath);
   const topics = allTopics.slice(0, n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
-  let stylesN, photos;
-  if (base && Array.isArray(base.styles) && base.styles.length >= n && Array.isArray(base.photos) && base.photos.length >= n) {
-    stylesN = base.styles.slice(0, n);
+  let styleObjs, photos;
+  const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
+    && base.styles.every((c) => { const IS = imageStyles(); return IS && IS.getStyle(c); });
+  if (baseStylesOk && Array.isArray(base.photos) && base.photos.length >= n) {
+    const IS = imageStyles();
+    styleObjs = base.styles.slice(0, n).map((c) => IS.getStyle(c));
     photos = base.photos.slice(0, n);
   } else {
-    const stylePool = ['promo', 'editorial', 'nocturno', 'bloque', 'marco', 'sello', 'cita', 'tipografico', 'oferta'];
-    for (let i = stylePool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [stylePool[i], stylePool[j]] = [stylePool[j], stylePool[i]];
+    // Estilos REALES del catálogo del producto: uno distinto por posteo.
+    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business });
+    if (photoPath) {
+      photos = topics.map(() => ({ userPhoto: true }));
+    } else if (TAG_GUARD_CATS.has(subcat || cat)) {
+      // Foto por tema con match obligatorio (guarda de tags).
+      const poolFams = (cat === 'gastronomia' && isCafeBusiness(business))
+        ? CAFE_POOL.slice()
+        : (CATEGORY_PHOTOS[subcat === 'makeup' ? 'belleza' : cat] || CATEGORY_PHOTOS.otro).slice();
+      const forbidden = AUDIENCE_FORBIDDEN_TEMAS[subcat || cat] || [];
+      const usedFams = new Set();
+      photos = topics.map((t) => {
+        const famName = pickPhotoTagged(t, poolFams, usedFams, forbidden);
+        usedFams.add(famName);
+        const p = path.join(STOCK_DIR, famName + '.webp');
+        if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
+        return p;
+      });
+    } else {
+      const stockN = stockPhotosN(cat, n, business);
+      // Foto por tema: si el tema trae `photo` asignada se usa esa (matchea el
+      // posteo); si no, se sortea del pool evitando repetir la misma foto.
+      // En cafés, los temas con `photoCafe` usan la variante de café.
+      const isCafe = cat === 'gastronomia' && isCafeBusiness(business);
+      const usedPhotos = new Set();
+      photos = topics.map((t) => {
+        const key = (isCafe && t.photoCafe) ? t.photoCafe : t.photo;
+        if (key) {
+          const p = path.join(STOCK_DIR, key + '.webp');
+          if (fs.existsSync(p) && !usedPhotos.has(p)) { usedPhotos.add(p); return p; }
+        }
+        const pick = stockN.find((s) => !usedPhotos.has(s)) || stockN[0];
+        usedPhotos.add(pick);
+        return pick;
+      });
     }
-    stylesN = stylePool.slice(0, n);
-    const socialIdx = topics.findIndex((t) => t.kind === 'social');
-    const citaIdx = stylesN.indexOf('cita');
-    if (citaIdx >= 0 && topics[citaIdx].kind !== 'social') {
-      const repl = stylePool.slice(n).find((s) => s !== 'cita') || 'editorial';
-      stylesN[citaIdx] = repl;
-      if (socialIdx >= 0) stylesN[socialIdx] = 'cita';
-    }
-    const stockN = photoPath ? null : stockPhotosN(cat, n, business);
-    // Foto por tema: si el tema trae `photo` asignada se usa esa (matchea el
-    // posteo); si no, se sortea del pool evitando repetir la misma foto.
-    // En cafés, los temas con `photoCafe` usan la variante de café.
-    const isCafe = cat === 'gastronomia' && isCafeBusiness(business);
-    const usedPhotos = new Set();
-    photos = topics.map((t) => {
-      if (photoPath) return { userPhoto: true };
-      const key = (isCafe && t.photoCafe) ? t.photoCafe : t.photo;
-      if (key) {
-        const p = path.join(STOCK_DIR, key + '.webp');
-        if (fs.existsSync(p) && !usedPhotos.has(p)) { usedPhotos.add(p); return p; }
-      }
-      const pick = stockN.find((s) => !usedPhotos.has(s)) || stockN[0];
-      usedPhotos.add(pick);
-      return pick;
-    });
   }
   const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
   const specPosts = topics.map((t, i) => {
@@ -492,9 +752,14 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       headline = captions.TU_HEADLINES[headline] || headline;
       subline = captions.toTu(subline);
     }
+    const st = styleObjs[i] || null;
     return {
       photo: photos[i],
-      style: stylesN[i],
+      style: st ? st.code : 'promo',
+      style_name: st ? st.name : '',
+      treatment: st ? treatmentForStyle(st) : null,
+      kind: t.kind,
+      tema: t.tema || null,
       focus: focuses[i],
       pill: t.tag,
       bar,
@@ -504,7 +769,8 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       watermark: 'Hecho con Posty',
     };
   });
-  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, n - 1), count: n, goalLine, topics };
+  const stylesN = specPosts.map((p) => p.style);
+  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, n - 1), count: n, goalLine, topics, subcat };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -522,15 +788,21 @@ async function renderSpecPngs(specPosts, colors) {
   }
 }
 
-async function renderVideoB64(pngPath, runDir, idx) {
+async function renderVideoB64(imagePaths, runDir, idx) {
   const waits = [1500, 3000, 6000];
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      return (await renderDemoVideo(pngPath, runDir, idx)).toString('base64');
+      return (await renderDemoVideo(imagePaths, runDir, idx)).toString('base64');
     } catch (e) {
       console.error('[posta] Video falló (intento ' + (attempt + 1) + '/4):', e.message);
       if (attempt < 3) await new Promise((r) => setTimeout(r, waits[attempt]));
     }
+  }
+  // Último recurso: si el tour falló, el video clásico de un solo diseño.
+  const paths = (Array.isArray(imagePaths) ? imagePaths : [imagePaths]).filter(Boolean);
+  if (paths.length >= 2) {
+    try { return (await renderDemoVideo(paths[Math.min(2, paths.length - 1)], runDir, idx)).toString('base64'); }
+    catch (e) { console.error('[posta] Video fallback también falló:', e.message); }
   }
   console.error('[posta] ⚠️ VIDEO FALLÓ TRAS 4 INTENTOS');
   return null;
@@ -578,23 +850,14 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     styles: spec.styles,
     photos: spec.photos,
     videoIdx, count: n,
+    engine: DEMO_ENGINE_V,
+    subcat: spec.subcat || null,
   };
   // En generación inicial photoPath existe: lo inyectamos directo.
   const withPhotos = specPosts.map((p) => (
     (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
   ));
-  // El video arranca APENAS está su diseño (en paralelo con los diseños
-  // que faltan): es el paso más lento de la prueba y esperarlo al final
-  // sumaba segundos de reloj sin ninguna necesidad.
-  const vDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-vid-'));
-  let videoPromise = null;
-  const onPng = (i, buf) => {
-    if (i === videoIdx && !videoPromise) {
-      const vp = path.join(vDir, `post-${videoIdx}.jpg`);
-      try { fs.writeFileSync(vp, buf); videoPromise = renderVideoB64(vp, vDir, videoIdx); } catch (e) {}
-    }
-  };
-  const { bufs, runDir } = await renderSpecPngsStream(withPhotos, { accent, btn }, onPng);
+  const { bufs, runDir } = await renderSpecPngsStream(withPhotos, { accent, btn }, () => {});
   try {
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
     // no pasa el gate, se reintenta con otro tema del rubro. Nunca sale un
@@ -608,29 +871,24 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
         caption: r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline, // titular real renderizado en el diseño
+        style: specPosts[i].style,
+        style_name: specPosts[i].style_name,
       };
     });
 
-    // El 3er posteo sale como video (el diseño del medio, animado con zoom
-    // suave). El render ya viene corriendo en paralelo desde que su diseño
-    // estuvo listo; esto solo lo espera si todavía no terminó.
-    let videoB64 = null;
-    if (videoPromise) { try { videoB64 = await videoPromise; } catch (e) {} }
-    if (!videoB64) {
-      const vpath = path.join(runDir, `post-${videoIdx}.jpg`);
-      try { fs.writeFileSync(vpath, bufs[videoIdx]); } catch (e) {}
-      videoB64 = await renderVideoB64(vpath, runDir, videoIdx);
-    }
+    // El video recorre TODOS los diseños con cortes (tour): ya no es una
+    // sola tarjeta estática animada. Los JPG ya están en runDir.
+    const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
+    const videoB64 = await renderVideoB64(designPaths, runDir, videoIdx);
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline }
-        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline }
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name }
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name }
     ));
     return { posts, spec: savedSpec };
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
-    try { fs.rmSync(vDir, { recursive: true, force: true }); } catch (_) {}
   }
 }
 
@@ -891,6 +1149,11 @@ const CATEGORY_KEYWORDS = [
 // matchea, devuelve 'otro'.
 function categoryFromText(text) {
   const t = String(text || '');
+  // La palabra ESPECÍFICA manda sobre la familia genérica: una bio que dice
+  // maquillaje/make-up es belleza (y el subrubro makeup lo resuelve
+  // demoSubcat), aunque también mencione "peluquería" al pasar. Solo una
+  // barbería declarada (barbero/barba) le gana a esa regla.
+  if (MAKEUP_RE.test(t) && !/barber|barba/i.test(t)) return 'belleza';
   for (const [re, cat] of CATEGORY_KEYWORDS) {
     if (re.test(t)) return cat;
   }
@@ -974,6 +1237,15 @@ module.exports = {
   DEMO_TOPICS: captions.DEMO_TOPICS,
   resolveTrialCaption: captions.resolveTrialCaption,
   DEMO_LIMIT_PER_DAY,
+  DEMO_ENGINE_V,
+  PHOTO_TAGS,
+  TEMA_CONFLICTS,
+  AUDIENCE_FORBIDDEN_TEMAS,
+  treatmentForStyle,
+  dishOf,
+  demoSubcat,
+  pickDemoStyles,
+  pickPhotoTagged,
   MAX_FILE_BYTES,
   CATEGORIES,
   CATEGORY_LABELS,

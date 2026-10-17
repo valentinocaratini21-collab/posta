@@ -395,6 +395,11 @@ CREATE TABLE IF NOT EXISTS recycled_posts (
 // por el scheduler (todo lo publicado sin veto se auto-marca 'approved' y
 // diluye el taste). 0 = manual (o anterior), 1 = auto.
 try { db.exec(`ALTER TABLE post_signals ADD COLUMN auto_signal INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// v182: style_code/tipo también DESPUÉS del CREATE — los ALTER de arriba
+// (línea ~175) corren antes de que la tabla exista en una DB nueva y la
+// tabla nacía sin estas columnas (mismo bug que assets en v181).
+try { db.exec(`ALTER TABLE post_signals ADD COLUMN style_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE post_signals ADD COLUMN tipo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 // Referidos: cada usuario tiene su código; referred_by apunta al usuario que lo trajo
 try { db.exec(`ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

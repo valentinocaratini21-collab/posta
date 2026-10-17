@@ -912,6 +912,12 @@ function importTrialWeek(userId, igRaw, expectedBusiness) {
   if (!hit) return 0;
   let out;
   try { out = JSON.parse(hit.payload); } catch (e) { return 0; }
+  // Motor viejo (v182): las plantillas anteriores NO se importan — la
+  // semana tiene que regenerarse con el motor actual antes de registrarse.
+  if (Number((out && out.engine) || 0) < demo.DEMO_ENGINE_V) {
+    console.log(`[posta] importTrialWeek: semana de @${ig} es de un motor viejo (engine=${out && out.engine}) — no se importa`);
+    return 0;
+  }
   const exp = String(expectedBusiness || '').trim().toLowerCase();
   if (exp) {
     const got = String((out && out.business) || '').trim().toLowerCase();
@@ -937,9 +943,20 @@ function importTrialWeek(userId, igRaw, expectedBusiness) {
       const name = `trial-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
       fs.writeFileSync(path.join(MEDIA_DIR, name), buf);
       const clientPhoto = trialPostUsesClientPhoto(out, idx) ? 1 : 0;
-      db.prepare(
-        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo) VALUES (?,?,?,?,?,?,?,?,?)'
-      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', trainingWheelsActive(userId) ? 1 : 0, 'trial', clientPhoto);
+      // El estilo del catálogo viaja con el posteo: posts.style_code y la
+      // fila de post_signals (así el aprendizaje por estilo lo ve desde el
+      // día uno, igual que un posteo generado adentro del producto).
+      const dpost = (out.design && Array.isArray(out.design.posts) && out.design.posts[idx]) || {};
+      const styleCode = String(dpost.style || p.style || '').slice(0, 60);
+      const ins = db.prepare(
+        'INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, style_code) VALUES (?,?,?,?,?,?,?,?,?,?)'
+      ).run(userId, `/media/${name}`, String(p.caption || ''), String(p.hashtags || ''), 'draft', isVideo ? 'video' : 'image', trainingWheelsActive(userId) ? 1 : 0, 'trial', clientPhoto, styleCode);
+      try {
+        db.prepare(`INSERT INTO post_signals (user_id, post_id, caption, hashtags, scheduled_for, rubro, client_signal, week_key, updated_at, style_code, tipo)
+          VALUES (?,?,?,?,?,?,?,?,datetime('now'),?,?)
+          ON CONFLICT(user_id, post_id) DO UPDATE SET style_code=excluded.style_code, tipo=excluded.tipo, updated_at=datetime('now')`)
+          .run(userId, Number(ins.lastInsertRowid), String(p.caption || ''), String(p.hashtags || ''), '', String(out.category || ''), 'approved', '', styleCode, String(dpost.kind || ''));
+      } catch (e) { console.error('[posta] importTrialWeek signal:', e.message); }
       n++;
     } catch (e) { /* un posteo fallido no frena los demás */ }
   }
@@ -2566,6 +2583,29 @@ app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, 
     db.prepare('UPDATE users SET autopilot_enabled = 0 WHERE id = ?').run(uid);
     console.log(`[admin] stop-publishing uid=${uid}: ${upd.changes} posteos desprogramados, autopilot off`);
     res.json({ ok: true, user_id: uid, unscheduled: upd.changes });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Extensión de prueba por soporte (v182): setea trial_extended_until =
+// ahora + days (default 7) y devuelve el estado efectivo usando el MISMO
+// cálculo del producto (trialEffectiveEnd: max entre fin de trial y
+// extensión vigente). Pensado para reactivar cuentas de prueba vencidas.
+app.post('/api/admin/extend-trial', requireAdminToken, express.json(), (req, res) => {
+  const uid = Number((req.body || {}).user_id) || 0;
+  const days = Math.min(Math.max(Number((req.body || {}).days) || 7, 1), 90);
+  if (!uid) return res.status(400).json({ error: 'falta user_id' });
+  try {
+    const u = db.prepare('SELECT id, email, plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
+    if (!u) return res.status(404).json({ error: 'usuario no encontrado' });
+    const until = Date.now() + days * 86400000;
+    db.prepare('UPDATE users SET trial_extended_until = ? WHERE id = ?').run(until, uid);
+    const eff = trialEffectiveEnd({ ...u, trial_extended_until: until });
+    console.log(`[admin] extend-trial uid=${uid}: +${days}d (hasta ${new Date(until).toISOString().slice(0, 10)})`);
+    res.json({
+      ok: true, user_id: uid, email: u.email, plan_status: u.plan_status, days,
+      trial_extended_until: until,
+      effective_trial_end: eff,
+      effective_trial_end_iso: eff ? new Date(eff).toISOString() : null,
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
@@ -10134,6 +10174,9 @@ const TRIAL_IMG_MIME = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png'
 // (bug 2026-10-03: posteos "FITSWAPP" en la cuenta de otro negocio).
 function trialCacheMatches(out, business, category) {
   try {
+    // Motor de la prueba (v182): una semana generada por un motor viejo NO
+    // se sirve desde el cache — se regenera con el motor actual.
+    if (!out || Number(out.engine || 0) !== demo.DEMO_ENGINE_V) return false;
     const b = String((out && out.business) || '').trim().toLowerCase();
     const want = String(business || '').trim().toLowerCase();
     if (!b || !want || b !== want) return false;
@@ -10262,6 +10305,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     }
     const out = {
       ok: true,
+      engine: demo.DEMO_ENGINE_V,
       business, ig, category,
       accent, btn, color_source: colorSource,
       ig_pic: igPic, ig_name: igName,
@@ -10453,7 +10497,6 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
 
   let photoPath = null;
   let runDir = null;
-  let vDir = null;
   let doneSent = false;
   try {
     if (file) {
@@ -10490,10 +10533,6 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const posts = new Array(n).fill(null);
     // 3) Render con streaming: cada PNG que aparece se emite como post imagen
     send('status', { step: 'diseno', text: 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
-    // El video arranca APENAS está su diseño, en paralelo con los que
-    // faltan: es el paso más lento y esperarlo al final sumaba segundos.
-    vDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-vid-'));
-    let videoPromise = null;
     const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn }, async (i, buf) => {
       posts[i] = {
         type: 'image',
@@ -10501,26 +10540,20 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         caption: made[i].caption,
         hashtags: made[i].hashtags,
         headline: made[i].headline,
+        style: specPosts[i].style,
+        style_name: specPosts[i].style_name,
       };
       send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
-      if (i === videoIdx && !videoPromise) {
-        const vp = path.join(vDir, `post-${videoIdx}.jpg`);
-        try { fs.writeFileSync(vp, buf); videoPromise = demo.renderVideoB64(vp, vDir, videoIdx); } catch (e) {}
-      }
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
 
-    // 4) El video: ya viene renderizándose en paralelo; si el render
-    // temprano falló, se reintenta acá por el camino de siempre.
+    // 4) El video (v182): recorre TODOS los diseños con cortes (tour por
+    // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
+    // diseños listos, así que arranca acá; los JPG ya están en runDir.
     send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' });
-    let videoB64 = null;
-    if (videoPromise) { try { videoB64 = await videoPromise; } catch (e) {} }
-    if (!videoB64) {
-      const vpath = path.join(runDir, `post-${videoIdx}.jpg`);
-      try { fs.writeFileSync(vpath, bufs[videoIdx]); } catch (e) {}
-      videoB64 = await demo.renderVideoB64(vpath, runDir, videoIdx);
-    }
+    const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
+    const videoB64 = await demo.renderVideoB64(designPaths, runDir, videoIdx);
     if (videoB64) {
       posts[videoIdx] = {
         type: 'video',
@@ -10528,6 +10561,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         caption: made[videoIdx].caption,
         hashtags: made[videoIdx].hashtags,
         headline: made[videoIdx].headline,
+        style: specPosts[videoIdx].style,
+        style_name: specPosts[videoIdx].style_name,
       };
     } else {
       posts[videoIdx] = {
@@ -10536,6 +10571,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         caption: made[videoIdx].caption,
         hashtags: made[videoIdx].hashtags,
         headline: made[videoIdx].headline,
+        style: specPosts[videoIdx].style,
+        style_name: specPosts[videoIdx].style_name,
       };
     }
     send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, post: posts[videoIdx] });
@@ -10551,6 +10588,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
     const out = {
       ok: true,
+      engine: demo.DEMO_ENGINE_V,
       business, ig, category,
       accent, btn, color_source: colorSource,
       ig_pic: igPic, ig_name: igName,
@@ -10561,6 +10599,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         styles: spec.styles,
         photos: spec.photos,
         videoIdx, count: n,
+        engine: demo.DEMO_ENGINE_V,
+        subcat: spec.subcat || null,
       },
       week, // día/fecha por posteo (el mismo que viaja en los eventos post)
       screenshot,
@@ -10592,9 +10632,6 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     }
     if (runDir) {
       try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
-    }
-    if (vDir) {
-      try { fs.rmSync(vDir, { recursive: true, force: true }); } catch (_) {}
     }
   }
 });
@@ -11265,7 +11302,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v181';
+const BUILD_ID = '20261017-v182';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

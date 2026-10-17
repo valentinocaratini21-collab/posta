@@ -655,6 +655,9 @@ try { window.addEventListener('pagehide', () => { try { if (_TQ.length && naviga
 const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Restaurante","cafeteria":"Cafetería","bar":"Bar / Cervecería","belleza":"Belleza / Estética","barberia":"Barbería / Peluquería","fitness":"Fitness / Gimnasio","mascotas":"Mascotas / Veterinaria","salud":"Salud / Odontología","hogar":"Servicios para el hogar","deco":"Muebles / Decoración","inmobiliaria":"Inmobiliaria","autos":"Autos / Taller","educacion":"Educación / Cursos","tecnologia":"Tecnología / Celulares","turismo":"Turismo / Hotelería","viajes":"Agencia de viajes","eventos":"Eventos / Fiestas","fotografia":"Fotografía","arte":"Arte / Diseño","joyeria":"Joyería / Accesorios","flores":"Florería / Vivero","profesionales":"Servicios profesionales","servicios":"Servicios","otro":"Otro"};
 
 let TRIAL = null;      // respuesta del backend
+// Motor de la prueba (sincronizado con DEMO_ENGINE_V en demo.js): una
+// semana guardada por un motor viejo NO se restaura — se genera de nuevo.
+const TRIAL_ENGINE_V = 2;
 let COUNTRY = 'AR';
 let TONE = 'vos';
 // Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
@@ -790,7 +793,7 @@ function show(id) {
   if (!TEST_KEY_QS) {
     try {
       const saved = await idb.get();
-      if (saved && saved.ok) { TRIAL = saved; renderResults(); return; }
+      if (saved && saved.ok && saved.engine === TRIAL_ENGINE_V) { TRIAL = saved; renderResults(); return; }
     } catch (e) {}
   }
   show('v-onboarding');

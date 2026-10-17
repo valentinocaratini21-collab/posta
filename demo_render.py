@@ -763,6 +763,326 @@ def render_post(d, img, fonts_dir, p, hsize_start, C):
     return bottom
 
 
+# =====================================================================
+# MOTOR v182 — estilos REALES del catálogo del producto.
+# El spec trae por posteo: style (code del catálogo), style_name y
+# treatment {skeleton, grade, crop} derivado determinísticamente en
+# demo.js (mapeo en DEMO-STYLES.md). Gramática de composite-headline.py:
+# foto protagonista a pantalla completa, titular integrado con fondo
+# según la luminancia REAL de la zona, barra de acento con la paleta del
+# cliente, Montserrat. Sin bloques de color como superficie principal.
+# =====================================================================
+
+def grade_v2(p):
+    """Grado base suave: balance de blancos + exposición apenas levantada.
+    (El grado viejo mezclaba 42% de blanco: lavaba la foto y se veía barato.)"""
+    st = ImageStat.Stat(p)
+    mr, mg, mb = st.mean[0], st.mean[1], st.mean[2]
+    lum = (mr + mg + mb) / 3.0 or 1.0
+
+    def cg(m, lo, hi):
+        return min(max(lum / m, lo), hi) if m > 1 else 1.0
+
+    s = 0.65
+    egr = 1 + (cg(mr, 0.86, 1.16) - 1) * s
+    egg = 1 + (cg(mg, 0.93, 1.07) - 1) * s
+    egb = 1 + (cg(mb, 0.86, 1.22) - 1) * s
+    r, g, b = p.split()
+    r = r.point(lambda v: 255 if v * egr >= 255 else int(v * egr))
+    g = g.point(lambda v: 255 if v * egg >= 255 else int(v * egg))
+    b = b.point(lambda v: 255 if v * egb >= 255 else int(v * egb))
+    p = Image.merge("RGB", (r, g, b))
+    p = ImageEnhance.Brightness(p).enhance(1.08)
+    p = Image.blend(p, Image.new("RGB", p.size, (255, 255, 255)), 0.14)
+    return p
+
+
+def load_photo_v2(photo_path, focus=0.5, zoom=1.0):
+    """Foto full-bleed 1080x1350 con grado v2. zoom>1 = crop más cerrado
+    (tratamiento macro/detalle del estilo)."""
+    if not os.path.isfile(photo_path):
+        raise FileNotFoundError("foto no encontrada: %s" % photo_path)
+    _im = Image.open(photo_path)
+    try:
+        _im.draft("RGB", (W * 2, H * 2))
+    except Exception:
+        pass
+    p = _im.convert("RGB")
+    target = W / H
+    pw, ph = p.size
+    if pw / ph > target:
+        nw = int(ph * target)
+        x0 = (pw - nw) // 2
+        p = p.crop((x0, 0, x0 + nw, ph))
+    else:
+        nh = int(pw / target)
+        y0 = int((ph - nh) * max(0.0, min(1.0, focus)))
+        p = p.crop((0, y0, pw, y0 + nh))
+    p = p.resize((W, H), Image.LANCZOS)
+    if zoom and zoom > 1.01:
+        zw, zh = int(W * zoom), int(H * zoom)
+        p = p.resize((zw, zh), Image.LANCZOS)
+        x0 = (zw - W) // 2
+        y0 = int((zh - H) * max(0.0, min(1.0, focus)))
+        p = p.crop((x0, y0, x0 + W, y0 + H))
+    return grade_v2(p)
+
+
+def apply_grade(img, grade):
+    if grade == "warm":
+        img = Image.blend(img, Image.new("RGB", img.size, (255, 190, 120)), 0.06)
+        img = ImageEnhance.Color(img).enhance(1.06)
+    elif grade == "cool":
+        img = Image.blend(img, Image.new("RGB", img.size, (140, 190, 255)), 0.05)
+    elif grade == "vivid":
+        img = ImageEnhance.Color(img).enhance(1.16)
+        img = ImageEnhance.Contrast(img).enhance(1.06)
+    elif grade == "soft":
+        img = ImageEnhance.Color(img).enhance(0.92)
+        img = ImageEnhance.Brightness(img).enhance(1.03)
+    return img
+
+
+def band_lum(img, y0f, y1f):
+    """Luminancia media (0..255) de una franja horizontal de la foto."""
+    y0 = int(H * y0f)
+    y1 = max(y0 + 1, int(H * y1f))
+    px = img.crop((0, y0, W, y1)).resize((1, 1)).getpixel((0, 0))
+    return 0.299 * px[0] + 0.587 * px[1] + 0.114 * px[2]
+
+
+def grad_scrim(img, rgb, y0f, y1f, alpha_max, from_top=False):
+    """Degradé vertical de un color: fuerte en un borde, cero en y1f/y0f."""
+    col = Image.new("L", (1, H), 0)
+    px = col.load()
+    for y in range(H):
+        t = y / H
+        if from_top:
+            a = 0 if t >= y1f else int(alpha_max * (1 - t / max(y1f, 0.01))) if t > 0 else alpha_max
+            if t <= 0:
+                a = alpha_max
+        else:
+            if t <= y0f:
+                a = 0
+            elif t >= y1f:
+                a = alpha_max
+            else:
+                a = int(alpha_max * (t - y0f) / (y1f - y0f))
+        px[0, y] = max(0, min(255, a))
+    mask = col.resize((W, H))
+    return Image.composite(Image.new("RGB", (W, H), rgb), img, mask)
+
+
+def sub_wrap(draw, fonts_dir, text, max_w, size=40, max_lines=2):
+    f2 = R(fonts_dir, size)
+    words, cur, lines = str(text or "").split(), "", []
+    for wd in words:
+        t = (cur + " " + wd).strip()
+        if tw(draw, t, f2) <= max_w or not cur:
+            cur = t
+        else:
+            lines.append(cur)
+            cur = wd
+    if cur:
+        lines.append(cur)
+    return f2, lines[:max_lines]
+
+
+def block_layout(draw, fonts_dir, p, hs):
+    """Mide el bloque de texto (barra + titular + sublínea + CTA)."""
+    f, lines = wrap_fit(draw, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 118), 3)
+    f2, slines = sub_wrap(draw, fonts_dir, p.get("subline", ""), MAX_W, 40, 2)
+    head_h = sum(f.size + int(f.size * 0.08) for _ in lines)
+    sub_h = sum(f2.size + 10 for _ in slines)
+    total = 9 + 30 + head_h + 18 + sub_h + 28 + 108
+    return {"f": f, "lines": lines, "f2": f2, "slines": slines, "total": total}
+
+
+def block_draw(d, fonts_dir, p, C, lay, y, dark, center=False, accent_override=None):
+    head_col = (255, 255, 255) if dark else C["headline"]
+    sub_col = (208, 219, 231) if dark else C["subline"]
+    bar_col = accent_override or C["accent"]
+    if center:
+        d.rectangle([W // 2 - 60, y, W // 2 + 60, y + 9], fill=bar_col)
+    else:
+        d.rectangle([MX, y, MX + 120, y + 9], fill=bar_col)
+    y += 39
+    for ln in lay["lines"]:
+        if center:
+            y = ctext(d, W // 2, y, ln, lay["f"], head_col)
+        else:
+            y = ltext(d, MX, y, ln, lay["f"], head_col)
+        y += int(lay["f"].size * 0.08)
+    y += 18
+    for ln in lay["slines"]:
+        if center:
+            y = ctext(d, W // 2, y, ln, lay["f2"], sub_col)
+        else:
+            y = ltext(d, MX, y, ln, lay["f2"], sub_col)
+        y += 10
+    y += 28
+    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=center)
+    return y
+
+
+def draw_bar_name(d, fonts_dir, p, dark_bg):
+    f0 = B(fonts_dir, 30)
+    name = str(p.get("bar", "")).upper()
+    if dark_bg:
+        ltext(d, MX + 2, 58, name, f0, fill=(0, 0, 0), tracking=6)
+        ltext(d, MX, 56, name, f0, fill=(255, 255, 255), tracking=6)
+    else:
+        ltext(d, MX + 2, 58, name, f0, fill=(255, 255, 255), tracking=6)
+        ltext(d, MX, 56, name, f0, fill=NAVY, tracking=6)
+
+
+def draw_footer(d, fonts_dir, p, dark_bg):
+    """Fila inferior: etiqueta del estilo (izquierda) + watermark (derecha)."""
+    col = (198, 212, 226) if dark_bg else (110, 128, 148)
+    name = str(p.get("style_name") or "").strip()
+    if name:
+        f = R(fonts_dir, 24)
+        ltext(d, MX, H - 56, ("ESTILO · " + name).upper(), f, fill=col, tracking=3)
+    rtext(d, W - MX, H - 58, p.get("watermark", "Hecho con Posty"), R(fonts_dir, 26), fill=col)
+
+
+def _v2_base(fonts_dir, p, C):
+    tr = p.get("treatment") or {}
+    focus = float(p.get("focus", 0.5) or 0.5)
+    zoom = 1.28 if tr.get("crop") == "tight" else 1.0
+    img = load_photo_v2(p["photo"], focus, zoom)
+    img = apply_grade(img, tr.get("grade") or "neutral")
+    return img
+
+
+def sk_abajo(fonts_dir, p, C, hs):
+    """Degradé inferior (navy o blanco según la luz de la zona) + bloque abajo."""
+    img = _v2_base(fonts_dir, p, C)
+    dark = band_lum(img, 0.55, 1.0) < 165
+    img = grad_scrim(img, NAVY if dark else WHITE, 0.48, 0.94, 218 if dark else 228)
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    draw_bar_name(d, fonts_dir, p, band_lum(img, 0.0, 0.2) < 150)
+    lay = block_layout(d, fonts_dir, p, hs)
+    y = (H - 110) - lay["total"]
+    y = block_draw(d, fonts_dir, p, C, lay, y, dark)
+    draw_footer(d, fonts_dir, p, dark)
+    return img, y
+
+
+def sk_arriba(fonts_dir, p, C, hs):
+    """Degradé superior + bloque arriba: la foto respira abajo."""
+    img = _v2_base(fonts_dir, p, C)
+    dark = band_lum(img, 0.0, 0.45) < 165
+    img = grad_scrim(img, NAVY if dark else WHITE, 0.0, 0.52, 218 if dark else 228, from_top=True)
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    draw_bar_name(d, fonts_dir, p, dark)
+    lay = block_layout(d, fonts_dir, p, hs)
+    y = block_draw(d, fonts_dir, p, C, lay, 150, dark)
+    draw_footer(d, fonts_dir, p, band_lum(img, 0.8, 1.0) < 150)
+    return img, y
+
+
+def sk_velo(fonts_dir, p, C, hs):
+    """Cine/nocturno: foto levemente oscurecida + velo navy fuerte abajo."""
+    img = _v2_base(fonts_dir, p, C)
+    img = ImageEnhance.Brightness(img).enhance(0.94)
+    img = grad_scrim(img, NAVY, 0.30, 0.96, 236)
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    draw_bar_name(d, fonts_dir, p, True)
+    lay = block_layout(d, fonts_dir, p, hs)
+    y = (H - 110) - lay["total"]
+    y = block_draw(d, fonts_dir, p, C, lay, y, True, accent_override=C["btn"])
+    draw_footer(d, fonts_dir, p, True)
+    return img, y
+
+
+def sk_claro(fonts_dir, p, C, hs):
+    """Editorial luminoso: fundido a blanco tardío (la foto manda hasta el 52%)."""
+    img = _v2_base(fonts_dir, p, C)
+    img = white_fade(img, fade_start=0.52, fade_end=0.86)
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    draw_bar_name(d, fonts_dir, p, band_lum(img, 0.0, 0.2) < 150)
+    lay = block_layout(d, fonts_dir, p, hs)
+    y = (H - 110) - lay["total"]
+    y = block_draw(d, fonts_dir, p, C, lay, y, False)
+    draw_footer(d, fonts_dir, p, False)
+    return img, y
+
+
+def sk_centro(fonts_dir, p, C, hs):
+    """Cita/retrato: panel central translúcido (tono según la luz) y texto centrado."""
+    img = _v2_base(fonts_dir, p, C)
+    dark = band_lum(img, 0.3, 0.7) < 160
+    probe = ImageDraw.Draw(img)
+    lay = block_layout(probe, fonts_dir, p, hs)
+    panel_h = lay["total"] + 72
+    cy0 = (H - panel_h) // 2 + 24
+    panel = Image.new("RGB", (W - 160, panel_h), NAVY if dark else WHITE)
+    mask = Image.new("L", (W - 160, panel_h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 160, panel_h], radius=36, fill=168 if dark else 208)
+    img.paste(panel, (80, cy0), mask)
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    draw_bar_name(d, fonts_dir, p, band_lum(img, 0.0, 0.2) < 150)
+    y = block_draw(d, fonts_dir, p, C, lay, cy0 + 36, dark, center=True)
+    draw_footer(d, fonts_dir, p, band_lum(img, 0.85, 1.0) < 150)
+    return img, y
+
+
+def sk_duo(fonts_dir, p, C, hs):
+    """Antes/después: misma foto partida — izquierda apagada, derecha viva."""
+    tr = p.get("treatment") or {}
+    focus = float(p.get("focus", 0.5) or 0.5)
+    base = load_photo_v2(p["photo"], focus, 1.0)
+    base = apply_grade(base, tr.get("grade") or "neutral")
+    left = ImageEnhance.Color(base.crop((0, 0, W // 2, H))).enhance(0.22)
+    left = ImageEnhance.Brightness(left).enhance(0.94)
+    right = ImageEnhance.Color(base.crop((W // 2, 0, W, H))).enhance(1.14)
+    img = Image.new("RGB", (W, H))
+    img.paste(left, (0, 0))
+    img.paste(right, (W // 2, 0))
+    img = grad_scrim(img, NAVY, 0.74, 0.98, 228)
+    d = ImageDraw.Draw(img)
+    d.rectangle([W // 2 - 3, 0, W // 2 + 3, int(H * 0.78)], fill=(255, 255, 255))
+    # chips ANTES / DESPUÉS
+    fchip = B(fonts_dir, 28)
+    for label, x0, fill, tcol in (("ANTES", MX, NAVY, (255, 255, 255)), ("DESPUÉS", W - MX, C["accent"], C["accent_text"])):
+        wch = tw(d, label, fchip, 4) + 44
+        xa = x0 if label == "ANTES" else x0 - wch
+        d.rounded_rectangle([xa, 56, xa + wch, 56 + 62], radius=31, fill=fill)
+        ltext(d, xa + 22, 56 + 15, label, fchip, fill=tcol, tracking=4)
+    lay = block_layout(d, fonts_dir, p, hs)
+    y = (H - 110) - lay["total"]
+    y = block_draw(d, fonts_dir, p, C, lay, y, True)
+    draw_footer(d, fonts_dir, p, True)
+    return img, y
+
+
+SKELETONS_V2 = {
+    "abajo": sk_abajo,
+    "arriba": sk_arriba,
+    "velo": sk_velo,
+    "claro": sk_claro,
+    "centro": sk_centro,
+    "duo": sk_duo,
+}
+
+
+def render_v2(fonts_dir, p, C, hs):
+    tr = p.get("treatment") or {}
+    fn = SKELETONS_V2.get(str(tr.get("skeleton") or "abajo"), sk_abajo)
+    return fn(fonts_dir, p, C, hs)
+
+
 def main():
     if len(sys.argv) != 3:
         print("uso: demo_render.py SPEC_JSON OUT_DIR", file=sys.stderr)
@@ -777,7 +1097,9 @@ def main():
 
     C = load_colors(spec)
     for i, p in enumerate(spec["posts"]):
-        fn = STYLES.get(str(p.get("style") or "promo"), style_promo)
+        # v182: si el posteo trae treatment, manda el motor nuevo (estilos
+        # reales del catálogo); si no, los estilos legacy de siempre.
+        fn = render_v2 if p.get("treatment") else STYLES.get(str(p.get("style") or "promo"), style_promo)
         bottom, img = None, None
         for hs in (150, 130, 112, 96):
             # re-render limpio en cada intento
