@@ -6379,6 +6379,7 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
 // un posteo existente; sin la auditoría de Direct Post de TikTok, lo que sale
 // queda en privado (SELF_ONLY) — el módulo respeta lo que creator_info ofrece.
 const tiktok = require('./tiktok');
+const google = require('./google');
 
 app.get('/api/tiktok/status', requireAuth, (req, res) => {
   const acc = tiktok.getAccount(db, req.session.userId);
@@ -6479,6 +6480,105 @@ app.post('/api/tiktok/publish/:postId', requireAuth, async (req, res) => {
     console.error('[tiktok/publish]', e.message);
     res.status(502).json({ error: 'TikTok no pudo recibir el posteo 😅 ' + String(e.message || '').slice(0, 140) });
   }
+});
+
+// ---------- Google Business Profile: conectar la ficha + reseñas en un toque ----------
+app.get('/api/google/status', requireAuth, (req, res) => {
+  const acc = google.getAccount(db, req.session.userId);
+  res.json({
+    configured: google.configured(),
+    connected: !!acc,
+    businessName: acc ? (acc.location_title || '') : '',
+  });
+});
+
+app.get('/api/google/connect', requireAuth, (req, res) => {
+  if (!google.configured()) {
+    return res.status(503).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>⭐ Google llega en poquito</h2><p>Estamos terminando la conexión con Google. Cuando esté lista, vas a poder responder las reseñas de tu negocio con un toque.</p><p><a href="/#/app/ajustes">← Volver a Posty</a></p></body></html>`);
+  }
+  const host = req.get('host');
+  const redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/google/callback`;
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.gState = state;
+  req.session.gRedirect = redirectUri;
+  res.redirect(google.buildAuthUrl(redirectUri, state));
+});
+
+app.get('/api/google/callback', async (req, res) => {
+  const dest = '/#/app/ajustes';
+  const { code, state, error } = req.query;
+  if (error) {
+    const msg = /access_denied/i.test(error)
+      ? 'Denegaste el acceso a Google. Probá de nuevo y tocá "Permitir".'
+      : 'Google no autorizó la conexión. Probá de nuevo.';
+    return res.redirect(dest + '?google=error&msg=' + encodeURIComponent(msg));
+  }
+  if (!req.session.userId || !state || state !== req.session.gState) return res.status(400).send('Estado inválido');
+  try {
+    const tok = await google.exchangeCode(code, req.session.gRedirect);
+    let info = {};
+    try {
+      const u = await google.fetchUserInfo(tok.access_token);
+      info = { googleUserId: u.sub || '', email: u.email || '' };
+    } catch (e) { console.error('[google/callback] userinfo:', e.message); }
+    // Una cuenta de Google = una sola cuenta de Posty activa a la vez.
+    if (info.googleUserId) {
+      const dupe = db.prepare('SELECT user_id FROM google_accounts WHERE google_user_id = ? AND user_id != ?').get(info.googleUserId, req.session.userId);
+      if (dupe) return res.redirect(dest + '?google=error&msg=' + encodeURIComponent('Esa cuenta de Google ya está conectada a otra cuenta de Posty.'));
+    }
+    google.saveAccount(db, req.session.userId, tok, info);
+    // Resolver la ficha ahora (cuenta + location) para que las reseñas fluyan.
+    try {
+      const biz = await google.resolveBusiness(tok.access_token);
+      if (biz) google.saveAccount(db, req.session.userId, { access_token: tok.access_token, refresh_token: tok.refresh_token || '', expires_in: tok.expires_in }, { ...info, ...biz });
+    } catch (e) { console.error('[google/callback] resolve:', e.message); }
+    try { track(req.session.userId, 'google_connected'); } catch (e) {}
+    return res.redirect(dest + '?google=ok');
+  } catch (e) {
+    console.error('[google/callback]', e.message);
+    return res.redirect(dest + '?google=error&msg=' + encodeURIComponent('No pudimos conectar tu Google 😅 Probá de nuevo.'));
+  }
+});
+
+app.post('/api/google/disconnect', requireAuth, (req, res) => {
+  google.deleteAccount(db, req.session.userId);
+  res.json({ ok: true });
+});
+
+// ---------- Reseñas de Google: responder en un toque ----------
+app.get('/api/reviews', requireAuth, (req, res) => {
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, reviewer, star_rating, text, suggested, created_at FROM review_queue
+      WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
+  } catch (e) { /* tabla nueva */ }
+  res.json({ reviews: rows });
+});
+app.post('/api/reviews/refresh', requireAuth, requireTrialValid, async (req, res) => {
+  try {
+    const st = getSettings(req.session.userId) || {};
+    const n = await google.syncReviews(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    res.json({ ok: true, fresh: n });
+  } catch (e) {
+    res.status(500).json({ error: 'No pude revisar tus reseñas 😅 Probá de nuevo' });
+  }
+});
+app.post('/api/reviews/:id/reply', requireAuth, async (req, res) => {
+  try {
+    const r = db.prepare('SELECT * FROM review_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+    if (!r || r.status !== 'pending') return res.status(404).json({ error: 'Esa reseña se me perdió 😅 Actualizá y probá de nuevo' });
+    const message = String((req.body && req.body.message) || r.suggested || '').slice(0, 1000);
+    if (!message.trim()) return res.status(400).json({ error: 'Escribí la respuesta primero ✍️' });
+    if (!google.configured()) return res.status(503).json({ error: 'Google todavía no está activo en Posty. ¡Falta poquito! ⭐' });
+    await google.sendReviewReply(db, req.session.userId, r, message);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'No pudimos responder: ' + String(e.message).slice(0, 120) });
+  }
+});
+app.post('/api/reviews/:id/dismiss', requireAuth, (req, res) => {
+  try { db.prepare(`UPDATE review_queue SET status='dismissed' WHERE id = ? AND user_id = ?`).run(req.params.id, req.session.userId); } catch (e) {}
+  res.json({ ok: true });
 });
 
 // Reinicio manual total (marca + posteos pendientes). El historial publicado no se toca.
@@ -10895,7 +10995,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v166';
+const BUILD_ID = '20261017-v167';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

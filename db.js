@@ -444,6 +444,36 @@ CREATE TABLE IF NOT EXISTS tiktok_accounts (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
+// Cuentas de Google conectadas (Business Profile): tokens por usuario, espejo
+// de tiktok_accounts. location_title guarda el título de la ficha (nombre del
+// negocio en Google) para mostrarlo en Ajustes sin llamar a la API.
+// El módulo google.js queda inerte sin GOOGLE_CLIENT_ID/SECRET.
+db.exec(`
+CREATE TABLE IF NOT EXISTS google_accounts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  google_user_id TEXT DEFAULT '',
+  email TEXT DEFAULT '',
+  access_token TEXT DEFAULT '',
+  refresh_token TEXT DEFAULT '',
+  expires_at INTEGER DEFAULT 0,
+  account_name TEXT DEFAULT '',
+  location_name TEXT DEFAULT '',
+  location_title TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);`);
+// Bandeja de reseñas de Google: espejo de comment_queue/dm_queue.
+db.exec(`CREATE TABLE IF NOT EXISTS review_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  google_review_id TEXT NOT NULL UNIQUE,
+  reviewer TEXT DEFAULT '',
+  star_rating INTEGER DEFAULT 0,
+  text TEXT DEFAULT '',
+  suggested TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
 // Chat consultor: historial persistente entre sesiones + idea cerrada pendiente
 db.exec(`
 CREATE TABLE IF NOT EXISTS chat_messages (

@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261017-v166'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261017-v167'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -3973,6 +3973,12 @@ async function chatSend() {
     showWeekInChat();
     return;
   }
+  // "reseñas" → la IA trae las reseñas de Google sin responder y deja la respuesta lista, acá en el chat
+  if (/\b(reseñas?|resenas?|opiniones|reviews?)\b/i.test(sendText)) {
+    try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
+    showReviewsInChat();
+    return;
+  }
   // "mensajes" → la IA trae los DMs pendientes de Instagram y deja la respuesta lista, acá en el chat
   if (/\b(mensajes?|dms?|directos?|privados?|bandeja)\b/i.test(sendText)) {
     try { api.post('/api/ideas/chat/log', { messages: [{ role: 'user', text: sendText }] }).catch(() => {}); } catch (e) {}
@@ -4113,6 +4119,71 @@ function bindChatDMs() {
         setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatdm="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
       } catch (e) {
         b.disabled = false; b.textContent = act === 'reply' ? '📩 Responder' : 'Descartar';
+        if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
+      }
+    };
+  });
+}
+
+// Reseñas de Google dentro del chat: espejo de comentarios/DMs, respuesta lista en un toque.
+async function showReviewsInChat() {
+  const box = $('#chatBox');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatRvTyping">⏳ Revisando tus reseñas…</div>`);
+  chatScroll();
+  let list = [];
+  try { const r = await api.get('/api/reviews'); list = (r && r.reviews) || []; } catch (e) {}
+  if (!list.length) {
+    try { await api.post('/api/reviews/refresh', {}); const r2 = await api.get('/api/reviews'); list = (r2 && r2.reviews) || []; } catch (e) {}
+  }
+  const t = $('#chatRvTyping'); if (t) t.remove();
+  const stars = (n) => '⭐'.repeat(Math.max(1, Math.min(5, Number(n) || 0)));
+  const html = list.length ? `
+    <div class="chat-msg ai" style="max-width:100%">
+      <div style="font-weight:800;margin-bottom:4px">⭐ ${list.length} ${list.length === 1 ? 'reseña' : 'reseñas'} de Google para responder</div>
+      <div style="font-size:11.5px;color:var(--mut);margin-bottom:8px">Te dejé la respuesta lista — la editás si querés y sale en un toque.</div>
+      ${list.map(rv => `
+      <div data-chatrv="${rv.id}" style="background:#F7FAFC;border-radius:12px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:12.5px;margin-bottom:2px"><b>${esc(rv.reviewer || 'Un cliente')}</b> · ${stars(rv.star_rating)}</div>
+        <div style="font-size:12.5px;margin-bottom:6px">${esc(rv.text || '(dejó solo la calificación, sin texto)')}</div>
+        <textarea class="in" data-chatrvreply="${rv.id}" rows="2" style="font-size:16px" aria-label="Respuesta sugerida">${esc(rv.suggested || '')}</textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" data-chatrvdo="reply" data-id="${rv.id}">⭐ Responder</button>
+          <button class="btn btn-ghost btn-sm" data-chatrvdo="dismiss" data-id="${rv.id}">Descartar</button>
+        </div>
+        <div class="hint" data-chatrvmsg="${rv.id}" style="margin:6px 0 0"></div>
+      </div>`).join('')}
+    </div>`
+    : `<div class="chat-msg ai">⭐ No tenés reseñas pendientes — todo respondido 👏</div>`;
+  box.insertAdjacentHTML('beforeend', html);
+  const say = list.length ? `Te muestro las ${list.length} reseñas para responder 👇` : 'No tenés reseñas pendientes.';
+  CHAT.push({ role: 'assistant', text: say });
+  try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
+  bindChatReviews();
+  chatScroll();
+}
+function bindChatReviews() {
+  document.querySelectorAll('#chatBox [data-chatrvdo]').forEach(b => {
+    if (b.dataset.bound) return; b.dataset.bound = '1';
+    b.onclick = async () => {
+      const id = b.dataset.id, act = b.dataset.chatrvdo;
+      const msg = document.querySelector(`#chatBox [data-chatrvmsg="${id}"]`);
+      b.disabled = true;
+      try {
+        if (act === 'reply') {
+          const ta = document.querySelector(`#chatBox [data-chatrvreply="${id}"]`);
+          const message = (ta && ta.value || '').trim();
+          if (!message) throw new Error('La respuesta está vacía');
+          b.textContent = '⏳ Enviando...';
+          await api.post(`/api/reviews/${id}/reply`, { message });
+          if (msg) msg.innerHTML = '<span style="color:#1E7E34">✅ Respondida en Google</span>';
+        } else {
+          await api.post(`/api/reviews/${id}/dismiss`, {});
+          if (msg) msg.innerHTML = '<span style="color:var(--mut)">Descartada</span>';
+        }
+        setTimeout(() => { const item = document.querySelector(`#chatBox [data-chatrv="${id}"]`); if (item) item.style.opacity = '.45'; }, 1200);
+      } catch (e) {
+        b.disabled = false; b.textContent = act === 'reply' ? '⭐ Responder' : 'Descartar';
         if (msg) msg.innerHTML = `<span style="color:#C0392B">${esc(e.message || 'No se pudo')}</span>`;
       }
     };
