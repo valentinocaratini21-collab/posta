@@ -956,6 +956,25 @@ function landingView(cfg) {
     </div>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Quiero mi semana así 👀</a></div>
   </div></div>
+  <div class="section" id="fotos"><div class="wrap">
+    <h2>Con tus fotos, es tu negocio de verdad. Sin fotos, Posty lo crea igual.</h2>
+    <p class="lede">Los posteos que ves arriba salen por dos caminos — y los dos funcionan:</p>
+    <div class="lp-foto-grid">
+      <div class="lp-foto-card">
+        <div class="lp-foto-i">📸</div>
+        <h3>Nos pasás fotos y videos de tu negocio</h3>
+        <p>Tus productos, tu local, tu equipo: nada vende como lo real. Posty usa <b>tu</b> material en los posteos, y cuanto más nos pasás, mejores y más tuyos salen.</p>
+        <div class="lp-foto-check">✅ Sale tu negocio de verdad, no uno parecido</div>
+      </div>
+      <div class="lp-foto-card">
+        <div class="lp-foto-i">🤖</div>
+        <h3>¿No tenés material? Lo creamos nosotros</h3>
+        <p>Posty diseña las imágenes desde cero con tu marca, tus colores y tu estilo. Nunca te quedás sin publicar por no tener fotos.</p>
+        <div class="lp-foto-check">✅ Tu semana sale igual, siempre</div>
+      </div>
+    </div>
+    <p class="lp-foto-cta"><a href="/prueba">En la prueba gratuita podés subir una foto tuya y ver la diferencia →</a></p>
+  </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así trabajo yo 👇</h2>
     <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
@@ -5174,10 +5193,10 @@ async function chatView() {
     </div>
     <div id="revMsg"></div>
     ${homeWeekHTML(posts, quota, weekGenerating, weekNoDna)}
+    <div id="albumCard"></div>
     ${nDrafts ? `<button class="btn btn-primary btn-block" id="btnActivateWeek" style="margin:4px 0 14px">🚀 Activar mi semana (${nDrafts})</button>` : ''}
     <div class="hs-chat-label"><b>💬 ¿Cambiamos algo?</b></div>
     ${chatCardHTML(true, true, true)}
-    <div id="albumCard"></div>
   </div>`;
 }
 
@@ -5204,38 +5223,55 @@ async function bindAlbumCard() {
   const perfHTML = data.perf
     ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
     : '';
-  const grid = (data.photos || []).length
+  const totalFotos = (data.photos || []).length;
+  const countHTML = totalFotos > 0
+    ? `<div style="font-size:13.5px;margin-top:4px">📷 Ya tenés <b>${totalFotos}</b> foto${totalFotos === 1 ? '' : 's'} en tu álbum — Posty las usa en tus posteos.</div>`
+    : '';
+  const grid = totalFotos
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${data.photos.map(ph => `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
-    : `<div style="font-size:13.5px;opacity:.75;margin:6px 0">Todavía no hay fotos tuyas. La primera que mandes se convierte en posteo ✨</div>`;
+    : `<div style="font-size:14px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
   <div class="card" style="margin-top:14px">
-    <div style="font-size:16px"><b>📸 El álbum de ${esc(biz)}</b></div>
-    <div style="font-size:13px;opacity:.75">Los posteos con tus fotos reales rinden más: son TU negocio, no uno parecido.</div>
+    <div style="font-size:17px"><b>📸 Las fotos de tu negocio</b></div>
+    <div style="font-size:13.5px;opacity:.8">Cuantas más fotos y videos nos pasás, mejores y más tuyos salen tus posteos.</div>
+    ${countHTML}
     ${missionHTML}
     <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}${complete ? '<div style="font-size:14px;margin-top:6px">🎉 <b>¡Álbum completo!</b> Posty tiene todo para que tus posteos sean 100% tuyos.</div>' : ''}</div>
     ${perfHTML}
     ${grid}
     <label class="btn btn-primary btn-block" style="margin:6px 0 0;cursor:pointer">
-      📸 Mandar una foto
-      <input type="file" id="albumFile" accept="image/*" style="display:none">
+      📸 Subir fotos
+      <input type="file" id="albumFile" accept="image/*" multiple style="display:none">
     </label>
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
   </div>`;
   const inp = document.getElementById('albumFile');
   if (inp) inp.onchange = async () => {
-    const f = inp.files && inp.files[0];
-    if (!f) return;
+    const files = Array.from(inp.files || []);
+    if (!files.length) return;
     const msg = document.getElementById('albumMsg');
-    if (msg) msg.textContent = 'Subiendo… 📤';
-    try {
-      const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(120000) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
-      if (msg) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
-      setTimeout(() => { try { bindAlbumCard(); } catch (e) {} }, 2500);
-    } catch (e) {
-      if (msg) msg.textContent = '😅 ' + (e.message || 'No pude subirla. Probá de nuevo.');
+    let okCount = 0;
+    let lastErr = '';
+    // Subida secuencial: el servidor festeja/clasifica cada una en 2º plano.
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}… 📤` : 'Subiendo… 📤';
+      try {
+        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(120000) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
+        okCount++;
+      } catch (e) {
+        lastErr = e.message || 'No pude subirla. Probá de nuevo.';
+        break; // ej.: llegó al tope de 20 — no tiene sentido seguir
+      }
     }
+    if (msg) {
+      if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} fotos nuevas!</b> Posty ya las tiene para tus posteos ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
+      else if (okCount) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
+      else msg.textContent = '😅 ' + (lastErr || 'No pude subirla. Probá de nuevo.');
+    }
+    if (okCount) setTimeout(() => { try { bindAlbumCard(); } catch (e) {} }, 2500);
   };
 }
 
@@ -5853,7 +5889,7 @@ function pcOpenImageSheet(id) {
       <button type="button" class="pcsheet-opt" data-pc-act="img-all">📚 Ver todos los de mi rubro<small class="pcsheet-allcount"></small></button>
       <div class="pcsheet-all" hidden></div>
     </div>
-    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📷 Mi foto<small>Subí una foto tuya y la uso para este posteo</small></button>
+    <button type="button" class="pcsheet-opt" data-pc-act="img-upload">📸 Usar una foto tuya<small>Subila y la uso en este posteo: sale tu negocio real</small></button>
     <input type="file" accept="image/*" class="pcsheet-file" hidden>
     <button type="button" class="pcsheet-opt" data-pc-act="img-enhance">✨ Mejorar esta<small>Retoco la actual: luz, color y nitidez</small></button>
     <button type="button" class="pcsheet-opt" data-pc-act="img-revert" hidden>↩️ Volver a la anterior<small>Recuperás la imagen que tenía antes del cambio — gratis</small></button>
@@ -9352,6 +9388,7 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
+    <div id="albumCard"></div>
     ${homeChatBlock}
     ${armBlock}
   </div>`;
@@ -9541,6 +9578,7 @@ function bindSchedule() {
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
+  try { bindAlbumCard(); } catch (e) {} // 📸 Álbum del negocio: protagonista en Schedule (v180)
   bindScheduleAll(); // "📅 Programar mi semana →" (chip del chat)
   bindAcceptAll(); // legacy (ya no se pinta en la tarjeta)
   bindActivateWeek(); // "🚀 Activar mi semana" dentro de la tarjeta de revisión
