@@ -522,26 +522,39 @@ function landingView(cfg) {
           <img loading="lazy" src="g-tazas.jpg" alt="Posteo de Instagram de Café Aurora: dos tazas de café con flores">
           <img loading="lazy" src="g-pasta.jpg" alt="Posteo de Instagram de Café Aurora: plato de pasta del mediodía">
           <img loading="lazy" src="g-latte.jpg" alt="Posteo de Instagram de Café Aurora: latte art en vivo">
-          <img loading="lazy" src="g-cappu.jpg" alt="Posteo de Instagram de Café Aurora: cappuccino con corazón">
+          <span class="igp-cell-reel"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Reel de Instagram de Café Aurora: el café más pedido"></video><span class="igp-reel-badge">▶</span></span>
           <img loading="lazy" src="g-platos.jpg" alt="Posteo de Instagram de Café Aurora: platos del brunch">
           <img loading="lazy" src="g-vaso.jpg" alt="Posteo de Instagram de Café Aurora: vaso de latte">
           <img loading="lazy" src="g-tres.jpg" alt="Posteo de Instagram de Café Aurora: cafés en la mesa">
           <img loading="lazy" src="g-gourmet.jpg" alt="Posteo de Instagram de Café Aurora: platos gourmet">
         </div>
       </div></div></div>
-      <div class="lp-show-cta"><a class="btn btn-primary lp-show-btn" href="/prueba">Quiero mi perfil así — probá 3 días gratis →</a></div>
+      <div class="lp-show-cta">
+        <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
+        <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
+          <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
+          <button class="btn btn-primary" type="submit">Quiero mi perfil así →</button>
+        </form>
+        <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
+      </div>
     </div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
       <div class="pz-ba-row">
-        <div class="pz-ba-panel">
-          <div class="pz-ba-label">TU INSTAGRAM HOY</div>
-          <div class="pz-ba-grid">${'<span></span>'.repeat(9)}</div>
+        <div class="pz-ba-panel pz-ba-dead">
+          <div class="pz-ba-label">HOY</div>
+          <div class="pz-ba-prof"><span class="pz-ba-ava">C</span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
+          <p class="pz-ba-bio">Café ☕</p>
+          <div class="pz-ba-grid"><span class="pz-ba-dull"><img src="ig-cafe.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-vaso.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-tres.jpg" alt=""></span></div>
+          <p class="pz-ba-last">⏸ Última publicación: hace 6 semanas</p>
         </div>
         <div class="pz-ba-arrow">→</div>
         <div class="pz-ba-panel">
           <div class="pz-ba-label pz-ba-label-on">CON POSTY</div>
-          <img src="hero-feed.jpg" alt="Feed de Instagram gestionado por Posty">
+          <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="ig-cafe.jpg" alt=""></span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
+          <p class="pz-ba-bio">☕ Café de especialidad y brunch<br>📍 Gorriti 4380 · 8 a 20 h</p>
+          <div class="pz-ba-grid pz-ba-grid-live"><img src="ig-cafe.jpg" alt=""><img loading="lazy" src="g-tazas.jpg" alt=""><img loading="lazy" src="g-pasta.jpg" alt=""><img loading="lazy" src="g-latte.jpg" alt=""><img loading="lazy" src="g-cappu.jpg" alt=""><img loading="lazy" src="g-platos.jpg" alt=""><img loading="lazy" src="g-vaso.jpg" alt=""><img loading="lazy" src="g-tres.jpg" alt=""><img loading="lazy" src="g-gourmet.jpg" alt=""></div>
+          <p class="pz-ba-last pz-ba-last-on">🔥 Publicando esta semana</p>
         </div>
       </div>
     </div>
