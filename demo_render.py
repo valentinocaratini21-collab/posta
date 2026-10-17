@@ -779,8 +779,14 @@ def main():
             img, bottom = fn(fonts_dir, p, C, hs)
             if bottom <= 1300:
                 break
-        out = os.path.join(outdir, "post-%d.png" % i)
-        img.save(out)
+        out = os.path.join(outdir, "post-%d.jpg" % i)
+        # JPEG q90 en vez de PNG (2026-10-17, velocidad de la prueba): los
+        # diseños son fotos compuestas sin transparencia; el PNG pesaba
+        # 3-5x más y tardaba más en codificarse, viajar y pintarse en el
+        # teléfono del visitante, sin ninguna diferencia visible.
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(out, quality=90)
         print("post-%d OK style=%s bottom=%d" % (i, p.get("style", "promo"), bottom))
 
     print("DONE %d" % len(spec["posts"]))

@@ -9658,7 +9658,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // Perfil real de Instagram (best-effort): foto + nombre + colores.
     // Si no se puede, todo cae a los fallbacks sin que se note.
     try {
-      const prof = await demo.fetchIgProfile(ig);
+      // Instagram lento no frena la prueba: a los 2,5s seguimos con los
+      // datos del formulario (el fetch sigue de fondo, sin efecto).
+      const prof = await Promise.race([demo.fetchIgProfile(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
       if (prof) {
         igPic = prof.pic; igName = prof.name;
         if (!hexOk(fields.accent) && prof.colors && prof.colors[0]) {
@@ -9868,7 +9870,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   let igPic = null, igName = '';
   if (ig) {
     try {
-      const prof = await demo.fetchIgProfile(ig);
+      // Instagram lento no frena la prueba: a los 2,5s seguimos con los
+      // datos del formulario (el fetch sigue de fondo, sin efecto).
+      const prof = await Promise.race([demo.fetchIgProfile(ig), new Promise((r) => setTimeout(() => r(null), 2500))]);
       if (prof) {
         igPic = prof.pic; igName = prof.name;
         if (!hexOk(fields.accent) && prof.colors && prof.colors[0]) {
@@ -9926,6 +9930,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
 
   let photoPath = null;
   let runDir = null;
+  let vDir = null;
   let doneSent = false;
   try {
     if (file) {
@@ -9962,24 +9967,37 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const posts = new Array(n).fill(null);
     // 3) Render con streaming: cada PNG que aparece se emite como post imagen
     send('status', { step: 'diseno', text: 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
+    // El video arranca APENAS está su diseño, en paralelo con los que
+    // faltan: es el paso más lento y esperarlo al final sumaba segundos.
+    vDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-vid-'));
+    let videoPromise = null;
     const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn }, async (i, buf) => {
       posts[i] = {
         type: 'image',
-        image: 'data:image/png;base64,' + buf.toString('base64'),
+        image: 'data:image/jpeg;base64,' + buf.toString('base64'),
         caption: made[i].caption,
         hashtags: made[i].hashtags,
         headline: made[i].headline,
       };
       send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
+      if (i === videoIdx && !videoPromise) {
+        const vp = path.join(vDir, `post-${videoIdx}.jpg`);
+        try { fs.writeFileSync(vp, buf); videoPromise = demo.renderVideoB64(vp, vDir, videoIdx); } catch (e) {}
+      }
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
 
-    // 4) El video: igual que generateDemo (renderVideoB64 reintenta solo)
+    // 4) El video: ya viene renderizándose en paralelo; si el render
+    // temprano falló, se reintenta acá por el camino de siempre.
     send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' });
-    const vpath = path.join(runDir, `post-${videoIdx}.png`);
-    try { fs.writeFileSync(vpath, bufs[videoIdx]); } catch (e) {}
-    const videoB64 = await demo.renderVideoB64(vpath, runDir, videoIdx);
+    let videoB64 = null;
+    if (videoPromise) { try { videoB64 = await videoPromise; } catch (e) {} }
+    if (!videoB64) {
+      const vpath = path.join(runDir, `post-${videoIdx}.jpg`);
+      try { fs.writeFileSync(vpath, bufs[videoIdx]); } catch (e) {}
+      videoB64 = await demo.renderVideoB64(vpath, runDir, videoIdx);
+    }
     if (videoB64) {
       posts[videoIdx] = {
         type: 'video',
@@ -9991,7 +10009,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     } else {
       posts[videoIdx] = {
         type: 'image',
-        image: 'data:image/png;base64,' + bufs[videoIdx].toString('base64'),
+        image: 'data:image/jpeg;base64,' + bufs[videoIdx].toString('base64'),
         caption: made[videoIdx].caption,
         hashtags: made[videoIdx].hashtags,
         headline: made[videoIdx].headline,
@@ -10051,6 +10069,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     }
     if (runDir) {
       try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
+    }
+    if (vDir) {
+      try { fs.rmSync(vDir, { recursive: true, force: true }); } catch (_) {}
     }
   }
 });
@@ -10721,7 +10742,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261016-v160';
+const BUILD_ID = '20261016-v161';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

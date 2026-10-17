@@ -515,7 +515,7 @@ async function renderSpecPngs(specPosts, colors) {
     const specPath = path.join(runDir, 'spec.json');
     fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: specPosts }));
     await runDemoRender([DEMO_SCRIPT, specPath, runDir]);
-    return { bufs: specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.png`))), runDir };
+    return { bufs: specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.jpg`))), runDir };
   } catch (e) {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
     throw e;
@@ -583,7 +583,18 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   const withPhotos = specPosts.map((p) => (
     (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
   ));
-  const { bufs, runDir } = await renderSpecPngs(withPhotos, { accent, btn });
+  // El video arranca APENAS está su diseño (en paralelo con los diseños
+  // que faltan): es el paso más lento de la prueba y esperarlo al final
+  // sumaba segundos de reloj sin ninguna necesidad.
+  const vDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-vid-'));
+  let videoPromise = null;
+  const onPng = (i, buf) => {
+    if (i === videoIdx && !videoPromise) {
+      const vp = path.join(vDir, `post-${videoIdx}.jpg`);
+      try { fs.writeFileSync(vp, buf); videoPromise = renderVideoB64(vp, vDir, videoIdx); } catch (e) {}
+    }
+  };
+  const { bufs, runDir } = await renderSpecPngsStream(withPhotos, { accent, btn }, onPng);
   try {
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
     // no pasa el gate, se reintenta con otro tema del rubro. Nunca sale un
@@ -593,18 +604,23 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
         business, tone, country, idx: i, goalLine,
       });
       return {
-        image: 'data:image/png;base64,' + bufs[i].toString('base64'),
+        image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
         caption: r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline, // titular real renderizado en el diseño
       };
     });
 
-    // El 3er posteo sale como video (el diseño del medio, animado con zoom suave).
-    const vbuf = bufs[videoIdx];
-    const vpath = path.join(runDir, `post-${videoIdx}.png`);
-    fs.writeFileSync(vpath, vbuf);
-    const videoB64 = await renderVideoB64(vpath, runDir, videoIdx);
+    // El 3er posteo sale como video (el diseño del medio, animado con zoom
+    // suave). El render ya viene corriendo en paralelo desde que su diseño
+    // estuvo listo; esto solo lo espera si todavía no terminó.
+    let videoB64 = null;
+    if (videoPromise) { try { videoB64 = await videoPromise; } catch (e) {} }
+    if (!videoB64) {
+      const vpath = path.join(runDir, `post-${videoIdx}.jpg`);
+      try { fs.writeFileSync(vpath, bufs[videoIdx]); } catch (e) {}
+      videoB64 = await renderVideoB64(vpath, runDir, videoIdx);
+    }
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
@@ -614,6 +630,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     return { posts, spec: savedSpec };
   } finally {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
+    try { fs.rmSync(vDir, { recursive: true, force: true }); } catch (_) {}
   }
 }
 
@@ -652,11 +669,11 @@ async function redesignDemo({ spec, colors, photoOverrides, userPhotoDataUrl }) 
     });
     const { bufs, runDir } = await renderSpecPngs(sub, colors || {});
     try {
-      const images = bufs.map((b) => 'data:image/png;base64,' + b.toString('base64'));
+      const images = bufs.map((b) => 'data:image/jpeg;base64,' + b.toString('base64'));
       let video = null;
       const vIdx = idxs.indexOf(spec.videoIdx);
       if (vIdx >= 0) {
-        const vpath = path.join(runDir, `post-${vIdx}.png`);
+        const vpath = path.join(runDir, `post-${vIdx}.jpg`);
         fs.writeFileSync(vpath, bufs[vIdx]);
         const b64 = await renderVideoB64(vpath, runDir, vIdx);
         if (b64) video = 'data:video/mp4;base64,' + b64;
@@ -905,7 +922,7 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
       await new Promise((r) => setTimeout(r, 400));
       for (let i = 0; i < n; i++) {
         if (emitted[i]) continue;
-        const p = path.join(runDir, `post-${i}.png`);
+        const p = path.join(runDir, `post-${i}.jpg`);
         let st;
         try { st = fs.statSync(p); } catch (_) { continue; }
         if (!st.isFile() || st.size < 1024) continue;
@@ -923,7 +940,7 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
     }
     await renderPromise;
     if (renderErr) throw renderErr;
-    const bufs = specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.png`)));
+    const bufs = specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.jpg`)));
     return { bufs, runDir };
   } catch (e) {
     try { fs.rmSync(runDir, { recursive: true, force: true }); } catch (_) {}
