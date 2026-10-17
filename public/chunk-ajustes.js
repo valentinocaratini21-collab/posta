@@ -12,16 +12,18 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : 'marca';
+  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('tiktok') ? 'tiktok' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
+  const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
+    : q.get('tiktok') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar TikTok')}</div>` : '';
   const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
-  ${igMsg}${planMsg}${tokenWarn}
+  ${igMsg}${ttMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
@@ -178,6 +180,11 @@ function ajustesView() {
     </div>
     <div id="igMsg"></div>
   </div></div>
+  <div class="card ajsec${openSec==='tiktok' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎵 TikTok</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
+    <div id="ttZone"><p class="hint">Cargando…</p></div>
+    <div id="ttMsg"></div>
+  </div></div>
   <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>
@@ -225,6 +232,39 @@ function ajustesView() {
   <div class="card" style="margin-top:16px"><button class="btn btn-danger btn-block" id="btnLogoutAj">🚪 Salir</button></div>`;
 }
 
+// Zona TikTok: estado desde /api/tiktok/status (configurado / conectado).
+async function ttZoneLoad() {
+  const zone = $('#ttZone');
+  if (!zone) return;
+  let st = null;
+  try { st = await api.get('/api/tiktok/status'); } catch (e) { /* queda el fallback */ }
+  if (!st) { zone.innerHTML = '<p class="hint">No se pudo cargar el estado de TikTok.</p>'; return; }
+  if (!st.configured) {
+    zone.innerHTML = `<div class="set-row"><div><div class="t">🎵 TikTok — Próximamente</div>
+      <div class="d">Estamos terminando la conexión con TikTok. Cuando esté lista, vas a poder compartir tus posteos ahí con un toque, sin salir de Posty.</div></div></div>`;
+    return;
+  }
+  if (!st.connected) {
+    zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta de TikTok</div>
+      <div class="d">Todavía no conectaste tu TikTok. Al conectar, Posty puede compartir tus posteos ahí cuando vos lo pidas — nunca publica solo.</div>
+      <div class="hint" style="margin-top:6px">🔒 Entrás con el login oficial de TikTok. Nunca vemos ni guardamos tu contraseña.</div></div>
+      <button class="btn btn-primary btn-sm" id="btnTtConn" style="flex:none">Conectar TikTok</button></div>`;
+    const bc = $('#btnTtConn');
+    if (bc) bc.onclick = () => { location.href = '/api/tiktok/connect'; };
+    return;
+  }
+  zone.innerHTML = `<div class="set-row"><div><div class="t">Cuenta conectada</div>
+    <div class="d">✅ ${st.username ? '@' + esc(st.username) : 'Tu TikTok'} — lista para compartir tus posteos 🎵</div>
+    <div class="hint" style="margin-top:6px">En cada posteo publicado de tu Schedule vas a ver el botón <b>🎵 Compartir en TikTok</b>.</div></div>
+    <button class="btn btn-danger btn-sm" id="btnTtDisc" style="flex:none">Desconectar</button></div>`;
+  const bd = $('#btnTtDisc');
+  if (bd) bd.onclick = async () => {
+    if (!confirm('¿Desconectar tu TikTok de Posty?')) return;
+    try { await api.post('/api/tiktok/disconnect'); } catch (e) {}
+    ttZoneLoad();
+  };
+}
+
 function bindSettings() {
   // Acordeón de secciones en móvil
   $$('.ajsec-h').forEach(h => {
@@ -232,6 +272,7 @@ function bindSettings() {
     h.onclick = tg;
     h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tg(); } };
   });
+  try { ttZoneLoad(); } catch (e) {}
   // 2026-10-10: "Tus números" vive en Ajustes (pedido de Valentino)
   try { if (typeof bindStats === 'function' && document.getElementById('stGrid')) bindStats(); } catch (e) {}
   // --- Autopiloto (4 puntos, 2026-10-02) ---

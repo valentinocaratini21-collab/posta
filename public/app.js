@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261016-v156'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261017-v166'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5181,14 +5181,42 @@ function postCardHTML(p, opts) {
       ${String(p.status) === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
       ${canApprove ? '<button type="button" data-pc-act="approve" class="pcard-approve">✅ Aprobar</button>' : ''}
     </div>`;
+  // TikTok (v166): solo posteos publicados y solo si el usuario conectó su
+  // cuenta — el botón nace oculto y ttEnhance() lo muestra según /api/tiktok/status.
+  const ttActs = !isPub ? '' : (p.tiktok_publish_id
+    ? `<div class="pcard-actions"><span style="font-size:11.5px;font-weight:700;color:var(--dim)">🎵 Ya está en TikTok ✓</span></div>`
+    : `<div class="pcard-actions"><button type="button" data-pc-act="tiktok" hidden>🎵 Compartir en TikTok</button></div>`);
   return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
     <button type="button" class="pcard-media" data-pc-act="open" aria-label="Ver posteo">${media}</button>
     <div class="pcard-body">
       <div class="pcard-meta"><b>${esc(when)}</b>${pcBadge(p)}</div>
       <div class="pcard-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>
-      ${actions}
+      ${actions}${ttActs}
     </div>
   </div>`;
+}
+// TikTok (v166): comparte un posteo publicado en TikTok, a pedido del usuario.
+let __ttStatusP = null;
+function ttStatusOnce() {
+  if (!__ttStatusP) __ttStatusP = api.get('/api/tiktok/status').catch(() => null);
+  return __ttStatusP;
+}
+async function ttEnhance() {
+  try {
+    const st = await ttStatusOnce();
+    if (st && st.connected) document.querySelectorAll('[data-pc-act="tiktok"]').forEach(b => { b.hidden = false; });
+  } catch (e) {}
+}
+async function pcShareTikTok(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '🎵 Publicando…'; }
+  try {
+    const r = await api.post('/api/tiktok/publish/' + encodeURIComponent(id), {});
+    postToast({ text: (r && r.message) || '🎵 ¡Compartido en TikTok!', ms: 6000 });
+    try { render(); } catch (e) {}
+  } catch (e) {
+    postToast({ text: '😅 ' + ((e && e.message) || 'No se pudo compartir en TikTok'), ms: 6000 });
+    if (btn) { btn.disabled = false; btn.textContent = '🎵 Compartir en TikTok'; }
+  }
 }
 // Toast con acciones (fijo abajo, sobre el input). actions: [{label, fn}]
 function postToast(o) {
@@ -5489,6 +5517,7 @@ function pcOnClick(e) {
   if (act === 'image') { pcOpenImageSheet(id); return; }
   if (act === 'skip') { pcSkip(id, root); return; }
   if (act === 'approve') { pcApprove(id, root, el); return; }
+  if (act === 'tiktok') { pcShareTikTok(id, el); return; }
   if (act === 'img-style') {
     const wrap = root.querySelector('.pcsheet-stylewrap');
     if (wrap) {
@@ -8349,6 +8378,7 @@ async function render() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
   // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 60);
+  setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 80);
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado
   try {

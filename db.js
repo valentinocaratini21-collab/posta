@@ -151,6 +151,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN posty_digest_at TEXT DEFAULT ''`); }
 try { db.exec(`ALTER TABLE style_rules ADD COLUMN created_at TEXT DEFAULT (datetime('now'))`); } catch (e) { /* ya existe */ }
 // Todo-en-uno v2: métricas, mejor horario, funnel y comentarios
 try { db.exec(`ALTER TABLE posts ADD COLUMN ig_media_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN tiktok_publish_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN carousel_paths TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN tipo TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Track 4 "Pipeline perpetuo": a qué semana (lunes, 'YYYY-MM-DD') pertenece cada
@@ -429,6 +430,20 @@ CREATE TABLE IF NOT EXISTS ig_registry (
   first_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
 } catch (e) { /* ya existe */ }
+// Cuentas de TikTok conectadas (Login Kit): tokens por usuario, espejo del
+// patrón de IG en settings. El módulo tiktok.js queda inerte sin credenciales.
+db.exec(`
+CREATE TABLE IF NOT EXISTS tiktok_accounts (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  tiktok_user_id TEXT DEFAULT '',
+  username TEXT DEFAULT '',
+  access_token TEXT DEFAULT '',
+  refresh_token TEXT DEFAULT '',
+  expires_at INTEGER DEFAULT 0,
+  scope TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);`);
 // Chat consultor: historial persistente entre sesiones + idea cerrada pendiente
 db.exec(`
 CREATE TABLE IF NOT EXISTS chat_messages (

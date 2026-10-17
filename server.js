@@ -6373,6 +6373,114 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- TikTok: conectar y compartir posteos (v1, siempre a pedido) ----------
+// Sin TIKTOK_CLIENT_KEY/SECRET en el entorno, todo queda inerte y la UI lo
+// muestra como "próximamente". Publicar es SIEMPRE a pedido del usuario desde
+// un posteo existente; sin la auditoría de Direct Post de TikTok, lo que sale
+// queda en privado (SELF_ONLY) — el módulo respeta lo que creator_info ofrece.
+const tiktok = require('./tiktok');
+
+app.get('/api/tiktok/status', requireAuth, (req, res) => {
+  const acc = tiktok.getAccount(db, req.session.userId);
+  res.json({
+    configured: tiktok.configured(),
+    connected: !!acc,
+    username: acc ? (acc.username || '') : '',
+  });
+});
+
+app.get('/api/tiktok/connect', requireAuth, (req, res) => {
+  if (!tiktok.configured()) {
+    return res.status(503).send(`<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:system-ui;padding:32px;text-align:center"><h2>🎵 TikTok llega en poquito</h2><p>Estamos terminando la conexión con TikTok. Cuando esté lista, vas a poder compartir tus posteos ahí con un toque.</p><p><a href="/#/app/ajustes">← Volver a Posty</a></p></body></html>`);
+  }
+  const host = req.get('host');
+  const redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/tiktok/callback`;
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.ttState = state;
+  req.session.ttRedirect = redirectUri;
+  res.redirect(tiktok.buildAuthUrl(redirectUri, state));
+});
+
+app.get('/api/tiktok/callback', async (req, res) => {
+  const dest = '/#/app/ajustes';
+  const { code, state, error, error_description } = req.query;
+  if (error) {
+    const msg = /access_denied|user_denied/i.test(error)
+      ? 'Denegaste el acceso a TikTok. Probá de nuevo y tocá "Autorizar".'
+      : (error_description || 'TikTok no autorizó la conexión. Probá de nuevo.');
+    return res.redirect(dest + '?tiktok=error&msg=' + encodeURIComponent(msg));
+  }
+  if (!req.session.userId || !state || state !== req.session.ttState) return res.status(400).send('Estado inválido');
+  try {
+    const tok = await tiktok.exchangeCode(code, req.session.ttRedirect);
+    let username = '';
+    try {
+      const u = await tiktok.fetchUserInfo(tok.access_token);
+      username = u.username || u.display_name || '';
+    } catch (e) { console.error('[tiktok/callback] user/info:', e.message); }
+    // Una cuenta de TikTok = una sola cuenta de Posty activa a la vez.
+    if (tok.open_id) {
+      const dupe = db.prepare('SELECT user_id FROM tiktok_accounts WHERE tiktok_user_id = ? AND user_id != ?').get(tok.open_id, req.session.userId);
+      if (dupe) return res.redirect(dest + '?tiktok=error&msg=' + encodeURIComponent('Esa cuenta de TikTok ya está conectada a otra cuenta de Posty.'));
+    }
+    tiktok.saveAccount(db, req.session.userId, tok, username);
+    try { track(req.session.userId, 'tiktok_connected'); } catch (e) {}
+    return res.redirect(dest + '?tiktok=ok');
+  } catch (e) {
+    console.error('[tiktok/callback]', e.message);
+    return res.redirect(dest + '?tiktok=error&msg=' + encodeURIComponent('No pudimos conectar tu TikTok 😅 Probá de nuevo.'));
+  }
+});
+
+app.post('/api/tiktok/disconnect', requireAuth, (req, res) => {
+  tiktok.deleteAccount(db, req.session.userId);
+  res.json({ ok: true });
+});
+
+app.post('/api/tiktok/publish/:postId', requireAuth, async (req, res) => {
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.postId, req.session.userId);
+    if (!post) return res.status(404).json({ error: 'Ese posteo no aparece 😅 Actualizá y probá de nuevo.' });
+    if (!tiktok.configured()) return res.status(503).json({ error: 'TikTok todavía no está activo en Posty. ¡Falta poquito! 🎵' });
+    if (!tiktok.getAccount(db, req.session.userId)) return res.status(400).json({ error: 'Conectá tu TikTok en Ajustes primero 🎵' });
+    if (post.tiktok_publish_id) return res.status(409).json({ error: 'Ese posteo ya lo compartiste en TikTok 🎵' });
+    if (!post.image_path) return res.status(400).json({ error: 'Ese posteo todavía no tiene imagen o video para compartir.' });
+    const accessToken = await tiktok.getValidToken(db, req.session.userId);
+    if (!accessToken) return res.status(400).json({ error: 'Tu conexión con TikTok venció. Reconectala en Ajustes 🎵' });
+    const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+    const abs = (p) => /^https?:\/\//i.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p);
+    const cap = String(post.caption || '').trim();
+    const tags = String(post.hashtags || '').trim();
+    const fullText = [cap, tags].filter(Boolean).join('\n');
+    const mt = String(post.media_type || 'image');
+    let out;
+    if (mt === 'video' || /\.mp4($|\?)/i.test(post.image_path)) {
+      out = await tiktok.publishVideo({ accessToken, videoUrl: abs(post.image_path), title: fullText || 'Posteo de mi negocio' });
+    } else {
+      let paths = [post.image_path];
+      if (mt === 'carousel' && post.carousel_paths) {
+        try { const arr = JSON.parse(post.carousel_paths); if (Array.isArray(arr) && arr.length) paths = arr.map(String); } catch (e) { /* queda la portada */ }
+      }
+      if (/\.png($|\?)/i.test(paths[0])) {
+        return res.status(400).json({ error: 'TikTok no acepta imágenes PNG 😅 Este posteo tiene un formato viejo: regenerá la imagen y probá de nuevo.' });
+      }
+      const firstLine = (cap.split('\n')[0] || 'Mi negocio').slice(0, 90);
+      out = await tiktok.publishPhoto({ accessToken, imageUrls: paths.map(abs), title: firstLine, description: fullText });
+    }
+    db.prepare('UPDATE posts SET tiktok_publish_id = ? WHERE id = ?').run(out.publishId, post.id);
+    try { track(req.session.userId, 'tiktok_publish'); } catch (e) {}
+    res.json({
+      ok: true, publish_id: out.publishId, privacy_level: out.privacyLevel,
+      message: out.privacyLevel === 'SELF_ONLY'
+        ? '🎵 ¡Listo! Tu posteo se está publicando en TikTok. Por ahora sale en privado, hasta que TikTok apruebe nuestra app.'
+        : '🎵 ¡Listo! Tu posteo se está publicando en TikTok.',
+    });
+  } catch (e) {
+    console.error('[tiktok/publish]', e.message);
+    res.status(502).json({ error: 'TikTok no pudo recibir el posteo 😅 ' + String(e.message || '').slice(0, 140) });
+  }
+});
+
 // Reinicio manual total (marca + posteos pendientes). El historial publicado no se toca.
 app.post('/api/brand/reset', requireAuth, (req, res) => {
   fullBrandReset(req.session.userId);
@@ -10787,7 +10895,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v165';
+const BUILD_ID = '20261017-v166';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
