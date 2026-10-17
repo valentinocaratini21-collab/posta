@@ -462,6 +462,57 @@ function lpFilterEx(rubro, btn) {
   if (row) row.classList.toggle('lp-filtered', rubro !== 'todos');
   document.querySelectorAll('.lp-chip').forEach((b) => b.classList.toggle('on', b === btn));
 }
+let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
+function lpInitHero() {
+  // — Actividad en vivo "Posty trabajando": rota líneas ilustrativas del negocio de ejemplo.
+  const line = document.getElementById('lpLiveLine');
+  if (line) {
+    const items = [
+      '🐾 <b>Posty</b> publicó el posteo del martes <span>· hace 2 h</span>',
+      '💬 <b>Posty</b> dejó listas 3 respuestas a comentarios <span>· hace 5 h</span>',
+      '🎬 El reel de la semana ya está listo <span>· ayer</span>',
+      '📸 Historia de la promo programada <span>· hoy 9:00</span>',
+      '📊 Tu reporte de la semana está listo <span>· el lunes</span>'
+    ];
+    let i = 0;
+    line.innerHTML = items[0];
+    if (LP_LIVE_TIMER) { clearInterval(LP_LIVE_TIMER); LP_LIVE_TIMER = null; }
+    if (LP_LIVE_IO) { LP_LIVE_IO.disconnect(); LP_LIVE_IO = null; }
+    const tick = () => {
+      line.classList.add('swap');
+      setTimeout(() => { i = (i + 1) % items.length; line.innerHTML = items[i]; line.classList.remove('swap'); }, 320);
+    };
+    const start = () => { if (!LP_LIVE_TIMER) LP_LIVE_TIMER = setInterval(tick, 3500); };
+    const stop = () => { if (LP_LIVE_TIMER) { clearInterval(LP_LIVE_TIMER); LP_LIVE_TIMER = null; } };
+    if ('IntersectionObserver' in window) {
+      LP_LIVE_IO = new IntersectionObserver((es) => { es.forEach((en) => { if (en.isIntersecting) start(); else stop(); }); }, { threshold: 0.15 });
+      LP_LIVE_IO.observe(line);
+    } else start();
+  }
+  // — Contraste arrastrable HOY / CON POSTY (pointer events + range accesible).
+  const drag = document.getElementById('pzDrag');
+  if (drag && !drag.dataset.bound) {
+    drag.dataset.bound = '1';
+    const range = document.getElementById('pzDragRange');
+    const setPos = (p) => {
+      p = Math.max(4, Math.min(96, p));
+      drag.style.setProperty('--pos', p + '%');
+      if (range) range.value = Math.round(p);
+    };
+    setPos(50);
+    let on = false;
+    const fromEvent = (e) => { const r = drag.getBoundingClientRect(); if (r.width) setPos(((e.clientX - r.left) / r.width) * 100); };
+    drag.addEventListener('pointerdown', (e) => {
+      if (e.target === range) return;
+      on = true; drag.classList.add('touched');
+      try { drag.setPointerCapture(e.pointerId); } catch (err) {}
+      fromEvent(e);
+    });
+    drag.addEventListener('pointermove', (e) => { if (on) fromEvent(e); });
+    ['pointerup', 'pointercancel'].forEach((ev) => drag.addEventListener(ev, () => { on = false; }));
+    if (range) range.addEventListener('input', () => { drag.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
+  }
+}
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -522,7 +573,7 @@ function landingView(cfg) {
           <img loading="lazy" src="g-tazas.jpg" alt="Posteo de Instagram de Café Aurora: dos tazas de café con flores">
           <img loading="lazy" src="g-pasta.jpg" alt="Posteo de Instagram de Café Aurora: plato de pasta del mediodía">
           <img loading="lazy" src="g-latte.jpg" alt="Posteo de Instagram de Café Aurora: latte art en vivo">
-          <span class="igp-cell-reel"><video src="showcase-reel-cafe2.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Reel de Instagram de Café Aurora: el café más pedido"></video><span class="igp-reel-badge">▶</span></span>
+          <span class="igp-cell-reel"><video src="showcase-reel-natural.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Reel de Instagram de Café Aurora: barista preparando latte art"></video><span class="igp-reel-badge">▶</span></span>
           <img loading="lazy" src="g-platos.jpg" alt="Posteo de Instagram de Café Aurora: platos del brunch">
           <img loading="lazy" src="g-vaso.jpg" alt="Posteo de Instagram de Café Aurora: vaso de latte">
           <img loading="lazy" src="g-tres.jpg" alt="Posteo de Instagram de Café Aurora: cafés en la mesa">
@@ -537,26 +588,32 @@ function landingView(cfg) {
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
       </div>
+      <div class="lp-live" id="lpLive">
+        <div class="lp-live-head"><span class="lp-live-dot"></span><b>Posty trabajando</b><span>así trabaja por este negocio, todos los días</span></div>
+        <div class="lp-live-line" id="lpLiveLine"></div>
+      </div>
     </div>
     <div class="pz-beforeafter">
       <h3>La diferencia se ve en una semana</h3>
-      <div class="pz-ba-row">
-        <div class="pz-ba-panel pz-ba-dead">
-          <div class="pz-ba-label">HOY</div>
-          <div class="pz-ba-prof"><span class="pz-ba-ava">C</span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
-          <p class="pz-ba-bio">Café ☕</p>
-          <div class="pz-ba-grid"><span class="pz-ba-dull"><img src="ig-cafe.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-vaso.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-tres.jpg" alt=""></span></div>
-          <p class="pz-ba-last">⏸ Última publicación: hace 6 semanas</p>
-        </div>
-        <div class="pz-ba-arrow">→</div>
-        <div class="pz-ba-panel">
-          <div class="pz-ba-label pz-ba-label-on">CON POSTY</div>
+      <div class="pz-drag" id="pzDrag">
+        <div class="pz-drag-layer">
           <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="ig-cafe.jpg" alt=""></span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
           <p class="pz-ba-bio">☕ Café de especialidad y brunch<br>📍 Gorriti 4380 · 8 a 20 h</p>
           <div class="pz-ba-grid pz-ba-grid-live"><img src="ig-cafe.jpg" alt=""><img loading="lazy" src="g-tazas.jpg" alt=""><img loading="lazy" src="g-pasta.jpg" alt=""><img loading="lazy" src="g-latte.jpg" alt=""><img loading="lazy" src="g-cappu.jpg" alt=""><img loading="lazy" src="g-platos.jpg" alt=""><img loading="lazy" src="g-vaso.jpg" alt=""><img loading="lazy" src="g-tres.jpg" alt=""><img loading="lazy" src="g-gourmet.jpg" alt=""></div>
           <p class="pz-ba-last pz-ba-last-on">🔥 Publicando esta semana</p>
         </div>
+        <div class="pz-drag-layer pz-drag-hoy pz-ba-dead" aria-hidden="true">
+          <div class="pz-ba-prof"><span class="pz-ba-ava">C</span><span class="pz-ba-who"><b>cafe.aurora</b><small>Cafetería · Palermo</small></span></div>
+          <p class="pz-ba-bio">Café ☕</p>
+          <div class="pz-ba-grid"><span class="pz-ba-dull"><img src="ig-cafe.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-vaso.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-tres.jpg" alt=""></span></div>
+          <p class="pz-ba-last">⏸ Última publicación: hace 6 semanas</p>
+        </div>
+        <span class="pz-tag pz-tag-hoy">HOY</span>
+        <span class="pz-tag pz-tag-on">CON POSTY</span>
+        <div class="pz-drag-bar"><span class="pz-drag-knob">⇄</span></div>
+        <input class="pz-drag-range" id="pzDragRange" type="range" min="4" max="96" step="1" value="50" aria-label="Comparar el perfil: arrastrá para ver tu Instagram hoy, a la izquierda, y con Posty, a la derecha">
       </div>
+      <p class="pz-drag-hint">👆 Arrastrá la línea: así cambia un perfil cuando Posty se pone a trabajar</p>
     </div>
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
   </div></div>
@@ -564,11 +621,11 @@ function landingView(cfg) {
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
       <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
       <div class="lp-week-grid">
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FDEBD2">C</i></span><b>cafe.aurora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E4F0FA">T</i></span><b>tiendacora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E9E4DC">E</i></span><b>elcorte.barberia</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mié</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FBE4EC">A</i></span><b>estetica.alma</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-belleza.jpg" alt="Posteo de Instagram de una estética hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
-        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-ok">✓ Listo</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FDEBD2">C</i></span><b>cafe.aurora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · lun 10:32</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E4F0FA">T</i></span><b>tiendacora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-moda.jpg" alt="Posteo de Instagram de una tienda de ropa hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mar</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · mar 11:06</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E9E4DC">E</i></span><b>elcorte.barberia</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-barber.jpg" alt="Posteo de Instagram de una barbería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Mié</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · mié 18:30</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FBE4EC">A</i></span><b>estetica.alma</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-belleza.jpg" alt="Posteo de Instagram de una estética hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Jue</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · jue 11:00</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Posteo de Instagram de un pet shop hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Vie</b><span>Posteo</span></div><div class="lp-day-sched">📮 Programado · vie 12:15</div></div>
       </div>
       <p class="lp-week-note">Así se ve tu semana: ideas, diseños y textos con tu marca, que se publican solos en los mejores horarios.</p>
     </div>
@@ -8526,6 +8583,7 @@ async function render() {
       PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
       root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
+      lpInitHero();
       // Lugares reales: bajan solos con cada cliente nuevo
       refreshScarcity();
       // Puntitos del carrusel de planes
@@ -8645,6 +8703,7 @@ async function render() {
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
+    lpInitHero();
     refreshScarcity(); // número vivo de /api/capacity (fallback: 50 del template)
     return;
   }
