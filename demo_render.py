@@ -124,7 +124,12 @@ def load_photo(photo_path, w=W, h=H, focus=0.5):
     """Foto graduada (high-key) recortada a w x h. focus 0=arriba, 1=abajo."""
     if not os.path.isfile(photo_path):
         raise FileNotFoundError("foto no encontrada: %s" % photo_path)
-    p = Image.open(photo_path).convert("RGB")
+    _im = Image.open(photo_path)
+    try:
+        _im.draft("RGB", (w * 2, h * 2))  # decodifica cerca del tamaño de uso: mismo resultado, menos CPU
+    except Exception:
+        pass
+    p = _im.convert("RGB")
     target = w / h
     pw, ph = p.size
     if pw / ph > target:

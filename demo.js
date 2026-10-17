@@ -906,26 +906,15 @@ function categoryFromText(text) {
 async function renderSpecPngsStream(specPosts, colors, onPng) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
-  // 2026-10-17 (velocidad II): con 4+ diseños, el render se parte en DOS
-  // procesos Python en paralelo sobre el mismo runDir (cada uno escribe
-  // sus post-N.jpg con el índice global vía index_offset). El render es
-  // CPU puro: en cualquier máquina con 2 núcleos esto corta la fase de
-  // diseño casi a la mitad, sin tocar ni un pixel del resultado.
-  const jobs = [];
-  if (specPosts.length >= 4) {
-    const mid = Math.ceil(specPosts.length / 2);
-    jobs.push({ posts: specPosts.slice(0, mid), offset: 0 });
-    jobs.push({ posts: specPosts.slice(mid), offset: mid });
-  } else {
-    jobs.push({ posts: specPosts, offset: 0 });
-  }
+  const specPath = path.join(runDir, 'spec.json');
+  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: specPosts }));
   let renderErr = null;
   let renderDone = false;
-  const renderPromise = Promise.all(jobs.map((job, j) => {
-    const specPath = path.join(runDir, j === 0 ? 'spec.json' : `spec-${j}.json`);
-    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: job.posts, index_offset: job.offset }));
-    return runDemoRender([DEMO_SCRIPT, specPath, runDir]);
-  })).then(() => { renderDone = true; }, (e) => { renderErr = e; renderDone = true; });
+  // NOTA (2026-10-17): se probó partir el render en dos procesos Python
+  // en paralelo y en la instancia actual NO ayudó (la CPU es compartida:
+  // el trabajo total manda). Queda el proceso único de siempre.
+  const renderPromise = runDemoRender([DEMO_SCRIPT, specPath, runDir])
+    .then(() => { renderDone = true; }, (e) => { renderErr = e; renderDone = true; });
   try {
     const n = specPosts.length;
     const emitted = new Array(n).fill(false);
@@ -933,7 +922,7 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
     let emittedCount = 0;
     while (emittedCount < n) {
       if (renderErr) throw renderErr; // el render murió: no van a aparecer más PNGs
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 150));
       for (let i = 0; i < n; i++) {
         if (emitted[i]) continue;
         const p = path.join(runDir, `post-${i}.jpg`);
