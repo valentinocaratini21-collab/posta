@@ -163,7 +163,11 @@ function pickHook({ intent, usedHookIds = [] } = {}) {
 //  - Los hooks de PRECIO exigen precio/promo REAL en la idea: sin precio,
 //    "está más barato" es gramaticalmente roto y además un claim falso.
 // ---------------------------------------------------------------------------
-const IMPERATIVE_START = /^(regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire)\b/i;
+// NOCHE-48 (2026-10-16): el \b final era ASCII y NO matcheaba los imperativos
+// voseo terminados en vocal acentuada (regalá, mirá, probá, vení…): el tema
+// exacto del empalme real de v142 ("Regalá mamá…") pasaba hookFits. Se usa
+// lookahead de no-letra (incluye acentuadas) en vez de \b.
+const IMPERATIVE_START = /^(regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire)(?=$|[^a-záéíóúüñ])/i;
 const PRICE_FORMULA = /más barato|bajamos de precio|bajó|sin margen|te sale menos|descuento|liquidación/i;
 
 function hookFits(hook, { tema, negocio, hasPrice } = {}) {
@@ -189,11 +193,29 @@ function hookFits(hook, { tema, negocio, hasPrice } = {}) {
 
 // Detector determinista de empalmes en la primera línea: puntuación
 // huérfana ("Posty.:"), el negocio repetido, o una apertura desmesurada.
+// LINT v2 (Juli, 2026-10-17 — auditoría de producción): la v1 dejaba pasar
+// 7 de las 12 aperturas empalmadas vivas en la cuenta 12 (semana 2026-10-12).
+// Tres firmas nuevas, todas con caso real y 0 falsos positivos sobre los
+// 50 ejemplos del banco:
+//  (a) punto seguido de minúscula DENTRO de la apertura — dos frases
+//      cosidas en la línea del hook: "El Regalá… de Posty. sin margen…"
+//      (id 91). Ninguna fórmula del banco lleva ". " interna.
+//  (b) ¿ o ¡ empalmados a mitad de frase — el tema es él mismo una
+//      pregunta/exclamación metida en la fórmula: "…haciendo ¿Cómo crear
+//      contenido sin estrés? en Posty." (ids 93/109), "…, ¡Novedades…!"
+//      (id 113). Un ¿/¡ legítimo abre la línea (índice 0), no la parte.
+//  (c) artículo + palabra capitalizada al abrir — el tema-título/frase se
+//      cosió tras el artículo de la fórmula: "El De escéptica a fan:…"
+//      (id 112), "El Regalá una presencia…" (id 91). Con tema sano el
+//      segundo token va en minúscula ("El pan de campo…").
 function captionOpenIsGarbled(caption, negocio) {
   const first = String(caption || '').split('\n')[0].trim();
   if (!first) return false;
   if (/[.,:;]{2,}/.test(first.replace(/\.\.\./g, ''))) return true;
   if (/\w\.:(?!\/)/.test(first)) return true;
+  if (/\.\s+[a-záéíóúñ]/.test(first)) return true;
+  if (/[¿¡]/.test(first.slice(1))) return true;
+  if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(first)) return true;
   const biz = String(negocio || '').trim().toLowerCase();
   if (biz && biz.length >= 3) {
     const hits = first.toLowerCase().split(biz).length - 1;
