@@ -1949,7 +1949,7 @@ textarea.in{resize:vertical;min-height:96px}
 @media (max-width:720px){
   .lp-week{padding:16px 14px 10px;margin-top:40px}
   .lp-week-grid{display:flex;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
-  .lp-day{min-width:128px;flex:0 0 auto}
+  .lp-day{width:132px;min-width:132px;flex:0 0 132px}
   .lp-stats-grid{grid-template-columns:1fr 1fr;gap:30px 14px}
   .lp-offer{margin-top:-20px;padding:16px 18px;font-size:14px}
   .lp-final{padding:60px 0}
@@ -1988,3 +1988,13 @@ textarea.in{resize:vertical;min-height:96px}
 .hs-report{background:#fff;border:2px solid #E3EDF4;border-radius:16px;padding:16px 18px;margin:14px 0 4px;text-align:left}
 .hs-report-title{font-weight:800;font-size:17px;color:#0A1E33;margin-bottom:8px}
 .hs-report-line{font-size:15px;color:#33506B;line-height:1.55;padding:3px 0}
+
+/* v157 — fixes de captura real (Valentino, iPhone): (a) las tarjetas del
+   panel de semana explotaban a ancho completo en el carrusel mobile porque
+   .lp-day no tenía ancho definido y la imagen empujaba; (b) al filtrar
+   ejemplos por rubro, el carrusel dejaba 1 tarjeta sola a la izquierda —
+   filtrado pasa a grilla de 2 columnas centrada. */
+@media (max-width:760px){
+  #ejemplos .show-row.lp-filtered{flex-wrap:wrap;justify-content:center;overflow-x:visible;scroll-snap-type:none}
+  #ejemplos .show-row.lp-filtered .phone.sm{flex:0 0 calc(50% - 7px);width:calc(50% - 7px);scroll-snap-align:none}
+}

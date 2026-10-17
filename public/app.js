@@ -458,6 +458,8 @@ function lpFilterEx(rubro, btn) {
   document.querySelectorAll('#ejemplos .phone[data-rubro]').forEach((el) => {
     el.style.display = (rubro === 'todos' || el.getAttribute('data-rubro') === rubro) ? '' : 'none';
   });
+  const row = document.querySelector('#ejemplos .show-row');
+  if (row) row.classList.toggle('lp-filtered', rubro !== 'todos');
   document.querySelectorAll('.lp-chip').forEach((b) => b.classList.toggle('on', b === btn));
 }
 function landingView(cfg) {
@@ -492,9 +494,6 @@ function landingView(cfg) {
     <div class="pill">🤖 Tu community manager</div>
     <h1>Tu semana de Instagram,<br><span class="hl">hecha en 1 minuto</span></h1>
     <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Vos no hacés nada: solo frenás si algo no te cierra.</p>
-    <div class="hero-cta">
-      <a class="btn btn-primary" href="/prueba" style="font-size:17px;padding:18px 46px">Ver mi semana gratis 👀</a>
-    </div>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
       <button class="btn btn-primary" type="submit">Ver mi semana →</button>
