@@ -796,7 +796,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
-    <h1>Tu Instagram vendiendo<br><span class="hl">todos los días, sin que muevas un dedo</span></h1>
+    <h1>Tu Instagram vendiendo<br><span class="hl">todos los días, con un solo clic</span></h1>
     <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Posteos, reels, historias, comentarios, mensajes y pauta — todo tu Instagram, hecho por Posty. Vos no hacés nada: solo frenás si algo no te cierra.</p>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
