@@ -174,6 +174,25 @@ ok('con campo signal válido manda el campo; duplicados no se repiten', () => {
   assert.strictEqual(out[0].signal, sigs[1]);
   assert.strictEqual(out[1].signal, sigs[0]);
 });
+ok('ideas cruzadas de orden (el caso real de producción) se asignan por contenido', () => {
+  // Salida REAL de la 2ª corrida en producción (cuenta 12): la idea del
+  // Día de la Madre vino 2ª y la de carruseles 3ª, al revés que las
+  // señales. Sin campo signal: la asignación es por puntaje de contenido.
+  const sigs = [
+    { source: 'competitor', format: 'carrusel', evidence: 'El posteo con más comentarios de @metricool (22 💬) fue sobre Unfiltered', facts: { handle: 'metricool' } },
+    { source: 'competitor', format: 'carrusel', evidence: '@metricool publicó 2 carruseles en sus últimos 12 posteos', facts: { handle: 'metricool' } },
+    { source: 'calendar', format: 'post', evidence: 'Día de la Madre es HOY (2026-10-18)', facts: { name: 'Día de la Madre' } },
+  ];
+  const out = ideas.pickIdeas({ ideas: [
+    { title: '¿Qué es Unfiltered? Tu próximo must en redes', why: '@metricool tuvo 22 💬 en un posteo que habla de Unfiltered.', format: 'carrusel', brief: 'B1' },
+    { title: '¡Prepará tu regalo para mamá ya!', why: 'Hoy es el Día de la Madre (2026-10-18), la fecha que más vende del año.', format: 'post', brief: 'B2' },
+    { title: 'Carruseles: el formato que no podés ignorar', why: '@metricool publicó 2 carruseles en sus últimos 12 posteos y tuvo el más engagement con 22 💬.', format: 'carrusel', brief: 'B3' },
+  ] }, sigs);
+  assert.strictEqual(out.length, 3);
+  assert.strictEqual(out[0].signal, sigs[0], 'la de Unfiltered va al top del competidor');
+  assert.strictEqual(out[1].signal, sigs[2], 'la del Día de la Madre va a la efeméride, no al hueco de formato');
+  assert.strictEqual(out[2].signal, sigs[1], 'la de carruseles va al hueco de formato');
+});
 ok('salida vacía o basura → lista vacía (silencio, no relleno)', () => {
   assert.deepStrictEqual(ideas.pickIdeas(null, []), []);
   assert.deepStrictEqual(ideas.pickIdeas({ ideas: 'nope' }, [{ source: 'x', format: 'post', evidence: 'e' }]), []);
@@ -193,7 +212,7 @@ ok('server.js: loop, endpoints y admin', () => {
   for (const needle of ['runWeeklyIdeasLoop', 'runIdeasForUser', 'makeIdeaDraft', "app.get('/api/ideas'", "app.post('/api/ideas/:id/make'", "app.post('/api/ideas/:id/dismiss'", "app.post('/api/ideas/competitors'", "app.post('/api/admin/ideas/run'", "app.post('/api/admin/ideas/make'", 'ideas: weekIdeas']) {
     assert.ok(srvSrc.includes(needle), 'falta: ' + needle);
   }
-  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v219'"));
+  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v220'"));
 });
 ok('app.js: bloque de ideas en Schedule + enhanceIdeas', () => {
   assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length >= 2, 'slot en las dos vistas de Schedule');

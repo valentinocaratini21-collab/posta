@@ -156,35 +156,71 @@ function buildIdeaSignals(input) {
 }
 
 // Interpreta la salida del pase de texto (gpt-4o-mini) contra las señales.
-// Verificado en producción (2026-10-18): el modelo devolvió las 3 ideas SIN
-// el campo "signal" y el loop se salteaba la semana entera en silencio.
-// Mapeo robusto: el campo signal válido manda; si falta o no sirve, la
-// idea i va a la señal i (el modelo responde en el orden de las señales).
-// El porqué SIEMPRE queda anclado a la evidencia: si no cita un @, un
-// número o una fecha, el código anexa la evidencia calculada.
+// Verificado en producción (2026-10-18) dos veces: el modelo devuelve las
+// ideas SIN campo "signal" utilizable y NO siempre en el orden de las
+// señales (la 1ª corrida se salteó la semana entera; la 2ª cruzó los
+// angle_key de la idea de carruseles con la del Día de la Madre — la
+// memoria de ángulos quedaba envenenada). Asignación determinística por
+// puntaje global: para cada idea×señal suma el campo signal si es válido
+// (+10), el @ del competidor citado en el porqué (+4), el nombre de la
+// efeméride citado (+4), el formato coincidente (+2), la palabra del
+// formato en el porqué (+1) y la posición (+1); se elige la asignación
+// sin repetir señal de mayor puntaje total (≤4 señales: se prueban
+// todas). El porqué SIEMPRE queda anclado a la evidencia de SU señal:
+// si no cita un @, un número o una fecha, el código la anexa.
 function pickIdeas(parsed, signals) {
-  const list = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.ideas) ? parsed.ideas : []);
   const sigs = Array.isArray(signals) ? signals : [];
+  const list = (Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.ideas) ? parsed.ideas : []))
+    .filter((it) => it && typeof it === 'object' && String(it.title || '').trim())
+    .slice(0, Math.min(3, sigs.length));
+  if (!list.length || !sigs.length) return [];
+  const FMT_WORD = { reel: /reel/i, carrusel: /carrusel/i, post: /posteo|post /i };
+  const score = (it, pos, s, si) => {
+    let sc = 0;
+    const why = String(it.why || '');
+    const field = (parseInt(it.signal, 10) || 0) - 1;
+    if (field === si) sc += 10;
+    const handle = s.facts && s.facts.handle;
+    if (handle && why.toLowerCase().includes('@' + String(handle).toLowerCase())) sc += 4;
+    const ephName = s.facts && s.facts.name;
+    if (ephName && why.toLowerCase().includes(String(ephName).toLowerCase())) sc += 4;
+    // Números compartidos entre el porqué y la evidencia (conteos, fechas):
+    // el ancla más difícil de falsificar — desempata campos duplicados.
+    const evNums = new Set(String(s.evidence || '').match(/[0-9]+/g) || []);
+    const shared = (why.match(/[0-9]+/g) || []).filter((n) => evNums.has(n)).length;
+    sc += 3 * Math.min(shared, 2);
+    if (it.format && it.format === s.format) sc += 2;
+    if (FMT_WORD[s.format] && FMT_WORD[s.format].test(why)) sc += 1;
+    if (pos === si) sc += 1;
+    return sc;
+  };
+  // Asignación óptima sin repetir señal (fuerza bruta acotada).
+  let best = null;
+  const assign = new Array(list.length).fill(-1);
+  const usedS = new Set();
+  const bt = (pos, total) => {
+    if (pos === list.length) { if (!best || total > best.total) best = { total, assign: assign.slice() }; return; }
+    for (let si = 0; si < sigs.length; si++) {
+      if (usedS.has(si)) continue;
+      usedS.add(si); assign[pos] = si;
+      bt(pos + 1, total + score(list[pos], pos, sigs[si], si));
+      usedS.delete(si); assign[pos] = -1;
+    }
+  };
+  bt(0, 0);
   const out = [];
-  const used = new Set();
   list.forEach((it, pos) => {
-    if (!it || typeof it !== 'object') return;
-    let idx = (parseInt(it.signal, 10) || 0) - 1;
-    if (idx < 0 || idx >= sigs.length || used.has(idx)) idx = pos;
-    if (idx < 0 || idx >= sigs.length || used.has(idx)) return;
-    const s = sigs[idx];
+    const s = sigs[best.assign[pos]];
     const title = String(it.title || '').trim().slice(0, 90);
-    if (!title) return;
     let why = String(it.why || '').trim();
     const anchored = why && (/@[a-z0-9._]/i.test(why) || /[0-9]/.test(why));
     if (!anchored) why = (why ? why.replace(/[. ]+$/, '') + ' — ' : '') + s.evidence;
     why = String(why).slice(0, 320);
     const format = ['post', 'reel', 'carrusel'].includes(it.format) ? it.format : s.format;
     const brief = String(it.brief || '').trim().slice(0, 400) || title;
-    used.add(idx);
     out.push({ signal: s, title, why, format, brief });
   });
-  return out.slice(0, 3);
+  return out;
 }
 
 // Memoria de ángulos: dado el historial reciente del usuario (filas de
