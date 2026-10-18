@@ -10830,6 +10830,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // demo ya se alcanzó, feedKind queda 'photo' (plantillas, $0 extra).
     const demoApiKey = process.env.OPENAI_API_KEY || '';
     let feedKind = ig ? 'photo' : null;
+    let feedFormula = null; // v202: fórmula de composición del feed (viaja en el payload/caché)
     let demoSpendBefore = null;
     let classifyPromise = null;
     if (ig && feedPhotoPaths.length && demoApiKey && costs.demoAiCapOk()) {
@@ -10901,7 +10902,17 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           if (aiKeepalive.unref) aiKeepalive.unref();
           try {
             const visualStyle = demoAi.visualStyleForFeed(cls, feedRegister);
-            const refs = [profilePicPath, feedPhotoPaths[0]].filter(Boolean);
+            // v202: la FÓRMULA de composición del feed manda sobre la
+            // tanda: restricciones duras por pieza (personaje 60-70%,
+            // fondo simple, UN objeto-concepto, tercio superior limpio)
+            // y escala de titular del composite según la fórmula.
+            const formula = demoAi.compositionFor(cls);
+            feedFormula = formula;
+            const headlineScale = formula.headline === 'large' ? 1.45 : 1;
+            // Referencias: la foto de perfil (el personaje) + la foto del
+            // feed más nítida (mayor peso = mejor proxy disponible).
+            const sharpRef = demoAi.pickSharpestRef(feedPhotoPaths);
+            const refs = [profilePicPath, sharpRef].filter(Boolean);
             const { getStyle: getStyleDemo } = require('./image-styles');
             const makePiece = async (i) => {
               const sp = specPosts[i];
@@ -10920,8 +10931,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 const st = sp.style ? getStyleDemo(sp.style) : null;
                 if (st) prompt += '\n\n' + styleFragment(st, [accent, btn].filter(Boolean));
               } catch (e) { /* el fragmento de estilo es opcional */ }
+              prompt += '\n\n' + demoAi.compositionDirectives(cls, `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`);
               const b64 = await genConceptImage(demoApiKey, prompt, refs, demoAi.REF_NOTE, null, 'demo-ai-image');
-              return demoAi.compositeDemoPiece({ b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i });
+              return demoAi.compositeDemoPiece({ b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale });
             };
             const { replaced } = await demoAi.replacePiecesWithAi({
               indexes: posts.map((_, i) => i),
@@ -11067,6 +11079,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       feed_kind: feedKind,
+      feed_formula: feedFormula,
       demo_ai: demoAiInfo,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
@@ -11782,7 +11795,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v201';
+const BUILD_ID = '20261018-v202';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

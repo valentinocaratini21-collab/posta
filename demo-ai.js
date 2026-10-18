@@ -1,5 +1,10 @@
 'use strict';
 // demo-ai.js — v198: PROYECCIÓN CON IA SOLO PARA PERFILES ILUSTRADOS/MASCOTA.
+// v202: FÓRMULA DE COMPOSICIÓN DEL FEED — el clasificador también devuelve
+// CÓMO compone el feed (escala del personaje, tipo de fondo, peso del
+// titular) y esa fórmula se inyecta como restricciones DURAS en el prompt
+// de cada pieza IA (personaje protagonista 60-70%, fondo simple, UN objeto
+// concepto grande por pieza, tercio superior limpio para el titular).
 //
 // Decisión de Valentino (2026-10-18): en /prueba, si el Instagram del
 // visitante es una marca ILUSTRADA (avatar/mascota/personaje dibujado —
@@ -48,14 +53,28 @@ function buildContactSheet(photoPaths) {
 }
 
 // ---------- 2) Clasificación del feed ----------
+const FORMULA_BACKGROUNDS = ['plain', 'soft', 'detailed'];
+const FORMULA_HEADLINES = ['large', 'small', 'none'];
+
+// La FÓRMULA DE COMPOSICIÓN viaja dentro de la clasificación: escala del
+// personaje (fracción del alto del cuadro que ocupa en el feed), tipo de
+// fondo y tratamiento del titular. Valores inválidos → null por campo (el
+// consumidor aplica defaults vía compositionFor).
 function parseClassifyContent(text) {
   try {
     const j = JSON.parse(String(text || ''));
     if (!j || (j.kind !== 'photo' && j.kind !== 'illustrated')) return null;
+    const c = (j.composition && typeof j.composition === 'object') ? j.composition : {};
+    const scale = Number(c.character_scale);
     return {
       kind: j.kind,
       character: String(j.character || '').slice(0, 400),
       style: String(j.style || '').slice(0, 400),
+      formula: {
+        character_scale: Number.isFinite(scale) && scale > 0 && scale <= 1 ? scale : null,
+        background: FORMULA_BACKGROUNDS.includes(c.background) ? c.background : null,
+        headline: FORMULA_HEADLINES.includes(c.headline) ? c.headline : null,
+      },
     };
   } catch (e) { return null; }
 }
@@ -64,8 +83,12 @@ const CLASSIFY_SYSTEM = [
   'Mirás una hoja de contacto con los últimos posteos del Instagram de un negocio.',
   'Tu tarea: decidir si el contenido del feed es FOTOGRAFÍA REAL (fotos de un local, productos, personas reales) o ILUSTRADO (dibujos, ilustración digital, render 3D de un personaje/mascota/avatar, animación, piezas gráficas con un personaje dibujado como protagonista).',
   'Si la mayoría de las piezas son ilustradas o hay un personaje dibujado recurrente → "illustrated". Si son fotos reales → "photo". Ante la duda → "photo".',
+  'Además describí la FÓRMULA DE COMPOSICIÓN del feed (cómo están armadas típicamente las piezas):',
+  '- composition.character_scale: fracción del ALTO del cuadro que ocupa el personaje/protagonista principal en una pieza típica (0.3 = chico en la escena, 0.7 = primer plano protagonista). Número entre 0 y 1.',
+  '- composition.background: "plain" si los fondos son color pleno/lisos, "soft" si son interiores suaves o desenfocados, "detailed" si son escenarios detallados y ocupados.',
+  '- composition.headline: "large" si las piezas llevan un titular grande y protagonista, "small" si el texto es chico/secundario, "none" si no llevan texto.',
   'Respondé SOLO un JSON válido, sin markdown:',
-  '{"kind":"photo"|"illustrated","character":"descripción en INGLÉS del personaje/mascota dibujado recurrente (aspecto, colores, ropa, rasgos distintivos) o cadena vacía si no hay","style":"descripción en INGLÉS, en una línea, del estilo de ilustración (técnica, paleta dominante, luz, mood) o cadena vacía si es foto"}',
+  '{"kind":"photo"|"illustrated","character":"descripción en INGLÉS del personaje/mascota dibujado recurrente (aspecto, colores, ropa, rasgos distintivos) o cadena vacía si no hay","style":"descripción en INGLÉS, en una línea, del estilo de ilustración (técnica, paleta dominante, luz, mood) o cadena vacía si es foto","composition":{"character_scale":0.7,"background":"plain"|"soft"|"detailed","headline":"large"|"small"|"none"}}',
 ].join('\n');
 
 // Clasifica el feed UNA vez. Devuelve {kind, character, style} o null si
@@ -90,7 +113,7 @@ async function classifyFeedKind({ photoPaths, apiKey, fetchImpl } = {}) {
       body: JSON.stringify({
         model: CLASSIFY_MODEL,
         temperature: 0.2,
-        max_tokens: 300,
+        max_tokens: 450,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: CLASSIFY_SYSTEM },
@@ -131,12 +154,93 @@ function visualStyleForFeed(cls, feedRegister) {
     : feedRegister === 'dark'
       ? 'The feed is DARK/moody: deep backgrounds, dramatic light.'
       : '';
+  const f = compositionFor(cls);
+  const bgLine = f.background === 'plain'
+    ? 'Feed composition formula: FLAT solid-color backgrounds in the brand palette.'
+    : f.background === 'soft'
+      ? 'Feed composition formula: SOFT, blurred, simple interior backgrounds.'
+      : 'Feed composition formula: backgrounds stay SIMPLE even when they suggest a place.';
+  const headLine = f.headline === 'large'
+    ? 'The feed uses BIG bold headlines — keep the top third of every frame clean for the headline.'
+    : '';
   return [
     `This client's Instagram feed is ILLUSTRATED digital art — NOT photography. Recurring brand character: ${character}.`,
     `Illustration style of the feed: ${style}. ${light}`,
+    bgLine,
+    headLine,
     'EVERY image must be an illustration in that EXACT same art style, with that SAME character as the protagonist in a NEW scene (never a copy of a reference scene).',
     'This brand\'s product IS its illustrated character — the character belongs in every piece. Never photorealistic, never generic stock photography, never a different character, never a real human replacing the character.',
-  ].join(' ');
+  ].filter(Boolean).join(' ');
+}
+
+// ---------- Fórmula de composición (v202) ----------
+// Normaliza la fórmula del clasificador con defaults alineados al feed
+// que queremos reproducir: personaje grande, fondo simple, titular con
+// peso. character_scale reportado es informativo (queda en el payload);
+// las directivas duras SIEMPRE exigen el rango protagonista 60-70%.
+function compositionFor(cls) {
+  const f = (cls && cls.formula) || {};
+  return {
+    character_scale: typeof f.character_scale === 'number' ? f.character_scale : 0.4,
+    background: FORMULA_BACKGROUNDS.includes(f.background) ? f.background : 'soft',
+    headline: FORMULA_HEADLINES.includes(f.headline) ? f.headline : 'large',
+  };
+}
+
+// UN objeto-concepto grande y distinto por pieza, derivado del tema del
+// posteo (el feed de referencia compone por CONCEPTOS: reloj gigante,
+// cartas de fotos, tablet…). Devuelve la frase en inglés para el prompt
+// o null si el tema no mapea (la directiva genérica cubre el resto).
+const CONCEPT_OBJECTS = [
+  [/horario|hora|reloj|cu[aá]ndo|momento|puntual/i, 'one GIANT round wall clock, oversized, right beside the character'],
+  [/carrusel|cartas|tarjetas|fotos|galer[ií]a|[aá]lbum/i, 'a big fanned set of oversized photo cards held up by the character'],
+  [/sorte|regalo|premio|meg[aá]fono|particip/i, 'one BIG gift box with a ribbon, oversized, beside the character'],
+  [/auditor[ií]a|lupa|gr[aá]fico|crecimiento|analiz|revis/i, 'one oversized magnifying glass over a large rising bar-chart board'],
+  [/comunidad|responde|mensaje|comentario|chat|seguidores/i, 'a few LARGE friendly chat speech bubbles floating big beside the character'],
+  [/turno|agenda|reserva|cita|calendario/i, 'one oversized calendar page with a big bold checkmark'],
+  [/venta|precio|promo|oferta|compr|tienda/i, 'one BIG price tag with a bold percent sign beside the character'],
+  [/contenido|tablet|ideas|mes|planific|creativ/i, 'one oversized tablet showing a bright colorful content calendar'],
+  [/festejo|celebr|logro|meta|cumple/i, 'big colorful confetti and one oversized party balloon beside the character'],
+];
+function conceptObjectFor(text) {
+  const t = String(text || '');
+  for (const [re, obj] of CONCEPT_OBJECTS) { if (re.test(t)) return obj; }
+  return null;
+}
+
+// Restricciones DURAS de composición que se agregan al prompt ya
+// ensamblado de cada pieza IA (después del brief y del fragmento de
+// estilo): es la traducción operativa de la fórmula del feed.
+function compositionDirectives(cls, topicText) {
+  const f = compositionFor(cls);
+  const concept = conceptObjectFor(topicText);
+  const bg = f.background === 'plain'
+    ? 'Background: ONE flat solid color from the brand palette (or a very subtle two-tone gradient of it). No environment, no room, no props behind the character.'
+    : 'Background: a VERY soft, blurred, simple interior wash in the brand palette — out of focus, almost abstract. FORBIDDEN: detailed busy offices, big window walls, cluttered desks, shelves full of objects, city skylines.';
+  const lines = [
+    'COMPOSITION — NON-NEGOTIABLE (this feed\'s formula):',
+    '- The character is the ABSOLUTE protagonist: CLOSE-UP in the foreground, occupying 60-70% of the frame height, centered, large and instantly readable at thumbnail size. Never a small figure lost inside a big scene.',
+    '- ' + bg,
+    concept
+      ? `- ONE single large concept object dominates the scene with the character: ${concept}. Nothing else competes — no extra props, no secondary characters, no busy details.`
+      : '- ONE single large concept object, emblematic of this post\'s theme, dominates the scene with the character. Nothing else competes — no extra props, no secondary characters, no busy details.',
+    '- Keep the TOP THIRD of the frame completely clean, plain and uncluttered (only the simple background) — a bold headline is composited there afterwards. No object, window, shelf or face may enter the top third.',
+    '- Instant concept read: a viewer must get the post\'s idea in one glance from the character + the one big object alone.',
+  ];
+  return lines.join('\n');
+}
+
+// La referencia de estilo del feed: entre las fotos localizadas, la de
+// mayor peso en bytes (proxy barato de la más nítida/grande disponible).
+function pickSharpestRef(photoPaths) {
+  let best = null; let bestSize = -1;
+  for (const p of photoPaths || []) {
+    try {
+      const s = fs.statSync(p);
+      if (s.isFile() && s.size > bestSize) { best = p; bestSize = s.size; }
+    } catch (e) { /* no existe: se ignora */ }
+  }
+  return best;
 }
 
 const REF_NOTE = 'IMPORTANT: the FIRST reference image is the client\'s brand character/mascot (its profile picture); if there is a second one, it is a post from its feed showing the illustration style. Keep the SAME character — identical design, colors, proportions and art style — as the protagonist in a NEW scene. Do NOT redesign or reinterpret the character.';
@@ -181,7 +285,7 @@ async function replacePiecesWithAi({ indexes, capOk, makePiece, onPiece } = {}) 
 // La IA genera la escena LIMPIA (sin texto); el titular lo compone el
 // código con composite-headline.py — el mismo del pipeline real — y la
 // pieza final sale JPEG 1080x1350 como las de plantilla.
-function compositeDemoPiece({ b64, headline, gradeHex, workDir, index }) {
+function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale }) {
   return new Promise((resolve) => {
     try {
       const dir = workDir || os.tmpdir();
@@ -191,6 +295,10 @@ function compositeDemoPiece({ b64, headline, gradeHex, workDir, index }) {
       fs.writeFileSync(raw, Buffer.from(String(b64 || ''), 'base64'));
       const args = [COMPOSITE_SCRIPT, '--in', raw, '--headline', String(headline || ''), '--out', fin];
       if (gradeHex) args.push('--grade', String(gradeHex));
+      // v202: si la fórmula del feed pide titulares grandes, el composite
+      // usa la escala mayor (el auto-fit del script sigue garantizando
+      // que el titular entre sin cortarse).
+      if (headlineScale && Number(headlineScale) > 1) args.push('--scale', String(headlineScale));
       execFile('python3', args, { timeout: 30000 }, (err) => {
         if (err) return resolve(null);
         const conv = 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nim = im.resize((1080, 1350), Image.LANCZOS)\nim.save(sys.argv[2], "JPEG", quality=88)\n';
@@ -215,6 +323,10 @@ module.exports = {
   parseClassifyContent,
   classifyFeedKind,
   visualStyleForFeed,
+  compositionFor,
+  conceptObjectFor,
+  compositionDirectives,
+  pickSharpestRef,
   REF_NOTE,
   SCENE_ROLES,
   replacePiecesWithAi,

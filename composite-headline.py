@@ -50,6 +50,11 @@ def main():
     ap.add_argument('--headline', default='')
     ap.add_argument('--out', required=True)
     ap.add_argument('--grade', default='')  # hex de marca: look de color sutil y unificado del feed
+    # Escala del titular (v202, solo lo usa el demo con IA cuando la
+    # fórmula del feed pide titulares grandes): multiplica el tamaño
+    # inicial del auto-fit; el ajuste posterior sigue garantizando que
+    # el titular entre completo. Default 1.0 = comportamiento histórico.
+    ap.add_argument('--scale', type=float, default=1.0)
     a = ap.parse_args()
 
     headline = str(a.headline or '').strip()
@@ -76,7 +81,7 @@ def main():
     draw = ImageDraw.Draw(img)
 
     # Auto-fit: bajar el tamaño hasta que entre en 3 líneas.
-    size = int(W * 0.085)
+    size = int(W * 0.085 * max(0.5, min(2.0, a.scale or 1.0)))
     font, lines = None, []
     while size >= int(W * 0.04):
         font = load_font(True, size)

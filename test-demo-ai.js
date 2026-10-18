@@ -15,6 +15,10 @@
 //      key, sin fotos) devuelve null → el llamador cae a 'photo'.
 //  (e) compositeDemoPiece compone el titular y devuelve un JPEG
 //      1080x1350 válido (el mismo composite del pipeline real).
+//  (f) v202: la FÓRMULA DE COMPOSICIÓN viaja en la clasificación, el
+//      mapa tema→objeto-concepto acierta los temas del feed, y las
+//      directivas duras (60-70%, fondo simple, tercio superior) quedan
+//      en el prompt ensamblado de cada pieza.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -204,6 +208,73 @@ const llmJson = (content, usage) => ({
     const vs = demoAi.visualStyleForFeed({ character: 'a small blue robot with a yellow antenna', style: 'soft 3D render, sky blue and yellow palette' }, 'light');
     ok(/blue robot/.test(vs) && /ILLUSTRATED/.test(vs) && /BRIGHT/.test(vs), 'la línea nombra personaje, estilo y registro');
     ok(/SAME character/.test(vs), 'la línea exige el mismo personaje en escena nueva');
+  }
+
+  // ---------- (f) fórmula de composición del feed (v202) ----------
+  console.log('— fórmula de composición (v202)');
+  {
+    const conFormula = demoAi.parseClassifyContent('{"kind":"illustrated","character":"robot","style":"3d","composition":{"character_scale":0.72,"background":"plain","headline":"large"}}');
+    ok(conFormula && conFormula.formula.character_scale === 0.72 && conFormula.formula.background === 'plain' && conFormula.formula.headline === 'large',
+      'la composición válida viaja en la clasificación');
+    const invalida = demoAi.parseClassifyContent('{"kind":"illustrated","composition":{"character_scale":7,"background":"ruidoso","headline":"enorme"}}');
+    ok(invalida && invalida.formula.character_scale === null && invalida.formula.background === null && invalida.formula.headline === null,
+      'valores de fórmula inválidos → null por campo (el kind sigue válido)');
+    const sinFormula = demoAi.parseClassifyContent('{"kind":"photo"}');
+    ok(sinFormula && sinFormula.formula.character_scale === null && sinFormula.formula.background === null,
+      'sin composition → fórmula en null');
+
+    const stubFormula = async () => llmJson('{"kind":"illustrated","character":"robot celeste","style":"render 3D","composition":{"character_scale":0.68,"background":"soft","headline":"large"}}');
+    const clsF = await demoAi.classifyFeedKind({ photoPaths: PHOTOS, apiKey: 'sk-test', fetchImpl: stubFormula });
+    ok(clsF && clsF.formula && clsF.formula.character_scale === 0.68 && clsF.formula.background === 'soft',
+      'classifyFeedKind devuelve la fórmula del feed');
+
+    const def = demoAi.compositionFor({ formula: { character_scale: null, background: null, headline: null } });
+    ok(def.character_scale === 0.4 && def.background === 'soft' && def.headline === 'large',
+      'compositionFor aplica defaults (fondo simple, titular grande)');
+    const rep = demoAi.compositionFor(clsF);
+    ok(rep.character_scale === 0.68 && rep.background === 'soft' && rep.headline === 'large',
+      'compositionFor conserva lo reportado por el clasificador');
+
+    // Mapa tema → objeto-concepto
+    ok(/wall clock/i.test(demoAi.conceptObjectFor('Los horarios que más rinden') || ''), 'horarios → reloj gigante');
+    ok(/photo cards/i.test(demoAi.conceptObjectFor('Carruseles que enganchan') || ''), 'carruseles → cartas de fotos');
+    ok(/gift box/i.test(demoAi.conceptObjectFor('Sorteamos una auditoría completa') || ''), 'sorteo → regalo (gana sobre auditoría)');
+    ok(/magnifying glass/i.test(demoAi.conceptObjectFor('Auditoría de tu Instagram') || ''), 'auditoría → lupa + gráfico');
+    ok(/tablet/i.test(demoAi.conceptObjectFor('Tu mes de contenido, resuelto') || ''), 'contenido → tablet');
+    ok(/speech bubbles/i.test(demoAi.conceptObjectFor('Comunidad que responde') || ''), 'comunidad → burbujas de chat');
+    ok(demoAi.conceptObjectFor('xyz sin tema conocido') === null, 'tema sin mapa → null (directiva genérica)');
+
+    // Directivas duras en el prompt ensamblado
+    const dir = demoAi.compositionDirectives(clsF, 'Los horarios que más rinden');
+    ok(/60-70%/.test(dir), 'la directiva exige personaje al 60-70% del cuadro');
+    ok(/TOP THIRD/.test(dir), 'la directiva reserva el tercio superior para el titular');
+    ok(/FORBIDDEN/.test(dir) && /window/i.test(dir), 'la directiva prohíbe la oficina detallada con ventanales');
+    ok(/wall clock/i.test(dir), 'la directiva inyecta el objeto-concepto del tema');
+    const dirPlain = demoAi.compositionDirectives({ formula: { character_scale: 0.7, background: 'plain', headline: 'large' } }, 'Auditoría de tu Instagram');
+    ok(/flat solid color/i.test(dirPlain), 'fórmula plain → fondo de color pleno');
+    ok(/ONE single large concept object/i.test(dirPlain), 'un solo objeto-concepto por pieza');
+
+    // La línea visual nombra la fórmula
+    const vsF = demoAi.visualStyleForFeed({ character: 'robot', style: '3d', formula: { character_scale: 0.7, background: 'plain', headline: 'large' } }, 'light');
+    ok(/FLAT/.test(vsF) && /BIG bold headlines/.test(vsF), 'visualStyleForFeed incorpora fondo y titular de la fórmula');
+
+    // Referencia más nítida = mayor peso
+    const chico = path.join(TMP, 'ref-chica.jpg'); fs.writeFileSync(chico, Buffer.alloc(1000));
+    const grande = path.join(TMP, 'ref-grande.jpg'); fs.writeFileSync(grande, Buffer.alloc(9000));
+    ok(demoAi.pickSharpestRef([chico, grande]) === grande && demoAi.pickSharpestRef([grande, chico]) === grande,
+      'pickSharpestRef elige la foto de mayor peso');
+    ok(demoAi.pickSharpestRef([path.join(TMP, 'no-existe.jpg')]) === null, 'pickSharpestRef sin archivos → null');
+
+    // Composite con escala de titular grande (fórmula headline=large)
+    const rawPng2 = path.join(TMP, 'raw2.png');
+    execFileSync('python3', ['-c',
+      'import sys\nfrom PIL import Image\nImage.new("RGB", (1024, 1280), (230, 240, 250)).save(sys.argv[1], "PNG")\n',
+      rawPng2]);
+    const bufBig = await demoAi.compositeDemoPiece({
+      b64: fs.readFileSync(rawPng2).toString('base64'), headline: 'Carruseles que enganchan',
+      gradeHex: '#1386C7', workDir: TMP, index: 7, headlineScale: 1.45,
+    });
+    ok(Buffer.isBuffer(bufBig) && bufBig[0] === 0xFF && bufBig[1] === 0xD8, 'composite con --scale devuelve JPEG válido');
   }
 
   console.log(fails ? `\n✗ test-demo-ai: ${fails} fallas` : '\nTODO OK — test-demo-ai');
