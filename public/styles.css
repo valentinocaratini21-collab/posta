@@ -1368,10 +1368,9 @@ textarea.in{resize:vertical;min-height:96px}
    Va DESPUÉS de .chome-ava para pisar la animación idle mientras dura; al sacarse la clase, vuelve el idle. */
 @keyframes posty-wave{0%{transform:translateY(0) rotate(0deg)}20%{transform:translateY(-9px) rotate(-7deg)}40%{transform:translateY(0) rotate(5deg)}60%{transform:translateY(-5px) rotate(-4deg)}80%{transform:translateY(0) rotate(2deg)}100%{transform:translateY(0) rotate(0deg)}}
 .chome-ava-wave{animation:posty-wave 1.2s ease-in-out 1;transform-origin:50% 85%}
-/* Posty trabajando: video de malabares con 3 pelotitas amarillas 🤹 */
-.chome-ava-vid{width:118%;height:118%;object-fit:cover;display:block;margin:-9%}
+/* Posty trabajando (v210): sin video de malabares — mientras genera, el
+   avatar queda quieto (se apaga el idle) y nada más. */
 .chome-ava-wrap.working .chome-ava{animation:none}
-@keyframes posty-juggle{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-3px) rotate(2deg)}}
 .chome-top .pdot{color:#FEC14D}
 /* Nivel de LA MARCA en la tira TU PROGRESO: logo del cliente con marco por tier + badge */
 .xp-brand{display:flex;align-items:center;gap:12px;margin-bottom:10px;min-width:0}
@@ -1904,24 +1903,9 @@ textarea.in{resize:vertical;min-height:96px}
 /* Variante liviana: placeholder borroso mientras carga la real */
 .vimg{background-size:cover;background-position:center;background-repeat:no-repeat}
 
-/* Posty haciendo malabares mientras carga (2026-10-16). V2 — escenario:
-   Valentino marcó que la V1 no malabareaba "de la manera correcta": las
-   pelotas orbitaban pegadas a la cara. Ahora hay un ESCENARIO más grande
-   que el avatar: las pelotas salen de los costados (las "manos"), suben
-   BIEN arriba de la cabeza con tiempo de gravedad (lento en la cima,
-   rápido en las manos) y caen del otro lado — cascada de 3 pelotas. */
-.pjwrap{position:relative;display:inline-block;width:148px;height:112px;line-height:0}
-.pjwrap.big{width:196px;height:152px}
-.pj-ava-box{position:absolute;left:0;right:0;bottom:4px;text-align:center;line-height:0}
-.pj-ava{border-radius:50%;object-fit:cover;animation:pj-bob 1.14s ease-in-out infinite}
-@keyframes pj-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
-.pj-ball{position:absolute;left:50%;top:50%;width:15px;height:15px;margin:-7px 0 0 -7px;border-radius:50%;box-shadow:0 2px 6px rgba(10,30,51,.28);z-index:2;pointer-events:none}
-.pj-ball.b1{background:#FEC14D;animation:pj-cascade 1.14s infinite}
-.pj-ball.b2{background:#2793C8;animation:pj-cascade 1.14s infinite;animation-delay:-.38s}
-.pj-ball.b3{background:#0A1E33;animation:pj-cascade 1.14s infinite;animation-delay:-.76s}
-.pjwrap.big .pj-ball{animation-name:pj-cascade-lg}
-@keyframes pj-cascade{0%{transform:translate(-52px,26px);animation-timing-function:ease-out}28%{transform:translate(0,-44px);animation-timing-function:ease-in}50%{transform:translate(52px,26px);animation-timing-function:ease-out}78%{transform:translate(0,-44px);animation-timing-function:ease-in}100%{transform:translate(-52px,26px)}}
-@keyframes pj-cascade-lg{0%{transform:translate(-68px,34px);animation-timing-function:ease-out}28%{transform:translate(0,-58px);animation-timing-function:ease-in}50%{transform:translate(68px,34px);animation-timing-function:ease-out}78%{transform:translate(0,-58px);animation-timing-function:ease-in}100%{transform:translate(-68px,34px)}}
+/* v210: el Posty haciendo malabares SE FUE (orden de Valentino) — el
+   componente .pjwrap y sus animaciones se eliminaron de splash, tarjetas
+   de estado y CSS. Los estados de carga usan el avatar estático. */
 
 /* v183: resaltado del bloque de fotos de la semana al llegar del deep link
    del ritual (push/email con ?fotos=semana). */
@@ -2172,6 +2156,22 @@ textarea.in{resize:vertical;min-height:96px}
    4×2, resto tras el toggle) y tira con scroll-snap en celular. */
 .lp-wall-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 .lp-wall-card{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 12px 32px rgba(10,30,51,.07);text-align:left}
+/* v210: stats de la pared SIN solape — la causa real era el ANCHO: en la
+   tarjeta de pared la celda de cada stat mide ~54px y "publicaciones" a
+   11px necesita ~67px; como es una sola palabra sin quiebre posible, el
+   texto centrado desbordaba sobre los vecinos (v208 creyó arreglarlo con
+   flex y no tocó el ancho). Fix de raíz SOLO en la pared: avatar más
+   chico, cabecera más compacta y rótulos a 9.5px con tracking cerrado —
+   verificado medido en harness (scrollWidth ≤ clientWidth en desktop,
+   1024 y celular). La tarjeta de teléfono (perfil único) no se toca. */
+.lp-wall-card .igp-head{gap:8px;padding:10px 10px 4px}
+.lp-wall-card .ig-ava-lg i,.lp-wall-card .ig-ava-lg img{width:42px;height:42px}
+.lp-wall-card .igp-stats>div{padding:0 1px}
+.lp-wall-card .igp-stats b{font-size:13px}
+.lp-wall-card .igp-stats span{font-size:9.5px;letter-spacing:-.35px}
+@media(min-width:900px) and (max-width:1180px){
+  .lp-wall-grid{grid-template-columns:repeat(3,1fr)}
+}
 .lp-wall-card .igp-grid{margin-top:6px}
 .lp-wall-foot{padding:8px 12px 10px;font-size:12px;font-weight:800;color:var(--cel)}
 .lp-wall-meta{display:flex;justify-content:center;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}

@@ -4833,7 +4833,7 @@ async function chatExchange({ text, display, extra, pushed }) {
 }
 
 // Posty parpadea como un humano: cada 3.5-6.5s cierra los ojos 140ms.
-// Solo cuando está tranqui (no haciendo malabares).
+// Solo cuando está tranqui (no mientras trabaja).
 (function postyBlinkLoop() {
   try { const p = new Image(); p.src = 'ai-avatar-blink.png'; } catch (e) {}
   const blink = () => {
@@ -4851,29 +4851,18 @@ async function chatExchange({ text, display, extra, pushed }) {
   setTimeout(blink, 2500);
 })();
 
-// Posty trabajando: cambia el avatar al VIDEO de malabares 🤹 mientras genera.
-// Cuando termina, vuelve a la imagen normal.
+// Posty trabajando (v210): sin malabares — mientras genera, el avatar
+// queda visible y quieto (la clase .working apaga el idle via CSS).
+// Si quedo un video de malabares de una version anterior en el DOM, se
+// limpia y el avatar vuelve a mostrarse.
 function postyWorking(on) {
   try {
     document.querySelectorAll('.chome-ava-wrap').forEach(w => {
       w.classList.toggle('working', !!on);
       const img = w.querySelector('.chome-ava');
-      let vid = w.querySelector('.chome-ava-vid');
-      if (on) {
-        if (img) img.style.display = 'none';
-        if (!vid) {
-          vid = document.createElement('video');
-          vid.className = 'chome-ava-vid';
-          vid.src = 'ai-avatar-working.mp4';
-          vid.muted = true; vid.loop = true; vid.autoplay = true; vid.playsInline = true;
-          vid.setAttribute('muted', ''); vid.setAttribute('playsinline', '');
-          w.appendChild(vid);
-        }
-        const pr = vid.play(); if (pr && pr.catch) pr.catch(() => {});
-      } else {
-        if (img) img.style.display = '';
-        if (vid) { try { vid.pause(); } catch (e) {} vid.remove(); }
-      }
+      if (img) img.style.display = '';
+      const vid = w.querySelector('.chome-ava-vid');
+      if (vid) { try { vid.pause(); } catch (e) {} vid.remove(); }
     });
   } catch (e) {}
 }
@@ -5069,7 +5058,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // Usa clase propia (hs-nodna) para que el loop de refresh de .hs-generating
     // no corra en este caso.
     if (noDna) return `<div class="hs-nodna" id="hsNoDna">
-    <div class="hs-gen-ava"><span class="pjwrap"><span class="pj-ava-box"><img class="pj-ava" src="ai-avatar.png" alt="Posty"></span><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
+    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
     <b>Para armar tu semana necesito conocer tu negocio 👇</b>
     <p>Contame de qué se trata en 2 minutos y la armo sola ✨</p>
     <a class="btn btn-primary btn-block" href="#/app/ajustes" style="margin-top:4px">Contar de mi negocio</a>
@@ -5077,7 +5066,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // Si estamos generando (ensure disparado), mostrar "armando" aunque
     // haya tenido posteos antes — la semana actual está vacía.
     if (generating) return `<div class="hs-generating" id="hsGenerating">
-    <div class="hs-gen-ava"><span class="pjwrap"><span class="pj-ava-box"><img class="pj-ava" src="ai-avatar.png" alt="Posty"></span><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
+    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
@@ -5088,12 +5077,12 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     // la semana está completa (no un spinner eterno).
     const everHad = all.length > 0;
     if (everHad) return `<div class="hs-done">
-      <div class="hs-gen-ava"><span class="pjwrap"><span class="pj-ava-box"><img class="pj-ava" src="ai-avatar.png" alt="Posty"></span><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
+      <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
       <b>Tu semana está completa 🎉</b>
       <p>Todo publicado. La próxima se arma sola ✨</p>
     </div>`;
     return `<div class="hs-generating" id="hsGenerating">
-    <div class="hs-gen-ava"><span class="pjwrap"><span class="pj-ava-box"><img class="pj-ava" src="ai-avatar.png" alt="Posty"></span><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span></div>
+    <div class="hs-gen-ava"><img src="ai-avatar.png" alt="Posty"></div>
     <b>Posty está armando tu semana ✨</b>
     <p>Diseños, textos y hashtags con la onda de tu negocio.<br>En unos segundos aparece acá 👇</p>
     <div class="hs-gen-dots"><i></i><i></i><i></i></div>
