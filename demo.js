@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 14;
+const DEMO_ENGINE_V = 16;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -665,6 +665,79 @@ function enforceSkeletonVariety({ styleObjs, topics, category, subcat, business,
   return overrides;
 }
 
+// ---------- (v205) LENGUAJES DE DISEÑO de la semana ----------
+// Ampliación de Valentino (2026-10-18, con la galería de Predis por
+// rubro como referencia): no alcanza con que cada pieza tenga un
+// esqueleto distinto (v197) si las 5 se LEEN con un solo lenguaje —
+// la semana de Mili salió con tratamientos distintos pero el mismo
+// sistema visual (masthead + bloque + CTA idénticos). Un LENGUAJE es
+// el sistema que el ojo distingue de un vistazo: dónde vive el
+// titular, qué superficie manda y cómo se compone. Los esqueletos de
+// foto con bloque abajo (abajo + velo, su variante cine) cuentan como
+// UN solo lenguaje. Regla exigible de la semana (n>=3):
+//   - al menos 3 lenguajes distintos;
+//   - ningún lenguaje más de 2 veces.
+// La reparación mueve ESQUELETOS vía el mismo mapa de overrides de
+// v197 (nunca rompe la unicidad de esqueleto, nunca toca el póster ni
+// un dúo de antes/después, y solo usa esqueletos sin prerrequisitos:
+// claro/centro/arriba/abajo).
+const DESIGN_LANGUAGES = {
+  abajo: 'foto-abajo', velo: 'foto-abajo',
+  arriba: 'foto-arriba',
+  claro: 'editorial',
+  centro: 'panel',
+  duo: 'split',
+  poster: 'grafico',
+};
+function designLanguageOf(skeleton) {
+  return DESIGN_LANGUAGES[skeleton] || 'foto-abajo';
+}
+const DESIGN_REPAIR_SKELS = ['claro', 'centro', 'arriba', 'abajo'];
+function enforceDesignLanguages({ styleObjs, topics, overrides, posterAt }) {
+  const n = (styleObjs || []).length;
+  if (n < 3) return overrides;
+  const effTr = (i) => (overrides.get(i) || (styleObjs[i] ? treatmentForStyle(styleObjs[i]) : null));
+  const skelAt = (i) => (posterAt && posterAt.has(i)) ? 'poster' : ((effTr(i) || {}).skeleton || 'abajo');
+  const counts = () => {
+    const m = new Map();
+    for (let i = 0; i < n; i++) {
+      const L = designLanguageOf(skelAt(i));
+      m.set(L, (m.get(L) || 0) + 1);
+    }
+    return m;
+  };
+  let guard = 0;
+  while (guard++ < 16) {
+    const m = counts();
+    const langs = [...m.keys()];
+    const over = langs.filter((L) => m.get(L) > 2);
+    if (langs.length >= 3 && !over.length) break;
+    // Posteo a mover: de un lenguaje sobrerrepresentado o, si faltan
+    // lenguajes, de uno con más de un posteo. Nunca el póster (su
+    // slot manda) ni un dúo (su split ES la promesa del posteo).
+    let idx = -1;
+    for (let i = n - 1; i >= 0; i--) {
+      if (posterAt && posterAt.has(i)) continue;
+      if (skelAt(i) === 'duo') continue;
+      const L = designLanguageOf(skelAt(i));
+      if (over.includes(L) || (langs.length < 3 && (m.get(L) || 0) > 1)) { idx = i; break; }
+    }
+    if (idx < 0) break;
+    const usedSkels = new Set(Array.from({ length: n }, (_, i) => skelAt(i)));
+    const cur = effTr(idx) || { grade: 'neutral', crop: 'normal' };
+    const cand = DESIGN_REPAIR_SKELS.find((s) => {
+      if (usedSkels.has(s)) return false; // unicidad de esqueleto (v197) intacta
+      const L = designLanguageOf(s);
+      if (langs.length < 3 && (m.get(L) || 0) > 0) return false; // falta variedad: solo suma un lenguaje NUEVO
+      if ((m.get(L) || 0) >= 2) return false; // no crear un lenguaje con 3
+      return true;
+    });
+    if (!cand) break;
+    overrides.set(idx, { skeleton: cand, grade: cur.grade, crop: cur.crop });
+  }
+  return overrides;
+}
+
 // ---------- Colores elegidos por el visitante ----------
 const DEMO_COLOR_DEFAULTS = { accent: '#2793C8', btn: '#FEC14D' };
 
@@ -1140,6 +1213,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // (v197) VARIEDAD ESTRUCTURAL: ningún esqueleto de render se repite
   // en la semana (garantía, no puntaje — ver enforceSkeletonVariety).
   const treatmentOverrides = enforceSkeletonVariety({ styleObjs, topics, category: cat, subcat, business, posterAt });
+  // (v205) VARIEDAD DE LENGUAJES DE DISEÑO: sobre los esqueletos ya
+  // únicos de v197, la semana reparte ≥3 lenguajes distinguibles a
+  // ojo y ninguno pasa de 2 posteos (ver enforceDesignLanguages).
+  enforceDesignLanguages({ styleObjs, topics, overrides: treatmentOverrides, posterAt });
   const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
   const specPosts = topics.map((t, i) => {
     let headline = t.headline;
@@ -1150,15 +1227,19 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     }
     const st = styleObjs[i] || null;
     const isPoster = posterAt.has(i);
+    // (v196) El slot de póster manda sobre el tratamiento del estilo: la
+    // pieza es un póster de marca (fondo pleno + medallón), no una foto.
+    const trFinal = isPoster
+      ? { skeleton: 'poster', grade: 'neutral', crop: 'normal' }
+      : (treatmentOverrides.get(i) || (st ? treatmentForStyle(st) : null));
     return {
       photo: photos[i],
       style: st ? st.code : 'promo',
       style_name: st ? st.name : '',
-      // (v196) El slot de póster manda sobre el tratamiento del estilo: la
-      // pieza es un póster de marca (fondo pleno + medallón), no una foto.
-      treatment: isPoster
-        ? { skeleton: 'poster', grade: 'neutral', crop: 'normal' }
-        : (treatmentOverrides.get(i) || (st ? treatmentForStyle(st) : null)),
+      treatment: trFinal,
+      // (v205) El lenguaje de diseño de la pieza, registrado en el
+      // payload (design.posts[i].design_code) y exigible por tests.
+      design_code: designLanguageOf(trFinal ? trFinal.skeleton : 'abajo'),
       poster: isPoster || undefined,
       kind: t.kind,
       tema: t.tema || null,
@@ -1511,7 +1592,17 @@ function extractRichColorsFromBuffer(buf) {
 //     tonos residuales de un collage "aparecen" en todas las fotos y le
 //     ganan a un color que ocupa media foto en dos). El accent tiene que
 //     ser un color VIVO (saturación >= 0.25): un fondo crema repetido es
-//     fondo, no acento de marca.
+//     fondo, no acento de marca. Y tiene que tener PRESENCIA LUMINOSA:
+//     luminancia relativa (WCAG) >= 0.18. El accent es el color de ACCIÓN
+//     de las piezas — tiñe botones, resaltados y CTAs — y un tono
+//     casi-negro no funciona ahí aunque se repita en todas las fotos (el
+//     marrón piel/estadio que domina un feed de deportes, el navy de un
+//     logo): para los fondos oscuros ya existe el rol oscuro derivado
+//     (poster_dark), que se calcula aparte. Un grupo que no llega al piso
+//     de luz no desaparece del feed: sigue pudiendo ser botón si cumple
+//     el criterio del botón (punto 4, que ya excluye casi-negros y
+//     casi-blancos: ambos pisos son la misma idea — los extremos de luz
+//     no son colores de acción).
 //  3. Un color de una sola foto NO es accent si existe algún grupo vivo
 //     presente en 2+ fotos. Y si NINGÚN grupo vivo se repite, solo gana
 //     uno que DOMINE el color del feed: más de la mitad del peso de
@@ -1533,6 +1624,7 @@ const PALETTE_DOM_SHARE = 0.5;   // cuota de dominancia sobre grupos vivos
 const PALETTE_DOM_MIN_W = 0.3;   // peso absoluto mínimo del dominante
 const PALETTE_BTN_SAT_MIN = 0.40; // saturación mínima de un botón "vivo"
 const PALETTE_BTN_MIN_W = 0.02;  // presencia mínima de un botón vivo
+const PALETTE_ACCENT_LUM_MIN = 0.18; // luminancia relativa (WCAG) mínima del accent: es color de acción, necesita presencia luminosa
 function hexToRgbArr(hex) {
   const n = parseInt(String(hex).slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -1545,6 +1637,14 @@ function colorSat(hex) {
 function colorDist(a, b) {
   const A = hexToRgbArr(a), B = hexToRgbArr(b);
   return Math.sqrt((A[0] - B[0]) ** 2 + (A[1] - B[1]) ** 2 + (A[2] - B[2]) ** 2);
+}
+// Luminancia relativa WCAG (sRGB linealizado): 0 = negro, 1 = blanco.
+function colorLum(hex) {
+  const [r, g, b] = hexToRgbArr(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 async function extractPaletteFromBuffers(buffers) {
   const list = (buffers || []).filter((b) => Buffer.isBuffer(b) && b.length).slice(0, 6);
@@ -1588,12 +1688,19 @@ async function extractPaletteFromBuffers(buffers) {
     (fotosDe(b) - fotosDe(a)) || (b.peso - a.peso) || (colorSat(repOf(b)) - colorSat(repOf(a)));
   const vivos = groups.filter((g) => colorSat(repOf(g)) >= PALETTE_SAT_MIN);
   if (!vivos.length) return null;
-  let accentG = vivos.filter((g) => fotosDe(g) >= 2).sort(byMerit)[0] || null;
+  // Piso de luz del accent (punto 2): solo los grupos vivos con
+  // luminancia relativa >= PALETTE_ACCENT_LUM_MIN compiten por accent.
+  // Los demás no se descartan del todo: quedan en `groups` y pueden
+  // salir como botón si cumplen su propio criterio.
+  const elegibles = vivos.filter((g) => colorLum(repOf(g)) >= PALETTE_ACCENT_LUM_MIN);
+  if (!elegibles.length) return null; // hay color vivo pero ninguno sirve de acción: fallback del llamador
+  let accentG = elegibles.filter((g) => fotosDe(g) >= 2).sort(byMerit)[0] || null;
   if (!accentG) {
-    // Sin recurrencia: solo un dominante claro del color vivo del feed.
-    const totalVivos = vivos.reduce((s, g) => s + g.peso, 0);
-    accentG = vivos
-      .filter((g) => g.peso >= PALETTE_DOM_MIN_W && totalVivos > 0 && g.peso / totalVivos > PALETTE_DOM_SHARE)
+    // Sin recurrencia: solo un dominante claro del color vivo y
+    // luminoso del feed (la cuota se mide sobre los elegibles).
+    const totalElegibles = elegibles.reduce((s, g) => s + g.peso, 0);
+    accentG = elegibles
+      .filter((g) => g.peso >= PALETTE_DOM_MIN_W && totalElegibles > 0 && g.peso / totalElegibles > PALETTE_DOM_SHARE)
       .sort(byMerit)[0] || null;
   }
   if (!accentG) return null; // el feed no tiene color de marca claro: fallback del llamador
@@ -1966,6 +2073,9 @@ module.exports = {
   dishOf,
   demoSubcat,
   pickDemoStyles,
+  DESIGN_LANGUAGES,
+  designLanguageOf,
+  enforceDesignLanguages,
   pickPhotoTagged,
   MAX_FILE_BYTES,
   CATEGORIES,

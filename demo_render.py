@@ -280,20 +280,6 @@ def pill_nuevo(d, fonts_dir, text, C, y=64, x_right=None, left=False):
     return y + h
 
 
-def celeste_bar(d, fonts_dir, y, text, C):
-    f = B(fonts_dir, 40)
-    tracking = 8
-    # achicar si la etiqueta es muy larga
-    while tw(d, text, f, tracking) > MAX_W - 88 and f.size > 20:
-        f = B(fonts_dir, f.size - 2)
-    pad_x, pad_y = 44, 20
-    w = tw(d, text, f, tracking) + pad_x * 2
-    h = f.size + pad_y * 2
-    d.rectangle([MX, y, MX + w, y + h], fill=C["accent"])
-    ltext(d, MX + pad_x, y + pad_y - 5, text, f, fill=C["accent_text"], tracking=tracking)
-    return y + h
-
-
 def cta_button(d, fonts_dir, y, text, C, center=False):
     if not str(text or "").strip():
         return y  # sin CTA no hay pastilla: dibujarla vacía dejaba un óvalo flotante (v187)
@@ -318,7 +304,6 @@ def style_promo(fonts_dir, p, C, hs):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
 
     y = 600
-    y = celeste_bar(d, fonts_dir, y, str(p.get("bar", "")).upper(), C)
     y += 40
 
     f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, hs, 3)
@@ -400,7 +385,6 @@ def style_nocturno(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     white = (255, 255, 255)
     f0 = B(fonts_dir, 32)
-    ltext(d, MX, 64, str(p.get("bar", "")).upper(), f0, fill=white, tracking=8)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C, y=130)
 
@@ -455,7 +439,7 @@ def style_bloque(fonts_dir, p, C, hs):
     white = (255, 255, 255)
     y = 660
     f0 = B(fonts_dir, 32)
-    y = ltext(d, MX, y, str(p.get("bar", "")).upper(), f0, fill=white, tracking=8) + 38
+    y += 70  # (v205) sin rótulo: el nombre del negocio ya no se imprime
     f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 130), 2)
     for ln in lines:
         y = ltext(d, MX, y, ln, f, white)
@@ -507,7 +491,7 @@ def style_marco(fonts_dir, p, C, hs):
 
     y = 690
     f0 = R(fonts_dir, 32)
-    y = ltext(d, MX, y, str(p.get("bar", "")).upper(), f0, fill=C["accent"], tracking=8) + 36
+    y += 68  # (v205) sin rótulo: el nombre del negocio ya no se imprime
     f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 125), 2)
     for ln in lines:
         y = ltext(d, MX, y, ln, f, C["headline"])
@@ -632,7 +616,7 @@ def style_cita(fonts_dir, p, C, hs):
         y += 14
     y += 30
     f0 = B(fonts_dir, 34)
-    tag = str(p.get("pill") or p.get("bar", "")).upper()
+    tag = str(p.get("pill") or "").upper()  # (v205) sin fallback al nombre del negocio
     ctext(d, W // 2, y, tag, f0, fill=C["accent"], tracking=8)
     y += 90
     y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=True)
@@ -652,7 +636,6 @@ def style_tipografico(fonts_dir, p, C, hs):
 
     y = 220
     f0 = B(fonts_dir, 34)
-    ltext(d, MX, y, str(p.get("bar", "")).upper(), f0, fill=C["accent"], tracking=8)
     y += 90
     big = min(hs + 30, 175)
     f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, big, 4)
@@ -713,10 +696,7 @@ def style_oferta(fonts_dir, p, C, hs):
     d.rectangle([0, 0, W, 220], fill=C["accent"])
     white = (255, 255, 255)
     f0 = B(fonts_dir, 42)
-    bar = str(p.get("bar", "")).upper()
-    while tw(d, bar, f0, 8) > MAX_W - 340 and f0.size > 22:
-        f0 = B(fonts_dir, f0.size - 2)
-    ltext(d, MX, 110 - f0.size // 2, bar, f0, fill=white, tracking=8)
+    # (v205) La banda de marca queda SIN el nombre impreso.
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C, y=76)
     rtext(d, W - MX, 172, p.get("watermark", ""), R(fonts_dir, 26), fill=(240, 246, 250))
@@ -932,15 +912,12 @@ def block_draw(d, fonts_dir, p, C, lay, y, dark, center=False, accent_override=N
     return y
 
 
-def draw_bar_name(d, fonts_dir, p, dark_bg):
-    f0 = B(fonts_dir, 30)
-    name = str(p.get("bar", "")).upper()
-    if dark_bg:
-        ltext(d, MX + 2, 58, name, f0, fill=(0, 0, 0), tracking=6)
-        ltext(d, MX, 56, name, f0, fill=(255, 255, 255), tracking=6)
-    else:
-        ltext(d, MX + 2, 58, name, f0, fill=(255, 255, 255), tracking=6)
-        ltext(d, MX, 56, name, f0, fill=NAVY, tracking=6)
+# (v205) SIN NOMBRE DEL NEGOCIO EN LA PIEZA (orden de Valentino,
+# 2026-10-18, caso "MILAGROS" en la semana de Mili): el nombre
+# del cliente NO se imprime como masthead/rótulo en ningún
+# esqueleto — vive en el caption y en el perfil, no en la
+# imagen. Acá vivía draw_bar_name (arriba a la izquierda en
+# los 5 esqueletos de foto): eliminado, no reintroducir.
 
 
 def draw_footer(d, fonts_dir, p, dark_bg):
@@ -1000,7 +977,6 @@ def sk_abajo(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    draw_bar_name(d, fonts_dir, p, band_lum(img, 0.0, 0.2) < 150)
     lay = block_layout(d, fonts_dir, p, hs)
     y = (H - 110) - lay["total"]
     y = block_draw(d, fonts_dir, p, C, lay, y, dark)
@@ -1016,7 +992,6 @@ def sk_arriba(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    draw_bar_name(d, fonts_dir, p, dark)
     lay = block_layout(d, fonts_dir, p, hs)
     y = block_draw(d, fonts_dir, p, C, lay, 150, dark)
     draw_footer(d, fonts_dir, p, band_lum(img, 0.8, 1.0) < 150)
@@ -1031,7 +1006,6 @@ def sk_velo(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    draw_bar_name(d, fonts_dir, p, True)
     lay = block_layout(d, fonts_dir, p, hs)
     y = (H - 110) - lay["total"]
     y = block_draw(d, fonts_dir, p, C, lay, y, True, accent_override=C["btn"])
@@ -1046,7 +1020,6 @@ def sk_claro(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    draw_bar_name(d, fonts_dir, p, band_lum(img, 0.0, 0.2) < 150)
     lay = block_layout(d, fonts_dir, p, hs)
     y = (H - 110) - lay["total"]
     y = block_draw(d, fonts_dir, p, C, lay, y, False)
@@ -1069,7 +1042,6 @@ def sk_centro(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    draw_bar_name(d, fonts_dir, p, band_lum(img, 0.0, 0.2) < 150)
     y = block_draw(d, fonts_dir, p, C, lay, cy0 + 36, dark, center=True)
     draw_footer(d, fonts_dir, p, band_lum(img, 0.85, 1.0) < 150)
     return img, y
@@ -1129,22 +1101,8 @@ def sk_poster(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     if p.get("pill"):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    # Nombre del negocio arriba, con shrink-fit: un nombre largo (26
-    # caracteres) llegaba hasta debajo de la pastilla y se pisaban.
-    name = str(p.get("bar", "") or "").upper()
-    if name:
-        avail = MAX_W
-        if p.get("pill"):
-            pill_w = tw(d, str(p["pill"]).upper(), B(fonts_dir, 34), 6) + 68
-            avail = W - MX - pill_w - 36 - MX
-        f0 = B(fonts_dir, 30)
-        while tw(d, name, f0, 6) > avail and f0.size > 17:
-            f0 = B(fonts_dir, f0.size - 2)
-        if dark_bg:
-            ltext(d, MX + 2, 58, name, f0, fill=(0, 0, 0), tracking=6)
-            ltext(d, MX, 56, name, f0, fill=(255, 255, 255), tracking=6)
-        else:
-            ltext(d, MX, 56, name, f0, fill=NAVY, tracking=6)
+    # (v205) Sin nombre del negocio impreso arriba: la identidad
+    # la cargan el medallón, la paleta y el titular — no un rótulo.
 
     # Medallón protagonista (centrado, tercio superior).
     cx, cy, r = W // 2, 402, 196

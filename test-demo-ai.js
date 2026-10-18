@@ -32,6 +32,22 @@
 //      los roles completos (principal, acento, oscuro, claro, fondo
 //      dominante) DESDE esas fotos, y los prompts ensamblados (la
 //      directiva dura + el FLAT con su hex rotado) contienen los hex.
+//  (j) v205: NANO BANANA PRO — genNanoImage arma el request de Gemini
+//      (endpoint, header x-goog-api-key, parts texto+referencia,
+//      aspectRatio 4:5), extrae el inlineData, reintenta con la
+//      config alternativa ante un 400 y devuelve null ante cualquier
+//      otra falla; su costo se loguea a USD 0,134 (feature demo-ai-nano).
+//  (k) v205: la CADENA de motores — con clave Gemini y Nano OK sale
+//      engine 'nano' sin tocar gpt; Nano caído → gpt; ambos caídos →
+//      null (plantilla); sin clave Gemini, gpt directo.
+//  (l) v205: QA VISUAL con reintento — el chequeo parsea los 3 ejes
+//      (concepto, sin texto, tratamiento), el puntaje y las fallas;
+//      la directiva reforzada nombra en imperativo lo que falló; un
+//      chequeo ilegible/caído devuelve null (la pieza se conserva).
+//  (m) v205: DIRECCIÓN DE ARTE por estilo — cada estilo alcanzable por
+//      la ruta del demo resuelve una dirección COMPLETA (6 dimensiones)
+//      y dos estilos de familias distintas producen directivas
+//      INCOMPATIBLES entre sí (cámara/luz/gramática opuestas).
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -419,6 +435,187 @@ const llmJson = (content, usage) => ({
     ok(dirFlat.includes('exactly ' + pal.accent), 'la directiva FLAT nombra el hex exacto que le toca a la pieza');
     const dirFlatSin = demoAi.compositionDirectives(clsP, 'Comunidad que responde', 'flat');
     ok(!/exactly #/.test(dirFlatSin), 'sin paleta, el FLAT no inventa ningún hex');
+  }
+
+  // ---------- (j) Nano Banana Pro: request y extracción (v205) ----------
+  console.log('— motor Nano Banana Pro (v205)');
+  {
+    const geminiOk = (b64) => ({
+      ok: true, status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }, { inlineData: { mimeType: 'image/jpeg', data: b64 } }] } }] }),
+    });
+    let seenReq = null;
+    const stubNano = async (url, opts) => { seenReq = { url, opts }; return geminiOk('TkFOTw=='); };
+    const b64 = await demoAi.genNanoImage({ prompt: 'Posty con una tablet', refPath: PHOTOS[0], apiKey: 'gem-test', fetchImpl: stubNano });
+    ok(b64 === 'TkFOTw==', 'genNanoImage devuelve el b64 del inlineData');
+    ok(seenReq && /generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-3-pro-image:generateContent/.test(seenReq.url),
+      'el request va al endpoint de gemini-3-pro-image');
+    ok(seenReq && seenReq.opts.headers['x-goog-api-key'] === 'gem-test', 'la clave viaja en x-goog-api-key');
+    const body = JSON.parse(seenReq.opts.body);
+    ok(body.contents[0].parts[0].text === 'Posty con una tablet' && !!body.contents[0].parts[1].inline_data,
+      'parts = [prompt final, referencia en base64]');
+    ok(body.generationConfig.responseModalities.includes('IMAGE') && body.generationConfig.imageConfig.aspectRatio === '4:5',
+      'generationConfig pide IMAGE en 4:5');
+
+    let callsSinKeyN = 0;
+    ok(await demoAi.genNanoImage({ prompt: 'x', refPath: PHOTOS[0], apiKey: '', fetchImpl: async () => { callsSinKeyN++; return geminiOk('AA=='); } }) === null
+      && callsSinKeyN === 0, 'sin clave Gemini → null y cero llamadas (cae a gpt)');
+    ok(await demoAi.genNanoImage({ prompt: 'x', refPath: path.join(TMP, 'no-existe.png'), apiKey: 'k', fetchImpl: stubNano }) === null,
+      'sin referencia legible → null');
+    ok(await demoAi.genNanoImage({ prompt: 'x', refPath: PHOTOS[0], apiKey: 'k', fetchImpl: async () => { throw new Error('red caída'); } }) === null,
+      'falla de red → null');
+    ok(await demoAi.genNanoImage({ prompt: 'x', refPath: PHOTOS[0], apiKey: 'k', fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({}) }) }) === null,
+      'HTTP 500 → null');
+    ok(await demoAi.genNanoImage({ prompt: 'x', refPath: PHOTOS[0], apiKey: 'k', fetchImpl: async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'sin imagen' }] } }] }) }) }) === null,
+      'respuesta sin imagen → null');
+
+    // 400 con la config primaria → reintenta con TEXT+IMAGE y sale.
+    let intents400 = 0;
+    const stub400 = async (url, opts) => {
+      intents400++;
+      if (intents400 === 1) return { ok: false, status: 400, json: async () => ({}) };
+      const b = JSON.parse(opts.body);
+      ok(b.generationConfig.responseModalities.join() === 'TEXT,IMAGE', 'el reintento usa la config TEXT+IMAGE');
+      return geminiOk('UkVUUlk=');
+    };
+    ok(await demoAi.genNanoImage({ prompt: 'x', refPath: PHOTOS[0], apiKey: 'k', fetchImpl: stub400 }) === 'UkVUUlk=',
+      '400 en la config primaria → reintento con la alternativa y la pieza sale');
+
+    // La contabilidad: USD 0,134 por imagen, feature demo-ai-nano.
+    ok(costs.MODEL_PRICES['gemini-3-pro-image'] && costs.MODEL_PRICES['gemini-3-pro-image'].perImage === 0.134,
+      'MODEL_PRICES fija gemini-3-pro-image en USD 0,134');
+    ok(Math.abs(costs.estCostUsd('gemini-3-pro-image', 0, 0, 1, 0) - 0.134) < 1e-9,
+      'estCostUsd de 1 imagen Nano = USD 0,134');
+  }
+
+  // ---------- (k) cadena de motores nano → gpt → plantilla (v205) ----------
+  console.log('— cadena de motores del demo ilustrado (v205)');
+  {
+    const geminiOk = (b64) => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ inlineData: { data: b64 } }] } }] }) });
+    let gptCalls = 0;
+    const genGptOk = async () => { gptCalls++; return 'R1BU'; };
+    const rNano = await demoAi.generateDemoPieceImage({
+      prompt: 'prompt', refs: [PHOTOS[0]], geminiKey: 'gem', genGpt: genGptOk, refNote: 'REF',
+      fetchImpl: async () => geminiOk('TkFOTw=='),
+    });
+    ok(rNano && rNano.engine === 'nano' && rNano.b64 === 'TkFOTw==' && gptCalls === 0,
+      'Nano OK → engine nano, gpt ni se llama');
+
+    let seenNanoPrompt = '';
+    await demoAi.generateDemoPieceImage({
+      prompt: 'base', refs: [PHOTOS[0]], geminiKey: 'gem', genGpt: genGptOk, refNote: 'NOTA-REF',
+      fetchImpl: async (url, opts) => { seenNanoPrompt = JSON.parse(opts.body).contents[0].parts[0].text; return geminiOk('TkFOTw=='); },
+    });
+    ok(seenNanoPrompt === 'base\n\nNOTA-REF', 'el refNote se suma solo en la ruta Nano');
+
+    const rGpt = await demoAi.generateDemoPieceImage({
+      prompt: 'prompt', refs: [PHOTOS[0]], geminiKey: 'gem', genGpt: genGptOk,
+      fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }),
+    });
+    ok(rGpt && rGpt.engine === 'gpt' && rGpt.b64 === 'R1BU', 'Nano caído → cae a gpt-image (engine gpt)');
+
+    const rSinKey = await demoAi.generateDemoPieceImage({ prompt: 'p', refs: [PHOTOS[0]], geminiKey: '', genGpt: genGptOk });
+    ok(rSinKey && rSinKey.engine === 'gpt', 'sin clave Gemini → gpt directo');
+
+    const rNull = await demoAi.generateDemoPieceImage({
+      prompt: 'p', refs: [PHOTOS[0]], geminiKey: 'gem',
+      genGpt: async () => { throw new Error('OpenAI caído'); },
+      fetchImpl: async () => ({ ok: false, status: 500, json: async () => ({}) }),
+    });
+    ok(rNull === null, 'ambos motores caídos → null (la pieza queda de plantilla)');
+  }
+
+  // ---------- (l) QA visual con reintento (v205) ----------
+  console.log('— QA visual de pieza IA (v205)');
+  {
+    const stubQa = (content) => async () => llmJson(content);
+    const qOk = await demoAi.qaDemoPiece({
+      b64: 'QUFB', topicText: 'Carruseles que enganchan', treatment: 'poster', apiKey: 'sk-test',
+      fetchImpl: stubQa('{"concepto_ok":true,"sin_texto":true,"tratamiento_ok":true,"detalle":"el personaje sostiene tarjetas de fotos"}'),
+    });
+    ok(qOk && qOk.passed === true && qOk.score === 3 && qOk.failures.length === 0, 'QA limpio → passed, score 3');
+
+    const qBad = await demoAi.qaDemoPiece({
+      b64: 'QUFB', topicText: 'Carruseles que enganchan', treatment: 'poster', apiKey: 'sk-test',
+      fetchImpl: stubQa('{"concepto_ok":false,"sin_texto":false,"tratamiento_ok":true,"detalle":"hay una calesita y un cartel con texto"}'),
+    });
+    ok(qBad && qBad.passed === false && qBad.score === 1, 'QA con calesita+texto → no pasa, score 1');
+    ok(qBad && qBad.failures.join() === 'concept,text', 'las fallas nombran concepto y texto');
+    const dirQa = demoAi.qaRetryDirective(qBad);
+    ok(/NEVER/.test(dirQa) && /printed PHOTOS/.test(dirQa), 'la directiva reforzada trae el concepto correcto con sus NEVER');
+    ok(/NO TEXT/.test(dirQa) && /composited afterwards/.test(dirQa), 'la directiva reforzada prohíbe el texto en imperativo');
+    ok(!/TREATMENT:/.test(dirQa), 'la directiva NO refuerza lo que pasó (tratamiento estaba ok)');
+
+    const qTrat = await demoAi.qaDemoPiece({
+      b64: 'QUFB', topicText: 'Comunidad que responde', treatment: 'flat', apiKey: 'sk-test',
+      fetchImpl: stubQa('{"concepto_ok":true,"sin_texto":true,"tratamiento_ok":false,"detalle":"salió una oficina en vez de fondo pleno"}'),
+    });
+    ok(qTrat && /TREATMENT:/.test(demoAi.qaRetryDirective(qTrat)) && /FLAT STUDIO/.test(demoAi.qaRetryDirective(qTrat)),
+      'falla de tratamiento → la directiva exige el tratamiento asignado');
+
+    // El brief del QA enhebra el concepto anti-calesita y la expectativa:
+    const briefQa = demoAi.qaBriefFor('Carruseles que enganchan', 'flat');
+    ok(/NEVER a merry-go-round/.test(briefQa.concept) && briefQa.conceptDefined, 'qaBriefFor trae la definición con NEVER del mapa');
+    ok(/FLAT STUDIO/.test(briefQa.treatmentExpect) && /ONE flat solid color/.test(briefQa.treatmentExpect), 'qaBriefFor trae la expectativa del tratamiento flat');
+    ok(demoAi.qaBriefFor('tema raro', undefined).treatment === 'prop', 'sin tratamiento válido → expectativa PROP');
+
+    ok(await demoAi.qaDemoPiece({ b64: 'QUFB', topicText: 'x', treatment: 'prop', apiKey: 'sk-test', fetchImpl: stubQa('no-json') }) === null,
+      'QA ilegible → null (la pieza se conserva)');
+    ok(await demoAi.qaDemoPiece({ b64: 'QUFB', topicText: 'x', treatment: 'prop', apiKey: 'sk-test', fetchImpl: async () => { throw new Error('red'); } }) === null,
+      'QA caído → null');
+    ok(await demoAi.qaDemoPiece({ b64: 'QUFB', topicText: 'x', treatment: 'prop', apiKey: '', fetchImpl: stubQa('{}') }) === null,
+      'sin key → null');
+    ok(demoAi.parseQaContent('{"concepto_ok":true,"sin_texto":false,"tratamiento_ok":true}').no_text === false,
+      'parseQaContent mapea sin_texto → no_text');
+    ok(demoAi.qaRetryDirective({ failures: [] }) === '', 'sin fallas no hay directiva de reintento');
+  }
+
+  // ---------- (m) dirección de arte por estilo (v205) ----------
+  console.log('— dirección de arte por estilo (v205)');
+  {
+    const DIMS = ['Composition grammar:', 'Background system:', 'Light:', 'Camera:', 'Texture / medium:', 'Color usage:'];
+    const dirs = {};
+    const codigos = ['/flatlay', '/cinematic', '/macro', '/luxury', '/popart', '/lifestyle', '/beforeafter', '/quote', '/techad', '/unboxing', '/product', '/levitate', '/gold', '/neon', '/packaging', '/quote'];
+    for (const c of codigos) {
+      dirs[c] = demoAi.artDirectionFor(c);
+      ok(DIMS.every((d) => dirs[c].includes(d)), `${c}: dirección COMPLETA (6 dimensiones)`);
+    }
+    ok(/GOVERNS THE LOOK/.test(dirs['/flatlay']), 'la dirección declara que MANDA sobre el brief');
+    // Incompatibilidad real entre familias: cenital plano vs cine bajo.
+    ok(/TOP-DOWN/.test(dirs['/flatlay']) && /overhead at exactly 90/.test(dirs['/flatlay']), 'flatlay = cenital ortográfico');
+    ok(/LOW angle/.test(dirs['/cinematic']) && /MOODY directional/.test(dirs['/cinematic']), 'cinematic = ángulo bajo + luz dramática');
+    ok(!/TOP-DOWN/.test(dirs['/cinematic']) && !/LOW angle/.test(dirs['/flatlay']),
+      'flatlay y cinematic son INCOMPATIBLES (ninguna contiene la cámara de la otra)');
+    ok(/macro distance/i.test(dirs['/macro']) && !/macro distance/i.test(dirs['/quote']), 'macro y typo no se pueden intercambiar');
+    const unicas = new Set(Object.values(dirs));
+    ok(unicas.size >= 10, `las direcciones de familias distintas son textos distintos (${unicas.size} únicos de ${codigos.length})`);
+
+    // Cobertura: TODOS los códigos de las intenciones que el demo
+    // asigna resuelven una dirección completa (mapa exacto o familia).
+    const IS = require('./image-styles');
+    const intencionesDemo = ['promo', 'tips', 'testimonio', 'lanzamiento', 'producto'];
+    const union = new Set();
+    intencionesDemo.forEach((i) => (IS.INTENT_STYLES[i] || []).forEach((c) => union.add(c)));
+    let sinDireccion = 0;
+    for (const c of union) {
+      const d = demoAi.artDirectionFor(c);
+      if (!d || !DIMS.every((x) => d.includes(x))) sinDireccion++;
+    }
+    ok(union.size >= 40 && sinDireccion === 0, `cobertura: los ${union.size} códigos alcanzables por el demo tienen dirección completa`);
+
+    // Los estilos reales de la ruta profesionales/contenido → corporate.
+    for (const c of ['/prof-salajuntas', '/prof-lobby', '/branding', '/prof-bibliotecalegal', '/prof-oficinanocturna']) {
+      ok(demoAi.artFamilyFor(c) === 'corporate', `${c} → dirección corporativa`);
+    }
+    ok(/CORPORATE EDITORIAL/.test(demoAi.artDirectionFor('/branding')), 'la dirección corporativa es editorial de marca');
+    // Fallback genérico premium: completo, nunca vacío.
+    const gen = demoAi.artDirectionFor('/zzz-estilo-inexistente');
+    ok(DIMS.every((d) => gen.includes(d)) && /premium editorial/.test(gen), 'estilo sin familia → dirección genérica premium completa');
+    ok(demoAi.artDirectionFor(null).length > 100, 'sin estilo → dirección genérica (nunca bloque vacío)');
+    // Acepta el objeto estilo del catálogo (nombre + firma reales).
+    const stObj = IS.getStyle('/flatlay');
+    ok(/Flat lay/.test(demoAi.artDirectionFor(stObj)) && /Style signature/.test(demoAi.artDirectionFor(stObj)),
+      'con el objeto estilo, la dirección trae su nombre y su firma del catálogo');
   }
 
   console.log(fails ? `\n✗ test-demo-ai: ${fails} fallas` : '\nTODO OK — test-demo-ai');

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # brand-card.py — Tarjeta de marca de respaldo (fallback nivel 2 de ensurePostImage).
 # Renderiza un PNG 1080x1350 con PIL: fondo color de marca (o foto del cliente
-# con overlay oscuro), titular centrado, nombre del negocio arriba y logo
-# abajo-derecha si existe. Nunca crashea por assets faltantes: los ignora.
+# con overlay oscuro), titular centrado y logo abajo-derecha si existe.
+# (v205: el nombre del negocio ya NO se imprime en la pieza.)
+# Nunca crashea por assets faltantes: los ignora.
 # Uso: python3 brand-card.py --headline "..." --bg "#0A1E33" --text "#FFFFFF"
 #        --business "Mi Negocio" --logo /path/logo.png --photo /path/foto.jpg --out /path/salida.png
 import argparse
@@ -89,11 +90,10 @@ def main():
     d = ImageDraw.Draw(img)
     margin = 90
 
-    # Nombre del negocio arriba (en modo story más abajo: safe area de IG).
-    if a.business:
-        f_biz = load_font(False, 44)
-        biz = str(a.business)[:48]
-        d.text((W // 2, 300 if story_mode else 120), biz, font=f_biz, fill=fg, anchor='mm')
+    # (v205) El nombre del negocio NO se imprime en la pieza (orden de
+    # Valentino, 2026-10-18): vive en el caption y en la UI, no como
+    # rótulo en la imagen. El arg --business se sigue aceptando por
+    # compatibilidad con los llamadores, pero ya no se dibuja.
 
     # Titular centrado, auto-shrink hasta que entre.
     headline = str(a.headline or '').strip()

@@ -354,6 +354,13 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   out = sinColgada(out.replace(/[,;:]+$/, '').trim().split(' ').filter(Boolean)).join(' ').replace(/[,;:]+$/, '').trim();
   // 5) Sentence case con nombres propios y siglas preservados.
   out = headlineCase(out, sRaw);
+  // 6) CIERRE DE SIGNOS (Mora 2026-10-18, ids reales 458/461): el recorte por
+  // palabras dejaba preguntas abiertas sin su cierre (¿cuántas veces te
+  // imaginaste creando contenido" sin "?"). Si el titular abre con ¿/¡, el
+  // signo de cierre es obligatorio: se restaura siempre. Sin efecto en
+  // titulares que no abren con signo.
+  if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+  if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
   return out.replace(/\u0001/g, '.');
 }
 const app = express();
@@ -8401,12 +8408,13 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
 {"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
-- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. Si la imagen NO lleva texto → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
 - brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena).
+- detalle: UNA frase concreta sobre ESTA imagen: nombrá un elemento visible (el titular, un objeto, un color) y, si algo falla, qué. PROHIBIDO responder "..." o genéricos tipo "cumple con todos los requisitos" sin nombrar nada visible (Mora 2026-10-18: ids 404/456/459/462 volvieron con detalle "...").
 - anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).` },
           { role: 'user', content: [
             { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
@@ -10836,6 +10844,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // la caché de la semana. Si clasificar falla o el tope diario del
     // demo ya se alcanzó, feedKind queda 'photo' (plantillas, $0 extra).
     const demoApiKey = process.env.OPENAI_API_KEY || '';
+    // v205: clave de Gemini (Nano Banana Pro) — si está, es el motor
+    // principal de las piezas IA del demo ilustrado; si falta o falla,
+    // generateDemoPieceImage cae solo a gpt-image y de ahí a plantillas.
+    const geminiKey = process.env.GEMINI_API_KEY || '';
     let feedKind = ig ? 'photo' : null;
     let feedFormula = null; // v202: fórmula de composición del feed (viaja en el payload/caché)
     let demoSpendBefore = null;
@@ -10893,7 +10905,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // quedan con las piezas IA). Cada pieza que falla conserva su
     // plantilla — fallback silencioso total, sin error visible. Los
     // extras de la grilla NO usan IA (quedan de plantilla, como hoy).
-    let demoAiInfo = { used: false, pieces: 0, cost_usd: 0 };
+    let demoAiInfo = { used: false, pieces: 0, cost_usd: 0, engines: [], qa: [] };
+    // v205: motor (nano|gpt) y veredicto del QA visual por pieza IA —
+    // viajan en el payload (demo_ai.engines / demo_ai.qa por índice y
+    // post.engine / post.qa) para poder verificar qué produjo cada una.
+    const pieceEngines = {};
+    const pieceQa = {};
+    let demoTreatments = null; // tratamientos de la tanda IA (para el posteo video)
     if (classifyPromise) {
       const cls = await Promise.race([
         classifyPromise,
@@ -10924,6 +10942,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             // piezas planas/gráficas componen el titular en la tinta
             // oscura de su paleta (poster_dark, la misma del demo).
             const treatments = demoAi.assignTreatments(specPosts.map((sp) => ({ style: sp.style, headline: sp.headline })));
+            demoTreatments = treatments;
             const inkHex = demo.demoColors(accent, btn, feedRegister).poster_dark;
             // Referencias: la foto de perfil (el personaje) + la foto del
             // feed más nítida (mayor peso = mejor proxy disponible).
@@ -10932,6 +10951,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             const { getStyle: getStyleDemo } = require('./image-styles');
             const makePiece = async (i) => {
               const sp = specPosts[i];
+              const topicText = `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`;
               let prompt = await expandArtBrief({
                 headline: sp.headline,
                 tipo: sp.kind || 'social',
@@ -10943,16 +10963,61 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 visualStyle,
                 sceneRole: demoAi.SCENE_ROLES[i % demoAi.SCENE_ROLES.length],
               }, demoApiKey, 'demo-ai-brief');
+              let styleObj = null;
               try {
-                const st = sp.style ? getStyleDemo(sp.style) : null;
-                if (st) prompt += '\n\n' + styleFragment(st, [accent, btn].filter(Boolean));
+                styleObj = sp.style ? getStyleDemo(sp.style) : null;
+                if (styleObj) prompt += '\n\n' + styleFragment(styleObj, [accent, btn].filter(Boolean));
               } catch (e) { /* el fragmento de estilo es opcional */ }
-              prompt += '\n\n' + demoAi.compositionDirectives(cls, `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`, treatments[i], { palette: feedPalette, index: i });
+              // v205: DIRECCIÓN DE ARTE completa del estilo nombrado —
+              // manda sobre el brief y el fragmento; solo cede ante las
+              // directivas duras que siguen (fórmula/tratamiento y
+              // paleta). Es la capa anti-convergencia: dos estilos de
+              // familias distintas no pueden salir con el mismo look.
+              try {
+                const artDir = demoAi.artDirectionFor(styleObj || sp.style);
+                if (artDir) prompt += '\n\n' + artDir;
+              } catch (e) { /* la dirección es opcional: sin ella manda el brief */ }
+              prompt += '\n\n' + demoAi.compositionDirectives(cls, topicText, treatments[i], { palette: feedPalette, index: i });
               const palDir = demoAi.paletteDirectives(feedPalette);
               if (palDir) prompt += '\n\n' + palDir;
-              const b64 = await genConceptImage(demoApiKey, prompt, refs, demoAi.REF_NOTE, null, 'demo-ai-image');
+              // v205: cadena de motores — Nano Banana Pro (si hay clave
+              // Gemini) → gpt-image → null (la pieza queda de plantilla).
+              const genGpt = (p) => genConceptImage(demoApiKey, p, refs, demoAi.REF_NOTE, null, 'demo-ai-image');
+              let gen = await demoAi.generateDemoPieceImage({ prompt, refs, geminiKey, genGpt, refNote: demoAi.REF_NOTE });
+              if (!gen) return null;
+              // v205: QA VISUAL con reintento — la pieza cruda se chequea
+              // contra su brief (concepto correcto y sin prohibidos, SIN
+              // texto renderizado por el modelo, tratamiento
+              // materializado). Si falla y el tope diario lo permite, se
+              // regenera UNA vez con la directiva reforzada y queda la
+              // mejor de las dos (por puntaje del propio QA).
+              const qaArgs = { topicText, treatment: treatments[i], apiKey: demoApiKey };
+              const qaRes = await demoAi.qaDemoPiece({ b64: gen.b64, ...qaArgs });
+              let qaInfo = { passed: qaRes ? qaRes.passed : true, retried: false };
+              if (qaRes && !qaRes.passed && costs.demoAiCapOk()) {
+                const gen2 = await demoAi.generateDemoPieceImage({
+                  prompt: prompt + '\n\n' + demoAi.qaRetryDirective(qaRes),
+                  refs, geminiKey, genGpt, refNote: demoAi.REF_NOTE,
+                }).catch(() => null);
+                if (gen2) {
+                  const qa2 = await demoAi.qaDemoPiece({ b64: gen2.b64, ...qaArgs });
+                  if (!qa2 || qa2.score >= qaRes.score) {
+                    gen = gen2;
+                    qaInfo = { passed: qa2 ? qa2.passed : qaRes.passed, retried: true };
+                  } else {
+                    qaInfo = { passed: qaRes.passed, retried: true };
+                  }
+                } else {
+                  qaInfo = { passed: qaRes.passed, retried: true };
+                }
+                if (!qaInfo.passed) {
+                  console.error(`[posta] demo-ai QA: la pieza ${i} (${sp.headline}) quedó sin pasar tras el reintento: ${(qaRes.failures || []).join(', ')} — ${qaRes.detalle || ''}`);
+                }
+              }
+              pieceEngines[i] = gen.engine;
+              pieceQa[i] = qaInfo;
               return demoAi.compositeDemoPiece({
-                b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale,
+                b64: gen.b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale,
                 inkHex: (treatments[i] === 'flat' || treatments[i] === 'poster') ? inkHex : null,
               });
             };
@@ -10975,12 +11040,16 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   style_name: specPosts[i].style_name,
                   treatment: treatments[i],
                   ai: true,
+                  engine: pieceEngines[i] || null,
+                  qa: pieceQa[i] || null,
                 };
                 send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
               },
             });
             demoAiInfo.used = replaced.size > 0;
             demoAiInfo.pieces = replaced.size;
+            demoAiInfo.engines = posts.map((_, i) => pieceEngines[i] || null);
+            demoAiInfo.qa = posts.map((_, i) => pieceQa[i] || null);
           } catch (e) {
             console.error('[posta] demo-ai: la tanda IA falló, quedan las plantillas:', e.message);
           } finally {
@@ -11070,6 +11139,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         headline: made[videoIdx].headline,
         style: specPosts[videoIdx].style,
         style_name: specPosts[videoIdx].style_name,
+        // v205: si la pieza del reel salió del motor IA, su motor y su
+        // QA viajan también en el posteo video (antes se perdían acá).
+        ...(pieceEngines[videoIdx] ? { ai: true, engine: pieceEngines[videoIdx], qa: pieceQa[videoIdx] || null, ...(demoTreatments ? { treatment: demoTreatments[videoIdx] } : {}) } : {}),
       };
     } else {
       posts[videoIdx] = {
@@ -11080,6 +11152,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         headline: made[videoIdx].headline,
         style: specPosts[videoIdx].style,
         style_name: specPosts[videoIdx].style_name,
+        ...(pieceEngines[videoIdx] ? { ai: true, engine: pieceEngines[videoIdx], qa: pieceQa[videoIdx] || null, ...(demoTreatments ? { treatment: demoTreatments[videoIdx] } : {}) } : {}),
       };
     }
     send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, post: posts[videoIdx] });
@@ -11818,7 +11891,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v204';
+const BUILD_ID = '20261018-v205';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -11834,6 +11907,8 @@ app.get('/api/qa-audit', (req, res) => {
 app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   // Diagnóstico sin exponer secretos: ¿hay clave de OpenAI configurada?
   openai: Boolean(process.env.OPENAI_API_KEY),
+  // v205: ¿hay clave de Gemini (Nano Banana Pro, motor del demo ilustrado)?
+  gemini: Boolean(process.env.GEMINI_API_KEY),
   // Disco libre del volumen de datos (MB): vigila la causa del ENOSPC 2026-10-15.
   diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })(),
 }));

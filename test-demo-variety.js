@@ -176,6 +176,50 @@ console.log('— registro: luminancia del feed y fondo del póster');
   });
   ok(specN.feedRegister === null, 'sin perfil → spec sin registro (comportamiento actual)');
 
+  // ---------- 6) Lenguajes de diseño (v205): ≥3 distintos, ninguno >2 ----------
+  console.log('— lenguajes de diseño (v205): toda semana reparte ≥3 y ninguno pasa de 2');
+  const checkLangs = (spec, label) => {
+    const codes = spec.specPosts.map((p) => p.design_code);
+    ok(codes.every(Boolean), `${label}: pieza sin design_code (${JSON.stringify(codes)})`);
+    const counts = {};
+    codes.forEach((c) => { counts[c] = (counts[c] || 0) + 1; });
+    const langs = Object.keys(counts);
+    ok(langs.length >= 3, `${label}: solo ${langs.length} lenguajes (${codes})`);
+    ok(Math.max(...Object.values(counts)) <= 2, `${label}: un lenguaje se repite >2 (${codes})`);
+    const fa = spec.specPosts.filter((p) => ['abajo', 'velo'].includes(p.treatment && p.treatment.skeleton)).length;
+    ok(fa <= 2, `${label}: abajo+velo suman ${fa} (foto-abajo >2)`);
+    spec.specPosts.forEach((p) => {
+      ok(p.design_code === demo.designLanguageOf(p.treatment && p.treatment.skeleton),
+        `${label}: design_code ${p.design_code} no corresponde al esqueleto ${p.treatment && p.treatment.skeleton}`);
+    });
+  };
+  for (const cat of demo.CATEGORIES) {
+    for (let r = 0; r < 25; r++) {
+      const spec = demo.buildDemoSpec({
+        business: 'Negocio Test', category: cat, country: 'AR', tone: 'vos', goal: '', count: 5,
+        profilePicPath: '/tmp/pic-test.jpg',
+      });
+      checkLangs(spec, cat);
+    }
+  }
+  for (let r = 0; r < 60; r++) {
+    const mk2 = demo.buildDemoSpec({
+      business: 'Milagros', category: 'belleza', country: 'AR', tone: 'vos',
+      goal: 'Soy maquilladora profesional: makeup social, novias y producciones para fotos',
+      count: 5, profilePicPath: '/tmp/pic-test.jpg',
+    });
+    checkLangs(mk2, 'mili-makeup');
+    const cm2 = demo.buildDemoSpec({
+      business: 'Postá. | Contenido para tu negocio', category: 'profesionales',
+      country: 'AR', tone: 'vos', goal: 'Conseguir clientes y crecer en Instagram',
+      count: 5, profilePicPath: '/tmp/pic-test.jpg', feedRegister: 'light',
+    });
+    checkLangs(cm2, 'contenido');
+  }
+  ok(demo.designLanguageOf('abajo') === demo.designLanguageOf('velo'), 'abajo y velo son UN lenguaje (foto-abajo)');
+  ok(demo.designLanguageOf('poster') === 'grafico' && demo.designLanguageOf('duo') === 'split'
+    && demo.designLanguageOf('claro') === 'editorial', 'el mapa de lenguajes cubre los sistemas distinguibles');
+
   console.log(fails ? `\n✗ ${fails} FALLAS` : '\n✓ TODO OK');
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error('ERROR', e); process.exit(1); });
