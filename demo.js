@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 5;
+const DEMO_ENGINE_V = 6;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -251,11 +251,23 @@ function pickPhotoTagged(topic, poolFams, used, forbiddenTemas) {
 // en el texto) no se convierte en makeup por mencionar la palabra al pasar.
 const MAKEUP_RE = /maquillaje|make\s?-?\s?up|makeup/i;
 const BARBER_RE = /barber|barba|corte masculino|fade/i;
-function demoSubcat({ business, category, goal }) {
-  const text = `${business || ''} ${goal || ''}`;
-  if (!MAKEUP_RE.test(text)) return null;
-  if (category === 'belleza' || category === 'otro') return 'makeup';
-  if (category === 'barberia' && !BARBER_RE.test(text)) return 'makeup';
+// (v192) Servicio de contenido / community manager: frases que OFRECEN el
+// servicio (no un CTA suelto tipo "seguinos en redes"). Lo comparten
+// demoSubcat (temas de contenido) y categoryFromText (nunca "tecnología").
+// Los strings de la propia marca Posty ("Posta. | Contenido para tu
+// negocio") matchean acá a propósito: Posty ES un servicio de contenido.
+const CONTENIDO_SERVICE_RE = /community manager|social media manager|manejo de redes|gesti[oó]n de redes|contenido para (tu|su|mi)|contenidos? para (tu|su) (marca|negocio|emprendimiento)|creaci[oó]n de contenido|marketing digital|agencia de (marketing|contenido|publicidad|redes)/i;
+function demoSubcat({ business, category, goal, bioText }) {
+  const text = `${business || ''} ${goal || ''} ${bioText || ''}`;
+  if (MAKEUP_RE.test(text)) {
+    if (category === 'belleza' || category === 'otro') return 'makeup';
+    if (category === 'barberia' && !BARBER_RE.test(text)) return 'makeup';
+  }
+  // (v192) Contenido/CM — la bio del perfil (bioText) manda tanto como el
+  // nombre y la descripción del formulario. Va después de makeup: una
+  // maquilladora que además crea contenido sigue siendo makeup (su palabra
+  // específica manda, como siempre en este sistema).
+  if (CONTENIDO_SERVICE_RE.test(text)) return 'contenido';
   return null;
 }
 
@@ -373,6 +385,14 @@ function pickDemoStyles({ topics, category, subcat, business }) {
       if (sd && dishOf(`${t.headline} ${t.sub} ${t.tag}`) !== sd) score -= 200;
       if (!usedSkeletons.has(tr.skeleton)) score += 40;
       if (subcat === 'makeup' && /makeup|beauty|cosmet|glow|skin|lipstick|editorial/i.test(s.code + ' ' + s.name + ' ' + (s.prompt || ''))) score += 15;
+      // (v192) Contenido/CM: primero los estilos "de marca" — esqueletos
+      // gráficos (cita central, luminoso de estudio) y vocabulario de
+      // identidad/diseño. La semana de una agencia tiene que verse como
+      // piezas de marca, no como fotos sueltas de stock.
+      if (subcat === 'contenido') {
+        if (tr.skeleton === 'centro' || tr.skeleton === 'claro') score += 30;
+        if (/brand|logo|corporate|identidad|minimal|editorial|magazine|poster|graphic|dise[ñn]o/i.test(s.code + ' ' + s.name + ' ' + (s.prompt || ''))) score += 20;
+      }
       if (score > bestScore) { bestScore = score; best = s; }
     }
     if (best) { used.add(best.code); usedSkeletons.add(treatmentForStyle(best).skeleton); }
@@ -699,13 +719,15 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '' }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
-  // Subrubro (makeup ≠ peluquería): cambia los ÁNGULOS, no la categoría.
-  const subcat = demoSubcat({ business, category: cat, goal });
-  const topicsBase = (subcat === 'makeup' && captions.DEMO_TOPICS.makeup)
-    ? captions.DEMO_TOPICS.makeup
+  // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
+  // los ÁNGULOS, no la categoría. bioText = la bio real del perfil (v192):
+  // la semana hereda los temas de SU línea, no solo los del formulario.
+  const subcat = demoSubcat({ business, category: cat, goal, bioText });
+  const topicsBase = (subcat && captions.DEMO_TOPICS[subcat])
+    ? captions.DEMO_TOPICS[subcat]
     : (captions.DEMO_TOPICS[cat] || captions.DEMO_TOPICS.otro);
   const { topics: allTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath);
   // topicOffset (v187): temas desde una posición del pool — lo usan los
@@ -860,9 +882,9 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '' });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -1042,6 +1064,50 @@ function extractColorsFromBuffer(buf) {
   });
 }
 
+// ---------- Paleta HEREDADA del feed (v192) ----------
+// La semana hereda la línea visual del perfil que ya existe: se extraen los
+// colores dominantes de hasta 3 fotos del feed (con la MISMA utilidad de los
+// logos, extractColorsFromBuffer) y se combinan. El acento es el color vivo
+// que más se repite entre fotos; el botón, el color presente más distinguible
+// del acento (distancia RGB). Sin par distinguible → { accent, btn: null } o
+// null, y el llamador conserva la paleta anterior (foto de perfil o rubro).
+// El contraste legible lo sigue garantizando demoColors/textOn, como hoy.
+function hexToRgbArr(hex) {
+  const n = parseInt(String(hex).slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function colorSat(hex) {
+  const [r, g, b] = hexToRgbArr(hex).map((v) => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  return mx === 0 ? 0 : (mx - mn) / mx;
+}
+function colorDist(a, b) {
+  const A = hexToRgbArr(a), B = hexToRgbArr(b);
+  return Math.sqrt((A[0] - B[0]) ** 2 + (A[1] - B[1]) ** 2 + (A[2] - B[2]) ** 2);
+}
+async function extractPaletteFromBuffers(buffers) {
+  const list = (buffers || []).filter((b) => Buffer.isBuffer(b) && b.length).slice(0, 3);
+  if (!list.length) return null;
+  const freq = new Map(); // hex -> { count, photos:Set }
+  for (let i = 0; i < list.length; i++) {
+    let cols = [];
+    try { cols = await extractColorsFromBuffer(list[i]); } catch (e) { cols = []; }
+    for (const c of cols) {
+      const e = freq.get(c) || { count: 0, photos: new Set() };
+      e.count++; e.photos.add(i); freq.set(c, e);
+    }
+  }
+  if (!freq.size) return null;
+  const scored = [...freq.entries()].map(([hex, e]) => ({
+    hex, sat: colorSat(hex),
+    score: e.photos.size * 2 + e.count + colorSat(hex) * 2,
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  const accent = (scored.find((s) => s.sat >= 0.25) || scored[0]).hex;
+  const btnCand = scored.find((s) => s.hex !== accent && colorDist(s.hex, accent) > 90);
+  return { accent, btn: btnCand ? btnCand.hex : null };
+}
+
 function httpsGet(url, timeoutMs) {
   return new Promise((resolve, reject) => {
     let u;
@@ -1158,7 +1224,7 @@ const CATEGORY_KEYWORDS = [
   [/escuela|colegio|universidad|curs[ao]s|clases|academia|instituto|educaci[oó]n|taller de/i, 'educacion'],
   [/hotel|hostel|excursi[oó]n|aerol[ií]nea|vacaci[oó]n|posada|caba[nñ]a|apart hotel/i, 'turismo'],
   [/casamiento|boda|quince|fiesta de 15|\bdj\b|sal[oó]n de|organizaci[oó]n de eventos|catering/i, 'eventos'],
-  [/software|\bapp\b|celular|smartphone|iphone|inform[aá]tica|computaci[oó]n|desarrollo web|programaci[oó]n/i, 'tecnologia'],
+  [/software|celular|smartphone|iphone|inform[aá]tica|computaci[oó]n|desarrollo web|programaci[oó]n|desarrollo de apps|aplicaciones m[oó]viles|apps m[oó]viles/i, 'tecnologia'],
   [/interiorismo|diseño de interiores|diseno de interiores|decoraci[oó]n de interiores/i, 'deco'],
   [/joyer[ií]a|relojer[ií]a|\boro\b|plater[ií]a|anillo/i, 'joyeria'],
   [/fotograf|photography|retrato|estudio fotogr[aá]fico/i, 'fotografia'],
@@ -1177,6 +1243,13 @@ function categoryFromText(text) {
   // demoSubcat), aunque también mencione "peluquería" al pasar. Solo una
   // barbería declarada (barbero/barba) le gana a esa regla.
   if (MAKEUP_RE.test(t) && !/barber|barba/i.test(t)) return 'belleza';
+  // (v192) Un servicio de contenido / community manager NO es "tecnología"
+  // aunque su bio diga "app" o "celular" (así se contaminó la semana de
+  // @posty.hacetodo: reparación de celulares para un CM). Vende contenido,
+  // comunidad y ventas: su base es 'profesionales' y demoSubcat le da los
+  // temas de 'contenido'. Y la palabra "app" sola ya no categoriza en la
+  // tabla de abajo: hoy la tiene cualquier negocio (pedidos, turnos...).
+  if (CONTENIDO_SERVICE_RE.test(t)) return 'profesionales';
   for (const [re, cat] of CATEGORY_KEYWORDS) {
     if (re.test(t)) return cat;
   }
@@ -1249,6 +1322,7 @@ module.exports = {
   redesignDemo,
   trialPhotoOptions,
   extractColorsFromBuffer,
+  extractPaletteFromBuffers,
   toTu: captions.toTu,
   demoHashtags: captions.demoHashtags,
   // Prueba en 1 campo (prefill + streaming)

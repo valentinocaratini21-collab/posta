@@ -27,6 +27,19 @@ se materializa como tratamiento determinístico local.
   uñas/makeup.
 - Un posteo con tag **ANTES/DESPUÉS** prioriza estilos before/after
   (esqueleto `duo`): la pieza muestra lo que su etiqueta promete.
+- **Herencia visual del perfil (v192):** si el visitante trae su @, la
+  semana hereda SU línea: la paleta sale de hasta 3 fotos de su feed
+  (`extractPaletteFromBuffers`, misma extracción que los logos — reemplaza
+  a la del rubro y a la de la foto de perfil; los colores que el visitante
+  fijó a mano siempre ganan) y su bio alimenta los temas vía `bioText`.
+  Subrubro `contenido` (servicios de contenido / community manager,
+  `CONTENIDO_SERVICE_RE`): temas de contenido/crecimiento
+  (`DEMO_TOPICS.contenido`: carruseles, horarios, comunidad, ventas) y
+  bonus de puntaje a los estilos "de marca" (esqueletos `centro`/`claro`
+  y vocabulario brand/identidad/editorial). Un servicio de contenido
+  NUNCA categoriza `tecnologia`: la palabra "app" sola ya no categoriza
+  (la tiene cualquier bio) y `categoryFromText` lo resuelve a
+  `profesionales` antes de la tabla de keywords.
 - Un estilo que **nombra un plato** (`dishOf`: hamburguesa, pizza, sushi,
   cazuela, mariscos, provoleta, milanesa, café, …) solo etiqueta posteos
   de ese plato — el nombre del estilo se imprime en la pieza.

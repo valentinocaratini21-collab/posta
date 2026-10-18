@@ -10658,8 +10658,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // resultados y el cache. Si pierde la carrera o falla (IG privado, IG
   // caído), la proyección no existe y el flujo queda idéntico al de siempre.
   let trialProfile = null;
+  let trialProfilePromise = null;
   if (ig) {
-    const profilePromise = (async () => {
+    trialProfilePromise = (async () => {
       try {
         const known = await Promise.race([igProfPromise, new Promise((r) => setTimeout(() => r(null), 4500))]);
         const data = await feedAudit.fetchAuditData(ig, null, known || undefined);
@@ -10675,7 +10676,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         return prof;
       } catch (e) { return null; }
     })();
-    Promise.race([profilePromise, new Promise((r) => setTimeout(() => r(null), 3000))])
+    Promise.race([trialProfilePromise, new Promise((r) => setTimeout(() => r(null), 3000))])
       .then((p) => { if (p) { trialProfile = p; send('profile', { profile: p }); } })
       .catch(() => {});
   }
@@ -10740,9 +10741,44 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     send('status', { step: 'ideas', text: `Estoy pensando ideas para ${business}…` });
     const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors }, null);
 
+    // (v192) HERENCIA VISUAL DEL PERFIL: la semana sale de SU línea, no de
+    // una plantilla genérica del rubro. Con el perfil ya en vuelo (la misma
+    // promesa de la proyección — cero fetches nuevos) y SOLO si el visitante
+    // no fijó colores a mano: (a) la paleta sale de hasta 3 fotos de su feed
+    // ya localizadas, y reemplaza a la del rubro y a la de la foto de
+    // perfil; (b) su bio alimenta los temas (demoSubcat vía bioText).
+    // Espera acotada: las ideas ya tomaron su tiempo y el perfil suele
+    // estar; si no llega, se sigue con lo que haya — la prueba no se frena.
+    let bioText = '';
+    if (ig && trialProfilePromise) {
+      const prof = trialProfile || await Promise.race([
+        trialProfilePromise,
+        new Promise((r) => setTimeout(() => r(null), 4000)),
+      ]).catch(() => null);
+      if (prof) {
+        bioText = String(prof.bio || '');
+        if (!hexOk(fields.accent) && Array.isArray(prof.photos)) {
+          const bufs = [];
+          for (const p of prof.photos) {
+            if (bufs.length >= 3) break;
+            if (typeof p !== 'string' || !p.startsWith('/media/')) continue;
+            try { bufs.push(fs.readFileSync(path.join(MEDIA_DIR, path.basename(p)))); } catch (e) { /* foto podada por el janitor: se sigue con las demás */ }
+          }
+          if (bufs.length) {
+            const feedPal = await demo.extractPaletteFromBuffers(bufs).catch(() => null);
+            if (feedPal && feedPal.accent) {
+              accent = feedPal.accent;
+              if (feedPal.btn) btn = feedPal.btn;
+              colorSource = 'instagram-feed';
+            }
+          }
+        }
+      }
+    }
+
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5 });
+    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
@@ -10802,7 +10838,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const weekTreat = (j) => spec.specPosts[j % spec.specPosts.length] || {};
       const probe = (off) => {
         try {
-          return demo.buildDemoSpec({ business, category, country, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto] });
+          return demo.buildDemoSpec({ business, category, country, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText });
         } catch (e) { return null; }
       };
       for (let off = n; off < n + 3 && posts.length < 3; off++) {
@@ -11589,7 +11625,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v193';
+const BUILD_ID = '20261017-v194';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
