@@ -51,7 +51,7 @@ async function waitBoot(tries = 60) {
     ok(await waitBoot(), 'server booteó');
     const db = new DatabaseSync(path.join(TMP, 'posta.db'));
     db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?,?,?)')
-      .run('milagrosmakeup', payload(6, ['/cosmetic', '/quote']), Date.now());
+      .run('milagrosmakeup', payload(7, ['/cosmetic', '/quote']), Date.now());
     db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?,?,?)')
       .run('viejoengine', payload(1, ['/cosmetic']), Date.now());
 

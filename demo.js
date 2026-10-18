@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 6;
+const DEMO_ENGINE_V = 7;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -702,7 +702,16 @@ function runDemoRender(args, timeoutMs = 90000) {
 function renderDemoVideo(imagePaths, runDir, idx) {
   return new Promise((resolve, reject) => {
     const out = path.join(runDir, `post-${idx == null ? 2 : idx}.mp4`);
-    const paths = (Array.isArray(imagePaths) ? imagePaths : [imagePaths]).filter(Boolean);
+    let paths = (Array.isArray(imagePaths) ? imagePaths : [imagePaths]).filter(Boolean);
+    if (paths.length >= 2) {
+      // El tour ARRANCA en el diseño del propio posteo video (v195): si
+      // empezara en el diseño N°1, la celda del reel mostraría al inicio
+      // (y en foto fija) el mismo diseño que la celda del primer posteo —
+      // se lee como repetido. Wrap-around: [idx, idx+1, …, n-1, 0, …, idx-1].
+      // Si el diseño del video ya es el primero, nada cambia.
+      const start = Math.min(Math.max(idx == null ? 2 : idx, 0), paths.length - 1);
+      if (start > 0) paths = paths.slice(start).concat(paths.slice(0, start));
+    }
     const args = paths.length >= 2
       ? [DEMO_VIDEO_SCRIPT, '--tour', out, '1.4', ...paths]
       : [DEMO_VIDEO_SCRIPT, paths[0], out, '6'];
