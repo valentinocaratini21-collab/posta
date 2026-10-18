@@ -380,6 +380,17 @@ const KNOWN_HOOK_RES = (HOOK_BANK || []).map(h => {
 function applyPostyHook(out, input) {
   if (!out || typeof out !== 'object') return out;
   try {
+    // LINT ANTES DE LOS ATAJOS (Juli, 2026-10-18 — id 406): un caption que
+    // ya abre con FORMA de hook pasa los dos retornos tempranos de abajo y
+    // el lint final nunca corría: así entró "Lo que nos dijo una clienta
+    // después de probar Lo que nuestros usuarios dicen de Posty en Posty".
+    // Si la apertura está empalmada, cae esa línea ANTES de decidir atajos
+    // y el flujo sigue con el cuerpo limpio (puede ganar un hook sano).
+    if (captionOpenIsGarbled(out.caption, (input && input.business) || '')) {
+      const glines = String(out.caption || '').split('\n');
+      const grest = glines.slice(1).join('\n').replace(/^\n+/, '');
+      if (grest.trim().length >= 20) { out.caption = grest; out.hookId = null; }
+    }
     const firstLine = String(out.caption || '').split('\n')[0].trim();
     if (LEGACY_HOOKS.has(firstLine.toLowerCase())) return out; // ya abre con hook
     if (KNOWN_HOOK_RES.some(re => re.test(firstLine))) return out; // ya abre con hook del motor
@@ -473,6 +484,7 @@ const BANNED_PHRASES = [
   'en el mundo actual',
   'en el mundo de hoy',
   'al siguiente nivel',
+  'a otro nivel',
   'no te lo podes perder',
   'no te lo pierdas',
   'sumergite',

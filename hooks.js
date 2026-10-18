@@ -180,6 +180,13 @@ function hookFits(hook, { tema, negocio, hasPrice } = {}) {
     if (words.length > 7) return false;
     if (t.length > 60) return false;
     if (IMPERATIVE_START.test(t)) return false;
+    // Tema-TÍTULO (Juli, 2026-10-18 — ids 406 y 110): si el tema ARRANCA
+    // con una palabra común capitalizada ("Lo que nuestros usuarios
+    // dicen…", "Consejos para optimizar…", "Día a día en la vida de…") es
+    // el TÍTULO de otro posteo, no un sustantivo del negocio: no encaja
+    // en ninguna fórmula. Un tema sano arranca en minúscula ("la
+    // merienda") o es un nombre propio real del negocio.
+    if (/^(?:Lo|La|El|Los|Las|Un|Una|Día|Cómo|Consejos)\s/.test(t)) return false;
     if (/[¡!¿?:]/.test(t) || t.includes('—')) return false;
     // Artículo duplicado: si la fórmula ya pone "El {tema}", un tema que
     // arranca con artículo sale "El la línea…" — no encaja.
@@ -216,6 +223,17 @@ function captionOpenIsGarbled(caption, negocio) {
   if (/\.\s+[a-záéíóúñ]/.test(first)) return true;
   if (/[¿¡]/.test(first.slice(1))) return true;
   if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(first)) return true;
+  // (d) LINT v3 (Juli, 2026-10-18) — la firma residual pre-registrada el
+  // 17/10 apareció en generación NUEVA: id 406, "Lo que nos dijo una
+  // clienta después de probar Lo que nuestros usuarios dicen de Posty en
+  // Posty" — un tema-TÍTULO cosido a mitad de frase. Su delator no depende
+  // del nombre del negocio: una palabra común (Lo/La/El/Los/Las/Un/Una) con
+  // mayúscula tras una palabra en minúscula y seguida de minúscula. Si lo
+  // que sigue también va en mayúscula es nombre propio ("nuestro local de
+  // La Plata abre…") y no se marca. Ídem el modismo "Día a día"
+  // capitalizado (id 111); "Día de la Madre" no matchea (nombre propio).
+  if (/[a-záéíóúñü]\s+(?:Lo|La|El|Los|Las|Un|Una)\s+[a-záéíóúñü]/.test(first)) return true;
+  if (/[a-záéíóúñü]\s+Día a día/.test(first)) return true;
   const biz = String(negocio || '').trim().toLowerCase();
   if (biz && biz.length >= 3) {
     const hits = first.toLowerCase().split(biz).length - 1;
