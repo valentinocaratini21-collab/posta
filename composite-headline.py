@@ -61,6 +61,11 @@ def main():
     # plano tiene que quedar plano, como el feed de referencia).
     # Default '' = comportamiento histórico (blanco con scrim).
     ap.add_argument('--ink', default='')
+    # Zona del titular (v209): 'top' (histórico) o 'bottom'. La usa el
+    # demo con IA cuando el QA de texto compuesto detecta que el titular
+    # arriba tapa una cara, un ojo o el producto/personaje: el titular se
+    # recompone abajo en vez de pelear con la foto.
+    ap.add_argument('--zone', default='top', choices=('top', 'bottom'))
     a = ap.parse_args()
 
     headline = str(a.headline or '').strip()
@@ -87,10 +92,12 @@ def main():
         img.save(a.out)
         return
 
-    # Zona de texto: tercio superior con márgenes seguros.
+    # Zona de texto: tercio superior con márgenes seguros (o el inferior
+    # si --zone bottom: misma gramática, espejada).
     margin_x = int(W * 0.07)
     max_w = W - margin_x * 2
     top_y = int(H * 0.045)
+    zone_bottom = (a.zone == 'bottom')
 
     draw = ImageDraw.Draw(img)
 
@@ -119,33 +126,39 @@ def main():
     line_h = int(size * 1.2)
     text_h = line_h * len(lines)
     grad_h = top_y + text_h + int(H * 0.055)
+    # Origen vertical del bloque de texto y de la franja de fondo.
+    text_y = (H - top_y - text_h) if zone_bottom else top_y
+    zy0 = (H - grad_h) if zone_bottom else 0
     if not ink_rgb:
-        zone = img.crop((0, 0, W, grad_h)).resize((1, 1))
+        zone = img.crop((0, zy0, W, zy0 + grad_h)).resize((1, 1))
         lum = (0.299 * zone.getpixel((0, 0))[0] + 0.587 * zone.getpixel((0, 0))[1]
                + 0.114 * zone.getpixel((0, 0))[2])
         alpha_max = 80 if lum < 90 else 130 if lum < 150 else 175 if lum < 200 else 215
         try:
             from PIL import ImageFilter
-            soft = img.crop((0, 0, W, grad_h)).filter(ImageFilter.GaussianBlur(radius=max(6, W * 0.012)))
+            soft = img.crop((0, zy0, W, zy0 + grad_h)).filter(ImageFilter.GaussianBlur(radius=max(6, W * 0.012)))
             mask = Image.new('L', (1, grad_h))
             for yy in range(grad_h):
-                mask.putpixel((0, yy), 255 if yy < grad_h * 0.8 else int(255 * (1 - (yy - grad_h * 0.8) / max(grad_h * 0.2, 1))))
+                if zone_bottom:
+                    mask.putpixel((0, yy), 255 if yy > grad_h * 0.2 else int(255 * (yy / max(grad_h * 0.2, 1))))
+                else:
+                    mask.putpixel((0, yy), 255 if yy < grad_h * 0.8 else int(255 * (1 - (yy - grad_h * 0.8) / max(grad_h * 0.2, 1))))
             mask = mask.resize((W, grad_h))
-            img.paste(soft, (0, 0), mask)
+            img.paste(soft, (0, zy0), mask)
         except Exception:
             pass
         overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
         od = ImageDraw.Draw(overlay)
         for yy in range(grad_h):
-            alpha = int(alpha_max * (1 - yy / max(grad_h, 1)))
-            od.line([(0, yy), (W, yy)], fill=(0, 0, 0, alpha))
+            alpha = int(alpha_max * (yy / max(grad_h, 1))) if zone_bottom else int(alpha_max * (1 - yy / max(grad_h, 1)))
+            od.line([(0, zy0 + yy), (W, zy0 + yy)], fill=(0, 0, 0, alpha))
         img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
     # Sombra SUAVE: capa de texto en negro, desenfocada, apenas corrida —
     # reemplaza la sombra dura corrida (3,3) que se veía barata.
     shadow = Image.new('RGBA', img.size, (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
-    yy = top_y + max(2, int(size * 0.045))
+    yy = text_y + max(2, int(size * 0.045))
     for line in lines:
         lw = sd.textlength(line, font=font)
         sd.text(((W - lw) / 2, yy), line, font=font, fill=(ink_rgb + (110,)) if ink_rgb else (0, 0, 0, 165))
@@ -159,7 +172,7 @@ def main():
     draw = ImageDraw.Draw(img)
 
     # Texto principal.
-    y = top_y
+    y = text_y
     for line in lines:
         lw = draw.textlength(line, font=font)
         x = (W - lw) / 2
@@ -175,7 +188,9 @@ def main():
             bar_w = int(W * 0.14)
             bar_h = max(6, int(W * 0.009))
             bx = (W - bar_w) // 2
-            by = top_y + text_h + int(H * 0.02)
+            # Arriba: la barra cierra el bloque hacia adentro. Abajo: la
+            # barra abre el bloque (espejo exacto de la gramática).
+            by = (text_y - int(H * 0.02) - bar_h) if zone_bottom else top_y + text_h + int(H * 0.02)
             draw.rounded_rectangle([bx, by, bx + bar_w, by + bar_h], radius=bar_h // 2, fill=ac)
         except Exception:
             pass

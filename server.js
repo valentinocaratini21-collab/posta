@@ -361,6 +361,28 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   // titulares que no abren con signo.
   if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
   if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
+  // 7) CAP DE PALABRAS DURO (v209, regla de pieza de Valentino
+  // 2026-10-18): garantía FINAL — ningún titular sale de acá con más de
+  // maxWords palabras (default 6), venga del seed que venga (rubro-aware,
+  // estacional o el fallback de 8 palabras). Recorte por CLÁUSULA
+  // primero (la primera completa que entra), después por palabras con
+  // retroceso anti-colgada: nunca una idea cortada a la mitad si una
+  // cláusula entera cumple. (Espejo en generator.js.)
+  {
+    const ws = out.split(' ').filter(Boolean);
+    if (ws.length > maxWords) {
+      const clauses = out.split(/\s*[:;—]\s*|\s+-\s+/).map((x) => x.trim()).filter(Boolean);
+      let picked = '';
+      for (const c of clauses) {
+        const cw = c.split(' ').filter(Boolean);
+        if (cw.length >= 2 && cw.length <= maxWords) { picked = c; break; }
+      }
+      out = picked || sinColgada(ws.slice(0, maxWords)).join(' ');
+      out = out.replace(/[,;:]+$/, '').trim();
+      if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+      if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
+    }
+  }
   return out.replace(/\u0001/g, '.');
 }
 const app = express();
@@ -8022,7 +8044,7 @@ function parseBrandHexes(brandColorsRaw) {
 // volumen se llenó de media huérfana y TODA escritura de imagen explotaba),
 // corre la limpieza de emergencia y reintenta una vez: el producto se
 // auto-repara sin esperar un deploy.
-const JPEG_PY = "import sys\nfrom PIL import Image\nfrom io import BytesIO\nim = Image.open(BytesIO(sys.stdin.buffer.read()))\nim = im.convert('RGB')\nif im.width > 1080:\n    im = im.resize((1080, round(im.height * 1080 / im.width)), Image.LANCZOS)\nout = BytesIO()\nim.save(out, 'JPEG', quality=85, optimize=True)\nsys.stdout.buffer.write(out.getvalue())\n";
+const JPEG_PY = "import sys\nfrom PIL import Image\nfrom io import BytesIO\nim = Image.open(BytesIO(sys.stdin.buffer.read()))\nim = im.convert('RGB')\nif im.width > 1080:\n    im = im.resize((1080, round(im.height * 1080 / im.width)), Image.LANCZOS)\nout = BytesIO()\nim.save(out, 'JPEG', quality=90, optimize=True)\nsys.stdout.buffer.write(out.getvalue())\n";
 // Variantes livianas en segundo plano (subidas del cliente): no bloquea la
 // respuesta de la subida; si la foto no se puede procesar (HEIC, etc.), la
 // app cae a la maestra y listo.
@@ -8035,7 +8057,8 @@ function makeVariantsAsync(absPath) {
 function saveImageB64(b64) {
   // Peso (2026-10-16, pedido de Valentino: "imágenes cada vez más
   // livianas"): el maestro PNG de la IA pesa ~2 MB → se transcodifica a
-  // JPEG q85 (~250-350 KB, ~6× más liviano): el Schedule carga al instante
+  // JPEG q90 (~350-450 KB, ~5× más liviano; q90 desde v209 por la vara de
+  // calidad máxima de imagen): el Schedule carga al instante
   // en el celular, el volumen dura meses más y Meta acepta JPEG
   // nativamente. Si la transcodificación falla, cae al PNG original:
   // guardar la imagen nunca depende de este paso.
@@ -8321,6 +8344,7 @@ async function expandArtBrief({ headline, tipo, angle, businessName, category, p
 `Sos un director de arte publicitario de clase mundial. Expandís un brief corto en los bloques de un prompt de imagen publicitaria (en inglés). Devolvé SOLO un JSON válido, sin explicaciones ni markdown, con exactamente estas 5 claves (cada una, una o dos frases concretas de hasta 30 palabras): {"sujeto": el producto/persona protagonista exacto, con su nombre y aspecto; "momento": la acción o momento vivo que está pasando (nunca la cosa quieta); "contexto": el lugar real del negocio, nombrando UN detalle verificable del brief o, si no hay ninguno, el elemento más específico del rubro (el horno, el mostrador, la camilla); "luz": la iluminación física (fuente, dirección, hora); "composicion": plano, lente y qué va en primer plano y en el fondo}. El prompt final lo ensambla el código con tus bloques: NO escribas la paleta, NI la zona del titular, NI bloque AVOID, NI reglas — eso lo agrega el código siempre igual.
 
 El prompt DEBE exigir:
+- UNA IDEA POR PIEZA (regla dura v209): la escena expresa UN solo concepto — el del brief. Nada de dos ideas, dos productos protagonistas, dos promos ni dos momentos en la misma imagen: si el brief trae más de un ángulo, gana el primero y el resto se descarta.
 - Una escena CONCRETA y ESPECÍFICA del rubro (nada genérico: describí objetos, ambiente, fondo, detalles tangibles).
 - La iluminación descripta (ej. luz natural suave de ventana, hora dorada, neón nocturno, estudio con softbox).
 - La composición (plano, encuadre, qué va en primer plano y qué en el fondo).
@@ -8547,27 +8571,34 @@ function qaDedupe7d(uid, headline) {
 // fallan, el error combinado trae los dos mensajes de OpenAI (visible en
 // /api/week/last-result vía firstImgError).
 let GPT_IMAGE_2_DOWN = false;
-async function genConceptImage(apiKey, prompt, absRefs, refNote, uid, costFeature) {
+// quality (v209): override del tier de gpt-image SOLO para quien lo pide
+// (la ruta IA del demo: 'high', calidad máxima de la prueba). El pipeline
+// de clientes NO lo pasa: sigue en costs.IMAGE_QUALITY (medium) porque su
+// techo mensual por usuario (10% del plan) manda — con 'high' (~4x) una
+// semana de cliente costaría ~USD 1,25-1,75 y rompería el techo del plan
+// Esencial (~USD 2,80/mes) en dos semanas.
+async function genConceptImage(apiKey, prompt, absRefs, refNote, uid, costFeature, quality) {
   if (!GPT_IMAGE_2_DOWN) {
     try {
-      return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-2', costFeature);
+      return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-2', costFeature, quality);
     } catch (e) {
       GPT_IMAGE_2_DOWN = true;
       console.error('[concept-shot] gpt-image-2 rechazó la generación; fallback a gpt-image-1 por este proceso:', e.message);
       try {
-        return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1', costFeature);
+        return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1', costFeature, quality);
       } catch (e2) {
         throw new Error(`gpt-image-2: ${e.message} || gpt-image-1: ${e2.message}`);
       }
     }
   }
-  return genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1', costFeature);
+  return genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1', costFeature, quality);
 }
 // Llama al modelo dado con refs (edits) o sin refs (generations). Devuelve el b64.
 // Lanza Error con el mensaje de OpenAI recortado si falla.
 // costFeature (v198): etiqueta de api_costs — el demo pasa 'demo-ai-image'
 // para que su gasto sea medible aparte; el pipeline real usa 'concept-shot'.
-async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model, costFeature) {
+async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model, costFeature, quality) {
+  const imgQuality = quality || costs.IMAGE_QUALITY;
   let r;
   if (absRefs.length) {
     const form = new FormData();
@@ -8581,7 +8612,7 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
     form.append('size', '1024x1280'); // vertical 4:5 REAL (1024x1536 era 2:3: píxeles de más que el composite recortaba — más lento y más pesado)
-    form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY): medium en vez de auto (auto puede resolver a high = 4x)
+    form.append('quality', imgQuality); // config en costs.js (env IMAGE_QUALITY): medium en vez de auto (auto puede resolver a high = 4x); el demo pasa 'high' explícito (v209)
     r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
@@ -8592,7 +8623,7 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     r = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, prompt, size: '1024x1280', quality: costs.IMAGE_QUALITY }), // 4:5 real (ver rama edits); config en costs.js (env IMAGE_QUALITY)
+      body: JSON.stringify({ model, prompt, size: '1024x1280', quality: imgQuality }), // 4:5 real (ver rama edits); config en costs.js (env IMAGE_QUALITY); el demo pasa 'high' explícito (v209)
       signal: AbortSignal.timeout(120000),
     });
   }
@@ -8601,7 +8632,9 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     throw new Error(`OpenAI ${r.status}: ${t.slice(0, 160)}`);
   }
   const data = await r.json();
-  costs.trackUsage({ feature: costFeature || 'concept-shot', userId: uid, model, images: 1, json: data });
+  // El quemado se loguea al precio del tier REALMENTE usado: '@high' tiene
+  // su tarifa en costs.js (si no, el demo en high mediría como medium).
+  costs.trackUsage({ feature: costFeature || 'concept-shot', userId: uid, model: imgQuality === 'high' ? model + '@high' : model, images: 1, json: data });
   const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
   if (!b64) throw new Error('OpenAI no devolvió imagen');
   return b64;
@@ -10871,8 +10904,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const r = demo.resolveTrialCaption(topics, cat, {
         business, tone, country, idx: i, goalLine,
       });
+      // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
+      const cleanPiece = specPosts[i].text_mode === 'clean';
       return {
-        caption: r.caption,
+        caption: cleanPiece
+          ? demo.ensureCaptionCtaClose(r.caption, (topics[r.topicIndex] || t).kind, tone)
+          : r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline,
       };
@@ -10889,6 +10926,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         headline: made[i].headline,
         style: specPosts[i].style,
         style_name: specPosts[i].style_name,
+        text_mode: specPosts[i].text_mode || 'text',
       };
       send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
     });
@@ -10982,7 +11020,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               if (palDir) prompt += '\n\n' + palDir;
               // v205: cadena de motores — Nano Banana Pro (si hay clave
               // Gemini) → gpt-image → null (la pieza queda de plantilla).
-              const genGpt = (p) => genConceptImage(demoApiKey, p, refs, demoAi.REF_NOTE, null, 'demo-ai-image');
+              // v209: la ruta IA del demo genera en el tier de calidad
+              // MÁS ALTO de gpt-image ('high') — la prueba es la vidriera
+              // y la vara es calidad máxima; el tope diario fail-closed
+              // del demo (DEMO_AI_DAILY_CAP_USD) sigue mandando. El
+              // pipeline de clientes NO usa este override (su techo
+              // mensual por usuario no lo admite: ver genConceptImage).
+              const genGpt = (p) => genConceptImage(demoApiKey, p, refs, demoAi.REF_NOTE, null, 'demo-ai-image', 'high');
               let gen = await demoAi.generateDemoPieceImage({ prompt, refs, geminiKey, genGpt, refNote: demoAi.REF_NOTE });
               if (!gen) return null;
               // v205: QA VISUAL con reintento — la pieza cruda se chequea
@@ -11015,11 +11059,44 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 }
               }
               pieceEngines[i] = gen.engine;
-              pieceQa[i] = qaInfo;
-              return demoAi.compositeDemoPiece({
-                b64: gen.b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale,
-                inkHex: (treatments[i] === 'flat' || treatments[i] === 'poster') ? inkHex : null,
+              // (v209) DOSIFICACIÓN también en la ruta IA: la pieza
+              // limpia NO compone titular (su imagen cruda ya pasó el QA
+              // de "sin texto"); la pieza con texto compone arriba y
+              // pasa el 4º chequeo del QA sobre la pieza COMPUESTA: el
+              // titular no puede tapar caras, ojos ni el producto o
+              // personaje. Si tapa, se recompone en la zona opuesta —
+              // ese es su reintento (sin regenerar la imagen).
+              const inkFor = (treatments[i] === 'flat' || treatments[i] === 'poster') ? inkHex : null;
+              if (specPosts[i].text_mode === 'clean') {
+                pieceQa[i] = { ...qaInfo, text: null };
+                return demoAi.compositeDemoPiece({
+                  b64: gen.b64, headline: '', gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor,
+                });
+              }
+              let buf = await demoAi.compositeDemoPiece({
+                b64: gen.b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor, zone: 'top',
               });
+              let textInfo = { passed: true, zone: 'top', retried: false };
+              const textQa = buf ? await demoAi.qaComposedText({ b64: buf.toString('base64'), zone: 'top', apiKey: demoApiKey }) : null;
+              if (textQa) textInfo.passed = textQa.passed;
+              if (buf && textQa && !textQa.passed && costs.demoAiCapOk()) {
+                const buf2 = await demoAi.compositeDemoPiece({
+                  b64: gen.b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale, inkHex: inkFor, zone: 'bottom',
+                }).catch(() => null);
+                let swapped = false;
+                if (buf2) {
+                  const textQa2 = await demoAi.qaComposedText({ b64: buf2.toString('base64'), zone: 'bottom', apiKey: demoApiKey });
+                  if (textQa2 && textQa2.passed) { buf = buf2; swapped = true; }
+                }
+                textInfo = swapped
+                  ? { passed: true, zone: 'bottom', retried: true }
+                  : { passed: false, zone: 'top', retried: true };
+                if (!swapped) {
+                  console.error(`[posta] demo-ai QA texto: la pieza ${i} (${made[i].headline}) tapa el sujeto según visión y la otra zona no lo resolvió: ${textQa.detalle || ''}`);
+                }
+              }
+              pieceQa[i] = { ...qaInfo, text: textInfo };
+              return buf;
             };
             const { replaced } = await demoAi.replacePiecesWithAi({
               indexes: posts.map((_, i) => i),
@@ -11038,6 +11115,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   headline: made[i].headline,
                   style: specPosts[i].style,
                   style_name: specPosts[i].style_name,
+                  text_mode: specPosts[i].text_mode || 'text',
                   treatment: treatments[i],
                   ai: true,
                   engine: pieceEngines[i] || null,
@@ -11050,6 +11128,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             demoAiInfo.pieces = replaced.size;
             demoAiInfo.engines = posts.map((_, i) => pieceEngines[i] || null);
             demoAiInfo.qa = posts.map((_, i) => pieceQa[i] || null);
+            demoAiInfo.text_modes = specPosts.map((sp) => sp.text_mode || 'text');
           } catch (e) {
             console.error('[posta] demo-ai: la tanda IA falló, quedan las plantillas:', e.message);
           } finally {
@@ -11139,6 +11218,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         headline: made[videoIdx].headline,
         style: specPosts[videoIdx].style,
         style_name: specPosts[videoIdx].style_name,
+        text_mode: specPosts[videoIdx].text_mode || 'text',
         // v205: si la pieza del reel salió del motor IA, su motor y su
         // QA viajan también en el posteo video (antes se perdían acá).
         ...(pieceEngines[videoIdx] ? { ai: true, engine: pieceEngines[videoIdx], qa: pieceQa[videoIdx] || null, ...(demoTreatments ? { treatment: demoTreatments[videoIdx] } : {}) } : {}),
@@ -11152,6 +11232,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         headline: made[videoIdx].headline,
         style: specPosts[videoIdx].style,
         style_name: specPosts[videoIdx].style_name,
+        text_mode: specPosts[videoIdx].text_mode || 'text',
         ...(pieceEngines[videoIdx] ? { ai: true, engine: pieceEngines[videoIdx], qa: pieceQa[videoIdx] || null, ...(demoTreatments ? { treatment: demoTreatments[videoIdx] } : {}) } : {}),
       };
     }
@@ -11891,7 +11972,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v208';
+const BUILD_ID = '20261018-v209';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

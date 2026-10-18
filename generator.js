@@ -147,6 +147,28 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   // titulares que no abren con signo.
   if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
   if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
+  // 7) CAP DE PALABRAS DURO (v209, regla de pieza de Valentino
+  // 2026-10-18): garantía FINAL — ningún titular sale de acá con más de
+  // maxWords palabras (default 6), venga del seed que venga (rubro-aware,
+  // estacional o el fallback de 8 palabras). Recorte por CLÁUSULA
+  // primero (la primera completa que entra), después por palabras con
+  // retroceso anti-colgada: nunca una idea cortada a la mitad si una
+  // cláusula entera cumple.
+  {
+    const ws = out.split(' ').filter(Boolean);
+    if (ws.length > maxWords) {
+      const clauses = out.split(/\s*[:;—]\s*|\s+-\s+/).map((x) => x.trim()).filter(Boolean);
+      let picked = '';
+      for (const c of clauses) {
+        const cw = c.split(' ').filter(Boolean);
+        if (cw.length >= 2 && cw.length <= maxWords) { picked = c; break; }
+      }
+      out = picked || sinColgada(ws.slice(0, maxWords)).join(' ');
+      out = out.replace(/[,;:]+$/, '').trim();
+      if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+      if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
+    }
+  }
   return out.replace(/\u0001/g, '.');
 }
 const HOOKS = {
@@ -1629,7 +1651,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'system',
           content:
-            'Sos un estratega de marketing digital argentino experto en Instagram. Escribís en español rioplatense con voseo. REGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta". Si el negocio es Posta, hablá de "Posty" en singular. Respondé SOLO con un JSON: {"ideas": [{"titulo": "...", "formato": "...", "tipo": "...", "angulo": "...", "porque": "..."}]}. Generá exactamente 7 ideas de posts variadas: novedad, promo, tip educativo, testimonio, detrás de escena, comunidad y reel/video. "titulo" es el tema en una frase corta. "formato" es una de esas 7 categorías (para video usá exactamente "Reel/Video"). "tipo" es el tipo de contenido: uno de promo, tip, social, detras, novedad (promo=oferta con urgencia, tip=educativo, social=prueba social o comunidad, detras=detrás de escena humano, novedad=anuncio o lanzamiento). REGLA DURA: nunca dos ideas seguidas con el mismo tipo — alterná los tipos a lo largo de la semana. "angulo" es el enfoque estratégico en 1-2 frases, explicando por qué va a rendir y cómo diferenciarse de la competencia. REGLA DE CONCRECIÓN: cada idea TIENE que estar atada a algo concreto del contexto del negocio (un producto, un servicio, una promo activa, una pregunta frecuente o un tema que rinde en su Instagram) — PROHIBIDO ideas genéricas que servirían para cualquier negocio (motivación genérica, "emprendé tus sueños", tips sin producto). "porque" es UNA línea de estrategia en voseo que explica por qué este posteo vende para ESTE negocio, atada a un producto/servicio/promo REAL del contexto (ej: "porque el 2x1 de esta semana es tu gancho de precio y este reel lo muestra puesto, que es lo que más te rinde"). El "porque" además sugiere el ángulo visual: qué debería mostrarse en la imagen (producto, escena, persona, detalle) para guiar al diseñador.',
+            'Sos un estratega de marketing digital argentino experto en Instagram. Escribís en español rioplatense con voseo. REGLA DE IDENTIDAD: el servicio se llama "Posty", nunca "Posta". Si el negocio es Posta, hablá de "Posty" en singular. Respondé SOLO con un JSON: {"ideas": [{"titulo": "...", "formato": "...", "tipo": "...", "angulo": "...", "porque": "..."}]}. Generá exactamente 7 ideas de posts variadas: novedad, promo, tip educativo, testimonio, detrás de escena, comunidad y reel/video. "titulo" es el tema en una frase corta. "formato" es una de esas 7 categorías (para video usá exactamente "Reel/Video"). "tipo" es el tipo de contenido: uno de promo, tip, social, detras, novedad (promo=oferta con urgencia, tip=educativo, social=prueba social o comunidad, detras=detrás de escena humano, novedad=anuncio o lanzamiento). REGLA DURA: nunca dos ideas seguidas con el mismo tipo — alterná los tipos a lo largo de la semana. "angulo" es el enfoque estratégico en 1-2 frases, explicando por qué va a rendir y cómo diferenciarse de la competencia. REGLA DE CONCRECIÓN: cada idea TIENE que estar atada a algo concreto del contexto del negocio (un producto, un servicio, una promo activa, una pregunta frecuente o un tema que rinde en su Instagram) — PROHIBIDO ideas genéricas que servirían para cualquier negocio (motivación genérica, "emprendé tus sueños", tips sin producto). REGLA DE PIEZA (v209, dura): UNA IDEA POR PIEZA — cada idea es UN tema con UN ángulo y UN solo CTA implícito; jamás una idea que junte dos promos, dos productos protagonistas o dos llamados a la acción: si el negocio tiene dos cosas para decir, son dos ideas separadas. "porque" es UNA línea de estrategia en voseo que explica por qué este posteo vende para ESTE negocio, atada a un producto/servicio/promo REAL del contexto (ej: "porque el 2x1 de esta semana es tu gancho de precio y este reel lo muestra puesto, que es lo que más te rinde"). El "porque" además sugiere el ángulo visual: qué debería mostrarse en la imagen (producto, escena, persona, detalle) para guiar al diseñador.',
         },
         {
           role: 'user',
@@ -3708,4 +3730,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline };

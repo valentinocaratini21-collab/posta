@@ -36,6 +36,8 @@ const MODEL_PRICES = {
   'gpt-4o':      { inPer1M: 2.50, outPer1M: 10.00 }, // chat con foto (visión)
   'gpt-4o-mini': { inPer1M: 0.15, outPer1M: 0.60 },  // chat texto, ideas, captions, briefs
   'gpt-image-2': { perImage: IMAGE_QUALITY === 'high' ? 0.25 : 0.063 }, // verificado 07/10/2026: OpenAI factura por tokens ($4/1M in, $15/1M out desde sep-2026); medium 1024x1024≈$0.05268 → $0.063 para 1024x1536 es buena aproximación (solo medición de quemado, no facturación)
+  'gpt-image-2@high': { perImage: 0.25 }, // v209: tier high EXPLÍCITO por llamada (ruta IA del demo: calidad máxima de la prueba) aunque el global siga en medium — se loguea con este modelo virtual para medir el quemado real
+  'gpt-image-1@high': { perImage: 0.167 }, // v209: fallback de gpt-image-2 en high (1024x1280 high ≈ $0.167 de lista)
   'gemini-3-pro-image': { perImage: 0.134 }, // v205: Nano Banana Pro (Google) — precio de lista por imagen del benchmark 2026-10-18; lo usa SOLO el demo ilustrado con feature 'demo-ai-nano'
   'whisper-1':   { perMin: 0.006 },                  // notas de voz / ADN por audio
 };

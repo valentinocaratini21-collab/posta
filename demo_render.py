@@ -280,24 +280,9 @@ def pill_nuevo(d, fonts_dir, text, C, y=64, x_right=None, left=False):
     return y + h
 
 
-def cta_button(d, fonts_dir, y, text, C, center=False):
-    if not str(text or "").strip():
-        return y  # sin CTA no hay pastilla: dibujarla vacía dejaba un óvalo flotante (v187)
-    f = B(fonts_dir, 44)
-    while tw(d, text, f) > MAX_W - 128 and f.size > 22:
-        f = B(fonts_dir, f.size - 2)
-    pad_x = 64
-    bh = 108
-    w = tw(d, text, f) + pad_x * 2
-    x0 = W // 2 - w / 2 if center else MX
-    d.rounded_rectangle([x0, y, x0 + w, y + bh], radius=bh // 2, fill=C["btn"])
-    ltext(d, x0 + pad_x, y + bh // 2 - f.size // 2 - 5, text, f, fill=C["btn_text"])
-    return y + bh
-
-
 def style_promo(fonts_dir, p, C, hs):
     """Estilo 1 PROMO: foto full-bleed con fundido a blanco, barra del negocio,
-    titular grande navy, sublinea y boton CTA."""
+    titular grande navy y sublinea."""
     focus = float(p.get("focus", 0.5) or 0.5)
     img, d = photo_bg(p["photo"], focus=focus)
     if p.get("pill"):
@@ -329,7 +314,6 @@ def style_promo(fonts_dir, p, C, hs):
         y += 10
     y += 34
 
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C)
     rtext(d, W - MX, H - 70, p.get("watermark", ""), R(fonts_dir, 30), fill=C["watermark"])
     return img, y
 
@@ -371,8 +355,6 @@ def style_editorial(fonts_dir, p, C, hs):
         y = ltext(d, MX, y, ln, f2, C["subline"])
         y += 8
     y += 30
-    f3 = B(fonts_dir, 38)
-    y = ltext(d, MX, y, str(p.get("cta", "")).upper(), f3, fill=C["accent"], tracking=4) + 28
     rtext(d, W - MX, H - 64, p.get("watermark", ""), R(fonts_dir, 28), fill=C["watermark"])
     return img, y
 
@@ -389,7 +371,7 @@ def style_nocturno(fonts_dir, p, C, hs):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C, y=130)
 
     f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, hs, 3)
-    block = len(lines) * int(f.size * 1.08) + 30 + 52 + 40 + 108
+    block = len(lines) * int(f.size * 1.08) + 30 + 52 + 40
     y = max(H - 120 - block, 400)
     for ln in lines:
         y = ltext(d, MX, y, ln, f, white)
@@ -411,16 +393,6 @@ def style_nocturno(fonts_dir, p, C, hs):
         y = ltext(d, MX, y, ln, f2, white)
         y += 8
     y += 36
-    # boton outline blanco
-    f3 = B(fonts_dir, 42)
-    txt = str(p.get("cta", ""))
-    while tw(d, txt, f3) > MAX_W - 140 and f3.size > 22:
-        f3 = B(fonts_dir, f3.size - 2)
-    bw = tw(d, txt, f3) + 120
-    bh = 104
-    d.rounded_rectangle([MX, y, MX + bw, y + bh], radius=bh // 2, outline=white, width=5)
-    ltext(d, MX + 60, y + bh // 2 - f3.size // 2 - 4, txt, f3, fill=white)
-    y += bh
     rtext(d, W - MX, H - 70, p.get("watermark", ""), R(fonts_dir, 30), fill=(200, 210, 220))
     return img, y + 40
 
@@ -461,16 +433,6 @@ def style_bloque(fonts_dir, p, C, hs):
         y = ltext(d, MX, y, ln, f2, white)
         y += 8
     y += 34
-    # boton blanco con texto del color de marca
-    f3 = B(fonts_dir, 40)
-    txt = str(p.get("cta", ""))
-    while tw(d, txt, f3) > MAX_W - 140 and f3.size > 22:
-        f3 = B(fonts_dir, f3.size - 2)
-    bw = tw(d, txt, f3) + 110
-    bh = 100
-    d.rounded_rectangle([MX, y, MX + bw, y + bh], radius=bh // 2, fill=white)
-    ltext(d, MX + 55, y + bh // 2 - f3.size // 2 - 4, txt, f3, fill=C["accent"])
-    y += bh
     rtext(d, W - MX, H - 56, p.get("watermark", ""), R(fonts_dir, 28), fill=(235, 240, 245))
     return img, y + 16
 
@@ -513,7 +475,6 @@ def style_marco(fonts_dir, p, C, hs):
         y = ltext(d, MX, y, ln, f2, C["subline"])
         y += 8
     y += 34
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C)
     rtext(d, W - MX, H - 64, p.get("watermark", ""), R(fonts_dir, 28), fill=C["watermark"])
     return img, y + 12
 
@@ -559,15 +520,6 @@ def style_sello(fonts_dir, p, C, hs):
         y = ctext(d, W // 2, y, ln, f2, C["subline"])
         y += 8
     y += 30
-    f3 = B(fonts_dir, 40)
-    txt = str(p.get("cta", ""))
-    while tw(d, txt, f3) > MAX_W - 140 and f3.size > 22:
-        f3 = B(fonts_dir, f3.size - 2)
-    bw = tw(d, txt, f3) + 110
-    bh = 100
-    d.rounded_rectangle([W // 2 - bw / 2, y, W // 2 + bw / 2, y + bh], radius=bh // 2, fill=C["btn"])
-    ltext(d, W // 2 - bw / 2 + 55, y + bh // 2 - f3.size // 2 - 4, txt, f3, fill=C["btn_text"])
-    y += bh
     rtext(d, W - MX, H - 64, p.get("watermark", ""), R(fonts_dir, 28), fill=C["watermark"])
     return img, y + 12
 
@@ -619,7 +571,6 @@ def style_cita(fonts_dir, p, C, hs):
     tag = str(p.get("pill") or "").upper()  # (v205) sin fallback al nombre del negocio
     ctext(d, W // 2, y, tag, f0, fill=C["accent"], tracking=8)
     y += 90
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=True)
     rtext(d, W - MX, H - 70, p.get("watermark", ""), R(fonts_dir, 30), fill=C["watermark"])
     return img, y + 20
 
@@ -660,7 +611,6 @@ def style_tipografico(fonts_dir, p, C, hs):
         y = ltext(d, MX, y, ln, f2, (205, 215, 225))
         y += 10
     y += 48
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C)
 
     # franja de foto abajo con fundido navy arriba
     band_h = 300
@@ -727,7 +677,6 @@ def style_oferta(fonts_dir, p, C, hs):
         y = ltext(d, MX, y, ln, f2, C["subline"])
         y += 8
     y += 30
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C)
     return img, y + 12
 
 
@@ -876,12 +825,13 @@ def sub_wrap(draw, fonts_dir, text, max_w, size=40, max_lines=2):
 
 
 def block_layout(draw, fonts_dir, p, hs):
-    """Mide el bloque de texto (barra + titular + sublínea + CTA)."""
+    """Mide el bloque de texto (barra + titular + sublínea).
+    (v209) SIN botón CTA: el CTA vive en el caption, nunca pintado."""
     f, lines = wrap_fit(draw, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 118), 3)
     f2, slines = sub_wrap(draw, fonts_dir, p.get("subline", ""), MAX_W, 40, 2)
     head_h = sum(f.size + int(f.size * 0.08) for _ in lines)
     sub_h = sum(f2.size + 10 for _ in slines)
-    total = 9 + 30 + head_h + 18 + sub_h + 28 + 108
+    total = 9 + 30 + head_h + 18 + sub_h + 14
     return {"f": f, "lines": lines, "f2": f2, "slines": slines, "total": total}
 
 
@@ -907,8 +857,7 @@ def block_draw(d, fonts_dir, p, C, lay, y, dark, center=False, accent_override=N
         else:
             y = ltext(d, MX, y, ln, lay["f2"], sub_col)
         y += 10
-    y += 28
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=center)
+    y += 14
     return y
 
 
@@ -958,6 +907,389 @@ def _pic_watermark_on(img, pic_path):
     return img
 
 
+# =====================================================================
+# (v209) ZONAS SEGURAS — EL TEXTO NUNCA PELEA CON LA FOTO.
+# Regla dura de Valentino (2026-10-18, semana de Mili): el titular no
+# puede pisar pinceles/producto ni caer sobre caras u ojos. Antes el
+# bloque se ubicaba SOLO por luminancia de la banda: una cara luminosa
+# o un flat-lay cargado recibían el texto encima igual.
+# Ahora cada esqueleto de foto MIDE la foto antes de ubicar el bloque:
+#   · CARAS: manifest relevado del stock (demo-faces.json, cajas
+#     relativas mapeadas al lienzo replicando el recorte de
+#     load_photo_v2) + heurística de piel en vivo para fotos fuera del
+#     manifest (subidas del cliente). Una banda con cara queda
+#     PROHIBIDA para el texto.
+#   · DETALLE: mapa de textura por celdas (gradiente): el bloque va a
+#     la zona más tranquila; si la elegida sigue cargada, gana un scrim
+#     LOCALIZADO detrás del bloque (no sobre toda la foto).
+#   · Si ninguna banda sirve (cara o detalle extremo en ambas), la
+#     pieza cae al PANEL EDITORIAL: foto arriba, panel pleno de la
+#     paleta abajo y el texto sobre el panel — jamás sobre el sujeto.
+# La zona final de cada posteo se imprime en el log (zone=...) y los
+# tests la verifican contra el manifest.
+# =====================================================================
+import json as _json
+from collections import deque as _deque
+
+try:
+    import numpy as _np
+except Exception:  # pragma: no cover — el entorno de render trae numpy
+    _np = None
+
+_FACES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo-faces.json")
+_FACES_CACHE = None
+_LAST_ZONE = {"zone": "", "busy": 0.0}
+
+# Umbrales de ocupación (0..1) calibrados sobre el stock del demo:
+# >0.42 la banda se considera cargada (candidata a flip si la otra está
+# tranquila); >0.60 ni con scrim localizado alcanza → panel editorial.
+ZONE_FLIP = 0.42
+ZONE_PANEL = 0.60
+ZONE_SCRIM = 0.16
+
+
+def _faces_manifest():
+    global _FACES_CACHE
+    if _FACES_CACHE is None:
+        try:
+            with open(_FACES_PATH, "r", encoding="utf-8") as f:
+                _FACES_CACHE = _json.load(f).get("photos", {})
+        except Exception:
+            _FACES_CACHE = {}
+    return _FACES_CACHE
+
+
+def _manifest_faces_canvas(photo_path, focus, zoom, key="faces"):
+    """Cajas del manifest (relativas a la foto fuente) → lienzo
+    1080x1350, replicando el recorte cover de load_photo_v2 y su zoom.
+    Se expanden un margen de seguridad (8% + 10 px). key: 'faces'
+    (prohibición dura) o 'hero' (el objeto protagonista: señal blanda)."""
+    try:
+        entry = _faces_manifest().get(os.path.basename(str(photo_path or "")))
+        if not entry:
+            return []
+        boxes = entry.get(key) or []
+        if not boxes:
+            return []
+        with Image.open(photo_path) as im:
+            pw, ph = im.size
+        target = W / H
+        if pw / ph > target:
+            nw = ph * target
+            x0s, y0s, vw, vh = (pw - nw) / 2.0, 0.0, nw, float(ph)
+        else:
+            nh = pw / target
+            x0s, y0s, vw, vh = 0.0, (ph - nh) * max(0.0, min(1.0, focus)), float(pw), nh
+        out = []
+        for (fx0, fy0, fx1, fy1) in boxes:
+            cx0 = (fx0 * pw - x0s) / vw * W
+            cx1 = (fx1 * pw - x0s) / vw * W
+            cy0 = (fy0 * ph - y0s) / vh * H
+            cy1 = (fy1 * ph - y0s) / vh * H
+            if zoom and zoom > 1.01:
+                zx0 = (W * zoom - W) / 2.0
+                zy0 = (H * zoom - H) * max(0.0, min(1.0, focus))
+                cx0, cx1 = cx0 * zoom - zx0, cx1 * zoom - zx0
+                cy0, cy1 = cy0 * zoom - zy0, cy1 * zoom - zy0
+            mx = (cx1 - cx0) * 0.08 + 10
+            my = (cy1 - cy0) * 0.08 + 10
+            cx0, cy0 = max(0.0, cx0 - mx), max(0.0, cy0 - my)
+            cx1, cy1 = min(float(W), cx1 + mx), min(float(H), cy1 + my)
+            if cx1 > cx0 and cy1 > cy0:
+                out.append((cx0, cy0, cx1, cy1))
+        return out
+    except Exception:
+        return []
+
+
+def _skin_faces_canvas(img):
+    """Heurística de piel en vivo: respaldo para fotos fuera del
+    manifest (la subida del cliente). Componentes conexas de piel en
+    una grilla de 90x112; se quedan las compactas con tamaño de cara
+    (ni manchas chicas ni superficies enormes tipo piso de madera)."""
+    if _np is None:
+        return []
+    try:
+        small = img.resize((270, 338))
+        a = _np.asarray(small).astype(_np.int16)
+        R, G, B = a[:, :, 0], a[:, :, 1], a[:, :, 2]
+        skin = (R > 90) & (G > 35) & (B > 18) & ((R - G) > 8) & ((R - B) > 14)
+        skin |= (R > 60) & (G > 28) & (B > 12) & (R >= G) & ((R - B) > 9) & ((R - G) > 3)
+        m = skin[:336, :270].reshape(112, 3, 90, 3).mean(axis=(1, 3)) >= 0.5
+        seen = _np.zeros(m.shape, dtype=bool)
+        boxes = []
+        for gy in range(112):
+            for gx in range(90):
+                if not m[gy, gx] or seen[gy, gx]:
+                    continue
+                q = _deque([(gy, gx)])
+                seen[gy, gx] = True
+                cells = []
+                while q:
+                    cy, cx = q.popleft()
+                    cells.append((cy, cx))
+                    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        ny, nx = cy + dy, cx + dx
+                        if 0 <= ny < 112 and 0 <= nx < 90 and m[ny, nx] and not seen[ny, nx]:
+                            seen[ny, nx] = True
+                            q.append((ny, nx))
+                area = len(cells)
+                if area < 22:
+                    continue
+                ys = [c[0] for c in cells]
+                xs = [c[1] for c in cells]
+                bw = max(xs) - min(xs) + 1
+                bh = max(ys) - min(ys) + 1
+                if bw < 3 or bh < 3:
+                    continue
+                # Filtros de CARA (calibrados contra el stock: la piel
+                # suelta — mármol crema, madera, paredes cálidas, brazos
+                # — forma manchas enormes, estiradas o bajas; una cara
+                # es compacta, de tamaño acotado y vive en la mitad
+                # superior del encuadre típico de retrato/servicio).
+                wf = bw * 12.0 / W
+                hf = bh * 12.05 / H
+                if wf < 0.07 or wf > 0.42 or hf < 0.06 or hf > 0.40:
+                    continue
+                if (min(ys) + max(ys)) / 2.0 * 12.05 / H > 0.72:
+                    continue
+                asp = bw / float(bh)
+                if asp < 0.5 or asp > 1.9:
+                    continue
+                if area < 0.5 * bw * bh:
+                    continue
+                sx = W / 90.0
+                sy = H / 112.0
+                boxes.append((min(xs) * sx - 12, min(ys) * sy - 12,
+                              (max(xs) + 1) * sx + 12, (max(ys) + 1) * sy + 12))
+        return boxes
+    except Exception:
+        return []
+
+
+def _detail_grid(img):
+    """Mapa de textura 0..1 en celdas de ~12 px (90x112): energía de
+    bordes normalizada — 0 = superficie plana, 1 = muy cargada."""
+    if _np is None:
+        return None
+    try:
+        a = _np.asarray(img.resize((270, 338)).convert("L")).astype(_np.float32) / 255.0
+        g = _np.zeros_like(a)
+        g[:, :-1] += _np.abs(_np.diff(a, axis=1))
+        g[:-1, :] += _np.abs(_np.diff(a, axis=0))
+        cells = g[:336, :270].reshape(112, 3, 90, 3).mean(axis=(1, 3))
+        return _np.clip(cells / 0.16, 0.0, 1.0)
+    except Exception:
+        return None
+
+
+def _rect_busy(grid, rect):
+    """Ocupación de un rect del lienzo: mezcla de fracción de celdas con
+    textura fuerte y energía media."""
+    if grid is None:
+        return 0.0
+    x0, y0, x1, y1 = rect
+    cx0 = max(0, int(x0 / 12))
+    cx1 = min(90, int(x1 / 12) + 1)
+    cy0 = max(0, int(y0 / 12.05))
+    cy1 = min(112, int(y1 / 12.05) + 1)
+    if cx1 <= cx0 or cy1 <= cy0:
+        return 0.0
+    sub = grid[cy0:cy1, cx0:cx1]
+    return float(0.65 * (sub > 0.45).mean() + 0.35 * sub.mean())
+
+
+def _rect_hits_face(faces, rect):
+    x0, y0, x1, y1 = rect
+    for (fx0, fy0, fx1, fy1) in faces:
+        if fx0 < x1 and fx1 > x0 and fy0 < y1 and fy1 > y0:
+            return True
+    return False
+
+
+def analyze_photo(img, p, zoom_override=None):
+    """Análisis completo de la foto YA compuesta en el lienzo:
+    'faces' = caras del manifest (prohibición DURA: el texto jamás va
+    ahí); 'soft' = objeto héroe del manifest + manchas de piel de la
+    heurística en vivo (señal BLANDA: mueve el bloque si la otra banda
+    está libre y fuerza scrim si el bloque queda encima — la heurística
+    sola no puede distinguir una cara de un sillón beige, por eso no
+    prohíbe en duro); 'all' = la unión. Más el mapa de detalle."""
+    tr = p.get("treatment") or {}
+    focus = float(p.get("focus", 0.5) or 0.5)
+    zoom = zoom_override if zoom_override is not None else (1.28 if tr.get("crop") == "tight" else 1.0)
+    faces = _manifest_faces_canvas(p.get("photo"), focus, zoom, "faces")
+    soft = _manifest_faces_canvas(p.get("photo"), focus, zoom, "hero")
+    soft += _skin_faces_canvas(img)
+    return {"grid": _detail_grid(img), "faces": faces, "soft": soft, "all": faces + soft}
+
+
+def text_rects(total):
+    """Rectángulos que ocuparía el bloque de texto en cada banda."""
+    rb = (40, (H - 110) - total, W - 40, H - 96)
+    rt = (40, 132, W - 40, 164 + total)
+    return rb, rt
+
+
+def _rect_soft_ratio(soft, rect):
+    """Mayor fracción del rect cubierta por UNA caja blanda (héroe o
+    piel): 0 = libre, 1 = la caja se come todo el bloque."""
+    x0, y0, x1, y1 = rect
+    area = max(1.0, (x1 - x0) * (y1 - y0))
+    best = 0.0
+    for (fx0, fy0, fx1, fy1) in soft:
+        ix = max(0.0, min(x1, fx1) - max(x0, fx0))
+        iy = max(0.0, min(y1, fy1) - max(y0, fy0))
+        if ix > 0 and iy > 0:
+            best = max(best, (ix * iy) / area)
+    return best
+
+
+def choose_text_zone(an, total, prefer):
+    """Decide la zona del bloque → (zona, busy, protect).
+    Cara del manifest en la banda = prohibida (duro). Señal blanda
+    (héroe o piel) en la banda preferida = se mueve a la otra si está
+    libre; si la elegida conserva una señal blanda encima, protect=True
+    (scrim localizado fuerte). Banda muy cargada = la otra si está
+    tranquila. Extremo en la elegida = panel editorial."""
+    rb, rt = text_rects(total)
+    rects = {"bottom": rb, "top": rt}
+    busy = {z: _rect_busy(an["grid"], r) for z, r in rects.items()}
+    hard = {z: _rect_hits_face(an["faces"], r) for z, r in rects.items()}
+    sratio = {z: _rect_soft_ratio(an["soft"], r) for z, r in rects.items()}
+    other = "top" if prefer == "bottom" else "bottom"
+    if hard[prefer] and hard[other]:
+        return "panel", busy[prefer], True
+    if hard[prefer]:
+        return other, busy[other], sratio[other] > 0.10
+    z = prefer
+    # Señal blanda fuerte en la preferida y claramente menor en la otra
+    # (el pote de la foto de agenda: 36% del bloque arriba, 10% abajo):
+    # el bloque se muda aunque la otra banda también roce la señal.
+    if sratio[z] > 0.22 and not hard[other] and sratio[other] < sratio[z] * 0.6:
+        z = other
+    if busy[z] > ZONE_FLIP and not hard[other] and busy[other] < busy[z] * 0.62:
+        z = other
+    if busy[z] > ZONE_PANEL:
+        if not hard[other] and busy[other] <= busy[z]:
+            z = other
+        if busy[z] > ZONE_PANEL:
+            return "panel", busy[z], True
+    return z, busy[z], sratio[z] > 0.10
+
+
+def local_scrim(img, rect, rgb, alpha):
+    """Velo localizado y difuminado detrás del bloque: el texto gana una
+    superficie calma sin tapar el resto de la foto."""
+    x0, y0, x1, y1 = [int(v) for v in rect]
+    x0 = max(0, x0 - 26)
+    y0 = max(0, y0 - 24)
+    x1 = min(W, x1 + 26)
+    y1 = min(H, y1 + 24)
+    mask = Image.new("L", (x1 - x0, y1 - y0), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, x1 - x0, y1 - y0], radius=30, fill=int(alpha))
+    mask = mask.filter(ImageFilter.GaussianBlur(16))
+    img.paste(Image.new("RGB", (x1 - x0, y1 - y0), rgb), (x0, y0), mask)
+    return img
+
+
+def white_fade_top(img):
+    """Espejo vertical de white_fade (para el esqueleto claro cuando el
+    bloque va arriba)."""
+    return white_fade(img.transpose(Image.FLIP_TOP_BOTTOM), 0.52, 0.86).transpose(Image.FLIP_TOP_BOTTOM)
+
+
+def _sk_panel(fonts_dir, p, C, hs, base, lay):
+    """Panel editorial (última ratio de la regla): foto arriba y panel
+    pleno de la paleta del cliente abajo con el bloque completo. El
+    texto jamás pisa el sujeto porque no hay foto detrás."""
+    total = lay["total"]
+    panel_h = total + 150
+    photo_h = H - panel_h
+    dark = _lum(C["poster_bg"]) < 0.5
+    img = Image.new("RGB", (W, H), C["poster_bg"] if dark else WHITE)
+    img.paste(base.crop((0, 0, W, photo_h)), (0, 0))
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    y = block_draw(d, fonts_dir, p, C, lay, photo_h + 36, dark)
+    draw_footer(d, fonts_dir, p, dark)
+    return img, y
+
+
+def _sk_photo_block(fonts_dir, p, C, hs, prefer, kind):
+    """Gramática foto+bloque con ZONAS SEGURAS (v209). kind: 'abajo' |
+    'arriba' (degradé según la luz de la zona elegida), 'velo' (navy
+    fuerte, siempre oscuro), 'claro' (fundido a blanco, siempre claro).
+    La zona preferida es la identidad del esqueleto; la regla de zonas
+    puede mover el bloque a la otra banda o al panel editorial."""
+    img = _v2_base(fonts_dir, p, C)
+    if kind == "velo":
+        img = ImageEnhance.Brightness(img).enhance(0.94)
+    probe = ImageDraw.Draw(img)
+    lay = block_layout(probe, fonts_dir, p, hs)
+    an = analyze_photo(img, p)
+    zone, busy, protect = choose_text_zone(an, lay["total"], prefer)
+    _LAST_ZONE.update(zone=zone, busy=round(busy, 2))
+    if zone == "panel":
+        return _sk_panel(fonts_dir, p, C, hs, img, lay)
+    rb, rt = text_rects(lay["total"])
+    rect = rb if zone == "bottom" else rt
+    if kind == "velo":
+        dark = True
+    elif kind == "claro":
+        dark = False
+    elif zone == "bottom":
+        dark = band_lum(img, 0.55, 1.0) < 165
+    else:
+        dark = band_lum(img, 0.0, 0.45) < 165
+    if kind == "claro":
+        img = white_fade(img, fade_start=0.52, fade_end=0.86) if zone == "bottom" else white_fade_top(img)
+    elif zone == "bottom":
+        a_max = 236 if kind == "velo" else (218 if dark else 228)
+        y0f, y1f = (0.30, 0.96) if kind == "velo" else (0.48, 0.94)
+        img = grad_scrim(img, NAVY if dark else WHITE, y0f, y1f, a_max)
+    else:
+        a_max = 236 if kind == "velo" else (218 if dark else 228)
+        y1f = 0.70 if kind == "velo" else 0.52
+        img = grad_scrim(img, NAVY if dark else WHITE, 0.0, y1f, a_max, from_top=True)
+    if protect:
+        img = local_scrim(img, rect, NAVY if dark else WHITE, 225)
+    elif busy > ZONE_SCRIM:
+        img = local_scrim(img, rect, NAVY if dark else WHITE, int(min(235, 100 + busy * 190)))
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    aov = C["btn"] if kind == "velo" else None
+    if zone == "bottom":
+        y = block_draw(d, fonts_dir, p, C, lay, (H - 110) - lay["total"], dark, accent_override=aov)
+        draw_footer(d, fonts_dir, p, dark)
+    else:
+        y = block_draw(d, fonts_dir, p, C, lay, 150, dark, accent_override=aov)
+        draw_footer(d, fonts_dir, p, band_lum(img, 0.8, 1.0) < 150)
+    return img, y
+
+
+def _sk_clean(fonts_dir, p, C, skel):
+    """(v209) Pieza LIMPIA de la dosificación: la foto sale sin titular,
+    sin pill y sin scrims de texto — solo el grado del tratamiento (y el
+    split del dúo, que es lenguaje visual, sin chips ni bloque)."""
+    if skel == "duo":
+        tr = p.get("treatment") or {}
+        focus = float(p.get("focus", 0.5) or 0.5)
+        base = load_photo_v2(p["photo"], focus, 1.0)
+        base = apply_grade(base, tr.get("grade") or "neutral")
+        left = ImageEnhance.Color(base.crop((0, 0, W // 2, H))).enhance(0.22)
+        left = ImageEnhance.Brightness(left).enhance(0.94)
+        right = ImageEnhance.Color(base.crop((W // 2, 0, W, H))).enhance(1.14)
+        img = Image.new("RGB", (W, H))
+        img.paste(left, (0, 0))
+        img.paste(right, (W // 2, 0))
+        ImageDraw.Draw(img).rectangle([W // 2 - 3, 0, W // 2 + 3, H], fill=(255, 255, 255))
+        return img
+    return _v2_base(fonts_dir, p, C)
+
+
 def _v2_base(fonts_dir, p, C):
     tr = p.get("treatment") or {}
     focus = float(p.get("focus", 0.5) or 0.5)
@@ -970,61 +1302,28 @@ def _v2_base(fonts_dir, p, C):
 
 
 def sk_abajo(fonts_dir, p, C, hs):
-    """Degradé inferior (navy o blanco según la luz de la zona) + bloque abajo."""
-    img = _v2_base(fonts_dir, p, C)
-    dark = band_lum(img, 0.55, 1.0) < 165
-    img = grad_scrim(img, NAVY if dark else WHITE, 0.48, 0.94, 218 if dark else 228)
-    d = ImageDraw.Draw(img)
-    if p.get("pill"):
-        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    lay = block_layout(d, fonts_dir, p, hs)
-    y = (H - 110) - lay["total"]
-    y = block_draw(d, fonts_dir, p, C, lay, y, dark)
-    draw_footer(d, fonts_dir, p, dark)
-    return img, y
+    """Degradé inferior (navy o blanco según la luz de la zona) + bloque
+    abajo — con zonas seguras v209: el bloque puede subir o ir al panel
+    si abajo hay una cara o detalle extremo."""
+    return _sk_photo_block(fonts_dir, p, C, hs, "bottom", "abajo")
 
 
 def sk_arriba(fonts_dir, p, C, hs):
-    """Degradé superior + bloque arriba: la foto respira abajo."""
-    img = _v2_base(fonts_dir, p, C)
-    dark = band_lum(img, 0.0, 0.45) < 165
-    img = grad_scrim(img, NAVY if dark else WHITE, 0.0, 0.52, 218 if dark else 228, from_top=True)
-    d = ImageDraw.Draw(img)
-    if p.get("pill"):
-        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    lay = block_layout(d, fonts_dir, p, hs)
-    y = block_draw(d, fonts_dir, p, C, lay, 150, dark)
-    draw_footer(d, fonts_dir, p, band_lum(img, 0.8, 1.0) < 150)
-    return img, y
+    """Degradé superior + bloque arriba: la foto respira abajo — con
+    zonas seguras v209 (puede bajar o ir al panel si arriba hay cara)."""
+    return _sk_photo_block(fonts_dir, p, C, hs, "top", "arriba")
 
 
 def sk_velo(fonts_dir, p, C, hs):
-    """Cine/nocturno: foto levemente oscurecida + velo navy fuerte abajo."""
-    img = _v2_base(fonts_dir, p, C)
-    img = ImageEnhance.Brightness(img).enhance(0.94)
-    img = grad_scrim(img, NAVY, 0.30, 0.96, 236)
-    d = ImageDraw.Draw(img)
-    if p.get("pill"):
-        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    lay = block_layout(d, fonts_dir, p, hs)
-    y = (H - 110) - lay["total"]
-    y = block_draw(d, fonts_dir, p, C, lay, y, True, accent_override=C["btn"])
-    draw_footer(d, fonts_dir, p, True)
-    return img, y
+    """Cine/nocturno: foto levemente oscurecida + velo navy fuerte —
+    zona segura v209 (el velo sigue al bloque si este se mueve)."""
+    return _sk_photo_block(fonts_dir, p, C, hs, "bottom", "velo")
 
 
 def sk_claro(fonts_dir, p, C, hs):
-    """Editorial luminoso: fundido a blanco tardío (la foto manda hasta el 52%)."""
-    img = _v2_base(fonts_dir, p, C)
-    img = white_fade(img, fade_start=0.52, fade_end=0.86)
-    d = ImageDraw.Draw(img)
-    if p.get("pill"):
-        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    lay = block_layout(d, fonts_dir, p, hs)
-    y = (H - 110) - lay["total"]
-    y = block_draw(d, fonts_dir, p, C, lay, y, False)
-    draw_footer(d, fonts_dir, p, False)
-    return img, y
+    """Editorial luminoso: fundido a blanco tardío (la foto manda hasta
+    el 52%) — zona segura v209 (el fundido se espeja si el bloque sube)."""
+    return _sk_photo_block(fonts_dir, p, C, hs, "bottom", "claro")
 
 
 def sk_centro(fonts_dir, p, C, hs):
@@ -1035,9 +1334,21 @@ def sk_centro(fonts_dir, p, C, hs):
     lay = block_layout(probe, fonts_dir, p, hs)
     panel_h = lay["total"] + 72
     cy0 = (H - panel_h) // 2 + 24
+    # (v209) El panel central tampoco pisa caras: si una cae dentro del
+    # panel, la pieza pasa al panel editorial inferior; si la zona es
+    # muy cargada, el panel se opaca más para no pelear con la foto.
+    _an = analyze_photo(img, p)
+    _prect = (80, cy0, W - 80, cy0 + panel_h)
+    if _rect_hits_face(_an["faces"], _prect):
+        _LAST_ZONE.update(zone="panel", busy=1.0)
+        return _sk_panel(fonts_dir, p, C, hs, img, lay)
+    _palpha = 168 if dark else 208
+    if _rect_busy(_an["grid"], _prect) > 0.5 or _rect_hits_face(_an["all"], _prect):
+        _palpha = 238
+    _LAST_ZONE.update(zone="centro", busy=round(_rect_busy(_an["grid"], _prect), 2))
     panel = Image.new("RGB", (W - 160, panel_h), NAVY if dark else WHITE)
     mask = Image.new("L", (W - 160, panel_h), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 160, panel_h], radius=36, fill=168 if dark else 208)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 160, panel_h], radius=36, fill=_palpha)
     img.paste(panel, (80, cy0), mask)
     d = ImageDraw.Draw(img)
     if p.get("pill"):
@@ -1070,6 +1381,15 @@ def sk_duo(fonts_dir, p, C, hs):
         d.rounded_rectangle([xa, 56, xa + wch, 56 + 62], radius=31, fill=fill)
         ltext(d, xa + 22, 56 + 15, label, fchip, fill=tcol, tracking=4)
     lay = block_layout(d, fonts_dir, p, hs)
+    # (v209) Si el bloque inferior del dúo cae sobre una cara o una zona
+    # muy cargada del split, scrim localizado sólido detrás del bloque.
+    _an = analyze_photo(img, p, zoom_override=1.0)
+    _rb, _rt = text_rects(lay["total"])
+    _busy_duo = _rect_busy(_an["grid"], _rb)
+    _LAST_ZONE.update(zone="duo", busy=round(_busy_duo, 2))
+    if _rect_hits_face(_an["all"], _rb) or _busy_duo > 0.55:
+        img = local_scrim(img, _rb, NAVY, 235)
+        d = ImageDraw.Draw(img)
     y = (H - 110) - lay["total"]
     y = block_draw(d, fonts_dir, p, C, lay, y, True)
     draw_footer(d, fonts_dir, p, True)
@@ -1173,7 +1493,6 @@ def sk_poster(fonts_dir, p, C, hs):
         y = ctext(d, cx, y, ln, f2, sub_col)
         y += 12
     y += 34
-    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=True)
     draw_footer(d, fonts_dir, p, dark_bg)
     return img, y
 
@@ -1191,7 +1510,16 @@ SKELETONS_V2 = {
 
 def render_v2(fonts_dir, p, C, hs):
     tr = p.get("treatment") or {}
-    fn = SKELETONS_V2.get(str(tr.get("skeleton") or "abajo"), sk_abajo)
+    skel = str(tr.get("skeleton") or "abajo")
+    fn = SKELETONS_V2.get(skel, sk_abajo)
+    # (v209) Pieza LIMPIA de la dosificación (sin titular y sin pill en
+    # el spec de render): la foto sale limpia — sin bloque, sin scrims
+    # de texto, solo el grado del tratamiento. El póster es tipográfico
+    # por definición: nunca va por esta vía.
+    if skel != "poster" and not str(p.get("headline") or "").strip() \
+            and not str(p.get("pill") or "").strip():
+        _LAST_ZONE.update(zone="clean", busy=0.0)
+        return _sk_clean(fonts_dir, p, C, skel), H
     return fn(fonts_dir, p, C, hs)
 
 
@@ -1213,6 +1541,7 @@ def main():
         # reales del catálogo); si no, los estilos legacy de siempre.
         fn = render_v2 if p.get("treatment") else STYLES.get(str(p.get("style") or "promo"), style_promo)
         bottom, img = None, None
+        _LAST_ZONE.update(zone="", busy=0.0)
         for hs in (150, 130, 112, 96):
             # re-render limpio en cada intento
             img, bottom = fn(fonts_dir, p, C, hs)
@@ -1226,7 +1555,7 @@ def main():
         if img.mode != "RGB":
             img = img.convert("RGB")
         img.save(out, quality=90)
-        print("post-%d OK style=%s bottom=%d" % (int(spec.get("index_offset", 0)) + i, p.get("style", "promo"), bottom))
+        print("post-%d OK style=%s bottom=%d zone=%s busy=%s" % (int(spec.get("index_offset", 0)) + i, p.get("style", "promo"), bottom, _LAST_ZONE.get("zone") or "-", _LAST_ZONE.get("busy", 0)))
 
     print("DONE %d" % len(spec["posts"]))
 

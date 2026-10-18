@@ -38,7 +38,7 @@ const TU_MAP = [
   ['Guardá este post para la próxima salida 🔖', 'Guarda este post para la próxima salida 🔖'],
   ['Guardá estas ideas 🔖', 'Guarda estas ideas 🔖'],
   ['Guardá esta guía 🔖', 'Guarda esta guía 🔖'],
-  ['Guardá este post y vení que lo arreglamos 💇', 'Guarda este post y ven que lo arreglamos 💇'],
+  ['Guardá este post 💇', 'Guarda este post 💇'],
   ['Guardá este post y entrená mejor 🔖', 'Guarda este post y entrena mejor 🔖'],
   ['Etiquetá a quien lo necesita 🙋', 'Etiqueta a quien lo necesita 🙋'],
   ['Reservá tu turno de esta semana', 'Reserva tu turno de esta semana'],
@@ -56,7 +56,6 @@ const TU_MAP = [
   ['Reservá tu cita por DM 📩', 'Reserva tu cita por DM 📩'],
   ['Reservá su turno de pelu por DM 📩', 'Reserva su turno de pelu por DM 📩'],
   ['Reservá el suyo por DM 📩', 'Reserva el suyo por DM 📩'],
-  ['Reservá tu visita técnica 🔧', 'Reserva tu visita técnica 🔧'],
   ['Reservá tu visita por DM 📩', 'Reserva tu visita por DM 📩'],
   ['Reservá tu sesión', 'Reserva tu sesión'],
   ['Reservalo antes de que se llene', 'Reserva tu lugar antes de que se llene'],
@@ -87,7 +86,7 @@ const TU_MAP = [
   ['qué birra va con vos', 'qué birra va contigo'],
   ['Qué birra va con vos 🍺', 'Qué birra va contigo 🍺'],
   ['Pedilo por DM 📩', 'Pídelo por DM 📩'],
-  ['Pedilo por DM o pasá a probarlo 📩', 'Pídelo por DM o pasa a probarlo 📩'],
+  ['Pedilo por DM 📩', 'Pídelo por DM 📩'],
   ['Pedilos por DM 📩', 'Pídelos por DM 📩'],
   ['Pedilas por DM 📩', 'Pídelas por DM 📩'],
   ['Pedila por DM 📩', 'Pídela por DM 📩'],
@@ -236,6 +235,16 @@ function demoHashtags(category, country, tone) {
 // nunca una etiqueta genérica como "PROMO SEMANAL") · subline: beneficio concreto
 // (neutro, sin voseo) · cta: texto del botón
 // caption: hook + 1 idea + CTA concreto. {BIZ} = nombre del negocio.
+// REGLAS DE PIEZA (v209, órdenes duras de Valentino 2026-10-18):
+// 1) UNA IDEA POR PIEZA: un tema, una promo, UN CTA por posteo — nada de
+//    dos llamados a la acción ni dos ideas conviviendo en la misma pieza.
+// 2) TITULARES DE 6 PALABRAS O MENOS, siempre ("Agenda abierta: reservá
+//    tu fecha" = 5 ya es el límite deseable). El catálogo cumple y
+//    capHeadlineWords lo garantiza en el armado (demo.js).
+// 3) DOSIFICACIÓN DE TEXTO: solo 2 de las 5 piezas de la semana llevan
+//    titular+CTA quemados sobre la imagen; las demás salen con la foto
+//    limpia y su idea + CTA viven en el caption, que CIERRA con el CTA
+//    (assignTextModes + ensureCaptionCtaClose, verificados por tests).
 // Reglas: sin muletillas quemadas (ver BANNED_PHRASES en generator.js), sin %
 // inventados (el % solo si el número está en tag/headline/subline), sin ganchos
 // de escasez, sin promesas logísticas, sin claims de salud, sin precios.
@@ -248,7 +257,7 @@ const DEMO_TOPICS = {
     { kind: 'promo', tag: 'OUTLET', photo: 'fashion-2', headline: 'Outlet: hasta 50% off',
       subline: 'Remeras, jeans y camperas de temporada pasada.', cta: 'Ver selección',
       caption: 'Hasta 50% off en el outlet 👇\n\nRemeras, jeans y camperas de la temporada pasada a mitad de precio. Cuando se termina, se termina.\n\nComentá INFO y te pasamos la lista con talles 👇' },
-    { kind: 'tip', tag: 'TIP', photo: 'fashion-3', headline: '3 formas de usar la misma campera',
+    { kind: 'tip', tag: 'TIP', photo: 'fashion-3', headline: '3 formas de usar tu campera',
       subline: 'Un básico, tres looks distintos.', cta: 'Ver los looks',
       caption: 'Una campera, tres looks 👇\n\n1. Abierta sobre remera básica. 2. Cerrada con jean oscuro. 3. Sobre un vestido para la noche.\n\nGuardá este post para tu próximo outfit 🔖' },
     { kind: 'sorteo', tag: 'SORTEO', photo: 'fashion', headline: 'Sorteo: look completo de regalo',
@@ -262,7 +271,7 @@ const DEMO_TOPICS = {
       caption: '2x1 en remeras básicas 👇\n\nBlanca, negra y gris: las tres que combinan con todo. Llevate dos, pagá uno.\n\nPedilo por DM 📩' },
   ],
   gastronomia: [
-    { kind: 'social', tag: 'EL FAVORITO', photo: 'food-5', photoCafe: 'food-1', headline: 'La milanesa que piden todos los viernes',
+    { kind: 'social', tag: 'EL FAVORITO', photo: 'food-5', photoCafe: 'food-1', headline: 'La milanesa que piden los viernes',
       subline: 'A caballo, con fritas: la de siempre.', cta: 'La quiero probar',
       caption: 'Los viernes se pide milanesa 🔥\n\nA caballo, con fritas bien crocantes: la que nunca falla en {BIZ}.\n\nPasá por el local hoy' },
     { kind: 'promo', tag: '2X1', photo: 'food-6', photoCafe: 'food-2', headline: '2x1 en pizzas todos los miércoles',
@@ -273,7 +282,7 @@ const DEMO_TOPICS = {
       caption: 'Esta noche se come afuera 🍽️\n\nEn {BIZ} quedan mesas para las 21. Vení directo o asegurá la tuya.\n\nReservá por DM 📩' },
     { kind: 'novedad', tag: 'NUEVO', photo: 'food-3', photoCafe: 'food', headline: 'Nuevo: risotto de hongos',
       subline: 'Cremoso, con parmesano de verdad.', cta: 'Lo quiero probar',
-      caption: 'Nuevo en la carta: risotto de hongos 🍄\n\nCremoso, con parmesano de verdad y un toque de vino blanco.\n\nPedilo por DM o pasá a probarlo 📩' },
+      caption: 'Nuevo en la carta: risotto de hongos 🍄\n\nCremoso, con parmesano de verdad y un toque de vino blanco.\n\nPedilo por DM 📩' },
     { kind: 'tip', tag: 'TIP', photo: 'food', headline: 'Qué pedir si venís con chicos',
       subline: 'Platos que les gustan y salen rápido.', cta: 'Ver la guía',
       caption: 'Venís con chicos? Pedí esto 👇\n\n1. Milanesitas con fritas. 2. Ñoquis con manteca. 3. Helado de postre, obvio.\n\nGuardá este post para la próxima salida 🔖' },
@@ -290,11 +299,11 @@ const DEMO_TOPICS = {
       caption: 'Esta semana quedan turnos jueves y viernes 💇\n\nCorte, color o peinado: elegí tu horario antes de que se ocupen.\n\nReservá tu turno por DM 📩' },
     { kind: 'tip', tag: 'TIP', tema: 'pelo', photo: 'beauty-7', headline: '3 errores al teñirte en casa',
       subline: 'Y cómo los arreglamos nosotras.', cta: 'Ver cuáles son',
-      caption: 'Teñirse en casa: 3 errores típicos 👇\n\n1. Elegir el tono por la caja. 2. Dejarlo de más "por las dudas". 3. Saltarse el matizador.\n\nGuardá este post y vení que lo arreglamos 💇' },
+      caption: 'Teñirse en casa: 3 errores típicos 👇\n\n1. Elegir el tono por la caja. 2. Dejarlo de más "por las dudas". 3. Saltarse el matizador.\n\nGuardá este post 💇' },
     { kind: 'promo', tag: 'COMBO', tema: 'pelo', photo: 'beauty-2', headline: 'Combo corte + color',
       subline: 'Vení con una amiga y ahorran las dos.', cta: 'Lo quiero',
       caption: 'Combo corte + color 💇\n\nVení con una amiga: se atienden juntas y ahorran las dos.\n\nEscribinos por DM 📩' },
-    { kind: 'social', tag: 'ANTES/DESPUÉS', tema: 'pelo', photo: 'beauty-9', headline: 'De castaño a rubio en un día',
+    { kind: 'social', tag: 'ANTES/DESPUÉS', tema: 'pelo', photo: 'beauty-9', headline: 'De castaño a rubio hoy',
       subline: 'Sin dañar el pelo: así trabajamos.', cta: 'Quiero mi cambio',
       caption: 'De castaño apagado a rubio luminoso ✨\n\nUn día de trabajo, cero daño: así sale el color en {BIZ}.\n\nPedí tu diagnóstico por DM 📩' },
     { kind: 'sorteo', tag: 'SORTEO', tema: 'skincare', photo: 'beauty-3', headline: 'Sorteo: día de spa',
@@ -313,7 +322,7 @@ const DEMO_TOPICS = {
       caption: 'Agenda de makeup abierta 💄\n\nEventos, cumples y producciones: los fines de semana se ocupan primero.\n\nReservá tu fecha por DM 📩' },
     { kind: 'tip', tag: 'TIP', tema: 'makeup', photo: 'beauty-3', headline: '3 errores que arruinan tu makeup',
       subline: 'Y cómo los evitamos en cada producción.', cta: 'Ver cuáles son',
-      caption: '3 errores que arruinan un makeup 👇\n\n1. No preparar la piel. 2. Base más oscura que tu tono. 3. No sellar al final.\n\nGuardá este post y llevá tu makeup a otro nivel 💄' },
+      caption: '3 errores que arruinan un makeup 👇\n\n1. No preparar la piel. 2. Base más oscura que tu tono. 3. No sellar al final.\n\nGuardá este post 💄' },
     { kind: 'promo', tag: 'NOVIAS', tema: 'makeup', photo: 'beauty-5', headline: 'Novias: tu prueba va incluida',
       subline: 'Probamos el look completo antes del gran día.', cta: 'Quiero mi prueba',
       caption: 'Novias: la prueba va incluida 👰\n\nEn {BIZ} probamos tu makeup completo antes del gran día, sin sorpresas.\n\nPedí tu fecha por DM 📩' },
@@ -382,7 +391,7 @@ const DEMO_TOPICS = {
       caption: '10 años cuidando sonrisas ✨\n\nGracias a cada paciente que confía en {BIZ}.\n\nPedí tu primera consulta por DM 📩' },
     { kind: 'tip', tag: 'TIP', photo: 'lifestyle', headline: 'Cuándo pedir turno sin dudar',
       subline: 'Señales que no hay que ignorar.', cta: 'Ver la guía',
-      caption: 'No esperes si notás esto 👇\n\nDolor al masticar, sangrado o sensibilidad que no se va: pedí turno.\n\nReservá por DM 📩' },
+      caption: 'No esperes si notás esto 👇\n\nDolor al masticar, sangrado o sensibilidad que no se va: es señal de turno.\n\nReservá por DM 📩' },
   ],
   hogar: [
     { kind: 'novedad', tag: 'NUEVO', photo: 'home-2', headline: 'Ahora también hacemos plomería',
@@ -431,7 +440,7 @@ const DEMO_TOPICS = {
     { kind: 'promo', tag: 'SERVICE', photo: 'office-1', headline: 'Service completo esta semana',
       subline: 'Aceite, filtros y 20 puntos de control.', cta: 'Reservar service',
       caption: 'Service completo: 20 puntos de control 🚗\n\nAceite, filtros y revisión general en el día.\n\nReservá tu lugar por DM 📩' },
-    { kind: 'tip', tag: 'TIP', photo: 'office', headline: '3 ruidos que no hay que ignorar',
+    { kind: 'tip', tag: 'TIP', photo: 'office', headline: '3 ruidos para no ignorar',
       subline: 'Tu auto te avisa antes.', cta: 'Ver los tips',
       caption: 'Tu auto te avisa: escuchalo 👇\n\n1. Chillido al frenar. 2. Golpe al doblar. 3. Zumbido a velocidad.\n\nGuardá este post 🔖' },
     { kind: 'promo', tag: 'CUOTAS', photo: 'lifestyle-4', headline: 'Estrenalo en cuotas',
@@ -517,7 +526,7 @@ const DEMO_TOPICS = {
     { kind: 'tip', tag: 'TIP', photo: 'tech-1', headline: '3 ajustes que alargan la batería',
       subline: 'Hacelos en 2 minutos.', cta: 'Ver los trucos',
       caption: 'Tu batería dura más así 👇\n\n1. Brillo automático. 2. Cerrar apps en segundo plano. 3. Modo ahorro a la noche.\n\nGuardá este post 🔖' },
-    { kind: 'promo', tag: 'TRADE-IN', photo: 'tech-3', headline: 'Traé tu usado y llevate el nuevo',
+    { kind: 'promo', tag: 'TRADE-IN', photo: 'tech-3', headline: 'Traé tu usado, llevate el nuevo',
       subline: 'Te lo tomamos en parte de pago.', cta: 'Consultar',
       caption: 'Tu usado vale más acá 📱\n\nEn {BIZ} te lo tomamos en parte de pago por el nuevo.\n\nComentá INFO y te cotizamos 👇' },
     { kind: 'social', tag: 'REVIEW', photo: 'office', headline: 'Lo probamos una semana',
@@ -574,7 +583,7 @@ const DEMO_TOPICS = {
     { kind: 'reserva', tag: 'SESIÓN', photo: 'fashion-1', headline: 'Fechas de octubre abiertas',
       subline: 'Fines de semana disponibles.', cta: 'Reservar fecha',
       caption: 'Fechas de octubre abiertas 📸\n\nFines de semana disponibles en {BIZ}.\n\nReservá la tuya por DM 📩' },
-    { kind: 'tip', tag: 'TIP', photo: 'fashion-3', headline: '3 tips para salir bien en fotos',
+    { kind: 'tip', tag: 'TIP', photo: 'fashion-3', headline: '3 tips para tus fotos',
       subline: 'Con el celular.', cta: 'Ver los tips',
       caption: 'Salí mejor en tus fotos 👇\n\n1. Luz de frente, nunca de atrás. 2. Mentón levemente abajo. 3. Ropa lisa, sin estampados.\n\nGuardá este post 🔖' },
     { kind: 'social', tag: 'BACKSTAGE', photo: 'lifestyle-3', headline: 'Detrás de cámara',
@@ -616,7 +625,7 @@ const DEMO_TOPICS = {
       caption: 'Carruseles que enganchan 👇\\n\\nEs el formato que más se guarda y se comparte, y así lo armamos en {BIZ}: una idea por placa, gancho en la primera y cierre con llamado a la acción.\\n\\nGuardá este post 🔖' },
     { kind: 'tip', tag: 'HORARIOS', photo: 'office-2', headline: 'Los horarios que más rinden',
       subline: 'Publicar cuando tu gente está.', cta: 'Ver cómo',
-      caption: 'No es lo mismo publicar a cualquier hora 👇\\n\\nCada cuenta tiene sus momentos de mayor actividad, y publicar ahí cambia el alcance. En {BIZ} lo medimos antes de armar el calendario.\\n\\nSeguinos para más tips 📈' },
+      caption: 'No es lo mismo publicar a cualquier hora 👇\n\nCada cuenta tiene sus momentos de mayor actividad, y publicar ahí cambia el alcance. En {BIZ} lo medimos antes de armar el calendario.\n\nSeguinos para más tips 📈' },
     { kind: 'social', tag: 'COMUNIDAD', photo: 'lifestyle-1', headline: 'Comunidad que responde',
       subline: 'Contestar también es vender.', cta: 'Conocernos',
       caption: 'Un comentario sin respuesta es una venta que se enfría 💬\\n\\nEn {BIZ} cuidamos la conversación de cada cuenta: responder rápido y con onda convierte seguidores en clientes.\\n\\nEscribinos por DM 📩' },
@@ -700,7 +709,7 @@ const DEMO_TOPICS = {
     { kind: 'novedad', tag: 'TENDENCIA', tema: 'pelo', photo: 'beauty-5', headline: 'El corte del momento',
       subline: 'Ya lo hacemos acá.', cta: 'Quiero ese corte',
       caption: 'El corte que todos piden 💈\n\nTextura arriba, degradado limpio: ya lo hacemos en {BIZ}.\n\nReservá tu turno 📩' },
-    { kind: 'tip', tag: 'TIP', tema: 'pelo', photo: 'beauty-1', headline: '3 tips para que dure el corte',
+    { kind: 'tip', tag: 'TIP', tema: 'pelo', photo: 'beauty-1', headline: '3 tips para tu corte',
       subline: 'Como recién salido.', cta: 'Ver los tips',
       caption: 'Que tu corte dure más 👇\n\n1. Lavalo día por medio. 2. Cera, no gel. 3. Retoque cada 3 semanas.\n\nGuardá este post 🔖' },
     { kind: 'promo', tag: 'COMBO', tema: 'barberia', photo: 'fashion-5', headline: 'Combo corte + barba',
@@ -725,7 +734,7 @@ const DEMO_TOPICS = {
       caption: 'Mirá el antes y después de hoy ✨\n\nTrabajo real de {BIZ}, terminado esta mañana.\n\nPedí tu presupuesto por DM 📩' },
     { kind: 'reserva', tag: 'VISITA', photo: 'home-4', headline: 'Visita técnica esta semana',
       subline: 'Reservá tu lugar.', cta: 'Reservar',
-      caption: 'Reservá tu visita técnica 🔧\n\nEsta semana en {BIZ}: vamos, miramos y cotizamos.\n\nEscribinos por DM 📩' },
+      caption: 'Visita técnica a domicilio 🔧\n\nEsta semana en {BIZ}: vamos, miramos y cotizamos.\n\nEscribinos por DM 📩' },
     { kind: 'sorteo', tag: 'SORTEO', photo: 'home-5', headline: 'Sorteo: service gratis',
       subline: 'Completo.', cta: 'Quiero participar',
       caption: 'Sorteamos un service completo 🎁\n\nGratis, en {BIZ}.\n\nComentá PARTICIPO y ya estás adentro 👇' },
@@ -765,7 +774,7 @@ const DEMO_TOPICS = {
       caption: 'Tu idea, hecha obra 🎨\n\nEncargos abiertos este mes en {BIZ}.\n\nComentá INFO y lo charlamos 👇' },
     { kind: 'reserva', tag: 'LISTA', photo: 'beauty-5', headline: 'Lista de encargos abierta',
       subline: 'Se llena rápido.', cta: 'Reservar el mío',
-      caption: 'La lista de encargos se llena 🎨\n\nReservá tu lugar de este mes en {BIZ}.\n\nEscribinos por DM 📩' },
+      caption: 'La lista de encargos se llena 🎨\n\nTu lugar de este mes te espera en {BIZ}.\n\nEscribinos por DM 📩' },
     { kind: 'sorteo', tag: 'SORTEO', photo: 'fashion-1', headline: 'Sorteo: obra pequeña',
       subline: 'De regalo.', cta: 'Quiero participar',
       caption: 'Sorteamos una obra 🎁\n\nPieza original de {BIZ}. Participar es gratis.\n\nComentá PARTICIPO y ya estás adentro 👇' },
@@ -804,7 +813,7 @@ const TU_HEADLINES = {
   'Festejá tu cumple acá': 'Festeja tu cumple aquí',
   'Elegí con ayuda experta': 'Elige con ayuda experta',
   'Traé tu usado': 'Trae tu usado',
-  'Traé tu usado y llevate el nuevo': 'Trae tu usado y llévate el nuevo',
+  'Traé tu usado, llevate el nuevo': 'Trae tu usado, llévate el nuevo',
   'Sacale más provecho': 'Sácale más provecho',
   'Evitá gastos grandes': 'Evita gastos grandes',
   'Aprendé más rápido': 'Aprende más rápido',
@@ -894,6 +903,81 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   return { caption, hashtags: demoHashtags(cat, country, tone), topicIndex: idx, ok: true, fallback: true };
 }
 
+// ---------- Reglas de pieza v209: helpers compartidos ----------
+
+// Cap DURO de palabras para titulares (regla 2): nunca más de `max`
+// palabras (default 6). El recorte es por CLÁUSULA: se prefiere la
+// primera cláusula completa que entra (corte en ":", "—", ";", ","),
+// nunca una idea a la mitad; si ninguna cláusula entra, se recorta por
+// palabras descartando las colgadas del final (artículos, preposiciones,
+// conjunciones) para no dejar el titular trunco en una palabra débil.
+const HEADLINE_HANG_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'en', 'a', 'y', 'o', 'con', 'sin', 'por', 'para', 'que', 'tu', 'su', 'al', 'más']);
+function capHeadlineWords(headline, max = 6) {
+  const h = String(headline || '').replace(/\s+/g, ' ').trim();
+  if (!h) return h;
+  const words = h.split(' ');
+  if (words.length <= max) return h;
+  const clauses = h.split(/\s*[:;—]\s*|\s+-\s+/).map((s) => s.trim()).filter(Boolean);
+  for (const c of clauses) {
+    const cw = c.split(' ');
+    if (cw.length >= 2 && cw.length <= max) return c.replace(/[.,;:]+$/, '');
+  }
+  let kept = words.slice(0, max);
+  while (kept.length > 2 && HEADLINE_HANG_WORDS.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!¡?¿]+$/, ''))) kept.pop();
+  return kept.join(' ').replace(/[.,;:]+$/, '');
+}
+
+// Dosificación de texto (regla 3 de la enmienda): en una semana de 5,
+// exactamente 2 piezas llevan el texto quemado sobre la imagen — las que
+// el tema lo pide (promo, turnos/reserva, sorteo, tip fuerte) — y las
+// demás salen con la FOTO LIMPIA. El reel es elegible con preferencia en
+// los empates (su portada puede llevar el gancho) pero cuenta dentro de
+// las 2: el conteo verificable es 2 con texto / 3 limpias sobre 5.
+// Devuelve un array paralelo a topics con 'text' | 'clean'.
+const TEXT_KIND_RANK = { promo: 0, reserva: 1, sorteo: 2, tip: 3, novedad: 4, social: 5 };
+function assignTextModes(topics, videoIdx = -1, textCount = 2) {
+  // Los 2 textos se eligen ENTRE LOS POSTEOS IMAGEN: el slot del reel
+  // queda fuera de la cuenta (enmienda v209: "exactamente 2 con texto
+  // sobre 5 posteos imagen; el reel queda exento" — su gancho lo pone
+  // el motor de video, no este asignador). El reel sale 'clean' acá.
+  const list = Array.isArray(topics) ? topics : [];
+  const modes = list.map(() => 'clean');
+  const ranked = list.map((t, i) => ({
+    i,
+    rank: (TEXT_KIND_RANK[t && t.kind] != null ? TEXT_KIND_RANK[t && t.kind] : 5),
+  })).filter(r => r.i !== videoIdx).sort((a, b) => (a.rank - b.rank) || (a.i - b.i));
+  const n = Math.max(0, Math.min(textCount, list.length));
+  for (let k = 0; k < n && k < ranked.length; k++) modes[ranked[k].i] = 'text';
+  return modes;
+}
+
+// ¿El caption CIERRA con un CTA? Se mira la última línea no vacía: tiene
+// que contener una señal de llamado a la acción (las mismas que usan las
+// plantillas del catálogo). Las piezas limpias lo exigen: sin titular ni
+// botón en la imagen, el caption es el que vende.
+const CAPTION_CTA_CLOSE_RE = /(por dm|coment[aá]|escribinos|escribime|reserv[aá]|ped[ií]lo|ped[ií] |pas[aá] |guard[aá]|ven[ií] |anotate|sumate|particip[aá]|aprovech|agend[aá]|seguinos|seguime|whatsapp|ya estás adentro|reservamos tu|te esperamos)/i;
+function captionEndsWithCta(caption) {
+  const lines = String(caption || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  if (!lines.length) return false;
+  return CAPTION_CTA_CLOSE_RE.test(lines[lines.length - 1]);
+}
+const CTA_CLOSE_BY_KIND = {
+  reserva: 'Reservá tu lugar por DM 📩',
+  promo: 'Pedilo por DM 📩',
+  novedad: 'Pedilo por DM 📩',
+  tip: 'Guardá este post 🔖',
+  social: 'Pasá por el local hoy',
+  sorteo: 'Comentá PARTICIPO y ya estás adentro 👇',
+};
+function ensureCaptionCtaClose(caption, kind, tone) {
+  let out = String(caption || '');
+  if (captionEndsWithCta(out)) return out;
+  let close = CTA_CLOSE_BY_KIND[kind] || CTA_CLOSE_BY_KIND.social;
+  if (tone === 'tu') close = toTu(close);
+  out = out.replace(/\s+$/, '') + '\n\n' + close;
+  return out;
+}
+
 module.exports = {
   DEMO_TOPICS,
   TU_MAP,
@@ -904,4 +988,9 @@ module.exports = {
   buildFinalCaption,
   resolveTrialCaption,
   SAFE_FALLBACK_CAPTIONS,
+  capHeadlineWords,
+  assignTextModes,
+  captionEndsWithCta,
+  ensureCaptionCtaClose,
+  TEXT_KIND_RANK,
 };

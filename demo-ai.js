@@ -452,6 +452,10 @@ function extractGeminiImageB64(j) {
 // primaria pide solo IMAGE; si la API la rechaza con 400 se reintenta
 // con la configuración probada en el benchmark (TEXT+IMAGE).
 // fetchImpl es la costura de test: si viene inyectado no se loguea costo.
+// (v209) CALIDAD MÁXIMA: se pide imageSize '2K' — el tier alto de salida
+// del modelo (la pieza final es 1080×1350: 2K ya la supera ~2×; el tier
+// 4K cuesta USD 0,24/img sin diferencia visible tras el downscale, por
+// eso no se usa). Si la API rechaza el parámetro, se reintenta sin él.
 async function genNanoImage({ prompt, refPath, apiKey, fetchImpl } = {}) {
   if (!apiKey || !refPath) return null;
   let refB64 = null; let refMime = 'image/jpeg';
@@ -467,6 +471,8 @@ async function genNanoImage({ prompt, refPath, apiKey, fetchImpl } = {}) {
     { inline_data: { mime_type: refMime, data: refB64 } },
   ];
   const configs = [
+    { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '4:5', imageSize: '2K' } },
+    { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '4:5', imageSize: '2K' } },
     { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '4:5' } },
     { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: '4:5' } },
   ];
@@ -479,9 +485,9 @@ async function genNanoImage({ prompt, refPath, apiKey, fetchImpl } = {}) {
         signal: AbortSignal.timeout(120000),
       });
       if (!r || !r.ok) {
-        // 400 con la config primaria = probablemente la config: se
-        // prueba la alternativa. Cualquier otro error → fallback.
-        if (r && r.status === 400 && ci === 0) continue;
+        // 400 con una config = probablemente ESA config: se prueba la
+        // siguiente. Cualquier otro error → fallback.
+        if (r && r.status === 400 && ci < configs.length - 1) continue;
         return null;
       }
       const j = await r.json().catch(() => null);
@@ -899,11 +905,85 @@ async function replacePiecesWithAi({ indexes, capOk, makePiece, onPiece } = {}) 
   return { replaced, stoppedByCap };
 }
 
+// ---------- 3c-bis) QA DEL TEXTO COMPUESTO (v209: 4º chequeo) ----------
+// El QA de la pieza cruda (qaDemoPiece) mira la imagen ANTES del titular.
+// Este chequeo mira la pieza TERMINADA: ¿el titular compuesto por código
+// tapa una cara, los ojos o el producto/personaje protagonista? Es la
+// versión IA de la regla "el texto nunca pelea con la foto" (en la ruta
+// de fotos la cumple el selector de zonas de demo_render.py). Si falla,
+// el server recompone en la zona opuesta (ese es el reintento de la
+// pieza; la imagen NO se regenera). Fail-open como el resto del QA:
+// null = sin veredicto (red/caída) y la pieza sigue su curso.
+const QA_COMPOSED_SYSTEM = [
+  'You are a strict visual QA reviewer for a finished Instagram post image.',
+  'The image already has a software-composited headline (large bold text with a small colored bar) placed in ONE zone: the TOP or the BOTTOM (the user message tells you which).',
+  'Judge ONLY this question: does the composited headline text (or its colored bar) overlap or cover a FACE, EYES, or the MAIN SUBJECT (the central character, person, product or hero object of the scene)?',
+  'Covering background, sky, floor, walls or empty space is FINE. Partially touching hair, shoulders or clothing edges is FINE. Covering any part of a face, an eye, or the hero product/character body is a FAIL.',
+  'Return ONLY a JSON object: {"texto_no_tapa": true|false, "detalle": "<short reason, max 15 words>"}. No markdown, no prose outside the JSON.',
+].join(' ');
+
+function parseComposedQaContent(content) {
+  let txt = String((content && content.trim()) || '');
+  if (!txt) return null;
+  txt = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  let j = null;
+  try { j = JSON.parse(txt); } catch (e) {
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (m) { try { j = JSON.parse(m[0]); } catch (e2) { /* cae a null */ } }
+  }
+  if (!j || typeof j !== 'object') return null;
+  if (typeof j.texto_no_tapa !== 'boolean') return null;
+  return { passed: j.texto_no_tapa, detalle: String(j.detalle || '').slice(0, 200) };
+}
+
+async function qaComposedText({ b64, zone, apiKey, fetchImpl } = {}) {
+  try {
+    if (!b64 || !apiKey) return null;
+    const doFetch = fetchImpl || fetch;
+    const z = zone === 'bottom' ? 'BOTTOM' : 'TOP';
+    const r = await doFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0,
+        max_tokens: 300,
+        messages: [
+          { role: 'system', content: QA_COMPOSED_SYSTEM },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: `The composited headline is in the ${z} zone of this image. Does it cover a face, eyes, or the main subject? Answer with the JSON only.` },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'low' } },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r || !r.ok) return null;
+    const j = await r.json().catch(() => null);
+    if (!fetchImpl && j && j.usage) {
+      try {
+        costs.logApiCost({
+          feature: 'demo-ai-qa', model: 'gpt-4o-mini',
+          inTokens: (j.usage.prompt_tokens | 0) || 0,
+          outTokens: (j.usage.completion_tokens | 0) || 0,
+        });
+      } catch (e) { /* medir nunca rompe */ }
+    }
+    const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return parseComposedQaContent(content);
+  } catch (e) {
+    return null;
+  }
+}
+
 // ---------- 4) Composite del titular + JPEG final ----------
 // La IA genera la escena LIMPIA (sin texto); el titular lo compone el
 // código con composite-headline.py — el mismo del pipeline real — y la
 // pieza final sale JPEG 1080x1350 como las de plantilla.
-function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale, inkHex }) {
+function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale, inkHex, zone }) {
   return new Promise((resolve) => {
     try {
       const dir = workDir || os.tmpdir();
@@ -921,9 +1001,12 @@ function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineS
       // usa la escala mayor (el auto-fit del script sigue garantizando
       // que el titular entre sin cortarse).
       if (headlineScale && Number(headlineScale) > 1) args.push('--scale', String(headlineScale));
+      // (v209) Zona del titular: 'bottom' cuando el QA de texto compuesto
+      // (qaComposedText) detectó que arriba tapa al sujeto.
+      if (zone === 'bottom') args.push('--zone', 'bottom');
       execFile('python3', args, { timeout: 30000 }, (err) => {
         if (err) return resolve(null);
-        const conv = 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nim = im.resize((1080, 1350), Image.LANCZOS)\nim.save(sys.argv[2], "JPEG", quality=88)\n';
+        const conv = 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nim = im.resize((1080, 1350), Image.LANCZOS)\nim.save(sys.argv[2], "JPEG", quality=92)\n';
         execFile('python3', ['-c', conv, fin, jpg], { timeout: 20000 }, (err2) => {
           try { fs.unlinkSync(raw); } catch (e) {}
           try { fs.unlinkSync(fin); } catch (e) {}
@@ -972,6 +1055,9 @@ module.exports = {
   parseQaContent,
   qaDemoPiece,
   qaRetryDirective,
+  qaComposedText,
+  parseComposedQaContent,
+  QA_COMPOSED_SYSTEM,
   replacePiecesWithAi,
   compositeDemoPiece,
 };

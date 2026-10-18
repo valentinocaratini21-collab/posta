@@ -137,7 +137,7 @@ def main():
             print('brand-card: logo ignorado:', e, file=sys.stderr)
 
     if a.out.lower().endswith('.jpg'):
-        img.convert('RGB').save(a.out, 'JPEG', quality=88, optimize=True)
+        img.convert('RGB').save(a.out, 'JPEG', quality=90, optimize=True)
     else:
         img.save(a.out, 'PNG')
     print('ok', a.out)

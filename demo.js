@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 16;
+const DEMO_ENGINE_V = 17;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -1225,6 +1225,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       headline = captions.TU_HEADLINES[headline] || headline;
       subline = captions.toTu(subline);
     }
+    // (v209) TITULARES ≤ 6 PALABRAS, DURO (regla de pieza de Valentino):
+    // el catálogo cumple, pero NINGÚN titular sale del armado sin pasar
+    // por el cap — recorte limpio por cláusula, nunca a mitad de idea.
+    headline = captions.capHeadlineWords(headline, 6);
     const st = styleObjs[i] || null;
     const isPoster = posterAt.has(i);
     // (v196) El slot de póster manda sobre el tratamiento del estilo: la
@@ -1251,6 +1255,29 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       cta: t.cta,
     };
   });
+  // (v209) DOSIFICACIÓN DE TEXTO: exactamente 2 piezas de la semana
+  // llevan titular+CTA quemados sobre la imagen; las demás salen con la
+  // foto limpia y su idea+CTA viven en el caption (que cierra con el
+  // CTA: ver generateDemo y el stream de /prueba). El modo queda
+  // registrado en el payload (design.posts[i].text_mode) y el renderer
+  // lo cumple vía paraRender + la vía limpia de render_v2.
+  const textModes = captions.assignTextModes(topics, Math.min(2, Math.max(0, specPosts.length - 1)), 2);
+  // El póster es una pieza tipográfica: sin texto no existe. Si quedó
+  // limpio, entra en las 2 y sale la pieza con texto de menor prioridad.
+  for (const pi of posterAt) {
+    if (textModes[pi] !== 'text') {
+      textModes[pi] = 'text';
+      let worst = -1; let worstRank = -1;
+      textModes.forEach((m, j) => {
+        if (m === 'text' && j !== pi && !posterAt.has(j)) {
+          const r = captions.TEXT_KIND_RANK[topics[j] && topics[j].kind] != null ? captions.TEXT_KIND_RANK[topics[j].kind] : 5;
+          if (r >= worstRank) { worstRank = r; worst = j; }
+        }
+      });
+      if (worst >= 0 && textModes.filter((m) => m === 'text').length > 2) textModes[worst] = 'clean';
+    }
+  }
+  specPosts.forEach((sp, i) => { sp.text_mode = textModes[i] || 'text'; });
   // (v197) La foto de perfil aparece como máximo en 2 piezas y con
   // tratamientos DISTINTOS entre sí: el medallón protagonista del
   // póster (si lo hay) y una marca suave grande sobre UNA pieza con
@@ -1274,11 +1301,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
 // La etiqueta de estilo (nombre interno del catálogo, ej "Depilación láser")
 // NO se dibuja en la imagen del cliente: es jerga interna (pedido 2026-10-17).
 const sinEtiqueta = (posts) => posts.map((p) => ({ ...p, label: '', style_name: '' }));
+// (v209) Proyección de RENDER de la dosificación: las piezas 'clean' le
+// llegan al renderer SIN titular, sublínea, CTA ni pill — la foto sale
+// limpia de verdad (el renderer además tiene su vía limpia en
+// render_v2). El spec guardado conserva los textos (payload/captions).
+const paraRender = (posts) => posts.map((p) => (p && p.text_mode === 'clean'
+  ? { ...p, label: '', style_name: '', headline: '', subline: '', cta: '', pill: '' }
+  : { ...p, label: '', style_name: '' }));
 async function renderSpecPngs(specPosts, colors) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   try {
     const specPath = path.join(runDir, 'spec.json');
-    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn, colors.register), posts: sinEtiqueta(specPosts) }));
+    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn, colors.register), posts: paraRender(specPosts) }));
     await runDemoRender([DEMO_SCRIPT, specPath, runDir]);
     return { bufs: specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.jpg`))), runDir };
   } catch (e) {
@@ -1372,13 +1406,19 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       const r = captions.resolveTrialCaption(topics, cat, {
         business, tone, country, idx: i, goalLine,
       });
+      // (v209) Pieza LIMPIA: sin titular ni botón en la imagen, el
+      // caption carga la idea y CIERRA con el CTA — garantizado acá.
+      const cleanPiece = specPosts[i].text_mode === 'clean';
       return {
         image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
-        caption: r.caption,
+        caption: cleanPiece
+          ? captions.ensureCaptionCtaClose(r.caption, (topics[r.topicIndex] || t).kind, tone)
+          : r.caption,
         hashtags: r.hashtags,
-        headline: specPosts[i].headline, // titular real renderizado en el diseño
+        headline: specPosts[i].headline, // titular del diseño (en piezas limpias vive solo en el caption)
         style: specPosts[i].style,
         style_name: specPosts[i].style_name,
+        text_mode: specPosts[i].text_mode || 'text',
       };
     });
 
@@ -1389,8 +1429,8 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
 
     const posts = made.map((m, i) => (
       i === videoIdx && videoB64
-        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name }
-        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name }
+        ? { type: 'video', video: 'data:video/mp4;base64,' + videoB64, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode }
+        : { type: 'image', image: m.image, caption: m.caption, hashtags: m.hashtags, headline: m.headline, style: m.style, style_name: m.style_name, text_mode: m.text_mode }
     ));
     return { posts, spec: savedSpec };
   } finally {
@@ -1985,7 +2025,7 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   const specPath = path.join(runDir, 'spec.json');
-  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn, colors.register), posts: sinEtiqueta(specPosts) }));
+  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn, colors.register), posts: paraRender(specPosts) }));
   let renderErr = null;
   let renderDone = false;
   // NOTA (2026-10-17): se probó partir el render en dos procesos Python
@@ -2057,6 +2097,10 @@ module.exports = {
   renderVideoB64,
   DEMO_TOPICS: captions.DEMO_TOPICS,
   resolveTrialCaption: captions.resolveTrialCaption,
+  capHeadlineWords: captions.capHeadlineWords,
+  assignTextModes: captions.assignTextModes,
+  captionEndsWithCta: captions.captionEndsWithCta,
+  ensureCaptionCtaClose: captions.ensureCaptionCtaClose,
   DEMO_LIMIT_PER_DAY,
   DEMO_ENGINE_V,
   PHOTO_TAGS,
