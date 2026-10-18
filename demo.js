@@ -795,11 +795,14 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
 // Devuelve los buffers en el mismo orden. No toca textos: solo diseño.
+// La etiqueta de estilo (nombre interno del catálogo, ej "Depilación láser")
+// NO se dibuja en la imagen del cliente: es jerga interna (pedido 2026-10-17).
+const sinEtiqueta = (posts) => posts.map((p) => ({ ...p, label: '', style_name: '' }));
 async function renderSpecPngs(specPosts, colors) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   try {
     const specPath = path.join(runDir, 'spec.json');
-    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: specPosts }));
+    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: sinEtiqueta(specPosts) }));
     await runDemoRender([DEMO_SCRIPT, specPath, runDir]);
     return { bufs: specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.jpg`))), runDir };
   } catch (e) {
@@ -1190,7 +1193,7 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   const specPath = path.join(runDir, 'spec.json');
-  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: specPosts }));
+  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: sinEtiqueta(specPosts) }));
   let renderErr = null;
   let renderDone = false;
   // NOTA (2026-10-17): se probó partir el render en dos procesos Python
