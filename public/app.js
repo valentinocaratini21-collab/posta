@@ -5133,42 +5133,102 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     return map;
   })();
 
-  const proposedFor = (d, i) => {
-    if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
+  // ===== v213: LA AGENDA — la semana asentada en días =====
+  // Programados por scheduled_at, borradores por su día propuesto (el
+  // proposedIsos de arriba, sin cambios) y publicados de esta semana en el
+  // día que salieron. La agenda se pinta SOLO desde esos datos: si el chat
+  // mueve un posteo de día, al refrescar la agenda lo muestra en su día
+  // nuevo — no hay estado paralelo que mantener.
+  const cap1 = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const hourOf = (dt) => { try { return dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
+  const todayKeyStr = (() => { try { return new Date().toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } })();
+  // Lunes de esta semana (lun–dom): la misma definición del cupo y del
+  // ritual de fotos (albumMondayKey). Fallback manual si aquella fallara.
+  let mondayKeyStr = '';
+  try { mondayKeyStr = albumMondayKey(); } catch (e) {}
+  if (!mondayKeyStr && todayKeyStr) {
     try {
-      const iso = (proposedIsos.get(d.id) || {}).iso || null;
-      if (!iso) return { label: '📝 Borrador', iso: null };
-      const lbl = new Date(iso.slice(0, 10) + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
-      return { label: `📅 ${lbl} · 10:00`, iso };
-    } catch (e) { return { label: '📝 Borrador', iso: null }; }
-  };
-  const cards = list.map((d, i) => {
+      const t0 = new Date(todayKeyStr + 'T12:00:00Z');
+      t0.setUTCDate(t0.getUTCDate() - ((t0.getUTCDay() + 6) % 7));
+      mondayKeyStr = t0.toISOString().slice(0, 10);
+    } catch (e) {}
+  }
+  const calDate = (key) => new Date(String(key) + 'T12:00:00Z'); // mediodía UTC: aritmética de calendario pura
+  const weekDays = [];
+  if (mondayKeyStr) for (let i = 0; i < 7; i++) { const d = calDate(mondayKeyStr); d.setUTCDate(d.getUTCDate() + i); weekDays.push({ key: d.toISOString().slice(0, 10), date: d }); }
+  const sundayKeyStr = weekDays.length ? weekDays[6].key : '';
+  const dayKeyOfIso = (iso) => { const d = pcParseDate(iso); return d ? d.toLocaleDateString('en-CA', { timeZone: tz }) : ''; };
+  // Ítems de la agenda: lo por venir (borradores + programados) + lo ya
+  // publicado esta semana, cada uno con su día y su hora.
+  const agItems = [];
+  for (const d of list) {
+    const isPending = !d.image_path && d.status === 'draft';
+    if (d.status === 'scheduled' && d.scheduled_at) {
+      const dt = pcParseDate(d.scheduled_at);
+      agItems.push({ p: d, key: dayKeyOfIso(d.scheduled_at), t: dt ? dt.getTime() : 0, hour: dt ? hourOf(dt) : '', proposedIso: null, isPending: false, published: false });
+    } else {
+      const pIso = (proposedIsos.get(d.id) || {}).iso || null;
+      agItems.push({ p: d, key: pIso ? pIso.slice(0, 10) : '', t: pIso ? new Date(pIso).getTime() : 0, hour: pIso ? pIso.slice(11, 16) : '', proposedIso: pIso, isPending, published: false });
+    }
+  }
+  for (const p of all) {
+    if (!p || p.status !== 'published') continue;
+    const whenIso = p.published_at || p.scheduled_at;
+    if (!whenIso) continue;
+    const k = dayKeyOfIso(whenIso);
+    if (!k || (mondayKeyStr && k < mondayKeyStr) || (sundayKeyStr && k > sundayKeyStr)) continue;
+    const dt = pcParseDate(whenIso);
+    agItems.push({ p, key: k, t: dt ? dt.getTime() : 0, hour: dt ? hourOf(dt) : '', proposedIso: null, isPending: false, published: true });
+  }
+  const itemsByKey = new Map();
+  for (const it of agItems) { if (!it.key) continue; if (!itemsByKey.has(it.key)) itemsByKey.set(it.key, []); itemsByKey.get(it.key).push(it); }
+  for (const arr of itemsByKey.values()) arr.sort((a, b) => a.t - b.t);
+  // Tarjeta de la agenda: la MISMA igmock de siempre (mismo data-post-id y
+  // los mismos data-pc-act / data-revaccept / data-lightbox, para que el
+  // listener delegado y bindReview sigan andando sin tocarlos) — cambia la
+  // fila superior: pastilla de estado + hora; el día lo da la sección.
+  let agSeq = 0;
+  const agTotal = agItems.length;
+  const agCard = (it) => {
+    const d = it.p;
+    agSeq++;
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
-    // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
-    const isPending = !d.image_path && d.status === 'draft';
-    const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
+    const media = it.isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
       : !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
-    const prop = proposedFor(d, i);
     const capFull = String(d.caption || d.source_topic || '');
-    const acts = `<div class="pcard-actions hs-acts">
-        ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
-        <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
-        ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
-        <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
-      </div>`;
-    return `<div class="igmock igmock-fixed" data-post-id="${esc(String(d.id))}">
+    const typeTag = isS ? ' · 📸 story' : isV ? ' · 🎬 reel' : '';
+    let pill = '';
+    let topRight = '';
+    if (it.published) pill = '<span class="ag-pill ag-pill-pub">✅ Publicado</span>';
+    else if (d.status === 'scheduled') pill = '<span class="ag-pill ag-pill-sched">📮 Programado</span>';
+    else if (it.isPending) pill = '<span class="pcard-creating">⏳ Creando…</span>';
+    else {
+      pill = '<span class="ag-pill ag-pill-draft">✏️ Borrador</span>';
+      topRight = `<button type="button" data-revaccept="${esc(String(d.id))}"${it.proposedIso ? ` data-proposed="${esc(it.proposedIso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`;
+    }
+    const acts = it.published
+      ? (d.tiktok_publish_id
+          ? '<div class="pcard-actions hs-acts"><span class="ag-tt-done">🎵 Ya está en TikTok ✓</span></div>'
+          : '<div class="pcard-actions hs-acts"><button type="button" data-pc-act="tiktok" hidden>🎵 Compartir en TikTok</button></div>')
+      : `<div class="pcard-actions hs-acts">
+          ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
+          <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
+          ${isV || it.isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+          <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
+        </div>`;
+    // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
+    // "Armar otro" (la igmock del carrusel no los traía; acá van completos).
+    let dayLabel = '';
+    if (d.scheduled_at) { const dt = pcParseDate(d.scheduled_at); if (dt) dayLabel = pcFmtDayLong(dt, tz) + ' a las ' + hourOf(dt); }
+    else if (it.proposedIso) { const dd = calDate(it.proposedIso.slice(0, 10)); dayLabel = cap1(dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' })) + ' ' + dd.getUTCDate() + ' a las ' + it.proposedIso.slice(11, 16); }
+    return `<div class="igmock igmock-fixed ag-card" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
-        <span class="igmock-count">${i + 1} de ${list.length}</span></div>
-      <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
-        ${d.status === 'scheduled'
-          ? `<span class="pcard-scheduled">📮 Programado</span>`
-          : isPending
-            ? `<span class="pcard-creating">⏳ Creando…</span>`
-            : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`}</div>
-      ${isPending
+        <span class="igmock-count">${agSeq} de ${agTotal}</span></div>
+      <div class="igmock-when-top ag-when-top">${pill}<span class="ag-hour">${it.hour ? esc(it.hour) + ' hs' : ''}${typeTag}</span>${topRight}</div>
+      ${it.isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>`}
       <div class="igmock-foot">
@@ -5176,7 +5236,42 @@ function homeWeekHTML(posts, quota, generating, noDna) {
         ${acts}
       </div>
     </div>`;
-  }).join('');
+  };
+  const dayNameOf = (date) => { try { return cap1(date.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' })); } catch (e) { return ''; } };
+  const daySection = (wd) => {
+    const items = itemsByKey.get(wd.key) || [];
+    const isToday = wd.key === todayKeyStr;
+    const cnt = items.length ? `<span class="ag-day-count">${items.length} posteo${items.length > 1 ? 's' : ''}</span>` : '';
+    // Día sin posteos, honesto: "Posty lo completa" SOLO si la semana se
+    // está armando; si la semana ya está, es un día libre del plan.
+    const body = items.length
+      ? items.map(agCard).join('')
+      : `<button type="button" class="sched-ghost ag-ghost" data-sched-day="${esc(dayNameOf(wd.date) + ' ' + wd.date.getUTCDate())}" aria-label="Pedirle a Posty un posteo para este día"><span class="sg-plus">+</span><span class="sg-txt">${generating ? 'Posty lo completa ✨' : 'Día libre 🌿'}</span></button>`;
+    return `<section class="ag-day${isToday ? ' ag-today' : ''}" data-agday="${esc(wd.key)}">
+      <header class="ag-day-head"><span class="ag-day-name">${esc(dayNameOf(wd.date))} <b>${wd.date.getUTCDate()}</b></span>${isToday ? '<span class="ag-today-pill">hoy</span>' : ''}${cnt}</header>
+      <div class="ag-day-cards">${body}</div>
+    </section>`;
+  };
+  const weekHTML = weekDays.map(daySection).join('');
+  // Desborde honesto: lo que cae después del domingo es la semana que viene.
+  const nextKeys = [...itemsByKey.keys()].filter(k => sundayKeyStr && k > sundayKeyStr).sort();
+  const nextHTML = nextKeys.length ? `<div class="ag-next"><div class="ag-next-t">✨ La semana que viene</div><div class="ag-days">${nextKeys.map(k => daySection({ key: k, date: calDate(k) })).join('')}</div></div>` : '';
+  // Borradores que no se pudieron ubicar en un día (no debería pasar):
+  // quedan visibles en su propia sección — nunca se pierden de vista.
+  const noDayItems = agItems.filter(it => !it.key);
+  const noDayHTML = noDayItems.length ? `<section class="ag-day ag-noday"><header class="ag-day-head"><span class="ag-day-name">📝 Borradores sin día</span></header><div class="ag-day-cards">${noDayItems.map(agCard).join('')}</div></section>` : '';
+  // Programados de semanas anteriores (quedaron sin salir): tira compacta
+  // con la tarjeta de siempre — tampoco desaparecen de la agenda.
+  const staleItems = agItems.filter(it => it.key && mondayKeyStr && it.key < mondayKeyStr).sort((a, b) => a.t - b.t);
+  const staleHTML = staleItems.length ? `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${staleItems.map(it => postCardHTML(it.p, { layout: 'row' })).join('')}</div>` : '';
+  const monthNameOf = (date) => { try { return date.toLocaleDateString('es-AR', { month: 'long', timeZone: 'UTC' }); } catch (e) { return ''; } };
+  let rangeLabel = '';
+  if (weekDays.length) {
+    const m1 = monthNameOf(weekDays[0].date), m2 = monthNameOf(weekDays[6].date);
+    rangeLabel = m1 === m2
+      ? `Semana del ${weekDays[0].date.getUTCDate()} al ${weekDays[6].date.getUTCDate()} de ${m1}`
+      : `Semana del ${weekDays[0].date.getUTCDate()} de ${m1} al ${weekDays[6].date.getUTCDate()} de ${m2}`;
+  }
   // 2026-10-14 (pedido de Valentino): contador visible de la semana — cuántos
   // posteos van y cuántos quedan del plan, para que el cliente sepa cómo viene.
   const qLeft = Math.max(0, qTotal - qUsed);
@@ -5198,16 +5293,20 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
       ${nextLine}
     </div>` : '';
-  // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
-  return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
+  // v213: la agenda reemplaza al carrusel — cabecera de semana con rango,
+  // cupo, reporte y los días. #hsWeekList sigue conteniendo TODAS las
+  // tarjetas: doAcceptAll y bindReview lo recorren buscando [data-revaccept]
+  // y .igmock-fixed, igual que cuando era el carrusel.
+  return `<div class="hs-week ag-wrap">
+    <div class="hs-week-head ag-head"><div class="ag-head-txt"><b>📅 Tu agenda</b>${rangeLabel ? `<span class="ag-range">${esc(rangeLabel)}</span>` : ''}</div>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
-    <div class="hs-carousel">
-      <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
-      <div class="hs-week-list" id="hsWeekList">${cards}</div>
-      <button type="button" class="hs-side" id="hsNext" aria-label="Siguiente">›</button>
+    <div id="hsWeekList" class="ag-all">
+      ${staleHTML}
+      <div class="ag-days">${weekHTML}</div>
+      ${nextHTML}
+      ${noDayHTML}
     </div>
   </div>`;
 }
@@ -9569,6 +9668,7 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
+    <div class="ag-uploadbar"><button type="button" class="ag-upload-btn" id="agUploadBtn">📸 Subir fotos o video</button></div>
     ${homeChatBlock}
     <div id="albumCard"></div>
     ${armBlock}
@@ -9760,6 +9860,16 @@ function bindSchedule() {
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
   try { bindAlbumCard(); } catch (e) {} // 📸 Álbum del negocio: protagonista en Schedule (v180)
+  // v213: botón fijo de subida de la agenda — dispara el MISMO input de la
+  // tarjeta del álbum (#albumFile, con su festejo y su clasificación); si el
+  // álbum todavía no cargó, lleva al bloque de fotos de la semana.
+  const agUp = $('#agUploadBtn');
+  if (agUp) agUp.onclick = () => {
+    const f = document.getElementById('albumFile');
+    if (f) { f.click(); return; }
+    const blk = document.getElementById('albumWeekBlock') || document.getElementById('albumCard');
+    if (blk) blk.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   bindScheduleAll(); // "📅 Programar mi semana →" (chip del chat)
   bindAcceptAll(); // legacy (ya no se pinta en la tarjeta)
   bindActivateWeek(); // "🚀 Activar mi semana" dentro de la tarjeta de revisión
