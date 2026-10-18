@@ -14,7 +14,9 @@
 'use strict';
 
 const { execFile } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
+const https = require('https');
 const os = require('os');
 const path = require('path');
 
@@ -192,6 +194,96 @@ function trialProfileFromAudit(data, fallbackPic) {
     pic: p.pic || fallbackPic || null,
     photos: (data.posts || []).map((x) => (x && x.thumb) || null).filter(Boolean).slice(0, 9),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Miniaturas LOCALES para la proyección de /prueba (v187): las URLs de la
+// CDN de Instagram no se dejan hotlinkear desde el navegador (en vivo, la
+// grilla HOY pintó la identidad real pero las 9 celdas en gris). El server
+// las descarga UNA vez a MEDIA_DIR y el payload pasa a llevar
+// /media/igthumb-<hash>.jpg — mismo origen, sin firma que expire.
+// hash = sha256(handle|url): estable entre corridas, así la semana cacheada
+// (72 h) reusa los archivos y las regeneraciones no re-descargan. El
+// janitor de media los conserva mientras el payload cacheado los nombra
+// (trial_cache es una tabla de texto más en su escaneo de referencias).
+// NUNCA lanza: cada foto que falla queda null (celda neutra, como antes).
+// fetchImpl inyectable para tests (misma convención que fetchOverride).
+// ---------------------------------------------------------------------------
+const IG_THUMB_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const THUMB_DL_CAP = 1500 * 1024;  // descarga máxima aceptada por miniatura
+const THUMB_SOFT_CAP = 500 * 1024; // arriba de esto se recomprime a 540px
+
+function fetchImageBuf(url, timeoutMs, hops) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch (e) { return reject(e); }
+    const req = https.get({
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      headers: { 'User-Agent': IG_THUMB_UA, 'Accept-Language': 'es-AR,es;q=0.9' },
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if ((hops || 0) >= 3) return reject(new Error('redirects'));
+        return fetchImageBuf(res.headers.location, timeoutMs, (hops || 0) + 1).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error('http ' + res.statusCode)); }
+      if (!String(res.headers['content-type'] || '').startsWith('image/')) { res.resume(); return reject(new Error('no-image')); }
+      const chunks = [];
+      let bytes = 0;
+      res.on('data', (c) => {
+        bytes += c.length;
+        if (bytes > THUMB_DL_CAP) { req.destroy(new Error('too-big')); return; }
+        chunks.push(c);
+      });
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')));
+  });
+}
+
+function shrinkThumb(abs) {
+  return new Promise((resolve) => {
+    const tmp = abs + '.tmp-' + process.pid + '-' + Math.floor(Math.random() * 1e6) + '.jpg';
+    execFile('ffmpeg', ['-y', '-v', 'error', '-i', abs, '-vf', 'scale=540:-2', '-q:v', '4', tmp],
+      { timeout: 8000 }, (err) => {
+        if (!err) {
+          try {
+            const st = fs.statSync(tmp);
+            if (st.isFile() && st.size > 200) { fs.renameSync(tmp, abs); return resolve(true); }
+          } catch (e) { /* cae a conservar el original */ }
+        }
+        try { fs.unlinkSync(tmp); } catch (e) {}
+        resolve(false);
+      });
+  });
+}
+
+async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
+  if (!profile || !Array.isArray(profile.photos) || !profile.photos.length || !mediaDir) return profile;
+  const handle = sanitizeHandle(profile.handle) || 'ig';
+  try { fs.mkdirSync(mediaDir, { recursive: true }); } catch (e) {}
+  const get = fetchImpl || ((u) => fetchImageBuf(u, 2000));
+  profile.photos = await Promise.all(profile.photos.slice(0, 9).map(async (url) => {
+    try {
+      if (!url || typeof url !== 'string') return null;
+      // Solo la CDN oficial de Instagram (mismo anti-SSRF que fetchIgProfile).
+      if (!/^https:\/\/[a-z0-9.-]*cdninstagram\.com\//i.test(url)) return null;
+      const hash = crypto.createHash('sha256').update(handle + '|' + url).digest('hex').slice(0, 24);
+      const name = 'igthumb-' + hash + '.jpg';
+      const abs = path.join(mediaDir, name);
+      try { const st = fs.statSync(abs); if (st.isFile() && st.size > 1024) return '/media/' + name; } catch (e) {}
+      const buf = await get(url);
+      if (!buf || !buf.length) return null;
+      fs.writeFileSync(abs, buf);
+      if (buf.length > THUMB_SOFT_CAP) await shrinkThumb(abs);
+      const st = fs.statSync(abs);
+      if (!st.isFile() || st.size < 200) { try { fs.unlinkSync(abs); } catch (e) {} return null; }
+      return '/media/' + name;
+    } catch (e) { return null; }
+  }));
+  return profile;
 }
 
 // ---------------------------------------------------------------------------
@@ -499,5 +591,6 @@ module.exports = {
   parseEmbedPosts,
   fetchAuditData,
   trialProfileFromAudit,
+  localizeTrialPhotos,
   AUDIT_LIMIT_PER_DAY,
 };

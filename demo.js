@@ -696,7 +696,7 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   // Subrubro (makeup ≠ peluquería): cambia los ÁNGULOS, no la categoría.
@@ -705,7 +705,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     ? captions.DEMO_TOPICS.makeup
     : (captions.DEMO_TOPICS[cat] || captions.DEMO_TOPICS.otro);
   const { topics: allTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath);
-  const topics = allTopics.slice(0, n);
+  // topicOffset (v187): temas desde una posición del pool — lo usan los
+  // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
+  // fotos, vía excludePhotos) de la semana ya generada.
+  const topics = allTopics.slice(topicOffset, topicOffset + n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
   let styleObjs, photos;
@@ -726,7 +729,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         ? CAFE_POOL.slice()
         : (CATEGORY_PHOTOS[subcat === 'makeup' ? 'belleza' : cat] || CATEGORY_PHOTOS.otro).slice();
       const forbidden = AUDIENCE_FORBIDDEN_TEMAS[subcat || cat] || [];
-      const usedFams = new Set();
+      const usedFams = new Set((excludePhotos || []).map((x) => path.basename(String(x)).replace(/\.webp$/i, '')));
       photos = topics.map((t) => {
         const famName = pickPhotoTagged(t, poolFams, usedFams, forbidden);
         usedFams.add(famName);
@@ -740,7 +743,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // posteo); si no, se sortea del pool evitando repetir la misma foto.
       // En cafés, los temas con `photoCafe` usan la variante de café.
       const isCafe = cat === 'gastronomia' && isCafeBusiness(business);
-      const usedPhotos = new Set();
+      const usedPhotos = new Set((excludePhotos || []).map((x) => String(x)));
       photos = topics.map((t) => {
         const key = (isCafe && t.photoCafe) ? t.photoCafe : t.photo;
         if (key) {

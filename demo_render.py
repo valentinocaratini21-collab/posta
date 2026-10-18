@@ -291,6 +291,8 @@ def celeste_bar(d, fonts_dir, y, text, C):
 
 
 def cta_button(d, fonts_dir, y, text, C, center=False):
+    if not str(text or "").strip():
+        return y  # sin CTA no hay pastilla: dibujarla vacía dejaba un óvalo flotante (v187)
     f = B(fonts_dir, 44)
     while tw(d, text, f) > MAX_W - 128 and f.size > 22:
         f = B(fonts_dir, f.size - 2)

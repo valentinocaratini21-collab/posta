@@ -10656,7 +10656,16 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       try {
         const known = await Promise.race([igProfPromise, new Promise((r) => setTimeout(() => r(null), 4500))]);
         const data = await feedAudit.fetchAuditData(ig, null, known || undefined);
-        return feedAudit.trialProfileFromAudit(data, igPic);
+        const prof = feedAudit.trialProfileFromAudit(data, igPic);
+        if (prof) {
+          // v187: las miniaturas se sirven desde NUESTRO server — las URLs
+          // de la CDN de IG no se dejan hotlinkear desde el navegador y la
+          // grilla HOY salía gris en vivo. Descarga paralela (timeout 2 s
+          // por foto) dentro de esta misma carrera de ~3 s: lo que no llega
+          // queda null (celda neutra) y la semana nunca espera por esto.
+          try { await feedAudit.localizeTrialPhotos(prof, MEDIA_DIR); } catch (e) { /* queda como vino */ }
+        }
+        return prof;
       } catch (e) { return null; }
     })();
     Promise.race([profilePromise, new Promise((r) => setTimeout(() => r(null), 3000))])
@@ -10766,11 +10775,58 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // diseños listos, así que arranca acá; los JPG ya están en runDir.
     send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' });
     const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
+    // v187: visuales extra para la grilla CON Posty de la proyección, SIN
+    // repetir ningún diseño de la semana: (A) diseños de los temas del pool
+    // que la semana no usó (cada rubro trae 6, la semana usa 5) y (B) fotos
+    // del rubro sin titular con tratamientos de ESTA semana — todo con
+    // fotos distintas a las de la semana (excludePhotos). Corren en
+    // paralelo con el video; si fallan, la grilla muestra 6 celdas.
+    const buildTrialGridExtras = async () => {
+      const posts = [];
+      const usedPhoto = new Set((spec.photos || []).map((p) => String(p)));
+      const usedTema = new Set((spec.topics || []).map((t) => (t && (t.tema || t.headline)) || ''));
+      const weekTreat = (j) => spec.specPosts[j % spec.specPosts.length] || {};
+      const probe = (off) => {
+        try {
+          return demo.buildDemoSpec({ business, category, country, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto] });
+        } catch (e) { return null; }
+      };
+      for (let off = n; off < n + 3 && posts.length < 3; off++) {
+        const pr = probe(off);
+        if (!pr || !pr.specPosts.length) continue;
+        const sp = pr.specPosts[0];
+        const tema = sp.tema || sp.headline || '';
+        if (!tema || usedTema.has(tema)) continue;
+        if (typeof sp.photo !== 'string' || usedPhoto.has(sp.photo)) continue;
+        const w = weekTreat(posts.length + 2);
+        posts.push({ ...sp, style: w.style, style_name: w.style_name, treatment: w.treatment });
+        usedTema.add(tema); usedPhoto.add(sp.photo);
+      }
+      while (posts.length < 3) {
+        const pr = probe(n);
+        if (!pr || !pr.specPosts.length) break;
+        const sp = pr.specPosts[0];
+        if (typeof sp.photo !== 'string' || usedPhoto.has(sp.photo)) break;
+        const w = weekTreat(posts.length + 3);
+        posts.push({ ...sp, style: w.style, style_name: w.style_name, treatment: w.treatment, headline: '', subline: '', pill: '', cta: '', kind: 'foto', tema: null });
+        usedPhoto.add(sp.photo);
+      }
+      if (!posts.length) return [];
+      const r = await demo.renderSpecPngs(posts, { accent, btn });
+      try { fs.rmSync(r.runDir, { recursive: true, force: true }); } catch (e) {}
+      return r.bufs.map((b) => 'data:image/jpeg;base64,' + b.toString('base64'));
+    };
+    const extrasPromise = (async () => {
+      try { return ig ? await buildTrialGridExtras() : []; } catch (e) { return []; }
+    })();
     const videoB64 = await demo.renderVideoB64(designPaths, runDir, videoIdx);
     if (videoB64) {
       posts[videoIdx] = {
         type: 'video',
         video: 'data:video/mp4;base64,' + videoB64,
+        // v187: la tapa del reel (el still de su diseño) — la grilla CON
+        // Posty la usa como celda propia, como hace Instagram con los reels.
+        cover: 'data:image/jpeg;base64,' + bufs[videoIdx].toString('base64'),
         caption: made[videoIdx].caption,
         hashtags: made[videoIdx].hashtags,
         headline: made[videoIdx].headline,
@@ -10798,6 +10854,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const ext = photoPath.split('.').pop().toLowerCase();
       screenshot = `data:${TRIAL_IMG_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64');
     }
+    const gridExtra = await extrasPromise;
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
     const out = {
       ok: true,
@@ -10806,6 +10863,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       accent, btn, color_source: colorSource,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
+      grid_extra: gridExtra,
       ideas: ideas.slice(0, 6),
       posts,
       design: {
@@ -11516,7 +11574,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v186';
+const BUILD_ID = '20261017-v187';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

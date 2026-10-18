@@ -1,18 +1,27 @@
 // test-demo-projection.js — v184/v185: la proyección de perfil de /prueba
 // (su perfil HOY vs CON Posty) se arma con datos REALES y sin inventar.
+// v187: la grilla HOY sirve las miniaturas desde NUESTRO server (la CDN de
+// IG no se deja hotlinkear: en vivo salían las 9 celdas grises) y la grilla
+// CON Posty no repite NINGÚN diseño (5 piezas + tapa del reel + extras).
 //
 // Parte A (fixture, sin red): fetchAuditData + trialProfileFromAudit sobre
 // un HTML de embed ficticio — identidad, bio, conteos TAL CUAL y grilla.
+// Parte A2 (v187, sin red): localizeTrialPhotos con fetch inyectado —
+// descarga a MEDIA_DIR, /media/…, falla→null, anti-SSRF, caché por hash y
+// recompresión real de las que superan 500 KB.
 // Parte B (server real + DB temporal): el stream sin @ no trae proyección
 // y termina igual; una semana cacheada CON perfil lo devuelve intacto
-// (contrato del front para la tarjeta de resultados).
+// (contrato del front para la tarjeta de resultados); las fotos locales
+// cacheadas se sirven por /media con 200.
 // Parte C (contrato estático): prueba.html trae el bloque y sus hooks.
+// Parte D (v187, harness DOM): las funciones REALES de prueba.html arman
+// la grilla CON Posty con visuales 100% únicos (9 y 6 celdas).
 // Sin IA paga, sin Instagram real.
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const { DatabaseSync } = require('node:sqlite');
 
 const feedAudit = require('./feed-audit');
@@ -91,6 +100,67 @@ async function partA() {
   ok(feedAudit.trialProfileFromAudit({ ok: false }) === null, 'data no-ok → proyección nula');
 }
 
+function smallJpegBytes() { return makeJpeg(120, 120, false); }
+
+function makeJpeg(w, h, noise) {
+  const out = path.join(os.tmpdir(), `thumb-fixture-${w}x${h}-${noise ? 'n' : 'p'}.jpg`);
+  const args = ['-y', '-v', 'error', '-f', 'lavfi', '-i', `testsrc2=size=${w}x${h}:duration=1`, '-frames:v', '1'];
+  if (noise) args.push('-vf', 'noise=alls=90:allf=t');
+  args.push(out);
+  execFileSync('ffmpeg', args);
+  return fs.readFileSync(out);
+}
+
+async function partA2() {
+  console.log('— Parte A2: localizeTrialPhotos (miniaturas locales de la grilla HOY)');
+  const mediaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-thumbs-'));
+  try {
+    const small = makeJpeg(120, 120, false);
+    const big = makeJpeg(1400, 1400, true);
+    ok(big.length > 500 * 1024, `fixture: el JPEG grande supera los 500 KB (${Math.round(big.length / 1024)} KB)`);
+    const calls = [];
+    const impl = async (url) => {
+      calls.push(url);
+      if (url.includes('foto-fail')) throw new Error('cdn caído');
+      if (url.includes('foto-big')) return big;
+      return small;
+    };
+    const prof = { handle: 'fixture.cafe', photos: [
+      'https://scontent.cdninstagram.com/fixture/foto-ok.jpg',
+      'https://scontent.cdninstagram.com/fixture/foto-big.jpg',
+      'https://scontent.cdninstagram.com/fixture/foto-fail.jpg',
+      'https://example.com/evil.jpg',
+      null,
+    ] };
+    await feedAudit.localizeTrialPhotos(prof, mediaDir, impl);
+    ok(!!(prof.photos[0] && prof.photos[0].startsWith('/media/igthumb-')), 'foto ok → URL local /media/igthumb-…');
+    ok(!!(prof.photos[1] && prof.photos[1].startsWith('/media/igthumb-')), 'foto grande → URL local');
+    ok(prof.photos[2] === null, 'foto que no descarga → null (celda neutra, como antes)');
+    ok(prof.photos[3] === null, 'URL fuera de la CDN de IG → null (anti-SSRF)');
+    ok(prof.photos[4] === null, 'foto ausente → null');
+    ok(!calls.some((u) => u.includes('example.com')), 'la URL ajena ni siquiera se intenta descargar');
+    const f0 = path.join(mediaDir, path.basename(prof.photos[0]));
+    ok(fs.existsSync(f0) && fs.statSync(f0).size === small.length, 'la miniatura quedó escrita en MEDIA_DIR');
+    const f1 = path.join(mediaDir, path.basename(prof.photos[1]));
+    ok(fs.existsSync(f1) && fs.statSync(f1).size < big.length && fs.statSync(f1).size > 10 * 1024,
+      `la de >500 KB se recomprimió (${Math.round(big.length / 1024)} KB → ${Math.round(fs.statSync(f1).size / 1024)} KB)`);
+    // Caché por hash estable: la segunda corrida reusa el archivo, sin red.
+    const calls2 = [];
+    const prof2 = { handle: 'fixture.cafe', photos: ['https://scontent.cdninstagram.com/fixture/foto-ok.jpg'] };
+    await feedAudit.localizeTrialPhotos(prof2, mediaDir, async (u) => { calls2.push(u); return small; });
+    ok(prof2.photos[0] === prof.photos[0] && calls2.length === 0, 'archivo ya presente → misma URL local, cero descargas');
+    // Lote inalcanzable: todo null y sin lanzar (el stream no se entera).
+    const prof3 = { handle: 'fixture.cafe', photos: ['https://scontent.cdninstagram.com/fixture/foto-fail.jpg'] };
+    await feedAudit.localizeTrialPhotos(prof3, mediaDir, impl);
+    ok(prof3.photos[0] === null, 'todas inalcanzables → nulls, sin excepción');
+  } catch (e) {
+    fails++;
+    console.error('  ✗ excepción en Parte A2:', e.message);
+  } finally {
+    try { fs.rmSync(mediaDir, { recursive: true, force: true }); } catch (e) {}
+  }
+}
+
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-proj-'));
 const PORT = 18744;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -130,7 +200,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261017-v185', '/api/version es v185 (build de la proyección)');
+    ok(ver.build === '20261017-v187', '/api/version es v187 (build del fix de grillas)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -194,6 +264,28 @@ async function partB() {
         && done2.d.out.profile.followers === 4812,
         'el done del cache-hit trae el perfil para la tarjeta');
     }
+
+    // B3 (v187): semana cacheada con fotos LOCALES — el payload restaurado
+    // conserva las URLs /media/… y el archivo se sirve con 200 desde
+    // nuestro propio origen (eso es lo que el navegador sí puede mostrar).
+    const thumbName = 'igthumb-fixture187.jpg';
+    fs.mkdirSync(path.join(TMP, 'media'), { recursive: true });
+    fs.writeFileSync(path.join(TMP, 'media', thumbName), smallJpegBytes());
+    const payloadLocal = JSON.stringify({
+      ok: true, engine: demo.DEMO_ENGINE_V, business: 'Café Local', ig: 'local.cafe', category: 'cafeteria',
+      profile: { handle: 'local.cafe', name: 'Café Local', bio: '', followers: 10, posts_count: 3, following: 1,
+        pic: null, photos: ['/media/' + thumbName, null, '/media/igthumb-otra187.jpg'] },
+      posts: [0, 1, 2, 3, 4].map((i) => ({ type: 'image', image: 'data:image/jpeg;base64,AAAA', caption: 'c' + i, hashtags: '#cafe', style_name: 'Estilo ' + i })),
+      design: { posts: [], styles: [], photos: [], videoIdx: 2, count: 5, engine: demo.DEMO_ENGINE_V },
+      week: [],
+    });
+    db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?,?,?)').run('local.cafe', payloadLocal, Date.now());
+    const wkL = await (await fetch(`${BASE}/api/trial/week?ig=local.cafe`)).json();
+    ok(wkL && wkL.profile && wkL.profile.photos[0] === '/media/' + thumbName && wkL.profile.photos[1] === null,
+      'la semana cacheada conserva las fotos locales (y los null de las que fallaron)');
+    const mediaRes = await fetch(`${BASE}/media/${thumbName}`);
+    ok(mediaRes.status === 200 && (mediaRes.headers.get('content-type') || '').includes('image'),
+      '/media sirve la miniatura local con 200 e image/*');
   } catch (e) {
     fails++;
     console.error('  ✗ excepción en Parte B:', e.message);
@@ -215,13 +307,76 @@ function partC() {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes('20261017-v185'), 'BUILD_ID en v185');
+  ok(srv.includes('20261017-v187'), 'BUILD_ID en v187');
+  // v187: proxy de miniaturas + grilla CON Posty sin repetidos.
+  ok(srv.includes('localizeTrialPhotos'), 'el stream localiza las miniaturas del perfil (v187)');
+  ok(srv.includes('grid_extra: gridExtra'), 'el payload lleva grid_extra (visuales únicos de la grilla)');
+  ok(srv.includes('cover:'), 'el posteo video lleva su tapa (cover) para la grilla');
+  const fa = fs.readFileSync(path.join(__dirname, 'feed-audit.js'), 'utf8');
+  ok(fa.includes('igthumb-') && fa.includes('localizeTrialPhotos'), 'feed-audit descarga las miniaturas a MEDIA_DIR');
+  ok(html.includes('projAfterVisuals'), 'la grilla CON Posty se arma con projAfterVisuals (sin motivos repetidos)');
+  ok(!html.includes('(i - 5) % arr.length'), 'el reciclado de piezas con crop (v185) ya no existe');
+}
+
+function partD() {
+  console.log('— Parte D: grilla CON Posty con las funciones reales (visuales únicos)');
+  const html = fs.readFileSync(path.join(__dirname, 'public', 'prueba.html'), 'utf8');
+  const start = html.indexOf('let PROJ = null;');
+  const end = html.indexOf('function renderProj()');
+  ok(start > 0 && end > start, 'bloque de proyección extraíble de prueba.html');
+  if (start < 0 || end <= start) return;
+  globalThis.TRIAL = null;
+  globalThis.esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let api = null;
+  try {
+    api = new Function(html.slice(start, end) + '\nreturn { setProj: (p) => { PROJ = p; }, layer: projLayerHTML, visuals: projAfterVisuals };')();
+  } catch (e) {
+    ok(false, 'el bloque evalúa: ' + e.message);
+    return;
+  }
+  const profile = { handle: 'fixture.cafe', name: 'Café Fixture', bio: 'bio', followers: 10, posts_count: 9, following: 3, pic: '', photos: [] };
+  const mkPosts = (withCover) => {
+    const posts = [0, 1, 2, 3, 4].map((i) => ({ type: 'image', image: 'data:IMG' + i, style_name: 'S' + i }));
+    posts[2] = { type: 'video', video: 'data:VID', style_name: 'S2' };
+    if (withCover) posts[2].cover = 'data:COVER';
+    return posts;
+  };
+  const gridSrcs = (layerHtml) => {
+    const gi = layerHtml.indexOf('pfp-grid');
+    const frag = gi >= 0 ? layerHtml.slice(gi) : layerHtml;
+    return [...frag.matchAll(/src="([^"]+)"/g)].map((m) => m[1]);
+  };
+  const cellCount = (layerHtml) => (layerHtml.match(/<div class="pfp-cell">/g) || []).length;
+
+  // D1: semana completa + tapa + 3 extras → 9 celdas, 9 visuales únicos.
+  api.setProj({ profile, piecesArr: mkPosts(true), extras: ['data:EX0', 'data:EX1', 'data:EX2'], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
+  const h1 = api.layer('posty');
+  const s1 = gridSrcs(h1);
+  ok(cellCount(h1) === 9, `D1: 9 celdas (hay ${cellCount(h1)})`);
+  ok(s1.length === 9 && new Set(s1).size === 9, `D1: 9 visuales y TODOS distintos (únicos: ${new Set(s1).size})`);
+  ok(s1.includes('data:COVER') && s1.includes('data:EX0') && s1.includes('data:EX2'), 'D1: están la tapa del reel y los extras');
+  ok(!s1.includes('data:IMG2'), 'D1: el diseño del reel no se duplica como imagen (sale como video + tapa)');
+
+  // D2: sin extras → 6 celdas (2 filas), ningún repetido.
+  api.setProj({ profile, piecesArr: mkPosts(true), extras: [], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
+  const h2 = api.layer('posty');
+  const s2 = gridSrcs(h2);
+  ok(cellCount(h2) === 6, `D2: sin extras la grilla muestra 6 celdas (hay ${cellCount(h2)})`);
+  ok(s2.length === 6 && new Set(s2).size === 6, 'D2: los 6 visuales son únicos');
+
+  // D3: sin tapa ni extras (último recurso) → 5 celdas, únicos igual.
+  api.setProj({ profile, piecesArr: mkPosts(false), extras: [], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
+  const h3 = api.layer('posty');
+  const s3 = gridSrcs(h3);
+  ok(cellCount(h3) === 5 && new Set(s3).size === s3.length, `D3: último recurso = 5 celdas únicas (hay ${cellCount(h3)})`);
 }
 
 (async () => {
   await partA();
+  await partA2();
   await partB();
   partC();
+  partD();
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
   console.log(fails ? `\n❌ ${fails} fallas` : '\n✅ TODO VERDE');
   process.exit(fails ? 1 : 0);

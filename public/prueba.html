@@ -1218,7 +1218,7 @@ function onStreamError(d) {
 // siempre.
 let PROJ = null; // { profile, piecesArr, mode:'live'|'card', closed, min, pos, scrolled }
 function projFresh(mode) {
-  return { profile: null, piecesArr: [], mode, closed: false, min: false, pos: 50, scrolled: false };
+  return { profile: null, piecesArr: [], extras: [], mode, closed: false, min: false, pos: 50, scrolled: false };
 }
 function projCategory() {
   if (TRIAL && TRIAL.category) return TRIAL.category;
@@ -1272,21 +1272,44 @@ function projPieceMediaHTML(post, crop) {
   if (post.video) return `<video src="${post.video}" muted loop autoplay playsinline${st}></video><span class="pfp-vb">▶ REEL</span>`;
   return '';
 }
-function projAfterCellHTML(i) {
+function projAfterVisuals() {
+  // Visuales ÚNICOS de la grilla CON Posty (v187): las 5 piezas de la semana
+  // + la tapa del reel (cover del posteo video) + hasta 3 diseños extra que
+  // manda el server (grid_extra: temas/fotos que la semana no usó). NADA se
+  // repite — la versión anterior reciclaba piezas con otro crop y se leía
+  // como posteos repetidos. Si no hay 9 únicos, la grilla muestra 6.
   const arr = (PROJ && PROJ.piecesArr) || [];
-  let html = '';
-  if (i < 5) html = arr[i] ? projPieceMediaHTML(arr[i]) : '';
-  else {
-    const src = arr.length ? arr[(i - 5) % arr.length] : null;
-    html = src ? projPieceMediaHTML(src, PROJ_CROPS[i - 5]) : '';
-  }
-  return html || '<div class="pfp-cell-wait"></div>';
+  const cells = [];
+  for (let i = 0; i < 5; i++) cells.push(arr[i] ? { post: arr[i] } : null);
+  const vp = arr.find((p) => p && p.type === 'video' && p.cover);
+  if (vp) cells.push({ cover: vp.cover });
+  const ex = (PROJ && PROJ.extras) || [];
+  for (const u of ex) { if (u && cells.length < 9) cells.push({ img: u }); }
+  return cells;
+}
+function projAfterCellHTML(i) {
+  const c = projAfterVisuals()[i];
+  if (!c) return '<div class="pfp-cell-wait"></div>';
+  if (c.post) return projPieceMediaHTML(c.post) || '<div class="pfp-cell-wait"></div>';
+  if (c.cover) return `<img src="${c.cover}" alt="" loading="lazy"><span class="pfp-vb">▶ REEL</span>`;
+  return `<img src="${c.img}" alt="" loading="lazy">`;
 }
 function projLayerHTML(side) {
   const p = PROJ.profile;
   const grid = side === 'hoy'
     ? Array.from({ length: 9 }, (_, i) => projHoyCellHTML((p.photos || [])[i])).join('')
-    : Array.from({ length: 9 }, (_, i) => `<div class="pfp-cell">${projAfterCellHTML(i)}</div>`).join('');
+    : (() => {
+        // Semana completa: 9 celdas si hay 9 visuales únicos; si no, 6
+        // (2 filas) — jamás se rellena reciclando un diseño ya mostrado.
+        const ready = (PROJ.piecesArr || []).filter(Boolean).length >= 5;
+        let count = 9;
+        if (ready) {
+          count = projAfterVisuals().filter(Boolean).length;
+          if (count > 6 && count < 9) count = 6;
+          if (count < 5) count = 5;
+        }
+        return Array.from({ length: count }, (_, i) => `<div class="pfp-cell">${projAfterCellHTML(i)}</div>`).join('');
+      })();
   return `<div class="pfp-prof">${projAvaHTML(p)}<div class="pfp-who"><b>${esc(p.name || p.handle || '')}</b><span>@${esc(p.handle || '')}</span></div></div>`
     + projStatsHTML(p)
     + (p.bio ? `<p class="pfp-bio">${esc(p.bio)}</p>` : '')
@@ -1371,7 +1394,8 @@ function onStreamProfile(d) {
   }
 }
 // Cada pieza que llega por el stream llena su celda de la grilla CON Posty
-// (y los motivos que la repiten), sin re-renderizar toda la tarjeta.
+// (y refresca la tapa del reel si es el posteo video), sin re-renderizar
+// toda la tarjeta.
 function projAddPiece(idx, post) {
   if (!PROJ || !PROJ.profile || PROJ.closed || !post) return;
   PROJ.piecesArr = PROJ.piecesArr || [];
@@ -1379,8 +1403,8 @@ function projAddPiece(idx, post) {
   const grid = document.querySelector('.pfp-grid-after');
   if (!grid) { renderProj(); return; }
   const cells = grid.children;
-  for (let i = 0; i < 9; i++) {
-    if (i === idx || i >= 5) { const c = cells[i]; if (c) c.innerHTML = projAfterCellHTML(i); }
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i]; if (c) c.innerHTML = projAfterCellHTML(i);
   }
   // Línea de estilos de la semana (aparece con el primer estilo nombrado)
   const styles = [...new Set(PROJ.piecesArr.map((x) => x && x.style_name).filter(Boolean))];
@@ -1405,6 +1429,7 @@ function projFromTrial() {
     PROJ.closed = wasClosed;
     PROJ.profile = t.profile;
     PROJ.piecesArr = (t.posts || []).slice(0, 5);
+    PROJ.extras = Array.isArray(t.grid_extra) ? t.grid_extra.slice(0, 3) : [];
   }
   renderProj();
 }
