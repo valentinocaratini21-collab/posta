@@ -5073,6 +5073,130 @@ function bindChat() {
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
 
+/* ---------- Piezas compartidas de la semana (home + agenda v217) ---------- */
+// Propuestas de día para los borradores: DÍAS DISTINTOS, saltando los que
+// ya tienen un posteo real (publicado o programado). Antes salían de
+// "hoy + índice" y el corrimiento de las 10:00 hacía que dos posteos
+// cayeran "mañana" (reporte de Valentino, 2026-10-16). Las historias
+// tienen su propio carril, igual que en el servidor. Extraído TAL CUAL
+// del IIFE que vivía dentro de homeWeekHTML (v217): misma entrada
+// (all, list, tz) → mismo mapa, para que el carrusel del chat y las
+// vistas Día/Semana/Mes de Schedule ubiquen cada borrador en el MISMO día.
+function computeProposedIsos(all, list, tz) {
+  const map = new Map();
+  try {
+    const dayKey = (v) => new Date(v).toLocaleDateString('en-CA', { timeZone: tz });
+    const takenFeed = new Set(), takenStory = new Set();
+    for (const p of all) {
+      if (!p || !p.scheduled_at) continue;
+      if (p.status !== 'published' && p.status !== 'scheduled') continue;
+      (String(p.media_type) === 'story' ? takenStory : takenFeed).add(dayKey(p.scheduled_at));
+    }
+    const now = new Date();
+    const hourNow = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now), 10);
+    // Base: hoy si todavía no pasaron las 10:00 del cliente; si no, mañana.
+    const cursorFeed = new Date(now.getTime() + (hourNow >= 10 ? 86400000 : 0));
+    const cursorStory = new Date(cursorFeed.getTime());
+    const nextFree = (cursor, taken) => {
+      let d = new Date(cursor.getTime());
+      for (let k = 0; k < 21; k++) {
+        const ymd = d.toLocaleDateString('en-CA', { timeZone: tz });
+        if (!taken.has(ymd)) { taken.add(ymd); return { iso: `${ymd}T10:00:00`, next: new Date(d.getTime() + 86400000) }; }
+        d = new Date(d.getTime() + 86400000);
+      }
+      return null;
+    };
+    let cf = cursorFeed, cs = cursorStory;
+    for (const d of list) {
+      if (!d || d.scheduled_at) continue;
+      const isStory = String(d.media_type) === 'story';
+      const r = isStory ? nextFree(cs, takenStory) : nextFree(cf, takenFeed);
+      if (r) { map.set(d.id, { iso: r.iso }); if (isStory) cs = r.next; else cf = r.next; }
+    }
+  } catch (e) {}
+  return map;
+}
+// Etiqueta de día/hora de un posteo para la cabecera de su tarjeta:
+// programado → su fecha; borrador → el día propuesto (o "Borrador").
+function proposedLabelFor(d, proposedIsos, tz) {
+  if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
+  try {
+    const iso = (proposedIsos.get(d.id) || {}).iso || null;
+    if (!iso) return { label: '📝 Borrador', iso: null };
+    const lbl = new Date(iso.slice(0, 10) + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
+    return { label: `📅 ${lbl} · 10:00`, iso };
+  } catch (e) { return { label: '📝 Borrador', iso: null }; }
+}
+// LA tarjeta grande réplica de Instagram (la del carrusel de v215).
+// o = { bizName, tz, prop: {label, iso}, count: 'N de M' | null, dia: bool }
+// - count null → sin contador en la tarjeta (v217: el "N de M" se leía como
+//   índice de fotos del propio posteo; la cuenta vive en la cabecera).
+// - dia true → esqueleto fijo y uniforme (.igmock-dia): zonas de alto fijo
+//   para que TODAS las tarjetas midan exactamente lo mismo.
+// Los publicados solo llegan acá desde la vista Día de Schedule: salen
+// con su pastilla ✅ Publicado y sin acciones de borrador.
+function weekCardHTML(d, o) {
+  o = o || {};
+  const tz = o.tz || 'America/Argentina/Buenos_Aires';
+  const bizName = o.bizName || 'Mi negocio';
+  const prop = o.prop || { label: '📝 Borrador', iso: null };
+  const isV = String(d.media_type || '') === 'video';
+  const isS = String(d.media_type || '') === 'story';
+  const isPub = String(d.status) === 'published';
+  // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
+  const isPending = !d.image_path && d.status === 'draft';
+  const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
+    : !d.image_path ? '<span class="pcard-nothumb">📝</span>'
+    : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
+    : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
+  const capFull = String(d.caption || d.source_topic || '');
+  const acts = isPub ? (o.dia ? '<div class="pcard-actions hs-acts"></div>' : '')
+    : `<div class="pcard-actions hs-acts">
+        ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
+        <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
+        ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+        <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
+      </div>`;
+  // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
+  // "Armar otro" (la igmock del carrusel original no los traía).
+  let dayLabel = '';
+  const whenIso = isPub ? (d.published_at || d.scheduled_at) : d.scheduled_at;
+  if (whenIso) { const dt = pcParseDate(whenIso); if (dt) dayLabel = pcFmtDayLong(dt, tz) + ' a las ' + dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); }
+  else if (prop.iso) { const dd = new Date(prop.iso.slice(0, 10) + 'T12:00:00Z'); const dn = dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); dayLabel = dn.charAt(0).toUpperCase() + dn.slice(1) + ' ' + dd.getUTCDate() + ' a las ' + prop.iso.slice(11, 16); }
+  // La forma de Instagram: íconos + "Me gusta" solo cuando hay pieza
+  // (un borrador creándose todavía no tiene qué mostrar).
+  const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div><div class="igmock-likes">Sé el primero en indicar que te gusta</div>` : '';
+  const statusHTML = d.status === 'scheduled'
+    ? `<span class="pcard-scheduled">📮 Programado</span>`
+    : isPub
+      ? `<span class="pcard-published">✅ Publicado</span>`
+      : isPending
+        ? `<span class="pcard-creating">⏳ Creando…</span>`
+        : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`;
+  const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : '';
+  const foot = o.dia
+    ? `<div class="igmock-foot">
+        <div class="igmock-chrome">${igChrome}</div>
+        ${capFull ? capHTML : '<div class="igmock-cap" aria-hidden="true"></div>'}
+        ${acts}
+      </div>`
+    : `<div class="igmock-foot">
+        ${igChrome}
+        ${capHTML}
+        ${acts}
+      </div>`;
+  return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
+      <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>${o.count ? `
+        <span class="igmock-count">${esc(o.count)}</span>` : ''}</div>
+      <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
+        ${statusHTML}</div>
+      ${isPending
+        ? `<div class="igmock-media igmock-pending">${media}</div>`
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>`}
+      ${foot}
+    </div>`;
+}
+
 /* ---------- v215: AGENDA = CARRUSEL DE TARJETAS GRANDES ---------- */
 // homeWeekHTML pinta el carrusel que Valentino aprobó (el pre-v213):
 // tarjetas grandes lado a lado, flechas ‹ ›, cada tarjeta con su día.
@@ -5130,45 +5254,9 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   // botones Aceptar/Editar/Imagen/Eliminar. Pedido de Valentino.
   // 2026-10-09: cada borrador muestra arriba el día propuesto (se programa ahí al aceptar).
   const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
-  // Propuestas de día para los borradores: DÍAS DISTINTOS, saltando los que
-  // ya tienen un posteo real (publicado o programado). Antes salían de
-  // "hoy + índice" y el corrimiento de las 10:00 hacía que dos posteos
-  // cayeran "mañana" (reporte de Valentino, 2026-10-16). Las historias
-  // tienen su propio carril, igual que en el servidor.
-  const proposedIsos = (() => {
-    const map = new Map();
-    try {
-      const dayKey = (v) => new Date(v).toLocaleDateString('en-CA', { timeZone: tz });
-      const takenFeed = new Set(), takenStory = new Set();
-      for (const p of all) {
-        if (!p || !p.scheduled_at) continue;
-        if (p.status !== 'published' && p.status !== 'scheduled') continue;
-        (String(p.media_type) === 'story' ? takenStory : takenFeed).add(dayKey(p.scheduled_at));
-      }
-      const now = new Date();
-      const hourNow = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now), 10);
-      // Base: hoy si todavía no pasaron las 10:00 del cliente; si no, mañana.
-      const cursorFeed = new Date(now.getTime() + (hourNow >= 10 ? 86400000 : 0));
-      const cursorStory = new Date(cursorFeed.getTime());
-      const nextFree = (cursor, taken) => {
-        let d = new Date(cursor.getTime());
-        for (let k = 0; k < 21; k++) {
-          const ymd = d.toLocaleDateString('en-CA', { timeZone: tz });
-          if (!taken.has(ymd)) { taken.add(ymd); return { iso: `${ymd}T10:00:00`, next: new Date(d.getTime() + 86400000) }; }
-          d = new Date(d.getTime() + 86400000);
-        }
-        return null;
-      };
-      let cf = cursorFeed, cs = cursorStory;
-      for (const d of list) {
-        if (!d || d.scheduled_at) continue;
-        const isStory = String(d.media_type) === 'story';
-        const r = isStory ? nextFree(cs, takenStory) : nextFree(cf, takenFeed);
-        if (r) { map.set(d.id, { iso: r.iso }); if (isStory) cs = r.next; else cf = r.next; }
-      }
-    } catch (e) {}
-    return map;
-  })();
+  // Propuestas de día para los borradores (compartido con la agenda v217:
+  // computeProposedIsos — la misma cuenta que hacía el IIFE que vivía acá).
+  const proposedIsos = computeProposedIsos(all, list, tz);
 
   // ===== v215: EL CARRUSEL DE TARJETAS GRANDES (restaurado) =====
   // La referencia de Valentino es el carrusel pre-v213: tarjetas grandes
@@ -5182,15 +5270,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   // de "Me gusta" entre la imagen y el caption, como las tarjetas de la
   // landing (LP_WEEK_ICONS). Sin conteos inventados (regla de verdad):
   // la línea usa el estado cero real de Instagram.
-  const proposedFor = (d) => {
-    if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
-    try {
-      const iso = (proposedIsos.get(d.id) || {}).iso || null;
-      if (!iso) return { label: '📝 Borrador', iso: null };
-      const lbl = new Date(iso.slice(0, 10) + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
-      return { label: `📅 ${lbl} · 10:00`, iso };
-    } catch (e) { return { label: '📝 Borrador', iso: null }; }
-  };
+  const proposedFor = (d) => proposedLabelFor(d, proposedIsos, tz);
   // Programados de semanas anteriores que quedaron sin salir: filas
   // compactas arriba (postCardHTML), como en v213/v214 — no ocupan
   // tarjeta del carrusel ni cuentan en el "N de M".
@@ -5202,50 +5282,9 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   const staleSet = new Set(staleItems);
   const staleHTML = staleItems.length ? `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${staleItems.map(p => postCardHTML(p, { layout: 'row' })).join('')}</div>` : '';
   const rail = list.filter(p => !staleSet.has(p));
-  const cards = rail.map((d, i) => {
-    const isV = String(d.media_type || '') === 'video';
-    const isS = String(d.media_type || '') === 'story';
-    // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
-    const isPending = !d.image_path && d.status === 'draft';
-    const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
-      : !d.image_path ? '<span class="pcard-nothumb">📝</span>'
-      : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
-      : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
-    const prop = proposedFor(d);
-    const capFull = String(d.caption || d.source_topic || '');
-    const acts = `<div class="pcard-actions hs-acts">
-        ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
-        <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
-        ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
-        <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
-      </div>`;
-    // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
-    // "Armar otro" (la igmock del carrusel original no los traía).
-    let dayLabel = '';
-    if (d.scheduled_at) { const dt = pcParseDate(d.scheduled_at); if (dt) dayLabel = pcFmtDayLong(dt, tz) + ' a las ' + dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); }
-    else if (prop.iso) { const dd = new Date(prop.iso.slice(0, 10) + 'T12:00:00Z'); const dn = dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); dayLabel = dn.charAt(0).toUpperCase() + dn.slice(1) + ' ' + dd.getUTCDate() + ' a las ' + prop.iso.slice(11, 16); }
-    // La forma de Instagram: íconos + "Me gusta" solo cuando hay pieza
-    // (un borrador creándose todavía no tiene qué mostrar).
-    const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div><div class="igmock-likes">Sé el primero en indicar que te gusta</div>` : '';
-    return `<div class="igmock igmock-fixed" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
-      <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
-        <span class="igmock-count">${i + 1} de ${rail.length}</span></div>
-      <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
-        ${d.status === 'scheduled'
-          ? `<span class="pcard-scheduled">📮 Programado</span>`
-          : isPending
-            ? `<span class="pcard-creating">⏳ Creando…</span>`
-            : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`}</div>
-      ${isPending
-        ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>`}
-      <div class="igmock-foot">
-        ${igChrome}
-        ${capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : ''}
-        ${acts}
-      </div>
-    </div>`;
-  }).join('');
+  // Las tarjetas las construye weekCardHTML (compartido con la agenda
+  // v217); acá van CON el contador "N de M", como en el carrusel aprobado.
+  const cards = rail.map((d, i) => weekCardHTML(d, { bizName, tz, prop: proposedFor(d), count: `${i + 1} de ${rail.length}` })).join('');
   // 2026-10-14 (pedido de Valentino): contador visible de la semana — cuántos
   // posteos van y cuántos quedan del plan, para que el cliente sepa cómo viene.
   const qLeft = Math.max(0, qTotal - qUsed);
@@ -5297,6 +5336,411 @@ function homeWhenLabel(iso) {
     return `${day} · ${hh}`;
   } catch (e) { return ''; }
 }
+
+/* ===== v217: SCHEDULE CON FILTRO DÍA · SEMANA · MES =====
+   Diseño final de Valentino (consolidado de sus correcciones del
+   2026-10-18): arriba de Schedule, un filtro segmentado.
+   - DÍA: las tarjetas grandes réplica de Instagram de ESE día, con
+     esqueleto fijo y uniforme (.igmock-dia), sin contador "N de M" en
+     la tarjeta y con las flechas del riel POR FUERA del cuadro.
+   - SEMANA: lunes a domingo de una, grilla de 7 columnas; tocar un
+     día salta a la vista Día de ese día.
+   - MES: el almanaque — semanas apiladas con su rótulo; tocar un día
+     salta a Día.
+   Ningún posteo desaparece al aceptarlo: queda en su día con su
+   estado nuevo (📮 Programado / ✅ Publicado) en las tres vistas.
+   Todo se pinta desde scheduled_at / día propuesto / estado — el
+   mismo dato de siempre, sin estado paralelo. */
+let SCHED_MODE = 'semana';
+try { const m0 = localStorage.getItem('posty_sched_mode'); if (m0 === 'dia' || m0 === 'semana' || m0 === 'mes') SCHED_MODE = m0; } catch (e) {}
+let SCHED_WEEK_OFFSET = 0; // semanas desde la actual (vista Semana)
+let SCHED_MONTH_OFFSET = 0; // meses desde el actual (vista Mes)
+// (SCHED_DAY_OFFSET — días desde hoy — vive junto a scheduleView.)
+
+// --- Fechas ancladas a mediodía UTC: aritmética de días sin sorpresas
+// de zona horaria. El "ymd" SIEMPRE es la fecha local del cliente.
+function schedTodayYmd(tz) { try { return new Date().toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+function schedYmdToDate(ymd) { const d = new Date(String(ymd || '').slice(0, 10) + 'T12:00:00Z'); return isNaN(d) ? null : d; }
+function schedDateToYmd(d) { return d.toISOString().slice(0, 10); }
+function schedAddDays(ymd, n) { const d = schedYmdToDate(ymd); if (!d) return ymd; d.setUTCDate(d.getUTCDate() + n); return schedDateToYmd(d); }
+function schedMondayOf(ymd) { const d = schedYmdToDate(ymd); if (!d) return ymd; const back = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - back); return schedDateToYmd(d); }
+function schedDiffDays(fromYmd, toYmd) { const a = schedYmdToDate(fromYmd), b = schedYmdToDate(toYmd); if (!a || !b) return 0; return Math.round((b - a) / 86400000); }
+function schedDayKeyOf(dt, tz) { try { return dt.toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } }
+function schedCap(s) { s = String(s || ''); return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function schedMonthName(ymd) { const d = schedYmdToDate(ymd); try { return d ? d.toLocaleDateString('es-AR', { month: 'long', timeZone: 'UTC' }) : ''; } catch (e) { return ''; } }
+function schedRangeLabel(a, b) {
+  const da = schedYmdToDate(a), db = schedYmdToDate(b);
+  if (!da || !db) return '';
+  const ma = schedMonthName(a), mb = schedMonthName(b);
+  if (ma === mb) return `del ${da.getUTCDate()} al ${db.getUTCDate()} de ${ma}`;
+  return `del ${da.getUTCDate()} de ${ma} al ${db.getUTCDate()} de ${mb}`;
+}
+// Estado visual de un posteo en las vistas de calendario.
+function schedPostState(p) {
+  if (!p) return 'draft';
+  if (p.status === 'published') return 'published';
+  if (p.status === 'scheduled') return 'scheduled';
+  if (!p.image_path) return 'creating';
+  return 'draft';
+}
+// Ubicación de TODOS los posteos por día: publicados → el día que
+// salieron; programados → su scheduled_at; borradores → su scheduled_at
+// si lo traen, si no el día propuesto (computeProposedIsos, la misma
+// cuenta del carrusel: ningún borrador cambia de día entre vistas).
+function schedPlacements(all, tz) {
+  const posts = Array.isArray(all) ? all : [];
+  const list = posts.filter(p => p && (p.status === 'draft' || p.status === 'scheduled'))
+    .sort((a, b) => ((a.status === 'draft' ? 0 : 1) - (b.status === 'draft' ? 0 : 1)) || String(a.scheduled_at || a.created_at || '').localeCompare(String(b.scheduled_at || b.created_at || '')));
+  const proposals = computeProposedIsos(posts, list, tz);
+  const byDay = new Map();
+  const dayOf = new Map();
+  const push = (ymd, p, t) => {
+    if (!ymd || !p) return;
+    if (!byDay.has(ymd)) byDay.set(ymd, []);
+    byDay.get(ymd).push({ p, t: t || 0 });
+    dayOf.set(p.id, ymd);
+  };
+  for (const p of posts) {
+    if (!p) continue;
+    if (p.status === 'published') {
+      const dt = pcParseDate(p.published_at || p.scheduled_at);
+      if (dt) push(schedDayKeyOf(dt, tz), p, dt.getTime());
+    } else if (p.status === 'scheduled') {
+      const dt = pcParseDate(p.scheduled_at);
+      if (dt) push(schedDayKeyOf(dt, tz), p, dt.getTime());
+    } else if (p.status === 'draft') {
+      if (p.scheduled_at) {
+        const dt = pcParseDate(p.scheduled_at);
+        if (dt) { push(schedDayKeyOf(dt, tz), p, dt.getTime()); continue; }
+      }
+      const iso = (proposals.get(p.id) || {}).iso;
+      if (iso) { const base = schedYmdToDate(iso.slice(0, 10)); push(iso.slice(0, 10), p, base ? base.getTime() : 0); }
+    }
+  }
+  for (const arr of byDay.values()) arr.sort((a, b) => a.t - b.t);
+  return { byDay, dayOf, proposals, list };
+}
+// Línea de cupo de Schedule (la misma cuenta y el mismo copy que pinta
+// homeWeekHTML en el chat: hechos/quedan + la semana que viene capeada,
+// nunca "8 de 5").
+function schedQuotaHTML(list, quota) {
+  const q = quota || {};
+  const qTotal = Number(q.limit) || 0;
+  const qUsed = Math.max(0, Number(q.used) || 0);
+  if (!(qTotal > 0)) return '';
+  const qLeft = Math.max(0, qTotal - qUsed);
+  const qPct = Math.min(100, Math.round((qUsed / qTotal) * 100));
+  const feedDrafts = (list || []).filter(pp => pp.status === 'draft' && !/^(story|video)$/.test(String(pp.media_type || 'image'))).length;
+  const rollover = Math.max(0, feedDrafts - qLeft);
+  const nextArmed = Math.min(rollover, qTotal);
+  const nextLine = rollover > 0
+    ? `<div class="hs-quota-next">✨ Ya están armados <b>${nextArmed} de ${qTotal}</b> de la semana que viene${rollover > qTotal ? ` · y <b>${rollover - qTotal} más</b> en espera` : ''}</div>`
+    : '';
+  return `<div class="hs-quota">
+      <div class="hs-quota-txt">${qUsed >= qTotal
+        ? `🎉 <b>¡Semana completa!</b> ${qUsed} de ${qTotal} posteos listos`
+        : `📊 <b>${qUsed} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
+      <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
+      ${nextLine}
+    </div>`;
+}
+// Tira de programados de semanas anteriores que quedaron sin salir
+// (la misma de v215: filas compactas de postCardHTML, siempre visible).
+function schedStaleHTML(all, tz) {
+  let mondayKeyStr = '';
+  try { mondayKeyStr = albumMondayKey(); } catch (e) {}
+  if (!mondayKeyStr) return '';
+  const stale = (all || []).filter(p => p && p.status === 'scheduled' && p.scheduled_at)
+    .filter(p => { const dt = pcParseDate(p.scheduled_at); const k = dt ? schedDayKeyOf(dt, tz) : ''; return !!k && k < mondayKeyStr; })
+    .sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)));
+  if (!stale.length) return '';
+  return `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${stale.map(p => postCardHTML(p, { layout: 'row' })).join('')}</div>`;
+}
+// Miniatura de calendario (Semana/Mes): la imagen MAESTRA o su variante
+// @640 que SÍ existe (la @240 de v214 no existe: prohibida), con punto
+// de estado y badge de reel/story. Videos: el propio archivo de portada.
+function schedMiniHTML(p, timeLabel) {
+  const st = schedPostState(p);
+  const isV = String(p.media_type || '') === 'video';
+  const isS = String(p.media_type || '') === 'story';
+  const media = !p.image_path
+    ? '<span class="scf-mini ph">✨</span>'
+    : isV
+      ? `<span class="scf-mini"><video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video><i class="scf-dot st-${st}"></i><em class="scf-mini-badge">🎬</em></span>`
+      : `<span class="scf-mini"><img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt=""><i class="scf-dot st-${st}"></i>${isS ? '<em class="scf-mini-badge">📸</em>' : ''}</span>`;
+  return media + (timeLabel ? `<span class="scf-mini-t">${esc(timeLabel)}</span>` : '');
+}
+function schedMiniTime(p) {
+  const dt = pcParseDate(p.scheduled_at || p.published_at);
+  if (dt) { try { return dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: pcTz() }); } catch (e) {} }
+  return '10:00'; // borrador: su día propuesto sale a las 10:00
+}
+// --- Vista DÍA: tarjetas grandes de un solo día, en riel horizontal ---
+function schedDiaBodyHTML(ctx) {
+  const { pl, tz, bizName } = ctx;
+  const today = schedTodayYmd(tz);
+  const ymd = schedAddDays(today, SCHED_DAY_OFFSET);
+  const items = pl.byDay.get(ymd) || [];
+  if (!items.length) {
+    const d = schedYmdToDate(ymd);
+    const dl = d ? pcFmtDayLong(d, 'UTC') : ymd;
+    return `<div class="scf-empty"><b>🕊️ Nada para este día</b><span>Este día está libre en tu agenda.</span><button type="button" class="sched-ghost scf-ghost" data-sched-day="${esc(dl)}"><span class="sg-plus">+</span><span class="sg-txt">Pedirle a Posty un posteo para este día</span></button></div>`;
+  }
+  const cards = items.map(({ p }) => {
+    const prop = p.status === 'published'
+      ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+      : proposedLabelFor(p, pl.proposals, tz);
+    return weekCardHTML(p, { bizName, tz, prop, dia: true });
+  }).join('');
+  const arrows = items.length > 1;
+  // El espacio de las flechas se reserva SIEMPRE (fantasma invisible en
+  // días de un solo posteo): si el riel cambiara de ancho según el día,
+  // las tarjetas — que miden % del riel — cambiarían de alto entre días
+  // y volvería el "no están iguales" que Valentino marcó.
+  const ph = '<span class="scf-arrow scf-arrow-ph" aria-hidden="true">‹</span>';
+  return `<div class="scf-railwrap">
+    ${arrows ? '<button type="button" class="scf-arrow" id="scfRailPrev" aria-label="Posteo anterior">‹</button>' : ph}
+    <div class="hs-week-list scf-rail" id="hsWeekList">${cards}</div>
+    ${arrows ? '<button type="button" class="scf-arrow" id="scfRailNext" aria-label="Posteo siguiente">›</button>' : ph}
+  </div>`;
+}
+// --- Vista SEMANA: lunes a domingo de una, sin deslizar de costado ---
+// Cada posteo va COMPACTO en su columna (solo imagen, hora y estado —
+// SIN pie de foto). Al pasar el mouse por encima (o al primer toque en
+// táctil) se AGRANDA con todo: la tarjeta completa en una capa por
+// encima de la grilla, sin que la grilla se reacomode (amendment de
+// Valentino). Las tarjetas completas viven en el cofre #scfVault — el
+// patrón de v214 — y se MUEVEN a la capa al abrir: conservan todos
+// sus bindings ([data-pc-act] delegado, [data-revaccept], lightbox).
+// El encabezado de cada día (día + número) salta a la vista Día.
+function schedSemanaBodyHTML(ctx) {
+  const { pl, tz, bizName } = ctx;
+  const today = schedTodayYmd(tz);
+  const monday = schedMondayOf(schedAddDays(today, SCHED_WEEK_OFFSET * 7));
+  const sunday = schedAddDays(monday, 6);
+  const cols = [];
+  const vaultCards = [];
+  for (let i = 0; i < 7; i++) {
+    const ymd = schedAddDays(monday, i);
+    const items = pl.byDay.get(ymd) || [];
+    const dObj = schedYmdToDate(ymd) || new Date();
+    const num = dObj.getUTCDate();
+    let dow = '';
+    try { dow = dObj.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '').slice(0, 3).toUpperCase(); } catch (e) {}
+    // La capa se ancla hacia el interior de la pantalla según el borde:
+    // columnas de la izquierda crecen a la derecha, las de la derecha a
+    // la izquierda, las del medio se centran en el posteo.
+    const popCls = i <= 1 ? 'pl' : i >= 5 ? 'pr' : 'pc';
+    const shown = items.slice(0, 3);
+    const minis = shown.map(({ p }) => `<span class="scf-mini-x" data-post-id="${esc(String(p.id))}" data-day="${ymd}" data-pop-cls="${popCls}">${schedMiniHTML(p, schedMiniTime(p))}</span>`).join('');
+    const more = items.length > shown.length ? `<button type="button" class="scf-more" data-scf-day="${ymd}">+${items.length - shown.length}</button>` : '';
+    const free = !items.length ? '<span class="scf-cell-free">·</span>' : '';
+    for (const { p } of shown) {
+      const prop = p.status === 'published'
+        ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+        : proposedLabelFor(p, pl.proposals, tz);
+      vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
+    }
+    cols.push(`<div class="scf-col${ymd === today ? ' today' : ''}">
+      <button type="button" class="scf-colhead" data-scf-day="${ymd}" aria-label="Ver el día ${ymd}"><span class="scf-col-dow">${esc(dow)}</span><span class="scf-col-n">${num}</span>${ymd === today ? '<span class="scf-hoy">hoy</span>' : ''}</button>
+      <div class="scf-colbody">${minis}${more}${free}</div>
+    </div>`);
+  }
+  // Borradores que caen fuera de la semana visible: no se esconden —
+  // la línea lo dice y el filtro Día/Semana los alcanza navegando.
+  const drafts = (ctx.all || []).filter(p => p && p.status === 'draft');
+  const outside = drafts.filter(d => { const k = pl.dayOf.get(d.id); return k && (k < monday || k > sunday); }).length;
+  const outsideHTML = outside ? `<div class="scf-outside">📝 ${outside === 1 ? 'Hay 1 borrador que cae' : `Hay ${outside} borradores que caen`} fuera de esta semana — están en su día, navegando con las flechas.</div>` : '';
+  return `<div class="scf-weekwrap" id="hsWeekList"><div class="scf-week">${cols.join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div></div>${outsideHTML}`;
+}
+// --- La capa de ampliación de Semana ---
+let SCF_POP = null; // { wrap, card, vault } — la tarjeta abierta, si hay
+function scfClosePop() {
+  if (!SCF_POP) return;
+  const cur = SCF_POP;
+  SCF_POP = null;
+  try { if (cur.vault && cur.card) cur.vault.appendChild(cur.card); } catch (e) {}
+  try { const pop = cur.wrap.querySelector('.scf-pop'); if (pop) pop.remove(); } catch (e) {}
+  try { cur.wrap.classList.remove('pop-open'); } catch (e) {}
+}
+function scfOpenPop(wrap) {
+  if (!wrap) return;
+  if (SCF_POP && SCF_POP.wrap === wrap) return;
+  scfClosePop();
+  const vault = document.getElementById('scfVault');
+  if (!vault) return;
+  const card = vault.querySelector(`.igmock[data-post-id="${String(wrap.dataset.postId || '')}"]`);
+  if (!card) return;
+  const pop = document.createElement('div');
+  pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc');
+  pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-day">Ver el día completo →</button><button type="button" class="scf-pop-x" aria-label="Cerrar">✕</button></div>`;
+  pop.appendChild(card);
+  wrap.appendChild(pop);
+  wrap.classList.add('pop-open');
+  SCF_POP = { wrap, card, vault };
+  const x = pop.querySelector('.scf-pop-x');
+  if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(); };
+  const db = pop.querySelector('.scf-pop-day');
+  if (db) db.onclick = (e) => { e.stopPropagation(); const d = wrap.dataset.day; scfClosePop(); if (d) schedJumpDay(d); };
+}
+// --- Vista MES: el almanaque, semanas apiladas con su rótulo ---
+function schedMesBodyHTML(ctx) {
+  const { pl, tz } = ctx;
+  const today = schedTodayYmd(tz);
+  const base = schedYmdToDate(today);
+  base.setUTCDate(1);
+  base.setUTCMonth(base.getUTCMonth() + SCHED_MONTH_OFFSET);
+  const firstYmd = schedDateToYmd(base);
+  const lastD = new Date(base.getTime());
+  lastD.setUTCMonth(lastD.getUTCMonth() + 1);
+  lastD.setUTCDate(0);
+  const lastYmd = schedDateToYmd(lastD);
+  let cursor = schedMondayOf(firstYmd);
+  const rows = [];
+  while (cursor <= lastYmd) {
+    const wkEnd = schedAddDays(cursor, 6);
+    const cells = [];
+    for (let i = 0; i < 7; i++) {
+      const ymd = schedAddDays(cursor, i);
+      const out = ymd < firstYmd || ymd > lastYmd;
+      const items = pl.byDay.get(ymd) || [];
+      const num = (schedYmdToDate(ymd) || new Date()).getUTCDate();
+      let inner = '';
+      if (items.length) {
+        const first = items[0].p;
+        if (first.image_path) inner = schedMiniHTML(first, '');
+        else inner = `<span class="scf-mdots">${items.slice(0, 3).map(({ p }) => `<i class="scf-dot st-${schedPostState(p)}"></i>`).join('')}</span>`;
+        if (items.length > 1) inner += `<span class="scf-mmore">+${items.length - 1}</span>`;
+      }
+      cells.push(`<button type="button" class="scf-mcell${out ? ' out' : ''}${ymd === today ? ' today' : ''}" data-scf-day="${ymd}" aria-label="Ver el ${ymd}"><span class="scf-cell-n">${num}</span>${inner}</button>`);
+    }
+    rows.push(`<div class="scf-mweek"><div class="scf-mweek-t">Semana ${esc(schedRangeLabel(cursor, wkEnd))}</div><div class="scf-mgrid">${cells.join('')}</div></div>`);
+    cursor = schedAddDays(cursor, 7);
+  }
+  return `<div class="scf-mes" id="hsWeekList">${rows.join('')}</div>`;
+}
+// Rótulo + offset de la barra de navegación según el modo activo.
+function schedNavInfo(tz) {
+  const today = schedTodayYmd(tz);
+  if (SCHED_MODE === 'dia') {
+    const ymd = schedAddDays(today, SCHED_DAY_OFFSET);
+    const d = schedYmdToDate(ymd);
+    let lbl = ymd;
+    try { lbl = d ? d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }) : ymd; } catch (e) {}
+    return { label: schedCap(lbl) + (SCHED_DAY_OFFSET === 0 ? ' · hoy' : ''), offset: SCHED_DAY_OFFSET };
+  }
+  if (SCHED_MODE === 'mes') {
+    const base = schedYmdToDate(today);
+    base.setUTCDate(1);
+    base.setUTCMonth(base.getUTCMonth() + SCHED_MONTH_OFFSET);
+    const ymd = schedDateToYmd(base);
+    return { label: schedCap(schedMonthName(ymd)) + ' de ' + String(ymd).slice(0, 4), offset: SCHED_MONTH_OFFSET };
+  }
+  const monday = schedMondayOf(schedAddDays(today, SCHED_WEEK_OFFSET * 7));
+  return { label: 'Semana ' + schedRangeLabel(monday, schedAddDays(monday, 6)), offset: SCHED_WEEK_OFFSET };
+}
+// El bloque completo del filtro (cabecera + cupo + barra + vista activa).
+// Sin ningún posteo, delega en homeWeekHTML: los estados de siempre
+// (armando / sin ADN / semana completa) quedan intactos.
+function schedFilterBlockHTML(all, quota, generating, noDna) {
+  const posts = Array.isArray(all) ? all : [];
+  if (!posts.length) return homeWeekHTML(posts, quota, generating, noDna);
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  prefetchMedia(posts);
+  const pl = schedPlacements(posts, tz);
+  const drafts = posts.filter(p => p && p.status === 'draft');
+  const ctx = { pl, tz, bizName, all: posts };
+  const info = schedNavInfo(tz);
+  const body = SCHED_MODE === 'dia' ? schedDiaBodyHTML(ctx) : SCHED_MODE === 'mes' ? schedMesBodyHTML(ctx) : schedSemanaBodyHTML(ctx);
+  return `<div class="hs-week scf">
+    <div class="hs-week-head"><b>📅 Tu agenda</b>${drafts.length ? '<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>' : ''}</div>
+    <div id="revMsg"></div>
+    ${schedQuotaHTML(pl.list, quota)}
+    <div id="hs-report"></div>
+    ${generating ? '<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>' : ''}
+    ${schedStaleHTML(posts, tz)}
+    <div class="scf-bar">
+      <div class="scf-seg" role="tablist" aria-label="Ver la agenda por">
+        <button type="button" role="tab" data-scf-mode="dia" class="${SCHED_MODE === 'dia' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'dia'}">Día</button>
+        <button type="button" role="tab" data-scf-mode="semana" class="${SCHED_MODE === 'semana' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'semana'}">Semana</button>
+        <button type="button" role="tab" data-scf-mode="mes" class="${SCHED_MODE === 'mes' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'mes'}">Mes</button>
+      </div>
+      <div class="scf-nav">
+        <button type="button" class="scf-navbtn" id="scfNavPrev" aria-label="Anterior">‹</button>
+        <span class="scf-nav-label">${esc(info.label)}</span>
+        <button type="button" class="scf-navbtn" id="scfNavNext" aria-label="Siguiente">›</button>
+        ${info.offset !== 0 ? '<button type="button" class="scf-todaybtn" id="scfNavToday">hoy</button>' : ''}
+      </div>
+    </div>
+    ${drafts.length ? `<div class="scf-remain">📝 Te ${drafts.length === 1 ? 'queda' : 'quedan'} <b>${drafts.length}</b> por aceptar</div>` : ''}
+    ${body}
+  </div>`;
+}
+// --- Wiring del filtro (lo llama bindSchedule) ---
+function schedSetMode(m) {
+  SCHED_MODE = m;
+  try { localStorage.setItem('posty_sched_mode', m); } catch (e) {}
+  try { render(); } catch (e) {}
+}
+function schedNavStep(dir) {
+  if (SCHED_MODE === 'dia') SCHED_DAY_OFFSET += dir;
+  else if (SCHED_MODE === 'mes') SCHED_MONTH_OFFSET += dir;
+  else SCHED_WEEK_OFFSET += dir;
+  try { render(); } catch (e) {}
+}
+function schedJumpDay(ymd) {
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  SCHED_DAY_OFFSET = schedDiffDays(schedTodayYmd(tz), ymd);
+  SCHED_MODE = 'dia';
+  try { localStorage.setItem('posty_sched_mode', 'dia'); } catch (e) {}
+  try { render(); } catch (e) {}
+  setTimeout(() => { const el = document.getElementById('schedView'); if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} } }, 60);
+}
+function bindSchedFilter() {
+  SCF_POP = null; // el DOM se reconstruyó: ninguna capa queda abierta
+  $$('#schedView [data-scf-mode]').forEach(b => b.onclick = () => { if (b.dataset.scfMode !== SCHED_MODE) schedSetMode(b.dataset.scfMode); });
+  const pv = $('#scfNavPrev'), nx = $('#scfNavNext'), td = $('#scfNavToday');
+  if (pv) pv.onclick = () => schedNavStep(-1);
+  if (nx) nx.onclick = () => schedNavStep(1);
+  if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; SCHED_WEEK_OFFSET = 0; SCHED_MONTH_OFFSET = 0; try { render(); } catch (e) {} };
+  $$('#schedView [data-scf-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.scfDay));
+  // Semana: el posteo compacto se agranda al pasar el mouse (con una
+  // mini-espera para no parpadear al barrer la grilla) o al primer
+  // toque en pantallas táctiles; la capa es hija del propio posteo,
+  // así que mover el mouse a la tarjeta no la cierra.
+  $$('#schedView .scf-mini-x').forEach(w => {
+    let t = null;
+    w.addEventListener('mouseenter', () => { if (t) clearTimeout(t); t = setTimeout(() => scfOpenPop(w), 130); });
+    w.addEventListener('mouseleave', () => { if (t) clearTimeout(t); t = setTimeout(() => { if (SCF_POP && SCF_POP.wrap === w) scfClosePop(); }, 140); });
+    w.addEventListener('click', (e) => {
+      if (e.target.closest('.scf-pop')) return; // adentro de la capa mandan sus botones y los delegados
+      e.stopPropagation();
+      const touchLike = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+      if (SCF_POP && SCF_POP.wrap === w) { if (touchLike) scfClosePop(); }
+      else scfOpenPop(w);
+    });
+  });
+  // Cerrar la capa tocando afuera o con Escape (una sola vez global).
+  if (!window.__scfPopDocWired) {
+    window.__scfPopDocWired = true;
+    document.addEventListener('click', (e) => { if (SCF_POP && !e.target.closest('.scf-mini-x')) scfClosePop(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') scfClosePop(); });
+  }
+  const rail = $('#hsWeekList');
+  const rp = $('#scfRailPrev'), rn = $('#scfRailNext');
+  if (rail && (rp || rn)) {
+    const step = () => {
+      try {
+        const c = rail.querySelector('.igmock-fixed');
+        return c ? c.offsetWidth + 12 : rail.clientWidth * 0.8;
+      } catch (e) { return 300; }
+    };
+    if (rp) rp.onclick = () => rail.scrollBy({ left: -step(), behavior: 'smooth' });
+    if (rn) rn.onclick = () => rail.scrollBy({ left: step(), behavior: 'smooth' });
+  }
+}
+/* ===== /v217 ===== */
 
 // Vista #/app/chat = HOME SIMPLE: los posteos de la semana uno al lado del
 // otro, y el chat abajo si querés cambiar/editar/crear algo distinto.
@@ -9727,7 +10171,7 @@ async function scheduleView() {
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   // 2026-10-05: home en Schedule (primera pestaña) — 5 tarjetas fijas arriba,
   // chat abajo en la misma pantalla. Pedido de Valentino.
-  const homeWeekBlock = homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
+  const homeWeekBlock = schedFilterBlockHTML(allPosts, quota, weekGenerating, weekNoDna);
   const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
     <div class="hs-brand-head">
@@ -9932,6 +10376,9 @@ function bindSchedule() {
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
+  // v217: filtro Día·Semana·Mes (segmentado, navegación, salto de día,
+  // ampliación hover/toque de la vista Semana).
+  try { bindSchedFilter(); } catch (e) {}
   try { bindAlbumRow(); } catch (e) {} // 📸 Álbum en Schedule (v215): fila fina; la tarjeta grande vive en el chat
   // Botón fijo de subida de la agenda — dispara el MISMO input del álbum
   // (#albumFile, con su festejo y su clasificación, hoy en la fila fina);
