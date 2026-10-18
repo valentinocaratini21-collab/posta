@@ -10719,11 +10719,32 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // caído), la proyección no existe y el flujo queda idéntico al de siempre.
   let trialProfile = null;
   let trialProfilePromise = null;
+  // (v210) Auditoría en vivo del @: se computa de los MISMOS datos crudos
+  // que alimentan la proyección (cero IA, cero fetches nuevos) y viaja en
+  // el payload final y en el evento 'audit' del stream.
+  let trialAudit = null;
+  let trialAuditPalette = null;
   if (ig) {
     trialProfilePromise = (async () => {
       try {
         const known = await Promise.race([igProfPromise, new Promise((r) => setTimeout(() => r(null), 4500))]);
         const data = await feedAudit.fetchAuditData(ig, null, known || undefined);
+        // (v210) Señales determinísticas desde los posteos públicos; la
+        // paleta (única señal que descarga miniaturas) refina en segundo
+        // plano y reemite el evento si suma el hallazgo de línea visual.
+        try {
+          const auditBase = feedAudit.trialAuditFromData(data);
+          if (auditBase) trialAudit = auditBase;
+        } catch (e) { /* la auditoría nunca frena la prueba */ }
+        trialAuditPalette = feedAudit.analyzePalette((data && data.posts) || [])
+          .then((hues) => {
+            if (hues == null) return;
+            try {
+              const refined = feedAudit.trialAuditFromData(data, { paletteHues: hues });
+              if (refined) { trialAudit = refined; send('audit', { audit: refined }); }
+            } catch (e) { /* best-effort */ }
+          })
+          .catch(() => {});
         const prof = feedAudit.trialProfileFromAudit(data, igPic);
         if (prof) {
           // v187: las miniaturas se sirven desde NUESTRO server — las URLs
@@ -10740,7 +10761,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       } catch (e) { return null; }
     })();
     Promise.race([trialProfilePromise, new Promise((r) => setTimeout(() => r(null), 3000))])
-      .then((p) => { if (p) { trialProfile = p; send('profile', { profile: p }); } })
+      .then((p) => {
+        if (p) { trialProfile = p; send('profile', { profile: p }); }
+        if (trialAudit) send('audit', { audit: trialAudit });
+      })
       .catch(() => {});
   }
   if (!business) return fail('Contanos el nombre de tu negocio');
@@ -10764,6 +10788,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
         } catch (e) { /* payload roto: se regenera */ }
         if (cachedOut) {
+          // (v210) Las semanas cacheadas anteriores a la auditoría no la
+          // traen: si el análisis del @ llega rápido (la misma lectura que
+          // alimenta la proyección, ya en vuelo), viaja en este payload.
+          if (!cachedOut.audit && trialProfilePromise) {
+            await Promise.race([trialProfilePromise, new Promise((r) => setTimeout(() => r(null), 2500))]).catch(() => null);
+            if (trialAudit) cachedOut.audit = trialAudit;
+          }
           cachedOut.cached = true;
           cachedOut.spots_left = spotsLeft();
           cachedOut.week = buildTrialWeek((cachedOut.posts || []).length);
@@ -11247,6 +11278,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       screenshot = `data:${TRIAL_IMG_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(photoPath).toString('base64');
     }
     const gridExtra = await extrasPromise;
+    // (v210) La generación tarda más que el análisis de paleta casi
+    // siempre; esta espera corta es solo un seguro para que la auditoría
+    // del payload final incluya la señal de línea visual si ya llegó.
+    if (trialAuditPalette) {
+      try { await Promise.race([trialAuditPalette, new Promise((r) => setTimeout(() => r(null), 1200))]); } catch (e) { /* sigue sin paleta */ }
+    }
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
     const out = {
       ok: true,
@@ -11260,6 +11297,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       demo_ai: demoAiInfo,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
+      audit: trialAudit,
       grid_extra: gridExtra,
       ideas: ideas.slice(0, 6),
       posts,
@@ -11972,7 +12010,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v209';
+const BUILD_ID = '20261018-v210';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

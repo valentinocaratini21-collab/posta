@@ -197,6 +197,177 @@ function trialProfileFromAudit(data, fallbackPic) {
 }
 
 // ---------------------------------------------------------------------------
+// Auditoría EN VIVO de /prueba (v210): análisis del Instagram real del
+// visitante, determinístico y con CERO IA — cada hallazgo se computa de sus
+// posteos públicos (fechas, tipos de media, captions, horarios) y lleva su
+// número real de hoy; cuando la palanca es algo que Posty controla, suma el
+// número con Posty. Presentación SIEMPRE en positivo (oportunidad, nunca
+// reto) y agrupada: mejorar / incrementar / reducir. Lo que no se puede
+// computar se OMITE — jamás relleno genérico ni métricas privadas
+// (alcance, guardados, ventas no existen en los datos y no se mencionan).
+// opts.paletteHues: tonos dominantes del feed (analyzePalette), opcional —
+// sin ese dato la señal de línea visual no se emite.
+// ---------------------------------------------------------------------------
+const TRIAL_HOOK_RE = /[¿¡]|escrib|reserv|pedí|pedi|mirá|mira|vení|veni|probá|proba|aprovech|comentá|comenta|guardá|guarda|compart|sumate|anotá|anota|hacé|hace|descubr|conocé|conoce|encarg|empezá|empeza|agendá|agenda/i;
+
+function fmtRate210(x) {
+  const v = Math.round(x * 10) / 10;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
+}
+
+function trialAuditFromData(data, opts = {}) {
+  if (!data || !data.ok || !Array.isArray(data.posts)) return null;
+  const posts = data.posts.filter((p) => p && typeof p === 'object');
+  const n = posts.length;
+  const withTs = posts
+    .filter((p) => Number.isFinite(p.taken_at) && p.taken_at > 0)
+    .map((p) => p.taken_at)
+    .sort((a, b) => a - b);
+  const types = { GraphImage: 0, GraphVideo: 0, GraphSidecar: 0 };
+  posts.forEach((p) => { if (types[p.type] !== undefined) types[p.type]++; });
+
+  const signals = {
+    n_posts: n,
+    videos: types.GraphVideo,
+    images: types.GraphImage,
+    carousels: types.GraphSidecar,
+    posts_per_week: null,
+    max_gap_days: null,
+    days_since_last: null,
+    hour_bands: null,
+    top_band_share: null,
+    hook_pct: null,
+    captions_n: 0,
+    palette_hues: opts.paletteHues != null ? opts.paletteHues : null,
+  };
+  const findings = [];
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // --- Ritmo: posteos por semana en la ventana disponible (piso de 7 días
+  // para que un racimo reciente no infle la tasa) ---
+  let ritmo = null;
+  if (withTs.length >= 2) {
+    const spanDays = Math.max(7, (withTs[withTs.length - 1] - withTs[0]) / 86400);
+    ritmo = withTs.length / (spanDays / 7);
+    signals.posts_per_week = Math.round(ritmo * 10) / 10;
+  }
+  if (ritmo != null && ritmo < 4) {
+    findings.push({
+      group: 'incrementar',
+      text: 'Tu ritmo de publicación tiene mucho para crecer',
+      now: fmtRate210(ritmo) + ' posteos por semana',
+      with_posty: '5 por semana: tu semana completa, armada y programada',
+    });
+  }
+
+  // --- Racha de silencio: hueco máximo entre posteos y días desde el último
+  let maxGap = null;
+  let sinceLast = null;
+  if (withTs.length >= 2) {
+    maxGap = 0;
+    for (let i = 1; i < withTs.length; i++) {
+      maxGap = Math.max(maxGap, Math.round((withTs[i] - withTs[i - 1]) / 86400));
+    }
+    signals.max_gap_days = maxGap;
+  }
+  if (withTs.length >= 1) {
+    sinceLast = Math.max(0, Math.round((nowSec - withTs[withTs.length - 1]) / 86400));
+    signals.days_since_last = sinceLast;
+  }
+  if (sinceLast != null && sinceLast >= 7) {
+    findings.push({
+      group: 'reducir',
+      text: 'Cada día sin publicar es un día que tu negocio no aparece',
+      now: 'hace ' + sinceLast + ' días que no publicás',
+      with_posty: '0 días en silencio: tu semana se programa sola',
+    });
+  } else if (maxGap != null && maxGap >= 10) {
+    findings.push({
+      group: 'reducir',
+      text: 'Entre posteo y posteo tu perfil pasa rachas largas en silencio',
+      now: 'tu racha más larga fue de ' + maxGap + ' días',
+      with_posty: '0 días en silencio: tu semana se programa sola',
+    });
+  }
+
+  // --- Mix de formatos: los reels que faltan ---
+  if (n >= 3) {
+    const v = types.GraphVideo;
+    if (v === 0) {
+      findings.push({
+        group: 'incrementar',
+        text: 'Todavía no aprovechás los reels, el formato que más empuja Instagram',
+        now: '0 reels en tus últimos ' + n + ' posteos',
+        with_posty: '1 reel por semana, creado por Posty',
+      });
+    } else if (v / n < 0.2) {
+      findings.push({
+        group: 'incrementar',
+        text: 'Los reels aparecen poco en tu mix de formatos',
+        now: 'solo ' + v + ' de ' + n + ' posteos son reels',
+        with_posty: '1 reel por semana, creado por Posty',
+      });
+    }
+  }
+
+  // --- Horarios: dispersión de franjas (solo con ≥5 posteos con hora;
+  // AR y UY, los países de la prueba, son UTC-3) ---
+  if (withTs.length >= 5) {
+    const bands = [0, 0, 0, 0, 0, 0];
+    withTs.forEach((ts) => {
+      const h = new Date((ts - 3 * 3600) * 1000).getUTCHours();
+      bands[Math.floor(h / 4)]++;
+    });
+    const distinct = bands.filter((c) => c > 0).length;
+    const topShare = Math.max.apply(null, bands) / withTs.length;
+    signals.hour_bands = distinct;
+    signals.top_band_share = Math.round(topShare * 100) / 100;
+    if (distinct >= 4 && topShare < 0.6) {
+      findings.push({
+        group: 'mejorar',
+        text: 'Tus posteos salen en horarios muy repartidos, sin una franja que se repita',
+        now: 'publicás en ' + distinct + ' franjas horarias distintas',
+        with_posty: 'una franja fija: cada posteo sale programado, siempre en horario',
+      });
+    }
+  }
+
+  // --- Captions: cuántos abren con gancho (pregunta o llamado en la
+  // primera frase) ---
+  const caps = posts.map((p) => String(p.caption || '').trim()).filter(Boolean);
+  signals.captions_n = caps.length;
+  if (caps.length >= 3) {
+    let hooked = 0;
+    caps.forEach((c) => {
+      const open = (c.split(/(?<=[.!?…])\s+/)[0] || c).slice(0, 80);
+      if (TRIAL_HOOK_RE.test(open)) hooked++;
+    });
+    const pct = Math.round((hooked / caps.length) * 100);
+    signals.hook_pct = pct;
+    if (pct < 50) {
+      findings.push({
+        group: 'mejorar',
+        text: 'La mayoría de tus captions no abren con un gancho que frene el scroll',
+        now: 'solo ' + hooked + ' de ' + caps.length + ' abren con pregunta o llamado',
+        with_posty: 'todos: cada caption abre con gancho desde el primer día',
+      });
+    }
+  }
+
+  // --- Línea visual: coherencia de paleta (solo si la señal es clara) ---
+  if (signals.palette_hues != null && signals.palette_hues >= 6) {
+    findings.push({
+      group: 'mejorar',
+      text: 'Tu feed mezcla varias paletas y se ve desparejo',
+      now: signals.palette_hues + ' tonos dominantes distintos',
+      with_posty: 'una sola línea visual: la tuya, aplicada en cada posteo',
+    });
+  }
+
+  return { findings, signals, starter: n < 3 };
+}
+
+// ---------------------------------------------------------------------------
 // Miniaturas LOCALES para la proyección de /prueba (v187): las URLs de la
 // CDN de Instagram no se dejan hotlinkear desde el navegador (en vivo, la
 // grilla HOY pintó la identidad real pero las 9 celdas en gris). El server
@@ -642,6 +813,8 @@ module.exports = {
   parseEmbedPosts,
   fetchAuditData,
   trialProfileFromAudit,
+  trialAuditFromData,
+  analyzePalette,
   localizeTrialPhotos,
   localizeTrialPic,
   AUDIT_LIMIT_PER_DAY,

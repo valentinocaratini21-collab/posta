@@ -205,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261018-v209', '/api/version es v209 (reglas de pieza: una idea, titulares ≤6, zonas seguras, dosificación 2/5, sin botones CTA)');
+    ok(ver.build === '20261018-v210', '/api/version es v210 (auditoría en vivo en /prueba: mejorar/incrementar/reducir con números reales)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -307,12 +307,21 @@ function partC() {
   ok(html.includes('profile: onStreamProfile'), 'el handler SSE de profile está registrado');
   ok(html.includes('Proyección: así se vería tu perfil con Posty'), 'el rótulo de proyección está (verdad: es contenido, no promesa)');
   ok(html.includes('projFromTrial') && html.includes('t.profile'), 'resultados arman la tarjeta desde TRIAL.profile');
+  // v210: auditoría en vivo — contenedor, handler SSE y render desde payload.
+  ok(html.includes('id="auditBox"'), 'prueba.html trae el contenedor #auditBox (v210)');
+  ok(html.includes('audit: onStreamAudit'), 'el handler SSE de audit está registrado (v210)');
+  ok(html.includes('El análisis de tu Instagram'), 'el panel de auditoría trae su título (v210)');
+  ok(html.includes('auditFromTrial') && html.includes('t.audit'), 'resultados arman la auditoría desde TRIAL.audit (v210)');
   ok(html.includes('pfp-stage') && html.includes('pfp-layer-hoy'), 'el contraste arrastrable HOY/CON POSTY está');
   ok(html.includes('pfp-ptag hoy') && html.includes('CON POSTY'), 'las etiquetas HOY / CON POSTY están');
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes('20261018-v209'), 'BUILD_ID en v209');
+  ok(srv.includes('20261018-v210'), 'BUILD_ID en v210');
+  // v210: auditoría en vivo — el server computa y emite el análisis del @.
+  ok(srv.includes('trialAuditFromData'), 'el server computa la auditoría del @ (v210)');
+  ok(srv.includes("send('audit'"), 'el server emite el evento audit (v210)');
+  ok(srv.includes('audit: trialAudit'), 'el payload final lleva audit (v210)');
   // v187: proxy de miniaturas + grilla CON Posty sin repetidos.
   ok(srv.includes('localizeTrialPhotos'), 'el stream localiza las miniaturas del perfil (v187)');
   ok(srv.includes('grid_extra: gridExtra'), 'el payload lleva grid_extra (visuales únicos de la grilla)');
