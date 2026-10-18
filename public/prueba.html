@@ -520,6 +520,10 @@ html{scroll-behavior:smooth}
 <!-- VISTA: resultados -->
 <div id="v-results" style="display:none">
   <div class="wrap">
+    <div id="shareBanner" style="display:none;background:#EAF6FD;border:1.5px solid #2793C8;border-radius:14px;padding:12px 16px;margin-bottom:14px;text-align:center">
+      <p style="margin:0 0 8px;font-size:14.5px">Estás viendo la semana que Posty le armó a <b id="shareBannerBiz">@negocio</b> 💛</p>
+      <button class="btn btn-primary btn-sm" id="btnMakeMine">Quiero mi semana gratis</button>
+    </div>
     <div class="res-hero">
       <img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)">
       <h2 id="rTitle">¡Tu semana está lista, <span class="hl" id="rBiz">tu negocio</span>! 🎉</h2>
@@ -810,6 +814,7 @@ function show(id) {
   $('#btnGo2').onclick = startTrialFallback;
   $('#btnPrefillGo').onclick = startTrialPrefill;
   $('#btnSave').onclick = openRegTrial;
+  const bmm = $('#btnMakeMine'); if (bmm) bmm.onclick = () => { trk('prueba_step', { step: 'share_banner_cta' }); location.href = '/prueba'; };
   const bpc = $('#btnPhotosCard');
   if (bpc) bpc.onclick = () => { trk('prueba_step', { step: 'photos_card' }); openRegTrial(); };
   $('#btnRetryStream').onclick = () => { $('#rStreamErr').style.display = 'none'; STREAM_ERRORED = false; runGeneration(); };
@@ -852,6 +857,16 @@ function show(id) {
           TRIAL = data;
           resetTrialChat();
           renderResults();
+          // ¿Es un visitante (llegó por un link compartido) y no el dueño
+          // en su propio navegador? Si este navegador no tiene guardada
+          // una semana de ESTE @, mostramos la franja "armá la tuya".
+          try {
+            const sv = await idb.get();
+            if (!sv || !sv.ig || String(sv.ig).replace(/^@/, '').toLowerCase() !== DEEP_IG.toLowerCase()) {
+              const sb = $('#shareBanner');
+              if (sb) { $('#shareBannerBiz').textContent = '@' + DEEP_IG; sb.style.display = 'block'; }
+            }
+          } catch (e) {}
           return;
         }
       }
@@ -1873,8 +1888,8 @@ async function trialRedesign(patch) {
 async function shareWeek() {
   const t = TRIAL;
   if (!t || !t.posts) return;
-  const url = location.origin + '/prueba';
-  const text = `Mirá la semana de posteos que me armó Posta para ${t.business} 🚀 Probalo gratis:`;
+  const url = location.origin + '/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) : '');
+  const text = `Mirá la semana de posteos que me armó Posty para ${t.business} 🚀 Probalo gratis:`;
   try {
     const files = [];
     for (let i = 0; i < t.posts.length; i++) {
@@ -1886,7 +1901,7 @@ async function shareWeek() {
       files.push(new File([blob], `posta-${t.business || 'semana'}-${i + 1}.${ext}`, { type: blob.type || (p.type === 'video' ? 'video/mp4' : 'image/png') }));
     }
     if (files.length && navigator.canShare && navigator.canShare({ files })) {
-      await navigator.share({ title: 'Mi semana con Posta', text, url, files });
+      await navigator.share({ title: 'Mi semana con Posty', text, url, files });
       return;
     }
     throw new Error('no-share');
