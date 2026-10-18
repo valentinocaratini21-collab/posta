@@ -6271,10 +6271,15 @@ function albumMondayKey() {
 }
 // v208 — Si esta semana el cliente todavía no pasó fotos (week.photos==0),
 // Posty lo dice UNA vez por semana en el chat de Schedule, como mensaje
-// suyo con botón de subida que lleva al bloque (deep link, mismo patrón
-// que ?fotos=semana). Burbuja efímera de UI: no se loguea al historial
-// del servidor; el gate semanal vive en localStorage y si la semana ya
-// tiene fotos la burbuja se retira y no vuelve.
+// suyo. Burbuja efímera de UI: no se loguea al historial del servidor;
+// el gate semanal vive en localStorage y si la semana ya tiene fotos la
+// burbuja se retira y no vuelve.
+// v222 — Regla de Valentino: UN solo botón de subida a la vista. La
+// burbuja conserva su texto pero YA NO lleva botón propio: la subida se
+// hace con el botón principal de la pantalla (el azul fijo bajo el
+// saludo, v221). Esta burbuja solo se renderiza en Schedule (gate por
+// hash más abajo), donde ese botón ya existe; en la vista de chat
+// separada nunca aparece, así que ninguna otra superficie cambia.
 async function maybePhotoWeekReminder(data) {
   try {
     if (!data || !data.week) return;
@@ -6291,24 +6296,10 @@ async function maybePhotoWeekReminder(data) {
     try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
     const box = document.getElementById('chatBox');
     if (!box || document.getElementById('chatPhotoRem')) return;
-    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatPhotoRem">esta semana todavía no me pasaste fotos 📸<div style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="chatPhotoRemBtn">📸 Subir fotos</button></div></div>`);
+    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatPhotoRem">esta semana todavía no me pasaste fotos 📸</div>`);
     try { localStorage.setItem(key, '1'); } catch (e) {}
-    const b = document.getElementById('chatPhotoRemBtn');
-    if (b) b.onclick = () => {
-      const blk = document.getElementById('albumWeekBlock');
-      if (blk) {
-        blk.classList.add('album-focus');
-        setTimeout(() => { try { blk.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 60);
-        setTimeout(() => { try { blk.classList.remove('album-focus'); } catch (e) {} }, 5000);
-        return;
-      }
-      // v215/v221: en Schedule la tarjeta grande ya no está — el botón
-      // sube directo (el #albumFile vive en el bloque del chat).
-      const inp = document.getElementById('albumFile');
-      if (inp) { inp.click(); return; }
-      const row = document.getElementById('albumRowToggle');
-      if (row) row.click();
-    };
+    // v222: sin handler de botón — la burbuja ya no tiene botón propio
+    // (un solo botón de subida a la vista: el principal de Schedule).
     chatScroll();
   } catch (e) {}
 }
