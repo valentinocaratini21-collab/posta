@@ -7,6 +7,16 @@
 // semana que viene estaba fresca. Después: acepta y confirma su fecha;
 // un 6º de la MISMA semana sí devuelve plan_limit con week_key de esa
 // semana; accept-all respeta la misma regla por semana.
+// Extensión v216 (2026-10-18): schedule-all ("Programar mi semana") era el
+// último pariente con el criterio viejo — todo-o-nada contra la semana
+// ACTUAL. Escenarios E/F sobre el escenario tipo cuenta 12. ANTES: E
+// devolvía 403 global y no programaba nada (sin waiting), F devolvía 403
+// sin week_key ni waiting — 17/22 con 5 fallos, todos en E/F. DESPUÉS:
+// E programa los 2 de la semana que viene (fechas dentro de esa semana),
+// el 6º queda borrador y reportado en waiting { id, week_key: esta,
+// reason: 'plan_limit' }, sin 403; F conserva el 403 SOLO para el tope
+// verdadero (nada programable) pero con week_key de la semana del posteo
+// y el waiting reportado.
 // Uso: node test-accept-week-quota.js
 const fs = require('fs');
 const os = require('os');
@@ -151,6 +161,50 @@ async function api(cookie, method, p, body) {
       image_path: '/media/test.jpg', caption: 'Directo a la semana que viene', scheduled_at: isoAt(NEXT_MON), media_type: 'image',
     });
     ok(r5.status === 200 && r5.data && r5.data.ok, `D crear programado a la semana que viene NO salta plan_limit (status ${r5.status})`);
+
+    // ── Usuario E: schedule-all ("Programar mi semana") — 5/5 esta semana +
+    // 2 borradores de la que viene + el 6º de esta semana. Antes del fix v216
+    // el endpoint era todo-o-nada contra la semana ACTUAL: devolvía 403
+    // global y no programaba NADA. Después: programa los de la semana que
+    // viene, el 6º queda borrador y reportado en waiting (id + week_key +
+    // motivo), sin 403.
+    const seedDraftWk = (uid, wk, caption) => {
+      const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review, week_key)
+        VALUES (?,?,?,?,NULL,'draft','image',0,?)`).run(uid, '/media/test.jpg', caption || 'Borrador', '', wk);
+      return Number(r.lastInsertRowid);
+    };
+    const uE = await register('e@example.com');
+    ok(uE.status === 200 || uE.status === 201, `register E (${uE.status})`);
+    const uidE = uidOf('e@example.com');
+    for (let i = 0; i < 5; i++) seedPost(uidE, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado E' + (i + 1));
+    const eNext1 = seedDraftWk(uidE, NEXT_MON, 'E borrador que viene 1');
+    const eNext2 = seedDraftWk(uidE, NEXT_MON, 'E borrador que viene 2');
+    const eSixth = seedDraftWk(uidE, THIS_MON, 'E sexto de esta semana');
+    const r6 = await api(uE.cookie, 'POST', '/api/posts/schedule-all', {});
+    ok(r6.status === 200 && r6.data && r6.data.ok === true, `E schedule-all NO devuelve 403 global con la semana actual llena (status ${r6.status})`);
+    const eSched = (r6.data && r6.data.scheduled) || [];
+    const eWait = (r6.data && r6.data.waiting) || [];
+    ok(eSched.length === 2 && eSched.every((s) => [eNext1, eNext2].includes(s.id)),
+      `E programó exactamente los 2 borradores de la semana que viene (scheduled ${eSched.length})`);
+    ok(eSched.every((s) => { const d = String(s.scheduled_at || '').slice(0, 10); return d >= NEXT_MON && d <= shiftDays(NEXT_MON, 6); }),
+      'E los programados caen dentro de la semana que viene (lun–dom)');
+    ok(eWait.length === 1 && eWait[0].id === eSixth && eWait[0].week_key === THIS_MON && eWait[0].reason === 'plan_limit',
+      `E el 6º quedó en espera reportado (week_key ${eWait[0] && eWait[0].week_key}, reason ${eWait[0] && eWait[0].reason})`);
+    const rowE6 = db.prepare('SELECT status FROM posts WHERE id = ?').get(eSixth);
+    ok(rowE6.status === 'draft', 'E el 6º sigue como borrador en la DB');
+
+    // ── Usuario F: schedule-all sin nada programable por cupo — el 403
+    // queda SOLO para el tope verdadero (ningún borrador pudo programarse)
+    // y trae los datos de la semana DEL POSTEO + el waiting reportado.
+    const uF = await register('f@example.com');
+    const uidF = uidOf('f@example.com');
+    for (let i = 0; i < 5; i++) seedPost(uidF, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado F' + (i + 1));
+    const fSixth = seedDraftWk(uidF, THIS_MON, 'F sexto de esta semana');
+    const r7 = await api(uF.cookie, 'POST', '/api/posts/schedule-all', {});
+    ok(r7.status === 403 && r7.data && r7.data.plan_limit === true, `F sin programables por cupo → 403 plan_limit (status ${r7.status})`);
+    ok(r7.data && r7.data.week_key === THIS_MON, `F el 403 trae week_key de la semana del posteo ${THIS_MON} (vino ${r7.data && r7.data.week_key})`);
+    ok(r7.data && Array.isArray(r7.data.waiting) && r7.data.waiting.length === 1 && r7.data.waiting[0].id === fSixth && r7.data.waiting[0].reason === 'plan_limit',
+      'F el 403 reporta el borrador en espera (id + week_key + motivo)');
   } catch (e) {
     fails++;
     console.error('  ✗ excepción:', e.message);

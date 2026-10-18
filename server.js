@@ -6239,9 +6239,101 @@ function assignScheduleSlots(uid, drafts) {
   return out;
 }
 
+// ---------- schedule-all POR SEMANA DEL POSTEO (fix 2026-10-18, v216) ----------
+// Espejo de la semántica de acceptAllDrafts (v215): nada de "todos de una o
+// nada" contra la semana actual. Cada borrador se evalúa contra SU semana:
+// la de su week_key (sin week_key o vencida → la actual). Si el cupo de ESA
+// semana (por formato, desde quotaCounts) lo admite y hay un día libre en
+// ella (nunca hoy ni el pasado), se programa; si no, queda borrador y se
+// reporta en `waiting` ({ id, week_key, reason }) sin bloquear al resto.
+function quotaPoolKey(d) {
+  return d.media_type === 'video' ? 'video' : d.media_type === 'story' ? 'story' : 'image';
+}
+// Saldos de cupo por semana|formato, con descuento en memoria a medida que
+// ESTA corrida programa (mismo patrón que acceptAllDrafts v215).
+function weekQuotaPools(uid) {
+  const poolLimit = {
+    image: quotaFor(uid, 'image').limit,
+    video: quotaFor(uid, 'video').limit,
+    story: quotaFor(uid, 'story').limit,
+  };
+  const cache = new Map();
+  const leftFor = (monday, poolKey) => {
+    const k = monday + '|' + poolKey;
+    if (!cache.has(k)) {
+      const c = quotaCounts(uid, monday);
+      const used = poolKey === 'video' ? (c.video || 0)
+        : poolKey === 'story' ? (c.story || 0)
+        : (c.image || 0) + (c.carousel || 0);
+      cache.set(k, Math.max(0, (poolLimit[poolKey] || 0) - used));
+    }
+    return cache.get(k);
+  };
+  return {
+    leftFor,
+    consume(monday, poolKey) { cache.set(monday + '|' + poolKey, Math.max(0, leftFor(monday, poolKey) - 1)); },
+  };
+}
+// Núcleo compartido del schedule-all ("Programar mi semana" y el
+// scheduleAllDrafts del autopilot): programa `drafts` semana a semana.
+// `apply(iso, d)` ejecuta el UPDATE propio de cada flujo. Horarios: feed y
+// reels a la best_hour del negocio, historias a STORY_HOUR; un posteo de
+// feed por día (las historias tienen su propio carril de días).
+function scheduleDraftsPerWeek(uid, drafts, apply) {
+  const tz = userTz(uid);
+  let bestHour = 19;
+  try {
+    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
+    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
+  } catch (e) { /* respaldo 19:00 */ }
+  const { STORY_HOUR } = require('./story-reel');
+  const curMonday = mondayKeyOf(tzToday(tz));
+  const tomorrow = shiftDays(tzToday(tz), 1);
+  const taken = new Set();
+  const takenStory = new Set();
+  try {
+    const sched = db.prepare(`SELECT scheduled_at, media_type FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
+    for (const s of sched) {
+      const k = ymdInTz(s.scheduled_at, tz); if (!k) continue;
+      if (s.media_type === 'story') takenStory.add(k); else taken.add(k);
+    }
+  } catch (e) { /* no bloquea */ }
+  const pools = weekQuotaPools(uid);
+  const scheduled = [];
+  const waiting = [];
+  for (const d of drafts) {
+    const isStory = d.media_type === 'story';
+    const tset = isStory ? takenStory : taken;
+    const hour = isStory ? STORY_HOUR : bestHour;
+    let monday = curMonday;
+    if (typeof d.week_key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.week_key)) monday = mondayKeyOf(d.week_key);
+    if (monday < curMonday) monday = curMonday;
+    const poolKey = quotaPoolKey(d);
+    if (pools.leftFor(monday, poolKey) <= 0) {
+      waiting.push({ id: d.id, week_key: monday, reason: 'plan_limit' });
+      continue;
+    }
+    // Primer día libre dentro de SU semana (desde mañana si es la actual).
+    let iso = null;
+    const firstDay = monday < tomorrow ? tomorrow : monday;
+    for (let i = 0; i < 7; i++) {
+      const ymd = shiftDays(monday, i);
+      if (ymd < firstDay || tset.has(ymd)) continue;
+      const cand = zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
+      if (cand && ymdInTz(cand, tz) === ymd) { tset.add(ymd); iso = cand; break; }
+    }
+    if (!iso) { waiting.push({ id: d.id, week_key: monday, reason: 'no_slot' }); continue; }
+    pools.consume(monday, poolKey);
+    apply(iso, d);
+    try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
+    scheduled.push({ id: d.id, scheduled_at: iso, week_key: monday });
+  }
+  return { scheduled, waiting };
+}
+
 function scheduleAllDrafts(uid) {
   const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
-  if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [] };
+  if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [], waiting: [] };
   // FASE 0 — qualityGate: solo lo bueno sale solo. El borrador que no pasa
   // el gate queda en 'draft' con needs_review=1 (cola de revisión humana) y
   // no consume cupo. Fail-closed: si el gate tira error, tampoco sale solo.
@@ -6261,30 +6353,23 @@ function scheduleAllDrafts(uid) {
       : 'gate_error';
     console.log(`[autopilot] scheduleAllDrafts: post ${d.id} NO pasa gate (score ${g ? g.score : '?'}): ${failed} → revisión humana`);
   }
-  if (!ready.length) return { ok: false, reason: gateFailed > 0 ? 'quality_failed' : 'no_drafts', scheduled: [], gateFailed };
-  // Cupo: todos de una o nada (mismo criterio que el endpoint). Solo cuentan los que pasaron el gate.
-  const qf = quotaFor(uid, 'image');
-  const qr = quotaFor(uid, 'video');
-  const qs = quotaFor(uid, 'story');
-  const feedBillable = ready.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
-  const reelBillable = ready.filter((d) => d.media_type === 'video').length;
-  const storyBillable = ready.filter((d) => d.media_type === 'story').length;
-  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left)
-    return { ok: false, reason: 'plan_limit', scheduled: [] };
-  const slots = assignScheduleSlots(uid, ready);
-  const scheduled = [];
-  // FASE 1: auto_published=1 marca lo programado POR EL SISTEMA (sin tap del
-  // usuario): así el aviso pre-publicación de 30 min lo cubre como freno de
-  // emergencia en nivel 1, y el conteo de semanas limpias (nivel 2) lo ve.
+  if (!ready.length) return { ok: false, reason: gateFailed > 0 ? 'quality_failed' : 'no_drafts', scheduled: [], waiting: [], gateFailed };
+  // Cupo POR SEMANA DEL POSTEO (fix v216): el criterio viejo ("todos de
+  // una o nada" contra la semana ACTUAL) bloqueaba TODO cuando la semana
+  // actual estaba llena, aunque los borradores fueran de la que viene.
+  // Ahora cada borrador que pasó el gate se programa si el cupo de SU
+  // semana lo admite (scheduleDraftsPerWeek); el resto queda en espera,
+  // reportado en `waiting`, sin bloquear a los demás.
+  // FASE 1: auto_published=1 marca lo programado POR EL SISTEMA (sin tap
+  // del usuario): así el aviso pre-publicación de 30 min lo cubre como
+  // freno de emergencia en nivel 1, y el conteo de semanas limpias lo ve.
   const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0, auto_published=1 WHERE id=?`);
-  for (const d of ready) {
-    const iso = slots.get(d.id);
-    if (!iso) continue; // sin slot no se programa (nunca scheduled_at=NULL)
-    upd.run(iso, d.id);
-    try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
-    scheduled.push({ id: d.id, scheduled_at: iso });
+  const { scheduled, waiting } = scheduleDraftsPerWeek(uid, ready, (iso, d) => upd.run(iso, d.id));
+  if (!scheduled.length) {
+    const reason = waiting.some((w) => w.reason === 'plan_limit') ? 'plan_limit' : 'no_slots';
+    return { ok: false, reason, scheduled: [], waiting, gateFailed };
   }
-  return { ok: true, scheduled, gateFailed };
+  return { ok: true, scheduled, waiting, gateFailed };
 }
 
 // Arma la semana sola: genera historias/reels del plan sobre los borradores,
@@ -6347,67 +6432,25 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     if (pending > 0) return res.status(400).json({ error: 'in_review', message: 'Tus primeros posteos están en el horno ✨ Te aviso cuando estén listos para programar.' });
     return res.status(400).json({ error: 'No hay borradores para programar' });
   }
-  // Cupo: todos de una o nada. Cada formato contra su propio cupo.
-  const qf = quotaFor(uid, 'image');
-  const qr = quotaFor(uid, 'video');
-  const qs = quotaFor(uid, 'story');
-  const feedBillable = drafts.filter((d) => d.media_type !== 'story' && d.media_type !== 'video').length;
-  const reelBillable = drafts.filter((d) => d.media_type === 'video').length;
-  const storyBillable = drafts.filter((d) => d.media_type === 'story').length;
-  const overFmt = reelBillable > qr.left ? 'video' : storyBillable > qs.left ? 'story' : 'image';
-  if (feedBillable > qf.left || reelBillable > qr.left || storyBillable > qs.left) {
-    const qx = overFmt === 'video' ? qr : overFmt === 'story' ? qs : qf;
-    const over = `${qx.limit} ${quotaUnitName(overFmt)}`;
-    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qx.limit, plan_name: qf.plan_name,
-      message: `Llegaste al límite de tu plan ${qf.plan_name} (${over} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
-  }
-  const tz = userTz(uid);
-  let bestHour = 19;
-  try {
-    const u = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
-    if (u && u.best_hour >= 9 && u.best_hour <= 21) bestHour = u.best_hour;
-  } catch (e) { /* respaldo 19:00 */ }
-  // Días ya ocupados por posteos programados: no pisarlos (mismo criterio que
-  // suggestSlots() en el frontend). Las historias salen al mediodía (13:00) y
-  // PUEDEN compartir día con un posteo de feed (no compiten); entre ellas, 1/día.
-  const { STORY_HOUR } = require('./story-reel');
-  const taken = new Set();
-  const takenStory = new Set();
-  try {
-    const sched = db.prepare(`SELECT scheduled_at, media_type FROM posts WHERE user_id = ? AND status = 'scheduled' AND scheduled_at IS NOT NULL`).all(uid);
-    for (const s of sched) {
-      const k = ymdInTz(s.scheduled_at, tz); if (!k) continue;
-      if (s.media_type === 'story') takenStory.add(k); else taken.add(k);
-    }
-  } catch (e) { /* no bloquea */ }
-  // Equivalente servidor de slotDate19(i, tz): el día (hoy + i + 1) a la
-  // best_hour del negocio en su zona horaria, en ISO UTC. Historias: 13:00.
-  const slotAt = (i, hour) => {
-    const ymd = shiftDays(tzToday(tz), i + 1);
-    return zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
-  };
-  const scheduled = [];
+  // Cupo POR SEMANA DEL POSTEO (fix v216): cada borrador se programa si el
+  // cupo de SU semana (la de su week_key) lo admite; los que exceden el cupo
+  // de su propia semana quedan borradores y se reportan en `waiting`
+  // (id + week_key + motivo), sin bloquear al resto. El 403 queda SOLO para
+  // el tope verdadero —cuando NINGÚN borrador pudo programarse por cupo— y
+  // trae los datos de la semana del posteo (mismo criterio que v215).
   const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='', notified=0 WHERE id=?`);
-  let off = 0, offStory = 0, guard = 0;
-  for (const d of drafts) {
-    const isStory = d.media_type === 'story';
-    const hour = isStory ? STORY_HOUR : bestHour;
-    const tset = isStory ? takenStory : taken;
-    let o = isStory ? offStory : off;
-    let iso = null;
-    while (guard++ < 160) {
-      const cand = slotAt(o++, hour);
-      if (!cand) break;
-      const k = ymdInTz(cand, tz);
-      if (k && !tset.has(k)) { tset.add(k); iso = cand; break; }
+  const { scheduled, waiting } = scheduleDraftsPerWeek(uid, drafts, (iso, d) => upd.run(iso, d.id));
+  if (!scheduled.length && waiting.length) {
+    const w0 = waiting.find((w) => w.reason === 'plan_limit') || waiting[0];
+    if (w0.reason === 'plan_limit') {
+      const d0 = drafts.find((d) => d.id === w0.id) || {};
+      const qx = quotaForWeek(uid, d0.media_type, w0.week_key);
+      return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qx.limit, used: qx.used, plan_name: qx.plan_name, week_key: w0.week_key, waiting,
+        message: `Llegaste al límite de tu plan ${qx.plan_name} (${qx.limit} ${quotaUnitName(d0.media_type)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
     }
-    if (isStory) offStory = o; else off = o;
-    if (!iso) iso = slotAt(o++, hour); // respaldo: no dejar huecos
-    upd.run(iso, d.id);
-    try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
-    scheduled.push({ id: d.id, scheduled_at: iso });
+    return res.status(400).json({ error: 'no_slots', waiting, message: 'No encontramos días libres en la semana de tus posteos para programarlos.' });
   }
-  res.json({ ok: true, scheduled });
+  res.json({ ok: true, scheduled, waiting });
   // ===== Track 4 "Pipeline perpetuo" =====
   // Al programar la semana N, la N+1 se empieza a armar SOLA en segundo plano.
   // Fire-and-forget: la respuesta ya salió, esto no la bloquea. Solo BORRADORES:
@@ -12204,7 +12247,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v215';
+const BUILD_ID = '20261018-v216';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

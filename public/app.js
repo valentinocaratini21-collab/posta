@@ -2907,15 +2907,17 @@ async function doScheduleAll(btn) {
     if (r && r.ok) {
       // Festejo + handoff a la agenda "Lo que se viene" con la semana programada.
       const n = (r.scheduled || []).length;
-      track('schedule_all', { count: n });
+      const w = (r.waiting || []).length;
+      track('schedule_all', { count: n, waiting: w });
       // Ya no hay borradores: la píldora y los chips se actualizan en el acto.
-      try { REVIEW_DRAFTS = []; } catch (e) {}
+      try { if (!w) REVIEW_DRAFTS = []; } catch (e) {}
       try { paintWeekPill(); } catch (e) {}
       try { renderQuickChips([], r.scheduled || [], false); } catch (e) {}
       streakModalShell(`
         <div class="big-emoji">📅</div>
         <h3 style="margin:12px 0 4px">✅ Tu semana está programada</h3>
         <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
+        ${w ? `<p style="font-size:14px;margin:0 0 6px">⏳ ${w} ${w === 1 ? 'quedó' : 'quedaron'} en espera: la semana a la que ${w === 1 ? 'pertenece' : 'pertenecen'} ya completó su cupo — ${w === 1 ? 'sigue' : 'siguen'} como borrador${w === 1 ? '' : 'es'} para la próxima.</p>` : ''}
         <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
         ${celebRefHTML()}
         <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
