@@ -19,7 +19,7 @@ function initCosts(db, opts) {
   if (opts && typeof opts.planFor === 'function') planFor = opts.planFor;
 }
 
-// ---------- Calidad de imagen (gpt-image-1) ----------
+// ---------- Calidad de imagen (gpt-image-2) ----------
 // Una sola constante, cambiable sin tocar código: env IMAGE_QUALITY.
 // 'medium' = default (2026-10-02, pendiente de validación visual de Valentino).
 // 'high' ≈ 4x tokens que medium. Si Valentino ve diferencia real en la comparación
@@ -35,7 +35,7 @@ const IMAGE_QUALITY = (() => {
 const MODEL_PRICES = {
   'gpt-4o':      { inPer1M: 2.50, outPer1M: 10.00 }, // chat con foto (visión)
   'gpt-4o-mini': { inPer1M: 0.15, outPer1M: 0.60 },  // chat texto, ideas, captions, briefs
-  'gpt-image-1': { perImage: IMAGE_QUALITY === 'high' ? 0.25 : 0.063 }, // 1024x1536: medium≈$0.063, high≈4x
+  'gpt-image-2': { perImage: IMAGE_QUALITY === 'high' ? 0.25 : 0.063 }, // verificado 07/10/2026: OpenAI factura por tokens ($4/1M in, $15/1M out desde sep-2026); medium 1024x1024≈$0.05268 → $0.063 para 1024x1536 es buena aproximación (solo medición de quemado, no facturación)
   'whisper-1':   { perMin: 0.006 },                  // notas de voz / ADN por audio
 };
 
@@ -236,10 +236,37 @@ function costBreakdown(days) {
   } catch (e) { return []; }
 }
 
+// ---------- Tope diario ESPECÍFICO de la IA del demo (v198) ----------
+// La proyección de /prueba genera piezas con el motor de IA real SOLO para
+// perfiles ilustrados/mascota (decisión de Valentino 2026-10-18). Ese gasto
+// tiene su propio contador y su propio techo: DEMO_AI_DAILY_CAP_USD
+// (default USD 10/día). Todo gasto del demo se loguea en api_costs con
+// feature 'demo-ai-*' para medirlo contra conversión desde el panel admin.
+// FAIL-CLOSED como daySpendUsd: si la DB no responde, se asume tope superado
+// y el demo cae a plantillas (fallback silencioso, nunca error visible).
+const DEMO_AI_DAILY_CAP_USD = Math.max(0, parseFloat(process.env.DEMO_AI_DAILY_CAP_USD || '10') || 10);
+
+function demoAiSpendTodayUsd() {
+  if (!DB) return DEMO_AI_DAILY_CAP_USD;
+  try {
+    const r = DB.prepare(`SELECT COALESCE(SUM(est_cost_usd),0) AS s FROM api_costs
+      WHERE date(ts) = date('now') AND feature LIKE 'demo-ai%'`).get();
+    return (r && r.s) || 0;
+  } catch (e) {
+    console.error('[demoAiSpendTodayUsd] DB error, asumiendo tope superado:', e.message);
+    return DEMO_AI_DAILY_CAP_USD;
+  }
+}
+
+function demoAiCapOk() {
+  return demoAiSpendTodayUsd() < DEMO_AI_DAILY_CAP_USD;
+}
+
 module.exports = {
   initCosts, MODEL_PRICES, DAILY_CAP_USD, IMAGE_QUALITY,
   estCostUsd, logApiCost, trackUsage,
   daySpendUsd, AiCapExceeded, assertAiOk, MSG_CAP,
+  DEMO_AI_DAILY_CAP_USD, demoAiSpendTodayUsd, demoAiCapOk,
   monthlyCapUsd, monthSpendUsd, MSG_MONTHLY_CAP,
   checkRate, isFounderEmail, MSG_CHAT_RATE, MSG_WEEK_RATE, MSG_IDEAS_RATE, MSG_REGEN_RATE,
   photoHash, photoRecentlySent, markPhotoSent,

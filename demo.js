@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 9;
+const DEMO_ENGINE_V = 10;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -974,6 +974,14 @@ function runDemoRender(args, timeoutMs = 90000) {
 // (zoompan de ffmpeg). Con 2+ diseños hace un TOUR: recorre las piezas con
 // cortes cortos (como un reel de verdad); con 1 solo, el Ken Burns clásico
 // de 6 segundos.
+// TIMEOUT DURO (fix 2026-10-18): antes el execFile no tenía timeout — si
+// ffmpeg quedaba hambriento de CPU en el contenedor (en vez de morir), el
+// paso de video colgaba sin techo y la semana entera esperaba. En local el
+// tour tarda ~4-7 s: 60 s es ~10x de margen para CPU compartida; el clásico
+// (menos frames, una sola entrada) lleva 45 s. Si se excede, execFile mata
+// el proceso (SIGKILL) y la degradación de renderVideoB64 decide.
+const VIDEO_TOUR_TIMEOUT_MS = 60000;
+const VIDEO_CLASSIC_TIMEOUT_MS = 45000;
 function renderDemoVideo(imagePaths, runDir, idx) {
   return new Promise((resolve, reject) => {
     const out = path.join(runDir, `post-${idx == null ? 2 : idx}.mp4`);
@@ -987,10 +995,16 @@ function renderDemoVideo(imagePaths, runDir, idx) {
       const start = Math.min(Math.max(idx == null ? 2 : idx, 0), paths.length - 1);
       if (start > 0) paths = paths.slice(start).concat(paths.slice(0, start));
     }
-    const args = paths.length >= 2
+    const isTour = paths.length >= 2;
+    const args = isTour
       ? [DEMO_VIDEO_SCRIPT, '--tour', out, '1.4', ...paths]
       : [DEMO_VIDEO_SCRIPT, paths[0], out, '6'];
-    execFile('python3', args, (err, stdout, stderr) => {
+    const opts = {
+      timeout: isTour ? VIDEO_TOUR_TIMEOUT_MS : VIDEO_CLASSIC_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      maxBuffer: 16 * 1024 * 1024,
+    };
+    execFile('python3', args, opts, (err, stdout, stderr) => {
       if (err) return reject(new Error('video: ' + String(stderr || err.message).slice(0, 200)));
       try { resolve(fs.readFileSync(out)); }
       catch (e) { reject(e); }
@@ -1174,22 +1188,29 @@ async function renderSpecPngs(specPosts, colors) {
 }
 
 async function renderVideoB64(imagePaths, runDir, idx) {
-  const waits = [1500, 3000, 6000];
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return (await renderDemoVideo(imagePaths, runDir, idx)).toString('base64');
-    } catch (e) {
-      console.error('[posta] Video falló (intento ' + (attempt + 1) + '/4):', e.message);
-      if (attempt < 3) await new Promise((r) => setTimeout(r, waits[attempt]));
-    }
+  // Política de degradación rápida (fix 2026-10-18): UN intento principal
+  // (tour si hay 2+ diseños) y, si falla, UN solo intento barato con el Ken
+  // Burns del diseño del propio posteo video. Nada de reintentar el tour:
+  // sus fallos reales son deterministas (memoria del contenedor: el grafo
+  // del tour sostiene las 5 entradas a la vez y ffmpeg muere por
+  // allocation; binario ausente) y la política vieja — 4 intentos del tour
+  // con esperas 1,5/3/6 s + fallback — quemaba 10+ s extra y moría igual.
+  // El clásico usa una sola entrada y una fracción de la memoria: es la
+  // degradación que sí puede pasar cuando el tour no. Peor caso acotado:
+  // timeout del tour (60 s) + timeout del clásico (45 s); un fallo de video
+  // nunca bloquea la entrega de la semana (el llamador cae a celda imagen).
+  try {
+    return (await renderDemoVideo(imagePaths, runDir, idx)).toString('base64');
+  } catch (e) {
+    console.error('[posta] Video falló (intento principal):', e.message);
   }
-  // Último recurso: si el tour falló, el video clásico de un solo diseño.
   const paths = (Array.isArray(imagePaths) ? imagePaths : [imagePaths]).filter(Boolean);
   if (paths.length >= 2) {
-    try { return (await renderDemoVideo(paths[Math.min(2, paths.length - 1)], runDir, idx)).toString('base64'); }
-    catch (e) { console.error('[posta] Video fallback también falló:', e.message); }
+    const vi = Math.min(Math.max(idx == null ? 2 : idx, 0), paths.length - 1);
+    try { return (await renderDemoVideo(paths[vi], runDir, idx)).toString('base64'); }
+    catch (e) { console.error('[posta] Video degradado (Ken Burns) también falló:', e.message); }
   }
-  console.error('[posta] ⚠️ VIDEO FALLÓ TRAS 4 INTENTOS');
+  console.error('[posta] ⚠️ VIDEO FALLÓ — la semana sale sin reel');
   return null;
 }
 

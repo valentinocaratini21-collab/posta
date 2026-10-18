@@ -32,6 +32,7 @@ try {
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
 const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples } = require('./generator');
+const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
 const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
@@ -8270,7 +8271,7 @@ function topStyleMemoryLine(uid) {
     return rows.map(x => `${x.code} (alcance prom. ${Math.round(x.r || 0)})`).join(', ');
   } catch (e) { return ''; }
 }
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole }, apiKey) {
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole }, apiKey, costFeature) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
   // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
@@ -8350,7 +8351,7 @@ ${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 
     throw new Error(`brief ${r.status}: ${t.slice(0, 160)}`);
   }
   const j = await r.json().catch(() => null);
-  costs.trackUsage({ feature: 'concept-shot', model: 'gpt-4o-mini', json: j });
+  costs.trackUsage({ feature: costFeature || 'concept-shot', model: 'gpt-4o-mini', json: j });
   const content = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
   if (!content.trim()) throw new Error('brief vacío de OpenAI');
   // Ensamblado garantizado: bloques del director + bloques de código.
@@ -8538,25 +8539,27 @@ function qaDedupe7d(uid, headline) {
 // fallan, el error combinado trae los dos mensajes de OpenAI (visible en
 // /api/week/last-result vía firstImgError).
 let GPT_IMAGE_2_DOWN = false;
-async function genConceptImage(apiKey, prompt, absRefs, refNote, uid) {
+async function genConceptImage(apiKey, prompt, absRefs, refNote, uid, costFeature) {
   if (!GPT_IMAGE_2_DOWN) {
     try {
-      return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-2');
+      return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-2', costFeature);
     } catch (e) {
       GPT_IMAGE_2_DOWN = true;
       console.error('[concept-shot] gpt-image-2 rechazó la generación; fallback a gpt-image-1 por este proceso:', e.message);
       try {
-        return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1');
+        return await genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1', costFeature);
       } catch (e2) {
         throw new Error(`gpt-image-2: ${e.message} || gpt-image-1: ${e2.message}`);
       }
     }
   }
-  return genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1');
+  return genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, 'gpt-image-1', costFeature);
 }
 // Llama al modelo dado con refs (edits) o sin refs (generations). Devuelve el b64.
 // Lanza Error con el mensaje de OpenAI recortado si falla.
-async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model) {
+// costFeature (v198): etiqueta de api_costs — el demo pasa 'demo-ai-image'
+// para que su gasto sea medible aparte; el pipeline real usa 'concept-shot'.
+async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model, costFeature) {
   let r;
   if (absRefs.length) {
     const form = new FormData();
@@ -8590,7 +8593,7 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     throw new Error(`OpenAI ${r.status}: ${t.slice(0, 160)}`);
   }
   const data = await r.json();
-  costs.trackUsage({ feature: 'concept-shot', userId: uid, model, images: 1, json: data });
+  costs.trackUsage({ feature: costFeature || 'concept-shot', userId: uid, model, images: 1, json: data });
   const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
   if (!b64) throw new Error('OpenAI no devolvió imagen');
   return b64;
@@ -10771,6 +10774,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let bioText = '';
     let profilePicPath = null;
     let feedRegister = null;
+    let feedPhotoPaths = [];
     if (ig && trialProfilePromise) {
       const prof = trialProfile || await Promise.race([
         trialProfilePromise,
@@ -10784,12 +10788,21 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           const abs = path.join(MEDIA_DIR, path.basename(prof.pic_media));
           try { if (fs.statSync(abs).isFile()) profilePicPath = abs; } catch (e) { /* sin medallón */ }
         }
-        if (!hexOk(fields.accent) && Array.isArray(prof.photos)) {
-          const bufs = [];
+        // (v198) Paths locales de las fotos del feed: alimentan la
+        // clasificación ilustrado/foto y la referencia visual de la IA.
+        if (Array.isArray(prof.photos)) {
           for (const p of prof.photos) {
-            if (bufs.length >= 3) break;
+            if (feedPhotoPaths.length >= 6) break;
             if (typeof p !== 'string' || !p.startsWith('/media/')) continue;
-            try { bufs.push(fs.readFileSync(path.join(MEDIA_DIR, path.basename(p)))); } catch (e) { /* foto podada por el janitor: se sigue con las demás */ }
+            const fp = path.join(MEDIA_DIR, path.basename(p));
+            try { if (fs.statSync(fp).isFile()) feedPhotoPaths.push(fp); } catch (e) { /* podada: se sigue */ }
+          }
+        }
+        if (!hexOk(fields.accent) && feedPhotoPaths.length) {
+          const bufs = [];
+          for (const fp of feedPhotoPaths) {
+            if (bufs.length >= 3) break;
+            try { bufs.push(fs.readFileSync(fp)); } catch (e) { /* foto podada por el janitor: se sigue con las demás */ }
           }
           if (bufs.length) {
             const feedPal = await demo.extractPaletteFromBuffers(bufs).catch(() => null);
@@ -10807,6 +10820,21 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           }
         }
       }
+    }
+
+    // (v198) CLASIFICACIÓN DEL FEED (ilustrado vs foto real): corre en
+    // paralelo con el spec y el render de plantillas — la semana de
+    // plantillas NO espera a la IA. Una sola llamada de visión barata
+    // sobre la hoja de contacto; el resultado viaja en el payload y en
+    // la caché de la semana. Si clasificar falla o el tope diario del
+    // demo ya se alcanzó, feedKind queda 'photo' (plantillas, $0 extra).
+    const demoApiKey = process.env.OPENAI_API_KEY || '';
+    let feedKind = ig ? 'photo' : null;
+    let demoSpendBefore = null;
+    let classifyPromise = null;
+    if (ig && feedPhotoPaths.length && demoApiKey && costs.demoAiCapOk()) {
+      demoSpendBefore = costs.demoAiSpendTodayUsd();
+      classifyPromise = demoAi.classifyFeedKind({ photoPaths: feedPhotoPaths, apiKey: demoApiKey }).catch(() => null);
     }
 
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
@@ -10846,6 +10874,90 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
+
+    // (v198) PIEZAS CON IA — solo si el feed clasificó ILUSTRADO: las 5
+    // piezas de la semana se regeneran con el pipeline real (brief del
+    // director de arte + gpt-image con la foto de perfil y una foto del
+    // feed como referencia del personaje + titular compuesto por
+    // código) y van reemplazando a las de plantilla a medida que
+    // completan (mismo evento 'post' por índice: la proyección CON
+    // Posty y la semana las toman en vivo; el payload final y la caché
+    // quedan con las piezas IA). Cada pieza que falla conserva su
+    // plantilla — fallback silencioso total, sin error visible. Los
+    // extras de la grilla NO usan IA (quedan de plantilla, como hoy).
+    let demoAiInfo = { used: false, pieces: 0, cost_usd: 0 };
+    if (classifyPromise) {
+      const cls = await Promise.race([
+        classifyPromise,
+        new Promise((r) => setTimeout(() => r(null), 20000)),
+      ]).catch(() => null);
+      if (cls && cls.kind === 'illustrated') {
+        feedKind = 'illustrated';
+        if (demoApiKey && costs.demoAiCapOk()) {
+          send('status', { step: 'personaje', text: 'Tu marca es ilustrada: estoy creando tus posteos con tu personaje, en la línea de tu feed…' });
+          const aiKeepalive = setInterval(() => {
+            send('status', { step: 'personaje', text: 'Estoy creando tus posteos con tu personaje…' });
+          }, 20000);
+          if (aiKeepalive.unref) aiKeepalive.unref();
+          try {
+            const visualStyle = demoAi.visualStyleForFeed(cls, feedRegister);
+            const refs = [profilePicPath, feedPhotoPaths[0]].filter(Boolean);
+            const { getStyle: getStyleDemo } = require('./image-styles');
+            const makePiece = async (i) => {
+              const sp = specPosts[i];
+              let prompt = await expandArtBrief({
+                headline: sp.headline,
+                tipo: sp.kind || 'social',
+                angle: sp.subline || '',
+                theme: sp.tema || sp.headline,
+                businessName: business,
+                category,
+                paletteHex: [accent, btn].filter(Boolean),
+                visualStyle,
+                sceneRole: demoAi.SCENE_ROLES[i % demoAi.SCENE_ROLES.length],
+              }, demoApiKey, 'demo-ai-brief');
+              try {
+                const st = sp.style ? getStyleDemo(sp.style) : null;
+                if (st) prompt += '\n\n' + styleFragment(st, [accent, btn].filter(Boolean));
+              } catch (e) { /* el fragmento de estilo es opcional */ }
+              const b64 = await genConceptImage(demoApiKey, prompt, refs, demoAi.REF_NOTE, null, 'demo-ai-image');
+              return demoAi.compositeDemoPiece({ b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i });
+            };
+            const { replaced } = await demoAi.replacePiecesWithAi({
+              indexes: posts.map((_, i) => i),
+              capOk: () => costs.demoAiCapOk(),
+              makePiece,
+              onPiece: async (i, buf) => {
+                bufs[i] = buf;
+                // El diseño IA pisa el JPG del runDir: el video-tour de
+                // la semana recorre las piezas IA, no las plantillas.
+                try { fs.writeFileSync(path.join(runDir, `post-${i}.jpg`), buf); } catch (e) {}
+                posts[i] = {
+                  type: 'image',
+                  image: 'data:image/jpeg;base64,' + buf.toString('base64'),
+                  caption: made[i].caption,
+                  hashtags: made[i].hashtags,
+                  headline: made[i].headline,
+                  style: specPosts[i].style,
+                  style_name: specPosts[i].style_name,
+                  ai: true,
+                };
+                send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
+              },
+            });
+            demoAiInfo.used = replaced.size > 0;
+            demoAiInfo.pieces = replaced.size;
+          } catch (e) {
+            console.error('[posta] demo-ai: la tanda IA falló, quedan las plantillas:', e.message);
+          } finally {
+            clearInterval(aiKeepalive);
+          }
+        }
+      }
+      if (demoSpendBefore != null) {
+        demoAiInfo.cost_usd = Math.round(Math.max(0, costs.demoAiSpendTodayUsd() - demoSpendBefore) * 100) / 100;
+      }
+    }
 
     // 4) El video (v182): recorre TODOS los diseños con cortes (tour por
     // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
@@ -10954,6 +11066,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       business, ig, category,
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
+      feed_kind: feedKind,
+      demo_ai: demoAiInfo,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
       grid_extra: gridExtra,
@@ -11668,7 +11782,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v197';
+const BUILD_ID = '20261017-v198';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

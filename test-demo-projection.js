@@ -205,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261017-v197', '/api/version es v197 (variedad de esqueletos + registro heredado)');
+    ok(ver.build === '20261017-v198', '/api/version es v198 (proyección con IA para perfiles ilustrados)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -312,7 +312,7 @@ function partC() {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes('20261017-v197'), 'BUILD_ID en v197');
+  ok(srv.includes('20261017-v198'), 'BUILD_ID en v198');
   // v187: proxy de miniaturas + grilla CON Posty sin repetidos.
   ok(srv.includes('localizeTrialPhotos'), 'el stream localiza las miniaturas del perfil (v187)');
   ok(srv.includes('grid_extra: gridExtra'), 'el payload lleva grid_extra (visuales únicos de la grilla)');
