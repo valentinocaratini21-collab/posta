@@ -10720,6 +10720,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   let photoPath = null;
   let runDir = null;
   let doneSent = false;
+  let keepalive = null;
   try {
     if (file) {
       const kind = demo.validImageKind(file);
@@ -10774,6 +10775,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
     // diseños listos, así que arranca acá; los JPG ya están en runDir.
     send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' });
+    // v188: el paso de video+extras es el tramo en silencio más largo del
+    // stream (la corrida real de v187 se cortó a los ~127 s sin done: el
+    // proxy corta la conexión por inactividad). Un status cada 20 s lo
+    // mantiene vivo; el front ya sabe mostrarlo (es el mismo tracker).
+    keepalive = setInterval(() => send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' }), 20000);
+    if (keepalive.unref) keepalive.unref();
     const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
     // v187: visuales extra para la grilla CON Posty de la proyección, SIN
     // repetir ningún diseño de la semana: (A) diseños de los temas del pool
@@ -10896,6 +10903,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     console.error('[posta] Error en prueba streaming:', e.message);
     fail('No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.');
   } finally {
+    if (keepalive) clearInterval(keepalive);
     // Falló la generación o el stream se cortó a mitad (el cliente nunca
     // recibió 'done'): el intento se reembolsa, no se consume.
     if (charged && !doneSent) demo.refundTrialAttempt(ip);
@@ -11574,7 +11582,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v187';
+const BUILD_ID = '20261017-v188';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

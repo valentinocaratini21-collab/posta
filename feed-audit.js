@@ -265,9 +265,14 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
   const handle = sanitizeHandle(profile.handle) || 'ig';
   try { fs.mkdirSync(mediaDir, { recursive: true }); } catch (e) {}
   const get = fetchImpl || ((u) => fetchImageBuf(u, 2000));
-  profile.photos = await Promise.all(profile.photos.slice(0, 9).map(async (url) => {
+  profile.photos = await Promise.all(profile.photos.slice(0, 9).map(async (rawUrl) => {
     try {
-      if (!url || typeof url !== 'string') return null;
+      if (!rawUrl || typeof rawUrl !== 'string') return null;
+      // Las URLs del embed vienen con escapes residuales (\/ por nivel de
+      // JSON): sin limpiarlas, ni el chequeo de host ni la descarga matchean
+      // (así salió la primera corrida real de v187: las 6 en null). Misma
+      // limpieza que fetchIgProfile aplica a la foto de perfil.
+      const url = rawUrl.replace(/\\/g, '');
       // Solo la CDN oficial de Instagram (mismo anti-SSRF que fetchIgProfile).
       if (!/^https:\/\/[a-z0-9.-]*cdninstagram\.com\//i.test(url)) return null;
       const hash = crypto.createHash('sha256').update(handle + '|' + url).digest('hex').slice(0, 24);

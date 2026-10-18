@@ -131,6 +131,9 @@ async function partA2() {
       'https://scontent.cdninstagram.com/fixture/foto-fail.jpg',
       'https://example.com/evil.jpg',
       null,
+      // Así llegan del embed real: con escapes residuales (\/ por nivel de
+      // JSON). La primera corrida real de v187 las rechazó TODAS por esto.
+      'https:\\/\\/scontent.cdninstagram.com\\/fixture\\/foto-esc.jpg',
     ] };
     await feedAudit.localizeTrialPhotos(prof, mediaDir, impl);
     ok(!!(prof.photos[0] && prof.photos[0].startsWith('/media/igthumb-')), 'foto ok → URL local /media/igthumb-…');
@@ -138,6 +141,8 @@ async function partA2() {
     ok(prof.photos[2] === null, 'foto que no descarga → null (celda neutra, como antes)');
     ok(prof.photos[3] === null, 'URL fuera de la CDN de IG → null (anti-SSRF)');
     ok(prof.photos[4] === null, 'foto ausente → null');
+    ok(!!(prof.photos[5] && prof.photos[5].startsWith('/media/igthumb-')), 'URL con escapes residuales (\\/) → se limpia y localiza');
+    ok(calls.some((u) => u === 'https://scontent.cdninstagram.com/fixture/foto-esc.jpg'), 'la descarga se pide con la URL ya limpia');
     ok(!calls.some((u) => u.includes('example.com')), 'la URL ajena ni siquiera se intenta descargar');
     const f0 = path.join(mediaDir, path.basename(prof.photos[0]));
     ok(fs.existsSync(f0) && fs.statSync(f0).size === small.length, 'la miniatura quedó escrita en MEDIA_DIR');
@@ -200,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261017-v187', '/api/version es v187 (build del fix de grillas)');
+    ok(ver.build === '20261017-v188', '/api/version es v188 (build del fix de grillas)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -307,7 +312,7 @@ function partC() {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes('20261017-v187'), 'BUILD_ID en v187');
+  ok(srv.includes('20261017-v188'), 'BUILD_ID en v188');
   // v187: proxy de miniaturas + grilla CON Posty sin repetidos.
   ok(srv.includes('localizeTrialPhotos'), 'el stream localiza las miniaturas del perfil (v187)');
   ok(srv.includes('grid_extra: gridExtra'), 'el payload lleva grid_extra (visuales únicos de la grilla)');
