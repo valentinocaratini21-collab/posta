@@ -212,10 +212,11 @@ ok('server.js: loop, endpoints y admin', () => {
   for (const needle of ['runWeeklyIdeasLoop', 'runIdeasForUser', 'makeIdeaDraft', "app.get('/api/ideas'", "app.post('/api/ideas/:id/make'", "app.post('/api/ideas/:id/dismiss'", "app.post('/api/ideas/competitors'", "app.post('/api/admin/ideas/run'", "app.post('/api/admin/ideas/make'", 'ideas: weekIdeas']) {
     assert.ok(srvSrc.includes(needle), 'falta: ' + needle);
   }
-  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v222'"));
+  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v223'"));
 });
 ok('app.js: bloque de ideas en Schedule + enhanceIdeas', () => {
-  assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length >= 2, 'slot en las dos vistas de Schedule');
+  assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length === 1, 'v223: UN solo slot de ideas, en scheduleView y fuera de la agenda (el slot duplicado dentro del bloque de la agenda era el flash)');
+  assert.ok(appSrc.includes('IDEAS_CACHE_HTML'), 'v223: el bloque de ideas se cachea en la sesión (ciclo de vida independiente del filtro)');
   assert.ok(appSrc.includes('async function enhanceIdeas'));
   assert.ok(appSrc.includes('Ideas de Posty para vos'));
   assert.ok(appSrc.includes('data-idea-make'));

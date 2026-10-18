@@ -456,14 +456,31 @@ async function enhanceWeekReport() {
 // Posty pensó para esta semana (competencia / su ganador / calendario), cada
 // una con Hacelo (la convierte en borrador) y Ahora no (no se repite). Abajo,
 // discreta, la gestión de competidores: es el lugar contextual del loop.
+// v223: el bloque de ideas tiene ciclo de vida INDEPENDIENTE del filtro
+// de la agenda. Antes su slot vivía DENTRO del bloque de la agenda y
+// render() lo repoblaba async tras cada repintado: en cada cambio de
+// vista el bloque reaparecía de golpe en el medio de la agenda (el
+// flash que Valentino marcó). Ahora: su HTML se cachea en la sesión,
+// su único slot vive en Schedule FUERA de la agenda (bajo el bloque de
+// la semana), y al repintar se pinta SINCRÓNICO desde la caché — sin
+// flash, sin re-fetch por cada cambio de vista u offset.
+let IDEAS_CACHE_HTML = null;
 async function enhanceIdeas(force) {
   const slot = document.getElementById('hs-ideas');
   if (!slot) return;
+  if (!force && IDEAS_CACHE_HTML !== null) {
+    if (!slot.dataset.done) {
+      slot.dataset.done = '1';
+      slot.innerHTML = IDEAS_CACHE_HTML;
+      wireIdeasBlock(slot);
+    }
+    return;
+  }
   if (slot.dataset.done && !force) return;
   slot.dataset.done = '1';
   let r;
-  try { r = await api.get('/api/ideas'); } catch (e) { return; }
-  if (!r || !r.ok) return;
+  try { r = await api.get('/api/ideas'); } catch (e) { slot.dataset.done = ''; return; }
+  if (!r || !r.ok) { slot.dataset.done = ''; return; }
   const ideas = r.ideas || [];
   const comps = r.competitors || [];
   const fmtChip = { post: '📸 Posteo', reel: '🎬 Reel', carrusel: '🖼️ Carrusel' };
@@ -491,8 +508,11 @@ async function enhanceIdeas(force) {
   h += '</div>';
   if (!comps.length) h += '<div class="idea-comps-hint">Cargá hasta 5 cuentas y Posty las mira cada semana para traerte ideas con datos reales.</div>';
   h += '</div>';
-  slot.innerHTML = h;
-  wireIdeasBlock(slot);
+  IDEAS_CACHE_HTML = h;
+  // El slot pudo ser reemplazado por un re-render mientras la respuesta
+  // viajaba: se pinta el slot ACTUAL, en su lugar definitivo, una vez.
+  const cur = document.getElementById('hs-ideas');
+  if (cur) { cur.dataset.done = '1'; cur.innerHTML = h; wireIdeasBlock(cur); }
 }
 function wireIdeasBlock(slot) {
   const compList = () => [...slot.querySelectorAll('[data-comp-remove]')].map((x) => x.getAttribute('data-comp-remove'));
@@ -5416,7 +5436,6 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
-    <div id="hs-ideas"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
     ${staleHTML}
     <div class="hs-carousel">
@@ -5457,7 +5476,7 @@ function homeWhenLabel(iso) {
    Todo se pinta desde scheduled_at / día propuesto / estado — el
    mismo dato de siempre, sin estado paralelo. */
 let SCHED_MODE = 'semana';
-try { const m0 = localStorage.getItem('posty_sched_mode'); if (m0 === 'dia' || m0 === 'semana' || m0 === 'mes') SCHED_MODE = m0; } catch (e) {}
+try { const m0 = localStorage.getItem('posty_sched_mode'); if (m0 === 'dia' || m0 === 'semana' || m0 === 'mes' || m0 === 'feed') SCHED_MODE = m0; } catch (e) {}
 let SCHED_WEEK_OFFSET = 0; // semanas desde la actual (vista Semana)
 let SCHED_MONTH_OFFSET = 0; // meses desde el actual (vista Mes)
 // (SCHED_DAY_OFFSET — días desde hoy — vive junto a scheduleView.)
@@ -5760,6 +5779,11 @@ function schedNavInfo(tz) {
     const ymd = schedDateToYmd(base);
     return { label: schedCap(schedMonthName(ymd)) + ' de ' + String(ymd).slice(0, 4), offset: SCHED_MONTH_OFFSET };
   }
+  if (SCHED_MODE === 'feed') {
+    // Feed (v223): vista rodante — los que se vienen + los publicados —
+    // sin navegación por período: la barra no muestra flechas ni rótulo.
+    return { label: '', offset: 0 };
+  }
   const monday = schedMondayOf(schedAddDays(today, SCHED_WEEK_OFFSET * 7));
   return { label: 'Semana ' + schedRangeLabel(monday, schedAddDays(monday, 6)), offset: SCHED_WEEK_OFFSET };
 }
@@ -5776,13 +5800,19 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
   const drafts = posts.filter(p => p && p.status === 'draft');
   const ctx = { pl, tz, bizName, all: posts };
   const info = schedNavInfo(tz);
-  const body = SCHED_MODE === 'dia' ? schedDiaBodyHTML(ctx) : SCHED_MODE === 'mes' ? schedMesBodyHTML(ctx) : schedSemanaBodyHTML(ctx);
+  const body = SCHED_MODE === 'dia' ? schedDiaBodyHTML(ctx) : SCHED_MODE === 'mes' ? schedMesBodyHTML(ctx) : SCHED_MODE === 'feed' ? feedPreviewHTML(posts, tz) : schedSemanaBodyHTML(ctx);
+  // En Feed la barra no lleva navegación por período (vista rodante).
+  const navHTML = SCHED_MODE === 'feed' ? '' : `<div class="scf-nav">
+        <button type="button" class="scf-navbtn" id="scfNavPrev" aria-label="Anterior">‹</button>
+        <span class="scf-nav-label">${esc(info.label)}</span>
+        <button type="button" class="scf-navbtn" id="scfNavNext" aria-label="Siguiente">›</button>
+        ${info.offset !== 0 ? '<button type="button" class="scf-todaybtn" id="scfNavToday">hoy</button>' : ''}
+      </div>`;
   return `<div class="hs-week scf">
     <div class="hs-week-head"><b>📅 Tu agenda</b>${drafts.length ? '<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>' : ''}</div>
     <div id="revMsg"></div>
     ${schedQuotaHTML(pl.list, quota)}
     <div id="hs-report"></div>
-    <div id="hs-ideas"></div>
     ${generating ? '<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>' : ''}
     ${schedStaleHTML(posts, tz)}
     <div class="scf-bar">
@@ -5790,27 +5820,36 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
         <button type="button" role="tab" data-scf-mode="dia" class="${SCHED_MODE === 'dia' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'dia'}">Día</button>
         <button type="button" role="tab" data-scf-mode="semana" class="${SCHED_MODE === 'semana' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'semana'}">Semana</button>
         <button type="button" role="tab" data-scf-mode="mes" class="${SCHED_MODE === 'mes' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'mes'}">Mes</button>
+        <button type="button" role="tab" data-scf-mode="feed" class="${SCHED_MODE === 'feed' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'feed'}">Feed</button>
       </div>
-      <div class="scf-nav">
-        <button type="button" class="scf-navbtn" id="scfNavPrev" aria-label="Anterior">‹</button>
-        <span class="scf-nav-label">${esc(info.label)}</span>
-        <button type="button" class="scf-navbtn" id="scfNavNext" aria-label="Siguiente">›</button>
-        ${info.offset !== 0 ? '<button type="button" class="scf-todaybtn" id="scfNavToday">hoy</button>' : ''}
-      </div>
+      ${navHTML}
     </div>
     ${drafts.length ? `<div class="scf-remain">📝 Te ${drafts.length === 1 ? 'queda' : 'quedan'} <b>${drafts.length}</b> por aceptar</div>` : ''}
     ${body}
   </div>`;
 }
-// --- ✨ Así va quedando tu feed (v221, pedido de Valentino) ---
-// La grilla del perfil de IG del negocio, en Schedule, debajo de los
-// posteos: primero los que se vienen (programados y borradores, en su
-// orden de salida, con su marca), después los ya publicados reales.
-// Vista de LECTURA: se pinta desde schedPlacements (el mismo mapa de
-// días de la agenda, ninguna ubicación cambia entre vistas) + los
-// publicados que la app conoce. Las historias NO van: no viven en la
-// grilla del perfil. Tocar un tile que se viene salta a su día en la
-// agenda (bindSchedule); tocar un publicado abre el lightbox.
+// --- ✨ El feed del negocio, como CUARTO MODO del filtro (v223) ---
+// La grilla del perfil de IG del negocio es el cuerpo de la vista Feed
+// de la agenda (Día·Semana·Mes·Feed): primero los que se vienen
+// (programados y borradores, en su orden de salida), después los ya
+// publicados reales. Nació en v221 como sección debajo de los posteos;
+// v223 la muda entera al filtro (amendment de Valentino: "un filtro
+// más de la agenda, no una sección debajo"). v223 (veredicto
+// de Valentino con captura de su cuenta: "tiene que ser literalmente
+// el feed de Instagram, exactamente el mismo diseño"): la grilla es la
+// de un perfil de IG — tiles verticales 3:4 borde a borde (el formato
+// actual de la grilla de IG) con cover desde el master 4:5, recorte
+// leve arriba/abajo como hace IG (acá manda la fidelidad a IG, no el
+// "foto entera" de Semana/Día: el posteo completo se ve al tocar el
+// tile), publicados SIN ninguna
+// marca, reels con el glifo blanco de IG, y la ÚNICA marca de los que
+// se vienen es una pastillita mínima abajo a la izquierda (fecha corta
+// o "borrador"). Vista de LECTURA: se pinta desde schedPlacements (el
+// mismo mapa de días de la agenda, ninguna ubicación cambia entre
+// vistas) + los publicados que la app conoce. Las historias NO van:
+// no viven en la grilla del perfil. Tocar un tile que se viene salta a
+// su día en la agenda (bindSchedule); tocar un publicado abre el
+// lightbox.
 function feedPreviewHTML(all, tz) {
   const posts = (Array.isArray(all) ? all : []).filter(p => p && p.status !== 'failed' && String(p.media_type || '') !== 'story');
   if (!posts.length) return '';
@@ -5833,12 +5872,16 @@ function feedPreviewHTML(all, tz) {
       ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const VIS = 15;
+  // v223: glifo de reel blanco estilo IG (sin círculo de fondo) y la
+  // pastillita de fecha corta para los programados.
+  const REEL_SVG = '<svg class="fp-reel" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const grid = parts.map((t, i) => {
     const p = t.p;
     const isV = String(p.media_type || '') === 'video';
     const extra = i >= VIS ? ' fp-extra' : '';
     const media = tileMedia(p, isV);
-    const reel = isV ? '<span class="fp-reel">🎬</span>' : '';
+    const reel = isV ? REEL_SVG : '';
     if (t.kind === 'up') {
       const sched = p.status === 'scheduled';
       let when = t.ymd;
@@ -5848,19 +5891,22 @@ function feedPreviewHTML(all, tz) {
         try { dow = dObj.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', ''); } catch (e) {}
         when = `${dow} ${dObj.getUTCDate()} · ${schedMiniTime(p)}`;
       }
-      const mark = sched ? '📮' : '✏️';
-      return `<button type="button" class="fp-tile up${extra}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}<span class="fp-badge">${mark}</span>${reel}<span class="fp-when">${mark} ${esc(when)}</span></button>`;
+      // Única marca permitida (v223): pastillita mínima abajo a la
+      // izquierda — fecha corta si ya está programado, "borrador" si no.
+      const pill = sched ? (dObj ? `${dObj.getUTCDate()} ${MESES[dObj.getUTCMonth()]}` : 'programado') : 'borrador';
+      return `<button type="button" class="fp-tile up${extra}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}<span class="fp-pill">${esc(pill)}</span>${reel}</button>`;
     }
     const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}"` : '';
     return `<button type="button" class="fp-tile pub${extra}" data-post-id="${esc(String(p.id))}"${lb}>${media}${reel}</button>`;
   }).join('');
   const moreBtn = parts.length > VIS ? '<button type="button" class="fp-more" id="fpMore">Ver más posteos</button>' : '';
-  const noPub = !published.length ? '<div class="fp-note">Cuando empieces a publicar, los que ya salieron van a ir apareciendo acá abajo. ✨</div>' : '';
+  const anyUp = parts.some(t => t.kind === 'up');
+  // v223 (amendment): la grilla ES el cuerpo de la vista Feed del
+  // filtro — sin rótulo propio (la identidad la da el segmento "Feed");
+  // la línea de honestidad queda como pie discreto de la vista.
   return `<section class="hs-feed" id="hsFeed">
-    <div class="hs-feed-head"><b>✨ Así va quedando tu feed</b><span>Vista previa de tu perfil: los posteos que se vienen, en el lugar donde van a salir.</span></div>
     <div class="fp-grid">${grid}</div>
-    <div class="fp-legend">📮 programado · ✏️ borrador · sin marca = ya publicado</div>
-    ${noPub}${moreBtn}
+    ${anyUp ? '<div class="fp-line">Los que llevan pastillita todavía no salieron 😉</div>' : ''}${moreBtn}
   </section>`;
 }
 // --- Wiring del filtro (lo llama bindSchedule) ---
@@ -5870,6 +5916,7 @@ function schedSetMode(m) {
   try { render(); } catch (e) {}
 }
 function schedNavStep(dir) {
+  if (SCHED_MODE === 'feed') return; // el Feed no navega por período
   if (SCHED_MODE === 'dia') SCHED_DAY_OFFSET += dir;
   else if (SCHED_MODE === 'mes') SCHED_MONTH_OFFSET += dir;
   else SCHED_WEEK_OFFSET += dir;
@@ -9959,7 +10006,8 @@ async function render() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
   // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 60);
-  setTimeout(() => { try { enhanceIdeas(); } catch (e) {} }, 70);
+  // v223: enhanceIdeas ya NO se dispara desde render(): el bloque de
+  // ideas tiene ciclo de vida propio y se enciende desde bindSchedule.
   setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 80);
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado
@@ -10425,9 +10473,9 @@ async function scheduleView() {
   // 2026-10-05: home en Schedule (primera pestaña) — 5 tarjetas fijas arriba,
   // chat abajo en la misma pantalla. Pedido de Valentino.
   const homeWeekBlock = schedFilterBlockHTML(allPosts, quota, weekGenerating, weekNoDna);
-  // ✨ Así va quedando tu feed (v221): debajo de los posteos, la grilla
-  // del perfil con los que se vienen en su lugar + los publicados.
-  const feedBlock = feedPreviewHTML(allPosts, tz);
+  // v223: la grilla del feed ya NO es una sección debajo de los posteos:
+  // es el cuarto modo del filtro de la agenda (Día·Semana·Mes·Feed) y
+  // la pinta schedFilterBlockHTML adentro de homeWeekBlock.
   const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
     <div class="hs-brand-head">
@@ -10441,7 +10489,7 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
-    ${feedBlock}
+    <div id="hs-ideas"></div>
     ${homeChatBlock}
     ${armBlock}
   </div>`;
@@ -10642,6 +10690,7 @@ function bindSchedule() {
   // v217: filtro Día·Semana·Mes (segmentado, navegación, salto de día,
   // ampliación hover/toque de la vista Semana).
   try { bindSchedFilter(); } catch (e) {}
+  try { enhanceIdeas(); } catch (e) {} // 💡 v223: ideas con ciclo propio (caché de sesión; su slot vive fuera de la agenda)
   // v221: ✨ Así va quedando tu feed — tocar un tile que se viene salta
   // a su día en la agenda; "Ver más posteos" despliega el historial.
   // (Los tiles publicados se abren con el wiring de [data-lightbox] de
