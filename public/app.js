@@ -5041,6 +5041,76 @@ function bindChat() {
 // ---------- 🏠 HOME SIMPLE (2026-10-03) ----------
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
+
+/* ---------- v214: AGENDA COMPACTA — navegación de semanas + panel ---------- */
+// homeWeekHTML pinta un CALENDARIO de 7 columnas con miniaturas. La semana
+// visible es la actual + AG_WEEK_OFFSET (las flechas ‹ › la mueven; todo se
+// repinta con render(), como el SCHED_DAY_OFFSET de siempre). La tarjeta
+// completa de cada posteo vive en un cofre oculto (#agVault) DENTRO de
+// #hsWeekList: al tocar una miniatura, la tarjeta se mueve al panel
+// #agSheet (debajo del calendario) y al cerrarlo vuelve al cofre — así
+// doAcceptAll, el festejo de semana y los bindings de siempre las siguen
+// encontrando donde esperan.
+let AG_WEEK_OFFSET = 0;
+function agClosePost() {
+  const vault = document.getElementById('agVault');
+  const slot = document.getElementById('agSheetSlot');
+  const sheet = document.getElementById('agSheet');
+  if (!slot || !sheet) return;
+  const card = slot.querySelector('.igmock');
+  if (card && vault) vault.appendChild(card);
+  slot.innerHTML = '';
+  sheet.hidden = true;
+  sheet.dataset.openId = '';
+  document.querySelectorAll('.agth.on').forEach(x => x.classList.remove('on'));
+}
+function agOpenPost(id, thumbEl) {
+  const vault = document.getElementById('agVault');
+  const slot = document.getElementById('agSheetSlot');
+  const sheet = document.getElementById('agSheet');
+  if (!vault || !slot || !sheet) return;
+  if (sheet.dataset.openId === String(id)) { agClosePost(); return; } // mismo tap: cerrar
+  const prev = slot.querySelector('.igmock');
+  if (prev) vault.appendChild(prev);
+  slot.innerHTML = '';
+  const card = vault.querySelector('.igmock[data-post-id="' + String(id).replace(/"/g, '') + '"]');
+  if (!card) return;
+  slot.appendChild(card);
+  const t = document.getElementById('agSheetTitle');
+  if (t) t.textContent = card.dataset.dayLabel || 'Tu posteo';
+  sheet.hidden = false;
+  sheet.dataset.openId = String(id);
+  document.querySelectorAll('.agth.on').forEach(x => x.classList.remove('on'));
+  if (thumbEl && thumbEl.classList) thumbEl.classList.add('on');
+  setTimeout(() => { try { sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 40);
+}
+if (!window.__agCalBound) {
+  window.__agCalBound = true;
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const nav = t.closest('[data-agnav]');
+    if (nav) {
+      if (nav.disabled) return;
+      const v = nav.dataset.agnav;
+      AG_WEEK_OFFSET = v === '0' ? 0 : Math.max(-4, Math.min(5, AG_WEEK_OFFSET + (parseInt(v, 10) || 0)));
+      try { render(); } catch (err) {}
+      return;
+    }
+    const more = t.closest('[data-ag-more]');
+    if (more) {
+      const cell = more.closest('.agcal-day');
+      if (cell) {
+        const open = cell.classList.toggle('agcal-x');
+        more.textContent = open ? '−' : (more.dataset.n || more.textContent);
+      }
+      return;
+    }
+    const opener = t.closest('[data-ag-open]');
+    if (opener) { agOpenPost(opener.dataset.agOpen, opener); return; }
+    if (t.closest('[data-ag-close]')) agClosePost();
+  });
+}
 function homeWeekHTML(posts, quota, generating, noDna) {
   prefetchMedia(posts);
   const q = quota || {};
@@ -5133,12 +5203,14 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     return map;
   })();
 
-  // ===== v213: LA AGENDA — la semana asentada en días =====
+  // ===== v214: LA AGENDA COMPACTA — calendario con miniaturas =====
   // Programados por scheduled_at, borradores por su día propuesto (el
-  // proposedIsos de arriba, sin cambios) y publicados de esta semana en el
-  // día que salieron. La agenda se pinta SOLO desde esos datos: si el chat
-  // mueve un posteo de día, al refrescar la agenda lo muestra en su día
-  // nuevo — no hay estado paralelo que mantener.
+  // proposedIsos de arriba, sin cambios) y publicados en el día que
+  // salieron. Todo se pinta SOLO desde esos datos: si el chat mueve un
+  // posteo de día, al refrescar la agenda lo muestra en su día nuevo —
+  // no hay estado paralelo que mantener. La grilla muestra miniaturas;
+  // la tarjeta completa vive en el cofre (#agVault) y se abre en el
+  // panel (#agSheet) al tocar una miniatura (agOpenPost).
   const cap1 = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const hourOf = (dt) => { try { return dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
   const todayKeyStr = (() => { try { return new Date().toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } })();
@@ -5154,9 +5226,19 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     } catch (e) {}
   }
   const calDate = (key) => new Date(String(key) + 'T12:00:00Z'); // mediodía UTC: aritmética de calendario pura
+  const shiftKey = (key, days) => { const d = calDate(key); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+  // v214: la grilla muestra la semana ACTUAL corrida AG_WEEK_OFFSET semanas
+  // (navegación ‹ ›). mondayKeyStr sigue siendo el lunes real: lo usan el
+  // cupo y la ventana de programados viejos.
+  const wkOff = Math.max(-4, Math.min(5, Number(typeof AG_WEEK_OFFSET !== 'undefined' ? AG_WEEK_OFFSET : 0) || 0));
+  const dispMondayKey = mondayKeyStr ? shiftKey(mondayKeyStr, wkOff * 7) : '';
   const weekDays = [];
-  if (mondayKeyStr) for (let i = 0; i < 7; i++) { const d = calDate(mondayKeyStr); d.setUTCDate(d.getUTCDate() + i); weekDays.push({ key: d.toISOString().slice(0, 10), date: d }); }
+  if (dispMondayKey) for (let i = 0; i < 7; i++) { const key = shiftKey(dispMondayKey, i); weekDays.push({ key, date: calDate(key) }); }
   const sundayKeyStr = weekDays.length ? weekDays[6].key : '';
+  // Ventana para incluir publicados en el cofre: cubre todas las semanas
+  // navegables (offset −4..+5 desde el lunes real).
+  const pubWinLo = mondayKeyStr ? shiftKey(mondayKeyStr, -35) : '';
+  const pubWinHi = mondayKeyStr ? shiftKey(mondayKeyStr, 48) : '';
   const dayKeyOfIso = (iso) => { const d = pcParseDate(iso); return d ? d.toLocaleDateString('en-CA', { timeZone: tz }) : ''; };
   // Ítems de la agenda: lo por venir (borradores + programados) + lo ya
   // publicado esta semana, cada uno con su día y su hora.
@@ -5176,19 +5258,26 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     const whenIso = p.published_at || p.scheduled_at;
     if (!whenIso) continue;
     const k = dayKeyOfIso(whenIso);
-    if (!k || (mondayKeyStr && k < mondayKeyStr) || (sundayKeyStr && k > sundayKeyStr)) continue;
+    if (!k || (pubWinLo && k < pubWinLo) || (pubWinHi && k > pubWinHi)) continue;
     const dt = pcParseDate(whenIso);
     agItems.push({ p, key: k, t: dt ? dt.getTime() : 0, hour: dt ? hourOf(dt) : '', proposedIso: null, isPending: false, published: true });
   }
   const itemsByKey = new Map();
   for (const it of agItems) { if (!it.key) continue; if (!itemsByKey.has(it.key)) itemsByKey.set(it.key, []); itemsByKey.get(it.key).push(it); }
   for (const arr of itemsByKey.values()) arr.sort((a, b) => a.t - b.t);
+  // Programados de semanas anteriores (quedaron sin salir): se muestran
+  // como filas en la tira compacta (postCardHTML), NO como tarjetas del
+  // cofre — por eso el total de tarjetas los excluye. SOLO programados:
+  // un publicado viejo es historia de su semana (v214 lo trae al cofre
+  // para poder abrirlo navegando), no un vencido.
+  const staleItems = agItems.filter(it => !it.published && it.p.status === 'scheduled' && it.key && mondayKeyStr && it.key < mondayKeyStr).sort((a, b) => a.t - b.t);
+  const staleSet = new Set(staleItems.map(it => it.p));
   // Tarjeta de la agenda: la MISMA igmock de siempre (mismo data-post-id y
   // los mismos data-pc-act / data-revaccept / data-lightbox, para que el
   // listener delegado y bindReview sigan andando sin tocarlos) — cambia la
   // fila superior: pastilla de estado + hora; el día lo da la sección.
   let agSeq = 0;
-  const agTotal = agItems.length;
+  const agTotal = agItems.filter(it => !staleSet.has(it.p)).length;
   const agCard = (it) => {
     const d = it.p;
     agSeq++;
@@ -5238,32 +5327,67 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     </div>`;
   };
   const dayNameOf = (date) => { try { return cap1(date.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' })); } catch (e) { return ''; } };
-  const daySection = (wd) => {
+  const dowShortOf = (date) => { try { return date.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', ''); } catch (e) { return ''; } };
+  // Estado visual de cada miniatura: punto de color + etiqueta accesible.
+  const agStatusOf = (it) => it.published ? 'pub' : (it.p.status === 'scheduled' ? 'sched' : (it.isPending ? 'creating' : 'draft'));
+  const AG_STATUS_LBL = { pub: 'Publicado', sched: 'Programado', creating: 'Creando…', draft: 'Borrador' };
+  // Miniatura de la grilla: la imagen en chico, badge de formato (🎬/📸)
+  // y punto de estado. Al tocarla, agOpenPost abre la tarjeta completa.
+  const agThumb = (it) => {
+    const d = it.p;
+    const isV = String(d.media_type || '') === 'video';
+    const isS = String(d.media_type || '') === 'story';
+    const st = agStatusOf(it);
+    const media = it.isPending ? '<span class="agth-ph">✨</span>'
+      : !d.image_path ? '<span class="agth-ph">📝</span>'
+      : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(mv(d.image_path, 240))}" alt="" loading="lazy">`;
+    const badge = isV ? '<span class="agth-badge">🎬</span>' : isS ? '<span class="agth-badge">📸</span>' : '';
+    const dayTxt = it.key ? `${dayNameOf(calDate(it.key))} ${calDate(it.key).getUTCDate()}` : 'Sin día asignado';
+    const lbl = `${dayTxt} · ${AG_STATUS_LBL[st]}${it.hour ? ' · ' + it.hour + ' hs' : ''}`;
+    return `<span class="agth-w"><button type="button" class="agth st-${st}" data-ag-open="${esc(String(d.id))}" title="${esc(lbl)}" aria-label="${esc('Ver posteo: ' + lbl)}">
+      <span class="agth-media">${media}</span>${badge}<span class="agth-dot" aria-hidden="true"></span>
+    </button>${it.hour ? `<span class="agth-hour">${esc(it.hour)}</span>` : ''}</span>`;
+  };
+  // Celda del calendario: fecha arriba (hoy en celeste), hasta 3
+  // miniaturas y un "+N" que expande la celda si hay más. Día vacío:
+  // celda tranquila con un "+" tenue (mismo data-sched-day de siempre).
+  const AG_TH_MAX = 3;
+  const calCell = (wd) => {
     const items = itemsByKey.get(wd.key) || [];
     const isToday = wd.key === todayKeyStr;
-    const cnt = items.length ? `<span class="ag-day-count">${items.length} posteo${items.length > 1 ? 's' : ''}</span>` : '';
-    // Día sin posteos, honesto: "Posty lo completa" SOLO si la semana se
-    // está armando; si la semana ya está, es un día libre del plan.
-    const body = items.length
-      ? items.map(agCard).join('')
-      : `<button type="button" class="sched-ghost ag-ghost" data-sched-day="${esc(dayNameOf(wd.date) + ' ' + wd.date.getUTCDate())}" aria-label="Pedirle a Posty un posteo para este día"><span class="sg-plus">+</span><span class="sg-txt">${generating ? 'Posty lo completa ✨' : 'Día libre 🌿'}</span></button>`;
-    return `<section class="ag-day${isToday ? ' ag-today' : ''}" data-agday="${esc(wd.key)}">
-      <header class="ag-day-head"><span class="ag-day-name">${esc(dayNameOf(wd.date))} <b>${wd.date.getUTCDate()}</b></span>${isToday ? '<span class="ag-today-pill">hoy</span>' : ''}${cnt}</header>
-      <div class="ag-day-cards">${body}</div>
+    const vis = items.slice(0, AG_TH_MAX);
+    const rest = items.slice(AG_TH_MAX);
+    const more = rest.length ? `<button type="button" class="agth-more" data-ag-more data-n="+${rest.length}" aria-label="Ver ${rest.length} posteos más de este día">+${rest.length}</button><span class="agth-extra">${rest.map(agThumb).join('')}</span>` : '';
+    const emptyBtn = items.length ? '' : `<button type="button" class="agcal-empty" data-sched-day="${esc(dayNameOf(wd.date) + ' ' + wd.date.getUTCDate())}" aria-label="Día sin posteos: pedirle a Posty uno para este día"><span aria-hidden="true">+</span></button>`;
+    return `<section class="agcal-day${isToday ? ' agcal-today' : ''}" data-agday="${esc(wd.key)}">
+      <header class="agcal-head"><span class="agcal-dow">${esc(dowShortOf(wd.date))}</span><span class="agcal-num">${wd.date.getUTCDate()}</span></header>
+      <div class="agcal-thumbs">${vis.map(agThumb).join('')}${more}${emptyBtn}</div>
     </section>`;
   };
-  const weekHTML = weekDays.map(daySection).join('');
-  // Desborde honesto: lo que cae después del domingo es la semana que viene.
-  const nextKeys = [...itemsByKey.keys()].filter(k => sundayKeyStr && k > sundayKeyStr).sort();
-  const nextHTML = nextKeys.length ? `<div class="ag-next"><div class="ag-next-t">✨ La semana que viene</div><div class="ag-days">${nextKeys.map(k => daySection({ key: k, date: calDate(k) })).join('')}</div></div>` : '';
-  // Borradores que no se pudieron ubicar en un día (no debería pasar):
-  // quedan visibles en su propia sección — nunca se pierden de vista.
-  const noDayItems = agItems.filter(it => !it.key);
-  const noDayHTML = noDayItems.length ? `<section class="ag-day ag-noday"><header class="ag-day-head"><span class="ag-day-name">📝 Borradores sin día</span></header><div class="ag-day-cards">${noDayItems.map(agCard).join('')}</div></section>` : '';
-  // Programados de semanas anteriores (quedaron sin salir): tira compacta
-  // con la tarjeta de siempre — tampoco desaparecen de la agenda.
-  const staleItems = agItems.filter(it => it.key && mondayKeyStr && it.key < mondayKeyStr).sort((a, b) => a.t - b.t);
+  const weekHTML = weekDays.map(calCell).join('');
+  // Tira de viejos (filas con la tarjeta de siempre), como en v213.
   const staleHTML = staleItems.length ? `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${staleItems.map(it => postCardHTML(it.p, { layout: 'row' })).join('')}</div>` : '';
+  // Cofre con TODAS las tarjetas completas (la grilla solo muestra
+  // miniaturas; la tarjeta sale de acá cuando se toca una).
+  const vaultItems = agItems.filter(it => !staleSet.has(it.p));
+  const vaultHTML = vaultItems.map(agCard).join('');
+  // Borradores que no se pudieron ubicar en un día (no debería pasar):
+  // miniaturas en una tira propia — nunca se pierden de vista.
+  const noDayItems = vaultItems.filter(it => !it.key);
+  const noDayHTML = noDayItems.length ? `<div class="ag-noday"><div class="ag-noday-t">📝 Borradores sin día</div><div class="ag-noday-row">${noDayItems.map(agThumb).join('')}</div></div>` : '';
+  // Panel donde se abre la tarjeta completa, debajo del calendario.
+  const sheetHTML = `<div class="agsheet" id="agSheet" hidden>
+    <div class="agsheet-top"><b class="agsheet-title" id="agSheetTitle">Tu posteo</b><button type="button" class="agsheet-x" data-ag-close aria-label="Cerrar">✕</button></div>
+    <div class="agsheet-slot" id="agSheetSlot"></div>
+  </div>`;
+  // Flechas de navegación de semanas (la semana que viene se ve acá,
+  // navegando — ya no hay sección separada).
+  const navHTML = `<div class="ag-nav">
+    <button type="button" class="ag-nav-btn" data-agnav="-1"${wkOff <= -4 ? ' disabled' : ''} aria-label="Semana anterior">‹</button>
+    ${wkOff !== 0 ? '<button type="button" class="ag-nav-today" data-agnav="0">hoy</button>' : ''}
+    <button type="button" class="ag-nav-btn" data-agnav="1"${wkOff >= 5 ? ' disabled' : ''} aria-label="Semana siguiente">›</button>
+  </div>`;
   const monthNameOf = (date) => { try { return date.toLocaleDateString('es-AR', { month: 'long', timeZone: 'UTC' }); } catch (e) { return ''; } };
   let rangeLabel = '';
   if (weekDays.length) {
@@ -5293,20 +5417,23 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
       ${nextLine}
     </div>` : '';
-  // v213: la agenda reemplaza al carrusel — cabecera de semana con rango,
-  // cupo, reporte y los días. #hsWeekList sigue conteniendo TODAS las
-  // tarjetas: doAcceptAll y bindReview lo recorren buscando [data-revaccept]
-  // y .igmock-fixed, igual que cuando era el carrusel.
+  // v214: la agenda es un CALENDARIO compacto — cabecera con rango, flechas
+  // de navegación, cupo y reporte; la grilla de 7 columnas con miniaturas;
+  // el panel de la tarjeta abierta; y el cofre con TODAS las tarjetas
+  // completas. #hsWeekList sigue conteniendo todo: doAcceptAll y
+  // bindReview lo recorren buscando [data-revaccept] y .igmock-fixed,
+  // igual que cuando era el carrusel.
   return `<div class="hs-week ag-wrap">
-    <div class="hs-week-head ag-head"><div class="ag-head-txt"><b>📅 Tu agenda</b>${rangeLabel ? `<span class="ag-range">${esc(rangeLabel)}</span>` : ''}</div>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
+    <div class="hs-week-head ag-head"><div class="ag-head-txt"><b>📅 Tu agenda</b>${rangeLabel ? `<span class="ag-range">${esc(rangeLabel)}</span>` : ''}</div>${navHTML}${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
     <div id="hsWeekList" class="ag-all">
       ${staleHTML}
-      <div class="ag-days">${weekHTML}</div>
-      ${nextHTML}
+      <div class="agcal">${weekHTML}</div>
       ${noDayHTML}
+      ${sheetHTML}
+      <div class="ag-vault" id="agVault" hidden>${vaultHTML}</div>
     </div>
   </div>`;
 }
