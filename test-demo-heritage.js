@@ -39,8 +39,10 @@ const ok = (cond, msg) => { console.log((cond ? '✓' : '✗ FALLO') + ' ' + msg
     'ningún titular de tecnología ni de oficios');
   ok(specCm.specPosts.every((p) => p.style && p.style_name), 'cada pieza nombra su estilo real');
   ok(new Set(specCm.specPosts.map((p) => p.style)).size === 5, '5 estilos distintos');
-  ok(specCm.specPosts.every((p) => typeof p.photo === 'string' && fs.existsSync(p.photo)),
-    'todas las fotos de la semana existen en la biblioteca');
+  ok(specCm.specPosts.every((p) => p.poster
+      ? (p.photo === null || (typeof p.photo === 'string' && fs.existsSync(p.photo)))
+      : (typeof p.photo === 'string' && fs.existsSync(p.photo))),
+    'toda foto usada existe (v196: los pósters sin foto de perfil van tipográficos, photo null)');
 
   // La bio manda aunque el nombre del formulario sea neutro:
   const specBio = demo.buildDemoSpec({
