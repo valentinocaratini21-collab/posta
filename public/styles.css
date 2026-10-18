@@ -2249,92 +2249,35 @@ textarea.in{resize:vertical;min-height:96px}
   .lp-foto-grid{grid-template-columns:1fr}
 }
 
-/* ===== v214: LA AGENDA COMPACTA — calendario de 7 columnas =====
-   Grilla tipo Predis en TODOS los anchos (también en el celular): cada
-   día con su fecha y sus miniaturas; la tarjeta completa se abre en el
-   panel #agSheet bajo el calendario y vive el resto del tiempo en el
-   cofre #agVault. Paleta de la casa: blanco, navy, celeste #2793C8,
-   amarillo #FEC14D con criterio. Nada de fondos oscuros. */
-.ag-head{align-items:center;flex-wrap:wrap;row-gap:8px}
-.ag-head-txt{display:flex;flex-direction:column;gap:1px;min-width:0}
-.hs-week-head span.ag-range{font-size:12.5px;color:var(--mut);font-weight:700;background:none;border-radius:0;padding:0;margin-left:0;white-space:normal}
-.ag-all{display:block}
-/* Flechas de navegación de semanas */
-.ag-nav{display:flex;align-items:center;gap:6px;margin-left:auto}
-.ag-nav-btn{width:32px;height:32px;flex:none;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--txt);font-size:19px;font-weight:800;line-height:1;cursor:pointer;font-family:inherit;touch-action:manipulation;display:flex;align-items:center;justify-content:center}
-.ag-nav-btn:disabled{opacity:.32;cursor:default}
-.ag-nav-btn:not(:disabled):active{transform:scale(.93)}
-.ag-nav-today{border:1.5px solid var(--cel);background:#EAF4FB;color:#14648F;border-radius:999px;font-size:12px;font-weight:800;padding:6px 11px;cursor:pointer;font-family:inherit;touch-action:manipulation}
-/* La grilla: 7 columnas siempre, celdas que nunca se desbordan */
-.agcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
-.agcal-day{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 4px 7px;min-width:0}
-.agcal-day.agcal-today{border:1.5px solid var(--cel);background:#F4FAFD;box-shadow:0 4px 14px rgba(39,147,200,.13)}
-.agcal-head{display:flex;flex-direction:column;align-items:center;gap:1px;margin-bottom:5px}
-.agcal-dow{font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--mut);white-space:nowrap}
-.agcal-num{font-size:13.5px;font-weight:800;color:var(--txt);line-height:1.15}
-.agcal-today .agcal-num{background:var(--cel);color:#fff;border-radius:50%;width:21px;height:21px;display:flex;align-items:center;justify-content:center;font-size:12.5px}
-.agcal-thumbs{display:flex;flex-direction:column;gap:4px}
-.agth-w{display:block;min-width:0}
-.agth{position:relative;display:block;width:100%;aspect-ratio:1/1;border:none;background:var(--bg2);border-radius:8px;padding:0;cursor:pointer;overflow:hidden;font-family:inherit;touch-action:manipulation}
-.agth:active{transform:scale(.96)}
-.agth.on{outline:2.5px solid var(--cel);outline-offset:1px}
-.agth-media{display:block;width:100%;height:100%}
-.agth-media img,.agth-media video{width:100%;height:100%;object-fit:cover;display:block}
-.agth-ph{display:flex;width:100%;height:100%;align-items:center;justify-content:center;font-size:15px;background:linear-gradient(135deg,#FFF6DB,#FDEBC8)}
-.agth-dot{position:absolute;left:4px;bottom:4px;width:8px;height:8px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(10,30,51,.35);pointer-events:none}
-.agth.st-sched .agth-dot{background:#22a45a}
-.agth.st-pub .agth-dot{background:var(--cel)}
-.agth.st-draft .agth-dot{background:#9fb2c3}
-.agth.st-creating .agth-dot{background:#FEC14D;animation:agpulse 1.1s ease-in-out infinite}
-@keyframes agpulse{50%{opacity:.3}}
-.agth-badge{position:absolute;top:3px;right:3px;font-size:9px;line-height:1;background:rgba(10,30,51,.72);border-radius:6px;padding:2.5px 4px;pointer-events:none}
-.agth-hour{display:none}
-.agth-more{border:1.5px dashed var(--line);background:#fff;color:var(--mut);border-radius:8px;font-size:11px;font-weight:800;padding:5px 0;cursor:pointer;font-family:inherit;touch-action:manipulation;width:100%}
-.agth-extra{display:none}
-.agcal-day.agcal-x .agth-extra{display:contents}
-.agcal-empty{display:flex;width:100%;min-height:40px;align-items:center;justify-content:center;border:none;background:transparent;color:#c3d3df;font-size:16px;cursor:pointer;font-family:inherit;border-radius:8px;touch-action:manipulation}
-/* Borradores sin día: tira de miniaturas bajo la grilla */
-.ag-noday{margin-top:12px}
-.ag-noday-t{font-size:13px;font-weight:800;color:var(--mut);margin:0 2px 7px}
-.ag-noday-row{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px}
-.ag-noday-row .agth-w{width:52px;flex:none}
-/* Panel con la tarjeta completa, debajo del calendario */
-.agsheet{margin-top:14px;background:#fff;border:1.5px solid var(--cel);border-radius:18px;padding:12px 12px 14px;box-shadow:0 10px 30px rgba(39,147,200,.16);animation:agsheet-in .18s ease-out}
-@keyframes agsheet-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.agsheet-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.agsheet-title{font-size:14.5px;font-weight:800;color:var(--txt)}
-.agsheet-x{margin-left:auto;flex:none;border:none;background:var(--bg2);color:var(--mut);width:30px;height:30px;border-radius:50%;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;touch-action:manipulation}
-.agsheet-slot .igmock{margin:0 auto;width:100%;max-width:430px}
-.ag-vault{display:none!important}
-/* Tarjeta completa (la fila superior que pinta agCard) */
-.ag-when-top{justify-content:space-between;gap:6px;padding:8px 10px 0}
-.ag-hour{font-size:12px;font-weight:700;color:var(--mut);white-space:nowrap}
-.ag-pill{display:inline-block;padding:5px 11px;font-size:12px;font-weight:800;border-radius:999px;white-space:nowrap}
-.ag-pill-sched{background:#E5F6EC;color:#1a7a3a}
-.ag-pill-pub{background:#EAF4FB;color:#14648F}
-.ag-pill-draft{background:var(--bg2);color:var(--mut);border:1px solid var(--line)}
+/* ===== v215: LA AGENDA = CARRUSEL DE TARJETAS GRANDES =====
+   Vuelve el carrusel pre-v213 (tarjetas .igmock lado a lado, flechas
+   .hs-side — esos estilos viven más arriba y nunca se fueron). De la
+   agenda compacta de v214 solo sobreviven la tira de vencidos y el
+   botón sticky de subida. Lo nuevo: la forma literal de Instagram
+   dentro de la tarjeta (.igmock-acts + .igmock-likes), el mismo
+   lenguaje de las tarjetas de la landing (.lp-ig-act). */
+/* Tira de programados de semanas anteriores (filas compactas) */
 .ag-stale{margin:0 0 14px;background:var(--bg2);border:1.5px dashed var(--line);border-radius:14px;padding:10px 12px}
 .ag-stale-t{font-size:13px;font-weight:800;color:var(--mut);margin-bottom:8px}
 .ag-stale .pcard{margin-bottom:8px}
 .ag-stale .pcard:last-child{margin-bottom:0}
-.ag-tt-done{font-size:11.5px;font-weight:700;color:var(--dim)}
 /* Botón de subida SIEMPRE a mano dentro de la agenda (sticky abajo). El
    contenedor no captura toques; solo el botón. */
 .ag-uploadbar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:45;display:flex;justify-content:center;margin:16px 0 6px;pointer-events:none}
 .ag-upload-btn{pointer-events:auto;border:none;cursor:pointer;font-family:inherit;background:var(--cel);color:#fff;font-size:15px;font-weight:800;border-radius:999px;padding:13px 24px;box-shadow:0 8px 24px rgba(39,147,200,.42);touch-action:manipulation}
 .ag-upload-btn:active{transform:scale(.97)}
-/* Escritorio: celdas grandes, hora visible bajo cada miniatura */
-@media (min-width:1080px){
-  .agcal{gap:10px}
-  .agcal-day{border-radius:16px;padding:10px 8px 11px}
-  .agcal-head{margin-bottom:8px}
-  .agcal-dow{font-size:10.5px}
-  .agcal-num{font-size:16px}
-  .agcal-today .agcal-num{width:25px;height:25px;font-size:14.5px}
-  .agcal-thumbs{gap:6px}
-  .agth{border-radius:11px}
-  .agth-ph{font-size:22px}
-  .agth-hour{display:block;font-size:10.5px;font-weight:700;color:var(--mut);text-align:center;margin-top:3px}
-  .agcal-empty{min-height:64px;font-size:19px}
-  .ag-noday-row .agth-w{width:84px}
-}
+/* La forma de Instagram dentro de la tarjeta grande: fila de íconos
+   sociales (corazón, comentario, repost, enviar + guardar a la derecha)
+   y la línea de "Me gusta", entre la imagen y el caption. */
+.igmock-acts{display:flex;align-items:center;gap:16px;padding:2px 0 0}
+.igmock-acts svg{width:23px;height:23px;fill:none;stroke:#262626;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+.igmock-acts .ig-save{margin-left:auto}
+.igmock-likes{font-size:13px;font-weight:700;color:var(--txt);margin-top:7px}
+/* Fila fina del álbum en Schedule (v215): reemplaza la tarjeta grande —
+   un solo botón de subida a la vista (el sticky); el álbum se abre acá. */
+.album-row{margin:2px 0 14px}
+.album-row-btn{display:flex;align-items:center;gap:8px;width:100%;border:1.5px dashed var(--line);background:#fff;color:var(--mut);border-radius:12px;padding:11px 14px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation;text-align:left}
+.album-row-btn:active{transform:scale(.99)}
+.album-row-panel{margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.album-row-panel.album-focus{outline:2.5px solid var(--cel);outline-offset:1px}
+.album-row-msg{font-size:12.5px;color:var(--mut);margin-top:8px;min-height:16px}

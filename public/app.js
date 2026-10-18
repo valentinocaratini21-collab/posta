@@ -2821,10 +2821,27 @@ function pickRejectReason() {
       // 2026-10-09: en el carrusel del home no hay picker — usar el día propuesto.
       const proposed = b.dataset.proposed;
       const when = (winp && winp.value) ? new Date(winp.value).toISOString() : (proposed ? new Date(proposed).toISOString() : null);
-      await api.patch('/api/posts/' + id, { scheduled_at: when, caption: ta ? ta.value : undefined });
+      const pr = await api.patch('/api/posts/' + id, { scheduled_at: when, caption: ta ? ta.value : undefined });
       try { await api.post(`/api/posts/${id}/signal`, { signal: 'approved' }); } catch (e) {}
       try { await api.post('/api/funnel', { event: 'week_accepted' }); } catch (e) {}
       track('draft_accept', { id });
+      // v215: la confirmación dice CUÁNDO sale (día y hora) — el servidor
+      // devuelve la fecha real en la respuesta — y si es de la semana que
+      // viene, se nota. Antes este flujo podía terminar en el modal de
+      // tope con la semana actual llena aunque el posteo fuera de la otra.
+      let whenTxt = '';
+      let whenNextWeek = false;
+      try {
+        if (pr && pr.scheduled_at) {
+          const dt = pcParseDate(pr.scheduled_at);
+          if (dt) {
+            const tzA = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+            const hh = dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tzA });
+            whenTxt = pcFmtDayLong(dt, tzA) + ' a las ' + hh;
+            whenNextWeek = !!(pr.week_key && pr.week_key > albumMondayKey());
+          }
+        }
+      } catch (e) {}
       // 2026-10-10: el festejo de "semana completa" solo si NO quedan borradores.
       // REVIEW_DRAFTS puede estar vacío en el home (el carrusel usa allPosts).
       let remaining = 0;
@@ -2844,6 +2861,7 @@ function pickRejectReason() {
           <div class="big-emoji">🎉</div>
           <h3 style="margin:12px 0 4px">¡Listo! Tu semana se publica sola</h3>
           <p style="font-size:14px;margin:0 0 6px">Todos tus posteos quedaron programados ✅</p>
+          ${whenTxt ? `<p style="font-size:14px;margin:0 0 6px">📮 ${whenNextWeek ? 'Este queda para la semana que viene: sale el ' : 'Este sale el '}${esc(whenTxt)}</p>` : ''}
           <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
           ${celebRefHTML()}
           <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
@@ -2852,9 +2870,14 @@ function pickRejectReason() {
         const cg = $('#celebGo');
         if (cg) cg.onclick = () => { closeStreakModal(); render(); };
         else render();
-      } else render();
+      } else {
+        if (whenTxt) toast(whenNextWeek
+          ? `✅ <b>¡Listo!</b> Queda programado para la semana que viene: sale el ${esc(whenTxt)}`
+          : `✅ <b>¡Listo!</b> Sale el ${esc(whenTxt)}`);
+        render();
+      }
     } catch (e) {
-      if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+      if (isPlanLimitErr(e)) { planLimitModal(e); }
       else if (m) m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`;
       b.disabled = false;
     }
@@ -2909,7 +2932,7 @@ async function doScheduleAll(btn) {
       else render();
     }
   } catch (e) {
-    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    if (isPlanLimitErr(e)) { planLimitModal(e); }
     else if (m) { m.innerHTML = `<div class="err">Error: ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     if (b) { b.disabled = false; b.innerHTML = old; }
   }
@@ -2978,7 +3001,7 @@ async function doActivateWeek(btn) {
     };
     else render();
   } catch (e) {
-    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    if (isPlanLimitErr(e)) { planLimitModal(e); }
     else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     if (b) { b.disabled = false; b.innerHTML = '🚀 Activar mi semana'; }
   }
@@ -3026,14 +3049,20 @@ async function doAcceptAll(btn) {
     try { track('accept_all', { count: n }); } catch (e) {}
     try { REVIEW_DRAFTS = []; } catch (e) {}
     try { paintWeekPill(); } catch (e) {}
+    // v215: el servidor acepta POR SEMANA de cada posteo y lo cuenta en
+    // next_week — el toast lo refleja (nada de modal de tope si la semana
+    // llena era la actual y estos van a la que viene).
+    const nw = (r && r.next_week) || 0;
     toast(n === 1
       ? `✅ <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada 👌`
       : (r && r.partial)
-      ? `✅ <b>Acepté ${n} (tu plan cubre ${n} por semana).</b><br>Te quedan ${r.total - n} borradores para la próxima 👌`
+      ? `✅ <b>Acepté ${n}.</b><br>Los otros ${r.total - n} quedan en borrador: la semana de esos posteos ya está completa 👌`
+      : nw > 0
+      ? `✅ <b>Listo, acepté los ${n}.</b><br>${nw === n ? 'Quedan programados para la semana que viene 📮' : `${nw} de ellos quedan para la semana que viene 📮`}`
       : `✅ <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada 👌`);
     render();
   } catch (e) {
-    if (isPlanLimitErr(e)) { const q = await api.get('/api/quota').catch(() => null); quotaModal(q || { limit: 3, used: 3, left: 0, plan_name: '' }); }
+    if (isPlanLimitErr(e)) { planLimitModal(e); }
     else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     if (b) { b.disabled = false; b.textContent = '✅ Aceptar todos'; }
   }
@@ -5042,75 +5071,11 @@ function bindChat() {
 // Posty es esto: los posteos de la semana uno al lado del otro,
 // y el chat abajo si querés cambiar/editar/crear algo distinto.
 
-/* ---------- v214: AGENDA COMPACTA — navegación de semanas + panel ---------- */
-// homeWeekHTML pinta un CALENDARIO de 7 columnas con miniaturas. La semana
-// visible es la actual + AG_WEEK_OFFSET (las flechas ‹ › la mueven; todo se
-// repinta con render(), como el SCHED_DAY_OFFSET de siempre). La tarjeta
-// completa de cada posteo vive en un cofre oculto (#agVault) DENTRO de
-// #hsWeekList: al tocar una miniatura, la tarjeta se mueve al panel
-// #agSheet (debajo del calendario) y al cerrarlo vuelve al cofre — así
-// doAcceptAll, el festejo de semana y los bindings de siempre las siguen
-// encontrando donde esperan.
-let AG_WEEK_OFFSET = 0;
-function agClosePost() {
-  const vault = document.getElementById('agVault');
-  const slot = document.getElementById('agSheetSlot');
-  const sheet = document.getElementById('agSheet');
-  if (!slot || !sheet) return;
-  const card = slot.querySelector('.igmock');
-  if (card && vault) vault.appendChild(card);
-  slot.innerHTML = '';
-  sheet.hidden = true;
-  sheet.dataset.openId = '';
-  document.querySelectorAll('.agth.on').forEach(x => x.classList.remove('on'));
-}
-function agOpenPost(id, thumbEl) {
-  const vault = document.getElementById('agVault');
-  const slot = document.getElementById('agSheetSlot');
-  const sheet = document.getElementById('agSheet');
-  if (!vault || !slot || !sheet) return;
-  if (sheet.dataset.openId === String(id)) { agClosePost(); return; } // mismo tap: cerrar
-  const prev = slot.querySelector('.igmock');
-  if (prev) vault.appendChild(prev);
-  slot.innerHTML = '';
-  const card = vault.querySelector('.igmock[data-post-id="' + String(id).replace(/"/g, '') + '"]');
-  if (!card) return;
-  slot.appendChild(card);
-  const t = document.getElementById('agSheetTitle');
-  if (t) t.textContent = card.dataset.dayLabel || 'Tu posteo';
-  sheet.hidden = false;
-  sheet.dataset.openId = String(id);
-  document.querySelectorAll('.agth.on').forEach(x => x.classList.remove('on'));
-  if (thumbEl && thumbEl.classList) thumbEl.classList.add('on');
-  setTimeout(() => { try { sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 40);
-}
-if (!window.__agCalBound) {
-  window.__agCalBound = true;
-  document.addEventListener('click', (e) => {
-    const t = e.target;
-    if (!t || !t.closest) return;
-    const nav = t.closest('[data-agnav]');
-    if (nav) {
-      if (nav.disabled) return;
-      const v = nav.dataset.agnav;
-      AG_WEEK_OFFSET = v === '0' ? 0 : Math.max(-4, Math.min(5, AG_WEEK_OFFSET + (parseInt(v, 10) || 0)));
-      try { render(); } catch (err) {}
-      return;
-    }
-    const more = t.closest('[data-ag-more]');
-    if (more) {
-      const cell = more.closest('.agcal-day');
-      if (cell) {
-        const open = cell.classList.toggle('agcal-x');
-        more.textContent = open ? '−' : (more.dataset.n || more.textContent);
-      }
-      return;
-    }
-    const opener = t.closest('[data-ag-open]');
-    if (opener) { agOpenPost(opener.dataset.agOpen, opener); return; }
-    if (t.closest('[data-ag-close]')) agClosePost();
-  });
-}
+/* ---------- v215: AGENDA = CARRUSEL DE TARJETAS GRANDES ---------- */
+// homeWeekHTML pinta el carrusel que Valentino aprobó (el pre-v213):
+// tarjetas grandes lado a lado, flechas ‹ ›, cada tarjeta con su día.
+// La agenda compacta de v214 (grilla de 7 columnas + cofre #agVault +
+// panel #agSheet) quedó descartada por Valentino.
 function homeWeekHTML(posts, quota, generating, noDna) {
   prefetchMedia(posts);
   const q = quota || {};
@@ -5203,212 +5168,96 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     return map;
   })();
 
-  // ===== v214: LA AGENDA COMPACTA — calendario con miniaturas =====
-  // Programados por scheduled_at, borradores por su día propuesto (el
-  // proposedIsos de arriba, sin cambios) y publicados en el día que
-  // salieron. Todo se pinta SOLO desde esos datos: si el chat mueve un
-  // posteo de día, al refrescar la agenda lo muestra en su día nuevo —
-  // no hay estado paralelo que mantener. La grilla muestra miniaturas;
-  // la tarjeta completa vive en el cofre (#agVault) y se abre en el
-  // panel (#agSheet) al tocar una miniatura (agOpenPost).
-  const cap1 = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-  const hourOf = (dt) => { try { return dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); } catch (e) { return ''; } };
-  const todayKeyStr = (() => { try { return new Date().toLocaleDateString('en-CA', { timeZone: tz }); } catch (e) { return ''; } })();
-  // Lunes de esta semana (lun–dom): la misma definición del cupo y del
-  // ritual de fotos (albumMondayKey). Fallback manual si aquella fallara.
+  // ===== v215: EL CARRUSEL DE TARJETAS GRANDES (restaurado) =====
+  // La referencia de Valentino es el carrusel pre-v213: tarjetas grandes
+  // lado a lado (3 visibles en escritorio), flechas ‹ › laterales, contador
+  // "N de M", línea de día/hora con ✅ Aceptar al lado en los borradores,
+  // imagen grande (el MASTER directo: las variantes @240 que pedía la
+  // miniatura de v214 nunca existieron en el servidor — media-variants
+  // solo genera @640 y @24 — y salían rotas), caption y acciones al pie.
+  // Lo ÚNICO nuevo de diseño (pedido de Valentino): la forma literal de
+  // Instagram DENTRO de la tarjeta — fila de íconos sociales SVG y línea
+  // de "Me gusta" entre la imagen y el caption, como las tarjetas de la
+  // landing (LP_WEEK_ICONS). Sin conteos inventados (regla de verdad):
+  // la línea usa el estado cero real de Instagram.
+  const proposedFor = (d) => {
+    if (d.scheduled_at) return { label: '📮 ' + homeWhenLabel(d.scheduled_at), iso: null };
+    try {
+      const iso = (proposedIsos.get(d.id) || {}).iso || null;
+      if (!iso) return { label: '📝 Borrador', iso: null };
+      const lbl = new Date(iso.slice(0, 10) + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
+      return { label: `📅 ${lbl} · 10:00`, iso };
+    } catch (e) { return { label: '📝 Borrador', iso: null }; }
+  };
+  // Programados de semanas anteriores que quedaron sin salir: filas
+  // compactas arriba (postCardHTML), como en v213/v214 — no ocupan
+  // tarjeta del carrusel ni cuentan en el "N de M".
+  const dayKeyOfIso = (iso) => { const d = pcParseDate(iso); return d ? d.toLocaleDateString('en-CA', { timeZone: tz }) : ''; };
   let mondayKeyStr = '';
   try { mondayKeyStr = albumMondayKey(); } catch (e) {}
-  if (!mondayKeyStr && todayKeyStr) {
-    try {
-      const t0 = new Date(todayKeyStr + 'T12:00:00Z');
-      t0.setUTCDate(t0.getUTCDate() - ((t0.getUTCDay() + 6) % 7));
-      mondayKeyStr = t0.toISOString().slice(0, 10);
-    } catch (e) {}
-  }
-  const calDate = (key) => new Date(String(key) + 'T12:00:00Z'); // mediodía UTC: aritmética de calendario pura
-  const shiftKey = (key, days) => { const d = calDate(key); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
-  // v214: la grilla muestra la semana ACTUAL corrida AG_WEEK_OFFSET semanas
-  // (navegación ‹ ›). mondayKeyStr sigue siendo el lunes real: lo usan el
-  // cupo y la ventana de programados viejos.
-  const wkOff = Math.max(-4, Math.min(5, Number(typeof AG_WEEK_OFFSET !== 'undefined' ? AG_WEEK_OFFSET : 0) || 0));
-  const dispMondayKey = mondayKeyStr ? shiftKey(mondayKeyStr, wkOff * 7) : '';
-  const weekDays = [];
-  if (dispMondayKey) for (let i = 0; i < 7; i++) { const key = shiftKey(dispMondayKey, i); weekDays.push({ key, date: calDate(key) }); }
-  const sundayKeyStr = weekDays.length ? weekDays[6].key : '';
-  // Ventana para incluir publicados en el cofre: cubre todas las semanas
-  // navegables (offset −4..+5 desde el lunes real).
-  const pubWinLo = mondayKeyStr ? shiftKey(mondayKeyStr, -35) : '';
-  const pubWinHi = mondayKeyStr ? shiftKey(mondayKeyStr, 48) : '';
-  const dayKeyOfIso = (iso) => { const d = pcParseDate(iso); return d ? d.toLocaleDateString('en-CA', { timeZone: tz }) : ''; };
-  // Ítems de la agenda: lo por venir (borradores + programados) + lo ya
-  // publicado esta semana, cada uno con su día y su hora.
-  const agItems = [];
-  for (const d of list) {
-    const isPending = !d.image_path && d.status === 'draft';
-    if (d.status === 'scheduled' && d.scheduled_at) {
-      const dt = pcParseDate(d.scheduled_at);
-      agItems.push({ p: d, key: dayKeyOfIso(d.scheduled_at), t: dt ? dt.getTime() : 0, hour: dt ? hourOf(dt) : '', proposedIso: null, isPending: false, published: false });
-    } else {
-      const pIso = (proposedIsos.get(d.id) || {}).iso || null;
-      agItems.push({ p: d, key: pIso ? pIso.slice(0, 10) : '', t: pIso ? new Date(pIso).getTime() : 0, hour: pIso ? pIso.slice(11, 16) : '', proposedIso: pIso, isPending, published: false });
-    }
-  }
-  for (const p of all) {
-    if (!p || p.status !== 'published') continue;
-    const whenIso = p.published_at || p.scheduled_at;
-    if (!whenIso) continue;
-    const k = dayKeyOfIso(whenIso);
-    if (!k || (pubWinLo && k < pubWinLo) || (pubWinHi && k > pubWinHi)) continue;
-    const dt = pcParseDate(whenIso);
-    agItems.push({ p, key: k, t: dt ? dt.getTime() : 0, hour: dt ? hourOf(dt) : '', proposedIso: null, isPending: false, published: true });
-  }
-  const itemsByKey = new Map();
-  for (const it of agItems) { if (!it.key) continue; if (!itemsByKey.has(it.key)) itemsByKey.set(it.key, []); itemsByKey.get(it.key).push(it); }
-  for (const arr of itemsByKey.values()) arr.sort((a, b) => a.t - b.t);
-  // Programados de semanas anteriores (quedaron sin salir): se muestran
-  // como filas en la tira compacta (postCardHTML), NO como tarjetas del
-  // cofre — por eso el total de tarjetas los excluye. SOLO programados:
-  // un publicado viejo es historia de su semana (v214 lo trae al cofre
-  // para poder abrirlo navegando), no un vencido.
-  const staleItems = agItems.filter(it => !it.published && it.p.status === 'scheduled' && it.key && mondayKeyStr && it.key < mondayKeyStr).sort((a, b) => a.t - b.t);
-  const staleSet = new Set(staleItems.map(it => it.p));
-  // Tarjeta de la agenda: la MISMA igmock de siempre (mismo data-post-id y
-  // los mismos data-pc-act / data-revaccept / data-lightbox, para que el
-  // listener delegado y bindReview sigan andando sin tocarlos) — cambia la
-  // fila superior: pastilla de estado + hora; el día lo da la sección.
-  let agSeq = 0;
-  const agTotal = agItems.filter(it => !staleSet.has(it.p)).length;
-  const agCard = (it) => {
-    const d = it.p;
-    agSeq++;
+  const staleItems = list.filter(p => p.status === 'scheduled' && p.scheduled_at && mondayKeyStr && dayKeyOfIso(p.scheduled_at) && dayKeyOfIso(p.scheduled_at) < mondayKeyStr)
+    .sort((a, b) => String(a.scheduled_at).localeCompare(String(b.scheduled_at)));
+  const staleSet = new Set(staleItems);
+  const staleHTML = staleItems.length ? `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${staleItems.map(p => postCardHTML(p, { layout: 'row' })).join('')}</div>` : '';
+  const rail = list.filter(p => !staleSet.has(p));
+  const cards = rail.map((d, i) => {
     const isV = String(d.media_type || '') === 'video';
     const isS = String(d.media_type || '') === 'story';
-    const media = it.isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
+    // Tarjeta inmediata: borrador nacido sin imagen, creándose ahora mismo.
+    const isPending = !d.image_path && d.status === 'draft';
+    const media = isPending ? '<span class="pcard-pending-art"><span class="ppa-spark">✨</span><b>Creando imagen…</b></span>'
       : !d.image_path ? '<span class="pcard-nothumb">📝</span>'
       : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
       : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
+    const prop = proposedFor(d);
     const capFull = String(d.caption || d.source_topic || '');
-    const typeTag = isS ? ' · 📸 story' : isV ? ' · 🎬 reel' : '';
-    let pill = '';
-    let topRight = '';
-    if (it.published) pill = '<span class="ag-pill ag-pill-pub">✅ Publicado</span>';
-    else if (d.status === 'scheduled') pill = '<span class="ag-pill ag-pill-sched">📮 Programado</span>';
-    else if (it.isPending) pill = '<span class="pcard-creating">⏳ Creando…</span>';
-    else {
-      pill = '<span class="ag-pill ag-pill-draft">✏️ Borrador</span>';
-      topRight = `<button type="button" data-revaccept="${esc(String(d.id))}"${it.proposedIso ? ` data-proposed="${esc(it.proposedIso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`;
-    }
-    const acts = it.published
-      ? (d.tiktok_publish_id
-          ? '<div class="pcard-actions hs-acts"><span class="ag-tt-done">🎵 Ya está en TikTok ✓</span></div>'
-          : '<div class="pcard-actions hs-acts"><button type="button" data-pc-act="tiktok" hidden>🎵 Compartir en TikTok</button></div>')
-      : `<div class="pcard-actions hs-acts">
-          ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
-          <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
-          ${isV || it.isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
-          <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
-        </div>`;
+    const acts = `<div class="pcard-actions hs-acts">
+        ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
+        <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
+        ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
+        <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
+      </div>`;
     // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
-    // "Armar otro" (la igmock del carrusel no los traía; acá van completos).
+    // "Armar otro" (la igmock del carrusel original no los traía).
     let dayLabel = '';
-    if (d.scheduled_at) { const dt = pcParseDate(d.scheduled_at); if (dt) dayLabel = pcFmtDayLong(dt, tz) + ' a las ' + hourOf(dt); }
-    else if (it.proposedIso) { const dd = calDate(it.proposedIso.slice(0, 10)); dayLabel = cap1(dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' })) + ' ' + dd.getUTCDate() + ' a las ' + it.proposedIso.slice(11, 16); }
-    return `<div class="igmock igmock-fixed ag-card" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
+    if (d.scheduled_at) { const dt = pcParseDate(d.scheduled_at); if (dt) dayLabel = pcFmtDayLong(dt, tz) + ' a las ' + dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }); }
+    else if (prop.iso) { const dd = new Date(prop.iso.slice(0, 10) + 'T12:00:00Z'); const dn = dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); dayLabel = dn.charAt(0).toUpperCase() + dn.slice(1) + ' ' + dd.getUTCDate() + ' a las ' + prop.iso.slice(11, 16); }
+    // La forma de Instagram: íconos + "Me gusta" solo cuando hay pieza
+    // (un borrador creándose todavía no tiene qué mostrar).
+    const igChrome = (!isPending && d.image_path) ? `<div class="igmock-acts" aria-hidden="true">${LP_WEEK_ICONS}</div><div class="igmock-likes">Sé el primero en indicar que te gusta</div>` : '';
+    return `<div class="igmock igmock-fixed" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>
-        <span class="igmock-count">${agSeq} de ${agTotal}</span></div>
-      <div class="igmock-when-top ag-when-top">${pill}<span class="ag-hour">${it.hour ? esc(it.hour) + ' hs' : ''}${typeTag}</span>${topRight}</div>
-      ${it.isPending
+        <span class="igmock-count">${i + 1} de ${rail.length}</span></div>
+      <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
+        ${d.status === 'scheduled'
+          ? `<span class="pcard-scheduled">📮 Programado</span>`
+          : isPending
+            ? `<span class="pcard-creating">⏳ Creando…</span>`
+            : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`}</div>
+      ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
         : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>`}
       <div class="igmock-foot">
+        ${igChrome}
         ${capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : ''}
         ${acts}
       </div>
     </div>`;
-  };
-  const dayNameOf = (date) => { try { return cap1(date.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' })); } catch (e) { return ''; } };
-  const dowShortOf = (date) => { try { return date.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', ''); } catch (e) { return ''; } };
-  // Estado visual de cada miniatura: punto de color + etiqueta accesible.
-  const agStatusOf = (it) => it.published ? 'pub' : (it.p.status === 'scheduled' ? 'sched' : (it.isPending ? 'creating' : 'draft'));
-  const AG_STATUS_LBL = { pub: 'Publicado', sched: 'Programado', creating: 'Creando…', draft: 'Borrador' };
-  // Miniatura de la grilla: la imagen en chico, badge de formato (🎬/📸)
-  // y punto de estado. Al tocarla, agOpenPost abre la tarjeta completa.
-  const agThumb = (it) => {
-    const d = it.p;
-    const isV = String(d.media_type || '') === 'video';
-    const isS = String(d.media_type || '') === 'story';
-    const st = agStatusOf(it);
-    const media = it.isPending ? '<span class="agth-ph">✨</span>'
-      : !d.image_path ? '<span class="agth-ph">📝</span>'
-      : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
-      : `<img src="${esc(mv(d.image_path, 240))}" alt="" loading="lazy">`;
-    const badge = isV ? '<span class="agth-badge">🎬</span>' : isS ? '<span class="agth-badge">📸</span>' : '';
-    const dayTxt = it.key ? `${dayNameOf(calDate(it.key))} ${calDate(it.key).getUTCDate()}` : 'Sin día asignado';
-    const lbl = `${dayTxt} · ${AG_STATUS_LBL[st]}${it.hour ? ' · ' + it.hour + ' hs' : ''}`;
-    return `<span class="agth-w"><button type="button" class="agth st-${st}" data-ag-open="${esc(String(d.id))}" title="${esc(lbl)}" aria-label="${esc('Ver posteo: ' + lbl)}">
-      <span class="agth-media">${media}</span>${badge}<span class="agth-dot" aria-hidden="true"></span>
-    </button>${it.hour ? `<span class="agth-hour">${esc(it.hour)}</span>` : ''}</span>`;
-  };
-  // Celda del calendario: fecha arriba (hoy en celeste), hasta 3
-  // miniaturas y un "+N" que expande la celda si hay más. Día vacío:
-  // celda tranquila con un "+" tenue (mismo data-sched-day de siempre).
-  const AG_TH_MAX = 3;
-  const calCell = (wd) => {
-    const items = itemsByKey.get(wd.key) || [];
-    const isToday = wd.key === todayKeyStr;
-    const vis = items.slice(0, AG_TH_MAX);
-    const rest = items.slice(AG_TH_MAX);
-    const more = rest.length ? `<button type="button" class="agth-more" data-ag-more data-n="+${rest.length}" aria-label="Ver ${rest.length} posteos más de este día">+${rest.length}</button><span class="agth-extra">${rest.map(agThumb).join('')}</span>` : '';
-    const emptyBtn = items.length ? '' : `<button type="button" class="agcal-empty" data-sched-day="${esc(dayNameOf(wd.date) + ' ' + wd.date.getUTCDate())}" aria-label="Día sin posteos: pedirle a Posty uno para este día"><span aria-hidden="true">+</span></button>`;
-    return `<section class="agcal-day${isToday ? ' agcal-today' : ''}" data-agday="${esc(wd.key)}">
-      <header class="agcal-head"><span class="agcal-dow">${esc(dowShortOf(wd.date))}</span><span class="agcal-num">${wd.date.getUTCDate()}</span></header>
-      <div class="agcal-thumbs">${vis.map(agThumb).join('')}${more}${emptyBtn}</div>
-    </section>`;
-  };
-  const weekHTML = weekDays.map(calCell).join('');
-  // Tira de viejos (filas con la tarjeta de siempre), como en v213.
-  const staleHTML = staleItems.length ? `<div class="ag-stale"><div class="ag-stale-t">⏳ Programados de semanas anteriores</div>${staleItems.map(it => postCardHTML(it.p, { layout: 'row' })).join('')}</div>` : '';
-  // Cofre con TODAS las tarjetas completas (la grilla solo muestra
-  // miniaturas; la tarjeta sale de acá cuando se toca una).
-  const vaultItems = agItems.filter(it => !staleSet.has(it.p));
-  const vaultHTML = vaultItems.map(agCard).join('');
-  // Borradores que no se pudieron ubicar en un día (no debería pasar):
-  // miniaturas en una tira propia — nunca se pierden de vista.
-  const noDayItems = vaultItems.filter(it => !it.key);
-  const noDayHTML = noDayItems.length ? `<div class="ag-noday"><div class="ag-noday-t">📝 Borradores sin día</div><div class="ag-noday-row">${noDayItems.map(agThumb).join('')}</div></div>` : '';
-  // Panel donde se abre la tarjeta completa, debajo del calendario.
-  const sheetHTML = `<div class="agsheet" id="agSheet" hidden>
-    <div class="agsheet-top"><b class="agsheet-title" id="agSheetTitle">Tu posteo</b><button type="button" class="agsheet-x" data-ag-close aria-label="Cerrar">✕</button></div>
-    <div class="agsheet-slot" id="agSheetSlot"></div>
-  </div>`;
-  // Flechas de navegación de semanas (la semana que viene se ve acá,
-  // navegando — ya no hay sección separada).
-  const navHTML = `<div class="ag-nav">
-    <button type="button" class="ag-nav-btn" data-agnav="-1"${wkOff <= -4 ? ' disabled' : ''} aria-label="Semana anterior">‹</button>
-    ${wkOff !== 0 ? '<button type="button" class="ag-nav-today" data-agnav="0">hoy</button>' : ''}
-    <button type="button" class="ag-nav-btn" data-agnav="1"${wkOff >= 5 ? ' disabled' : ''} aria-label="Semana siguiente">›</button>
-  </div>`;
-  const monthNameOf = (date) => { try { return date.toLocaleDateString('es-AR', { month: 'long', timeZone: 'UTC' }); } catch (e) { return ''; } };
-  let rangeLabel = '';
-  if (weekDays.length) {
-    const m1 = monthNameOf(weekDays[0].date), m2 = monthNameOf(weekDays[6].date);
-    rangeLabel = m1 === m2
-      ? `Semana del ${weekDays[0].date.getUTCDate()} al ${weekDays[6].date.getUTCDate()} de ${m1}`
-      : `Semana del ${weekDays[0].date.getUTCDate()} de ${m1} al ${weekDays[6].date.getUTCDate()} de ${m2}`;
-  }
+  }).join('');
   // 2026-10-14 (pedido de Valentino): contador visible de la semana — cuántos
   // posteos van y cuántos quedan del plan, para que el cliente sepa cómo viene.
   const qLeft = Math.max(0, qTotal - qUsed);
   const qPct = qTotal > 0 ? Math.min(100, Math.round((qUsed / qTotal) * 100)) : 0;
   // Explicación de desborde (2026-10-16, pedido de Valentino): si hay más
   // borradores de feed que cupo libre esta semana, el resto YA es la semana
-  // que viene — y la pantalla lo dice, para que nadie se pregunte "¿por qué
-  // hay 4 si me queda 1?". Sin esta línea el estado era correcto pero
-  // inentendible.
+  // que viene — y la pantalla lo dice. Copy v215: NUNCA "8 de 5" — el
+  // armado de la semana que viene se muestra capeado al cupo y el resto
+  // como "en espera".
   const feedDrafts = list.filter(pp => pp.status === 'draft' && !/^(story|video)$/.test(String(pp.media_type || 'image'))).length;
   const rollover = Math.max(0, feedDrafts - qLeft);
+  const nextArmed = Math.min(rollover, qTotal);
   const nextLine = rollover > 0
-    ? `<div class="hs-quota-next">✨ Ya están armados <b>${rollover} de ${qTotal}</b> de la semana que viene</div>`
+    ? `<div class="hs-quota-next">✨ Ya están armados <b>${nextArmed} de ${qTotal}</b> de la semana que viene${rollover > qTotal ? ` · y <b>${rollover - qTotal} más</b> en espera` : ''}</div>`
     : '';
   const quotaLine = qTotal > 0 ? `<div class="hs-quota">
       <div class="hs-quota-txt">${qUsed >= qTotal
@@ -5417,23 +5266,17 @@ function homeWeekHTML(posts, quota, generating, noDna) {
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
       ${nextLine}
     </div>` : '';
-  // v214: la agenda es un CALENDARIO compacto — cabecera con rango, flechas
-  // de navegación, cupo y reporte; la grilla de 7 columnas con miniaturas;
-  // el panel de la tarjeta abierta; y el cofre con TODAS las tarjetas
-  // completas. #hsWeekList sigue conteniendo todo: doAcceptAll y
-  // bindReview lo recorren buscando [data-revaccept] y .igmock-fixed,
-  // igual que cuando era el carrusel.
-  return `<div class="hs-week ag-wrap">
-    <div class="hs-week-head ag-head"><div class="ag-head-txt"><b>📅 Tu agenda</b>${rangeLabel ? `<span class="ag-range">${esc(rangeLabel)}</span>` : ''}</div>${navHTML}${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
+  // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
+  return `<div class="hs-week">
+    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
-    <div id="hsWeekList" class="ag-all">
-      ${staleHTML}
-      <div class="agcal">${weekHTML}</div>
-      ${noDayHTML}
-      ${sheetHTML}
-      <div class="ag-vault" id="agVault" hidden>${vaultHTML}</div>
+    ${staleHTML}
+    <div class="hs-carousel">
+      <button type="button" class="hs-side" id="hsPrev" aria-label="Anterior">‹</button>
+      <div class="hs-week-list" id="hsWeekList">${cards}</div>
+      <button type="button" class="hs-side" id="hsNext" aria-label="Siguiente">›</button>
     </div>
   </div>`;
 }
@@ -5507,6 +5350,43 @@ function albumWeekState(n) {
   if (n >= 3) return { key: 'full', text: '¡Perfecto! Esta semana sale con tus fotos ✨' };
   if (n >= 1) return { key: 'some', text: `¡Van ${n}! Con 3 ya trabajamos bárbaro 📸` };
   return { key: 'none', text: 'Todavía no nos pasaste fotos esta semana: Posty crea las imágenes por vos, pero con las tuyas sale tu negocio real.' };
+}
+// Cablea el input de subida del álbum (lo comparten la tarjeta del chat
+// y la fila fina de Schedule): subida secuencial a /api/album/photo con
+// sus mensajes de siempre; al terminar bien, onDone() repinta la vista.
+function wireAlbumUpload(inp, onDone) {
+  if (!inp) return;
+  inp.onchange = async () => {
+    const files = Array.from(inp.files || []);
+    if (!files.length) return;
+    const msg = document.getElementById('albumMsg');
+    let okCount = 0;
+    let okVideos = 0;
+    let lastErr = '';
+    // Subida secuencial: el servidor festeja/clasifica cada foto en 2º plano.
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const isVid = (f.type || '').startsWith('video/');
+      if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}… 📤` : 'Subiendo… 📤';
+      try {
+        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(isVid ? 300000 : 120000) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
+        okCount++;
+        if (isVid || d.kind === 'video') okVideos++;
+      } catch (e) {
+        lastErr = e.message || 'No pude subirla. Probá de nuevo.';
+        break; // ej.: llegó al tope de 20 — no tiene sentido seguir
+      }
+    }
+    if (msg) {
+      if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
+      else if (okCount && okVideos) msg.innerHTML = '✅ <b>¡Video guardado!</b> Posty lo va a usar en tus reels 🎬';
+      else if (okCount) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
+      else msg.textContent = '😅 ' + (lastErr || 'No pude subirla. Probá de nuevo.');
+    }
+    if (okCount) setTimeout(() => { try { onDone(); } catch (e) {} }, 2500);
+  };
 }
 async function bindAlbumCard() {
   const box = document.getElementById('albumCard');
@@ -5597,39 +5477,76 @@ async function bindAlbumCard() {
       }
     }
   } catch (e) {}
-  const inp = document.getElementById('albumFile');
-  if (inp) inp.onchange = async () => {
-    const files = Array.from(inp.files || []);
-    if (!files.length) return;
-    const msg = document.getElementById('albumMsg');
-    let okCount = 0;
-    let okVideos = 0;
-    let lastErr = '';
-    // Subida secuencial: el servidor festeja/clasifica cada foto en 2º plano.
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      const isVid = (f.type || '').startsWith('video/');
-      if (msg) msg.textContent = files.length > 1 ? `Subiendo ${i + 1} de ${files.length}… 📤` : 'Subiendo… 📤';
-      try {
-        const r = await fetch('/api/album/photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f, signal: AbortSignal.timeout(isVid ? 300000 : 120000) });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok || !d.ok) throw new Error((d && d.error) || 'No pude subirla 😅');
-        okCount++;
-        if (isVid || d.kind === 'video') okVideos++;
-      } catch (e) {
-        lastErr = e.message || 'No pude subirla. Probá de nuevo.';
-        break; // ej.: llegó al tope de 20 — no tiene sentido seguir
+  wireAlbumUpload(document.getElementById('albumFile'), bindAlbumCard);
+  // v208: recordatorio de fotos de la semana dentro del chat de Schedule.
+  try { maybePhotoWeekReminder(data); } catch (e) {}
+}
+// v215 — Fila fina del álbum en Schedule (amendment de Valentino): la
+// tarjeta grande "Las fotos de tu negocio" SOBRA en Schedule — con el
+// botón sticky azul ya hay UN solo botón de subida a la vista. Acá queda
+// la fila "🖼️ Ver mi álbum (N)" que despliega la vista del álbum (los
+// contadores por categoría viven ADENTRO, no en Schedule) con ver y
+// borrar, y el input #albumFile que dispara el sticky. La tarjeta
+// completa sigue viviendo en el chat (#/app/chat).
+async function bindAlbumRow() {
+  const box = document.getElementById('albumRow');
+  if (!box) return;
+  let data = null;
+  try { data = await api.get('/api/album'); } catch (e) {}
+  if (!data || !data.ok) { box.innerHTML = ''; return; }
+  const biz = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'tu negocio';
+  const t = data.targets || { producto: 3, local: 2, equipo: 2 };
+  const n = data.counts || {};
+  const chip = (label, have, goal) => `<span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${have >= goal ? '#E7F6EC' : '#F1F5F9'};font-size:12.5px;margin:2px 4px 2px 0">${have >= goal ? '✅' : '📷'} ${label}: <b>${Math.min(have, goal)}/${goal}</b></span>`;
+  const items = data.photos || [];
+  const gridInner = items.length
+    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => `<div style="position:relative">${ph.kind === 'video'
+      ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span></div>`
+      : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`}<button type="button" class="media-del" data-albumdel="${esc(String(ph.id))}" title="Borrar" aria-label="Borrar archivo" style="position:absolute;top:4px;right:4px;z-index:2">×</button></div>`).join('')}</div>`
+    : `<div style="font-size:13.5px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
+  box.innerHTML = `
+  <div class="album-row">
+    <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
+    <button type="button" class="album-row-btn" id="albumRowToggle" aria-expanded="false"><span>🖼️ Ver mi álbum (${items.length})</span><span aria-hidden="true">▾</span></button>
+    <div class="album-row-panel" id="albumRowPanel" hidden>
+      <div>${chip('Productos', n.producto || 0, t.producto)}${chip('Tu local', n.local || 0, t.local)}${chip('Tu equipo', n.equipo || 0, t.equipo)}</div>
+      ${gridInner}
+    </div>
+    <div class="album-row-msg" id="albumMsg"></div>
+  </div>`;
+  const panel = document.getElementById('albumRowPanel');
+  const tgl = document.getElementById('albumRowToggle');
+  const setOpen = (open) => {
+    if (!panel || !tgl) return;
+    panel.hidden = !open;
+    tgl.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const arrow = tgl.querySelector('span:last-child');
+    if (arrow) arrow.textContent = open ? '▴' : '▾';
+  };
+  if (tgl && panel) tgl.onclick = () => setOpen(panel.hidden);
+  // Borrar fotos del álbum (mismo endpoint que la biblioteca de medios).
+  $$('#albumRowPanel [data-albumdel]').forEach(b => b.onclick = async () => {
+    if (!confirm('¿Borrar? No se va a usar más en tus posteos nuevos.')) return;
+    try { await api.delete('/api/assets/' + b.dataset.albumdel); } catch (e) {}
+    try { bindAlbumRow(); } catch (e) {}
+  });
+  wireAlbumUpload(document.getElementById('albumFile'), bindAlbumRow);
+  // Deep link del ritual (push/email → ?fotos=semana): aterriza en la
+  // agenda, que sigue existiendo — la fila se despliega y se enfoca.
+  try {
+    if (!window.__albumFocusDone) {
+      const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+      if (q.get('fotos')) {
+        window.__albumFocusDone = true;
+        setOpen(true);
+        if (panel) panel.classList.add('album-focus');
+        setTimeout(() => { try { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 400);
+        setTimeout(() => { try { if (panel) panel.classList.remove('album-focus'); } catch (e) {} }, 5000);
       }
     }
-    if (msg) {
-      if (okCount && files.length > 1) msg.innerHTML = `✅ <b>¡${okCount} archivos nuevos!</b> Posty ya los tiene para tus posteos y reels ✨${lastErr ? `<br>😅 ${esc(lastErr)}` : ''}`;
-      else if (okCount && okVideos) msg.innerHTML = '✅ <b>¡Video guardado!</b> Posty lo va a usar en tus reels 🎬';
-      else if (okCount) msg.innerHTML = '✅ <b>¡Hermosa!</b> Posty la está convirtiendo en un posteo — te aviso cuando esté listo ✨';
-      else msg.textContent = '😅 ' + (lastErr || 'No pude subirla. Probá de nuevo.');
-    }
-    if (okCount) setTimeout(() => { try { bindAlbumCard(); } catch (e) {} }, 2500);
-  };
-  // v208: recordatorio de fotos de la semana dentro del chat de Schedule.
+  } catch (e) {}
+  // El recordatorio semanal del chat NO depende de la tarjeta grande:
+  // se alimenta de estos mismos datos del álbum.
   try { maybePhotoWeekReminder(data); } catch (e) {}
 }
 
@@ -5676,7 +5593,14 @@ async function maybePhotoWeekReminder(data) {
         blk.classList.add('album-focus');
         setTimeout(() => { try { blk.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 60);
         setTimeout(() => { try { blk.classList.remove('album-focus'); } catch (e) {} }, 5000);
+        return;
       }
+      // v215: en Schedule la tarjeta grande ya no está — el botón sube
+      // directo (el #albumFile vive en la fila fina del álbum).
+      const inp = document.getElementById('albumFile');
+      if (inp) { inp.click(); return; }
+      const row = document.getElementById('albumRowToggle');
+      if (row) row.click();
     };
     chatScroll();
   } catch (e) {}
@@ -7951,6 +7875,16 @@ function fmtDay(d) {
 /* ---------- RACHAS 🔥 ---------- */
 // Límite del plan semanal: "mejorá tu paquete para seguir posteando esta semana"
 function isPlanLimitErr(e) { return !!(e && e.status === 403 && e.data && e.data.plan_limit); }
+// v215: el modal de tope se alimenta del 403 del servidor — trae el cupo
+// DE LA SEMANA DEL POSTEO (limit/used/week_key), no el de la semana
+// actual — y suma la acción "Ver los posteos de esta semana".
+async function planLimitModal(e) {
+  const d = (e && e.data) || {};
+  const q = d.limit
+    ? { limit: d.limit, used: d.used != null ? d.used : d.limit, left: 0, plan_name: d.plan_name || '', week_key: d.week_key || null }
+    : (await api.get('/api/quota').catch(() => null)) || { limit: 3, used: 3, left: 0, plan_name: '' };
+  quotaModal(q, { showWeek: true });
+}
 // Chequeo previo a crear: true = hay cupo; false = se mostró el modal de mejora
 async function checkQuotaOrModal() {
   try {
@@ -7985,9 +7919,19 @@ function quotaModal(q, opts = {}) {
     ${headHtml}
     ${hasPartial ? `<button class="btn btn-primary btn-block" id="qPartial" style="margin-top:10px">⚡ Armar ${left === 1 ? 'el que me queda' : `los ${left} que me quedan`} →</button>` : ''}
     ${!(typeof IS_NATIVE !== 'undefined' && IS_NATIVE) ? `<button class="btn ${hasPartial ? 'btn-soft' : 'btn-primary'} btn-block" id="qUpgrade" style="margin-top:10px">⬆️ Mejorar mi paquete</button>` : ''}
+    ${opts.showWeek ? `<button class="btn btn-soft btn-block" id="qShowWeek" style="margin-top:10px">📅 Ver los posteos de esta semana</button>` : ''}
     <button class="btn btn-ghost btn-block" id="qClose" style="margin-top:8px">Entendido</button>`);
   const up = document.getElementById('qUpgrade');
   if (up) up.onclick = () => { closeStreakModal(); location.hash = '#/app/ajustes?plan=1'; };
+  // v215: ver la semana que ocupa el cupo (los posteos que ya están).
+  const sw = document.getElementById('qShowWeek');
+  if (sw) sw.onclick = () => {
+    closeStreakModal();
+    const go = () => { const el = document.getElementById('hsWeekList'); if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} } };
+    const h = location.hash || '';
+    if (h.startsWith('#/app/schedule') || h.startsWith('#/app/chat')) { try { render(); } catch (e) {} setTimeout(go, 400); }
+    else { location.hash = '#/app/schedule'; setTimeout(go, 800); }
+  };
   const cl = document.getElementById('qClose');
   if (cl) cl.onclick = closeStreakModal;
   const pa = document.getElementById('qPartial');
@@ -9797,7 +9741,7 @@ async function scheduleView() {
     ${homeWeekBlock}
     <div class="ag-uploadbar"><button type="button" class="ag-upload-btn" id="agUploadBtn">📸 Subir fotos o video</button></div>
     ${homeChatBlock}
-    <div id="albumCard"></div>
+    <div id="albumRow"></div>
     ${armBlock}
   </div>`;
 }
@@ -9986,15 +9930,15 @@ function bindSchedule() {
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
-  try { bindAlbumCard(); } catch (e) {} // 📸 Álbum del negocio: protagonista en Schedule (v180)
-  // v213: botón fijo de subida de la agenda — dispara el MISMO input de la
-  // tarjeta del álbum (#albumFile, con su festejo y su clasificación); si el
-  // álbum todavía no cargó, lleva al bloque de fotos de la semana.
+  try { bindAlbumRow(); } catch (e) {} // 📸 Álbum en Schedule (v215): fila fina; la tarjeta grande vive en el chat
+  // Botón fijo de subida de la agenda — dispara el MISMO input del álbum
+  // (#albumFile, con su festejo y su clasificación, hoy en la fila fina);
+  // si el álbum todavía no cargó, lleva a la fila.
   const agUp = $('#agUploadBtn');
   if (agUp) agUp.onclick = () => {
     const f = document.getElementById('albumFile');
     if (f) { f.click(); return; }
-    const blk = document.getElementById('albumWeekBlock') || document.getElementById('albumCard');
+    const blk = document.getElementById('albumRow') || document.getElementById('albumWeekBlock') || document.getElementById('albumCard');
     if (blk) blk.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   bindScheduleAll(); // "📅 Programar mi semana →" (chip del chat)

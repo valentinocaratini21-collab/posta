@@ -205,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261018-v212', '/api/version es v212 (la prueba acepta la web del negocio; tracker sin Posty malabareando)');
+    ok(ver.build === '20261018-v215', '/api/version es v215 (la prueba acepta la web del negocio; tracker sin Posty malabareando)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();

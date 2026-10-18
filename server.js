@@ -2443,11 +2443,17 @@ function quotaCounts(userId, monday) {
   return m;
 }
 function quotaFor(userId, mediaType) {
-  const user = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(userId) || {};
-  const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const st = getSettings(userId) || {};
   const tz = st.timezone || 'America/Argentina/Buenos_Aires';
-  const monday = streaks.mondayKeyOf(streaks.tzToday(tz));
+  return quotaForWeek(userId, mediaType, streaks.mondayKeyOf(streaks.tzToday(tz)));
+}
+// Cupo de UNA semana puntual (la del posteo, no necesariamente la actual).
+// Fix 2026-10-18: aceptar/programar se evalúa contra la semana lun–dom de
+// la fecha destino — con la semana actual llena, un posteo de la semana
+// que viene tiene su cupo fresco y NO puede saltar plan_limit.
+function quotaForWeek(userId, mediaType, monday) {
+  const user = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(userId) || {};
+  const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const counts = quotaCounts(userId, monday);
   const mt = mediaType === 'video' ? 'video' : mediaType === 'story' ? 'story' : mediaType === 'carousel' ? 'carousel' : 'image';
   // Cupo PROPIO por formato (matriz de config/plans.js). Si el plan no incluye el
@@ -2464,7 +2470,7 @@ function quotaFor(userId, mediaType) {
     limit = plan.postsPerWeek || 3;
     used = (counts.image || 0) + (counts.carousel || 0);
   }
-  return { limit, used, left: Math.max(0, limit - used), plan: plan.id, plan_name: plan.name };
+  return { limit, used, left: Math.max(0, limit - used), plan: plan.id, plan_name: plan.name, week_key: monday };
 }
 // Nombre del formato para mensajes de cupo
 function quotaUnitName(mt) {
@@ -4449,10 +4455,11 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
   // Cupo del plan: solo las publicaciones consumen cupo (los borradores son gratis).
   // Cada formato consume SU cupo (posteos, reels, historias). El carrusel cuenta como 1 posteo.
   if (status === 'scheduled') {
-    const q = quotaFor(req.session.userId, mt);
+    // Cupo contra la semana DEL POSTEO (fix 2026-10-18), no la actual.
+    const q = quotaForWeek(req.session.userId, mt, mondayKeyOf(String(scheduled_at).slice(0, 10)));
     if (q.left <= 0) {
-      return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mt)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
+      return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name, week_key: q.week_key,
+        message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(mt)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
     }
   }
   let cpaths = '';
@@ -4511,6 +4518,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
   if (!post) return res.status(404).json({ error: 'Post no encontrado' });
   if (post.needs_review) return res.status(403).json({ error: 'in_review', message: 'Este posteo está en revisión ✨ Te aviso cuando esté listo.' });
+  let scheduledInfo = null; // la rama de programar lo completa: el cliente confirma la fecha al aceptar
   if (action === 'cancel') {
     db.prepare(`UPDATE posts SET status='cancelled' WHERE id=?`).run(post.id);
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
@@ -4531,18 +4539,10 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     return res.json({ ok: true });
   } else {
     const edited = (caption !== undefined && caption !== post.caption) || (hashtags !== undefined && hashtags !== post.hashtags);
-    // Programar SÍ consume cupo (las publicaciones son el límite del plan). Si el posteo
-    // ya estaba programado/publicado, no se descuenta de nuevo.
-    if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
-      const q = quotaFor(req.session.userId, post.media_type);
-      if (q.left <= 0) {
-        return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, plan_name: q.plan_name,
-          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esta semana.` });
-      }
-    }
     // Integridad de agenda (2026-10-16): jamás un posteo 'scheduled' sin
     // fecha (quedaba fantasma, no publicaba nunca) ni dos del feed el mismo
     // día. Sin fecha o con el día ocupado → próximo día libre del asignador.
+    // La fecha se resuelve PRIMERO: el cupo se evalúa contra SU semana.
     let finalWhen = scheduled_at || post.scheduled_at;
     if (!finalWhen || scheduleDayTaken(req.session.userId, post, finalWhen)) {
       try { const slots = assignScheduleSlots(req.session.userId, [post]); if (slots.get(post.id)) finalWhen = slots.get(post.id); } catch (e) {}
@@ -4551,6 +4551,20 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       db.prepare(`UPDATE posts SET caption=?, hashtags=? WHERE id=?`).run(caption ?? post.caption, hashtags ?? post.hashtags, post.id);
       return res.json({ ok: true, warning: 'sin_dia_libre' });
     }
+    // Programar SÍ consume cupo (las publicaciones son el límite del plan) —
+    // contra la semana DEL POSTEO (fix 2026-10-18): con la semana actual
+    // llena, aceptar un borrador de la semana que viene funcionaba mal
+    // (saltaba el modal de tope) porque quotaFor miraba la semana de hoy.
+    // Si el posteo ya estaba programado/publicado, no se descuenta de nuevo.
+    const whenMonday = mondayKeyOf(String(finalWhen).slice(0, 10));
+    if (!['scheduled', 'publishing', 'published'].includes(post.status)) {
+      const q = quotaForWeek(req.session.userId, post.media_type, whenMonday);
+      if (q.left <= 0) {
+        return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: whenMonday,
+          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(post.media_type)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+      }
+    }
+    scheduledInfo = { scheduled_at: finalWhen, week_key: whenMonday };
     db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=? WHERE id=?`).run(
       finalWhen, caption ?? post.caption, hashtags ?? post.hashtags,
       // "Posty te avisa": si cambió la hora programada, se re-arma el aviso de
@@ -4586,7 +4600,8 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     }
     if (edited) recordSignal(req.session.userId, post, 'edited'); // tocó el texto antes de que salga
   }
-  res.json({ ok: true });
+  // Al programar, la respuesta confirma la fecha real (el cliente la anuncia al aceptar).
+  res.json(scheduledInfo ? { ok: true, scheduled_at: scheduledInfo.scheduled_at, week_key: scheduledInfo.week_key } : { ok: true });
 });
 
 // POST /api/posts/:id/reject-reason  body {reason}
@@ -4946,42 +4961,68 @@ function acceptAllDrafts(uid, items, opts) {
   // Solo pendientes: respeta rechazados (no se tocan) y omite los ya aprobados.
   const pending = pool.filter((d) => (d.approval || 'pending') === 'pending');
   if (!pending.length) return { ok: false, reason: 'no_pending' };
-  // Cupo: se aceptan hasta el límite del plan (2026-10-11, pedido de Valentino:
-  // "si el máximo es 5, aceptame 5" — antes era todo o nada y fallaba).
-  const qf = quotaFor(uid, 'image');
-  const qr = quotaFor(uid, 'video');
-  const qs = quotaFor(uid, 'story');
-  let feedLeft = qf.left, reelLeft = qr.left, storyLeft = qs.left;
-  const toAccept = [];
-  for (const d of pending) {
-    if (d.media_type === 'video') {
-      if (reelLeft > 0) { toAccept.push(d); reelLeft--; }
-    } else if (d.media_type === 'story') {
-      if (storyLeft > 0) { toAccept.push(d); storyLeft--; }
-    } else {
-      if (feedLeft > 0) { toAccept.push(d); feedLeft--; }
+  // Cupo POR SEMANA DEL POSTEO (fix 2026-10-18): cada borrador se evalúa
+  // contra la semana lun–dom de su fecha destino, no contra la semana
+  // actual. Antes el contador era el de ESTA semana: con la semana llena,
+  // aceptar borradores de la semana que viene (cupo fresco) saltaba con
+  // plan_limit. Se acepta hasta el límite de CADA semana (2026-10-11:
+  // "si el máximo es 5, aceptame 5" — por semana, no global).
+  const poolLimit = {
+    image: quotaFor(uid, 'image').limit,
+    video: quotaFor(uid, 'video').limit,
+    story: quotaFor(uid, 'story').limit,
+  };
+  const weekLeftCache = new Map();
+  const leftFor = (monday, poolKey) => {
+    const k = monday + '|' + poolKey;
+    if (!weekLeftCache.has(k)) {
+      const c = quotaCounts(uid, monday);
+      const used = poolKey === 'video' ? (c.video || 0)
+        : poolKey === 'story' ? (c.story || 0)
+        : (c.image || 0) + (c.carousel || 0);
+      weekLeftCache.set(k, Math.max(0, (poolLimit[poolKey] || 0) - used));
     }
-  }
-  if (!toAccept.length) {
-    return { ok: false, reason: 'plan_limit', quota: qf };
-  }
+    return weekLeftCache.get(k);
+  };
   const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='' WHERE id=?`);
+  const acceptedItems = [];
+  let blockedQuota = null; // primer bloqueo por cupo: { monday, poolKey }
   let n = 0;
-  for (const d of toAccept) {
+  for (const d of pending) {
     let when = whenById[d.id] || (d.scheduled_at ? String(d.scheduled_at).slice(0, 19).replace('T', ' ') : null);
     // Integridad de agenda (2026-10-16): sin fecha o con el día ocupado
-    // (por otro posteo o por uno aceptado recién en este mismo lote), el
-    // asignador da el próximo día libre. Nunca dos el mismo día.
+    // (por otro posteo o por uno aceptado recién en este mismo lote — el
+    // UPDATE es inmediato, el chequeo ve el lote en curso), el asignador
+    // da el próximo día libre. Nunca dos el mismo día.
     if (!when || scheduleDayTaken(uid, d, when)) {
       try { const s = assignScheduleSlots(uid, [d]); if (s.get(d.id)) when = s.get(d.id); } catch (e) {}
     }
     if (!when) continue; // sin hora no se puede programar: se saltea
+    const poolKey = d.media_type === 'video' ? 'video' : d.media_type === 'story' ? 'story' : 'image';
+    const monday = mondayKeyOf(String(when).slice(0, 10));
+    if (leftFor(monday, poolKey) <= 0) {
+      if (!blockedQuota) blockedQuota = { monday, poolKey };
+      continue; // su semana está llena: queda borrador (el modal es para ESTE caso)
+    }
+    weekLeftCache.set(monday + '|' + poolKey, leftFor(monday, poolKey) - 1);
     upd.run(when, d.id);
     try { recordSignal(uid, d, 'approved'); } catch (e) {}
+    acceptedItems.push({ id: d.id, scheduled_at: when });
     n++;
   }
+  if (!n) {
+    if (blockedQuota) {
+      return { ok: false, reason: 'plan_limit', quota: quotaForWeek(uid, blockedQuota.poolKey, blockedQuota.monday) };
+    }
+    return { ok: false, reason: 'no_pending' };
+  }
   try { track(uid, 'accept_all', String(n)); } catch (e) {}
-  return { ok: true, accepted: n, partial: toAccept.length < pending.length, total: pending.length };
+  let nextWeek = 0;
+  try {
+    const curMonday = mondayKeyOf(tzToday(userTz(uid)));
+    nextWeek = acceptedItems.filter((it) => mondayKeyOf(String(it.scheduled_at).slice(0, 10)) > curMonday).length;
+  } catch (e) {}
+  return { ok: true, accepted: n, partial: n < pending.length, total: pending.length, items: acceptedItems, next_week: nextWeek };
 }
 
 // POST /api/posts/accept-all — "✅ Aceptar todos" (tarjeta "Revisá tu semana").
@@ -4996,10 +5037,10 @@ app.post('/api/posts/accept-all', requireAuth, (req, res) => {
   if (r.reason === 'no_pending') return res.status(400).json({ error: 'No hay borradores pendientes' });
   if (r.reason === 'plan_limit') {
     const qf = r.quota;
-    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qf.limit, plan_name: qf.plan_name,
-      message: `Llegaste al límite de tu plan ${qf.plan_name}. Mejorá tu paquete para seguir posteando esta semana.` });
+    return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: qf.limit, used: qf.used, plan_name: qf.plan_name, week_key: qf.week_key || null,
+      message: `Llegaste al límite de tu plan ${qf.plan_name}. Mejorá tu paquete para seguir posteando esa semana.` });
   }
-  res.json({ ok: true, accepted: r.accepted });
+  res.json({ ok: true, accepted: r.accepted, partial: !!r.partial, total: r.total || 0, items: r.items || [], next_week: r.next_week || 0 });
 });
 
 // FASE 2 — GET /api/week/:weekKey/publish — "Publicar semana" de un tap, SIN
@@ -12163,7 +12204,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v214';
+const BUILD_ID = '20261018-v215';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
