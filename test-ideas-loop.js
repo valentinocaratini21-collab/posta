@@ -212,7 +212,7 @@ ok('server.js: loop, endpoints y admin', () => {
   for (const needle of ['runWeeklyIdeasLoop', 'runIdeasForUser', 'makeIdeaDraft', "app.get('/api/ideas'", "app.post('/api/ideas/:id/make'", "app.post('/api/ideas/:id/dismiss'", "app.post('/api/ideas/competitors'", "app.post('/api/admin/ideas/run'", "app.post('/api/admin/ideas/make'", 'ideas: weekIdeas']) {
     assert.ok(srvSrc.includes(needle), 'falta: ' + needle);
   }
-  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v220'"));
+  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v221'"));
 });
 ok('app.js: bloque de ideas en Schedule + enhanceIdeas', () => {
   assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length >= 2, 'slot en las dos vistas de Schedule');

@@ -4122,7 +4122,7 @@ async function draftFromPreview(idea, prev) {
   }
 }
 
-function chatCardHTML(compact, noEditChip, bareWrap) {
+function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
   const msgs = CHAT.map(m => chatMsgHtml(m.role, m.text)).join('');
   // En la revisión va compacto: el saludo del chat ya dice lo mismo que la descripción.
   const desc = compact ? '' : `
@@ -4133,29 +4133,40 @@ function chatCardHTML(compact, noEditChip, bareWrap) {
     ? `<div id="chatCard" style="${bareWrap ? 'margin:0 0 4px' : 'margin:14px 0 4px;padding-top:12px;border-top:1.5px solid var(--line)'}">`
     : `<div class="card" id="chatCard">`;
   // Sin borradores no hay nada que editar: el chip "Editá un borrador" es un callejón sin salida.
-  const chips = !msgs ? `
+  // v221 (Schedule, órdenes de Valentino): SIN chips rápidos y SIN botón
+  // "+" — la zona del chat queda limpia; el micrófono no se toca. Y el
+  // ÚNICO botón de subida de la pantalla vive acá: fijo, inmediatamente
+  // debajo del saludo (la caja de mensajes scrollea; esta fila no), con
+  // su #albumFile y su #albumMsg (el festejo/clasificación de siempre).
+  const chips = (!msgs && !schedMode) ? `
     <div class="chat-chips" id="chatChips">
       <button data-chip="Haceme un posteo de promo para esta semana">✨ Haceme un posteo</button>
       ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>`}
       <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>
+    </div>` : '';
+  const upRow = schedMode ? `
+    <div class="sched-up-row">
+      <button type="button" class="ag-upload-btn" id="agUploadBtn">📸 Subir fotos o video</button>
+      <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
+      <div class="album-row-msg" id="albumMsg" aria-live="polite"></div>
     </div>` : '';
   return `
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
       ${msgs || `<div class="chat-msg ai">¡Hola! 👋 ¿Qué hacemos hoy?</div>`}
-    </div>${chips}
+    </div>${upRow}${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
-      <button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>
+      ${schedMode ? '' : `<button class="btn btn-soft" id="chatPlus" title="Agregar foto o video">＋</button>`}
       <input id="chatInput" class="in" placeholder="Escribile a Posty…" maxlength="2000" autocomplete="off">
       <button class="btn btn-soft" id="chatMicSend" title="Pedir con nota de voz">🎙</button>
       <input type="file" id="chatFile" accept="image/*,video/*" multiple hidden>
-      <div class="chat-plus-menu" id="chatPlusMenu" hidden>
+      ${schedMode ? '' : `<div class="chat-plus-menu" id="chatPlusMenu" hidden>
         <button data-k="photo">📷 Foto</button>
         <button data-k="video">🎬 Video</button>
-      </div>
+      </div>`}
     </div>
     <div id="chatMsg"></div>
   </div>`;
@@ -5578,7 +5589,17 @@ function schedDiaBodyHTML(ctx) {
   if (!items.length) {
     const d = schedYmdToDate(ymd);
     const dl = d ? pcFmtDayLong(d, 'UTC') : ymd;
-    return `<div class="scf-empty"><b>🕊️ Nada para este día</b><span>Este día está libre en tu agenda.</span><button type="button" class="sched-ghost scf-ghost" data-sched-day="${esc(dl)}"><span class="sg-plus">+</span><span class="sg-txt">Pedirle a Posty un posteo para este día</span></button></div>`;
+    // v221 (corrección de Valentino: "cuando paso de semana aparece una
+    // pantalla que no tiene nada que ver"): el día vacío se muestra
+    // DENTRO del mismo riel de Día (mismo marco, flechas fantasma en su
+    // lugar), vacío y honesto — nunca como otro componente a pantalla
+    // completa que rompe la naturaleza de la vista al navegar.
+    const phE = '<span class="scf-arrow scf-arrow-ph" aria-hidden="true">‹</span>';
+    return `<div class="scf-railwrap">
+    ${phE}
+    <div class="hs-week-list scf-rail" id="hsWeekList"><div class="scf-dayempty"><b>🕊️ Nada para este día</b><span>Este día está libre en tu agenda.</span><button type="button" class="sched-ghost scf-ghost" data-sched-day="${esc(dl)}"><span class="sg-plus">+</span><span class="sg-txt">Pedirle a Posty un posteo para este día</span></button></div></div>
+    ${phE.replace('‹', '›')}
+  </div>`;
   }
   const cards = items.map(({ p }) => {
     const prop = p.status === 'published'
@@ -5647,10 +5668,12 @@ function schedSemanaBodyHTML(ctx) {
   return `<div class="scf-weekwrap" id="hsWeekList"><div class="scf-week">${cols.join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div></div>${outsideHTML}`;
 }
 // --- La capa de ampliación de Semana ---
-let SCF_POP = null; // { wrap, card, vault } — la tarjeta abierta, si hay
-let SCF_POP_TIMER = null; // cierre diferido compartido (celda <-> capa)
+let SCF_POP = null; // { wrap, card, vault, pop } — la tarjeta abierta, si hay
+let SCF_POP_TIMER = null; // (legado) ya no hay cierre diferido por hover
+let SCF_PINNED = false; // v221: click = capa FIJADA (queda hasta ✕ o click afuera)
 function scfClosePop() {
   if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; }
+  SCF_PINNED = false;
   if (!SCF_POP) return;
   const cur = SCF_POP;
   SCF_POP = null;
@@ -5658,7 +5681,7 @@ function scfClosePop() {
   try { const pop = cur.wrap.querySelector('.scf-pop'); if (pop) pop.remove(); } catch (e) {}
   try { cur.wrap.classList.remove('pop-open'); } catch (e) {}
 }
-function scfOpenPop(wrap) {
+function scfOpenPop(wrap, pinned) {
   if (!wrap) return;
   if (SCF_POP && SCF_POP.wrap === wrap) return;
   scfClosePop();
@@ -5667,17 +5690,18 @@ function scfOpenPop(wrap) {
   const card = vault.querySelector(`.igmock[data-post-id="${String(wrap.dataset.postId || '')}"]`);
   if (!card) return;
   const pop = document.createElement('div');
-  pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc');
+  pop.className = 'scf-pop ' + (wrap.dataset.popCls || 'pc') + (pinned ? ' pinned' : '');
   pop.innerHTML = `<div class="scf-pop-bar"><button type="button" class="scf-pop-day">Ver el día completo →</button><button type="button" class="scf-pop-x" aria-label="Cerrar">✕</button></div>`;
   pop.appendChild(card);
   wrap.appendChild(pop);
   wrap.classList.add('pop-open');
-  SCF_POP = { wrap, card, vault };
-  // La capa va CENTRADA en la pantalla (corrección de Valentino): entre
-  // la celda y la tarjeta hay un trecho de mouse — entrar a la capa
-  // cancela el cierre diferido y salir de ella lo reprograma.
-  pop.addEventListener('mouseenter', () => { if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; } });
-  pop.addEventListener('mouseleave', () => { if (SCF_POP_TIMER) clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = setTimeout(() => scfClosePop(), 260); });
+  SCF_POP = { wrap, card, vault, pop };
+  SCF_PINNED = !!pinned;
+  // v221 (corrección de Valentino): la capa es vista previa de HOVER —
+  // muere en el acto al salir el mouse (de la foto o de la tarjeta
+  // grande), sin esperas. El cierre lo decide el rastreador geométrico
+  // de mousemove (bindSchedFilter): mouseleave no es confiable con
+  // capas fixed transformadas. Con click queda FIJADA (SCF_PINNED).
   const x = pop.querySelector('.scf-pop-x');
   if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(); };
   const db = pop.querySelector('.scf-pop-day');
@@ -5778,6 +5802,67 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
     ${body}
   </div>`;
 }
+// --- ✨ Así va quedando tu feed (v221, pedido de Valentino) ---
+// La grilla del perfil de IG del negocio, en Schedule, debajo de los
+// posteos: primero los que se vienen (programados y borradores, en su
+// orden de salida, con su marca), después los ya publicados reales.
+// Vista de LECTURA: se pinta desde schedPlacements (el mismo mapa de
+// días de la agenda, ninguna ubicación cambia entre vistas) + los
+// publicados que la app conoce. Las historias NO van: no viven en la
+// grilla del perfil. Tocar un tile que se viene salta a su día en la
+// agenda (bindSchedule); tocar un publicado abre el lightbox.
+function feedPreviewHTML(all, tz) {
+  const posts = (Array.isArray(all) ? all : []).filter(p => p && p.status !== 'failed' && String(p.media_type || '') !== 'story');
+  if (!posts.length) return '';
+  const pl = schedPlacements(posts, tz);
+  const upcoming = [];
+  for (const ymd of [...pl.byDay.keys()].sort()) {
+    for (const it of (pl.byDay.get(ymd) || [])) {
+      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
+    }
+  }
+  const published = posts.filter(p => p.status === 'published')
+    .sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
+  const parts = [];
+  for (const u of upcoming) parts.push({ kind: 'up', p: u.p, ymd: u.ymd });
+  for (const p of published) parts.push({ kind: 'pub', p });
+  if (!parts.length) return '';
+  const tileMedia = (p, isV) => !p.image_path
+    ? '<span class="fp-tile-ph">✨</span>'
+    : isV
+      ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
+  const VIS = 15;
+  const grid = parts.map((t, i) => {
+    const p = t.p;
+    const isV = String(p.media_type || '') === 'video';
+    const extra = i >= VIS ? ' fp-extra' : '';
+    const media = tileMedia(p, isV);
+    const reel = isV ? '<span class="fp-reel">🎬</span>' : '';
+    if (t.kind === 'up') {
+      const sched = p.status === 'scheduled';
+      let when = t.ymd;
+      const dObj = schedYmdToDate(t.ymd);
+      if (dObj) {
+        let dow = '';
+        try { dow = dObj.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', ''); } catch (e) {}
+        when = `${dow} ${dObj.getUTCDate()} · ${schedMiniTime(p)}`;
+      }
+      const mark = sched ? '📮' : '✏️';
+      return `<button type="button" class="fp-tile up${extra}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}<span class="fp-badge">${mark}</span>${reel}<span class="fp-when">${mark} ${esc(when)}</span></button>`;
+    }
+    const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}"` : '';
+    return `<button type="button" class="fp-tile pub${extra}" data-post-id="${esc(String(p.id))}"${lb}>${media}${reel}</button>`;
+  }).join('');
+  const moreBtn = parts.length > VIS ? '<button type="button" class="fp-more" id="fpMore">Ver más posteos</button>' : '';
+  const noPub = !published.length ? '<div class="fp-note">Cuando empieces a publicar, los que ya salieron van a ir apareciendo acá abajo. ✨</div>' : '';
+  return `<section class="hs-feed" id="hsFeed">
+    <div class="hs-feed-head"><b>✨ Así va quedando tu feed</b><span>Vista previa de tu perfil: los posteos que se vienen, en el lugar donde van a salir.</span></div>
+    <div class="fp-grid">${grid}</div>
+    <div class="fp-legend">📮 programado · ✏️ borrador · sin marca = ya publicado</div>
+    ${noPub}${moreBtn}
+  </section>`;
+}
 // --- Wiring del filtro (lo llama bindSchedule) ---
 function schedSetMode(m) {
   SCHED_MODE = m;
@@ -5800,6 +5885,7 @@ function schedJumpDay(ymd) {
 }
 function bindSchedFilter() {
   SCF_POP = null; // el DOM se reconstruyó: ninguna capa queda abierta
+  SCF_PINNED = false;
   $$('#schedView [data-scf-mode]').forEach(b => b.onclick = () => { if (b.dataset.scfMode !== SCHED_MODE) schedSetMode(b.dataset.scfMode); });
   const pv = $('#scfNavPrev'), nx = $('#scfNavNext'), td = $('#scfNavToday');
   if (pv) pv.onclick = () => schedNavStep(-1);
@@ -5809,18 +5895,43 @@ function bindSchedFilter() {
   // Semana: el posteo compacto se agranda al pasar el mouse (con una
   // mini-espera para no parpadear al barrer la grilla) o al primer
   // toque en pantallas táctiles. La ampliación va CENTRADA en la
-  // pantalla: el cierre al salir de la celda espera 450 ms (el trecho
-  // hasta la tarjeta) y entrar a la capa lo cancela (scfOpenPop).
+  // pantalla. v221 (corrección de Valentino): HOVER = vista previa que
+  // se cierra EN EL ACTO al sacar el mouse de la foto (sin esperas, sin
+  // depender de salir de la tarjeta grande); CLICK = capa FIJADA para
+  // poder usar Editar/Aceptar/Frenar, hasta ✕ o click afuera. En
+  // táctil el toque ya la fijaba: sin cambios.
   $$('#schedView .scf-mini-x').forEach(w => {
     let t = null;
-    w.addEventListener('mouseenter', () => { if (t) clearTimeout(t); if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; } t = setTimeout(() => scfOpenPop(w), 130); });
-    w.addEventListener('mouseleave', () => { if (t) clearTimeout(t); if (SCF_POP_TIMER) clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = setTimeout(() => { if (SCF_POP && SCF_POP.wrap === w) scfClosePop(); }, 450); });
+    w.addEventListener('mouseenter', () => {
+      if (SCF_PINNED) return; // hay una capa fijada: el hover no la roba
+      if (t) clearTimeout(t);
+      if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; }
+      t = setTimeout(() => scfOpenPop(w), 130);
+    });
+    w.addEventListener('mouseleave', () => {
+      if (t) clearTimeout(t); // si se fue antes de los 130 ms, no abre
+      // El CIERRE al salir lo maneja el rastreador geométrico global.
+    });
     w.addEventListener('click', (e) => {
-      if (e.target.closest('.scf-pop')) return; // adentro de la capa mandan sus botones y los delegados
+      if (e.target.closest('.scf-pop')) {
+        // Click sobre la propia capa: queda FIJADA.
+        SCF_PINNED = true;
+        const p = e.target.closest('.scf-pop');
+        if (p) p.classList.add('pinned');
+        return;
+      }
       e.stopPropagation();
       const touchLike = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
-      if (SCF_POP && SCF_POP.wrap === w) { if (touchLike) scfClosePop(); }
-      else scfOpenPop(w);
+      if (touchLike) {
+        if (SCF_POP && SCF_POP.wrap === w) scfClosePop();
+        else scfOpenPop(w, true);
+        return;
+      }
+      // Mouse: el click fija la ampliación (o la cierra si ya estaba fijada).
+      if (SCF_POP && SCF_POP.wrap === w) {
+        if (SCF_PINNED) scfClosePop();
+        else { SCF_PINNED = true; if (SCF_POP.pop) SCF_POP.pop.classList.add('pinned'); }
+      } else scfOpenPop(w, true);
     });
   });
   // Cerrar la capa tocando afuera o con Escape (una sola vez global).
@@ -5828,6 +5939,24 @@ function bindSchedFilter() {
     window.__scfPopDocWired = true;
     document.addEventListener('click', (e) => { if (SCF_POP && !e.target.closest('.scf-mini-x')) scfClosePop(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') scfClosePop(); });
+  }
+  // v221 — Rastreador geométrico de salida (corrección de Valentino:
+  // "cuando saco el mouse de la foto directamente se tiene que cerrar
+  // la foto grande"). Mientras la capa de hover está abierta y SIN
+  // fijar, cada mousemove compara el puntero contra los rectángulos de
+  // la foto y de la tarjeta grande: si no está sobre ninguna de las
+  // dos, la capa se cierra EN EL ACTO. Sin timers ni esperas.
+  if (!window.__scfPopMoveWired) {
+    window.__scfPopMoveWired = true;
+    document.addEventListener('mousemove', (e) => {
+      if (!SCF_POP || SCF_PINNED) return;
+      const wrap = SCF_POP.wrap, pop = SCF_POP.pop;
+      if (!wrap || !pop || !document.contains(wrap)) return;
+      const inR = (r) => r && e.clientX >= r.left - 2 && e.clientX <= r.right + 2 && e.clientY >= r.top - 2 && e.clientY <= r.bottom + 2;
+      if (inR(wrap.getBoundingClientRect())) return; // sigue sobre la foto
+      if (inR(pop.getBoundingClientRect())) return; // sigue sobre la tarjeta grande
+      scfClosePop();
+    });
   }
   const rail = $('#hsWeekList');
   const rp = $('#scfRailPrev'), rn = $('#scfRailNext');
@@ -6098,6 +6227,36 @@ async function bindAlbumRow() {
   try { maybePhotoWeekReminder(data); } catch (e) {}
 }
 
+// v221 — Schedule sin fila del álbum: el botón de subida vive fijo en el
+// bloque del chat (debajo del saludo) y su #albumFile va en la tarjeta
+// del chat. Este binder cablea la subida (mismo wireAlbumUpload, mismo
+// festejo/clasificación), alimenta el recordatorio semanal del chat
+// (que antes dependía de bindAlbumRow) y resuelve el deep link del
+// ritual (?fotos=semana) enfocando EL botón nuevo.
+function bindSchedUpload() {
+  wireAlbumUpload(document.getElementById('albumFile'), () => { try { render(); } catch (e) {} });
+  (async () => {
+    let data = null;
+    try { data = await api.get('/api/album'); } catch (e) {}
+    if (data && data.ok) { try { maybePhotoWeekReminder(data); } catch (e) {} }
+  })();
+  try {
+    if (!window.__albumFocusDone) {
+      const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+      if (q.get('fotos')) {
+        window.__albumFocusDone = true;
+        setTimeout(() => {
+          const b = document.getElementById('agUploadBtn');
+          if (!b) return;
+          try { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+          b.classList.add('album-focus');
+          setTimeout(() => { try { b.classList.remove('album-focus'); } catch (e) {} }, 5000);
+        }, 400);
+      }
+    }
+  } catch (e) {}
+}
+
 // v208 — Lunes de la semana actual (lun–dom, la misma definición del cupo)
 // en la zona horaria del perfil, como clave estable 'YYYY-MM-DD'.
 function albumMondayKey() {
@@ -6143,8 +6302,8 @@ async function maybePhotoWeekReminder(data) {
         setTimeout(() => { try { blk.classList.remove('album-focus'); } catch (e) {} }, 5000);
         return;
       }
-      // v215: en Schedule la tarjeta grande ya no está — el botón sube
-      // directo (el #albumFile vive en la fila fina del álbum).
+      // v215/v221: en Schedule la tarjeta grande ya no está — el botón
+      // sube directo (el #albumFile vive en el bloque del chat).
       const inp = document.getElementById('albumFile');
       if (inp) { inp.click(); return; }
       const row = document.getElementById('albumRowToggle');
@@ -10275,7 +10434,10 @@ async function scheduleView() {
   // 2026-10-05: home en Schedule (primera pestaña) — 5 tarjetas fijas arriba,
   // chat abajo en la misma pantalla. Pedido de Valentino.
   const homeWeekBlock = schedFilterBlockHTML(allPosts, quota, weekGenerating, weekNoDna);
-  const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true)}`;
+  // ✨ Así va quedando tu feed (v221): debajo de los posteos, la grilla
+  // del perfil con los que se vienen en su lugar + los publicados.
+  const feedBlock = feedPreviewHTML(allPosts, tz);
+  const homeChatBlock = `<div class="hs-chat-label" style="margin-top:18px"><b>💬 ¿Cambiamos algo?</b></div>${chatCardHTML(true, true, true, true)}`;
   return `<div id="schedView" class="sched-wrap">
     <div class="hs-brand-head">
       <img src="ai-avatar.png" alt="Posty" class="hs-brand-ava">
@@ -10288,9 +10450,8 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
-    <div class="ag-uploadbar"><button type="button" class="ag-upload-btn" id="agUploadBtn">📸 Subir fotos o video</button></div>
+    ${feedBlock}
     ${homeChatBlock}
-    <div id="albumRow"></div>
     ${armBlock}
   </div>`;
 }
@@ -10473,7 +10634,15 @@ function bindSchedule() {
     } catch (e) {}
   })();
   // Días libres: el fantasma "+" lleva al chat a pedirle algo a Posty para ese día.
-  $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => { location.hash = '#/app/chat'; });
+  // v221: el chat vive EN esta misma pantalla, abajo — el fantasma baja
+  // hasta el chat de Schedule y enfoca el input (antes saltaba a la
+  // vista del chat: otra pantalla, lo que Valentino marcó).
+  $$('#schedView [data-sched-day]').forEach(b => b.onclick = () => {
+    const card = document.getElementById('chatCard');
+    if (card) { try { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }
+    const inp = document.getElementById('chatInput');
+    if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 480);
+  });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
     if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1');
   });
@@ -10482,15 +10651,27 @@ function bindSchedule() {
   // v217: filtro Día·Semana·Mes (segmentado, navegación, salto de día,
   // ampliación hover/toque de la vista Semana).
   try { bindSchedFilter(); } catch (e) {}
-  try { bindAlbumRow(); } catch (e) {} // 📸 Álbum en Schedule (v215): fila fina; la tarjeta grande vive en el chat
-  // Botón fijo de subida de la agenda — dispara el MISMO input del álbum
-  // (#albumFile, con su festejo y su clasificación, hoy en la fila fina);
-  // si el álbum todavía no cargó, lleva a la fila.
+  // v221: ✨ Así va quedando tu feed — tocar un tile que se viene salta
+  // a su día en la agenda; "Ver más posteos" despliega el historial.
+  // (Los tiles publicados se abren con el wiring de [data-lightbox] de
+  // más arriba, el de siempre.)
+  $$('#schedView [data-feed-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.feedDay));
+  const fpMore = $('#fpMore');
+  if (fpMore) fpMore.onclick = () => {
+    const sec = document.getElementById('hsFeed');
+    if (!sec) return;
+    const open = sec.classList.toggle('open');
+    fpMore.textContent = open ? 'Ver menos' : 'Ver más posteos';
+  };
+  try { bindSchedUpload(); } catch (e) {} // 📸 v221: cablea la subida del bloque del chat + recordatorio semanal
+  // ÚNICO botón de subida de la pantalla (v221): vive fijo debajo del
+  // saludo del chat y dispara el MISMO input del álbum (#albumFile, con
+  // su festejo y su clasificación, ahora dentro del bloque del chat).
   const agUp = $('#agUploadBtn');
   if (agUp) agUp.onclick = () => {
     const f = document.getElementById('albumFile');
     if (f) { f.click(); return; }
-    const blk = document.getElementById('albumRow') || document.getElementById('albumWeekBlock') || document.getElementById('albumCard');
+    const blk = document.getElementById('albumWeekBlock') || document.getElementById('albumCard');
     if (blk) blk.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
   bindScheduleAll(); // "📅 Programar mi semana →" (chip del chat)
