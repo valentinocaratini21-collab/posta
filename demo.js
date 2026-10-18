@@ -1372,19 +1372,43 @@ async function redesignDemo({ spec, colors, photoOverrides, userPhotoDataUrl }) 
 
 // Opciones de fotos "nuestras" para cambiar la foto de un posteo de la prueba:
 // devuelve URLs públicas del pool del rubro (excluye las ya usadas).
+// (v199, cierre del gate) Las opciones pasan por el MISMO gate foto↔tema
+// que la generación de la semana (photoPassesGate): antes salía el pool
+// crudo de la categoría y el usuario podía elegir a mano justo lo que la
+// generación ya no deja pasar — una foto de makeup para una peluquería,
+// una fashion para un estudio de makeup. El contexto se deriva de lo que
+// la función ya recibe: demoSubcat sobre el texto del negocio (igual que
+// en buildDemoSpec; sin subrubro, belleza = mundo peluqueria) y, sin tema
+// de posteo, mandan el mundo del subrubro + los temas prohibidos por
+// público. Las exclusiones del llamador ya traen TODA la semana (la foto
+// actual del posteo y las usadas en los demás).
 function trialPhotoOptions(category, business, excludeFams, n) {
   const cat = CATEGORIES.includes(category) ? category : 'otro';
-  let pool = (cat === 'gastronomia' && isCafeBusiness(business))
+  const cafeBiz = isCafeBusiness(business);
+  const basePool = (cat === 'gastronomia' && cafeBiz)
     ? CAFE_POOL.slice()
     : (CATEGORY_PHOTOS[cat] || CATEGORY_PHOTOS.otro).slice();
+  const subcat = demoSubcat({ business, category: cat });
+  const ctx = photoGateCtx({
+    category: cat, subcat, topic: null,
+    isCafe: (cat === 'gastronomia' || cat === 'cafeteria') && cafeBiz,
+  });
+  const gated = (fams) => fams.filter((f) => photoPassesGate(f, ctx));
   const excl = new Set(excludeFams || []);
-  pool = pool.filter((f) => !excl.has(f));
+  let pool = gated(basePool).filter((f) => !excl.has(f));
   // Si quedan pocas (pool chico como el de café), completar con el pool general del rubro
   const want = n || 8;
   if (pool.length < Math.min(4, want)) {
-    const extra = (CATEGORY_PHOTOS[cat] || CATEGORY_PHOTOS.otro).slice()
+    const extra = gated((CATEGORY_PHOTOS[cat] || CATEGORY_PHOTOS.otro).slice())
       .filter((f) => !excl.has(f) && !pool.includes(f));
     pool = pool.concat(extra);
+  }
+  if (!pool.length) {
+    // El selector nunca queda vacío: primero las fotos del mundo aunque
+    // ya estén usadas en la semana; solo si el pool no tiene NINGUNA foto
+    // que pase el gate se vuelve al pool crudo sin las excluidas.
+    pool = gated(basePool);
+    if (!pool.length) pool = basePool.filter((f) => !excl.has(f));
   }
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

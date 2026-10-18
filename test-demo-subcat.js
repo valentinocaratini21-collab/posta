@@ -18,6 +18,11 @@
 //  3) A nivel gate: beauty-3 no pasa en contexto peluquería ni con tema
 //     genérico; fashion/fashion-1 no pasan en contexto makeup ni como
 //     única candidata de un tema de makeup.
+//  4) trialPhotoOptions (el selector para cambiar una foto a mano en
+//     /prueba): pasa por el MISMO gate — peluquería nunca recibe opciones
+//     de makeup/uñas/skincare/moda/barbería, makeup nunca fashion; las
+//     excluidas (foto actual + usadas en la semana) no se ofrecen; y el
+//     selector jamás queda vacío (relaja exclusiones antes que el gate).
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -120,6 +125,52 @@ console.log('— gate por subrubro: la foto ajena no entra ni forzada');
     'makeup: un tema de makeup figura matchable solo con fashion');
   ok(demo.topicPhotoMatchable(antesDespues, demo.CATEGORY_PHOTOS.belleza, ctxAD) === true,
     'makeup: el antes/despues debería ser matchable con el pool real');
+}
+
+// ---------- 4) trialPhotoOptions: el cambio manual también pasa el gate ----------
+console.log('— trialPhotoOptions ×100: el selector manual no ofrece fotos del otro oficio');
+{
+  const ctxPelu = demo.photoGateCtx({ category: 'belleza', subcat: null, topic: null, isCafe: false });
+  const ctxMk = demo.photoGateCtx({ category: 'belleza', subcat: 'makeup', topic: null, isCafe: false });
+  for (let r = 0; r < 100; r++) {
+    const usadasPelu = ['beauty-2', 'beauty-7'];
+    const optsP = demo.trialPhotoOptions('belleza', 'Milagros Peluqueria', usadasPelu, 8);
+    ok(optsP.length > 0, 'opciones peluquería: selector vacío');
+    for (const o of optsP) {
+      ok(!usadasPelu.includes(o.fam), `opciones peluquería: ofrece la excluida ${o.fam}`);
+      ok(o.url === '/demo-stock/' + o.fam + '.webp', `opciones peluquería: url rara ${o.url}`);
+      const t = temasOf(o.fam);
+      for (const x of FUERTES_AJENOS_PELU) {
+        ok(!t.includes(x), `opciones peluquería: ofrece ${o.fam} (temas ${t}) — tema ajeno ${x}`);
+      }
+      ok(demo.photoPassesGate(o.fam, ctxPelu), `opciones peluquería: ${o.fam} no pasa el gate de su contexto`);
+    }
+    const optsM = demo.trialPhotoOptions('belleza', 'Luna Makeup Studio', [], 8);
+    ok(optsM.length > 0, 'opciones makeup: selector vacío');
+    for (const o of optsM) {
+      ok(!o.fam.startsWith('fashion'), `opciones makeup: ofrece fashion (${o.fam})`);
+      const t = temasOf(o.fam);
+      for (const x of ['moda', 'pelo', 'unas', 'barberia']) {
+        ok(!t.includes(x), `opciones makeup: ofrece ${o.fam} (temas ${t}) — tema ajeno ${x}`);
+      }
+      ok(demo.photoPassesGate(o.fam, ctxMk), `opciones makeup: ${o.fam} no pasa el gate de su contexto`);
+    }
+  }
+  // Exclusiones que agotan el mundo: el selector relaja las EXCLUSIONES
+  // (repite una foto de la semana) antes que ofrecer una foto ajena.
+  const mundoPelu = demo.CATEGORY_PHOTOS.belleza.filter((f) => demo.photoPassesGate(f, ctxPelu));
+  const agotadas = demo.trialPhotoOptions('belleza', 'Milagros Peluqueria', mundoPelu, 8);
+  ok(agotadas.length > 0, 'opciones peluquería agotadas: selector vacío pese al fallback');
+  for (const o of agotadas) {
+    ok(demo.photoPassesGate(o.fam, ctxPelu), `opciones peluquería agotadas: el fallback ofreció ${o.fam} fuera del mundo`);
+  }
+  // El pool de café sigue intacto tras el gate.
+  const optsCafe = demo.trialPhotoOptions('gastronomia', 'Café Aurora', [], 8);
+  ok(optsCafe.length > 0, 'opciones café: selector vacío');
+  for (const o of optsCafe) {
+    const t = temasOf(o.fam);
+    ok(t.includes('cafe') || t.includes('comida'), `opciones café: ofrece ${o.fam} (temas ${t})`);
+  }
 }
 
 console.log(fails ? `\n✗ ${fails} FALLAS` : '\n✓ TODO OK');
