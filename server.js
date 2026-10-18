@@ -1225,7 +1225,7 @@ function ownWinnerFor(uid) {
 // no la cita, el código la anexa). Devuelve null si algo falla → silencio.
 async function ideasTextPass(uid, profile, signals, apiKey) {
   const biz = profile.business_name || 'el negocio';
-  const sigTxt = signals.map((s, i) => `${i + 1}. señal=${s.source} formato=${s.format}\n   EVIDENCIA: ${s.evidence}`).join('\n');
+  const sigTxt = signals.map((s, i) => (i + 1) + '. señal=' + s.source + ' formato=' + s.format + '\n   EVIDENCIA: ' + s.evidence).join('\n');
   const prompt = `Negocio: ${biz} (rubro: ${profile.category || 'otro'}). Descripción: ${String(profile.description || '').slice(0, 300)}
 
 Señales REALES detectadas esta semana (son hechos medidos; no los alteres ni agregues datos):
@@ -1247,6 +1247,7 @@ Devolvé SOLO un JSON {"ideas":[...]} con 2 o 3 ideas, cada una basada en UNA se
         signal: ctl.signal,
         body: JSON.stringify({
           model: 'gpt-4o-mini',
+          response_format: { type: 'json_object' },
           temperature: 0.7,
           max_tokens: 800,
           messages: [
@@ -1261,26 +1262,13 @@ Devolvé SOLO un JSON {"ideas":[...]} con 2 o 3 ideas, cada una basada en UNA se
   } catch (e) { return null; }
   try { costs.trackUsage({ feature: 'ideas-loop', userId: uid, model: 'gpt-4o-mini', json: data }); } catch (e) {}
   const parsed = parseLooseJson(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
-  const list = parsed && Array.isArray(parsed.ideas) ? parsed.ideas : [];
-  const out = [];
-  const usedSignals = new Set();
-  for (const it of list) {
-    const idx = (parseInt(it && it.signal, 10) || 0) - 1;
-    const s = signals[idx];
-    if (!s || usedSignals.has(idx)) continue;
-    const title = String((it && it.title) || '').trim().slice(0, 90);
-    if (!title) continue;
-    let why = String((it && it.why) || '').trim();
-    const anchored = why && (/@[a-z0-9._]/i.test(why) || /\d/.test(why));
-    if (!anchored) why = (why ? why.replace(/[.\s]+$/, '') + ' — ' : '') + s.evidence;
-    why = why.slice(0, 320);
-    const fmt = ['post', 'reel', 'carrusel'].includes(it && it.format) ? it.format : s.format;
-    const brief = String((it && it.brief) || '').trim().slice(0, 400) || title;
-    usedSignals.add(idx);
-    out.push({ signal: s, title, why, format: fmt, brief });
-    if (out.length >= 3) break;
+  const picked = ideasMod.pickIdeas(parsed, signals);
+  if (!picked.length) {
+    // Nunca más un text_pass mudo: la próxima falla deja la salida cruda en el log.
+    try { console.error('[ideas-loop] pase de texto sin ideas utilizables:', String((data.choices[0].message || {}).content || '').slice(0, 300)); } catch (e) {}
+    return null;
   }
-  return out.length ? out : null;
+  return picked;
 }
 
 // Corre el loop para UNA cuenta. opts.force no saltea gates de negocio
@@ -12595,7 +12583,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v218';
+const BUILD_ID = '20261018-v219';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

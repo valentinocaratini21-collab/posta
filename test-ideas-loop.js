@@ -141,6 +141,45 @@ ok('pendiente reciente también bloquea (no duplicar la misma semana)', () => {
   assert.ok(b.has('eph:2026-10-18:x'));
 });
 
+console.log('== 4b) pickIdeas: la salida real del modelo (regresión 2026-10-18) ==');
+ok('sin campo signal (el caso real de producción) mapea por orden', () => {
+  const sigs = [
+    { source: 'competitor', format: 'reel', evidence: 'El posteo con más comentarios de @metricool (48 💬) fue «5 errores»' },
+    { source: 'competitor', format: 'carrusel', evidence: '@metricool publicó 5 carruseles en sus últimos 12 posteos' },
+    { source: 'calendar', format: 'post', evidence: 'Día de la Madre es en 0 días (2026-10-18)' },
+  ];
+  const parsed = { ideas: [
+    { title: 'Evitá estos 5 errores en tus redes', why: 'El reel de @metricool tuvo 48 comentarios.', format: 'reel', brief: 'Reel con los 5 errores.' },
+    { title: 'Impulsá tu negocio con carruseles', why: '@metricool publicó 5 carruseles en los últimos 12 posteos.', format: 'carrusel', brief: 'Carrusel de tips.' },
+    { title: 'Prepará tu post para el Día de la Madre', why: 'Falta poco para la fecha.', format: 'post', brief: 'Post de regalos.' },
+  ] };
+  const out = ideas.pickIdeas(parsed, sigs);
+  assert.strictEqual(out.length, 3);
+  assert.strictEqual(out[0].signal, sigs[0]);
+  assert.strictEqual(out[1].signal, sigs[1]);
+  assert.strictEqual(out[2].signal, sigs[2]);
+  assert.ok(out[2].why.includes('Día de la Madre es en 0 días'), 'el porqué sin ancla recibe la evidencia anexada');
+});
+ok('con campo signal válido manda el campo; duplicados no se repiten', () => {
+  const sigs = [
+    { source: 'competitor', format: 'reel', evidence: 'E1 @a 10' },
+    { source: 'winner', format: 'post', evidence: 'E2 20 ❤️' },
+  ];
+  const out = ideas.pickIdeas({ ideas: [
+    { signal: 2, title: 'Del ganador', why: 'Tu posteo tuvo 20 ❤️', format: 'post', brief: 'B' },
+    { signal: 2, title: 'Duplicada', why: 'otra', format: 'post', brief: 'B' },
+    { signal: 1, title: 'Del competidor', why: '@a tuvo 10 comentarios', format: 'reel', brief: 'B' },
+  ] }, sigs);
+  assert.strictEqual(out.length, 2);
+  assert.strictEqual(out[0].signal, sigs[1]);
+  assert.strictEqual(out[1].signal, sigs[0]);
+});
+ok('salida vacía o basura → lista vacía (silencio, no relleno)', () => {
+  assert.deepStrictEqual(ideas.pickIdeas(null, []), []);
+  assert.deepStrictEqual(ideas.pickIdeas({ ideas: 'nope' }, [{ source: 'x', format: 'post', evidence: 'e' }]), []);
+  assert.deepStrictEqual(ideas.pickIdeas({ ideas: [{ why: 'sin título' }] }, [{ source: 'x', format: 'post', evidence: 'e' }]), []);
+});
+
 console.log('== 5) Contrato de deploy ==');
 const dbSrc = fs.readFileSync('db.js', 'utf8');
 const srvSrc = fs.readFileSync('server.js', 'utf8');
@@ -154,7 +193,7 @@ ok('server.js: loop, endpoints y admin', () => {
   for (const needle of ['runWeeklyIdeasLoop', 'runIdeasForUser', 'makeIdeaDraft', "app.get('/api/ideas'", "app.post('/api/ideas/:id/make'", "app.post('/api/ideas/:id/dismiss'", "app.post('/api/ideas/competitors'", "app.post('/api/admin/ideas/run'", "app.post('/api/admin/ideas/make'", 'ideas: weekIdeas']) {
     assert.ok(srvSrc.includes(needle), 'falta: ' + needle);
   }
-  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v218'"));
+  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v219'"));
 });
 ok('app.js: bloque de ideas en Schedule + enhanceIdeas', () => {
   assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length >= 2, 'slot en las dos vistas de Schedule');

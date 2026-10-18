@@ -155,6 +155,38 @@ function buildIdeaSignals(input) {
   return out;
 }
 
+// Interpreta la salida del pase de texto (gpt-4o-mini) contra las señales.
+// Verificado en producción (2026-10-18): el modelo devolvió las 3 ideas SIN
+// el campo "signal" y el loop se salteaba la semana entera en silencio.
+// Mapeo robusto: el campo signal válido manda; si falta o no sirve, la
+// idea i va a la señal i (el modelo responde en el orden de las señales).
+// El porqué SIEMPRE queda anclado a la evidencia: si no cita un @, un
+// número o una fecha, el código anexa la evidencia calculada.
+function pickIdeas(parsed, signals) {
+  const list = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.ideas) ? parsed.ideas : []);
+  const sigs = Array.isArray(signals) ? signals : [];
+  const out = [];
+  const used = new Set();
+  list.forEach((it, pos) => {
+    if (!it || typeof it !== 'object') return;
+    let idx = (parseInt(it.signal, 10) || 0) - 1;
+    if (idx < 0 || idx >= sigs.length || used.has(idx)) idx = pos;
+    if (idx < 0 || idx >= sigs.length || used.has(idx)) return;
+    const s = sigs[idx];
+    const title = String(it.title || '').trim().slice(0, 90);
+    if (!title) return;
+    let why = String(it.why || '').trim();
+    const anchored = why && (/@[a-z0-9._]/i.test(why) || /[0-9]/.test(why));
+    if (!anchored) why = (why ? why.replace(/[. ]+$/, '') + ' — ' : '') + s.evidence;
+    why = String(why).slice(0, 320);
+    const format = ['post', 'reel', 'carrusel'].includes(it.format) ? it.format : s.format;
+    const brief = String(it.brief || '').trim().slice(0, 400) || title;
+    used.add(idx);
+    out.push({ signal: s, title, why, format, brief });
+  });
+  return out.slice(0, 3);
+}
+
 // Memoria de ángulos: dado el historial reciente del usuario (filas de
 // posty_ideas), devuelve el Set de angle_key que NO hay que reproponer:
 // descartados/hechos en 42 días, propuestos (pending/expired) en 21 días.
@@ -172,4 +204,4 @@ function blockedAngleKeys(history, nowMs) {
   return blocked;
 }
 
-module.exports = { parseCompetitorHandles, canonicalCompetitors, snapshotFromAudit, buildIdeaSignals, blockedAngleKeys, fmtLabel };
+module.exports = { parseCompetitorHandles, canonicalCompetitors, snapshotFromAudit, buildIdeaSignals, blockedAngleKeys, fmtLabel, pickIdeas };
