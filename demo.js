@@ -101,7 +101,7 @@ const CATEGORY_PHOTOS = {
   joyeria: [...FASHION.slice(0, 4), 'fashion-5', ...BEAUTY, ...LIFE.slice(0, 2)],
   gastronomia: [...FOOD, ...LIFE.slice(0, 2)],
   bar: [...BAR, ...FOOD.slice(0, 3), ...LIFE.slice(0, 2)],
-  belleza: [...BEAUTY, 'beauty-7', 'beauty-8', 'beauty-9', ...FASHION.slice(0, 2), ...LIFE.slice(0, 2)],
+  belleza: [...BEAUTY, 'beauty-7', 'beauty-8', 'beauty-9', 'beauty-10', 'beauty-11', 'beauty-12', 'beauty-13', ...FASHION.slice(0, 2), ...LIFE.slice(0, 2)],
   fitness: [...FITNESS, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
   mascotas: [...PETS, ...HOME.slice(0, 3), ...LIFE.slice(0, 2)],
   hogar: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 10;
+const DEMO_ENGINE_V = 11;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -168,6 +168,13 @@ const PHOTO_TAGS = {
   'beauty-7': { temas: ['pelo'] },                    // peluquero secando el pelo de una clienta
   'beauty-8': { temas: ['pelo'] },                    // peluquera cortando el pelo rubio de una clienta
   'beauty-9': { temas: ['pelo'] },                    // brushing con cepillo redondo, primer plano
+  // (v199) Stock nuevo de Pexels (licencia libre, verificado a ojo) para que
+  // los mundos por subrubro no se queden sin fotos: makeup y peluquería
+  // necesitan pools propios de ≥5 sin pedirle fotos al subrubro hermano.
+  'beauty-10': { temas: ['makeup', 'rostro'] },       // maquilladora delineando a una clienta (Pexels 22364778)
+  'beauty-11': { temas: ['makeup', 'rostro'] },       // aplicación de labial en primer plano (Pexels 5178024)
+  'beauty-12': { temas: ['pelo'] },                   // lavado de pelo en la bacha, primer plano (Pexels 23349891)
+  'beauty-13': { temas: ['pelo', 'local'] },          // clienta en la bacha del salón (Pexels 7755482)
   'fashion':   { temas: ['moda', 'retrato'] },
   'fashion-1': { temas: ['moda', 'retrato'] },
   'fashion-2': { temas: ['moda', 'local'] },
@@ -318,7 +325,16 @@ const PHOTO_WORLD = {
   gastronomia: ['comida', 'cafe', 'local', 'personas', 'retrato'],
   bar: ['bar', 'local', 'personas', 'noche', 'comida', 'cafe', 'retrato'],
   belleza: ['pelo', 'makeup', 'unas', 'skincare', 'cosmetica', 'rostro', 'retrato', 'local', 'personas', 'moda', 'cafe'],
-  makeup: ['makeup', 'skincare', 'cosmetica', 'rostro', 'moda', 'retrato', 'personas', 'local', 'cafe'],
+  // (v199) Mundos por SUBRUBRO: la categoría belleza mezcla dos oficios y
+  // el mundo ancho dejaba pasar las fotos fuertes del subrubro hermano a
+  // los posteos genéricos (las brochas de makeup en "Turnos de esta
+  // semana" de una peluquería; el antes/despues de makeup sobre una foto
+  // fashion). peluqueria = belleza sin subrubro (sus temas SON de pelo):
+  // solo pelo/local/personas — ni makeup, ni uñas, ni skincare, ni moda.
+  // makeup pierde 'moda': la familia fashion (ropa) no ilustra NINGÚN
+  // posteo de un estudio de makeup, y menos un antes/despues.
+  peluqueria: ['pelo', 'local', 'personas', 'retrato', 'rostro'],
+  makeup: ['makeup', 'skincare', 'cosmetica', 'rostro', 'retrato', 'personas', 'local', 'cafe'],
   barberia: ['barberia', 'pelo', 'local', 'retrato', 'personas', 'moda', 'cafe'],
   fitness: ['fitness', 'personas', 'retrato', 'local', 'equipo', 'airelibre'],
   mascotas: ['mascotas', 'local', 'retrato', 'personas', 'bano', 'veterinaria', 'hogar', 'cafe'],
@@ -351,7 +367,10 @@ const PHOTO_STRONG_TEMAS = new Set([
 ]);
 
 function photoGateCtx({ category, subcat, topic, isCafe }) {
-  const key = subcat || category;
+  // (v199) El mundo se resuelve por subrubro: belleza sin subrubro es
+  // peluquería (ver PHOTO_WORLD.peluqueria). AUDIENCE_FORBIDDEN_TEMAS no
+  // tiene entrada 'peluqueria': cae a la de la categoría (belleza).
+  const key = subcat || (category === 'belleza' ? 'peluqueria' : category);
   const world = new Set(PHOTO_WORLD[key] || PHOTO_WORLD[category] || PHOTO_WORLD.otro);
   const forb = new Set(AUDIENCE_FORBIDDEN_TEMAS[key] || AUDIENCE_FORBIDDEN_TEMAS[category] || []);
   if (topic && topic.tema) for (const c of (TEMA_CONFLICTS[topic.tema] || [])) forb.add(c);

@@ -10,6 +10,10 @@ const { spawn } = require('child_process');
 const { DatabaseSync } = require('node:sqlite');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-import-'));
+process.env.DATA_DIR = TMP;
+// El fixture "motor nuevo" usa la constante viva: hardcodear el número
+// rompía el test en cada bump de DEMO_ENGINE_V (pasó en v11/v199).
+const CURRENT_ENGINE = require('./demo').DEMO_ENGINE_V;
 const PORT = 18741;
 const BASE = `http://127.0.0.1:${PORT}`;
 const TOKEN = 'testtoken182';
@@ -51,7 +55,7 @@ async function waitBoot(tries = 60) {
     ok(await waitBoot(), 'server booteó');
     const db = new DatabaseSync(path.join(TMP, 'posta.db'));
     db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?,?,?)')
-      .run('milagrosmakeup', payload(10, ['/cosmetic', '/quote']), Date.now());
+      .run('milagrosmakeup', payload(CURRENT_ENGINE, ['/cosmetic', '/quote']), Date.now());
     db.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?,?,?)')
       .run('viejoengine', payload(1, ['/cosmetic']), Date.now());
 

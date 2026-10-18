@@ -7,8 +7,21 @@ Dos modos:
      Recorre TODOS los diseños de la semana con cortes cortos y zooms
      alternados (entra/sale): se lee como un reel, no como una tarjeta
      estática animada.
-El zoom lo hace zoompan nativo de ffmpeg sobre la imagen escalada 2x
+El zoom lo hace zoompan nativo de ffmpeg sobre la imagen escalada 1.5x
 (suave, sin saltos), con la misma curva smoothstep de siempre.
+OJO memoria (fix 2026-10-18, medido por bisección en local): el tour
+medía ~283 MB de RSS en ffmpeg y en producción la semana salía sin reel
+(video_ok=false): el culpable NO era el zoompan (decode+scale+zoompan
+solos = ~65 MB) sino libx264 con preset veryfast a 1080x1350 (~225 MB
+él solo, por sus colas de frames lookahead/b-frames). En el contenedor
+de producción (memoria chica, compartida con node y con el render PIL
+de extras en paralelo) ffmpeg moría por allocation y los 4 reintentos
+repetían el mismo grafo caro. Fix: -tune zerolatency (sin lookahead ni
+b-frames: las colas del encoder casi desaparecen) + crf 27 (compensa el
+peso extra del tune; a ojo, en un celular, idéntico) + hilos capados a
+2 + oversample 1.5x en vez de 2x (menos CPU; el zoom máximo 1.13/1.16
+sigue muestreando por encima de los 1080 px de salida). Resultado
+medido: RSS ~150 MB, tour ~4 s, mp4 ~1,2 MB, misma duración y tamaño.
 """
 import subprocess
 import sys
@@ -16,6 +29,8 @@ import sys
 W, H = 1080, 1350
 FPS = 25
 ZOOM_END = 1.16  # zoom final del modo clásico (1.0 = sin zoom)
+UPSCALE = 1.5  # oversample del zoompan (era 2x — ver nota de memoria arriba)
+THREADS = "2"
 
 
 def smooth_expr(last, z_from, z_to):
@@ -25,10 +40,11 @@ def smooth_expr(last, z_from, z_to):
 
 def zoompan(zexpr, n):
     return (
-        "scale={W}:{H},scale=2160:2700,"
+        "scale={W}:{H},scale={UW}:{UH},"
         "zoompan=z='{z}':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)*0.42'"
         ":d={n}:s={W}x{H}:fps={fps}"
-    ).format(W=W, H=H, z=zexpr, n=n, fps=FPS)
+    ).format(W=W, H=H, UW=int(W * UPSCALE), UH=int(H * UPSCALE),
+             z=zexpr, n=n, fps=FPS)
 
 
 def run(cmd):
@@ -43,11 +59,11 @@ def classic(src, out, secs):
     last = max(1, n - 1)
     vf = zoompan(smooth_expr(last, 1.0, ZOOM_END), n)
     run([
-        "ffmpeg", "-y", "-v", "error",
+        "ffmpeg", "-y", "-v", "error", "-threads", THREADS,
         "-loop", "1", "-i", src,
         "-vf", vf,
         "-frames:v", str(n),
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
+        "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "27",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         out,
     ])
@@ -57,7 +73,7 @@ def classic(src, out, secs):
 def tour(out, seg_secs, images):
     frames = max(8, int(seg_secs * FPS))
     last = max(1, frames - 1)
-    cmd = ["ffmpeg", "-y", "-v", "error"]
+    cmd = ["ffmpeg", "-y", "-v", "error", "-threads", THREADS]
     # OJO: cada imagen entra como UN SOLO frame (sin -loop): zoompan con
     # d=frames genera exactamente `frames` salidas por entrada. Con -loop,
     # zoompan multiplica (frames_de_entrada x d) y el video explota.
@@ -73,7 +89,7 @@ def tour(out, seg_secs, images):
     cmd += [
         "-filter_complex", ";".join(parts),
         "-map", "[out]",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
+        "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "27",
         "-movflags", "+faststart",
         out,
     ]
