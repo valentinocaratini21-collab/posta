@@ -101,7 +101,7 @@ const CATEGORY_PHOTOS = {
   joyeria: [...FASHION.slice(0, 4), 'fashion-5', ...BEAUTY, ...LIFE.slice(0, 2)],
   gastronomia: [...FOOD, ...LIFE.slice(0, 2)],
   bar: [...BAR, ...FOOD.slice(0, 3), ...LIFE.slice(0, 2)],
-  belleza: [...BEAUTY, ...FASHION.slice(0, 2), ...LIFE.slice(0, 2)],
+  belleza: [...BEAUTY, 'beauty-7', 'beauty-8', 'beauty-9', ...FASHION.slice(0, 2), ...LIFE.slice(0, 2)],
   fitness: [...FITNESS, ...LIFE.slice(0, 3), ...HOME.slice(0, 2)],
   mascotas: [...PETS, ...HOME.slice(0, 3), ...LIFE.slice(0, 2)],
   hogar: [...HOME, ...LIFE.slice(0, 2), ...OFFICE.slice(0, 2)],
@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 4;
+const DEMO_ENGINE_V = 5;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -165,6 +165,9 @@ const PHOTO_TAGS = {
   'beauty-4': { temas: ['skincare', 'cosmetica'] },  // crema cosmética sobre mármol
   'beauty-5': { temas: ['makeup', 'rostro'] },        // retrato femenino con makeup completo
   'beauty-6': { temas: ['unas'] },                    // manos con esmaltado rojo
+  'beauty-7': { temas: ['pelo'] },                    // peluquero secando el pelo de una clienta
+  'beauty-8': { temas: ['pelo'] },                    // peluquera cortando el pelo rubio de una clienta
+  'beauty-9': { temas: ['pelo'] },                    // brushing con cepillo redondo, primer plano
   'fashion':   { temas: ['moda', 'retrato'] },
   'fashion-1': { temas: ['moda', 'retrato'] },
   'fashion-2': { temas: ['moda', 'local'] },
@@ -730,13 +733,19 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
         : (CATEGORY_PHOTOS[subcat === 'makeup' ? 'belleza' : cat] || CATEGORY_PHOTOS.otro).slice();
       const forbidden = AUDIENCE_FORBIDDEN_TEMAS[subcat || cat] || [];
       const usedFams = new Set((excludePhotos || []).map((x) => path.basename(String(x)).replace(/\.webp$/i, '')));
-      photos = topics.map((t) => {
-        const famName = pickPhotoTagged(t, poolFams, usedFams, forbidden);
+      // Dos pasadas: primero los temas CON tema (las fotos exactas son pocas
+      // y son para ellos), después los genéricos — si no, un posteo sin tema
+      // se queda con la única foto de pelo y los de pelo caen en fotos de
+      // otro servicio (caso real 2026-10-17, semana de peluquería).
+      photos = new Array(topics.length);
+      const order = topics.map((t, i) => i).sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
+      for (const i of order) {
+        const famName = pickPhotoTagged(topics[i], poolFams, usedFams, forbidden);
         usedFams.add(famName);
         const p = path.join(STOCK_DIR, famName + '.webp');
         if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
-        return p;
-      });
+        photos[i] = p;
+      }
     } else {
       const stockN = stockPhotosN(cat, n, business);
       // Foto por tema: si el tema trae `photo` asignada se usa esa (matchea el
