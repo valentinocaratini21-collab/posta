@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 13;
+const DEMO_ENGINE_V = 14;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
