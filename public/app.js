@@ -592,17 +592,51 @@ function lpTiles(p) {
   for (let k = 1; k <= 9; k++) out.push(`gt-${p.slug}-${k}.jpg`);
   return out;
 }
-function lpProfileHTML(p) {
-  const tiles = lpTiles(p);
-  const ava = p.ava || tiles[0];
-  const avaAlt = p.avaAlt || ('Foto de perfil de ' + p.user);
-  const hlPairs = (p.hls[0] && Array.isArray(p.hls[0])) ? p.hls : p.hls.map((l, k) => [tiles[[1, 2, 4, 6][k]], l]);
-  const cells = tiles.map((t, k) => {
+function lpCellsHTML(p, tiles) {
+  return tiles.map((t, k) => {
     if (t === 'VIDEO') return `<span class="igp-cell-reel"><video src="showcase-reel-natural.mp4" autoplay muted loop playsinline preload="metadata" aria-label="Reel de Instagram de ${p.name}: barista preparando latte art"></video><span class="igp-reel-badge">▶</span></span>`;
     const img = `<img loading="lazy" src="${t}" alt="Posteo de Instagram de ${p.name}">`;
     if (k === 4 && !p.cells) return `<span class="igp-cell-reel">${img}<span class="igp-reel-badge">▶</span></span>`;
     return img;
   }).join('');
+}
+/* ---------- v208: PARED DENSA de perfiles (pedido de Valentino: "la
+   nuestra muestra un perfil solo a la vez, ellos muestran 8 a la vez").
+   Tarjeta compacta por rubro: cabecera + stats + bio corta + grilla 3×3.
+   Desktop: grilla de 4 columnas (8 visibles, el resto tras "Ver los 20
+   perfiles"); celular: tira horizontal con scroll-snap. ---------- */
+function lpWallCardHTML(p) {
+  const tiles = lpTiles(p);
+  const ava = p.ava || tiles[0];
+  const avaAlt = p.avaAlt || ('Foto de perfil de ' + p.user);
+  return `<div class="lp-wall-card">
+    <div class="igp-top"><b>${p.user}</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"/></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="${ava}" alt="${avaAlt}"></span>
+      <div class="igp-stats"><div><b>${p.stats[0]}</b><span>publicaciones</span></div><div><b>${p.stats[1]}</b><span>seguidores</span></div><div><b>${p.stats[2]}</b><span>seguidos</span></div></div>
+    </div>
+    <div class="igp-bio"><b>${p.name}</b> <span class="igp-cat">${p.cat}</span><br><span class="igp-link">postyhacetodo.com/p/${p.link}</span></div>
+    <div class="igp-grid">${lpCellsHTML(p, tiles)}</div>
+    <div class="lp-wall-foot">${p.rubro}</div>
+  </div>`;
+}
+function lpWallCardsHTML() {
+  return LP_PROFILES.map(lpWallCardHTML).join('');
+}
+function lpWallToggle() {
+  const w = document.getElementById('lpWall');
+  const b = document.getElementById('lpWallMore');
+  if (!w) return;
+  const open = w.classList.toggle('open');
+  w.classList.toggle('collapsed', !open);
+  if (b) b.textContent = open ? 'Ver menos ↑' : 'Ver los 20 perfiles ↓';
+}
+function lpProfileHTML(p) {
+  const tiles = lpTiles(p);
+  const ava = p.ava || tiles[0];
+  const avaAlt = p.avaAlt || ('Foto de perfil de ' + p.user);
+  const hlPairs = (p.hls[0] && Array.isArray(p.hls[0])) ? p.hls : p.hls.map((l, k) => [tiles[[1, 2, 4, 6][k]], l]);
+  const cells = lpCellsHTML(p, tiles);
   return `<div class="phone igp-phone"><div class="screen"><div class="igp">
     <div class="igp-top"><b>${p.user}</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"/></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></div>
     <div class="igp-head">
@@ -855,12 +889,10 @@ function landingView(cfg) {
     <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show">
       <p class="lp-show-eyebrow">✨ Así queda tu Instagram con Posty</p>
-      <div class="lp-car" id="lpCar">
-        <div class="lp-car-track" id="lpCarTrack">${lpCarSlidesHTML()}</div>
-        <button type="button" class="lp-car-btn lp-car-prev" onclick="lpCarStep(-1)" aria-label="Ver el perfil anterior">‹</button>
-        <button type="button" class="lp-car-btn lp-car-next" onclick="lpCarStep(1)" aria-label="Ver el perfil siguiente">›</button>
+      <div class="lp-wall collapsed" id="lpWall">
+        <div class="lp-wall-grid" id="lpWallGrid">${lpWallCardsHTML()}</div>
       </div>
-      <div class="lp-car-meta"><span class="lp-car-rubro" id="lpCarRubro">Cafetería</span><span class="lp-car-count" id="lpCarCount">1 / 20</span></div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">20 rubros · perfiles armados por Posty</span><button type="button" class="lp-wall-more" id="lpWallMore" onclick="lpWallToggle()">Ver los 20 perfiles ↓</button></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
@@ -5304,10 +5336,16 @@ async function bindAlbumCard() {
   const countHTML = items.length > 0
     ? `<div style="font-size:13.5px;margin-top:4px">📷 Ya tenés <b>${nFotos}</b> foto${nFotos === 1 ? '' : 's'}${nVideos ? ` y <b>${nVideos}</b> video${nVideos === 1 ? '' : 's'}` : ''} en tu álbum — Posty los usa en tus posteos y reels.</div>`
     : '';
-  const grid = items.length
+  // v208 (pedido de Valentino): la grilla de imágenes viejas NO se renderiza
+  // en la tarjeta — el álbum completo queda accesible con un toggle y
+  // muestra solo las subidas del cliente (esto, que viene de /api/album).
+  const gridInner = items.length
     ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0">${items.map(ph => ph.kind === 'video'
       ? `<div style="position:relative;width:100%;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#0A1E33"><img src="${esc(ph.thumb || '')}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Video de ${esc(biz)}" style="width:100%;height:100%;object-fit:cover"><span style="position:absolute;right:5px;bottom:5px;background:rgba(10,30,51,.82);color:#fff;font-size:11px;line-height:1;padding:4px 7px;border-radius:999px">▶ Video</span></div>`
       : `<img src="${esc(mv(ph.path, 640))}" data-full="${esc(ph.path)}" onerror="__imgFb(this)" loading="lazy" alt="Foto de ${esc(biz)}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px">`).join('')}</div>`
+    : '';
+  const grid = items.length
+    ? `<button type="button" class="btn btn-soft btn-sm" id="albumToggle" style="margin-top:8px">🖼️ Ver mi álbum (${items.length})</button><div id="albumGrid" style="display:none">${gridInner}</div>`
     : `<div style="font-size:14px;background:#F1F8FD;border-radius:12px;padding:10px 12px;margin:8px 0">Todavía no nos pasaste fotos: Posty crea las imágenes por vos, pero con las tuyas los posteos salen con tu negocio real.</div>`;
   box.innerHTML = `
   <div class="card" style="margin-top:14px">
@@ -5320,6 +5358,14 @@ async function bindAlbumCard() {
     ${grid}
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
   </div>`;
+  const aTgl = document.getElementById('albumToggle');
+  if (aTgl) aTgl.onclick = () => {
+    const g = document.getElementById('albumGrid');
+    if (!g) return;
+    const open = g.style.display !== 'none';
+    g.style.display = open ? 'none' : '';
+    aTgl.textContent = open ? `🖼️ Ver mi álbum (${items.length})` : '🖼️ Ocultar mi álbum';
+  };
   // v183: deep link del ritual (push/email → ?fotos=semana): enfocar el
   // bloque de fotos de la semana UNA sola vez por carga de la app.
   try {
@@ -5368,6 +5414,57 @@ async function bindAlbumCard() {
     }
     if (okCount) setTimeout(() => { try { bindAlbumCard(); } catch (e) {} }, 2500);
   };
+  // v208: recordatorio de fotos de la semana dentro del chat de Schedule.
+  try { maybePhotoWeekReminder(data); } catch (e) {}
+}
+
+// v208 — Lunes de la semana actual (lun–dom, la misma definición del cupo)
+// en la zona horaria del perfil, como clave estable 'YYYY-MM-DD'.
+function albumMondayKey() {
+  const tz = (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.timezone) || 'America/Argentina/Buenos_Aires';
+  const now = new Date();
+  const ymd = now.toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD en su zona
+  const wd = now.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
+  const back = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[wd] || 0;
+  const d = new Date(ymd + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+// v208 — Si esta semana el cliente todavía no pasó fotos (week.photos==0),
+// Posty lo dice UNA vez por semana en el chat de Schedule, como mensaje
+// suyo con botón de subida que lleva al bloque (deep link, mismo patrón
+// que ?fotos=semana). Burbuja efímera de UI: no se loguea al historial
+// del servidor; el gate semanal vive en localStorage y si la semana ya
+// tiene fotos la burbuja se retira y no vuelve.
+async function maybePhotoWeekReminder(data) {
+  try {
+    if (!data || !data.week) return;
+    if (!(location.hash || '').startsWith('#/app/schedule')) return;
+    if (Number(data.week.photos || 0) > 0) {
+      const old = document.getElementById('chatPhotoRem');
+      if (old) old.remove();
+      return;
+    }
+    const key = 'posty_photorem_' + albumMondayKey();
+    let shown = false;
+    try { shown = !!localStorage.getItem(key); } catch (e) {}
+    if (shown) return;
+    try { await (window.__chatHistP || Promise.resolve()); } catch (e) {}
+    const box = document.getElementById('chatBox');
+    if (!box || document.getElementById('chatPhotoRem')) return;
+    box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai" id="chatPhotoRem">esta semana todavía no me pasaste fotos 📸<div style="margin-top:8px"><button type="button" class="btn btn-primary btn-sm" id="chatPhotoRemBtn">📸 Subir fotos</button></div></div>`);
+    try { localStorage.setItem(key, '1'); } catch (e) {}
+    const b = document.getElementById('chatPhotoRemBtn');
+    if (b) b.onclick = () => {
+      const blk = document.getElementById('albumWeekBlock');
+      if (blk) {
+        blk.classList.add('album-focus');
+        setTimeout(() => { try { blk.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} }, 60);
+        setTimeout(() => { try { blk.classList.remove('album-focus'); } catch (e) {} }, 5000);
+      }
+    };
+    chatScroll();
+  } catch (e) {}
 }
 
 async function bindChatView() {
@@ -9483,8 +9580,8 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
-    <div id="albumCard"></div>
     ${homeChatBlock}
+    <div id="albumCard"></div>
     ${armBlock}
   </div>`;
 }
