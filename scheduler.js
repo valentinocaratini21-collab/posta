@@ -616,6 +616,23 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[best-hour] no se pudo programar:', e.message);
   }
+  // 💡 Loop de ideas semanal: lunes 07:00 (Buenos Aires) — antes del digest de
+  // las 09:00 y del WOW de las 09:30, para que las ideas ya estén en Schedule
+  // y en el reporte cuando el cliente mira su semana. Sin notificaciones
+  // nuevas: vive en la app. Require perezoso (server.js ya cargó).
+  try {
+    cron.schedule('0 7 * * 1', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.runWeeklyIdeasLoop === 'function') {
+          srv.runWeeklyIdeasLoop().catch((e) => console.error('[ideas-loop]', e.message));
+        }
+      } catch (e) { console.error('[ideas-loop] no se pudo cargar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Loop de ideas semanal: lunes 07:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[ideas-loop] no se pudo programar:', e.message);
+  }
   // Nudges proactivos de Posty: chequeo DIARIO (Buenos Aires). Cada día, por cada
   // usuario al que le falta algo (foto > voz > estilo), si pasaron entre 6 y 9 días
   // (umbral aleatorio por ciclo) desde su último nudge, crea uno nuevo. Resultado:

@@ -548,6 +548,33 @@ CREATE TABLE IF NOT EXISTS ig_analysis (
   summary TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Loop de ideas semanal (2026-10-18, v218): cada lunes Posty propone 2-3 ideas
+-- por cliente desde señales reales (competencia / su ganador / calendario).
+-- angle_key es la memoria: lo descartado o hecho no se repite por semanas.
+CREATE TABLE IF NOT EXISTS posty_ideas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  week_key TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  angle_key TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  why TEXT NOT NULL DEFAULT '',
+  format TEXT NOT NULL DEFAULT 'post',
+  brief TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  post_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  acted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_posty_ideas_user ON posty_ideas(user_id, status, id);
+CREATE INDEX IF NOT EXISTS idx_posty_ideas_angle ON posty_ideas(user_id, angle_key, created_at);
+-- Caché semanal de la lectura pública de cada competidor (la misma maquinaria
+-- de la prueba/auditoría; cadencia semanal, nada de scraping agresivo).
+CREATE TABLE IF NOT EXISTS competitor_snapshots (
+  handle TEXT PRIMARY KEY,
+  data_json TEXT NOT NULL DEFAULT '',
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 -- Medición de gasto de IA por función (palanca anti-quemado): cada llamada a
 -- OpenAI loguea tokens reales (usage.*), modelo y feature. Sirve para saber
 -- mañana el culpable exacto; no es facturación.

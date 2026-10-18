@@ -452,6 +452,99 @@ async function enhanceWeekReport() {
     slot.innerHTML = h;
   } catch (e) {}
 }
+// 💡 Loop de ideas semanal (2026-10-18): bloque en Schedule con las ideas que
+// Posty pensó para esta semana (competencia / su ganador / calendario), cada
+// una con Hacelo (la convierte en borrador) y Ahora no (no se repite). Abajo,
+// discreta, la gestión de competidores: es el lugar contextual del loop.
+async function enhanceIdeas(force) {
+  const slot = document.getElementById('hs-ideas');
+  if (!slot) return;
+  if (slot.dataset.done && !force) return;
+  slot.dataset.done = '1';
+  let r;
+  try { r = await api.get('/api/ideas'); } catch (e) { return; }
+  if (!r || !r.ok) return;
+  const ideas = r.ideas || [];
+  const comps = r.competitors || [];
+  const fmtChip = { post: '📸 Posteo', reel: '🎬 Reel', carrusel: '🖼️ Carrusel' };
+  let h = '<div class="hs-ideas">';
+  h += '<div class="hs-ideas-title">💡 Ideas de Posty para vos</div>';
+  if (ideas.length) {
+    h += '<div class="hs-ideas-sub">Las pensé mirando tu competencia, lo que mejor te funcionó y lo que se viene. ¿Alguna te gusta?</div>';
+    for (const it of ideas) {
+      h += `<div class="idea-card" data-idea-card="${it.id}">
+        <div class="idea-top"><span class="idea-fmt">${fmtChip[it.format] || '📸 Posteo'}</span></div>
+        <div class="idea-title">${esc(it.title)}</div>
+        <div class="idea-why">${esc(it.why)}</div>
+        <div class="idea-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-idea-make="${it.id}">💪 Hacelo</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-idea-dismiss="${it.id}">Ahora no</button>
+        </div>
+      </div>`;
+    }
+  } else {
+    h += '<div class="hs-ideas-sub">Cada lunes te traigo ideas nuevas desde tu competencia, tus posteos que mejor anduvieron y las fechas que se vienen. Sin humo: si no hay nada concreto, no te molesto.</div>';
+  }
+  h += '<div class="idea-comps"><span class="idea-comps-label">👀 Tu competencia:</span>';
+  for (const c of comps) h += `<span class="idea-comp-chip">@${esc(c)}<button type="button" class="idea-comp-x" data-comp-remove="${esc(c)}" aria-label="Quitar @${esc(c)}">×</button></span>`;
+  if (comps.length < 5) h += '<span class="idea-comp-add"><input type="text" id="ideaCompInput" placeholder="@competidor" maxlength="42" autocomplete="off" autocapitalize="none"><button type="button" class="btn btn-ghost btn-sm" id="ideaCompAdd">Agregar</button></span>';
+  h += '</div>';
+  if (!comps.length) h += '<div class="idea-comps-hint">Cargá hasta 5 cuentas y Posty las mira cada semana para traerte ideas con datos reales.</div>';
+  h += '</div>';
+  slot.innerHTML = h;
+  wireIdeasBlock(slot);
+}
+function wireIdeasBlock(slot) {
+  const compList = () => [...slot.querySelectorAll('[data-comp-remove]')].map((x) => x.getAttribute('data-comp-remove'));
+  const saveComps = async (list) => {
+    try { await api.post('/api/ideas/competitors', { handles: list }); } catch (e) {}
+    try { enhanceIdeas(true); } catch (e) {}
+  };
+  slot.querySelectorAll('[data-idea-dismiss]').forEach((b) => {
+    b.onclick = async () => {
+      const id = b.getAttribute('data-idea-dismiss');
+      b.disabled = true;
+      try { await api.post('/api/ideas/' + id + '/dismiss', {}); } catch (e) {}
+      const card = slot.querySelector(`[data-idea-card="${id}"]`);
+      if (card) card.remove();
+      if (!slot.querySelector('.idea-card')) { try { enhanceIdeas(true); } catch (e) {} }
+    };
+  });
+  slot.querySelectorAll('[data-idea-make]').forEach((b) => {
+    b.onclick = async () => {
+      const id = b.getAttribute('data-idea-make');
+      const card = slot.querySelector(`[data-idea-card="${id}"]`);
+      b.disabled = true;
+      b.textContent = '⏳ Armando tu posteo…';
+      try {
+        await api.post('/api/ideas/' + id + '/make', {}, { timeout: 240000 });
+        if (card) card.innerHTML = '<div class="idea-done">✅ ¡Listo! Tu posteo quedó como borrador en tu semana — revisalo cuando quieras.</div>';
+        try { toast('✅ Posteo creado desde tu idea'); } catch (e) {}
+        setTimeout(() => { try { render(); } catch (e) {} }, 900);
+      } catch (e) {
+        b.disabled = false;
+        b.textContent = '💪 Hacelo';
+        try { toast('😅 ' + (e.message || 'No pude armarlo ahora')); } catch (e2) {}
+      }
+    };
+  });
+  slot.querySelectorAll('[data-comp-remove]').forEach((b) => {
+    b.onclick = () => saveComps(compList().filter((x) => x !== b.getAttribute('data-comp-remove')));
+  });
+  const addBtn = slot.querySelector('#ideaCompAdd');
+  const inp = slot.querySelector('#ideaCompInput');
+  if (addBtn && inp) {
+    const doAdd = () => {
+      const v = String(inp.value || '').trim();
+      if (!v) return;
+      const cur = compList();
+      cur.push(v);
+      saveComps(cur);
+    };
+    addBtn.onclick = doAdd;
+    inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doAdd(); } };
+  }
+}
 function lpGoTrial(e) {
   if (e) e.preventDefault();
   const inp = document.getElementById('lpIg');
@@ -5312,6 +5405,7 @@ function homeWeekHTML(posts, quota, generating, noDna) {
     <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
+    <div id="hs-ideas"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
     ${staleHTML}
     <div class="hs-carousel">
@@ -5527,9 +5621,8 @@ function schedSemanaBodyHTML(ctx) {
     const num = dObj.getUTCDate();
     let dow = '';
     try { dow = dObj.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '').slice(0, 3).toUpperCase(); } catch (e) {}
-    // La capa se ancla hacia el interior de la pantalla según el borde:
-    // columnas de la izquierda crecen a la derecha, las de la derecha a
-    // la izquierda, las del medio se centran en el posteo.
+    // (v218) La ampliación ya no se ancla a la celda: va centrada en la
+    // pantalla para cualquier columna. popCls queda solo como marca.
     const popCls = i <= 1 ? 'pl' : i >= 5 ? 'pr' : 'pc';
     const shown = items.slice(0, 3);
     const minis = shown.map(({ p }) => `<span class="scf-mini-x" data-post-id="${esc(String(p.id))}" data-day="${ymd}" data-pop-cls="${popCls}">${schedMiniHTML(p, schedMiniTime(p))}</span>`).join('');
@@ -5555,7 +5648,9 @@ function schedSemanaBodyHTML(ctx) {
 }
 // --- La capa de ampliación de Semana ---
 let SCF_POP = null; // { wrap, card, vault } — la tarjeta abierta, si hay
+let SCF_POP_TIMER = null; // cierre diferido compartido (celda <-> capa)
 function scfClosePop() {
+  if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; }
   if (!SCF_POP) return;
   const cur = SCF_POP;
   SCF_POP = null;
@@ -5578,6 +5673,11 @@ function scfOpenPop(wrap) {
   wrap.appendChild(pop);
   wrap.classList.add('pop-open');
   SCF_POP = { wrap, card, vault };
+  // La capa va CENTRADA en la pantalla (corrección de Valentino): entre
+  // la celda y la tarjeta hay un trecho de mouse — entrar a la capa
+  // cancela el cierre diferido y salir de ella lo reprograma.
+  pop.addEventListener('mouseenter', () => { if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; } });
+  pop.addEventListener('mouseleave', () => { if (SCF_POP_TIMER) clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = setTimeout(() => scfClosePop(), 260); });
   const x = pop.querySelector('.scf-pop-x');
   if (x) x.onclick = (e) => { e.stopPropagation(); scfClosePop(); };
   const db = pop.querySelector('.scf-pop-day');
@@ -5658,6 +5758,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
     <div id="revMsg"></div>
     ${schedQuotaHTML(pl.list, quota)}
     <div id="hs-report"></div>
+    <div id="hs-ideas"></div>
     ${generating ? '<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>' : ''}
     ${schedStaleHTML(posts, tz)}
     <div class="scf-bar">
@@ -5707,12 +5808,13 @@ function bindSchedFilter() {
   $$('#schedView [data-scf-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.scfDay));
   // Semana: el posteo compacto se agranda al pasar el mouse (con una
   // mini-espera para no parpadear al barrer la grilla) o al primer
-  // toque en pantallas táctiles; la capa es hija del propio posteo,
-  // así que mover el mouse a la tarjeta no la cierra.
+  // toque en pantallas táctiles. La ampliación va CENTRADA en la
+  // pantalla: el cierre al salir de la celda espera 450 ms (el trecho
+  // hasta la tarjeta) y entrar a la capa lo cancela (scfOpenPop).
   $$('#schedView .scf-mini-x').forEach(w => {
     let t = null;
-    w.addEventListener('mouseenter', () => { if (t) clearTimeout(t); t = setTimeout(() => scfOpenPop(w), 130); });
-    w.addEventListener('mouseleave', () => { if (t) clearTimeout(t); t = setTimeout(() => { if (SCF_POP && SCF_POP.wrap === w) scfClosePop(); }, 140); });
+    w.addEventListener('mouseenter', () => { if (t) clearTimeout(t); if (SCF_POP_TIMER) { clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = null; } t = setTimeout(() => scfOpenPop(w), 130); });
+    w.addEventListener('mouseleave', () => { if (t) clearTimeout(t); if (SCF_POP_TIMER) clearTimeout(SCF_POP_TIMER); SCF_POP_TIMER = setTimeout(() => { if (SCF_POP && SCF_POP.wrap === w) scfClosePop(); }, 450); });
     w.addEventListener('click', (e) => {
       if (e.target.closest('.scf-pop')) return; // adentro de la capa mandan sus botones y los delegados
       e.stopPropagation();
@@ -9707,6 +9809,7 @@ async function render() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
   // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 60);
+  setTimeout(() => { try { enhanceIdeas(); } catch (e) {} }, 70);
   setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 80);
   const root = $('#app');
   // Captura de código de referido (?ref=): se guarda una vez, sanitizado

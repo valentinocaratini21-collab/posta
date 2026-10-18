@@ -185,6 +185,7 @@ function saveGoldenExample(uid, postId, caption, visualBrief) {
 const mp = require('./mercadopago');
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
+const ideasMod = require('./ideas');
 const webExtract = require('./web-extract');
 const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
@@ -1118,6 +1119,12 @@ app.get('/api/week/report', requireAuth, (req, res) => {
         if (daysLeft >= 0 && daysLeft <= 14) opportunity = { name: eph.name || eph.title || 'una fecha especial', daysLeft };
       }
     } catch (e) {}
+    // Sección Ideas del reporte (v218): las mismas ideas pendientes del loop
+    // semanal — el reporte las lleva a todos sus consumidores sin endpoint nuevo.
+    let weekIdeas = [];
+    try {
+      weekIdeas = db.prepare(`SELECT id, title, why, format FROM posty_ideas WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 3`).all(uid);
+    } catch (e) {}
     res.json({
       ok: true,
       has: !!((stats && stats.n) || (stories && stories.n)),
@@ -1131,9 +1138,323 @@ app.get('/api/week/report', requireAuth, (req, res) => {
         : null,
       nextCount: (next && next.n) || 0,
       opportunity,
+      ideas: weekIdeas,
     });
   } catch (e) { res.json({ ok: false }); }
 });
+
+// ---------- 💡 Loop de ideas semanal (2026-10-18, v218) ----------
+// Cada lunes (cron en scheduler.js, 07:00 BA) Posty le propone 2-3 ideas de
+// contenido a cada cliente SIN que las pida, desde tres señales reales:
+// (1) su competencia (los @ que el cliente carga; lectura pública con la
+// misma maquinaria de la auditoría, caché semanal), (2) su propio posteo
+// ganador, (3) la próxima efeméride de su rubro. Sin señal no hay idea:
+// jamás relleno genérico. La evidencia la calcula el código (ideas.js); el
+// pase de texto solo redacta título/porqué/brief apoyándose en ella. Si el
+// tope de IA manda o no hay key, esa cuenta se saltea en silencio. Cero
+// notificaciones nuevas: el loop vive en Schedule y en el reporte semanal.
+
+// Efemérides del rubro en una ventana de N días, con el mismo criterio de
+// ephemerisFor (la fecha comercial solo entra en rubros donde regalar o
+// festejar tiene sentido; barberías afuera).
+function ephemerisWindowFor(profile, days) {
+  const list = upcomingEphemeris(days || 21);
+  if (!list.length) return [];
+  const cat = String((profile && profile.category) || '');
+  const biz = String((profile && profile.business_name) || '');
+  if (/barber/i.test(cat + ' ' + biz)) return [];
+  if (!EPHEMERIS_GIFT_OK.test(cat)) return [];
+  return list;
+}
+
+// Lectura pública de un competidor, con caché de 6 días en competitor_snapshots.
+async function competitorSnapshot(handle) {
+  try {
+    const row = db.prepare('SELECT data_json, fetched_at FROM competitor_snapshots WHERE handle = ?').get(handle);
+    if (row && row.fetched_at) {
+      const t = new Date(String(row.fetched_at).replace(' ', 'T') + 'Z').getTime();
+      if (Number.isFinite(t) && t > Date.now() - 6 * 86400000) {
+        const d = JSON.parse(row.data_json || 'null');
+        if (d) return d;
+      }
+    }
+  } catch (e) {}
+  let data = null;
+  try { data = await feedAudit.fetchAuditData(handle); } catch (e) { data = null; }
+  if (!data || !data.ok) return null;
+  let signals = null;
+  try { signals = feedAudit.computeSignals(data.profile, data.posts || []); } catch (e) {}
+  const snap = ideasMod.snapshotFromAudit(data, signals);
+  if (snap) {
+    try {
+      db.prepare(`INSERT INTO competitor_snapshots (handle, data_json, fetched_at) VALUES (?,?,datetime('now'))
+        ON CONFLICT(handle) DO UPDATE SET data_json = excluded.data_json, fetched_at = excluded.fetched_at`)
+        .run(handle, JSON.stringify(snap));
+    } catch (e) {}
+  }
+  return snap;
+}
+
+function ownFormats30(uid) {
+  const out = { image: 0, video: 0, carousel: 0 };
+  try {
+    const rows = db.prepare(`SELECT media_type, COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'published'
+      AND published_at > datetime('now', '-30 days') GROUP BY media_type`).all(uid);
+    for (const r of rows) { if (out[r.media_type] !== undefined) out[r.media_type] = r.n; }
+  } catch (e) {}
+  return out;
+}
+
+function ownWinnerFor(uid) {
+  try {
+    const r = db.prepare(`
+      SELECT p.id, p.caption, p.media_type, p.tipo,
+             COALESCE(m.likes, p.ig_likes, 0) AS likes,
+             COALESCE(m.comments, p.ig_comments, 0) AS comments
+      FROM posts p LEFT JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ? AND p.status = 'published' AND p.media_type != 'story'
+        AND p.published_at > datetime('now', '-60 days')
+      ORDER BY (COALESCE(m.likes, p.ig_likes, 0) + 3 * COALESCE(m.comments, p.ig_comments, 0)) DESC LIMIT 1`).get(uid);
+    if (!r) return null;
+    return { id: r.id, caption_first: String(r.caption || '').split('\n')[0].trim(), likes: r.likes || 0, comments: r.comments || 0, media_type: r.media_type || 'image', tipo: r.tipo || '' };
+  } catch (e) { return null; }
+}
+
+// Pase de texto (gpt-4o-mini): elige 2-3 señales y redacta. La evidencia viaja
+// como HECHO en el prompt y el porqué final siempre la contiene (si el modelo
+// no la cita, el código la anexa). Devuelve null si algo falla → silencio.
+async function ideasTextPass(uid, profile, signals, apiKey) {
+  const biz = profile.business_name || 'el negocio';
+  const sigTxt = signals.map((s, i) => `${i + 1}. señal=${s.source} formato=${s.format}\n   EVIDENCIA: ${s.evidence}`).join('\n');
+  const prompt = `Negocio: ${biz} (rubro: ${profile.category || 'otro'}). Descripción: ${String(profile.description || '').slice(0, 300)}
+
+Señales REALES detectadas esta semana (son hechos medidos; no los alteres ni agregues datos):
+${sigTxt}
+
+Devolvé SOLO un JSON {"ideas":[...]} con 2 o 3 ideas, cada una basada en UNA señal (campo "signal" = su número). Para cada idea:
+- "title": título corto y concreto del posteo (máx 70 caracteres), en rioplatense, específico para ${biz}. Prohibido lo genérico ("posteá un tip", "contenido de valor").
+- "why": UNA línea con el porqué, apoyada en la EVIDENCIA de su señal: nombrá el @, el número o la fecha tal como figuran en la evidencia.
+- "format": "post" | "reel" | "carrusel" (el de la señal, salvo mejor criterio).
+- "brief": 1-2 frases concretas para generar el posteo: qué se muestra y qué se cuenta, pensado para ${biz} y su rubro.`;
+  let data = null;
+  try {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 45000);
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        signal: ctl.signal,
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          temperature: 0.7,
+          max_tokens: 800,
+          messages: [
+            { role: 'system', content: 'Sos Posty, el community manager de negocios chicos en Argentina. Pensás ideas de contenido concretas desde datos reales. Respondés SOLO con JSON válido.' },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      });
+      if (!res.ok) return null;
+      data = await res.json();
+    } finally { clearTimeout(to); }
+  } catch (e) { return null; }
+  try { costs.trackUsage({ feature: 'ideas-loop', userId: uid, model: 'gpt-4o-mini', json: data }); } catch (e) {}
+  const parsed = parseLooseJson(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
+  const list = parsed && Array.isArray(parsed.ideas) ? parsed.ideas : [];
+  const out = [];
+  const usedSignals = new Set();
+  for (const it of list) {
+    const idx = (parseInt(it && it.signal, 10) || 0) - 1;
+    const s = signals[idx];
+    if (!s || usedSignals.has(idx)) continue;
+    const title = String((it && it.title) || '').trim().slice(0, 90);
+    if (!title) continue;
+    let why = String((it && it.why) || '').trim();
+    const anchored = why && (/@[a-z0-9._]/i.test(why) || /\d/.test(why));
+    if (!anchored) why = (why ? why.replace(/[.\s]+$/, '') + ' — ' : '') + s.evidence;
+    why = why.slice(0, 320);
+    const fmt = ['post', 'reel', 'carrusel'].includes(it && it.format) ? it.format : s.format;
+    const brief = String((it && it.brief) || '').trim().slice(0, 400) || title;
+    usedSignals.add(idx);
+    out.push({ signal: s, title, why, format: fmt, brief });
+    if (out.length >= 3) break;
+  }
+  return out.length ? out : null;
+}
+
+// Corre el loop para UNA cuenta. opts.force no saltea gates de negocio
+// (plan/key/tope se respetan siempre); solo lo usan el cron y el admin.
+async function runIdeasForUser(uid, opts = {}) {
+  const skip = (reason, extra) => Object.assign({ ok: false, skipped: reason, user_id: uid }, extra || {});
+  const u = db.prepare('SELECT id, plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(uid);
+  if (!u) return skip('no_user');
+  const ps = String(u.plan_status || 'trial');
+  if (ps === 'trial' && trialEffectiveEnd(u) <= Date.now()) return skip('trial_expired');
+  if (ps !== 'trial' && ps !== 'active') return skip('not_active');
+  const profile = getProfile(uid);
+  if (!profile || !String(profile.business_name || '').trim()) return skip('no_profile');
+  try { costs.assertAiOk(uid); } catch (e) { return skip('ai_cap'); }
+  const apiKey = openaiKeyFor(uid);
+  if (!apiKey) return skip('no_key');
+
+  const handles = ideasMod.parseCompetitorHandles(profile.competitors, profile.ig_username);
+  const snapshots = [];
+  for (const h of handles) {
+    const s = await competitorSnapshot(h).catch(() => null);
+    if (s) snapshots.push(s);
+  }
+  const signalsAll = ideasMod.buildIdeaSignals({
+    competitors: snapshots,
+    ownFormats30: ownFormats30(uid),
+    ownWinner: ownWinnerFor(uid),
+    ephemeris: ephemerisWindowFor(profile, 21),
+  });
+  let hist = [];
+  try { hist = db.prepare(`SELECT angle_key, status, created_at FROM posty_ideas WHERE user_id = ? AND created_at > datetime('now', '-45 days')`).all(uid); } catch (e) {}
+  const blocked = ideasMod.blockedAngleKeys(hist);
+  const signals = signalsAll.filter((s) => !blocked.has(s.angle_key));
+  const diag = {
+    handles,
+    fetched: snapshots.map((s) => s.handle),
+    signals_all: signalsAll.map((s) => s.angle_key),
+    signals: signals.map((s) => s.angle_key),
+  };
+  if (!signals.length) return skip('no_signals', diag);
+  const picked = await ideasTextPass(uid, profile, signals.slice(0, 4), apiKey);
+  if (!picked || !picked.length) return skip('text_pass', diag);
+
+  const wk = mondayKeyOf(tzToday(userTz(uid)));
+  try { db.prepare(`UPDATE posty_ideas SET status = 'expired' WHERE user_id = ? AND status = 'pending'`).run(uid); } catch (e) {}
+  const ins = db.prepare(`INSERT INTO posty_ideas (user_id, week_key, source, angle_key, title, why, format, brief, status) VALUES (?,?,?,?,?,?,?,?,'pending')`);
+  const rows = [];
+  for (const p of picked) {
+    const r = ins.run(uid, wk, p.signal.source, p.signal.angle_key, p.title, p.why, p.format, p.brief);
+    rows.push({ id: r.lastInsertRowid, title: p.title, why: p.why, format: p.format, source: p.signal.source, angle_key: p.signal.angle_key });
+  }
+  try { track(uid, 'ideas_generated', String(rows.length)); } catch (e) {}
+  return Object.assign({ ok: true, user_id: uid, created: rows.length, ideas: rows }, diag);
+}
+
+// Barrido del lunes: todas las cuentas activas/trial. Cada una aislada.
+async function runWeeklyIdeasLoop() {
+  let users = [];
+  try { users = db.prepare(`SELECT id FROM users WHERE COALESCE(plan_status, 'trial') IN ('trial', 'active')`).all(); }
+  catch (e) { console.error('[ideas-loop]', e.message); return { ok: false }; }
+  let made = 0, skipped = 0;
+  for (const u of users) {
+    try {
+      const r = await runIdeasForUser(u.id);
+      if (r.ok) made++; else skipped++;
+    } catch (e) { console.error('[ideas-loop] usuario', u.id, e.message); skipped++; }
+  }
+  console.log(`[ideas-loop] cuentas con ideas nuevas: ${made}, salteadas: ${skipped}`);
+  return { ok: true, made, skipped };
+}
+
+// "Hacelo": crea el posteo como BORRADOR por el pipeline normal de un posteo
+// (mismo camino que regenerar un borrador: contenido + imagen de concepto).
+// Un borrador NO consume cupo (el cupo cuenta programados/publicados): si la
+// semana está llena queda en espera como borrador, nunca rompe el cupo.
+async function makeIdeaDraft(uid, idea) {
+  const key = openaiKeyFor(uid);
+  if (!key) return { ok: false, reason: 'no_key' };
+  try { costs.assertAiOk(uid); } catch (e) { return { ok: false, reason: 'ai_cap' }; }
+  const tipo = idea.source === 'calendar' ? 'promo'
+    : idea.format === 'reel' ? 'novedad'
+    : idea.source === 'winner' ? 'social' : 'detras';
+  const topic = [idea.title, idea.brief].filter(Boolean).join('. ');
+  const content = await generateContent(contentInputFor(uid, topic, tipo, 0), key);
+  const caption = String((content && content.caption) || '').trim();
+  if (!caption) return { ok: false, reason: 'no_caption' };
+  recordHookUse(uid, content && content.hookId);
+  const hashtags = String((content && content.hashtags) || '');
+  const headline = makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.title, 5, 70, rubroOf(uid));
+  let refs = [];
+  try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map((r) => r.file_path); } catch (e) {}
+  const wk = idea.week_key || mondayKeyOf(tzToday(userTz(uid)));
+  let productRef = null;
+  try {
+    const r = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND week_key = ?
+      AND intent = 'producto' AND image_path LIKE '/media/%' AND status != 'cancelled'
+      ORDER BY id ASC LIMIT 1`).get(uid, wk);
+    const p = r && String(r.image_path || '');
+    if (p && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) productRef = p;
+  } catch (e) {}
+  const styleOut = {};
+  let imagePath = null;
+  for (let attempt = 0; attempt < 3 && !imagePath; attempt++) {
+    try {
+      imagePath = await conceptShotGenerateQueued({
+        uid, idea: { titulo: idea.title, porque: idea.why },
+        tipo, headline, refs, apiKey: key, styleOut, productRef,
+      });
+    } catch (e) {
+      console.error(`[ideas-loop] imagen falló (intento ${attempt + 1}/3):`, e.message);
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 4000 * (attempt + 1)));
+    }
+  }
+  if (!imagePath) return { ok: false, reason: 'no_image' };
+  const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
+    VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(uid, imagePath, caption, hashtags, String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
+      tipo, String(idea.why || '').slice(0, 500), wk, trainingWheelsActive(uid) ? 1 : 0,
+      String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
+      String((content && content.hookId) || ''), promptForMedia(imagePath));
+  try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(r.lastInsertRowid, idea.id); } catch (e) {}
+  try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
+  return { ok: true, post_id: r.lastInsertRowid };
+}
+
+app.get('/api/ideas', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  let ideas = [];
+  try { ideas = db.prepare(`SELECT id, title, why, format, source, week_key, created_at FROM posty_ideas WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 3`).all(uid); } catch (e) {}
+  let competitors = [];
+  try { const p = getProfile(uid); competitors = ideasMod.parseCompetitorHandles(p && p.competitors, p && p.ig_username); } catch (e) {}
+  res.json({ ok: true, ideas, competitors });
+});
+
+app.post('/api/ideas/competitors', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const raw = (req.body && req.body.handles) || [];
+    const p = getProfile(uid);
+    const handles = ideasMod.parseCompetitorHandles(Array.isArray(raw) ? raw.join(',') : String(raw), p && p.ig_username);
+    db.prepare(`UPDATE profiles SET competitors = ?, updated_at = datetime('now') WHERE user_id = ?`)
+      .run(ideasMod.canonicalCompetitors(handles), uid);
+    res.json({ ok: true, competitors: handles });
+  } catch (e) { res.status(500).json({ error: 'No pude guardar los competidores 😅' }); }
+});
+
+app.post('/api/ideas/:id/dismiss', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const r = db.prepare(`UPDATE posty_ideas SET status = 'dismissed', acted_at = datetime('now') WHERE id = ? AND user_id = ? AND status = 'pending'`).run(req.params.id, uid);
+    try { track(uid, 'idea_dismissed', String(req.params.id)); } catch (e) {}
+    res.json({ ok: true, changed: r.changes });
+  } catch (e) { res.status(500).json({ error: 'No pude descartarla 😅' }); }
+});
+
+app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res) => {
+  const uid = req.session.userId;
+  const idea = db.prepare(`SELECT * FROM posty_ideas WHERE id = ? AND user_id = ? AND status = 'pending'`).get(req.params.id, uid);
+  if (!idea) return res.status(404).json({ error: 'Esa idea ya no está 😅 Actualizá y probá de nuevo' });
+  try {
+    const r = await makeIdeaDraft(uid, idea);
+    if (!r.ok) {
+      if (r.reason === 'ai_cap') return res.status(429).json({ error: costs.MSG_CAP || 'Llegamos al tope de trabajo de IA por hoy 😅' });
+      return res.status(502).json({ error: 'No pude armar el posteo ahora 😅 Probá en un rato' });
+    }
+    res.json({ ok: true, post_id: r.post_id });
+  } catch (e) {
+    console.error('[ideas-loop] make:', e.message);
+    res.status(500).json({ error: 'No pude armar el posteo ahora 😅 Probá en un rato' });
+  }
+});
+
+// Los endpoints admin del loop viven tras requireAdminToken (definido más
+// abajo, junto al resto de rutas /api/admin/*): buscar "admin/ideas/run".
 
 // ---------- Magic link (entrar sin contraseña) ----------
 // Aplica el perfil de la prueba a un usuario NUEVO, espejando lo que hoy hace
@@ -2555,6 +2876,33 @@ const requireAdminToken = (req, res, next) => {
   if (!token || req.query.token !== token) return res.status(403).json({ error: 'no autorizado' });
   next();
 };
+// 💡 Loop de ideas (v218) — admin (verificación/ops): correr el loop para
+// una cuenta y materializar una idea como borrador. Viven acá porque
+// requireAdminToken se define recién en esta zona del archivo.
+app.post('/api/admin/ideas/run', requireAdminToken, express.json(), async (req, res) => {
+  const uid = parseInt((req.body || {}).user_id, 10);
+  if (!uid) return res.status(400).json({ error: 'user_id requerido' });
+  try {
+    if ((req.body || {}).competitors !== undefined) {
+      const p = getProfile(uid);
+      const handles = ideasMod.parseCompetitorHandles(String(req.body.competitors || ''), p && p.ig_username);
+      db.prepare(`UPDATE profiles SET competitors = ?, updated_at = datetime('now') WHERE user_id = ?`)
+        .run(ideasMod.canonicalCompetitors(handles), uid);
+    }
+    const r = await runIdeasForUser(uid, { force: true });
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: String(e.message || e).slice(0, 200) }); }
+});
+app.post('/api/admin/ideas/make', requireAdminToken, express.json(), async (req, res) => {
+  const id = parseInt((req.body || {}).idea_id, 10);
+  const idea = id ? db.prepare('SELECT * FROM posty_ideas WHERE id = ?').get(id) : null;
+  if (!idea) return res.status(404).json({ error: 'idea no encontrada' });
+  if (idea.status !== 'pending') return res.status(409).json({ error: 'idea no pending: ' + idea.status });
+  try {
+    const r = await makeIdeaDraft(idea.user_id, idea);
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: String(e.message || e).slice(0, 200) }); }
+});
 function funnelUniquesPrev(name, days) {
   // Período anterior equivalente: [2*days, days] — para tendencias.
   const ids = new Set();
@@ -12247,7 +12595,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v217';
+const BUILD_ID = '20261018-v218';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -12420,4 +12768,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser };
