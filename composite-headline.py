@@ -55,6 +55,12 @@ def main():
     # inicial del auto-fit; el ajuste posterior sigue garantizando que
     # el titular entre completo. Default 1.0 = comportamiento histórico.
     ap.add_argument('--scale', type=float, default=1.0)
+    # Tinta oscura (v203, solo lo usa el demo con IA en piezas de fondo
+    # plano o gráficas): el titular se dibuja en ese color de paleta,
+    # SIN el degradado/scrim oscuro de las piezas de escena (el fondo
+    # plano tiene que quedar plano, como el feed de referencia).
+    # Default '' = comportamiento histórico (blanco con scrim).
+    ap.add_argument('--ink', default='')
     a = ap.parse_args()
 
     headline = str(a.headline or '').strip()
@@ -68,6 +74,14 @@ def main():
         except Exception:
             pass
     W, H = img.size
+
+    ink_rgb = None
+    if a.ink:
+        try:
+            from PIL import ImageColor
+            ink_rgb = ImageColor.getrgb(str(a.ink).strip())
+        except Exception:
+            ink_rgb = None
 
     if not headline:
         img.save(a.out)
@@ -105,26 +119,27 @@ def main():
     line_h = int(size * 1.2)
     text_h = line_h * len(lines)
     grad_h = top_y + text_h + int(H * 0.055)
-    zone = img.crop((0, 0, W, grad_h)).resize((1, 1))
-    lum = (0.299 * zone.getpixel((0, 0))[0] + 0.587 * zone.getpixel((0, 0))[1]
-           + 0.114 * zone.getpixel((0, 0))[2])
-    alpha_max = 80 if lum < 90 else 130 if lum < 150 else 175 if lum < 200 else 215
-    try:
-        from PIL import ImageFilter
-        soft = img.crop((0, 0, W, grad_h)).filter(ImageFilter.GaussianBlur(radius=max(6, W * 0.012)))
-        mask = Image.new('L', (1, grad_h))
+    if not ink_rgb:
+        zone = img.crop((0, 0, W, grad_h)).resize((1, 1))
+        lum = (0.299 * zone.getpixel((0, 0))[0] + 0.587 * zone.getpixel((0, 0))[1]
+               + 0.114 * zone.getpixel((0, 0))[2])
+        alpha_max = 80 if lum < 90 else 130 if lum < 150 else 175 if lum < 200 else 215
+        try:
+            from PIL import ImageFilter
+            soft = img.crop((0, 0, W, grad_h)).filter(ImageFilter.GaussianBlur(radius=max(6, W * 0.012)))
+            mask = Image.new('L', (1, grad_h))
+            for yy in range(grad_h):
+                mask.putpixel((0, yy), 255 if yy < grad_h * 0.8 else int(255 * (1 - (yy - grad_h * 0.8) / max(grad_h * 0.2, 1))))
+            mask = mask.resize((W, grad_h))
+            img.paste(soft, (0, 0), mask)
+        except Exception:
+            pass
+        overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        od = ImageDraw.Draw(overlay)
         for yy in range(grad_h):
-            mask.putpixel((0, yy), 255 if yy < grad_h * 0.8 else int(255 * (1 - (yy - grad_h * 0.8) / max(grad_h * 0.2, 1))))
-        mask = mask.resize((W, grad_h))
-        img.paste(soft, (0, 0), mask)
-    except Exception:
-        pass
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    od = ImageDraw.Draw(overlay)
-    for yy in range(grad_h):
-        alpha = int(alpha_max * (1 - yy / max(grad_h, 1)))
-        od.line([(0, yy), (W, yy)], fill=(0, 0, 0, alpha))
-    img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+            alpha = int(alpha_max * (1 - yy / max(grad_h, 1)))
+            od.line([(0, yy), (W, yy)], fill=(0, 0, 0, alpha))
+        img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
     # Sombra SUAVE: capa de texto en negro, desenfocada, apenas corrida —
     # reemplaza la sombra dura corrida (3,3) que se veía barata.
@@ -133,7 +148,7 @@ def main():
     yy = top_y + max(2, int(size * 0.045))
     for line in lines:
         lw = sd.textlength(line, font=font)
-        sd.text(((W - lw) / 2, yy), line, font=font, fill=(0, 0, 0, 165))
+        sd.text(((W - lw) / 2, yy), line, font=font, fill=(ink_rgb + (110,)) if ink_rgb else (0, 0, 0, 165))
         yy += line_h
     try:
         from PIL import ImageFilter
@@ -148,7 +163,7 @@ def main():
     for line in lines:
         lw = draw.textlength(line, font=font)
         x = (W - lw) / 2
-        draw.text((x, y), line, font=font, fill=(255, 255, 255))
+        draw.text((x, y), line, font=font, fill=ink_rgb if ink_rgb else (255, 255, 255))
         y += line_h
 
     # Barra de acento con el color primario del cliente (llega por --grade):
@@ -156,7 +171,7 @@ def main():
     if a.grade:
         try:
             from PIL import ImageColor
-            ac = ImageColor.getrgb(str(a.grade).strip())
+            ac = ink_rgb if ink_rgb else ImageColor.getrgb(str(a.grade).strip())
             bar_w = int(W * 0.14)
             bar_h = max(6, int(W * 0.009))
             bx = (W - bar_w) // 2

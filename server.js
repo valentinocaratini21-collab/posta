@@ -10775,6 +10775,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let profilePicPath = null;
     let feedRegister = null;
     let feedPhotoPaths = [];
+    let feedPalette = null; // v203: paleta completa de los últimos posteos (roles + hexes)
     if (ig && trialProfilePromise) {
       const prof = trialProfile || await Promise.race([
         trialProfilePromise,
@@ -10801,11 +10802,17 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         if (!hexOk(fields.accent) && feedPhotoPaths.length) {
           const bufs = [];
           for (const fp of feedPhotoPaths) {
-            if (bufs.length >= 3) break;
+            if (bufs.length >= 6) break; // v203: los posteos MÁS RECIENTES (hasta 6, en orden de feed)
             try { bufs.push(fs.readFileSync(fp)); } catch (e) { /* foto podada por el janitor: se sigue con las demás */ }
           }
           if (bufs.length) {
-            const feedPal = await demo.extractPaletteFromBuffers(bufs).catch(() => null);
+            // (v203) PALETA COMPLETA de los últimos posteos: principal,
+            // acento, oscuro, claro/crema y fondo dominante. Viaja en el
+            // payload (feed_palette, origen 'latest-posts') y como
+            // directiva dura en los prompts de las piezas IA. El par
+            // accent/btn de siempre se deriva de la misma extracción.
+            feedPalette = await demo.extractFeedPaletteFromBuffers(bufs).catch(() => null);
+            const feedPal = feedPalette ? { accent: feedPalette.principal, btn: feedPalette.accent } : null;
             if (feedPal && feedPal.accent) {
               accent = feedPal.accent;
               if (feedPal.btn) btn = feedPal.btn;
@@ -10909,6 +10916,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             const formula = demoAi.compositionFor(cls);
             feedFormula = formula;
             const headlineScale = formula.headline === 'large' ? 1.45 : 1;
+            // v203 (ampliación): CAPA DE TRATAMIENTOS — cada pieza IA de
+            // la semana recibe un tratamiento visual DISTINTO (FLAT
+            // STUDIO / GRAPHIC POSTER / DUO / WORKSPACE / PROP SCENE)
+            // derivado de su estilo nombrado + rotación sin repetir,
+            // para que la semana no converja a un único look. Las
+            // piezas planas/gráficas componen el titular en la tinta
+            // oscura de su paleta (poster_dark, la misma del demo).
+            const treatments = demoAi.assignTreatments(specPosts.map((sp) => ({ style: sp.style, headline: sp.headline })));
+            const inkHex = demo.demoColors(accent, btn, feedRegister).poster_dark;
             // Referencias: la foto de perfil (el personaje) + la foto del
             // feed más nítida (mayor peso = mejor proxy disponible).
             const sharpRef = demoAi.pickSharpestRef(feedPhotoPaths);
@@ -10931,9 +10947,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 const st = sp.style ? getStyleDemo(sp.style) : null;
                 if (st) prompt += '\n\n' + styleFragment(st, [accent, btn].filter(Boolean));
               } catch (e) { /* el fragmento de estilo es opcional */ }
-              prompt += '\n\n' + demoAi.compositionDirectives(cls, `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`);
+              prompt += '\n\n' + demoAi.compositionDirectives(cls, `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`, treatments[i], { palette: feedPalette, index: i });
+              const palDir = demoAi.paletteDirectives(feedPalette);
+              if (palDir) prompt += '\n\n' + palDir;
               const b64 = await genConceptImage(demoApiKey, prompt, refs, demoAi.REF_NOTE, null, 'demo-ai-image');
-              return demoAi.compositeDemoPiece({ b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale });
+              return demoAi.compositeDemoPiece({
+                b64, headline: made[i].headline, gradeHex: accent, workDir: runDir, index: i, headlineScale,
+                inkHex: (treatments[i] === 'flat' || treatments[i] === 'poster') ? inkHex : null,
+              });
             };
             const { replaced } = await demoAi.replacePiecesWithAi({
               indexes: posts.map((_, i) => i),
@@ -10952,6 +10973,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   headline: made[i].headline,
                   style: specPosts[i].style,
                   style_name: specPosts[i].style_name,
+                  treatment: treatments[i],
                   ai: true,
                 };
                 send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
@@ -11080,6 +11102,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed_register: spec.feedRegister || null,
       feed_kind: feedKind,
       feed_formula: feedFormula,
+      feed_palette: feedPalette,
       demo_ai: demoAiInfo,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
@@ -11795,7 +11818,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v202';
+const BUILD_ID = '20261018-v203';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

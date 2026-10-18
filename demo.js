@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 12;
+const DEMO_ENGINE_V = 13;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -1468,14 +1468,71 @@ function extractColorsFromBuffer(buf) {
   });
 }
 
-// ---------- Paleta HEREDADA del feed (v192) ----------
-// La semana hereda la línea visual del perfil que ya existe: se extraen los
-// colores dominantes de hasta 3 fotos del feed (con la MISMA utilidad de los
-// logos, extractColorsFromBuffer) y se combinan. El acento es el color vivo
-// que más se repite entre fotos; el botón, el color presente más distinguible
-// del acento (distancia RGB). Sin par distinguible → { accent, btn: null } o
-// null, y el llamador conserva la paleta anterior (foto de perfil o rubro).
+// Variante "rica" de la extracción, SOLO para la paleta del feed: hasta 10
+// colores por foto con la fracción de píxeles que ocupa cada uno
+// (extract_colors.py rich). El modo clásico de 2 colores queda intacto para
+// los logos. Si el script no devuelve el formato con pesos (deploy parcial),
+// resuelve [] y extractPaletteFromBuffers degrada al modo clásico.
+function extractRichColorsFromBuffer(buf) {
+  return new Promise((resolve) => {
+    if (!Buffer.isBuffer(buf) || !buf.length) return resolve([]);
+    const tmp = path.join(os.tmpdir(), `posta-feed-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.jpg`);
+    try { fs.writeFileSync(tmp, buf); } catch (e) { return resolve([]); }
+    execFile('python3', [EXTRACT_COLORS_SCRIPT, tmp, 'rich'], { timeout: 10000 }, (err, stdout) => {
+      try { fs.unlinkSync(tmp); } catch (_) {}
+      if (err) return resolve([]);
+      const out = [];
+      for (const line of String(stdout || '').split('\n')) {
+        const m = /^#([0-9A-F]{6})\s+([0-9]*\.?[0-9]+)$/.exec(line.trim());
+        if (m) out.push({ hex: '#' + m[1], w: parseFloat(m[2]) });
+      }
+      resolve(out);
+    });
+  });
+}
+
+// ---------- Paleta HEREDADA del feed (v192, criterio v202) ----------
+// La semana hereda la línea visual del perfil que ya existe. El criterio
+// viejo contaba recurrencia por HEX EXACTO entre fotos (el mismo verde de
+// marca con dos hex apenas distintos contaba como dos colores distintos) y
+// desempataba por saturación: ganaba el color más vivo de UNA foto suelta
+// (el rosa de un refresher de Starbucks, el rojo de una zapatilla de
+// Adidas). El criterio nuevo:
+//  1. Se leen hasta 10 colores por foto CON su fracción de píxeles
+//     (extractRichColorsFromBuffer) y se AGRUPAN por cercanía (distancia
+//     RGB < 48, la misma diversidad que usa extract_colors.py) ANTES de
+//     contar: la recurrencia se mide por GRUPO entre fotos, y el tono que
+//     representa al grupo es el hex exacto con más píxeles del grupo
+//     (tono real, no promedio — la misma filosofía que para los logos).
+//  2. Orden de mérito: primero en cuántas fotos aparece el grupo; la
+//     fracción total de píxeles y la saturación solo desempatan. "Aparecer"
+//     exige presencia real: >= 0,5% de los píxeles de esa foto (un logo o
+//     un detalle de 0,2% no es el color de la foto, y sin este piso los
+//     tonos residuales de un collage "aparecen" en todas las fotos y le
+//     ganan a un color que ocupa media foto en dos). El accent tiene que
+//     ser un color VIVO (saturación >= 0.25): un fondo crema repetido es
+//     fondo, no acento de marca.
+//  3. Un color de una sola foto NO es accent si existe algún grupo vivo
+//     presente en 2+ fotos. Y si NINGÚN grupo vivo se repite, solo gana
+//     uno que DOMINE el color del feed: más de la mitad del peso de
+//     todos los grupos vivos y al menos ~1/3 de foto de píxeles. Si no
+//     hay ni recurrencia ni dominancia, se devuelve null y el llamador
+//     conserva la paleta anterior (foto de perfil o rubro): el feed no
+//     tenía un color de marca claro y es más honesto no inventarlo.
+//  4. El botón es un color de acción: distinguible del accent (distancia
+//     RGB > 90), nunca un extremo casi-negro o casi-blanco (eso no es un
+//     color, es una sombra o un brillo), y preferentemente vivo de verdad
+//     (saturación >= 0.40: un tierra de fondo con 0,35 no es un CTA) con
+//     presencia real (>= 2% de píxeles del feed) y recurrente; si no hay
+//     uno así, el distinguible más recurrente/pesado, aunque sea apagado.
 // El contraste legible lo sigue garantizando demoColors/textOn, como hoy.
+const PALETTE_GROUP_DIST = 48;   // cercanía RGB para agrupar tonos
+const PALETTE_SAT_MIN = 0.25;    // saturación mínima de un color "vivo"
+const PALETTE_PRESENCE_MIN_W = 0.005; // presencia real de un grupo en una foto
+const PALETTE_DOM_SHARE = 0.5;   // cuota de dominancia sobre grupos vivos
+const PALETTE_DOM_MIN_W = 0.3;   // peso absoluto mínimo del dominante
+const PALETTE_BTN_SAT_MIN = 0.40; // saturación mínima de un botón "vivo"
+const PALETTE_BTN_MIN_W = 0.02;  // presencia mínima de un botón vivo
 function hexToRgbArr(hex) {
   const n = parseInt(String(hex).slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -1490,26 +1547,149 @@ function colorDist(a, b) {
   return Math.sqrt((A[0] - B[0]) ** 2 + (A[1] - B[1]) ** 2 + (A[2] - B[2]) ** 2);
 }
 async function extractPaletteFromBuffers(buffers) {
-  const list = (buffers || []).filter((b) => Buffer.isBuffer(b) && b.length).slice(0, 3);
+  const list = (buffers || []).filter((b) => Buffer.isBuffer(b) && b.length).slice(0, 6);
   if (!list.length) return null;
-  const freq = new Map(); // hex -> { count, photos:Set }
-  for (let i = 0; i < list.length; i++) {
-    let cols = [];
-    try { cols = await extractColorsFromBuffer(list[i]); } catch (e) { cols = []; }
-    for (const c of cols) {
-      const e = freq.get(c) || { count: 0, photos: new Set() };
-      e.count++; e.photos.add(i); freq.set(c, e);
+  // Colores por foto con su peso (fracción de píxeles). Si el modo rico no
+  // devolvió nada en NINGUNA foto, se degrada al modo clásico de 2 colores
+  // por foto con peso 1 (la recurrencia por grupo sigue funcionando).
+  let perPhoto = [];
+  for (const b of list) perPhoto.push(await extractRichColorsFromBuffer(b).catch(() => []));
+  if (perPhoto.every((cols) => !cols.length)) {
+    perPhoto = [];
+    for (const b of list) {
+      let cols = [];
+      try { cols = await extractColorsFromBuffer(b); } catch (e) { cols = []; }
+      perPhoto.push(cols.map((hex) => ({ hex, w: 1 })));
     }
   }
-  if (!freq.size) return null;
-  const scored = [...freq.entries()].map(([hex, e]) => ({
-    hex, sat: colorSat(hex),
-    score: e.photos.size * 2 + e.count + colorSat(hex) * 2,
-  }));
-  scored.sort((a, b) => b.score - a.score);
-  const accent = (scored.find((s) => s.sat >= 0.25) || scored[0]).hex;
-  const btnCand = scored.find((s) => s.hex !== accent && colorDist(s.hex, accent) > 90);
-  return { accent, btn: btnCand ? btnCand.hex : null };
+  // Agrupar por cercanía ANTES de contar recurrencia: cada color entra al
+  // primer grupo cuyo tono representativo esté a < 48 RGB; si no hay, abre
+  // grupo nuevo. El representativo es el hex exacto con más peso del grupo.
+  const groups = []; // { hexW: Map(hex->peso), pesoFoto: Map(foto->peso), peso }
+  const repOf = (g) => [...g.hexW.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  // Presencia real del grupo: en cuántas fotos pesa >= PALETTE_PRESENCE_MIN_W.
+  const fotosDe = (g) => [...g.pesoFoto.values()].filter((w) => w >= PALETTE_PRESENCE_MIN_W).length;
+  const flat = [];
+  perPhoto.forEach((cols, i) => cols.forEach((c) => flat.push({ hex: c.hex, w: c.w, photo: i })));
+  flat.sort((a, b) => b.w - a.w);
+  for (const c of flat) {
+    let g = null;
+    for (const cand of groups) {
+      if (colorDist(c.hex, repOf(cand)) < PALETTE_GROUP_DIST) { g = cand; break; }
+    }
+    if (!g) { g = { hexW: new Map(), pesoFoto: new Map(), peso: 0 }; groups.push(g); }
+    g.hexW.set(c.hex, (g.hexW.get(c.hex) || 0) + c.w);
+    g.pesoFoto.set(c.photo, (g.pesoFoto.get(c.photo) || 0) + c.w);
+    g.peso += c.w;
+  }
+  if (!groups.length) return null;
+  // Mérito: recurrencia entre fotos → peso total → saturación.
+  const byMerit = (a, b) =>
+    (fotosDe(b) - fotosDe(a)) || (b.peso - a.peso) || (colorSat(repOf(b)) - colorSat(repOf(a)));
+  const vivos = groups.filter((g) => colorSat(repOf(g)) >= PALETTE_SAT_MIN);
+  if (!vivos.length) return null;
+  let accentG = vivos.filter((g) => fotosDe(g) >= 2).sort(byMerit)[0] || null;
+  if (!accentG) {
+    // Sin recurrencia: solo un dominante claro del color vivo del feed.
+    const totalVivos = vivos.reduce((s, g) => s + g.peso, 0);
+    accentG = vivos
+      .filter((g) => g.peso >= PALETTE_DOM_MIN_W && totalVivos > 0 && g.peso / totalVivos > PALETTE_DOM_SHARE)
+      .sort(byMerit)[0] || null;
+  }
+  if (!accentG) return null; // el feed no tiene color de marca claro: fallback del llamador
+  const accent = repOf(accentG);
+  // Botón: distinguible del accent y jamás un extremo (casi-negro o
+  // casi-blanco, con el mismo criterio con que extract_colors.py ignora
+  // esos píxeles). Se prefiere un color de acción de verdad: vivo
+  // (sat >= PALETTE_BTN_SAT_MIN) con presencia (peso >= PALETTE_BTN_MIN_W).
+  const esExtremo = (hex) => {
+    const [r, g, b] = hexToRgbArr(hex);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    return mx < 60 || (mx > 242 && mn > 225);
+  };
+  const distinguibles = groups
+    .filter((g) => g !== accentG && !esExtremo(repOf(g)) && colorDist(repOf(g), accent) > 90)
+    .sort(byMerit);
+  const btnG = distinguibles.find((g) => colorSat(repOf(g)) >= PALETTE_BTN_SAT_MIN && g.peso >= PALETTE_BTN_MIN_W)
+    || distinguibles[0] || null;
+  return { accent, btn: btnG ? repOf(btnG) : null };
+}
+
+// ---------- Paleta COMPLETA de los últimos posteos (v203) ----------
+// Sobre extractPaletteFromBuffers (accent/btn), esta variante devuelve
+// el SET COMPLETO de roles desde los posteos MÁS RECIENTES del feed
+// (hasta 6 buffers, en orden de feed): principal, acento, oscuro,
+// claro/crema y fondo dominante. Es la fuente de la directiva dura de
+// paleta del demo con IA: los fondos de las piezas salen de ESTOS hex,
+// no de colores que el modelo inventa. Los grupos se forman con la
+// misma agrupación por cercanía que la paleta base. oscuro/claro salen
+// de los grupos reales del feed cuando tienen presencia; si no, se
+// derivan del principal preservando el tono (misma matemática que
+// posterBgFor/posterBgLightFor: bajar o subir luminancia).
+function lumOfHex(hex) {
+  const [r, g, b] = hexToRgbArr(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+function hexToLum(hex, target) {
+  let [r, g, b] = hexToRgbArr(hex);
+  const L = lumOfHex(hex) || 1;
+  if (Math.abs(L - target) < 0.01) return String(hex).toUpperCase();
+  if (L > target) {
+    const s = target / L;
+    r = Math.round(r * s); g = Math.round(g * s); b = Math.round(b * s);
+  } else {
+    const t = (target - L) / (1 - L);
+    const mix = (c) => Math.round(c + (255 - c) * t);
+    r = mix(r); g = mix(g); b = mix(b);
+  }
+  return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+async function extractFeedPaletteFromBuffers(buffers) {
+  const list = (buffers || []).filter((b) => Buffer.isBuffer(b) && b.length).slice(0, 6);
+  if (!list.length) return null;
+  const base = await extractPaletteFromBuffers(list).catch(() => null);
+  if (!base || !base.accent) return null; // sin color de marca claro no se fuerza paleta
+  let perPhoto = [];
+  for (const b of list) perPhoto.push(await extractRichColorsFromBuffer(b).catch(() => []));
+  if (perPhoto.every((cols) => !cols.length)) {
+    perPhoto = [];
+    for (const b of list) {
+      let cols = [];
+      try { cols = await extractColorsFromBuffer(b); } catch (e) { cols = []; }
+      perPhoto.push(cols.map((hex) => ({ hex, w: 1 })));
+    }
+  }
+  const groups = [];
+  const repOf = (g) => [...g.hexW.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const flat = [];
+  perPhoto.forEach((cols, i) => cols.forEach((c) => flat.push({ hex: c.hex, w: c.w, photo: i })));
+  flat.sort((a, b) => b.w - a.w);
+  for (const c of flat) {
+    let g = null;
+    for (const cand of groups) {
+      if (colorDist(c.hex, repOf(cand)) < PALETTE_GROUP_DIST) { g = cand; break; }
+    }
+    if (!g) { g = { hexW: new Map(), fotos: new Set(), peso: 0 }; groups.push(g); }
+    g.hexW.set(c.hex, (g.hexW.get(c.hex) || 0) + c.w);
+    g.fotos.add(c.photo);
+    g.peso += c.w;
+  }
+  const principal = base.accent;
+  const acento = base.btn || null;
+  let bg = null, dark = null, light = null;
+  if (groups.length) {
+    const byPeso = [...groups].sort((a, b) => b.peso - a.peso);
+    bg = repOf(byPeso[0]); // fondo dominante: el grupo con más píxeles del feed reciente
+    const darkG = byPeso.find((g) => lumOfHex(repOf(g)) <= 0.30);
+    if (darkG) dark = hexToLum(repOf(darkG), Math.min(0.22, lumOfHex(repOf(darkG))));
+    const lightG = byPeso.find((g) => lumOfHex(repOf(g)) >= 0.70);
+    if (lightG) light = hexToLum(repOf(lightG), Math.max(0.86, lumOfHex(repOf(lightG))));
+  }
+  if (!dark) dark = posterBgFor(principal, acento || principal);
+  if (!light) light = posterBgLightFor(principal, acento || principal);
+  if (!bg) bg = light;
+  const hexes = [...new Set([principal, acento, dark, light, bg].filter(Boolean))];
+  return { principal, accent: acento, dark, light, bg, hexes, source: 'latest-posts' };
 }
 
 // ---------- (v197) REGISTRO LUMÍNICO heredado del feed ----------
@@ -1755,6 +1935,7 @@ module.exports = {
   trialPhotoOptions,
   extractColorsFromBuffer,
   extractPaletteFromBuffers,
+  extractFeedPaletteFromBuffers,
   feedLuminanceFromBuffers,
   demoColors,
   posterBgLightFor,

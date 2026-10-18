@@ -19,6 +19,19 @@
 //      mapa tema→objeto-concepto acierta los temas del feed, y las
 //      directivas duras (60-70%, fondo simple, tercio superior) quedan
 //      en el prompt ensamblado de cada pieza.
+//  (g) v203: "carruseles" = carrusel de Instagram (fotos), NUNCA una
+//      calesita: el prompt ensamblado trae la definición + los negativos
+//      duros anti merry-go-round.
+//  (h) v203 (ampliación): CAPA DE TRATAMIENTOS — cada pieza de la
+//      semana recibe un tratamiento visual distinto (flat/poster/duo/
+//      workspace/prop), derivado del estilo nombrado + rotación
+//      determinística sin repetir; los 5 prompts ensamblados se
+//      distinguen entre sí y el composite acepta tinta oscura.
+//  (i) v203 (ampliación 2): PALETA DE LOS ÚLTIMOS POSTEOS — la
+//      extracción sobre fotos sintéticas de colores conocidos devuelve
+//      los roles completos (principal, acento, oscuro, claro, fondo
+//      dominante) DESDE esas fotos, y los prompts ensamblados (la
+//      directiva dura + el FLAT con su hex rotado) contienen los hex.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -30,6 +43,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-demoai-'));
 process.env.DATA_DIR = TMP;
 
 const demoAi = require('./demo-ai');
+const demo = require('./demo');
 const costs = require('./costs');
 
 let fails = 0;
@@ -275,6 +289,136 @@ const llmJson = (content, usage) => ({
       gradeHex: '#1386C7', workDir: TMP, index: 7, headlineScale: 1.45,
     });
     ok(Buffer.isBuffer(bufBig) && bufBig[0] === 0xFF && bufBig[1] === 0xD8, 'composite con --scale devuelve JPEG válido');
+  }
+
+  // ---------- (g) carruseles ≠ calesita (v203) ----------
+  console.log('— carrusel de Instagram, no calesita (v203)');
+  {
+    const concepto = demoAi.conceptObjectFor('Carruseles que enganchan') || '';
+    ok(/Instagram photo carousel/i.test(concepto), 'el concepto define "carrusel" como carrusel de Instagram');
+    ok(/printed PHOTOS/i.test(concepto) && /photo cards/i.test(concepto), 'el concepto son fotos impresas / tarjetas de fotos');
+    ok(/smartphone/i.test(concepto) && /swipeable stack of photos/i.test(concepto), 'alternativa válida: celular con pila de fotos deslizable');
+    ok(/NEVER a merry-go-round/i.test(concepto), 'negativo duro: nunca merry-go-round');
+    ok(/NEVER a fairground carousel/i.test(concepto) && /no amusement park/i.test(concepto) && /no horses/i.test(concepto),
+      'negativos duros: sin feria, sin parque de diversiones, sin caballos');
+
+    // El prompt ensamblado (las directivas que se agregan al final de cada
+    // pieza IA) lleva definición + negativos para el tema carruseles.
+    const dirCar = demoAi.compositionDirectives({ formula: { character_scale: 0.68, background: 'soft', headline: 'large' } }, 'Carruseles que enganchan');
+    ok(/Instagram photo carousel/i.test(dirCar) && /printed PHOTOS/i.test(dirCar),
+      'el prompt ensamblado de carruseles trae el concepto de fotos');
+    ok(/NEVER a merry-go-round/i.test(dirCar) && /no horses/i.test(dirCar),
+      'el prompt ensamblado de carruseles trae el negativo anti-calesita');
+  }
+
+  // ---------- (h) capa de tratamientos visibles (v203) ----------
+  console.log('— capa de tratamientos (v203)');
+  {
+    // Mapeo familia de estilo → tratamiento
+    ok(demoAi.treatmentForStyle('/minimal') === 'flat', 'estilo minimal → FLAT STUDIO');
+    ok(demoAi.treatmentForStyle('/editorial-poster') === 'poster', 'estilo editorial → GRAPHIC POSTER');
+    ok(demoAi.treatmentForStyle('/ugc-unboxing') === 'duo', 'estilo UGC → DUO');
+    ok(demoAi.treatmentForStyle('/prof-escritoriominimal') === 'workspace', 'estilo escritorio → WORKSPACE');
+    ok(demoAi.treatmentForStyle('/foto-corporativo') === 'prop', 'estilo foto → PROP SCENE');
+    ok(demoAi.treatmentForStyle('/xyz-nada') === null, 'estilo sin familia → null (lo completa la rotación)');
+    ok(demoAi.treatmentForStyle('') === null, 'sin estilo → null');
+
+    // Asignación de la semana: 5 piezas → 5 tratamientos, sin repetir
+    const semana = [
+      { style: '/minimal', headline: 'Comunidad que responde' },
+      { style: '/foto-corporativo', headline: 'Carruseles que enganchan' },
+      { style: '/xyz-1', headline: 'Los horarios que más rinden' },
+      { style: '/xyz-2', headline: 'Tu mes de contenido, resuelto' },
+      { style: '/xyz-3', headline: 'Auditoría de tu Instagram' },
+    ];
+    const asig = demoAi.assignTreatments(semana);
+    ok(asig.length === 5 && new Set(asig).size === 5, 'la semana recibe 5 tratamientos SIN repetir');
+    ok(asig[0] === 'flat' && asig[1] === 'prop', 'los tratamientos derivados del estilo se respetan');
+    ok(JSON.stringify(demoAi.assignTreatments(semana)) === JSON.stringify(asig), 'la asignación es determinística');
+    ok(asig.filter((x) => x === 'prop').length <= 1, 'PROP SCENE queda en ≤1 por semana');
+    const sinEstilos = demoAi.assignTreatments([{ headline: 'a' }, { headline: 'b' }, { headline: 'c' }, { headline: 'd' }, { headline: 'e' }]);
+    ok(new Set(sinEstilos).size === 5, 'sin estilos mapeables, la rotación igual entrega 5 distintos');
+
+    // Los 5 prompts ensamblados de la semana se distinguen
+    const clsT = { formula: { character_scale: 0.68, background: 'soft', headline: 'large' } };
+    const dirs = semana.map((p, i) => demoAi.compositionDirectives(clsT, p.headline, asig[i]));
+    ok(dirs.every((d, i) => d.includes('TREATMENT: ' + demoAi.TREATMENT_NAMES[asig[i]])), 'cada prompt nombra su tratamiento');
+    ok(new Set(dirs).size === 5, 'los 5 prompts ensamblados son distinguibles entre sí');
+    const porTrat = {};
+    asig.forEach((t, i) => { porTrat[t] = dirs[i]; });
+    ok(/FLAT SOLID COLOR/.test(porTrat.flat) && /70-80%/.test(porTrat.flat), 'FLAT: fondo pleno + personaje al 70-80%');
+    ok(/GRAPHIC POSTER/.test(porTrat.poster) && /medallion/i.test(porTrat.poster) && /25%/.test(porTrat.poster), 'POSTER: diseño gráfico, personaje chico en medallón (≤25%)');
+    ok(/ONE human person/.test(porTrat.duo), 'DUO: el personaje interactúa con una persona de su rubro');
+    ok(/MEDIUM SHOT/.test(porTrat.workspace) && /50%/.test(porTrat.workspace), 'WORKSPACE: plano medio (~50%) con su herramienta');
+    ok(/60-70%/.test(porTrat.prop), 'PROP: la fórmula v202 (60-70% + objeto-concepto)');
+
+    // El concepto anti-calesita viaja en TODOS los tratamientos
+    for (const t of demoAi.TREATMENT_ORDER) {
+      const d = demoAi.compositionDirectives(clsT, 'Carruseles que enganchan', t);
+      ok(/Instagram photo carousel/i.test(d) && /NEVER a merry-go-round/i.test(d),
+        `carruseles con tratamiento ${t}: concepto de fotos + negativo anti-calesita`);
+    }
+
+    // Composite con tinta oscura: JPEG válido y distinto al de escena
+    const rawPng3 = path.join(TMP, 'raw3.png');
+    execFileSync('python3', ['-c',
+      'import sys\nfrom PIL import Image\nImage.new("RGB", (1024, 1280), (250, 230, 170)).save(sys.argv[1], "PNG")\n',
+      rawPng3]);
+    const b64L = fs.readFileSync(rawPng3).toString('base64');
+    const bufScene = await demoAi.compositeDemoPiece({ b64: b64L, headline: 'Comunidad que responde', gradeHex: '#F9C00E', workDir: TMP, index: 21 });
+    const bufInk = await demoAi.compositeDemoPiece({ b64: b64L, headline: 'Comunidad que responde', gradeHex: '#F9C00E', workDir: TMP, index: 22, inkHex: '#0A1E33' });
+    ok(Buffer.isBuffer(bufInk) && bufInk[0] === 0xFF && bufInk[1] === 0xD8, 'composite con --ink devuelve JPEG válido');
+    ok(Buffer.isBuffer(bufScene) && !bufScene.equals(bufInk), 'la tinta oscura produce una pieza distinta a la de escena (sin scrim)');
+  }
+
+  // ---------- (i) paleta de los últimos posteos (v203) ----------
+  console.log('— paleta de los últimos posteos (v203)');
+  {
+    const hexDist = (a, b) => {
+      const A = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+      const B = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+      return Math.sqrt((A[0] - B[0]) ** 2 + (A[1] - B[1]) ** 2 + (A[2] - B[2]) ** 2);
+    };
+    const lumOf = (hex) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    };
+    // Tres posteos sintéticos de colores conocidos (orden de feed):
+    // amarillo pleno · mitad celeste / mitad amarillo · crema con navy.
+    const mk = (name, script) => {
+      const p = path.join(TMP, name);
+      execFileSync('python3', ['-c', script, p]);
+      return fs.readFileSync(p);
+    };
+    const postA = mk('pal-a.jpg', 'import sys\nfrom PIL import Image\nImage.new("RGB", (200, 250), (249, 192, 14)).save(sys.argv[1], "JPEG", quality=92)\n');
+    const postB = mk('pal-b.jpg', 'import sys\nfrom PIL import Image\nim = Image.new("RGB", (200, 250), (19, 134, 199))\nim.paste(Image.new("RGB", (200, 125), (249, 192, 14)), (0, 125))\nim.save(sys.argv[1], "JPEG", quality=92)\n');
+    const postC = mk('pal-c.jpg', 'import sys\nfrom PIL import Image\nim = Image.new("RGB", (200, 250), (247, 232, 176))\nim.paste(Image.new("RGB", (200, 50), (10, 30, 51)), (0, 200))\nim.save(sys.argv[1], "JPEG", quality=92)\n');
+
+    const pal = await demo.extractFeedPaletteFromBuffers([postA, postB, postC]);
+    ok(pal && pal.source === 'latest-posts', 'la paleta se extrae y declara origen latest-posts');
+    ok(pal && hexDist(pal.principal, '#F9C00E') < 60, `principal = el amarillo de los posteos (dio ${pal && pal.principal})`);
+    ok(pal && pal.accent && hexDist(pal.accent, '#1386C7') < 60, `acento = el celeste de los posteos (dio ${pal && pal.accent})`);
+    ok(pal && hexDist(pal.bg, '#F9C00E') < 60, 'fondo dominante = el color con más píxeles del feed reciente');
+    ok(pal && hexDist(pal.dark, '#0A1E33') < 70 && lumOf(pal.dark) <= 0.25, `oscuro = el navy de los posteos (dio ${pal && pal.dark})`);
+    ok(pal && lumOf(pal.light) >= 0.78, `claro/crema luminoso desde los posteos (dio ${pal && pal.light})`);
+    ok(pal && [pal.principal, pal.accent, pal.dark, pal.light, pal.bg].every((hx) => pal.hexes.includes(hx)),
+      'hexes[] reúne los cinco roles');
+
+    // La directiva dura nombra TODOS los hex en el prompt
+    const dirPal = demoAi.paletteDirectives(pal);
+    ok(dirPal && /LATEST Instagram posts/.test(dirPal), 'la directiva declara la paleta de los últimos posteos');
+    ok(dirPal && [pal.principal, pal.accent, pal.dark, pal.light, pal.bg].every((hx) => dirPal.includes(hx)),
+      'el prompt ensamblado contiene los hex exactos de la paleta');
+    ok(demoAi.paletteDirectives(null) === null, 'sin paleta no hay directiva (comportamiento anterior)');
+
+    // FLAT STUDIO compone sobre el hex rotado de SU paleta
+    ok(demoAi.flatBgHexFor(pal, 0) === pal.light && demoAi.flatBgHexFor(pal, 1) === pal.accent && demoAi.flatBgHexFor(pal, 2) === pal.dark,
+      'el fondo FLAT rota claro → acento → oscuro de su paleta');
+    const clsP = { formula: { character_scale: 0.68, background: 'soft', headline: 'large' } };
+    const dirFlat = demoAi.compositionDirectives(clsP, 'Comunidad que responde', 'flat', { palette: pal, index: 1 });
+    ok(dirFlat.includes('exactly ' + pal.accent), 'la directiva FLAT nombra el hex exacto que le toca a la pieza');
+    const dirFlatSin = demoAi.compositionDirectives(clsP, 'Comunidad que responde', 'flat');
+    ok(!/exactly #/.test(dirFlatSin), 'sin paleta, el FLAT no inventa ningún hex');
   }
 
   console.log(fails ? `\n✗ test-demo-ai: ${fails} fallas` : '\nTODO OK — test-demo-ai');

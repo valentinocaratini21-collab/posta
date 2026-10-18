@@ -193,7 +193,14 @@ function compositionFor(cls) {
 // o null si el tema no mapea (la directiva genérica cubre el resto).
 const CONCEPT_OBJECTS = [
   [/horario|hora|reloj|cu[aá]ndo|momento|puntual/i, 'one GIANT round wall clock, oversized, right beside the character'],
-  [/carrusel|cartas|tarjetas|fotos|galer[ií]a|[aá]lbum/i, 'a big fanned set of oversized photo cards held up by the character'],
+  // v203: "carrusel" es polisémica — gpt-image la leyó literal (calesita de
+  // plaza) pese a que la frase vieja ya decía "photo cards". La entrada ahora
+  // DEFINE el término (carrusel de Instagram = fotos) y trae negativos duros.
+  // Auditoría del resto del mapa (misma corrida): horarios→reloj, sorteo→regalo,
+  // comunidad→burbujas, auditoría→lupa/gráfico, contenido→tablet, turnos→calendario,
+  // ventas→etiqueta de precio, festejo→confeti/globo — sin lectura literal
+  // peligrosa; no se tocaron.
+  [/carrusel|cartas|tarjetas|fotos|galer[ií]a|[aá]lbum/i, 'an Instagram photo carousel: the character proudly holding a fanned-out set of printed PHOTOS / photo cards (or a smartphone showing a swipeable stack of photos). NEVER a merry-go-round, NEVER a fairground carousel, no amusement park, no horses'],
   [/sorte|regalo|premio|meg[aá]fono|particip/i, 'one BIG gift box with a ribbon, oversized, beside the character'],
   [/auditor[ií]a|lupa|gr[aá]fico|crecimiento|analiz|revis/i, 'one oversized magnifying glass over a large rising bar-chart board'],
   [/comunidad|responde|mensaje|comentario|chat|seguidores/i, 'a few LARGE friendly chat speech bubbles floating big beside the character'],
@@ -208,26 +215,183 @@ function conceptObjectFor(text) {
   return null;
 }
 
+// ---------- Capa de tratamientos visibles (v203, ampliación) ----------
+// En el camino IA cada posteo ya tenía un ESTILO nombrado distinto, pero
+// la línea visual + la fórmula dominaban el prompt y los píxeles
+// convergían (personaje centrado + ambiente claro + objeto, siempre
+// igual — lo vio Valentino: "siempre usás el mismo estilo"). Encima de
+// la fórmula, cada pieza de la semana recibe ahora UN TRATAMIENTO visual
+// a nivel prompt, mutuamente muy distinto, y la semana nunca repite:
+//   flat      FLAT STUDIO   fondo pleno de paleta, personaje enorme, cero ambiente
+//   poster    GRAPHIC POSTER pieza gráfica/tipográfica, personaje chico/medallón
+//   duo       DUO           personaje interactuando con una persona de su rubro
+//   workspace WORKSPACE     plano medio trabajando con su herramienta
+//   prop      PROP SCENE    la fórmula v202 (ambiente suave + objeto gigante)
+const TREATMENT_ORDER = ['flat', 'poster', 'duo', 'workspace', 'prop'];
+const TREATMENT_NAMES = {
+  flat: 'FLAT STUDIO',
+  poster: 'GRAPHIC POSTER',
+  duo: 'DUO',
+  workspace: 'WORKSPACE',
+  prop: 'PROP SCENE',
+};
+
+// Familias del pool de estilos → tratamiento, cuando el mapeo es
+// razonable. Lo que no mapea devuelve null y lo completa la rotación.
+function treatmentForStyle(style) {
+  const s = String(style || '').toLowerCase();
+  if (!s) return null;
+  if (/poster|editorial|graphic|gr[aá]fic|collage|magazine|revista|pop/.test(s)) return 'poster';
+  if (/duo|ugc|person|gente|cliente|testimon|equipo|team|pareja/.test(s)) return 'duo';
+  if (/workspace|desk|escritorio|oficina|office|laptop|notebook|trabaj/.test(s)) return 'workspace';
+  if (/flat|plano|minimal|studio|estudio|s[oó]lido|solid|bold/.test(s)) return 'flat';
+  if (/scene|escena|foto|photo|producto|product|lifestyle|hero|corporativo/.test(s)) return 'prop';
+  return null;
+}
+
+// Asignación de la semana: 1) el tratamiento que deriva del estilo
+// nombrado de cada posteo (sin repetir); 2) los huecos se completan por
+// rotación determinística sobre los tratamientos libres (el offset sale
+// de un hash de estilos+titulares: misma semana → misma asignación,
+// semanas distintas rotan distinto). Nunca repite un tratamiento ya
+// usado mientras queden libres — con 5 piezas y 5 tratamientos, la
+// semana sale con los 5, y PROP SCENE queda en ≤1 (su tope era 1-2).
+function assignTreatments(items) {
+  const list = Array.isArray(items) ? items : [];
+  const used = new Set();
+  const out = new Array(list.length).fill(null);
+  list.forEach((it, i) => {
+    const t = treatmentForStyle(it && it.style);
+    if (t && !used.has(t)) { out[i] = t; used.add(t); }
+  });
+  let h = 0;
+  const seed = list.map((it) => String((it && it.style) || '') + '|' + String((it && it.headline) || '')).join('~');
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  const rest = TREATMENT_ORDER.filter((t) => !used.has(t));
+  let k = rest.length ? h % rest.length : 0;
+  list.forEach((it, i) => {
+    if (!out[i]) {
+      if (rest.length) { out[i] = rest[k % rest.length]; used.add(out[i]); k++; }
+      else out[i] = 'prop';
+    }
+  });
+  return out;
+}
+
+// ---------- Directiva dura de paleta (v203) ----------
+// Hasta v194 la paleta del feed solo teñía detalles (grade del titular,
+// botones): las escenas IA inventaban sus propios fondos. Ahora los hex
+// EXACTOS de los últimos posteos viajan como regla dura en el prompt de
+// cada pieza: fondos, superficies planas y elementos de escena se
+// construyen con ESTOS colores (o tintes directos de ellos).
+function paletteDirectives(palette) {
+  if (!palette || !palette.principal) return null;
+  const line = (label, hex) => (hex ? `- ${label}: ${hex}` : null);
+  return [
+    'BRAND PALETTE — HARD RULE (these exact hex colors were extracted from the client\'s LATEST Instagram posts; they ARE the brand — do not invent other colors):',
+    line('Main brand color', palette.principal),
+    line('Accent color', palette.accent),
+    line('Dark color', palette.dark),
+    line('Light / cream color', palette.light),
+    line('Dominant background color of the recent feed', palette.bg),
+    'Every background, wall, floor, desk, flat surface, shape, prop and clothing color in this image MUST be one of these hex colors or a direct tint/shade of them. No unrelated hues: no invented greens, purples, oranges, pinks or generic pastels outside this palette. (Natural skin and hair tones of people are the only exception.)',
+  ].filter(Boolean).join('\n');
+}
+
+// Hex de fondo de la pieza FLAT STUDIO: rota determinísticamente entre
+// el claro, el acento y el oscuro de la paleta reciente (por índice de
+// pieza) — nunca un color ajeno a sus posteos.
+function flatBgHexFor(palette, index) {
+  if (!palette) return null;
+  const cands = [palette.light, palette.accent, palette.dark].filter(Boolean);
+  if (!cands.length) return null;
+  return cands[Math.abs(parseInt(index, 10) || 0) % cands.length];
+}
+
 // Restricciones DURAS de composición que se agregan al prompt ya
 // ensamblado de cada pieza IA (después del brief y del fragmento de
-// estilo): es la traducción operativa de la fórmula del feed.
-function compositionDirectives(cls, topicText) {
+// estilo): es la traducción operativa de la fórmula del feed, modulada
+// por el TRATAMIENTO de la pieza (v203). Sin tratamiento explícito =
+// PROP SCENE, el comportamiento v202. opts.palette/opts.index (v203):
+// la pieza FLAT compone sobre el hex exacto rotado de la paleta.
+function compositionDirectives(cls, topicText, treatment, opts) {
   const f = compositionFor(cls);
   const concept = conceptObjectFor(topicText);
+  const t = TREATMENT_ORDER.includes(treatment) ? treatment : 'prop';
+  const bgSoft = 'Background: a VERY soft, blurred, simple interior wash in the brand palette — out of focus, almost abstract. FORBIDDEN: detailed busy offices, big window walls, cluttered desks, shelves full of objects, city skylines.';
   const bg = f.background === 'plain'
     ? 'Background: ONE flat solid color from the brand palette (or a very subtle two-tone gradient of it). No environment, no room, no props behind the character.'
-    : 'Background: a VERY soft, blurred, simple interior wash in the brand palette — out of focus, almost abstract. FORBIDDEN: detailed busy offices, big window walls, cluttered desks, shelves full of objects, city skylines.';
-  const lines = [
-    'COMPOSITION — NON-NEGOTIABLE (this feed\'s formula):',
+    : bgSoft;
+  const topClean = '- Keep the TOP THIRD of the frame completely clean, plain and uncluttered (only the simple background) — a bold headline is composited there afterwards. No object, window, shelf or face may enter the top third.';
+  const marker = `TREATMENT: ${TREATMENT_NAMES[t]}.`;
+  const head = 'COMPOSITION — NON-NEGOTIABLE (this feed\'s formula):';
+  if (t === 'flat') {
+    const flatHex = opts && opts.palette ? flatBgHexFor(opts.palette, opts.index) : null;
+    return [
+      marker,
+      head,
+      flatHex
+        ? `- Background: ONE single FLAT SOLID COLOR filling the ENTIRE frame — exactly ${flatHex}, taken from the client's latest-posts palette. ZERO environment: no room, no windows, no furniture, no floor, no sky, no cast shadows — that exact flat color only, like a brand poster.`
+        : '- Background: ONE single FLAT SOLID COLOR from the brand palette filling the ENTIRE frame. ZERO environment: no room, no windows, no furniture, no floor, no sky, no cast shadows — flat color only, like a brand poster.',
+      '- The character is ENORMOUS: bold close-up in the foreground, occupying 70-80% of the frame height, centered, iconic and instantly readable at thumbnail size.',
+      concept
+        ? `- One single bold prop, big and simple, held by or beside the character: ${concept}. Nothing else in the frame.`
+        : '- No props and no secondary elements: the character alone against the flat color.',
+      '- The top of the frame is the same flat color, completely clean — a bold headline is composited there afterwards.',
+      '- Instant read: character + flat color + at most one prop — nothing more.',
+    ].join('\n');
+  }
+  if (t === 'poster') {
+    return [
+      marker + ' This piece is a flat GRAPHIC DESIGN — an explicit exception to the big-protagonist scene rule.',
+      head,
+      '- A bold FLAT GRAPHIC composition: large flat shapes, bands, circles and blocks in the brand palette over a flat background. NOT a scene: no environment, no room, no perspective, no realistic setting.',
+      '- The character appears SMALL, as a signature: tucked in a corner or inside a clean circular medallion, at most 25% of the frame height.',
+      concept
+        ? `- The post's concept is ONE simple flat graphic motif, huge and clean, drawn as flat vector-style design (not a realistic object inside a scene): ${concept}.`
+        : '- The post\'s concept is ONE simple flat graphic motif, huge and clean, drawn as flat vector-style design.',
+      '- Leave the top 30% of the frame as clean flat design space — a bold headline is composited there afterwards.',
+      '- Instant read: a designed poster, not a picture of a place.',
+    ].join('\n');
+  }
+  if (t === 'duo') {
+    return [
+      marker,
+      head,
+      '- A warm TWO-SHOT in the same illustration style: the character interacts with ONE human person from its trade (handing something over, explaining an idea, celebrating together). The character remains the protagonist of the pair — at least half of the combined presence, never a sidekick; the person supports and never replaces the character.',
+      '- ' + bg,
+      concept
+        ? `- Between them, ONE large simple object carries the concept: ${concept}. Nothing else competes.`
+        : '- Their interaction alone carries the concept: hands, gesture and expression. No extra props.',
+      topClean,
+      '- Instant read: the character helping someone — understood in one glance.',
+    ].join('\n');
+  }
+  if (t === 'workspace') {
+    return [
+      marker,
+      head,
+      '- MEDIUM SHOT: the character DOING its job — working with its main tool (tablet, laptop or phone) front and center, typing, drawing or presenting the screen — occupying about 50% of the frame height.',
+      '- Environment: MINIMAL — one simple desk surface and a plain soft backdrop in the brand palette. FORBIDDEN: window walls, cluttered shelves, detailed busy offices, city skylines.',
+      concept
+        ? `- On the desk, ONE single large simple object: ${concept}. Nothing else competes.`
+        : '- Only the tool and the character on the desk — nothing else.',
+      topClean,
+      '- Instant read: the character at work with its tool.',
+    ].join('\n');
+  }
+  // prop — PROP SCENE, la fórmula v202 tal cual.
+  return [
+    marker,
+    head,
     '- The character is the ABSOLUTE protagonist: CLOSE-UP in the foreground, occupying 60-70% of the frame height, centered, large and instantly readable at thumbnail size. Never a small figure lost inside a big scene.',
     '- ' + bg,
     concept
       ? `- ONE single large concept object dominates the scene with the character: ${concept}. Nothing else competes — no extra props, no secondary characters, no busy details.`
       : '- ONE single large concept object, emblematic of this post\'s theme, dominates the scene with the character. Nothing else competes — no extra props, no secondary characters, no busy details.',
-    '- Keep the TOP THIRD of the frame completely clean, plain and uncluttered (only the simple background) — a bold headline is composited there afterwards. No object, window, shelf or face may enter the top third.',
+    topClean,
     '- Instant concept read: a viewer must get the post\'s idea in one glance from the character + the one big object alone.',
-  ];
-  return lines.join('\n');
+  ].join('\n');
 }
 
 // La referencia de estilo del feed: entre las fotos localizadas, la de
@@ -285,7 +449,7 @@ async function replacePiecesWithAi({ indexes, capOk, makePiece, onPiece } = {}) 
 // La IA genera la escena LIMPIA (sin texto); el titular lo compone el
 // código con composite-headline.py — el mismo del pipeline real — y la
 // pieza final sale JPEG 1080x1350 como las de plantilla.
-function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale }) {
+function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineScale, inkHex }) {
   return new Promise((resolve) => {
     try {
       const dir = workDir || os.tmpdir();
@@ -295,6 +459,10 @@ function compositeDemoPiece({ b64, headline, gradeHex, workDir, index, headlineS
       fs.writeFileSync(raw, Buffer.from(String(b64 || ''), 'base64'));
       const args = [COMPOSITE_SCRIPT, '--in', raw, '--headline', String(headline || ''), '--out', fin];
       if (gradeHex) args.push('--grade', String(gradeHex));
+      // v203: piezas de fondo plano/gráficas (FLAT STUDIO, GRAPHIC
+      // POSTER) llevan el titular en tinta oscura de su paleta, sin el
+      // scrim oscuro de las piezas de escena.
+      if (inkHex) args.push('--ink', String(inkHex));
       // v202: si la fórmula del feed pide titulares grandes, el composite
       // usa la escala mayor (el auto-fit del script sigue garantizando
       // que el titular entre sin cortarse).
@@ -325,6 +493,12 @@ module.exports = {
   visualStyleForFeed,
   compositionFor,
   conceptObjectFor,
+  TREATMENT_ORDER,
+  TREATMENT_NAMES,
+  treatmentForStyle,
+  assignTreatments,
+  paletteDirectives,
+  flatBgHexFor,
   compositionDirectives,
   pickSharpestRef,
   REF_NOTE,
