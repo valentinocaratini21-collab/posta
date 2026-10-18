@@ -205,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261017-v189', '/api/version es v188 (build del fix de grillas)');
+    ok(ver.build === '20261017-v191', '/api/version es v191 (build del fix de la tapa duplicada)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -312,7 +312,7 @@ function partC() {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes('20261017-v189'), 'BUILD_ID en v188');
+  ok(srv.includes('20261017-v191'), 'BUILD_ID en v191');
   // v187: proxy de miniaturas + grilla CON Posty sin repetidos.
   ok(srv.includes('localizeTrialPhotos'), 'el stream localiza las miniaturas del perfil (v187)');
   ok(srv.includes('grid_extra: gridExtra'), 'el payload lleva grid_extra (visuales únicos de la grilla)');
@@ -353,27 +353,52 @@ function partD() {
   };
   const cellCount = (layerHtml) => (layerHtml.match(/<div class="pfp-cell">/g) || []).length;
 
-  // D1: semana completa + tapa + 3 extras → 9 celdas, 9 visuales únicos.
-  api.setProj({ profile, piecesArr: mkPosts(true), extras: ['data:EX0', 'data:EX1', 'data:EX2'], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
+  // D1 (fix v191): video + tapa + 1 extra → 6 celdas, todas únicas, SIN la
+  // tapa: el reel ya se muestra como video en su celda y la tapa lo duplicaba.
+  api.setProj({ profile, piecesArr: mkPosts(true), extras: ['data:EX0'], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
   const h1 = api.layer('posty');
   const s1 = gridSrcs(h1);
-  ok(cellCount(h1) === 9, `D1: 9 celdas (hay ${cellCount(h1)})`);
-  ok(s1.length === 9 && new Set(s1).size === 9, `D1: 9 visuales y TODOS distintos (únicos: ${new Set(s1).size})`);
-  ok(s1.includes('data:COVER') && s1.includes('data:EX0') && s1.includes('data:EX2'), 'D1: están la tapa del reel y los extras');
-  ok(!s1.includes('data:IMG2'), 'D1: el diseño del reel no se duplica como imagen (sale como video + tapa)');
+  ok(cellCount(h1) === 6, `D1: video+tapa+1 extra = 6 celdas (hay ${cellCount(h1)})`);
+  ok(s1.length === 6 && new Set(s1).size === 6, `D1: los 6 visuales son únicos (únicos: ${new Set(s1).size})`);
+  ok(s1.includes('data:VID') && s1.includes('data:EX0'), 'D1: están el reel (como video) y el extra');
+  ok(!s1.includes('data:COVER'), 'D1: la tapa NO aparece (duplicaría el diseño del reel)');
 
-  // D2: sin extras → 6 celdas (2 filas), ningún repetido.
+  // D1b: video + tapa + 3 extras → hay 8 únicos; la regla <9 → 6 celdas.
+  api.setProj({ profile, piecesArr: mkPosts(true), extras: ['data:EX0', 'data:EX1', 'data:EX2'], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
+  const h1b = api.layer('posty');
+  const s1b = gridSrcs(h1b);
+  ok(cellCount(h1b) === 6 && s1b.length === 6 && new Set(s1b).size === 6, `D1b: 8 únicos disponibles → 6 celdas únicas (hay ${cellCount(h1b)})`);
+  ok(!s1b.includes('data:COVER'), 'D1b: la tapa tampoco aparece con 3 extras');
+
+  // D2 (caso v187 original, sin extras): la tapa viene en el payload pero el
+  // reel se ve como video → 5 celdas únicas, sin tapa.
   api.setProj({ profile, piecesArr: mkPosts(true), extras: [], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
   const h2 = api.layer('posty');
   const s2 = gridSrcs(h2);
-  ok(cellCount(h2) === 6, `D2: sin extras la grilla muestra 6 celdas (hay ${cellCount(h2)})`);
-  ok(s2.length === 6 && new Set(s2).size === 6, 'D2: los 6 visuales son únicos');
+  ok(cellCount(h2) === 5, `D2: sin extras la grilla muestra las 5 piezas (hay ${cellCount(h2)})`);
+  ok(s2.length === 5 && new Set(s2).size === 5, 'D2: los 5 visuales son únicos');
+  ok(!s2.includes('data:COVER'), 'D2: la tapa no duplica al reel');
 
   // D3: sin tapa ni extras (último recurso) → 5 celdas, únicos igual.
   api.setProj({ profile, piecesArr: mkPosts(false), extras: [], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
   const h3 = api.layer('posty');
   const s3 = gridSrcs(h3);
   ok(cellCount(h3) === 5 && new Set(s3).size === s3.length, `D3: último recurso = 5 celdas únicas (hay ${cellCount(h3)})`);
+
+  // D4 (fix v191): posteo video SIN media utilizable pero con tapa (payload
+  // viejo/cacheado) → la tapa ocupa SU celda, una sola vez y sin huecos.
+  const mkPostsNoMedia = () => {
+    const posts = [0, 1, 2, 3, 4].map((i) => ({ type: 'image', image: 'data:IMG' + i, style_name: 'S' + i }));
+    posts[2] = { type: 'video', style_name: 'S2', cover: 'data:COVER' };
+    return posts;
+  };
+  api.setProj({ profile, piecesArr: mkPostsNoMedia(), extras: [], mode: 'card', closed: false, min: false, pos: 50, scrolled: true });
+  const h4 = api.layer('posty');
+  const s4 = gridSrcs(h4);
+  ok(cellCount(h4) === 5, `D4: 5 celdas con la tapa en el lugar del reel (hay ${cellCount(h4)})`);
+  ok(s4.filter((u) => u === 'data:COVER').length === 1, 'D4: la tapa aparece una sola vez');
+  ok(new Set(s4).size === s4.length, 'D4: todos los visuales son únicos');
+  ok(!h4.slice(h4.indexOf('pfp-grid')).includes('pfp-cell-wait'), 'D4: la grilla no tiene huecos');
 }
 
 (async () => {

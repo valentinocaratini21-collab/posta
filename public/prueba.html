@@ -1272,19 +1272,36 @@ function projPieceMediaHTML(post, crop) {
   if (post.video) return `<video src="${post.video}" muted loop autoplay playsinline${st}></video><span class="pfp-vb">▶ REEL</span>`;
   return '';
 }
+function projPieceVisualKey(p) {
+  // Identidad del visual que una pieza muestra en su propia celda.
+  if (!p) return '';
+  return p.video || p.image || '';
+}
 function projAfterVisuals() {
-  // Visuales ÚNICOS de la grilla CON Posty (v187): las 5 piezas de la semana
-  // + la tapa del reel (cover del posteo video) + hasta 3 diseños extra que
-  // manda el server (grid_extra: temas/fotos que la semana no usó). NADA se
-  // repite — la versión anterior reciclaba piezas con otro crop y se leía
-  // como posteos repetidos. Si no hay 9 únicos, la grilla muestra 6.
+  // Visuales ÚNICOS de la grilla CON Posty. Orden de llenado (fix v191):
+  // (a) las 5 piezas de la semana — el posteo video se muestra COMO VIDEO
+  // en su celda; (b) los diseños extra del server (grid_extra: temas/fotos
+  // que la semana no usó); (c) la tapa del reel SOLO si el posteo video no
+  // mostró ningún visual utilizable (payloads viejos/cacheados sin video ni
+  // imagen): en ese caso la tapa ocupa SU celda, nunca una extra — con el
+  // video visible, la tapa es el mismo diseño y se leía como repetido.
+  // Garantía por identidad: ningún visual (misma URL/data) aparece dos
+  // veces; si no hay 9 únicos la grilla muestra 6, y si hay menos de 5,
+  // los que haya — jamás se rellena repitiendo.
   const arr = (PROJ && PROJ.piecesArr) || [];
+  const seen = new Set();
+  const claim = (k) => { if (!k || seen.has(k)) return false; seen.add(k); return true; };
   const cells = [];
-  for (let i = 0; i < 5; i++) cells.push(arr[i] ? { post: arr[i] } : null);
-  const vp = arr.find((p) => p && p.type === 'video' && p.cover);
-  if (vp) cells.push({ cover: vp.cover });
+  for (let i = 0; i < 5; i++) {
+    const p = arr[i];
+    if (!p) { cells.push(null); continue; }
+    const key = projPieceVisualKey(p);
+    if (key && claim(key)) { cells.push({ post: p }); continue; }
+    if (!key && p.cover && claim(p.cover)) { cells.push({ cover: p.cover }); continue; }
+    cells.push(null);
+  }
   const ex = (PROJ && PROJ.extras) || [];
-  for (const u of ex) { if (u && cells.length < 9) cells.push({ img: u }); }
+  for (const u of ex) { if (cells.length < 9 && claim(u)) cells.push({ img: u }); }
   return cells;
 }
 function projAfterCellHTML(i) {
@@ -1299,16 +1316,18 @@ function projLayerHTML(side) {
   const grid = side === 'hoy'
     ? Array.from({ length: 9 }, (_, i) => projHoyCellHTML((p.photos || [])[i])).join('')
     : (() => {
-        // Semana completa: 9 celdas si hay 9 visuales únicos; si no, 6
-        // (2 filas) — jamás se rellena reciclando un diseño ya mostrado.
+        // Semana completa: se renderizan SOLO las celdas con visual (sin
+        // huecos) — 9 únicos → 9 celdas; 7–8 → 6; 5–6 → esas; menos de 5 →
+        // los que haya. Jamás se rellena reciclando un diseño ya mostrado.
         const ready = (PROJ.piecesArr || []).filter(Boolean).length >= 5;
+        let idxs = null;
         let count = 9;
         if (ready) {
-          count = projAfterVisuals().filter(Boolean).length;
+          idxs = projAfterVisuals().map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+          count = idxs.length;
           if (count > 6 && count < 9) count = 6;
-          if (count < 5) count = 5;
         }
-        return Array.from({ length: count }, (_, i) => `<div class="pfp-cell">${projAfterCellHTML(i)}</div>`).join('');
+        return Array.from({ length: count }, (_, i) => `<div class="pfp-cell">${projAfterCellHTML(idxs ? idxs[i] : i)}</div>`).join('');
       })();
   return `<div class="pfp-prof">${projAvaHTML(p)}<div class="pfp-who"><b>${esc(p.name || p.handle || '')}</b><span>@${esc(p.handle || '')}</span></div></div>`
     + projStatsHTML(p)
