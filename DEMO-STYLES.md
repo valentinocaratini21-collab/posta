@@ -43,6 +43,25 @@ se materializa como tratamiento determinístico local.
 - Un estilo que **nombra un plato** (`dishOf`: hamburguesa, pizza, sushi,
   cazuela, mariscos, provoleta, milanesa, café, …) solo etiqueta posteos
   de ese plato — el nombre del estilo se imprime en la pieza.
+- **Variedad estructural (v197, `enforceSkeletonVariety`):** la
+  diversidad dejó de ser un puntaje: ninguna semana repite `style_code`
+  NI esqueleto de render NI par (esqueleto × tipo de fondo). Si el
+  estilo de una pieza colisiona, se cambia el estilo por otro del pool
+  con esqueleto libre (respetando público/platos/antes-después) o, en
+  última instancia, se reasigna el esqueleto a uno genérico libre
+  (nunca `duo` ni `poster`). El **póster de marca** (servicios/
+  contenido, v196) es UNA sola pieza posible por semana — la primera
+  de la semana principal; los extras nunca son póster — y la **foto de
+  perfil** aparece como máximo en 2 piezas con tratamientos distintos:
+  el medallón del póster y una marca suave grande (`pic_mark:
+  'watermark'`, fantasma en la esquina de una foto, bajo los textos).
+- **Registro lumínico heredado (v197):** la luminancia media de las
+  fotos del feed (`feedLuminanceFromBuffers`, mismas fotos que la
+  paleta) clasifica el registro: ≥0,55 → `light` y las piezas gráficas
+  (el póster) salen CLARAS — fondo crema/tinte claro de su paleta
+  (`posterBgLightFor`) con textos en el color oscuro de su paleta
+  (`poster_dark`); el feed de @posty.hacetodo mide ~0,62. Feed oscuro →
+  registro oscuro de siempre; sin perfil → comportamiento actual.
 - La pieza muestra el estilo con etiqueta discreta abajo a la izquierda:
   `ESTILO · {nombre}`. El `style_code` viaja en el spec y, al importar la
   semana a la cuenta, queda en `posts.style_code` y en `post_signals`
@@ -145,3 +164,8 @@ cambió.
 - `test-demo-import.js`: server real + DB temporal — import con
   style_code en posts y post_signals, motor viejo importa 0,
   extend-trial 403/200 con fecha efectiva correcta.
+- `test-demo-variety.js` (v197): 25 rubros ×60 + makeup/contenido ×60 —
+  cero style_code/esqueleto/par repetido por semana, contenido con ≥4
+  esqueletos, póster ≤1 y nunca en extras, foto de perfil ≤2 con
+  tratamientos distintos, luminancia del feed y fondos de póster por
+  registro.

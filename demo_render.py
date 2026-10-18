@@ -41,6 +41,8 @@ DEFAULT_COLORS = {
     "detail_text": "#0A1E33",  # texto sobre el acento
     "poster_bg": "#0A1E33",   # (v196) fondo pleno del póster de marca: el color
                               # oscuro de la paleta del cliente (demo.js lo deriva)
+    "poster_dark": "#0A1E33", # (v197) color oscuro de la paleta: textos del
+                              # póster cuando el registro heredado es CLARO
 }
 
 
@@ -953,12 +955,40 @@ def draw_footer(d, fonts_dir, p, dark_bg):
         ltext(d, MX, H - 56, ("ESTILO · " + name).upper(), f, fill=col, tracking=3)
 
 
+def _pic_watermark_on(img, pic_path):
+    """(v197) Marca suave grande: la foto de perfil del negocio como
+    fantasma de marca en la esquina inferior derecha de la foto. Va
+    SOBRE la foto pero BAJO scrims y textos (se aplica en la base, antes
+    de que el esqueleto dibuje): es el segundo uso posible de la foto de
+    perfil en una semana — el otro es el medallón del póster, y nunca
+    son el mismo tratamiento dos veces."""
+    try:
+        if not pic_path or not os.path.isfile(str(pic_path)):
+            return img
+        src = Image.open(str(pic_path)).convert("RGB")
+        S = 470
+        s = max(S / src.width, S / src.height)
+        src = src.resize((max(S, int(src.width * s)), max(S, int(src.height * s))), Image.LANCZOS)
+        ox = (src.width - S) // 2
+        oy = (src.height - S) // 2
+        src = src.crop((ox, oy, ox + S, oy + S)).filter(ImageFilter.GaussianBlur(0.7))
+        mask = Image.new("L", (S, S), 0)
+        ImageDraw.Draw(mask).ellipse([0, 0, S, S], fill=46)
+        mask = mask.filter(ImageFilter.GaussianBlur(8))
+        img.paste(src, (W - S - 34, H - S - 120), mask)
+    except Exception:
+        pass
+    return img
+
+
 def _v2_base(fonts_dir, p, C):
     tr = p.get("treatment") or {}
     focus = float(p.get("focus", 0.5) or 0.5)
     zoom = 1.28 if tr.get("crop") == "tight" else 1.0
     img = load_photo_v2(p["photo"], focus, zoom)
     img = apply_grade(img, tr.get("grade") or "neutral")
+    if p.get("pic_mark") == "watermark":
+        img = _pic_watermark_on(img, p.get("pic_path"))
     return img
 
 
@@ -1091,6 +1121,10 @@ def sk_poster(fonts_dir, p, C, hs):
     Sin foto de perfil utilizable → póster tipográfico con las iniciales
     del negocio en el medallón. Nada de foto de stock en esta pieza."""
     bg = C["poster_bg"]
+    # (v197) Registro heredado del feed: si el fondo que manda demo.js
+    # es CLARO (feed luminoso), el póster entero se lee en clave clara —
+    # textos navy/oscuros de la paleta sobre el tinte crema de su marca.
+    dark_bg = _lum(bg) < 0.5
     img = Image.new("RGB", (W, H), bg)
     d = ImageDraw.Draw(img)
     if p.get("pill"):
@@ -1106,12 +1140,15 @@ def sk_poster(fonts_dir, p, C, hs):
         f0 = B(fonts_dir, 30)
         while tw(d, name, f0, 6) > avail and f0.size > 17:
             f0 = B(fonts_dir, f0.size - 2)
-        ltext(d, MX + 2, 58, name, f0, fill=(0, 0, 0), tracking=6)
-        ltext(d, MX, 56, name, f0, fill=(255, 255, 255), tracking=6)
+        if dark_bg:
+            ltext(d, MX + 2, 58, name, f0, fill=(0, 0, 0), tracking=6)
+            ltext(d, MX, 56, name, f0, fill=(255, 255, 255), tracking=6)
+        else:
+            ltext(d, MX, 56, name, f0, fill=NAVY, tracking=6)
 
     # Medallón protagonista (centrado, tercio superior).
     cx, cy, r = W // 2, 402, 196
-    halo = _blend(bg, (255, 255, 255), 0.10)
+    halo = _blend(bg, (255, 255, 255), 0.10) if dark_bg else _blend(bg, NAVY, 0.05)
     d.ellipse([cx - r - 40, cy - r - 40, cx + r + 40, cy + r + 40], fill=halo)
     pic = p.get("photo")
     medallion = None
@@ -1147,14 +1184,23 @@ def sk_poster(fonts_dir, p, C, hs):
     # Anillo de marca sobre el medallón (doble: vivo + blanco fino).
     ring = C["btn"] if _lum(C["btn"]) > 0.18 else C["accent"]
     d.ellipse([cx - r - 7, cy - r - 7, cx + r + 7, cy + r + 7], outline=ring, width=13)
-    d.ellipse([cx - r - 18, cy - r - 18, cx + r + 18, cy + r + 18], outline=(255, 255, 255), width=4)
+    outer = (255, 255, 255) if dark_bg else _blend(bg, NAVY, 0.22)
+    d.ellipse([cx - r - 18, cy - r - 18, cx + r + 18, cy + r + 18], outline=outer, width=4)
 
-    # Titular enorme: el color claro de la paleta si contrasta; si no, blanco.
-    light = C["accent"] if _lum(C["accent"]) >= _lum(C["btn"]) else C["btn"]
-    head_col = light if _lum(light) >= 0.45 else (255, 255, 255)
-    rule_col = C["btn"] if head_col == C["accent"] else C["accent"]
-    if abs(_lum(rule_col) - _lum(bg)) < 0.08:
-        rule_col = head_col  # la regla no puede fundirse con el fondo
+    if dark_bg:
+        # Titular enorme: el color claro de la paleta si contrasta; si no, blanco.
+        light = C["accent"] if _lum(C["accent"]) >= _lum(C["btn"]) else C["btn"]
+        head_col = light if _lum(light) >= 0.45 else (255, 255, 255)
+        rule_col = C["btn"] if head_col == C["accent"] else C["accent"]
+        if abs(_lum(rule_col) - _lum(bg)) < 0.08:
+            rule_col = head_col  # la regla no puede fundirse con el fondo
+    else:
+        # Registro claro: titular en el color oscuro de SU paleta y la
+        # regla en el color de paleta más visible sobre claro.
+        head_col = C["poster_dark"]
+        rule_col = C["accent"] if _lum(C["accent"]) <= _lum(C["btn"]) else C["btn"]
+        if rule_col == head_col:
+            rule_col = C["btn"] if rule_col == C["accent"] else C["accent"]
     y = cy + r + 78
     d.rectangle([cx - 60, y, cx + 60, y + 10], fill=rule_col)
     y += 52
@@ -1163,14 +1209,14 @@ def sk_poster(fonts_dir, p, C, hs):
         y = ctext(d, cx, y, ln, f, head_col)
         y += int(f.size * 0.10)
     y += 16
-    sub_col = _blend(bg, (255, 255, 255), 0.78)
+    sub_col = _blend(bg, (255, 255, 255), 0.78) if dark_bg else _blend(bg, NAVY, 0.62)
     f2, slines = sub_wrap(d, fonts_dir, p.get("subline", ""), MAX_W, 42, 2)
     for ln in slines:
         y = ctext(d, cx, y, ln, f2, sub_col)
         y += 12
     y += 34
     y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=True)
-    draw_footer(d, fonts_dir, p, True)
+    draw_footer(d, fonts_dir, p, dark_bg)
     return img, y
 
 

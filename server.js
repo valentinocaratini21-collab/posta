@@ -10518,6 +10518,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       engine: demo.DEMO_ENGINE_V,
       business, ig, category,
       accent, btn, color_source: colorSource,
+      feed_register: spec.feedRegister || null,
       ig_pic: igPic, ig_name: igName,
       ideas: (await ideasPromise).slice(0, 6),
       posts,
@@ -10769,6 +10770,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // estar; si no llega, se sigue con lo que haya — la prueba no se frena.
     let bioText = '';
     let profilePicPath = null;
+    let feedRegister = null;
     if (ig && trialProfilePromise) {
       const prof = trialProfile || await Promise.race([
         trialProfilePromise,
@@ -10796,6 +10798,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               if (feedPal.btn) btn = feedPal.btn;
               colorSource = 'instagram-feed';
             }
+            // (v197) REGISTRO LUMÍNICO heredado: la luminancia media de
+            // las mismas fotos decide si las piezas gráficas de la
+            // semana salen claras u oscuras — la semana sigue la luz
+            // del feed que el visitante ya tiene, no una plantilla.
+            const feedLum = await demo.feedLuminanceFromBuffers(bufs).catch(() => null);
+            if (feedLum != null) feedRegister = feedLum >= 0.55 ? 'light' : 'dark';
           }
         }
       }
@@ -10803,7 +10811,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
 
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath });
+    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
@@ -10824,7 +10832,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const posts = new Array(n).fill(null);
     // 3) Render con streaming: cada PNG que aparece se emite como post imagen
     send('status', { step: 'diseno', text: 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
-    const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn }, async (i, buf) => {
+    const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, async (i, buf) => {
       posts[i] = {
         type: 'image',
         image: 'data:image/jpeg;base64,' + buf.toString('base64'),
@@ -10945,6 +10953,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       engine: demo.DEMO_ENGINE_V,
       business, ig, category,
       accent, btn, color_source: colorSource,
+      feed_register: spec.feedRegister || null,
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
       grid_extra: gridExtra,
@@ -11659,7 +11668,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v196';
+const BUILD_ID = '20261017-v197';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

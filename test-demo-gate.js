@@ -12,8 +12,10 @@
 //     ni forzándola como única candidata (pickPhotoGated devuelve null).
 //  2) Invariante universal: en TODAS las categorías, toda foto de stock de
 //     la semana pasa el gate para su (rubro, subrubro, tema).
-//  3) Modo póster: servicios/contenido arman 3 pósters + 2 fotos con match;
-//     el resto de los rubros no conoce pósters.
+//  3) Modo póster (acotado en v197): servicios/contenido arman 1 póster +
+//     4 fotos con match — el póster es UNA pieza de marca por semana, no
+//     la plantilla repetida ×3 de v196 ("estilos repetidos"); el resto
+//     de los rubros no conoce pósters.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -86,8 +88,8 @@ console.log('— póster de marca: la semana de un servicio de contenido');
     ok(spec.subcat === 'contenido', `posty: subcat=${spec.subcat}`);
     const posters = spec.specPosts.filter((p) => p.poster);
     const fotos = spec.specPosts.filter((p) => !p.poster);
-    ok(posters.length === 3, `posty: ${posters.length} pósters (esperaba 3)`);
-    ok(fotos.length === 2, `posty: ${fotos.length} posteos con foto (esperaba 2)`);
+    ok(posters.length === 1, `posty: ${posters.length} pósters (esperaba 1 — v197)`);
+    ok(fotos.length === 4, `posty: ${fotos.length} posteos con foto (esperaba 4)`);
     for (const p of posters) ok(p.photo === '/tmp/pic-test.jpg', 'posty: póster sin la foto de perfil como medallón');
     for (const p of fotos) ok(famOf(p.photo) !== 'lifestyle-2', 'posty: foto de playa en la semana');
     // El extra (tema 6, el sorteo) vía la misma vía que usa el servidor:
@@ -110,7 +112,7 @@ console.log('— póster de marca: la semana de un servicio de contenido');
     business: 'Estudio Jurídico Andina', category: 'profesionales',
     country: 'AR', tone: 'vos', goal: '', count: 5,
   });
-  ok(sinPic.specPosts.filter((p) => p.poster).length === 3, 'profesionales sin pic: composición de pósters');
+  ok(sinPic.specPosts.filter((p) => p.poster).length === 1, 'profesionales sin pic: 1 póster (v197)');
   ok(sinPic.specPosts.every((p) => !p.poster || p.photo === null), 'profesionales sin pic: póster con foto inesperada');
   // Un rubro de producto NO conoce pósters.
   const gastro = demo.buildDemoSpec({

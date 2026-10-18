@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 8;
+const DEMO_ENGINE_V = 9;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -577,6 +577,75 @@ function pickDemoStyles({ topics, category, subcat, business }) {
   return picks;
 }
 
+// ---------- (v197) VARIEDAD ESTRUCTURAL de la semana ----------
+// Hasta v196 una semana podía repetir ESQUELETO de render con distinto
+// titular (el caso que marcó Valentino: 3 "pósters de marca" idénticos).
+// Acá la variedad deja de ser un puntaje y pasa a ser GARANTÍA: ninguna
+// semana repite style_code (ya lo hacía pickDemoStyles) NI esqueleto de
+// render NI par (esqueleto × tipo de fondo). Si el estilo de una pieza
+// colisiona, primero se cambia el ESTILO por otro del pool sin usar cuyo
+// esqueleto natural esté libre (respetando exclusión de público, regla
+// de platos y que el antes/después solo etiqueta posteos de
+// antes/después); si el pool no da, se reasigna el esqueleto de render
+// a uno genérico libre (nunca duo ni poster: tienen semántica propia)
+// conservando grade y crop del estilo. El póster de marca cuenta como
+// esqueleto 'poster' en la misma contabilidad (máximo 1 por semana).
+const VARIETY_FALLBACK_SKELS = ['abajo', 'arriba', 'claro', 'velo', 'centro'];
+function enforceSkeletonVariety({ styleObjs, topics, category, subcat, business, posterAt }) {
+  const overrides = new Map();
+  const IS = imageStyles();
+  if (!IS) return overrides;
+  let pool = demoStylePool(category, business);
+  const excl = STYLE_AUDIENCE_EXCLUDE[subcat || category];
+  if (excl) pool = pool.filter((s) => !excl.test(s.code + ' ' + s.name));
+  const usedCodes = new Set(styleObjs.filter(Boolean).map((s) => s.code));
+  const usedSkels = new Set();
+  if (posterAt && posterAt.size) usedSkels.add('poster');
+  const wantsDuo = (t) => /antes/i.test(String((t && t.tag) || ''));
+  const skelOf = (s) => treatmentForStyle(s).skeleton;
+  const counted = new Set();
+  // Fase A: un posteo de antes/después con su estilo before reserva duo.
+  styleObjs.forEach((s, i) => {
+    if (!s || (posterAt && posterAt.has(i))) return;
+    if (wantsDuo(topics[i]) && /before/.test(s.code) && skelOf(s) === 'duo') {
+      usedSkels.add('duo');
+      counted.add(i);
+    }
+  });
+  styleObjs.forEach((s, i) => {
+    if (!s || counted.has(i) || (posterAt && posterAt.has(i))) return;
+    const t = topics[i] || {};
+    const sk = skelOf(s);
+    // Un duo sin tema de antes/después también "colisiona": sus chips
+    // ANTES/DESPUÉS mentirían en un posteo común.
+    const collision = usedSkels.has(sk) || (sk === 'duo' && !wantsDuo(t));
+    if (!collision) { usedSkels.add(sk); return; }
+    const alt = pool.find((c) => {
+      if (usedCodes.has(c.code)) return false;
+      const cs = skelOf(c);
+      if (usedSkels.has(cs)) return false;
+      if (cs === 'duo' && !wantsDuo(t)) return false;
+      const sd = dishOf(`${c.code} ${c.name}`);
+      if (sd && dishOf(`${t.headline || ''} ${t.sub || ''} ${t.tag || ''}`) !== sd) return false;
+      return true;
+    });
+    if (alt) {
+      usedCodes.delete(s.code);
+      usedCodes.add(alt.code);
+      styleObjs[i] = alt;
+      usedSkels.add(skelOf(alt));
+      return;
+    }
+    const free = VARIETY_FALLBACK_SKELS.find((x) => !usedSkels.has(x));
+    if (free) {
+      const tr = treatmentForStyle(s);
+      overrides.set(i, { skeleton: free, grade: tr.grade, crop: tr.crop });
+      usedSkels.add(free);
+    }
+  });
+  return overrides;
+}
+
 // ---------- Colores elegidos por el visitante ----------
 const DEMO_COLOR_DEFAULTS = { accent: '#2793C8', btn: '#FEC14D' };
 
@@ -613,7 +682,27 @@ function posterBgFor(accent, btn) {
   return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-function demoColors(accent, btn) {
+// (v197) El fondo CLARO del póster cuando el feed del visitante es
+// LUMINOSO: el color más claro de su paleta llevado a una luminancia
+// ~0,86 (crema/tinte de su marca, no un blanco genérico). Con la paleta
+// de Posty da un crema amarillo — el registro de su feed real.
+function posterBgLightFor(accent, btn) {
+  const lum = (h) => {
+    const v = parseInt(h.slice(1), 16);
+    return (0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255;
+  };
+  const base = lum(accent) >= lum(btn) ? accent : btn;
+  const v = parseInt(base.slice(1), 16);
+  const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+  const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const target = 0.86;
+  if (L >= target) return base.toUpperCase();
+  const t = (target - L) / (1 - L);
+  const mix = (c) => Math.round(c + (255 - c) * t);
+  return '#' + [mix(r), mix(g), mix(b)].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+function demoColors(accent, btn, register) {
   const a = cleanHex(accent, DEMO_COLOR_DEFAULTS.accent);
   const b = cleanHex(btn, DEMO_COLOR_DEFAULTS.btn);
   return {
@@ -624,7 +713,11 @@ function demoColors(accent, btn) {
     btn: b,
     btn_text: textOn(b),
     watermark: '#47617A',
-    poster_bg: posterBgFor(a, b),
+    // (v197) Registro heredado del feed: luminoso → póster claro con
+    // textos oscuros (poster_dark = el color oscuro de su paleta);
+    // oscuro o sin perfil → el póster oscuro de siempre.
+    poster_bg: register === 'light' ? posterBgLightFor(a, b) : posterBgFor(a, b),
+    poster_dark: posterBgFor(a, b),
   };
 }
 
@@ -910,7 +1003,7 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
@@ -927,11 +1020,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   let topics = allTopics.slice(topicOffset, topicOffset + n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
-  // (v196) MODO PÓSTER DE MARCA: un perfil de servicios/contenido (agencia,
-  // CM, profesionales) no es un catálogo de fotos — su semana sale como
-  // piezas de MARCA: pósters de color pleno con su foto de perfil como
-  // medallón protagonista + fotos con match. Posiciones pares del pool de
-  // temas (índice absoluto, estable entre la semana y los extras) = póster.
+  // (v196, acotado en v197) MODO PÓSTER DE MARCA: un perfil de
+  // servicios/contenido (agencia, CM, profesionales) no es un catálogo
+  // de fotos — su semana incluye UNA pieza de marca: un póster de color
+  // pleno con su foto de perfil como medallón protagonista. En v196 las
+  // posiciones pares salían TODAS como ese mismo póster (3 plantillas
+  // idénticas con distinto titular: "estilos repetidos", veredicto de
+  // Valentino) — ahora el póster es la PRIMERA pieza de la semana
+  // principal y nada más: máximo 1 por semana, elegido como un estilo
+  // más dentro de la variedad estructural (enforceSkeletonVariety).
   const posterMode = !photoPath && (subcat === 'contenido' || cat === 'profesionales' || cat === 'servicios');
   const posterAt = new Set();
 
@@ -960,7 +1057,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     const chosenPoster = [];
     for (let k = topicOffset; k < allTopics.length && chosen.length < n; k++) {
       const t = allTopics[k];
-      const isPoster = posterMode && (k % 2 === 0);
+      const isPoster = posterMode && topicOffset === 0 && chosen.length === 0;
       if (!isPoster) {
         const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe });
         if (!topicPhotoMatchable(t, poolFams, ctx)) continue;
@@ -973,21 +1070,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       chosenPoster.forEach((b, i) => { if (b) posterAt.add(i); });
     }
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
+    // (La variedad de esqueletos la garantiza enforceSkeletonVariety más
+    // abajo, para todas las ramas — el remiendo puntual de v196 que solo
+    // miraba los dos primeros posteos con foto quedó subsumido.)
     styleObjs = pickDemoStyles({ topics, category: cat, subcat, business });
-    // En modo póster, los posteos CON foto conservan esqueletos distintos
-    // entre sí (el póster ya aporta el suyo a la diversidad de la semana).
-    if (posterMode && topics.length >= 3) {
-      const photoIdxs = topics.map((t, i) => i).filter((i) => !posterAt.has(i));
-      if (photoIdxs.length >= 2) {
-        const skOf = (s) => (s ? treatmentForStyle(s).skeleton : null);
-        if (skOf(styleObjs[photoIdxs[0]]) === skOf(styleObjs[photoIdxs[1]])) {
-          const usedCodes = new Set(styleObjs.filter(Boolean).map((s) => s.code));
-          const alt = demoStylePool(cat, business).find((s) => !usedCodes.has(s.code)
-            && skOf(s) !== skOf(styleObjs[photoIdxs[0]]) && skOf(s) !== 'poster');
-          if (alt) styleObjs[photoIdxs[1]] = alt;
-        }
-      }
-    }
     // Fotos con el gate, en dos pasadas: primero los temas CON tema (las
     // fotos exactas son pocas y son para ellos), después los genéricos — si
     // no, un posteo sin tema se queda con la única foto de pelo y los de
@@ -1002,9 +1088,10 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       const famName = pickPhotoGated(topics[i], poolFams, usedFams, ctx);
       if (!famName) {
         // No debería pasar (la selección ya exigió match): si pasa, el
-        // slot sale como póster en modo póster y si no, con la primera
-        // foto del pool — nunca con una foto que el gate rechazó.
-        if (posterMode) { posterAt.add(i); photos[i] = profilePicPath || null; continue; }
+        // slot sale como póster SOLO si la semana todavía no tiene el
+        // suyo (v197: máximo 1) y si no, con la primera foto del pool —
+        // nunca con una foto que el gate rechazó.
+        if (posterMode && posterAt.size === 0) { posterAt.add(i); photos[i] = profilePicPath || null; continue; }
         const p0 = path.join(STOCK_DIR, poolFams[0] + '.webp');
         if (!fs.existsSync(p0)) throw new Error('Foto de muestra no disponible');
         photos[i] = p0;
@@ -1017,6 +1104,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     }
     for (const i of posterAt) photos[i] = profilePicPath || null;
   }
+  // (v197) VARIEDAD ESTRUCTURAL: ningún esqueleto de render se repite
+  // en la semana (garantía, no puntaje — ver enforceSkeletonVariety).
+  const treatmentOverrides = enforceSkeletonVariety({ styleObjs, topics, category: cat, subcat, business, posterAt });
   const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
   const specPosts = topics.map((t, i) => {
     let headline = t.headline;
@@ -1035,7 +1125,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // pieza es un póster de marca (fondo pleno + medallón), no una foto.
       treatment: isPoster
         ? { skeleton: 'poster', grade: 'neutral', crop: 'normal' }
-        : (st ? treatmentForStyle(st) : null),
+        : (treatmentOverrides.get(i) || (st ? treatmentForStyle(st) : null)),
       poster: isPoster || undefined,
       kind: t.kind,
       tema: t.tema || null,
@@ -1047,8 +1137,22 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       cta: t.cta,
     };
   });
+  // (v197) La foto de perfil aparece como máximo en 2 piezas y con
+  // tratamientos DISTINTOS entre sí: el medallón protagonista del
+  // póster (si lo hay) y una marca suave grande sobre UNA pieza con
+  // foto. Jamás el mismo medallón centrado repetido; si no hay póster
+  // o no hay foto de perfil, la identidad la cargan paleta+temas.
+  if (posterMode && profilePicPath && posterAt.size) {
+    const wi = specPosts.findIndex((p, i) => !posterAt.has(i)
+      && typeof p.photo === 'string'
+      && (!p.treatment || p.treatment.skeleton !== 'duo'));
+    if (wi >= 0) {
+      specPosts[wi].pic_mark = 'watermark';
+      specPosts[wi].pic_path = profilePicPath;
+    }
+  }
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat };
+  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat, feedRegister: feedRegister || null };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -1060,7 +1164,7 @@ async function renderSpecPngs(specPosts, colors) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   try {
     const specPath = path.join(runDir, 'spec.json');
-    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: sinEtiqueta(specPosts) }));
+    fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn, colors.register), posts: sinEtiqueta(specPosts) }));
     await runDemoRender([DEMO_SCRIPT, specPath, runDir]);
     return { bufs: specPosts.map((_, i) => fs.readFileSync(path.join(runDir, `post-${i}.jpg`))), runDir };
   } catch (e) {
@@ -1118,9 +1222,9 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -1138,7 +1242,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
   const withPhotos = specPosts.map((p) => (
     (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
   ));
-  const { bufs, runDir } = await renderSpecPngsStream(withPhotos, { accent, btn }, () => {});
+  const { bufs, runDir } = await renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, () => {});
   try {
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
     // no pasa el gate, se reintenta con otro tema del rubro. Nunca sale un
@@ -1344,6 +1448,34 @@ async function extractPaletteFromBuffers(buffers) {
   return { accent, btn: btnCand ? btnCand.hex : null };
 }
 
+// ---------- (v197) REGISTRO LUMÍNICO heredado del feed ----------
+// La luminancia media de hasta 3 fotos del feed (las mismas que ya se
+// leyeron para la paleta — cero fetches nuevos) decide el registro de
+// las piezas gráficas de la semana: un feed luminoso (crema, amarillo,
+// pastel — como el de @posty.hacetodo, que mide ~0,62) produce fondos
+// CLAROS; un feed oscuro mantiene el registro oscuro. Devuelve la
+// luminancia 0..1 o null si no se pudo medir (sin perfil → el llamador
+// conserva el comportamiento de siempre). El umbral vive en el
+// llamador (server.js): >= 0,55 = luminoso.
+const FEED_LUMINANCE_SCRIPT = path.join(__dirname, 'feed-luminance.py');
+function feedLuminanceFromBuffers(buffers) {
+  const list = (buffers || []).filter((b) => Buffer.isBuffer(b) && b.length).slice(0, 3);
+  if (!list.length) return Promise.resolve(null);
+  const tmps = list.map((b, i) => {
+    const tmp = path.join(os.tmpdir(), `posta-lum-${Date.now()}-${i}-${crypto.randomBytes(4).toString('hex')}.jpg`);
+    fs.writeFileSync(tmp, b);
+    return tmp;
+  });
+  return new Promise((resolve) => {
+    execFile('python3', [FEED_LUMINANCE_SCRIPT, ...tmps], { timeout: 10000 }, (err, stdout) => {
+      for (const t of tmps) { try { fs.unlinkSync(t); } catch (_) {} }
+      if (err) return resolve(null);
+      const v = parseFloat(String(stdout || '').trim());
+      resolve(Number.isFinite(v) && v >= 0 && v <= 1 ? v : null);
+    });
+  });
+}
+
 function httpsGet(url, timeoutMs) {
   return new Promise((resolve, reject) => {
     let u;
@@ -1502,7 +1634,7 @@ async function renderSpecPngsStream(specPosts, colors, onPng) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-spec-'));
   const specPath = path.join(runDir, 'spec.json');
-  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn), posts: sinEtiqueta(specPosts) }));
+  fs.writeFileSync(specPath, JSON.stringify({ fonts_dir: FONTS_DIR, colors: demoColors(colors.accent, colors.btn, colors.register), posts: sinEtiqueta(specPosts) }));
   let renderErr = null;
   let renderDone = false;
   // NOTA (2026-10-17): se probó partir el render en dos procesos Python
@@ -1559,6 +1691,9 @@ module.exports = {
   trialPhotoOptions,
   extractColorsFromBuffer,
   extractPaletteFromBuffers,
+  feedLuminanceFromBuffers,
+  demoColors,
+  posterBgLightFor,
   toTu: captions.toTu,
   demoHashtags: captions.demoHashtags,
   // Prueba en 1 campo (prefill + streaming)
