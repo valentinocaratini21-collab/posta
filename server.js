@@ -8100,6 +8100,13 @@ function mediaJanitor(aggressive = false) {
       const full = path.join(MEDIA_DIR, f);
       let st; try { st = fs.statSync(full); } catch (e) { continue; }
       if (!st.isFile()) continue;
+      // v189: las miniaturas igthumb-* de la proyección nacen ANTES de que
+      // el payload que las referencia se cachee (gap de ~1 min al final de
+      // la generación): un sweep agresivo en esa ventana las borraba y la
+      // grilla HOY volvía a salir gris (pasó en la corrida real de v188
+      // durante la turbulencia del deploy). Viven lo que vive el cache
+      // (72 h); después son huérfanas normales.
+      if (f.startsWith('igthumb-') && now - st.mtimeMs < 72 * 3600 * 1000) { kept++; continue; }
       if (now - st.mtimeMs < minAge) { kept++; continue; }
       try { fs.unlinkSync(full); deleted++; freed += st.size; } catch (e) {}
     }
@@ -11582,7 +11589,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v188';
+const BUILD_ID = '20261017-v189';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
