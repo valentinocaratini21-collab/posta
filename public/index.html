@@ -50,6 +50,21 @@
       <button class="btn btn-primary" type="submit">Ver mi semana →</button>
     </form>
     <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
+    <style>
+    .lp-webform{max-width:520px;margin:18px auto 0;text-align:center}
+    .lp-webform label{display:block;font-size:14px;color:var(--mut,#5A7186);margin-bottom:8px;font-weight:600}
+    .lp-webform-row{display:flex;gap:10px;justify-content:center;align-items:stretch;flex-wrap:wrap}
+    .lp-webform input{flex:1;min-width:210px;font-size:16px;padding:12px 18px;border:1.5px solid #D7E5EE;border-radius:999px;font-family:inherit;color:#0A1E33;background:#fff;outline:none}
+    .lp-webform input:focus{border-color:#2793C8}
+    .lp-webform button{border-radius:999px;font-size:15px;padding:12px 22px;cursor:pointer;white-space:nowrap}
+    </style>
+    <form class="lp-webform" onsubmit="var v=this.querySelector('input').value.trim();location.href=v?'/prueba?web='+encodeURIComponent(v):'/prueba';return false">
+      <label for="lpWebInput">¿Preferís? Pegá la web de tu negocio</label>
+      <div class="lp-webform-row">
+        <input id="lpWebInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="www.tunegocio.com.ar" aria-label="La web de tu negocio">
+        <button class="btn btn-ghost" type="submit">Usar mi web →</button>
+      </div>
+    </form>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
   </div></div></div>
 <div id="posty-boot" aria-hidden="true">

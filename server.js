@@ -185,6 +185,7 @@ function saveGoldenExample(uid, postId, caption, visualBrief) {
 const mp = require('./mercadopago');
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
+const webExtract = require('./web-extract');
 const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
 const streaks = require('./streaks');
@@ -10433,8 +10434,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   } catch (e) {
     return res.status(400).json({ error: e.message || 'Formulario inválido' });
   }
-  const business = String(fields.business || '').trim().slice(0, 60);
+  let business = String(fields.business || '').trim().slice(0, 60);
   const ig = String(fields.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  // (v212) La web del negocio (si pegó su link): la extracción determinística
+  // arranca YA, en paralelo con el resto; se consume con carrera acotada.
+  const webRaw = String(fields.web || '').trim().slice(0, 300);
+  const webDescEdited = String(fields.web_desc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
+  const webCtxPromise = webRaw ? trialWebContext(webRaw) : Promise.resolve(null);
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
@@ -10446,7 +10452,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  const richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -10472,6 +10478,17 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         }
       }
     } catch (e) { /* fallback silencioso */ }
+  }
+  // (v212) Web del negocio (1/2): nombre si el form no lo trajo y
+  // descripción/servicios al goal. Carrera acotada: la web nunca frena.
+  let webData = null;
+  if (webRaw) {
+    webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 9000))]).catch(() => null);
+    if (webData) {
+      if (!business && webData.name) business = webData.name;
+      const wl = trialWebGoalLines(webData, webDescEdited);
+      if (wl.length) richGoal = [richGoal, ...wl].filter(Boolean).join('\n');
+    }
   }
   if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
   if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
@@ -10548,7 +10565,18 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // spec ni los diseños ni los captions. Lanzarlas en paralelo con el
     // render en vez de esperarlas antes saca ~1-2s del camino crítico.
     const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors }, null)).catch(() => []);
-    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath });
+    // (v212) Web del negocio (2/2): su paleta manda si no hay otra fuente de
+    // color (con @, manda el feed) y sus fotos entran como material gateado.
+    let webExtraPhotos = [];
+    if (webData) {
+      if (colorSource === 'rubro' && webData.palette && webData.palette[0]) {
+        accent = webData.palette[0];
+        if (webData.palette[1]) btn = webData.palette[1];
+        colorSource = 'web';
+      }
+      webExtraPhotos = await trialWebPhotos(webData);
+    }
+    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -10563,6 +10591,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       business, ig, category,
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
+      web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       ig_pic: igPic, ig_name: igName,
       ideas: (await ideasPromise).slice(0, 6),
       posts,
@@ -10635,6 +10664,97 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   });
 });
 
+// ---------- Prueba con la WEB del negocio (v212) ----------
+// Orden de Valentino: "en el website deberíamos agregar para que peguen su
+// link de su website". El visitante pega la URL de su sitio y Posty lo lee
+// (determinístico, CERO IA): nombre, descripción, servicios, ciudad, paleta
+// y fotos. Eso precarga el negocio y alimenta la generación igual que el @:
+// la descripción y los servicios enriquecen los temas (vía goal), la paleta
+// entra como paleta del negocio y las fotos del sitio son material válido
+// (son SUYAS, como las del álbum — pasan el gate foto↔tema como todo).
+// Si vienen @ Y web: el @ manda en lo visual/herencia (paleta del feed) y la
+// web enriquece servicios/textos. Solo web: la semana se genera igual y la
+// proyección/auditoría no aparecen (sin @ no hay feed que analizar).
+// Si el sitio no responde, bloquea o no tiene nada útil: webData = null y la
+// prueba sigue con lo que haya — la web NUNCA rompe ni frena la prueba.
+const trialWebPromises = new Map(); // url normalizada -> Promise<data|null>
+function trialWebContext(rawUrl) {
+  const url = webExtract.normalizeSiteUrl(rawUrl);
+  if (!url) return Promise.resolve(null);
+  const hit = trialWebPromises.get(url);
+  if (hit) return hit;
+  const p = webExtract.fetchBusinessSite(url).catch(() => null);
+  trialWebPromises.set(url, p);
+  if (trialWebPromises.size > 300) trialWebPromises.clear();
+  // La extracción se comparte entre el prefill y la generación (el segundo
+  // no vuelve a bajar el sitio) y se olvida a los 30 min.
+  p.then(() => {
+    const t = setTimeout(() => trialWebPromises.delete(url), 30 * 60 * 1000);
+    if (t.unref) t.unref();
+  });
+  return p;
+}
+async function trialWebPhotos(webData) {
+  if (!webData || !Array.isArray(webData.photos) || !webData.photos.length) return [];
+  try { return await webExtract.localizeSitePhotos(webData.photos, MEDIA_DIR, 6); }
+  catch (e) { return []; }
+}
+function trialWebPhotosUsed(specPhotos) {
+  return (specPhotos || []).filter((p) => typeof p === 'string' && path.basename(p).startsWith('web-')).length;
+}
+function trialWebInfo(webData, photosUsed) {
+  if (!webData) return null;
+  return {
+    url: webData.url,
+    name: webData.name || '',
+    description: webData.description || '',
+    services: webData.services || [],
+    city: webData.city || '',
+    palette: webData.palette || [],
+    pic: (webData.photos && webData.photos[0] && webData.photos[0].url) || null,
+    photos_total: (webData.photos || []).length,
+    photos_used: photosUsed || 0,
+  };
+}
+// Líneas de goal que aporta la web (descripción editada por el visitante si
+// la mandó en web_desc; si no, la extraída) — se suman al richGoal para que
+// temas, ideas y captions hablen de SU negocio y no solo de su rubro.
+function trialWebGoalLines(webData, editedDesc) {
+  if (!webData) return [];
+  const desc = String(editedDesc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400) || webData.description || '';
+  const lines = [];
+  if (desc) lines.push('Sobre el negocio (de su web): ' + desc);
+  if (webData.services && webData.services.length) lines.push('Servicios: ' + webData.services.slice(0, 8).join(', '));
+  if (webData.city) lines.push('Ciudad: ' + webData.city);
+  return lines;
+}
+app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, res) => {
+  const ip = demo.clientIp(req);
+  if (!trialPrefillAllowed(ip).ok) return res.status(429).json({ ok: false, error: 'Demasiados intentos, probá en un rato' });
+  const raw = String((req.body || {}).web || '').trim().slice(0, 300);
+  const url = webExtract.normalizeSiteUrl(raw);
+  if (!url) return res.json({ ok: false, error: 'Ese link no parece una web válida' });
+  // Carrera acotada: un sitio lento no cuelga la pantalla; la extracción
+  // sigue de fondo y la generación la reusa desde la misma promesa.
+  const data = await Promise.race([
+    trialWebContext(raw),
+    new Promise((r) => setTimeout(() => r(null), 11000)),
+  ]).catch(() => null);
+  if (!data) return res.json({ ok: false, error: 'No pudimos leer esa web (puede estar caída o bloquear lecturas automáticas)' });
+  res.json({
+    ok: true,
+    web: data.url,
+    name: data.name || '',
+    description: data.description || '',
+    services: data.services || [],
+    city: data.city || '',
+    category: demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' ')),
+    palette: data.palette || [],
+    photos: (data.photos || []).map((p) => p.url),
+    photoCount: (data.photos || []).length,
+  });
+});
+
 // ---------- Prueba en 1 campo: generación con streaming (SSE) ----------
 // Acepta el MISMO multipart que /api/trial/generate y emite:
 //   event: status → {step, text} (tracker en primera persona)
@@ -10672,8 +10792,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     return fail(e.message || 'Formulario inválido');
   }
   // Mismo parseo y sanitización que /api/trial/generate
-  const business = String(fields.business || '').trim().slice(0, 60);
+  let business = String(fields.business || '').trim().slice(0, 60);
   const ig = String(fields.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
+  // (v212) La web del negocio (si pegó su link): la extracción determinística
+  // arranca YA, en paralelo con el resto; se consume con carrera acotada.
+  const webRaw = String(fields.web || '').trim().slice(0, 300);
+  const webDescEdited = String(fields.web_desc || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
+  const webCtxPromise = webRaw ? trialWebContext(webRaw) : Promise.resolve(null);
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
@@ -10683,7 +10808,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  const richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -10766,6 +10891,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         if (trialAudit) send('audit', { audit: trialAudit });
       })
       .catch(() => {});
+  }
+  // (v212) Web del negocio (1/2): si el form no trajo nombre, lo completa la
+  // web (con carrera corta: en el flujo normal el nombre ya viene del
+  // formulario y esto no espera nada).
+  let webData = null;
+  if (!business && webRaw) {
+    webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 4000))]).catch(() => null);
+    if (webData && webData.name) business = webData.name;
   }
   if (!business) return fail('Contanos el nombre de tu negocio');
   if (!demo.CATEGORIES.includes(category)) return fail('Rubro inválido');
@@ -10921,9 +11054,28 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       classifyPromise = demoAi.classifyFeedKind({ photoPaths: feedPhotoPaths, apiKey: demoApiKey }).catch(() => null);
     }
 
+    // (v212) Web del negocio (2/2): descripción/servicios al goal, la
+    // descripción como bio para el subrubro, paleta SOLO si ni el feed ni
+    // el perfil aportaron la suya (con @ manda lo visual del feed) y sus
+    // fotos como material gateado (pasan el gate foto↔tema como todo).
+    let webExtraPhotos = [];
+    if (webRaw) {
+      if (!webData) webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 9000))]).catch(() => null);
+      if (webData) {
+        const wl = trialWebGoalLines(webData, webDescEdited);
+        if (wl.length) richGoal = [richGoal, ...wl].filter(Boolean).join('\n');
+        if (!bioText && webData.description) bioText = webData.description;
+        if (colorSource === 'rubro' && webData.palette && webData.palette[0]) {
+          accent = webData.palette[0];
+          if (webData.palette[1]) btn = webData.palette[1];
+          colorSource = 'web';
+        }
+        webExtraPhotos = await trialWebPhotos(webData);
+      }
+    }
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister });
+    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
@@ -11291,6 +11443,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       business, ig, category,
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
+      web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
@@ -12010,7 +12163,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v211';
+const BUILD_ID = '20261018-v212';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -205,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261018-v210', '/api/version es v210 (auditoría en vivo en /prueba: mejorar/incrementar/reducir con números reales)');
+    ok(ver.build === '20261018-v212', '/api/version es v212 (la prueba acepta la web del negocio; tracker sin Posty malabareando)');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -317,7 +317,14 @@ function partC() {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes('20261018-v210'), 'BUILD_ID en v210');
+  ok(srv.includes('20261018-v212'), 'BUILD_ID en v212');
+  // v212: la prueba acepta la web del negocio + chau Posty malabareando.
+  ok(html.includes('id="webCard"') && html.includes('id="f_web"'), 'prueba.html trae la tarjeta web y el campo de link (v212)');
+  ok(html.includes('/api/trial/web-prefill'), 'prueba.html llama al web-prefill (v212)');
+  ok(html.includes('DEEP_WEB') && html.includes('startTrialWeb'), 'el flujo ?web= está cableado (v212)');
+  ok(!html.includes('pjwrap') && !html.includes('pj-ball'), 'el tracker ya no tiene a Posty malabareando (v212)');
+  ok(srv.includes("app.post('/api/trial/web-prefill'"), 'el server expone /api/trial/web-prefill (v212)');
+  ok(srv.includes('trialWebContext') && srv.includes('web_info:'), 'el server enriquece la generación con la web (v212)');
   // v210: auditoría en vivo — el server computa y emite el análisis del @.
   ok(srv.includes('trialAuditFromData'), 'el server computa la auditoría del @ (v210)');
   ok(srv.includes("send('audit'"), 'el server emite el evento audit (v210)');

@@ -377,13 +377,20 @@ function photoGateCtx({ category, subcat, topic, isCafe }) {
   return { world, forb, isCafe: !!isCafe };
 }
 
+// El gate sobre una lista de temas (v212): lo comparte el stock (vía
+// photoTemas) y las fotos del sitio web del negocio (temas derivados de su
+// alt/contexto/archivo en web-extract.js) — MISMA vara para todo el material.
+function temasPassGate(temas, ctx) {
+  if (!temas || !temas.length) return false; // sin tags: el gate es duro, no entra
+  if (temas.some((x) => ctx.forb.has(x))) return false;
+  if (temas.some((x) => PHOTO_STRONG_TEMAS.has(x) && !ctx.world.has(x))) return false;
+  if (!temas.some((x) => ctx.world.has(x))) return false;
+  return true;
+}
 function photoPassesGate(famName, ctx) {
   const t = photoTemas(famName);
   if (!t) return false; // sin tags: el gate es duro, no entra
-  if (t.some((x) => ctx.forb.has(x))) return false;
-  if (t.some((x) => PHOTO_STRONG_TEMAS.has(x) && !ctx.world.has(x))) return false;
-  if (!t.some((x) => ctx.world.has(x))) return false;
-  return true;
+  return temasPassGate(t, ctx);
 }
 
 // Elige la foto de un tema PASANDO el gate. Rangos:
@@ -410,6 +417,24 @@ function pickPhotoGated(topic, poolFams, used, ctx) {
     if (hit) return hit;
   }
   return cands.find((f) => photoPassesGate(f, ctx)) || null;
+}
+
+// (v212) Elige una foto del sitio web del negocio para el tema, con los
+// mismos rangos que pickPhotoGated: 1) muestra el tema del posteo, 2)
+// cualquiera que pase el gate. SIN rango de repetición: una foto de su web
+// ilustra UN posteo de la semana y el resto lo cubre el stock (la semana
+// nunca repite visuales — si el sitio tiene 1 sola foto útil, sale 1 vez).
+function pickWebPhoto(topic, webPool, used, ctx) {
+  if (!webPool || !webPool.length) return null;
+  const tiers = [
+    (w) => !!(topic && topic.tema && w.temas.includes(topic.tema)),
+    () => true,
+  ];
+  for (const tier of tiers) {
+    const hit = webPool.find((w) => !used.has(w.path) && temasPassGate(w.temas, ctx) && tier(w));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 // ¿Existe AL MENOS una foto (pool o curada) que pase el gate para el tema?
@@ -1109,9 +1134,15 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
+  // (v212) Fotos del SITIO WEB del negocio (extraPhotos: [{path, temas}]):
+  // son fotos SUYAS — como las del álbum, no como las del feed (que nunca se
+  // republican) — y entran al pool pasando el MISMO gate foto↔tema: sin
+  // temas derivables, quedan afuera igual que un stock sin tags.
+  const webPool = (Array.isArray(extraPhotos) ? extraPhotos : [])
+    .filter((w) => w && typeof w.path === 'string' && Array.isArray(w.temas) && w.temas.length);
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
   // los ÁNGULOS, no la categoría. bioText = la bio real del perfil (v192):
   // la semana hereda los temas de SU línea, no solo los del formulario.
@@ -1166,7 +1197,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       const isPoster = posterMode && topicOffset === 0 && chosen.length === 0;
       if (!isPoster) {
         const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe });
-        if (!topicPhotoMatchable(t, poolFams, ctx)) continue;
+        // Un tema entra si lo puede ilustrar el stock O una foto de su web.
+        if (!topicPhotoMatchable(t, poolFams, ctx)
+          && !webPool.some((w) => temasPassGate(w.temas, ctx))) continue;
       }
       chosen.push(t);
       chosenPoster.push(isPoster);
@@ -1189,8 +1222,14 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     const order = topics.map((t, i) => i)
       .filter((i) => !posterAt.has(i))
       .sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
+    const usedWeb = new Set();
     for (const i of order) {
       const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe });
+      // (v212) Primero las fotos de SU web (son suyas y venden más): match
+      // exacto de tema, después cualquier pase del gate; sin uso repetido
+      // salvo que no quede otra que pase.
+      const webHit = pickWebPhoto(topics[i], webPool, usedWeb, ctx);
+      if (webHit) { usedWeb.add(webHit.path); photos[i] = webHit.path; continue; }
       const famName = pickPhotoGated(topics[i], poolFams, usedFams, ctx);
       if (!famName) {
         // No debería pasar (la selección ya exigió match): si pasa, el
@@ -1377,9 +1416,9 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -2108,6 +2147,7 @@ module.exports = {
   AUDIENCE_FORBIDDEN_TEMAS,
   PHOTO_WORLD,
   PHOTO_STRONG_TEMAS,
+  temasPassGate,
   photoGateCtx,
   photoPassesGate,
   pickPhotoGated,

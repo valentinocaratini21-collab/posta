@@ -88,24 +88,9 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .tk-head{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px}
 .tk-head h2{margin:0;text-align:left;min-width:0}
 .tk-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 4px 14px rgba(39,147,200,.25)}
-/* Posty haciendo malabares mientras carga (2026-10-16). V2 — escenario:
-   Valentino marcó que la V1 no malabareaba "de la manera correcta": las
-   pelotas orbitaban pegadas a la cara. Ahora hay un ESCENARIO más grande
-   que el avatar: las pelotas salen de los costados (las "manos"), suben
-   BIEN arriba de la cabeza con tiempo de gravedad (lento en la cima,
-   rápido en las manos) y caen del otro lado — cascada de 3 pelotas. */
-.pjwrap{position:relative;display:inline-block;width:148px;height:112px;line-height:0}
-.pjwrap.big{width:196px;height:152px}
-.pj-ava-box{position:absolute;left:0;right:0;bottom:4px;text-align:center;line-height:0}
-.pj-ava{border-radius:50%;object-fit:cover;animation:pj-bob 1.14s ease-in-out infinite}
-@keyframes pj-bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-4px) rotate(2deg)}}
-.pj-ball{position:absolute;left:50%;top:50%;width:15px;height:15px;margin:-7px 0 0 -7px;border-radius:50%;box-shadow:0 2px 6px rgba(10,30,51,.28);z-index:2;pointer-events:none}
-.pj-ball.b1{background:#FEC14D;animation:pj-cascade 1.14s infinite}
-.pj-ball.b2{background:#2793C8;animation:pj-cascade 1.14s infinite;animation-delay:-.38s}
-.pj-ball.b3{background:#0A1E33;animation:pj-cascade 1.14s infinite;animation-delay:-.76s}
-.pjwrap.big .pj-ball{animation-name:pj-cascade-lg}
-@keyframes pj-cascade{0%{transform:translate(-52px,26px);animation-timing-function:ease-out}28%{transform:translate(0,-44px);animation-timing-function:ease-in}50%{transform:translate(52px,26px);animation-timing-function:ease-out}78%{transform:translate(0,-44px);animation-timing-function:ease-in}100%{transform:translate(-52px,26px)}}
-@keyframes pj-cascade-lg{0%{transform:translate(-68px,34px);animation-timing-function:ease-out}28%{transform:translate(0,-58px);animation-timing-function:ease-in}50%{transform:translate(68px,34px);animation-timing-function:ease-out}78%{transform:translate(0,-58px);animation-timing-function:ease-in}100%{transform:translate(-68px,34px)}}
+/* (v212) Posty malabareando ELIMINADO del tracker (orden de Valentino
+   2026-10-18: "sacar el posty haciendo malabares"): el tracker muestra
+   el avatar estatico, sin pelotas ni animacion. */
 
 .tstep{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 18px;margin-bottom:10px;text-align:left;opacity:.45;transition:all .3s}
 .tstep.act{opacity:1;border-color:var(--cel);box-shadow:0 6px 18px rgba(39,147,200,.12)}
@@ -450,6 +435,11 @@ html{scroll-behavior:smooth}
           <input type="file" id="optPhoto" accept="image/jpeg,image/png,image/webp" style="font-size:14px;max-width:100%">
           <p class="tiny" id="optPhotoName" style="margin-top:6px;min-height:18px"></p>
         </div>
+        <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="webOptLink">🌐 ¿Sin Instagram? Pegá la web de tu negocio</button></p>
+        <div id="webOptBox" style="display:none;margin-top:10px">
+          <div class="field" style="margin-bottom:10px"><label>La web de tu negocio</label><input type="text" id="f_web" placeholder="www.tunegocio.com.ar" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty lee tu web: nombre, servicios, colores y fotos.</div></div>
+          <button class="btn btn-primary btn-block" id="btnWebGo">Leer mi web 🌐</button>
+        </div>
       </div>
       <!-- Prefill OK: Posty encontró tu negocio -->
       <div id="prefillCard" style="display:none">
@@ -464,6 +454,22 @@ html{scroll-behavior:smooth}
         <p class="tiny" style="margin:10px 0 14px">Corregilo si hace falta — lo uso para armar tu semana.</p>
         <button class="btn btn-primary btn-block" id="btnPrefillGo">Armar mi semana 👀</button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="pfBack">← No es mi negocio / usar otro @</button></p>
+      </div>
+      <!-- Web OK: Posty leyó tu sitio (v212) -->
+      <div id="webCard" style="display:none">
+        <div style="text-align:center;margin-bottom:14px"><span class="pill">POSTY LEYÓ TU WEB 🌐</span></div>
+        <div class="pf-row">
+          <img id="wfPhoto" src="ai-avatar.png" alt="Foto de tu negocio" onerror="this.onerror=null;this.src='ai-avatar.png'">
+          <div class="pf-fields">
+            <div class="field" style="margin-bottom:10px"><label>Nombre</label><input type="text" id="wf_name" maxlength="60" autocomplete="off"></div>
+            <div class="field" style="margin-bottom:0"><label>Rubro</label><select id="wf_cat"></select></div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;margin-bottom:0"><label>Descripción (de tu web, editable)</label><textarea id="wf_desc" rows="3" maxlength="400"></textarea></div>
+        <div id="wfMeta" style="margin-top:10px"></div>
+        <p class="tiny" style="margin:10px 0 14px">Corregilo si hace falta — lo uso para armar tu semana.</p>
+        <button class="btn btn-primary btn-block" id="btnWebTrialGo">Armar mi semana 👀</button>
+        <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="wfBack">← Volver</button></p>
       </div>
       <!-- Fallback: formulario detallado actual (si el prefill falla) -->
       <div id="detailForm" style="display:none">
@@ -480,7 +486,7 @@ html{scroll-behavior:smooth}
     <h3>Así trabajo yo 👇</h3>
     <p class="lede">Tres pasos y tu Instagram anda solo.</p>
     <div class="steps3">
-      <div class="step3"><div class="n">1</div><div><b>Pasame tu @</b><p>10 segundos: solo tu Instagram, nada más.</p></div></div>
+      <div class="step3"><div class="n">1</div><div><b>Pasame tu @ o tu web</b><p>10 segundos: tu Instagram o el link de tu sitio, nada más.</p></div></div>
       <div class="step3"><div class="n">2</div><div><b>Armo tu semana</b><p>5 posteos + 1 reel: diseño, caption y hashtags con tu onda y tus colores.</p></div></div>
       <div class="step3"><div class="n">3</div><div><b>Vos aprobás, yo la armo</b><p>Nada sale sin tu OK.</p></div></div>
     </div>
@@ -522,7 +528,7 @@ html{scroll-behavior:smooth}
     <div class="tracker">
       <span class="pill">TRABAJANDO PARA VOS ⚙️</span>
       <div class="tk-head">
-        <span class="pjwrap"><span class="pj-ava-box"><img src="ai-avatar.png" alt="Posty" class="tk-avatar pj-ava"></span><span class="pj-ball b1"></span><span class="pj-ball b2"></span><span class="pj-ball b3"></span></span>
+        <img src="ai-avatar.png" alt="Posty" class="tk-avatar">
         <h2 id="tkTitle">Armando tu semana…</h2>
       </div>
       <p class="sub">Esto es lo que haríamos por vos cada semana, en automático.</p>
@@ -750,7 +756,7 @@ const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Resta
 let TRIAL = null;      // respuesta del backend
 // Motor de la prueba (sincronizado con DEMO_ENGINE_V en demo.js): una
 // semana guardada por un motor viejo NO se restaura — se genera de nuevo.
-const TRIAL_ENGINE_V = 17;
+const TRIAL_ENGINE_V = 18;
 let COUNTRY = 'AR';
 let TONE = 'vos';
 // Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
@@ -800,6 +806,12 @@ const DEEP_IG = (() => {
   const v = new URLSearchParams(location.search).get('ig');
   return v && /^[a-z0-9._]{1,30}$/i.test(v.trim()) ? v.trim().replace(/^@/, '').toLowerCase() : '';
 })();
+// Link de la landing "pegá la web de tu negocio": ?web=... lee el sitio y
+// muestra la tarjeta web con todo precargado y editable (v212).
+const DEEP_WEB = (() => {
+  const v = new URLSearchParams(location.search).get('web');
+  return v ? v.trim().slice(0, 300) : '';
+})();
 function saveTrial() { try { if (!TEST_KEY_QS) idb.set(TRIAL); } catch (e) {} }
 let _toastT = null;
 function toast(msg) {
@@ -829,8 +841,14 @@ function show(id) {
   const catOpts = `<option value="" selected disabled>Elegí tu rubro 👇</option>` + Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   $('#f_cat').innerHTML = catOpts;
   $('#pf_cat').innerHTML = catOpts;
+  $('#wf_cat').innerHTML = catOpts;
   // Prueba en 1 campo: el primer paso es solo el @
   $('#btnGo').onclick = onIgSubmit;
+  $('#btnWebGo').onclick = onWebSubmit;
+  $('#btnWebTrialGo').onclick = startTrialWeb;
+  $('#f_web').addEventListener('keydown', (e) => { if (e.key === 'Enter') onWebSubmit(); });
+  $('#webOptLink').onclick = () => { const b = $('#webOptBox'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; };
+  $('#wfBack').onclick = () => { WEB = null; GEN_WEB = false; $('#webCard').style.display = 'none'; $('#stepIg').style.display = 'block'; };
   $('#btnGo2').onclick = startTrialFallback;
   $('#btnPrefillGo').onclick = startTrialPrefill;
   $('#btnSave').onclick = openRegTrial;
@@ -903,6 +921,16 @@ function show(id) {
     } catch (e) {}
   }
   show('v-onboarding');
+  // ¿Llegó desde la landing con el link de su web? (?web=...) La leemos y
+  // le mostramos la tarjeta con todo precargado y editable.
+  if (DEEP_WEB) {
+    try {
+      const fw = $('#f_web');
+      if (fw) fw.value = DEEP_WEB;
+      const wb = $('#webOptBox'); if (wb) wb.style.display = 'block';
+      onWebSubmit();
+    } catch (e) {}
+  }
  } catch (e) { try { show('v-onboarding'); } catch (e2) {} }
 })();
 
@@ -930,6 +958,8 @@ const TK_TIPS = [
 // ---------- Prueba en 1 campo: el primer paso visible es solo el @ ----------
 let PREFILL = null;      // respuesta de /api/trial/prefill
 let GEN_PREFILL = false; // la generación actual viene del prefill (saltea las preguntas)
+let WEB = null;          // respuesta de /api/trial/web-prefill (v212)
+let GEN_WEB = false;     // la generación actual viene de la web del negocio
 let OPT_PHOTO = null;    // foto opcional subida por el visitante (campo 'photo' del multipart)
 const cleanIg = (v) => String(v || '').trim().replace(/^@+/, '');
 
@@ -958,6 +988,7 @@ function showPrefillCard(j) {
   PREFILL = j;
   $('#stepIg').style.display = 'none';
   $('#detailForm').style.display = 'none';
+  const wc = $('#webCard'); if (wc) wc.style.display = 'none';
   const img = $('#pfPhoto');
   img.src = j.photo || 'ai-avatar.png';
   $('#pf_name').value = j.name || '';
@@ -967,13 +998,68 @@ function showPrefillCard(j) {
   setTimeout(() => { try { $('#pf_name').focus({ preventScroll: true }); } catch (e) {} }, 300);
 }
 function showDetailForm() {
-  PREFILL = null; GEN_PREFILL = false;
+  PREFILL = null; GEN_PREFILL = false; GEN_WEB = false;
   $('#stepIg').style.display = 'none';
   $('#prefillCard').style.display = 'none';
+  const wc = $('#webCard'); if (wc) wc.style.display = 'none';
   $('#detailForm').style.display = 'block';
   trk('prueba_step', { step: 'prefill_fallback' });
   setTimeout(() => { try { $('#f_biz').focus({ preventScroll: true }); } catch (e) {} }, 300);
 }
+// ---------- Prueba con la WEB del negocio (v212) ----------
+async function onWebSubmit() {
+  const web = ($('#f_web').value || '').trim();
+  const err = $('#obErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  if (!web) return fail('Pegá el link de la web de tu negocio 🙂');
+  err.style.display = 'none';
+  trk('prueba_step', { step: 'web_submit' });
+  const btn = $('#btnWebGo');
+  btn.disabled = true; btn.textContent = 'Leyendo tu web…';
+  try {
+    const r = await fetch('/api/trial/web-prefill', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ web }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j && j.ok) { showWebCard(j); return; }
+    fail((j && j.error) || 'No pudimos leer esa web. Probá con tu @ 👆');
+  } catch (e) { fail('No pudimos leer esa web. Probá con tu @ 👆'); }
+  btn.disabled = false; btn.textContent = 'Leer mi web 🌐';
+}
+function showWebCard(j) {
+  WEB = j;
+  $('#stepIg').style.display = 'none';
+  $('#prefillCard').style.display = 'none';
+  $('#detailForm').style.display = 'none';
+  $('#wfPhoto').src = (j.photos && j.photos[0]) || 'ai-avatar.png';
+  $('#wf_name').value = j.name || '';
+  $('#wf_desc').value = j.description || '';
+  $('#wf_cat').value = CATS[j.category] ? j.category : 'otro';
+  const bits = [];
+  if (j.services && j.services.length) bits.push('📋 <b>Servicios:</b> ' + j.services.map(esc).join(' · '));
+  if (j.city) bits.push('📍 ' + esc(j.city));
+  if (j.photoCount) bits.push('📸 ' + j.photoCount + ' foto' + (j.photoCount === 1 ? '' : 's') + ' de tu web');
+  if (j.palette && j.palette.length) bits.push('🎨 Tus colores: ' + j.palette.map((c) => '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' + c + ';border:1px solid rgba(10,30,51,.15);vertical-align:-2px;margin-right:3px"></span>').join(''));
+  $('#wfMeta').innerHTML = bits.length ? '<p class="tiny" style="margin:0;line-height:1.7">' + bits.join('<br>') + '</p>' : '';
+  $('#webCard').style.display = 'block';
+  trk('prueba_step', { step: 'web_prefill_ok' });
+  setTimeout(() => { try { $('#wf_name').focus({ preventScroll: true }); } catch (e) {} }, 300);
+}
+// Web OK: directo a generar, sin preguntas (la descripción ya viene de su web).
+function startTrialWeb() {
+  const name = $('#wf_name').value.trim();
+  if (!name) { toast('Contanos el nombre de tu negocio 🙂'); try { $('#wf_name').focus(); } catch (e) {} return; }
+  if (!$('#wf_cat').value) { toast('Elegí tu rubro así los posteos salen a medida 👇'); try { $('#wf_cat').focus(); } catch (e) {} return; }
+  GEN_PREFILL = false;
+  GEN_WEB = true;
+  TRIAL_BIZ = name;
+  TRIAL_DESC = $('#wf_desc').value.trim();
+  for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
+  trk('prueba_step', { step: 'web_go' });
+  runGeneration();
+}
+
 // Fallback: el flujo detallado actual, intacto (form + 3 preguntas).
 function startTrialFallback() {
   const biz = $('#f_biz').value.trim();
@@ -983,6 +1069,7 @@ function startTrialFallback() {
   if (!$('#f_cat').value) return fail('Elegí tu rubro así los posteos salen a medida 👇');
   err.style.display = 'none';
   GEN_PREFILL = false;
+  GEN_WEB = false;
   TRIAL_BIZ = biz;
   TRIAL_DESC = '';
   trk('prueba_step', { step: 'formulario' });
@@ -994,6 +1081,7 @@ function startTrialPrefill() {
   if (!name) { toast('Contanos el nombre de tu negocio 🙂'); try { $('#pf_name').focus(); } catch (e) {} return; }
   if (!$('#pf_cat').value) { toast('Elegí tu rubro así los posteos salen a medida 👇'); try { $('#pf_cat').focus(); } catch (e) {} return; }
   GEN_PREFILL = true;
+  GEN_WEB = false;
   TRIAL_BIZ = name;
   TRIAL_DESC = '';
   for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
@@ -1098,7 +1186,14 @@ function buildGenFormData() {
   const fd = new FormData();
   fd.append('business', TRIAL_BIZ);
   fd.append('ig', cleanIg($('#f_ig').value));
-  fd.append('category', GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value);
+  fd.append('category', GEN_WEB ? $('#wf_cat').value : (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value));
+  // (v212) La web del negocio: el server la lee y enriquece la semana
+  // (servicios, paleta y fotos). La descripción viaja TAL como quedó
+  // editada en la tarjeta.
+  if (GEN_WEB && WEB) {
+    fd.append('web', WEB.web);
+    fd.append('web_desc', $('#wf_desc').value.trim());
+  }
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
   fd.append('goal', '');
@@ -1208,8 +1303,8 @@ function enterStreamingMode() {
   $('#rCached').style.display = 'none';
   $('#rTime').style.display = 'none';
   document.title = 'Armando tu semana… | Posta';
-  $('#phIg').textContent = ig ? '@' + ig : '@tuinstagram';
-  $('#phPic').src = (PREFILL && PREFILL.photo) || 'ai-avatar.png';
+  $('#phIg').textContent = ig ? '@' + ig : (GEN_WEB && WEB ? (WEB.name || 'tu negocio') : '@tuinstagram');
+  $('#phPic').src = (PREFILL && PREFILL.photo) || (GEN_WEB && WEB && WEB.photos && WEB.photos[0]) || 'ai-avatar.png';
   $('#rWeek').innerHTML = '';
   $('#weekDone').style.display = 'none';
   $('#rRest').style.display = 'none';
@@ -1625,8 +1720,8 @@ function renderResults() {
 
   // Header del mockup de teléfono: foto de perfil + @
   try {
-    $('#phPic').src = t.ig_pic || 'ai-avatar.png';
-    $('#phIg').textContent = t.ig ? '@' + t.ig : '@tuinstagram';
+    $('#phPic').src = t.ig_pic || (t.web_info && t.web_info.pic) || 'ai-avatar.png';
+    $('#phIg').textContent = t.ig ? '@' + t.ig : (t.web_info ? (t.business || 'tu negocio') : '@tuinstagram');
   } catch (e) {}
   // Urgencia real: lugares restantes del mes
   try {
