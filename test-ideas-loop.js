@@ -212,7 +212,7 @@ ok('server.js: loop, endpoints y admin', () => {
   for (const needle of ['runWeeklyIdeasLoop', 'runIdeasForUser', 'makeIdeaDraft', "app.get('/api/ideas'", "app.post('/api/ideas/:id/make'", "app.post('/api/ideas/:id/dismiss'", "app.post('/api/ideas/competitors'", "app.post('/api/admin/ideas/run'", "app.post('/api/admin/ideas/make'", 'ideas: weekIdeas']) {
     assert.ok(srvSrc.includes(needle), 'falta: ' + needle);
   }
-  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v223'"));
+  assert.ok(srvSrc.includes("const BUILD_ID = '20261018-v224'"));
 });
 ok('app.js: bloque de ideas en Schedule + enhanceIdeas', () => {
   assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length === 1, 'v223: UN solo slot de ideas, en scheduleView y fuera de la agenda (el slot duplicado dentro del bloque de la agenda era el flash)');

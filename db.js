@@ -575,6 +575,17 @@ CREATE TABLE IF NOT EXISTS competitor_snapshots (
   data_json TEXT NOT NULL DEFAULT '',
   fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Equilibrio de grilla (v224): patrón visual de la grilla que el cliente YA
+-- tiene (tendencias por columna + tablero), medido con estadísticas locales
+-- de sus posteos publicados (grid-stats.py, USD 0). Caché semanal por
+-- cuenta, misma cadencia que competitor_snapshots. data_json lleva el
+-- patrón detectado y, cuando el pipeline lo aplica a una tanda, la marca
+-- "applied" ({ week_key, line }) que alimenta la línea del reporte semanal.
+CREATE TABLE IF NOT EXISTS grid_pattern_snapshots (
+  user_id INTEGER PRIMARY KEY,
+  data_json TEXT NOT NULL DEFAULT '',
+  computed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 -- Medición de gasto de IA por función (palanca anti-quemado): cada llamada a
 -- OpenAI loguea tokens reales (usage.*), modelo y feature. Sirve para saber
 -- mañana el culpable exacto; no es facturación.

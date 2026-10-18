@@ -186,6 +186,7 @@ const mp = require('./mercadopago');
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
+const gridPattern = require('./grid-pattern');
 const webExtract = require('./web-extract');
 const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
@@ -1125,6 +1126,17 @@ app.get('/api/week/report', requireAuth, (req, res) => {
     try {
       weekIdeas = db.prepare(`SELECT id, title, why, format FROM posty_ideas WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 3`).all(uid);
     } catch (e) {}
+    // Línea de equilibrio de grilla (v224): una sola, y solo si la tanda de
+    // esta semana o la pasada se armó respetando un patrón de color real.
+    let gridNote = '';
+    try {
+      const gSnap = readGridSnapshot(uid);
+      if (gSnap && gSnap.applied && gSnap.applied.line) {
+        const curMon = mondayKeyOf(tzToday(userTz(uid)));
+        const prevMon = shiftDays(curMon, -7);
+        if (gSnap.applied.week_key === curMon || gSnap.applied.week_key === prevMon) gridNote = gSnap.applied.line;
+      }
+    } catch (e) {}
     res.json({
       ok: true,
       has: !!((stats && stats.n) || (stories && stories.n)),
@@ -1139,6 +1151,7 @@ app.get('/api/week/report', requireAuth, (req, res) => {
       nextCount: (next && next.n) || 0,
       opportunity,
       ideas: weekIdeas,
+      gridNote,
     });
   } catch (e) { res.json({ ok: false }); }
 });
@@ -5852,6 +5865,134 @@ function primaryBrandHex(uid) {
 }
 // Genera los borradores de una semana (week_key = lunes 'YYYY-MM-DD').
 // Idempotente por (usuario, semana): si ya existen, no hace nada.
+// ---------- 🧩 Equilibrio de grilla (2026-10-18, v224, pedido de Valentino) ----------
+// "Que mantenga el equilibrio de colores que ya tienen los clientes en su
+// feed. Si todas las publicaciones de la fila de la izquierda son de una
+// manera, respetar eso." Lectura del patrón de la grilla que el cliente YA
+// tiene (grid-pattern.js, lógica pura) desde estadísticas determinísticas
+// de sus posteos publicados (grid-stats.py: luminancia, saturación y
+// familia de tono por imagen — USD 0, todo local), cacheada por semana en
+// grid_pattern_snapshots como los snapshots de competencia del loop de
+// ideas. Sin patrón FUERTE no se toca nada: el pipeline sigue como siempre.
+function readGridSnapshot(uid) {
+  try {
+    const row = db.prepare('SELECT data_json, computed_at FROM grid_pattern_snapshots WHERE user_id = ?').get(uid);
+    if (!row) return null;
+    const d = JSON.parse(row.data_json || 'null');
+    if (d) d._computedAt = row.computed_at;
+    return d;
+  } catch (e) { return null; }
+}
+
+function runGridStats(files) {
+  return new Promise((resolve) => {
+    const { execFile } = require('child_process');
+    execFile('python3', [path.join(__dirname, 'grid-stats.py'), ...files], { timeout: 30000, maxBuffer: 1024 * 1024 }, (err, stdout) => {
+      if (err || !stdout) return resolve([]);
+      const out = [];
+      for (const line of String(stdout).split('\n')) {
+        const s = line.trim();
+        if (!s) continue;
+        try { out.push(JSON.parse(s)); } catch (e) { out.push(null); }
+      }
+      resolve(out);
+    });
+  });
+}
+
+// Mide la grilla publicada que la app conoce (la más nueva primero: la
+// posición 0 es arriba a la izquierda) y detecta su patrón. Una foto que
+// no está en disco conserva su posición pero no vota (lum null).
+async function computeGridPattern(uid) {
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, image_path, media_type, tipo, intent FROM posts
+      WHERE user_id = ? AND status = 'published' AND media_type IN ('image','carousel','video')
+      AND COALESCE(image_path, '') != ''
+      ORDER BY published_at DESC, id DESC LIMIT 18`).all(uid);
+  } catch (e) {}
+  const files = [];
+  const fileRowIdx = [];
+  rows.forEach((r, i) => {
+    const base = path.basename(String(r.image_path || ''));
+    if (!base) return;
+    const f = path.join(MEDIA_DIR, base);
+    if (fs.existsSync(f)) { files.push(f); fileRowIdx.push(i); }
+  });
+  const stats = files.length ? await runGridStats(files) : [];
+  const statByRow = new Map();
+  fileRowIdx.forEach((rowIdx, k) => statByRow.set(rowIdx, stats[k] || null));
+  const tiles = rows.map((r, i) => {
+    const s = statByRow.get(i);
+    return {
+      lum: s && s.ok ? s.lum : null,
+      sat: s && s.ok ? s.sat : null,
+      hueFam: s && s.ok ? s.hueFam : null,
+      media_type: r.media_type || 'image', tipo: r.tipo || '', intent: r.intent || '',
+    };
+  });
+  const pattern = gridPattern.detectPattern(tiles);
+  return {
+    pattern,
+    tiles: tiles.length,
+    usable: pattern.usable,
+    tilesDetail: tiles.map((t) => ({ lum: t.lum, hueFam: t.hueFam, type: gridPattern.typeKeyOf(t) })),
+    at: new Date().toISOString(),
+  };
+}
+
+// Patrón vigente de la cuenta: caché de 6 días; si venció, se remide.
+async function gridPatternFor(uid) {
+  const snap = readGridSnapshot(uid);
+  if (snap && snap._computedAt) {
+    const t = new Date(String(snap._computedAt).replace(' ', 'T') + 'Z').getTime();
+    if (Number.isFinite(t) && t > Date.now() - 6 * 86400000 && snap.pattern) return snap;
+  }
+  const fresh = await computeGridPattern(uid);
+  if (snap && snap.applied) fresh.applied = snap.applied; // la marca de aplicado sobrevive a la remedición
+  try {
+    db.prepare(`INSERT INTO grid_pattern_snapshots (user_id, data_json, computed_at) VALUES (?,?,datetime('now'))
+      ON CONFLICT(user_id) DO UPDATE SET data_json = excluded.data_json, computed_at = excluded.computed_at`)
+      .run(uid, JSON.stringify(fresh));
+  } catch (e) {}
+  return fresh;
+}
+
+// Marca que la tanda de `weekKey` se armó respetando el patrón, con la
+// línea que el reporte semanal puede mostrar. Sin línea no hay marca.
+function markGridApplied(uid, weekKey, line) {
+  if (!line) return;
+  try {
+    const row = db.prepare('SELECT data_json FROM grid_pattern_snapshots WHERE user_id = ?').get(uid);
+    if (!row) return;
+    const d = JSON.parse(row.data_json || 'null');
+    if (!d) return;
+    d.applied = { week_key: weekKey, line, at: new Date().toISOString() };
+    db.prepare('UPDATE grid_pattern_snapshots SET data_json = ? WHERE user_id = ?').run(JSON.stringify(d), uid);
+  } catch (e) {}
+}
+
+// Posteos que van a salir ANTES que la tanda nueva y quedan por encima de
+// la grilla vieja en el marco final: los ya programados (comprometidos) y
+// los borradores feed de esta semana o anteriores (salen primero porque se
+// programan por orden de creación). Solo desplaza el marco de lectura del
+// patrón; no mueve ninguna fecha.
+function gridAheadCount(uid, weekKey) {
+  let n = 0;
+  try {
+    const s = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'scheduled'
+      AND media_type IN ('image','carousel','video')`).get(uid);
+    n += (s && s.n) || 0;
+  } catch (e) {}
+  try {
+    const d = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE user_id = ? AND status = 'draft'
+      AND media_type IN ('image','carousel') AND COALESCE(image_path, '') != ''
+      AND (COALESCE(week_key, '') = '' OR week_key <= ?)`).get(uid, weekKey);
+    n += (d && d.n) || 0;
+  } catch (e) {}
+  return n;
+}
+
 // Ocupación REAL de una semana (2026-10-15): posteos feed con imagen que ya
 // ocupan la semana, por etiqueta (week_key) O por fecha de publicación
 // dentro del rango lun–dom, INCLUYENDO los ya publicados. Es el mismo
@@ -5955,6 +6096,39 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
+    // 🧩 EQUILIBRIO DE GRILLA (v224): si la grilla del cliente tiene un
+    // patrón fuerte, la tanda se ORDENA por posición (el tipo de cada idea
+    // calza con la columna donde va a caer) y cada idea lleva su consigna
+    // tonal de posición (_gridNote), que viaja a la dirección de arte como
+    // registro — subordinada al tema, al rol de escena y a la paleta.
+    // Sin patrón: picks intactos, comportamiento de siempre.
+    let gridAppliedLine = '';
+    try {
+      const gSnap = await gridPatternFor(uid);
+      const gPat = gSnap && gSnap.pattern;
+      if (gPat && gPat.has) {
+        const ahead = gridAheadCount(uid, weekKey);
+        const shift = deficit + ahead;
+        const typeKeyOfPick = (p) => {
+          try {
+            const ri = resolveExplicitIntent({ tipo: p.tipo || '', theme: p.titulo || '', angle: p.angulo || p.porque || '' });
+            if (ri.intent === 'tips' || ri.intent === 'educativo') return 'carrusel';
+            return ri.intent || p.tipo || 'foto';
+          } catch (e) { return p.tipo || 'foto'; }
+        };
+        const plan = gridPattern.planBatch(gPat, picks, deficit, shift, typeKeyOfPick);
+        if (plan.moved > 0) {
+          const ordered = plan.order.map((ix) => picks[ix]);
+          picks.splice(0, picks.length, ...ordered);
+          console.log(`[pipeline:${tag}] usuario ${uid}: equilibrio de grilla — tanda reordenada por posición (${plan.moved} ideas movidas)`);
+        }
+        plan.targets.forEach((t, i) => {
+          const note = gridPattern.noteForTarget(t);
+          if (note && picks[i]) picks[i]._gridNote = note;
+        });
+        gridAppliedLine = gridPattern.reportLine(gPat, shift);
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] equilibrio de grilla:`, e.message); }
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
@@ -6112,7 +6286,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try {
             imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
-              usedStyles, styleOut, productRef, sceneRole: nextSceneRole(),
+              usedStyles, styleOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
             });
           } catch (e) {
             if (!firstImgError) firstImgError = String((e && e.message) || e).slice(0, 300);
@@ -6230,6 +6404,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // 5 workers: la semana entera (5 posteos) sale en una sola oleada.
     await Promise.all([worker(), worker(), worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
+    // 🧩 Si la tanda se armó respetando el patrón de la grilla, queda la
+    // marca para la línea del reporte semanal (solo si salió algún posteo).
+    if (created > 0 && gridAppliedLine) {
+      try { markGridApplied(uid, weekKey, gridAppliedLine); console.log(`[pipeline:${tag}] usuario ${uid}: equilibrio de grilla aplicado — "${gridAppliedLine}"`); } catch (e) {}
+    }
     // Si la semana quedó incompleta por fallos de imagen IA, alimentar el
     // loop de reintentos (v72): el cron cada 3h la regenera con reason 'img_fail'.
     if (imgFailCount > 0 && created < picks.length) {
@@ -8722,7 +8901,7 @@ function topStyleMemoryLine(uid) {
     return rows.map(x => `${x.code} (alcance prom. ${Math.round(x.r || 0)})`).join(', ');
   } catch (e) { return ''; }
 }
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole }, apiKey, costFeature) {
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole, gridNote }, apiKey, costFeature) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
   // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
@@ -8793,7 +8972,7 @@ Familia visual: ${fam}
 ${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
 ${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
 ${dnaBits ? `Contexto del negocio: ${String(dnaBits).slice(0, 300)}` : ''}
-${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${sceneRole ? `\nRol de escena de este posteo dentro de la semana (cada posteo de la semana cumple un rol distinto — la semana completa debe verse variada): ${String(sceneRole).slice(0, 220)}. El momento y el contexto TIENEN que cumplir ese rol.` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
+${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${sceneRole ? `\nRol de escena de este posteo dentro de la semana (cada posteo de la semana cumple un rol distinto — la semana completa debe verse variada): ${String(sceneRole).slice(0, 220)}. El momento y el contexto TIENEN que cumplir ese rol.` : ''}${gridNote ? `\n${String(gridNote).slice(0, 420)}` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
       ],
     }),
     signal: AbortSignal.timeout(60000),
@@ -9173,7 +9352,7 @@ function conceptShotGenerateQueued(args) {
     else s.waiters.push(run);
   });
 }
-async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '' }) {
+async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -9211,6 +9390,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     learningsLine: learningsLineOf(getContentLearnings(uid)),
     memoryLine: [topStyleMemoryLine(uid), clientTasteLine(uid), monthlyGoalLine(uid)].filter(Boolean).join(' '),
     sceneRole,
+    gridNote,
     styleRules,
     visualStyle,
   };
@@ -12583,7 +12763,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v223';
+const BUILD_ID = '20261018-v224';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -12756,4 +12936,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern };

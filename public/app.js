@@ -444,6 +444,7 @@ async function enhanceWeekReport() {
       if (eng.length) h += `<div class="hs-report-line">${eng.join(' · ')}</div>`;
       if (r.best) h += `<div class="hs-report-line">🏆 Tu mejor posteo: “${esc(r.best.caption)}…” (${r.best.likes} ❤️ · ${r.best.comments} 💬)</div>`;
       if (r.nextCount) h += `<div class="hs-report-line">✨ Y ya hay <b>${r.nextCount}</b> posteos en camino para esta semana</div>`;
+      if (r.gridNote) h += `<div class="hs-report-line">${esc(r.gridNote)}</div>`;
     }
     if (opp) {
       h += `<div class="hs-report-line">📅 <b>Se viene ${esc(opp.name)}</b> ${opp.daysLeft === 0 ? '¡hoy!' : opp.daysLeft === 1 ? '¡mañana!' : `en ${opp.daysLeft} días`} — tu semana va a tener un posteo especial ✨</div>`;
