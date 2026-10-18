@@ -10434,6 +10434,21 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
   if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
 
+  // (v196) Medallón de los pósters de marca: la foto de perfil localizada
+  // en MEDIA_DIR (mismo archivo que usa el stream). Sin @ o sin foto, los
+  // pósters salen tipográficos.
+  let profilePicPath = null;
+  if (ig && igPic) {
+    try {
+      const profObj = { handle: ig, pic: igPic };
+      await feedAudit.localizeTrialPic(profObj, MEDIA_DIR);
+      if (profObj.pic_media) {
+        const abs = path.join(MEDIA_DIR, path.basename(profObj.pic_media));
+        if (fs.statSync(abs).isFile()) profilePicPath = abs;
+      }
+    } catch (e) { /* póster tipográfico */ }
+  }
+
   const ip = demo.clientIp(req);
   const testMode = trialTestMode(req);
   const igKey = ig.toLowerCase();
@@ -10489,7 +10504,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // spec ni los diseños ni los captions. Lanzarlas en paralelo con el
     // render en vez de esperarlas antes saca ~1-2s del camino crítico.
     const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors }, null)).catch(() => []);
-    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5 });
+    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -10672,6 +10687,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           // por foto) dentro de esta misma carrera de ~3 s: lo que no llega
           // queda null (celda neutra) y la semana nunca espera por esto.
           try { await feedAudit.localizeTrialPhotos(prof, MEDIA_DIR); } catch (e) { /* queda como vino */ }
+          // (v196) La foto de perfil también local: es el medallón de los
+          // pósters de marca (el render es del servidor, no del navegador).
+          try { await feedAudit.localizeTrialPic(prof, MEDIA_DIR); } catch (e) { /* póster tipográfico */ }
         }
         return prof;
       } catch (e) { return null; }
@@ -10750,6 +10768,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // Espera acotada: las ideas ya tomaron su tiempo y el perfil suele
     // estar; si no llega, se sigue con lo que haya — la prueba no se frena.
     let bioText = '';
+    let profilePicPath = null;
     if (ig && trialProfilePromise) {
       const prof = trialProfile || await Promise.race([
         trialProfilePromise,
@@ -10757,6 +10776,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       ]).catch(() => null);
       if (prof) {
         bioText = String(prof.bio || '');
+        // (v196) Medallón de los pósters de marca: la foto de perfil ya
+        // localizada por la cadena de la proyección (mismo archivo).
+        if (prof.pic_media) {
+          const abs = path.join(MEDIA_DIR, path.basename(prof.pic_media));
+          try { if (fs.statSync(abs).isFile()) profilePicPath = abs; } catch (e) { /* sin medallón */ }
+        }
         if (!hexOk(fields.accent) && Array.isArray(prof.photos)) {
           const bufs = [];
           for (const p of prof.photos) {
@@ -10778,7 +10803,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
 
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText });
+    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
@@ -10835,7 +10860,16 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const posts = [];
       const usedPhoto = new Set((spec.photos || []).map((p) => String(p)));
       const usedTema = new Set((spec.topics || []).map((t) => (t && (t.tema || t.headline)) || ''));
-      const weekTreat = (j) => spec.specPosts[j % spec.specPosts.length] || {};
+      // (v196) El tratamiento que hereda un extra NUNCA es el póster: un
+      // extra es una foto/diseño de la semana, no un póster de marca.
+      const weekTreat = (j) => {
+        const arr = spec.specPosts;
+        for (let m = 0; m < arr.length; m++) {
+          const cand = arr[(j + m) % arr.length];
+          if (cand && !(cand.treatment && cand.treatment.skeleton === 'poster')) return cand;
+        }
+        return arr[j % arr.length] || {};
+      };
       const probe = (off) => {
         try {
           return demo.buildDemoSpec({ business, category, country, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText });
@@ -11625,7 +11659,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261017-v195';
+const BUILD_ID = '20261017-v196';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

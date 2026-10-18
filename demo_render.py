@@ -21,7 +21,7 @@ import os
 import json
 import math
 
-from PIL import Image, ImageDraw, ImageFont, ImageStat, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageStat, ImageEnhance, ImageFilter
 
 NAVY = (10, 30, 51)        # #0A1E33
 BODY = (71, 97, 122)       # #47617A
@@ -39,6 +39,8 @@ DEFAULT_COLORS = {
     "watermark": "#47617A",   # marca de agua
     "detail": "#FEC14D",      # acento: detalles (anillo del sello, borde del pill)
     "detail_text": "#0A1E33",  # texto sobre el acento
+    "poster_bg": "#0A1E33",   # (v196) fondo pleno del póster de marca: el color
+                              # oscuro de la paleta del cliente (demo.js lo deriva)
 }
 
 
@@ -1072,6 +1074,106 @@ def sk_duo(fonts_dir, p, C, hs):
     return img, y
 
 
+def _lum(rgb):
+    return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255.0
+
+
+def _blend(rgb, other, t):
+    return tuple(int(round(rgb[i] + (other[i] - rgb[i]) * t)) for i in range(3))
+
+
+def sk_poster(fonts_dir, p, C, hs):
+    """(v196) PÓSTER DE MARCA para perfiles de servicios/contenido: fondo
+    PLENO del color oscuro de la paleta del cliente, su foto de perfil como
+    medallón protagonista (anillo de marca + halo suave) y titular enorme.
+    Es el lenguaje de los posteos de una marca con protagonista (ilustración
+    + titular gigante sobre color), no una foto de stock con texto encima.
+    Sin foto de perfil utilizable → póster tipográfico con las iniciales
+    del negocio en el medallón. Nada de foto de stock en esta pieza."""
+    bg = C["poster_bg"]
+    img = Image.new("RGB", (W, H), bg)
+    d = ImageDraw.Draw(img)
+    if p.get("pill"):
+        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
+    # Nombre del negocio arriba, con shrink-fit: un nombre largo (26
+    # caracteres) llegaba hasta debajo de la pastilla y se pisaban.
+    name = str(p.get("bar", "") or "").upper()
+    if name:
+        avail = MAX_W
+        if p.get("pill"):
+            pill_w = tw(d, str(p["pill"]).upper(), B(fonts_dir, 34), 6) + 68
+            avail = W - MX - pill_w - 36 - MX
+        f0 = B(fonts_dir, 30)
+        while tw(d, name, f0, 6) > avail and f0.size > 17:
+            f0 = B(fonts_dir, f0.size - 2)
+        ltext(d, MX + 2, 58, name, f0, fill=(0, 0, 0), tracking=6)
+        ltext(d, MX, 56, name, f0, fill=(255, 255, 255), tracking=6)
+
+    # Medallón protagonista (centrado, tercio superior).
+    cx, cy, r = W // 2, 402, 196
+    halo = _blend(bg, (255, 255, 255), 0.10)
+    d.ellipse([cx - r - 40, cy - r - 40, cx + r + 40, cy + r + 40], fill=halo)
+    pic = p.get("photo")
+    medallion = None
+    if pic and os.path.isfile(str(pic)):
+        try:
+            src = Image.open(str(pic)).convert("RGB")
+            s = max((2 * r) / src.width, (2 * r) / src.height)
+            src = src.resize((max(2 * r, int(src.width * s)), max(2 * r, int(src.height * s))), Image.LANCZOS)
+            ox = (src.width - 2 * r) // 2
+            oy = (src.height - 2 * r) // 2
+            medallion = src.crop((ox, oy, ox + 2 * r, oy + 2 * r))
+            # La foto de perfil de IG llega chica (100px): un toque de
+            # nitidez tras el upscale para que el medallón no se vea lavado.
+            medallion = medallion.filter(ImageFilter.UnsharpMask(radius=2, percent=68, threshold=2))
+        except Exception:
+            medallion = None
+    if medallion is not None:
+        mask = Image.new("L", (2 * r, 2 * r), 0)
+        ImageDraw.Draw(mask).ellipse([0, 0, 2 * r, 2 * r], fill=255)
+        img.paste(medallion, (cx - r, cy - r), mask)
+        d = ImageDraw.Draw(img)
+    else:
+        # Medallón tipográfico: círculo del color vivo de la paleta con las
+        # iniciales del negocio (la identidad entra igual, sin foto).
+        fill = C["accent"] if _lum(C["accent"]) >= _lum(C["btn"]) else C["btn"]
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fill)
+        name = str(p.get("bar", "") or "").strip()
+        initials = "".join(w[0] for w in name.split()[:2]).upper() or "•"
+        f_ini = B(fonts_dir, 168)
+        tcol = (10, 30, 51) if _lum(fill) > 0.55 else (255, 255, 255)
+        iw = tw(d, initials, f_ini)
+        d.text((cx - iw / 2, cy - f_ini.size * 0.58), initials, font=f_ini, fill=tcol)
+    # Anillo de marca sobre el medallón (doble: vivo + blanco fino).
+    ring = C["btn"] if _lum(C["btn"]) > 0.18 else C["accent"]
+    d.ellipse([cx - r - 7, cy - r - 7, cx + r + 7, cy + r + 7], outline=ring, width=13)
+    d.ellipse([cx - r - 18, cy - r - 18, cx + r + 18, cy + r + 18], outline=(255, 255, 255), width=4)
+
+    # Titular enorme: el color claro de la paleta si contrasta; si no, blanco.
+    light = C["accent"] if _lum(C["accent"]) >= _lum(C["btn"]) else C["btn"]
+    head_col = light if _lum(light) >= 0.45 else (255, 255, 255)
+    rule_col = C["btn"] if head_col == C["accent"] else C["accent"]
+    if abs(_lum(rule_col) - _lum(bg)) < 0.08:
+        rule_col = head_col  # la regla no puede fundirse con el fondo
+    y = cy + r + 78
+    d.rectangle([cx - 60, y, cx + 60, y + 10], fill=rule_col)
+    y += 52
+    f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 148), 3)
+    for ln in lines:
+        y = ctext(d, cx, y, ln, f, head_col)
+        y += int(f.size * 0.10)
+    y += 16
+    sub_col = _blend(bg, (255, 255, 255), 0.78)
+    f2, slines = sub_wrap(d, fonts_dir, p.get("subline", ""), MAX_W, 42, 2)
+    for ln in slines:
+        y = ctext(d, cx, y, ln, f2, sub_col)
+        y += 12
+    y += 34
+    y = cta_button(d, fonts_dir, y, p.get("cta", ""), C, center=True)
+    draw_footer(d, fonts_dir, p, True)
+    return img, y
+
+
 SKELETONS_V2 = {
     "abajo": sk_abajo,
     "arriba": sk_arriba,
@@ -1079,6 +1181,7 @@ SKELETONS_V2 = {
     "claro": sk_claro,
     "centro": sk_centro,
     "duo": sk_duo,
+    "poster": sk_poster,
 }
 
 

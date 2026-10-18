@@ -150,7 +150,7 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 7;
+const DEMO_ENGINE_V = 8;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -187,6 +187,56 @@ PHOTO_TAGS['flores-2'] = { temas: ['flores', 'florero'] };            // exhibic
 PHOTO_TAGS['flores-3'] = { temas: ['flores', 'ramos', 'personas'] };  // florista sonriendo con un ramo
 PHOTO_TAGS['flores-4'] = { temas: ['flores', 'local', 'personas'] };  // florería de noche con clientes
 PHOTO_TAGS['flores-5'] = { temas: ['flores', 'ramos'] };              // puesto de flores al sol, ramos artesanales
+
+// (v196) Tags del RESTO de las familias, verificados a ojo sobre hojas de
+// contacto del archivo real (2026-10-18). Con esto las 69 fotos del stock
+// quedan taggeadas y el gate foto↔tema puede ser UNIVERSAL y DURO: una foto
+// sin tags ya no es "genérica válida" — es inutilizable.
+Object.assign(PHOTO_TAGS, {
+  'fashion-3': { temas: ['moda', 'retrato', 'calle'] },   // mujer de vestido blanco en la calle
+  'fashion-4': { temas: ['moda', 'retrato'] },            // hombre de traje
+  'fashion-5': { temas: ['moda', 'retrato'] },            // editorial: mujer de vestido recostada
+  'fashion-6': { temas: ['moda', 'producto', 'calzado'] },// zapatilla blanca sobre cubos
+  'lifestyle-3': { temas: ['moda', 'retrato', 'calle'] }, // mujer urbana con campera
+  'lifestyle-4': { temas: ['personas', 'retrato', 'pareja'] }, // pareja abrazada al aire libre
+  'lifestyle-5': { temas: ['fitness', 'personas', 'hogar'] },  // mujer haciendo yoga en casa
+  'lifestyle-6': { temas: ['autos', 'viaje', 'personas'] },    // pareja en auto de viaje
+  'fitness':   { temas: ['fitness', 'local'] },           // interior de gimnasio luminoso
+  'fitness-1': { temas: ['fitness'] },                    // mancuernas en primer plano
+  'fitness-2': { temas: ['fitness', 'personas', 'retrato'] }, // mujer en banco de gym con toalla
+  'fitness-3': { temas: ['fitness', 'personas'] },        // clase de yoga/pilates
+  'fitness-4': { temas: ['fitness', 'personas', 'equipo'] },  // entrenamiento con cuerdas + profe
+  'fitness-5': { temas: ['fitness', 'personas', 'airelibre'] }, // corredor al atardecer en el parque
+  'pets':   { temas: ['mascotas', 'local'] },             // interior de pet shop
+  'pets-1': { temas: ['mascotas', 'retrato'] },           // border collie
+  'pets-2': { temas: ['mascotas', 'retrato'] },           // gato
+  'pets-3': { temas: ['mascotas', 'bano'] },              // perro bañándose (peluquería canina)
+  'pets-4': { temas: ['mascotas'] },                      // cachorro husky en el pasto
+  'pets-5': { temas: ['mascotas', 'personas', 'veterinaria'] }, // veterinario con un pomerania
+  'home':   { temas: ['hogar'] },                         // living luminoso con plantas
+  'home-1': { temas: ['hogar'] },                         // living amarillo con sillones
+  'home-2': { temas: ['hogar', 'cocina'] },               // cocina moderna con isla
+  'home-3': { temas: ['hogar'] },                         // dormitorio
+  'home-4': { temas: ['hogar'] },                         // living boho con plantas
+  'home-5': { temas: ['hogar'] },                         // living verde con ventanal
+  'home-6': { temas: ['hogar'] },                         // comedor minimalista
+  'bar':   { temas: ['bar', 'local'] },                   // canillas de cerveza en barra luminosa
+  'bar-1': { temas: ['bar'] },                            // tragos de colores en la barra
+  'bar-2': { temas: ['bar', 'personas'] },                // brindis con pintas
+  'bar-3': { temas: ['bar', 'noche', 'personas'] },       // bartender sirviendo un cóctel
+  'bar-4': { temas: ['bar', 'local'] },                   // interior de bar elegante vacío
+  'bar-5': { temas: ['bar', 'personas'] },                // brindis con copas de vino
+  'office':   { temas: ['oficina', 'laptop'] },           // escritorio con laptop junto a la ventana
+  'office-1': { temas: ['oficina', 'equipo', 'personas'] }, // equipo reunido en sala de juntas
+  'office-2': { temas: ['oficina', 'local'] },            // lounge de oficina moderna
+  'office-3': { temas: ['dental', 'salud', 'local'] },    // consultorio odontológico (sillón dental)
+  'office-4': { temas: ['oficina', 'equipo', 'personas'] }, // reunión en oficina luminosa
+  'office-5': { temas: ['dental', 'salud', 'personas'] }, // odontólogos atendiendo a una paciente
+  'tech':   { temas: ['tech', 'producto'] },              // celular exhibido en tienda
+  'tech-1': { temas: ['tech', 'local', 'personas'] },     // tienda de celulares: vendedor y clienta
+  'tech-2': { temas: ['tech', 'producto'] },              // accesorios de celular (fundas, cables)
+  'tech-3': { temas: ['tech', 'reparacion', 'personas'] },// reparación de celular con lupa
+});
 
 // Temas de foto PROHIBIDOS según el tema del posteo: la foto nunca puede ser
 // de OTRO servicio puntual (uñas vendiendo tintura fue el caso real).
@@ -242,6 +292,116 @@ function pickPhotoTagged(topic, poolFams, used, forbiddenTemas) {
     if (hit) return hit;
   }
   return poolFams.find((f) => !banned(f)) || poolFams[0];
+}
+
+// ---------- (v196) GATE DURO FOTO↔TEMA universal ----------
+// Hasta v195 el matching con tags solo cubría belleza/makeup/barbería; el
+// resto de los rubros usaba la foto curada del tema SIN chequeo — así una
+// foto de playa terminó vendiendo "Sorteamos una auditoría completa" en la
+// semana de una agencia (la misma familia del error uñas↔tintura de Mili).
+// Ahora TODA pieza del demo (las 5 de la semana y los extras de la grilla)
+// pasa por este gate:
+//   · el mundo visual del rubro (PHOTO_WORLD): los temas que una foto puede
+//     mostrar para ese negocio;
+//   · los temas FUERTES (PHOTO_STRONG_TEMAS) nombran un mundo concreto
+//     (playa, barbería, uñas, dental…): si la foto muestra uno que NO es del
+//     mundo del rubro, queda afuera — sin excepciones;
+//   · los conflictos duros de siempre (TEMA_CONFLICTS por tema del posteo +
+//     AUDIENCE_FORBIDDEN_TEMAS por público) siguen mandando;
+//   · la foto tiene que pertenecer AL MENOS en un tema al mundo del rubro;
+//   · foto sin tags = inutilizable (las 69 del stock están taggeadas).
+// Un tema para el que ninguna foto pasa el gate NO fuerza la foto: el tema
+// se cambia por otro del pool que sí matchea (selección en buildDemoSpec).
+const PHOTO_WORLD = {
+  moda: ['moda', 'retrato', 'local', 'personas', 'producto', 'calzado', 'calle', 'rostro'],
+  joyeria: ['moda', 'retrato', 'personas', 'local', 'producto', 'calzado', 'calle', 'rostro', 'makeup', 'skincare', 'cosmetica', 'unas'],
+  gastronomia: ['comida', 'cafe', 'local', 'personas', 'retrato'],
+  bar: ['bar', 'local', 'personas', 'noche', 'comida', 'cafe', 'retrato'],
+  belleza: ['pelo', 'makeup', 'unas', 'skincare', 'cosmetica', 'rostro', 'retrato', 'local', 'personas', 'moda', 'cafe'],
+  makeup: ['makeup', 'skincare', 'cosmetica', 'rostro', 'moda', 'retrato', 'personas', 'local', 'cafe'],
+  barberia: ['barberia', 'pelo', 'local', 'retrato', 'personas', 'moda', 'cafe'],
+  fitness: ['fitness', 'personas', 'retrato', 'local', 'equipo', 'airelibre'],
+  mascotas: ['mascotas', 'local', 'retrato', 'personas', 'bano', 'veterinaria', 'hogar', 'cafe'],
+  hogar: ['hogar', 'cocina', 'local', 'personas', 'cafe', 'retrato'],
+  deco: ['hogar', 'cocina', 'local', 'personas', 'cafe', 'retrato'],
+  flores: ['flores', 'ramos', 'rosas', 'florero', 'local', 'personas'],
+  inmobiliaria: ['hogar', 'cocina', 'oficina', 'local', 'personas', 'equipo', 'cafe', 'retrato', 'laptop'],
+  salud: ['dental', 'salud', 'personas', 'local', 'oficina', 'laptop', 'retrato', 'cafe'],
+  profesionales: ['oficina', 'laptop', 'equipo', 'personas', 'local', 'retrato', 'cafe'],
+  contenido: ['oficina', 'laptop', 'equipo', 'personas', 'local', 'retrato', 'cafe'],
+  servicios: ['oficina', 'laptop', 'equipo', 'personas', 'local', 'hogar', 'cocina', 'cafe', 'retrato'],
+  educacion: ['oficina', 'laptop', 'equipo', 'personas', 'local', 'cafe', 'retrato'],
+  tecnologia: ['tech', 'producto', 'reparacion', 'personas', 'local', 'oficina', 'laptop'],
+  turismo: ['playa', 'retrato', 'moda', 'calle', 'personas', 'pareja', 'viaje', 'autos', 'bar', 'local', 'comida', 'cafe', 'noche'],
+  viajes: ['playa', 'retrato', 'moda', 'calle', 'personas', 'pareja', 'viaje', 'autos', 'bar', 'local', 'comida', 'cafe', 'noche'],
+  eventos: ['bar', 'local', 'personas', 'noche', 'retrato', 'pareja', 'moda', 'calle', 'comida', 'cafe'],
+  fotografia: ['cafe', 'comida', 'personas', 'retrato', 'playa', 'moda', 'calle', 'pareja', 'oficina', 'laptop', 'local'],
+  autos: ['autos', 'viaje', 'personas', 'local', 'retrato', 'pareja', 'oficina', 'laptop', 'equipo'],
+  cafeteria: ['cafe', 'comida', 'local', 'personas', 'retrato'],
+  arte: ['moda', 'retrato', 'personas', 'local', 'calle', 'producto', 'calzado', 'cafe', 'comida'],
+  otro: ['cafe', 'comida', 'personas', 'retrato', 'oficina', 'laptop', 'equipo', 'local', 'hogar', 'cocina', 'pareja', 'moda', 'calle'],
+};
+const PHOTO_STRONG_TEMAS = new Set([
+  'pelo', 'makeup', 'unas', 'barberia', 'skincare', 'cosmetica',
+  'comida', 'cafe', 'bar', 'moda', 'calzado',
+  'flores', 'ramos', 'rosas', 'florero',
+  'mascotas', 'bano', 'veterinaria', 'fitness',
+  'hogar', 'cocina', 'oficina', 'laptop',
+  'dental', 'salud', 'tech', 'reparacion', 'autos', 'viaje', 'playa',
+]);
+
+function photoGateCtx({ category, subcat, topic, isCafe }) {
+  const key = subcat || category;
+  const world = new Set(PHOTO_WORLD[key] || PHOTO_WORLD[category] || PHOTO_WORLD.otro);
+  const forb = new Set(AUDIENCE_FORBIDDEN_TEMAS[key] || AUDIENCE_FORBIDDEN_TEMAS[category] || []);
+  if (topic && topic.tema) for (const c of (TEMA_CONFLICTS[topic.tema] || [])) forb.add(c);
+  return { world, forb, isCafe: !!isCafe };
+}
+
+function photoPassesGate(famName, ctx) {
+  const t = photoTemas(famName);
+  if (!t) return false; // sin tags: el gate es duro, no entra
+  if (t.some((x) => ctx.forb.has(x))) return false;
+  if (t.some((x) => PHOTO_STRONG_TEMAS.has(x) && !ctx.world.has(x))) return false;
+  if (!t.some((x) => ctx.world.has(x))) return false;
+  return true;
+}
+
+// Elige la foto de un tema PASANDO el gate. Rangos:
+//  1) muestra el tema del posteo (match exacto)
+//  2) la foto curada del tema (photo / photoCafe)
+//  3) cualquier foto del pool que pase
+//  4) una que pase aunque ya esté usada (los extras la descartan solos)
+// Devuelve null si NINGUNA candidata pasa: el llamador cambia el tema.
+function pickPhotoGated(topic, poolFams, used, ctx) {
+  const cands = (poolFams || []).slice();
+  if (topic) {
+    for (const key of [topic.photo, topic.photoCafe]) {
+      if (key && !cands.includes(key)) cands.push(key);
+    }
+  }
+  const curated = topic ? ((ctx.isCafe && topic.photoCafe) ? topic.photoCafe : topic.photo) : null;
+  const tiers = [
+    (f) => { const t = photoTemas(f); return !!(topic && topic.tema && t && t.includes(topic.tema)); },
+    (f) => !!curated && f === curated,
+    () => true,
+  ];
+  for (const tier of tiers) {
+    const hit = cands.find((f) => !used.has(f) && photoPassesGate(f, ctx) && tier(f));
+    if (hit) return hit;
+  }
+  return cands.find((f) => photoPassesGate(f, ctx)) || null;
+}
+
+// ¿Existe AL MENOS una foto (pool o curada) que pase el gate para el tema?
+function topicPhotoMatchable(topic, poolFams, ctx) {
+  const cands = (poolFams || []).slice();
+  if (topic) {
+    for (const key of [topic.photo, topic.photoCafe]) {
+      if (key && !cands.includes(key)) cands.push(key);
+    }
+  }
+  return cands.some((f) => photoPassesGate(f, ctx));
 }
 
 // ---------- Subrubro: makeup NO es peluquería ----------
@@ -432,6 +592,27 @@ function textOn(hex) {
   return lum > 0.62 ? '#0A1E33' : '#FFFFFF';
 }
 
+// (v196) El color OSCURO de la paleta para el fondo pleno del póster de
+// marca: se toma el más oscuro entre accent y btn y se lo baja a una
+// luminancia ~0,145 preservando el tono (escala RGB). Con la paleta de
+// Posty (amarillo #F9C00E / celeste #1386C7) da un azul profundo de marca.
+function posterBgFor(accent, btn) {
+  const lum = (h) => {
+    const v = parseInt(h.slice(1), 16);
+    return (0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255)) / 255;
+  };
+  const base = lum(accent) <= lum(btn) ? accent : btn;
+  const v = parseInt(base.slice(1), 16);
+  let r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+  const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255 || 1;
+  const target = 0.145;
+  if (L > target) {
+    const s = target / L;
+    r = Math.round(r * s); g = Math.round(g * s); b = Math.round(b * s);
+  }
+  return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
 function demoColors(accent, btn) {
   const a = cleanHex(accent, DEMO_COLOR_DEFAULTS.accent);
   const b = cleanHex(btn, DEMO_COLOR_DEFAULTS.btn);
@@ -443,6 +624,7 @@ function demoColors(accent, btn) {
     btn: b,
     btn_text: textOn(b),
     watermark: '#47617A',
+    poster_bg: posterBgFor(a, b),
   };
 }
 
@@ -728,7 +910,7 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '' }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
@@ -742,8 +924,16 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // topicOffset (v187): temas desde una posición del pool — lo usan los
   // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
   // fotos, vía excludePhotos) de la semana ya generada.
-  const topics = allTopics.slice(topicOffset, topicOffset + n);
+  let topics = allTopics.slice(topicOffset, topicOffset + n);
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
+
+  // (v196) MODO PÓSTER DE MARCA: un perfil de servicios/contenido (agencia,
+  // CM, profesionales) no es un catálogo de fotos — su semana sale como
+  // piezas de MARCA: pósters de color pleno con su foto de perfil como
+  // medallón protagonista + fotos con match. Posiciones pares del pool de
+  // temas (índice absoluto, estable entre la semana y los extras) = póster.
+  const posterMode = !photoPath && (subcat === 'contenido' || cat === 'profesionales' || cat === 'servicios');
+  const posterAt = new Set();
 
   let styleObjs, photos;
   const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
@@ -752,49 +942,80 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     const IS = imageStyles();
     styleObjs = base.styles.slice(0, n).map((c) => IS.getStyle(c));
     photos = base.photos.slice(0, n);
-  } else {
+  } else if (photoPath) {
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
     styleObjs = pickDemoStyles({ topics, category: cat, subcat, business });
-    if (photoPath) {
-      photos = topics.map(() => ({ userPhoto: true }));
-    } else if (TAG_GUARD_CATS.has(subcat || cat)) {
-      // Foto por tema con match obligatorio (guarda de tags).
-      const poolFams = (cat === 'gastronomia' && isCafeBusiness(business))
-        ? CAFE_POOL.slice()
-        : (CATEGORY_PHOTOS[subcat === 'makeup' ? 'belleza' : cat] || CATEGORY_PHOTOS.otro).slice();
-      const forbidden = AUDIENCE_FORBIDDEN_TEMAS[subcat || cat] || [];
-      const usedFams = new Set((excludePhotos || []).map((x) => path.basename(String(x)).replace(/\.webp$/i, '')));
-      // Dos pasadas: primero los temas CON tema (las fotos exactas son pocas
-      // y son para ellos), después los genéricos — si no, un posteo sin tema
-      // se queda con la única foto de pelo y los de pelo caen en fotos de
-      // otro servicio (caso real 2026-10-17, semana de peluquería).
-      photos = new Array(topics.length);
-      const order = topics.map((t, i) => i).sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
-      for (const i of order) {
-        const famName = pickPhotoTagged(topics[i], poolFams, usedFams, forbidden);
-        usedFams.add(famName);
-        const p = path.join(STOCK_DIR, famName + '.webp');
-        if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
-        photos[i] = p;
+    photos = topics.map(() => ({ userPhoto: true }));
+  } else {
+    // (v196) SELECCIÓN CON GATE DURO: se recorren los temas del pool desde
+    // topicOffset y un tema SOLO entra a la semana si alguna foto pasa el
+    // gate para él (o si su posición es de póster, que no necesita foto).
+    // El que no matchea se cambia por el siguiente que sí — la foto jamás
+    // se fuerza (así murió el "sorteo de auditoría" sobre la foto de playa).
+    const isCafe = (cat === 'gastronomia' || cat === 'cafeteria') && isCafeBusiness(business);
+    const poolFams = isCafe
+      ? CAFE_POOL.slice()
+      : (CATEGORY_PHOTOS[subcat === 'makeup' ? 'belleza' : cat] || CATEGORY_PHOTOS.otro).slice();
+    const chosen = [];
+    const chosenPoster = [];
+    for (let k = topicOffset; k < allTopics.length && chosen.length < n; k++) {
+      const t = allTopics[k];
+      const isPoster = posterMode && (k % 2 === 0);
+      if (!isPoster) {
+        const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe });
+        if (!topicPhotoMatchable(t, poolFams, ctx)) continue;
       }
-    } else {
-      const stockN = stockPhotosN(cat, n, business);
-      // Foto por tema: si el tema trae `photo` asignada se usa esa (matchea el
-      // posteo); si no, se sortea del pool evitando repetir la misma foto.
-      // En cafés, los temas con `photoCafe` usan la variante de café.
-      const isCafe = cat === 'gastronomia' && isCafeBusiness(business);
-      const usedPhotos = new Set((excludePhotos || []).map((x) => String(x)));
-      photos = topics.map((t) => {
-        const key = (isCafe && t.photoCafe) ? t.photoCafe : t.photo;
-        if (key) {
-          const p = path.join(STOCK_DIR, key + '.webp');
-          if (fs.existsSync(p) && !usedPhotos.has(p)) { usedPhotos.add(p); return p; }
-        }
-        const pick = stockN.find((s) => !usedPhotos.has(s)) || stockN[0];
-        usedPhotos.add(pick);
-        return pick;
-      });
+      chosen.push(t);
+      chosenPoster.push(isPoster);
     }
+    if (chosen.length) {
+      topics = chosen;
+      chosenPoster.forEach((b, i) => { if (b) posterAt.add(i); });
+    }
+    // Estilos REALES del catálogo del producto: uno distinto por posteo.
+    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business });
+    // En modo póster, los posteos CON foto conservan esqueletos distintos
+    // entre sí (el póster ya aporta el suyo a la diversidad de la semana).
+    if (posterMode && topics.length >= 3) {
+      const photoIdxs = topics.map((t, i) => i).filter((i) => !posterAt.has(i));
+      if (photoIdxs.length >= 2) {
+        const skOf = (s) => (s ? treatmentForStyle(s).skeleton : null);
+        if (skOf(styleObjs[photoIdxs[0]]) === skOf(styleObjs[photoIdxs[1]])) {
+          const usedCodes = new Set(styleObjs.filter(Boolean).map((s) => s.code));
+          const alt = demoStylePool(cat, business).find((s) => !usedCodes.has(s.code)
+            && skOf(s) !== skOf(styleObjs[photoIdxs[0]]) && skOf(s) !== 'poster');
+          if (alt) styleObjs[photoIdxs[1]] = alt;
+        }
+      }
+    }
+    // Fotos con el gate, en dos pasadas: primero los temas CON tema (las
+    // fotos exactas son pocas y son para ellos), después los genéricos — si
+    // no, un posteo sin tema se queda con la única foto de pelo y los de
+    // pelo caen en fotos de otro servicio (caso real 2026-10-17).
+    photos = new Array(topics.length).fill(null);
+    const usedFams = new Set((excludePhotos || []).map((x) => path.basename(String(x)).replace(/\.webp$/i, '')));
+    const order = topics.map((t, i) => i)
+      .filter((i) => !posterAt.has(i))
+      .sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
+    for (const i of order) {
+      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe });
+      const famName = pickPhotoGated(topics[i], poolFams, usedFams, ctx);
+      if (!famName) {
+        // No debería pasar (la selección ya exigió match): si pasa, el
+        // slot sale como póster en modo póster y si no, con la primera
+        // foto del pool — nunca con una foto que el gate rechazó.
+        if (posterMode) { posterAt.add(i); photos[i] = profilePicPath || null; continue; }
+        const p0 = path.join(STOCK_DIR, poolFams[0] + '.webp');
+        if (!fs.existsSync(p0)) throw new Error('Foto de muestra no disponible');
+        photos[i] = p0;
+        continue;
+      }
+      usedFams.add(famName);
+      const p = path.join(STOCK_DIR, famName + '.webp');
+      if (!fs.existsSync(p)) throw new Error('Foto de muestra no disponible');
+      photos[i] = p;
+    }
+    for (const i of posterAt) photos[i] = profilePicPath || null;
   }
   const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
   const specPosts = topics.map((t, i) => {
@@ -805,11 +1026,17 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       subline = captions.toTu(subline);
     }
     const st = styleObjs[i] || null;
+    const isPoster = posterAt.has(i);
     return {
       photo: photos[i],
       style: st ? st.code : 'promo',
       style_name: st ? st.name : '',
-      treatment: st ? treatmentForStyle(st) : null,
+      // (v196) El slot de póster manda sobre el tratamiento del estilo: la
+      // pieza es un póster de marca (fondo pleno + medallón), no una foto.
+      treatment: isPoster
+        ? { skeleton: 'poster', grade: 'neutral', crop: 'normal' }
+        : (st ? treatmentForStyle(st) : null),
+      poster: isPoster || undefined,
       kind: t.kind,
       tema: t.tema || null,
       focus: focuses[i],
@@ -821,7 +1048,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     };
   });
   const stylesN = specPosts.map((p) => p.style);
-  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, n - 1), count: n, goalLine, topics, subcat };
+  return { specPosts, styles: stylesN, photos, videoIdx: Math.min(2, Math.max(0, specPosts.length - 1)), count: specPosts.length, goalLine, topics, subcat };
 }
 
 // Renderiza un spec (lista de posteos) a PNGs con los colores dados.
@@ -891,9 +1118,9 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '' });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -1348,6 +1575,13 @@ module.exports = {
   PHOTO_TAGS,
   TEMA_CONFLICTS,
   AUDIENCE_FORBIDDEN_TEMAS,
+  PHOTO_WORLD,
+  PHOTO_STRONG_TEMAS,
+  photoGateCtx,
+  photoPassesGate,
+  pickPhotoGated,
+  topicPhotoMatchable,
+  posterBgFor,
   treatmentForStyle,
   dishOf,
   demoSubcat,

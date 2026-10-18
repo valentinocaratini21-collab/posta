@@ -292,6 +292,52 @@ async function localizeTrialPhotos(profile, mediaDir, fetchImpl) {
 }
 
 // ---------------------------------------------------------------------------
+// (v196) Foto de perfil LOCAL para el póster de marca de la prueba: el
+// medallón del póster se renderiza en el servidor (PIL), así que la pic —
+// que llega como data URL desde fetchIgProfile — se materializa una vez en
+// MEDIA_DIR con nombre determinístico igthumb-pic-<hash>.jpg (el prefijo
+// igthumb- la cubre con la conservación de 72 h del janitor, igual que las
+// miniaturas de la grilla, y el payload cacheado la referencia por nombre).
+// NUNCA lanza: sin pic utilizable, el póster sale tipográfico.
+// ---------------------------------------------------------------------------
+async function localizeTrialPic(profile, mediaDir, fetchImpl) {
+  if (!profile || !profile.pic || !mediaDir) return profile;
+  try { fs.mkdirSync(mediaDir, { recursive: true }); } catch (e) {}
+  const handle = sanitizeHandle(profile.handle) || 'ig';
+  const raw = String(profile.pic);
+  try {
+    let buf = null;
+    let seed = raw;
+    if (raw.startsWith('data:image/')) {
+      const m = /^data:image\/(png|jpeg|webp);base64,([\s\S]+)$/.exec(raw);
+      if (!m) return profile;
+      buf = Buffer.from(m[2], 'base64');
+      seed = handle + '|pic|' + raw.length + '|' + raw.slice(0, 128);
+    } else {
+      const url = raw.replace(/\\/g, '');
+      if (!/^https:\/\/[a-z0-9.-]*cdninstagram\.com\//i.test(url)) return profile;
+      seed = handle + '|pic|' + url;
+      const get = fetchImpl || ((u) => fetchImageBuf(u, 2500));
+      buf = await get(url);
+    }
+    if (!buf || buf.length < 1024 || buf.length > THUMB_DL_CAP) return profile;
+    const hash = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 24);
+    const name = 'igthumb-pic-' + hash + '.jpg';
+    const abs = path.join(mediaDir, name);
+    let exists = false;
+    try { const st = fs.statSync(abs); exists = st.isFile() && st.size > 1024; } catch (e) {}
+    if (!exists) {
+      fs.writeFileSync(abs, buf);
+      if (buf.length > THUMB_SOFT_CAP) await shrinkThumb(abs);
+      const st = fs.statSync(abs);
+      if (!st.isFile() || st.size < 200) { try { fs.unlinkSync(abs); } catch (e) {} return profile; }
+    }
+    profile.pic_media = '/media/' + name;
+  } catch (e) { /* sin pic local: el póster sale tipográfico */ }
+  return profile;
+}
+
+// ---------------------------------------------------------------------------
 // Señales heurísticas (números concretos que el LLM debe citar como evidencia)
 // ---------------------------------------------------------------------------
 const CTA_RE = /escribime|escribinos|whatsapp|wsp|link en (la )?bio|comentá|comenta|reservá|reservá tu|reserva tu|turno|escribime por|por dm|mensaje directo|visitanos|visítanos|te esperamos|pedidos|pedí|pedi tu|hacé tu pedido/i;
@@ -597,5 +643,6 @@ module.exports = {
   fetchAuditData,
   trialProfileFromAudit,
   localizeTrialPhotos,
+  localizeTrialPic,
   AUDIT_LIMIT_PER_DAY,
 };
