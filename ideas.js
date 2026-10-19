@@ -63,6 +63,18 @@ function fmtOfType(t) { return TYPE_TO_FMT[t] || 'image'; }
 function fmtLabel(fmt) { return (MEDIA_TO_FMT[fmt === 'video' ? 'video' : fmt === 'carousel' ? 'carousel' : 'image']) || 'post'; }
 
 // ---------------------------------------------------------------------------
+// (v236) DECISIÓN — EL LOOP NO PROMETE 🎬: las ideas nacen 'post' o
+// 'carrusel', nunca 'reel'. El motor de reels vigente crea drafts desde
+// FOTOS existentes (/api/reel-generate, tope 2/semana) o como extras
+// semanales desde los posteos ya creados (story-reel) — no existe un
+// camino "reel desde un brief de idea" sin cirugía mayor, y prometer
+// 🎬 para entregar una foto era el defecto medido (una idea 🎬 nacía
+// como imagen simple). Las señales DE video (el top del competidor es
+// un video, el cliente no publica videos) siguen existiendo y su
+// evidencia es la de siempre; la idea es un POSTEO cuyo brief empuja
+// ese tema/formato — y ese posteo alimenta después el motor de reels
+// semanal, como todos.
+// ---------------------------------------------------------------------------
 // buildIdeaSignals(input) → [candidatos] en orden de prioridad.
 // input = {
 //   competitors: [snapshot...],
@@ -89,7 +101,9 @@ function buildIdeaSignals(input) {
     out.push({
       source: 'competitor',
       angle_key: `comp_top:${bestTop.comp.handle}:${bestTop.post.shortcode || bestTop.post.caption_first.slice(0, 24)}`,
-      format: fmtLabel(fmt),
+      // (v236) Si el top es un video, la idea copia el ÁNGULO como
+      // posteo — el loop no emite formato 'reel' (ver decisión arriba).
+      format: fmt === 'video' ? 'post' : fmtLabel(fmt),
       evidence: `El posteo con más comentarios de @${bestTop.comp.handle} (${bestTop.post.comments} 💬) fue «${bestTop.post.caption_first}» — un ángulo que en tu rubro funciona y vos todavía no probaste`,
       facts: { handle: bestTop.comp.handle, comments: bestTop.post.comments, caption_first: bestTop.post.caption_first, fmt },
     });
@@ -119,7 +133,11 @@ function buildIdeaSignals(input) {
       out.push({
         source: 'competitor',
         angle_key: `comp_fmt:${fmt}:${best.comp.handle}`,
-        format: fmtLabel(fmt),
+        // (v236) El hueco de VIDEO se propone como idea de posteo que
+        // empuja el tema (sin chip 🎬): el formato prometido es el que
+        // Hacelo puede entregar. El hueco de carrusel sí promete 🖼️
+        // porque el pipeline de carrusel lo cumple (makeIdeaDraft).
+        format: fmt === 'video' ? 'post' : fmtLabel(fmt),
         evidence: `@${best.comp.handle} publicó ${best.nFmt} ${plural} en sus últimos ${best.total} posteos${topTxt}; vos no publicaste ${plural} en el último mes`,
         facts: { handle: best.comp.handle, fmt, n: best.nFmt, total: best.total },
       });
@@ -133,7 +151,9 @@ function buildIdeaSignals(input) {
     out.push({
       source: 'winner',
       angle_key: `winner:${w.id}`,
-      format: MEDIA_TO_FMT[w.media_type] || 'post',
+      // (v236) Si el ganador fue un video, la vuelta nueva es un posteo
+      // (el loop no emite 'reel'); el resto conserva su formato.
+      format: w.media_type === 'video' ? 'post' : (MEDIA_TO_FMT[w.media_type] || 'post'),
       evidence: `Tu posteo «${String(w.caption_first).slice(0, 60)}…» fue el que más respuesta tuvo en el último tiempo (${w.likes || 0} ❤️ · ${w.comments || 0} 💬): esa fórmula funciona, la repetimos con una vuelta nueva`,
       facts: { post_id: w.id, likes: w.likes || 0, comments: w.comments || 0, tipo: w.tipo || '' },
     });
@@ -216,7 +236,12 @@ function pickIdeas(parsed, signals) {
     const anchored = why && (/@[a-z0-9._]/i.test(why) || /[0-9]/.test(why));
     if (!anchored) why = (why ? why.replace(/[. ]+$/, '') + ' — ' : '') + s.evidence;
     why = String(why).slice(0, 320);
-    const format = ['post', 'reel', 'carrusel'].includes(it.format) ? it.format : s.format;
+    let format = ['post', 'reel', 'carrusel'].includes(it.format) ? it.format : s.format;
+    // (v236) Un 'reel' huérfano no sobrevive al mapeo: solo se respeta
+    // si la señal misma es de reel — y buildIdeaSignals ya no emite
+    // ninguna (decisión v236). Si el modelo lo propone sobre una señal
+    // de posteo/carrusel, la idea queda como posteo.
+    if (format === 'reel' && s.format !== 'reel') format = 'post';
     const brief = String(it.brief || '').trim().slice(0, 400) || title;
     out.push({ signal: s, title, why, format, brief });
   });
@@ -240,4 +265,42 @@ function blockedAngleKeys(history, nowMs) {
   return blocked;
 }
 
-module.exports = { parseCompetitorHandles, canonicalCompetitors, snapshotFromAudit, buildIdeaSignals, blockedAngleKeys, fmtLabel, pickIdeas };
+// ---------------------------------------------------------------------------
+// (v236) FRESCURA — una idea pending no vive para siempre:
+//  · si está atada a una efeméride, vence cuando la fecha ya pasó: el
+//    "why" se redactó UNA vez al nacer ("es HOY (2026-10-18)") y
+//    mostrarlo después sería mentir en presente — no se reescribe, la
+//    idea expira y no se muestra ni se puede hacer;
+//  · sin fecha, TTL general de 14 días: si el loop no corrió (sin
+//    señales, pase de texto fallido, tope de IA, trial vencido), una
+//    propuesta de hace más de dos semanas ya no representa "esta
+//    semana" y expira al leerse.
+// ---------------------------------------------------------------------------
+const PENDING_TTL_DAYS = 14;
+
+function ephemerisDateOf(idea) {
+  if (!idea) return '';
+  const d = String(idea.eph_date || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  // Filas viejas (sin eph_date): la fecha viajó siempre en el angle_key
+  // (eph:YYYY-MM-DD:nombre) desde el primer día del loop.
+  if (idea.source === 'calendar') {
+    const m = String(idea.angle_key || '').match(/^eph:(\d{4}-\d{2}-\d{2}):/);
+    if (m) return m[1];
+  }
+  return '';
+}
+
+// → 'ephemeris' | 'ttl' | null. todayStr: 'YYYY-MM-DD' en la zona del
+// usuario (una fecha de efeméride vence recién al día SIGUIENTE).
+function staleReasonFor(idea, todayStr, nowMs) {
+  if (!idea) return null;
+  const eph = ephemerisDateOf(idea);
+  if (eph && todayStr && eph < todayStr) return 'ephemeris';
+  const created = new Date(String(idea.created_at || '').replace(' ', 'T') + 'Z').getTime();
+  const now = typeof nowMs === 'number' ? nowMs : Date.now();
+  if (Number.isFinite(created) && now - created > PENDING_TTL_DAYS * 86400000) return 'ttl';
+  return null;
+}
+
+module.exports = { parseCompetitorHandles, canonicalCompetitors, snapshotFromAudit, buildIdeaSignals, blockedAngleKeys, fmtLabel, pickIdeas, ephemerisDateOf, staleReasonFor, PENDING_TTL_DAYS };

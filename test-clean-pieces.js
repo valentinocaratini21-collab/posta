@@ -137,7 +137,9 @@ ok('pieza limpia: sin titular hacia la generación y caption que cierra con CTA'
 });
 ok('la palanca regen-post y las creaciones individuales deciden el modo por semana', () => {
   assert.ok(srv.includes('const mode = weekTextModeFor(uid, post.week_key, kindOfTipo(tipo), post.id);'));
-  assert.ok(srv.includes('const mode = weekTextModeFor(uid, wkForMode, kindOfTipo(tipo), null);'));
+  // (v236) makeIdeaDraft mide el modo contra la semana ACTUAL (wk),
+  // no contra la semana de origen de la idea: el borrador cae hoy.
+  assert.ok(srv.includes('const mode = weekTextModeFor(uid, wk, kindOfTipo(tipo), null);'));
   assert.ok(srv.includes('const mode = weekTextModeFor(uid, weekKey, kindOfTipo(idea.tipo), null);'));
   assert.ok(srv.includes("const headline = mode === 'clean' ? ''"));
 });

@@ -1452,6 +1452,7 @@ app.get('/api/week/report', requireAuth, (req, res) => {
     // semanal — el reporte las lleva a todos sus consumidores sin endpoint nuevo.
     let weekIdeas = [];
     try {
+      sweepPendingIdeas(uid); // (v236) el reporte hereda la misma frescura que GET /api/ideas
       weekIdeas = db.prepare(`SELECT id, title, why, format FROM posty_ideas WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 3`).all(uid);
     } catch (e) {}
     // Línea de equilibrio de grilla (v224): una sola, y solo si la tanda de
@@ -1575,7 +1576,7 @@ ${sigTxt}
 Devolvé SOLO un JSON {"ideas":[...]} con 2 o 3 ideas, cada una basada en UNA señal (campo "signal" = su número). Para cada idea:
 - "title": título corto y concreto del posteo (máx 70 caracteres), en rioplatense, específico para ${biz}. Prohibido lo genérico ("posteá un tip", "contenido de valor").
 - "why": UNA línea con el porqué, apoyada en la EVIDENCIA de su señal: nombrá el @, el número o la fecha tal como figuran en la evidencia.
-- "format": "post" | "reel" | "carrusel" (el de la señal, salvo mejor criterio).
+- "format": "post" | "carrusel" (el de la señal, salvo mejor criterio). NUNCA "reel": si la señal habla de videos, la idea es un posteo que empuja ese tema (el brief puede sugerir filmarlo, pero el formato entregable es posteo o carrusel).
 - "brief": 1-2 frases concretas para generar el posteo: qué se muestra y qué se cuenta, pensado para ${biz} y su rubro.`;
   let data = null;
   try {
@@ -1655,10 +1656,13 @@ async function runIdeasForUser(uid, opts = {}) {
 
   const wk = mondayKeyOf(tzToday(userTz(uid)));
   try { db.prepare(`UPDATE posty_ideas SET status = 'expired' WHERE user_id = ? AND status = 'pending'`).run(uid); } catch (e) {}
-  const ins = db.prepare(`INSERT INTO posty_ideas (user_id, week_key, source, angle_key, title, why, format, brief, status) VALUES (?,?,?,?,?,?,?,?,'pending')`);
+  const ins = db.prepare(`INSERT INTO posty_ideas (user_id, week_key, source, angle_key, title, why, format, brief, status, eph_date) VALUES (?,?,?,?,?,?,?,?,'pending',?)`);
   const rows = [];
   for (const p of picked) {
-    const r = ins.run(uid, wk, p.signal.source, p.signal.angle_key, p.title, p.why, p.format, p.brief);
+    // (v236) La fecha de la efeméride queda guardada en la idea: es la
+    // que manda su vencimiento al leerse (frescura de efemérides).
+    const ephDate = p.signal && p.signal.source === 'calendar' && p.signal.facts ? String(p.signal.facts.date || '') : '';
+    const r = ins.run(uid, wk, p.signal.source, p.signal.angle_key, p.title, p.why, p.format, p.brief, ephDate);
     rows.push({ id: r.lastInsertRowid, title: p.title, why: p.why, format: p.format, source: p.signal.source, angle_key: p.signal.angle_key });
   }
   try { track(uid, 'ideas_generated', String(rows.length)); } catch (e) {}
@@ -1717,6 +1721,19 @@ function weekTextModeFor(uid, weekKey, kind, selfId) {
 // Un borrador NO consume cupo (el cupo cuenta programados/publicados): si la
 // semana está llena queda en espera como borrador, nunca rompe el cupo.
 async function makeIdeaDraft(uid, idea) {
+  // (v236) FRESCURA: una idea vencida NO se hace, aunque la llamen
+  // directo (el endpoint o el admin pasan por acá): su efeméride ya
+  // pasó o su TTL expiró. Queda marcada expired y el llamador
+  // devuelve el mensaje honesto — jamás un posteo de una fecha muerta.
+  {
+    let today = '';
+    try { today = tzToday(userTz(uid)); } catch (e) {}
+    const stale = ideasMod.staleReasonFor(idea, today, Date.now());
+    if (stale) {
+      try { db.prepare(`UPDATE posty_ideas SET status = 'expired' WHERE id = ? AND status = 'pending'`).run(idea.id); } catch (e) {}
+      return { ok: false, reason: 'stale', stale_reason: stale };
+    }
+  }
   const key = openaiKeyFor(uid);
   if (!key) return { ok: false, reason: 'no_key' };
   try { costs.assertAiOk(uid); } catch (e) { return { ok: false, reason: 'ai_cap' }; }
@@ -1729,17 +1746,44 @@ async function makeIdeaDraft(uid, idea) {
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId);
   const hashtags = String((content && content.hashtags) || '');
+  // (v236) SEMANA ACTUAL: el borrador de una idea cae en la semana
+  // corriente del usuario, no en la semana en que la idea nació —
+  // idea.week_key queda solo como dato de origen en posty_ideas. El
+  // modo de texto y el productRef también se miden contra la semana
+  // destino real (la que el cliente está mirando).
+  const wk = mondayKeyOf(tzToday(userTz(uid)));
+  // 🖼️ (v236) FORMATO PROMETIDO = FORMATO ENTREGADO: una idea de
+  // carrusel nace por el pipeline de carrusel (portada scroll-stop +
+  // placas). Si ese pipeline falla, Hacelo devuelve error honesto —
+  // jamás degrada en silencio a la imagen simple de antes.
+  if (idea.format === 'carrusel') {
+    let gen = null;
+    try {
+      gen = await generateCarouselSet({ uid, idea: { titulo: idea.title, porque: idea.why }, tipo, caption, key, usedStyles: [] });
+    } catch (e) {
+      console.error('[ideas-loop] carrusel de la idea falló:', e.message);
+      return { ok: false, reason: 'no_carousel' };
+    }
+    const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 5);
+    const rc = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
+      VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(uid, gen.coverPath, gen.caption, hashtags, JSON.stringify(paths), String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
+        tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || gen.needsReview) ? 1 : 0,
+        'carousel', '', '', '', String((content && content.hookId) || ''), promptForMedia(gen.coverPath));
+    stampPostDigest(rc.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
+    try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(rc.lastInsertRowid, idea.id); } catch (e) {}
+    try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
+    return { ok: true, post_id: rc.lastInsertRowid, media_type: 'carousel' };
+  }
   // 🧹 Limpieza (creación individual): el modo se decide contra la
   // composición de la semana destino — la pieza entra como la más nueva.
-  const wkForMode = idea.week_key || mondayKeyOf(tzToday(userTz(uid)));
-  const mode = weekTextModeFor(uid, wkForMode, kindOfTipo(tipo), null);
+  const mode = weekTextModeFor(uid, wk, kindOfTipo(tipo), null);
   if (mode === 'clean') {
     try { caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(tipo), (getProfile(uid) || {}).tone || ''); } catch (e) {}
   }
   const headline = mode === 'clean' ? '' : (makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.title, 5, 70, rubroOf(uid)));
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map((r) => r.file_path); } catch (e) {}
-  const wk = idea.week_key || mondayKeyOf(tzToday(userTz(uid)));
   let productRef = null;
   try {
     const r = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND week_key = ?
@@ -1847,8 +1891,41 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   return { ok: true, post_id: post.id, headline, textMode: mode };
 }
 
+// (v236) FRESCURA al leer: las pending vencidas expiran en el acto y
+// jamás se devuelven. Una idea de efeméride vence al día siguiente de
+// su fecha (su "why" quedó escrito en presente al nacer: mostrarlo
+// después sería mentir); una pending sin fecha vence a los 14 días
+// (TTL en ideas.js). El retiro en bloque del loop solo corría cuando
+// la corrida siguiente tenía éxito — este barrido es el piso que
+// garantiza que ninguna superficie muestre una idea vencida. De yapa
+// normaliza las pending 'reel' heredadas a 'post' (el loop ya no
+// emite 🎬: la idea sigue válida como posteo). Devuelve cuántas expiró.
+function sweepPendingIdeas(uid) {
+  let rows = [];
+  try { rows = db.prepare(`SELECT id, source, angle_key, eph_date, format, created_at FROM posty_ideas WHERE user_id = ? AND status = 'pending'`).all(uid); } catch (e) { return 0; }
+  if (!rows.length) return 0;
+  let today = '';
+  try { today = tzToday(userTz(uid)); } catch (e) {}
+  const now = Date.now();
+  let expired = 0;
+  for (const r of rows) {
+    if (r.format === 'reel') {
+      try { db.prepare(`UPDATE posty_ideas SET format = 'post' WHERE id = ?`).run(r.id); } catch (e) {}
+    }
+    const reason = ideasMod.staleReasonFor(r, today, now);
+    if (reason) {
+      try {
+        const u = db.prepare(`UPDATE posty_ideas SET status = 'expired' WHERE id = ? AND status = 'pending'`).run(r.id);
+        if (u.changes) { expired++; console.log(`[ideas-loop] idea ${r.id} expirada al leer (${reason})`); }
+      } catch (e) {}
+    }
+  }
+  return expired;
+}
+
 app.get('/api/ideas', requireAuth, (req, res) => {
   const uid = req.session.userId;
+  try { sweepPendingIdeas(uid); } catch (e) {}
   let ideas = [];
   try { ideas = db.prepare(`SELECT id, title, why, format, source, week_key, created_at FROM posty_ideas WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 3`).all(uid); } catch (e) {}
   let competitors = [];
@@ -1884,10 +1961,14 @@ app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res)
   try {
     const r = await makeIdeaDraft(uid, idea);
     if (!r.ok) {
+      // (v236) Vencida: mensaje honesto y definitivo, no un "probá en
+      // un rato" que promete lo que nunca va a pasar.
+      if (r.reason === 'stale') return res.status(410).json({ error: 'Esa idea ya pasó de fecha 😅 No la armo para que no publiques algo vencido — el lunes te traigo ideas frescas.' });
       if (r.reason === 'ai_cap') return res.status(429).json({ error: costs.MSG_CAP || 'Llegamos al tope de trabajo de IA por hoy 😅' });
+      if (r.reason === 'no_carousel') return res.status(502).json({ error: 'No pude armar el carrusel ahora 😅 Probá en un rato' });
       return res.status(502).json({ error: 'No pude armar el posteo ahora 😅 Probá en un rato' });
     }
-    res.json({ ok: true, post_id: r.post_id });
+    res.json({ ok: true, post_id: r.post_id, media_type: r.media_type || 'image' });
   } catch (e) {
     console.error('[ideas-loop] make:', e.message);
     res.status(500).json({ error: 'No pude armar el posteo ahora 😅 Probá en un rato' });
@@ -13721,7 +13802,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v235';
+const BUILD_ID = '20261019-v236';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

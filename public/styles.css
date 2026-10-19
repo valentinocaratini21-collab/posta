@@ -2428,9 +2428,22 @@ textarea.in{resize:vertical;min-height:96px}
 .scf-dayempty{flex:1 1 auto;width:100%;min-height:380px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;font-size:14px;color:var(--mut);background:#fff;border:1.5px dashed var(--line);border-radius:18px;padding:26px 18px}
 .scf-dayempty b{color:var(--txt);font-size:15px}
 .scf-pop.pinned{box-shadow:0 26px 80px rgba(10,30,51,.5),0 0 0 2.5px var(--cel)}
-.sched-up-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin:0 0 12px}
-.sched-up-row .album-row-msg{margin-top:6px}
+/* (v236) La fila de subida lleva DOS controles lado a lado: el botón
+   de subida y el chip de ideas a su derecha; el mensaje del álbum
+   ocupa su propia línea debajo (flex-basis completa). */
+.sched-up-row{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
+.sched-up-row .album-row-msg{flex:1 1 100%;margin-top:2px}
 .sched-up-row .album-row-msg:empty{min-height:0;margin-top:0}
+/* Chip de ideas (v236): pastilla tranquila junto al botón primario.
+   El badge tiene geometría FIJA reservada (22×22 siempre): el número
+   aparece/desaparece con visibility, jamás empuja el layout. */
+.ideas-chip{pointer-events:auto;border:1.5px solid var(--line);cursor:pointer;font-family:inherit;background:#fff;color:var(--txt);font-size:14.5px;font-weight:800;border-radius:999px;padding:12px 18px;display:inline-flex;align-items:center;gap:7px;touch-action:manipulation}
+.ideas-chip:active{transform:scale(.97)}
+.ideas-chip[aria-expanded="true"]{border-color:var(--cel);background:#EAF4FA}
+.ideas-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:0 0 22px;border-radius:999px;background:var(--cel);color:#fff;font-size:12px;font-weight:800;line-height:1}
+.ideas-badge.off{visibility:hidden}
+#hs-ideas.ideas-closed{display:none}
+.idea-comp-warn{flex:1 1 100%;margin-top:8px;font-size:12.5px;font-weight:700;color:#B3261E}
 
 .hs-feed{margin:2px auto 4px;max-width:560px}
 .fp-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}

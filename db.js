@@ -634,6 +634,10 @@ CREATE TABLE IF NOT EXISTS chat_seen_photos (
   PRIMARY KEY (user_id, photo_hash)
 );
 `);
+// (v236) Fecha de la efeméride atada a la idea (solo source='calendar'):
+// es la que manda el vencimiento — una idea de fecha que ya pasó expira
+// sola al leerse y su "why" jamás se muestra mintiendo en presente.
+try { db.exec(`ALTER TABLE posty_ideas ADD COLUMN eph_date TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try {
   db.exec(`INSERT OR IGNORE INTO ig_registry (ig_user_id, first_user_id)
            SELECT ig_user_id, user_id FROM settings

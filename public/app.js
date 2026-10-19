@@ -466,6 +466,35 @@ async function enhanceWeekReport() {
 // la semana), y al repintar se pinta SINCRÓNICO desde la caché — sin
 // flash, sin re-fetch por cada cambio de vista u offset.
 let IDEAS_CACHE_HTML = null;
+// (v236) EL CHIP DE IDEAS: el bloque vive colapsado detrás del chip
+// "💡 Ideas" de la fila de subida. Chip y panel se pintan desde la
+// MISMA fuente (esta caché + el conteo en memoria): el chip sale en el
+// HTML estático de render() ya con su badge y su aria-expanded, y
+// paintIdeasChrome() re-aplica TODO el estado (badge, expandido,
+// panel abierto/cerrado) de forma SINCRÓNICA en cada repintado —
+// abrir/cerrar no dispara fetches y un render() completo (que
+// reconstruye #schedView entero) no parpadea ni colapsa el panel.
+let IDEAS_PANEL_OPEN = false;
+let IDEAS_PENDING_COUNT = null; // null = todavía no lo sabemos (badge reservado, invisible)
+function paintIdeasChrome() {
+  const badge = document.getElementById('ideasBadge');
+  if (badge) {
+    const n = IDEAS_PENDING_COUNT;
+    badge.textContent = (typeof n === 'number') ? String(n) : '0';
+    badge.classList.toggle('off', !(typeof n === 'number' && n > 0));
+  }
+  const chip = document.getElementById('ideasChip');
+  if (chip) chip.setAttribute('aria-expanded', IDEAS_PANEL_OPEN ? 'true' : 'false');
+  const slot = document.getElementById('hs-ideas');
+  if (slot) slot.classList.toggle('ideas-closed', !IDEAS_PANEL_OPEN);
+}
+function toggleIdeasPanel() {
+  IDEAS_PANEL_OPEN = !IDEAS_PANEL_OPEN;
+  paintIdeasChrome();
+  // Al abrir, si el panel nunca cargó, enhanceIdeas lo trae (con la
+  // caché de sesión es sincrónico y sin fetch cuando ya cargó).
+  if (IDEAS_PANEL_OPEN) { try { enhanceIdeas(); } catch (e) {} }
+}
 async function enhanceIdeas(force) {
   const slot = document.getElementById('hs-ideas');
   if (!slot) return;
@@ -475,6 +504,7 @@ async function enhanceIdeas(force) {
       slot.innerHTML = IDEAS_CACHE_HTML;
       wireIdeasBlock(slot);
     }
+    paintIdeasChrome();
     return;
   }
   if (slot.dataset.done && !force) return;
@@ -483,6 +513,7 @@ async function enhanceIdeas(force) {
   try { r = await api.get('/api/ideas'); } catch (e) { slot.dataset.done = ''; return; }
   if (!r || !r.ok) { slot.dataset.done = ''; return; }
   const ideas = r.ideas || [];
+  IDEAS_PENDING_COUNT = ideas.length; // (v236) el badge del chip sale de la MISMA respuesta que pinta el panel
   const comps = r.competitors || [];
   const fmtChip = { post: '📸 Posteo', reel: '🎬 Reel', carrusel: '🖼️ Carrusel' };
   let h = '<div class="hs-ideas">';
@@ -506,6 +537,7 @@ async function enhanceIdeas(force) {
   h += '<div class="idea-comps"><span class="idea-comps-label">👀 Tu competencia:</span>';
   for (const c of comps) h += `<span class="idea-comp-chip">@${esc(c)}<button type="button" class="idea-comp-x" data-comp-remove="${esc(c)}" aria-label="Quitar @${esc(c)}">×</button></span>`;
   if (comps.length < 5) h += '<span class="idea-comp-add"><input type="text" id="ideaCompInput" placeholder="@competidor" maxlength="42" autocomplete="off" autocapitalize="none"><button type="button" class="btn btn-ghost btn-sm" id="ideaCompAdd">Agregar</button></span>';
+  h += '<div class="idea-comp-warn" id="ideaCompWarn" role="alert" hidden></div>';
   h += '</div>';
   if (!comps.length) h += '<div class="idea-comps-hint">Cargá hasta 5 cuentas y Posty las mira cada semana para traerte ideas con datos reales.</div>';
   h += '</div>';
@@ -514,6 +546,7 @@ async function enhanceIdeas(force) {
   // viajaba: se pinta el slot ACTUAL, en su lugar definitivo, una vez.
   const cur = document.getElementById('hs-ideas');
   if (cur) { cur.dataset.done = '1'; cur.innerHTML = h; wireIdeasBlock(cur); }
+  paintIdeasChrome();
 }
 function wireIdeasBlock(slot) {
   const compList = () => [...slot.querySelectorAll('[data-comp-remove]')].map((x) => x.getAttribute('data-comp-remove'));
@@ -521,14 +554,21 @@ function wireIdeasBlock(slot) {
     try { await api.post('/api/ideas/competitors', { handles: list }); } catch (e) {}
     try { enhanceIdeas(true); } catch (e) {}
   };
+  // (v236) Tras una mutación (Hacelo / Ahora no) la caché del panel se
+  // invalida y se re-trae la lista autoritativa: badge y panel nunca
+  // pueden contar historias distintas, y una tarjeta resuelta no
+  // reaparece al repintar.
+  const refreshIdeas = () => { IDEAS_CACHE_HTML = null; try { enhanceIdeas(true); } catch (e) {} };
   slot.querySelectorAll('[data-idea-dismiss]').forEach((b) => {
     b.onclick = async () => {
       const id = b.getAttribute('data-idea-dismiss');
       b.disabled = true;
       try { await api.post('/api/ideas/' + id + '/dismiss', {}); } catch (e) {}
+      if (typeof IDEAS_PENDING_COUNT === 'number') IDEAS_PENDING_COUNT = Math.max(0, IDEAS_PENDING_COUNT - 1);
+      paintIdeasChrome();
       const card = slot.querySelector(`[data-idea-card="${id}"]`);
       if (card) card.remove();
-      if (!slot.querySelector('.idea-card')) { try { enhanceIdeas(true); } catch (e) {} }
+      refreshIdeas();
     };
   });
   slot.querySelectorAll('[data-idea-make]').forEach((b) => {
@@ -539,9 +579,11 @@ function wireIdeasBlock(slot) {
       b.textContent = '⏳ Armando tu posteo…';
       try {
         await api.post('/api/ideas/' + id + '/make', {}, { timeout: 240000 });
+        if (typeof IDEAS_PENDING_COUNT === 'number') IDEAS_PENDING_COUNT = Math.max(0, IDEAS_PENDING_COUNT - 1);
+        paintIdeasChrome();
         if (card) card.innerHTML = '<div class="idea-done">✅ ¡Listo! Tu posteo quedó como borrador en tu semana — revisalo cuando quieras.</div>';
         try { toast('✅ Posteo creado desde tu idea'); } catch (e) {}
-        setTimeout(() => { try { render(); } catch (e) {} }, 900);
+        setTimeout(() => { refreshIdeas(); try { render(); } catch (e) {} }, 900);
       } catch (e) {
         b.disabled = false;
         b.textContent = '💪 Hacelo';
@@ -555,12 +597,26 @@ function wireIdeasBlock(slot) {
   const addBtn = slot.querySelector('#ideaCompAdd');
   const inp = slot.querySelector('#ideaCompInput');
   if (addBtn && inp) {
+    const warn = slot.querySelector('#ideaCompWarn');
+    const showWarn = (msg) => { if (warn) { warn.textContent = msg; warn.hidden = false; } };
+    const hideWarn = () => { if (warn) { warn.hidden = true; warn.textContent = ''; } };
     const doAdd = () => {
       const v = String(inp.value || '').trim();
       if (!v) return;
+      // (v236) La MISMA regla del servidor (ideas.parseCompetitorHandles:
+      // charset de IG, sin punto inicial/final, sin duplicados, tope 5),
+      // validada ANTES de guardar: un @ inválido ya no se descarta en
+      // silencio — el panel avisa. Acepta varios @ separados por
+      // espacio/coma, como el parser del servidor.
       const cur = compList();
-      cur.push(v);
-      saveComps(cur);
+      const toks = v.split(/[\s,;|]+/).filter(Boolean).map((t) => t.replace(/^@+/, '').toLowerCase());
+      const bad = !toks.length || toks.some((h) => !/^[a-z0-9._]{2,40}$/.test(h) || h.startsWith('.') || h.endsWith('.') || cur.includes(h));
+      if (bad || cur.length + toks.length > 5) {
+        showWarn(bad ? 'Ese @ no parece válido 😅 Revisá el nombre e intentá de nuevo.' : 'Ya tenés 5 competidores — quitá uno para agregar otro.');
+        return;
+      }
+      hideWarn();
+      saveComps(cur.concat(toks));
     };
     addBtn.onclick = doAdd;
     inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doAdd(); } };
@@ -4165,9 +4221,16 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
       ${noEditChip ? '' : `<button data-chip="Cambiá el texto del segundo posteo, hacelo más corto">✏️ Editá un borrador</button>`}
       <button data-chip="Dame una idea para vender más esta semana">💡 Dame una idea</button>
     </div>` : '';
+  // (v236) A la derecha de la subida, el chip de ideas: nace en el
+  // HTML estático ya con su estado (badge y aria-expanded salen del
+  // estado en memoria) para que ningún repintado lo mueva ni lo prenda
+  // tarde. El badge tiene geometría fija reservada (CSS): el número
+  // jamás empuja el layout al aparecer o cambiar.
+  const ideasChip = schedMode ? `<button type="button" class="ideas-chip" id="ideasChip" aria-expanded="${IDEAS_PANEL_OPEN ? 'true' : 'false'}" aria-controls="hs-ideas">💡 Ideas <span class="ideas-badge${(typeof IDEAS_PENDING_COUNT === 'number' && IDEAS_PENDING_COUNT > 0) ? '' : ' off'}" id="ideasBadge">${typeof IDEAS_PENDING_COUNT === 'number' ? IDEAS_PENDING_COUNT : 0}</span></button>` : '';
   const upRow = schedMode ? `
     <div class="sched-up-row">
       <button type="button" class="ag-upload-btn" id="agUploadBtn">📸 Subir fotos o video</button>
+      ${ideasChip}
       <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
       <div class="album-row-msg" id="albumMsg" aria-live="polite"></div>
     </div>` : '';
@@ -10490,7 +10553,7 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
-    <div id="hs-ideas"></div>
+    <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
     ${homeChatBlock}
     ${armBlock}
   </div>`;
@@ -10692,6 +10755,12 @@ function bindSchedule() {
   // ampliación hover/toque de la vista Semana).
   try { bindSchedFilter(); } catch (e) {}
   try { enhanceIdeas(); } catch (e) {} // 💡 v223: ideas con ciclo propio (caché de sesión; su slot vive fuera de la agenda)
+  // (v236) Chip de ideas: el cableado sigue el patrón de la casa (se
+  // recablea en cada pintado) y el estado visible se re-aplica
+  // sincrónico tras el render — badge, expandido y panel como estaban.
+  try { paintIdeasChrome(); } catch (e) {}
+  const ideasChipBtn = $('#ideasChip');
+  if (ideasChipBtn) ideasChipBtn.onclick = () => { try { toggleIdeasPanel(); } catch (e) {} };
   // v221: ✨ Así va quedando tu feed — tocar un tile que se viene salta
   // a su día en la agenda; "Ver más posteos" despliega el historial.
   // (Los tiles publicados se abren con el wiring de [data-lightbox] de

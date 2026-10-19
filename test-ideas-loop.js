@@ -67,13 +67,18 @@ ok('top del competidor: evidencia con @ y comentarios, angle con shortcode', () 
   assert.ok(top.evidence.includes('@predis.ai'));
   assert.ok(top.evidence.includes('42'));
   assert.strictEqual(top.angle_key, 'comp_top:predis.ai:TOP42');
-  assert.strictEqual(top.format, 'reel');
+  // (v236) El top es un video, pero la idea copia el ÁNGULO como
+  // posteo: el loop ya no emite formato 'reel' (decisión v236 en
+  // ideas.js — prometer 🎬 y entregar una foto era el defecto).
+  assert.strictEqual(top.format, 'post');
 });
 ok('hueco de formato: el competidor vive de reels y el cliente no hizo ninguno', () => {
   const out = ideas.buildIdeaSignals({ competitors: [snap], ownFormats30: { image: 3, video: 0, carousel: 1 }, ownWinner: null, ephemeris: [] });
   const gap = out.find((s) => s.angle_key === 'comp_fmt:video:predis.ai');
   assert.ok(gap, 'debería detectar el hueco de video');
-  assert.strictEqual(gap.format, 'reel');
+  // (v236) El hueco de video se propone como idea de POSTEO que empuja
+  // el tema, sin chip 🎬 (el formato prometido es el entregable).
+  assert.strictEqual(gap.format, 'post');
   assert.ok(gap.evidence.includes('no publicaste'));
 });
 ok('sin hueco si el cliente ya publica ese formato', () => {
@@ -212,7 +217,7 @@ ok('server.js: loop, endpoints y admin', () => {
   for (const needle of ['runWeeklyIdeasLoop', 'runIdeasForUser', 'makeIdeaDraft', "app.get('/api/ideas'", "app.post('/api/ideas/:id/make'", "app.post('/api/ideas/:id/dismiss'", "app.post('/api/ideas/competitors'", "app.post('/api/admin/ideas/run'", "app.post('/api/admin/ideas/make'", 'ideas: weekIdeas']) {
     assert.ok(srvSrc.includes(needle), 'falta: ' + needle);
   }
-  assert.ok(srvSrc.includes("const BUILD_ID = '20261019-v235'"));
+  assert.ok(srvSrc.includes("const BUILD_ID = '20261019-v236'"));
 });
 ok('app.js: bloque de ideas en Schedule + enhanceIdeas', () => {
   assert.ok((appSrc.match(/id="hs-ideas"/g) || []).length === 1, 'v223: UN solo slot de ideas, en scheduleView y fuera de la agenda (el slot duplicado dentro del bloque de la agenda era el flash)');

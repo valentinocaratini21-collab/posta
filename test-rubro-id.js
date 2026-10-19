@@ -192,7 +192,7 @@ console.log('== (f) NEGATIVO: señales débiles contradictorias NO forzan confia
     }
     ok(booted, 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261019-v235', `/api/version = ${ver.build}`);
+    ok(ver.build === '20261019-v236', `/api/version = ${ver.build}`);
     const rc = rubroId.resolveRubro({ confirmed: { rubro: 'belleza', subrubro: 'makeup', fuente: 'pregunta' }, cls: null });
     const digest = clientDigest.buildFromParts({
       business: 'Mili Makeup', category: rc.category, subcat: rc.subcat, rubroId: rc.rubroId,
