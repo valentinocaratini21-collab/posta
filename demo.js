@@ -14,6 +14,7 @@ const https = require('https');
 const db = require('./db');
 const captions = require('./demo-captions');
 const clientDigest = require('./client-digest');
+const demoAi = require('./demo-ai'); // (v231) subject_scale por familia de arte
 
 const DEMO_SCRIPT = path.join(__dirname, 'demo_render.py');
 const DEMO_VIDEO_SCRIPT = path.join(__dirname, 'demo_video.py');
@@ -159,7 +160,7 @@ function stockPhotos3(category, business) {
 // bio, léxico, mapa foto→producto, estrella inferido y contradicciones;
 // el gate de fotos sube a foto↔PRODUCTO cuando el mapa cubre la foto y
 // el estrella inferido abre la rotación de temas.
-const DEMO_ENGINE_V = 19;
+const DEMO_ENGINE_V = 20;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -1198,6 +1199,26 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
   // fotos, vía excludePhotos) de la semana ya generada.
   let topics = allTopics.slice(topicOffset, topicOffset + n);
+  // (v231) AUDITORÍA DE INTENCIÓN también en la prueba (adopción
+  // Predis): si la ventana sale degenerada (casi toda venta), la
+  // última pieza de venta se canjea por el primer tema no-venta del
+  // pool fuera de la ventana. En clientes el mismo criterio vive en
+  // clean-pieces.rebalanceIntentPicks (generateWeekDrafts).
+  try {
+    const VENTA = new Set(['promo', 'reserva', 'novedad', 'sorteo']);
+    if (topics.length >= 4) {
+      const ventaN = topics.filter((t) => t && VENTA.has(t.kind)).length;
+      if (ventaN >= topics.length - 1) {
+        const inUse = new Set(topics);
+        const cand = allTopics.slice(topicOffset + n).find((t) => t && !VENTA.has(t.kind) && !inUse.has(t));
+        if (cand) {
+          const ventaIdx = topics.map((t, i) => (t && VENTA.has(t.kind) ? i : -1)).filter((i) => i >= 0);
+          const lastVenta = ventaIdx[ventaIdx.length - 1];
+          if (lastVenta != null) topics[lastVenta] = cand;
+        }
+      }
+    }
+  } catch (e) { /* la auditoría nunca frena la prueba */ }
   const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
 
   // (v196, acotado en v197) MODO PÓSTER DE MARCA: un perfil de
@@ -1355,6 +1376,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     const trFinal = isPoster
       ? { skeleton: 'poster', grade: 'neutral', crop: 'normal' }
       : (treatmentOverrides.get(i) || (st ? treatmentForStyle(st) : null));
+    // (v231) subject_scale: el rango de ocupación del héroe de la
+    // familia de arte de ESTE estilo (rangos medidos del estudio).
+    // Viaja en el spec; el renderer lo verifica con analyze_photo y
+    // ajusta el zoom si la foto no lo cumple.
+    let subjectScale;
+    try {
+      const fam = demoAi.artFamilyFor(st);
+      subjectScale = (demoAi.ART_DIRECTIONS[fam] || {}).subject_scale || undefined;
+    } catch (e) { subjectScale = undefined; }
     return {
       photo: photos[i],
       // (v230) Trazabilidad del gate foto↔PRODUCTO: el producto exacto
@@ -1366,6 +1396,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // (v205) El lenguaje de diseño de la pieza, registrado en el
       // payload (design.posts[i].design_code) y exigible por tests.
       design_code: designLanguageOf(trFinal ? trFinal.skeleton : 'abajo'),
+      subject_scale: subjectScale,
       poster: isPoster || undefined,
       kind: t.kind,
       tema: t.tema || null,
@@ -1416,6 +1447,35 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (sp.subline) sp.subline = captions.capHeadlineWords(sp.subline, 8);
     if (sp.subline && sp.pill) sp.pill = '';
   });
+  // (v231) CANDADO DE NÚMEROS DE PROMO (adopción Predis + regla de
+  // verdad): en la prueba, una pieza promo cuyo titular/bajada/caption
+  // trae un número (precio, %, NxM) que NO está en el digest del
+  // negocio sale SIN ese número — inventarlo es humo. Los temas del
+  // digest pasan siempre (sus números SON los del digest, incluida la
+  // promo con precio que deriveTopics sube al titular). Sin digest no
+  // hay verdad que contrastar: la vidriera genérica no se toca.
+  if (digest) {
+    const stripNums = (s) => String(s || '')
+      .replace(/\$\s?\d[\d.,]*/g, '')
+      .replace(/\b\d+(?:[.,]\d+)?\s?%/g, '')
+      .replace(/\b\d+\s?x\s?\d+\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([.,;:!?)])/g, '$1')
+      .trim();
+    specPosts.forEach((sp, i) => {
+      if (!sp || sp.kind !== 'promo') return;
+      const t = topics[i] || {};
+      const g = clientDigest.promoNumberGuard(
+        { kind: 'promo', headline: `${sp.headline || ''} ${sp.subline || ''}`, subline: String(t.caption || '') }, digest);
+      if (g.ok) return;
+      const promoTitle = ((digest.promos || [])[0] || {}).titulo || '';
+      sp.headline = stripNums(sp.headline)
+        || captions.capHeadlineWords(String(promoTitle || ''), 6)
+        || 'Promo de la semana';
+      if (sp.subline) sp.subline = stripNums(sp.subline);
+      if (t.caption) t.caption = stripNums(t.caption);
+    });
+  }
   // (v197) La foto de perfil aparece como máximo en 2 piezas y con
   // tratamientos DISTINTOS entre sí: el medallón protagonista del
   // póster (si lo hay) y una marca suave grande sobre UNA pieza con

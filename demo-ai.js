@@ -318,7 +318,11 @@ function compositionDirectives(cls, topicText, treatment, opts) {
   const f = compositionFor(cls);
   const concept = conceptObjectFor(topicText);
   const t = TREATMENT_ORDER.includes(treatment) ? treatment : 'prop';
-  const bgSoft = 'Background: a VERY soft, blurred, simple interior wash in the brand palette — out of focus, almost abstract. FORBIDDEN: detailed busy offices, big window walls, cluttered desks, shelves full of objects, city skylines.';
+  // (v231) Framing positivo (guías oficiales de Google/OpenAI): la
+  // escena se describe por lo que SÍ hay — la lista de prohibiciones
+  // ("FORBIDDEN: oficinas detalladas, ventanales…") salió del prompt
+  // de generación; la calma del fondo se pide como descripción.
+  const bgSoft = 'Background: a VERY soft, blurred, simple interior wash in the brand palette — out of focus, almost abstract: clear empty surfaces, open space and soft shapes only, with all the visual weight on the character.';
   const bg = f.background === 'plain'
     ? 'Background: ONE flat solid color from the brand palette (or a very subtle two-tone gradient of it). No environment, no room, no props behind the character.'
     : bgSoft;
@@ -372,7 +376,7 @@ function compositionDirectives(cls, topicText, treatment, opts) {
       marker,
       head,
       '- MEDIUM SHOT: the character DOING its job — working with its main tool (tablet, laptop or phone) front and center, typing, drawing or presenting the screen — occupying about 50% of the frame height.',
-      '- Environment: MINIMAL — one simple desk surface and a plain soft backdrop in the brand palette. FORBIDDEN: window walls, cluttered shelves, detailed busy offices, city skylines.',
+      '- Environment: MINIMAL — one simple desk surface and a plain soft backdrop in the brand palette: clear surfaces, open space and total calm around the work.',
       concept
         ? `- On the desk, ONE single large simple object: ${concept}. Nothing else competes.`
         : '- Only the tool and the character on the desk — nothing else.',
@@ -407,7 +411,11 @@ function pickSharpestRef(photoPaths) {
   return best;
 }
 
-const REF_NOTE = 'IMPORTANT: the FIRST reference image is the client\'s brand character/mascot (its profile picture); if there is a second one, it is a post from its feed showing the illustration style. Keep the SAME character — identical design, colors, proportions and art style — as the protagonist in a NEW scene. Do NOT redesign or reinterpret the character.';
+// (v231) Roles etiquetados por índice (adopción OpenAI/Google): la
+// referencia 1 es el personaje (foto de perfil) y la 2, si existe, un
+// posteo del feed SOLO como estilo (paleta y luz). Antes era una nota
+// única que mezclaba los papeles. La compone ref-roles.js.
+const REF_NOTE = require('./ref-roles').DEMO_REF_NOTE;
 
 // Roles de escena por posición: la semana IA tiene que verse VARIADA
 // (cada pieza cumple un rol distinto, como en el pipeline real).
@@ -663,7 +671,50 @@ const ART_DIRECTIONS = {
     texture: 'the feed\'s exact illustration technique with a premium, polished finish',
     color: 'the palette leads the whole scene: background, props and wardrobe in its tones',
   },
+  // (v231) Familia CARRUSEL (adopción Predis/IKEA medido): gramática
+  // de continuidad — fondo/escena/luz/cámara IDÉNTICOS entre placas,
+  // UN producto por placa, y la primera placa con el sujeto corrido a
+  // la derecha y levemente cortado por ese borde (invita al swipe).
+  carousel: {
+    composition: 'CAROUSEL STRIP: ONE single product per frame on the SAME continuous background as its sibling slides — placed side by side, the slides read as one unbroken strip; the first slide\'s subject sits slightly RIGHT of center and is gently cropped by the right edge, inviting the swipe',
+    background: 'the SAME setting, surface and backdrop as the other slides of the set — continuity IS the design; only the product changes',
+    light: 'identical light across all slides — same source, same direction, same warmth',
+    camera: 'IDENTICAL angle, distance and framing in every slide — only the product and the moment change',
+    texture: 'consistent finish across the strip — same technique, same rendering of the product',
+    color: 'one shared palette across all slides; the accent travels with the product, the world stays',
+  },
 };
+
+// (v231) SUBJECT_SCALE por familia — los rangos MEDIDOS en las piezas
+// ganadoras del estudio: el héroe ocupa 55–87% del ANCHO con texto y
+// 60–100% sin texto; el bleed (el sujeto corta un borde) es un recurso
+// declarado por familia, no un accidente. Excepciones documentadas:
+// typo (el vacío ES la composición: ancla chica), luxury y cinematic
+// (el aire negativo es el lujo / el encuadre de cine respira).
+// Se adjunta como campo `subject_scale` de CADA familia de
+// ART_DIRECTIONS y artDirectionFor lo inyecta como línea del prompt;
+// la ruta de render lo verifica con analyze_photo (demo_render.py).
+const SUBJECT_SCALES = {
+  flatlay: { text: [0.55, 0.87], clean: [0.60, 1.00], bleed: 'none' },
+  studio: { text: [0.55, 0.80], clean: [0.60, 0.90], bleed: 'none' },
+  macro: { text: [0.75, 0.87], clean: [0.80, 1.00], bleed: 'edges' },
+  levitation: { text: [0.55, 0.85], clean: [0.60, 0.95], bleed: 'none' },
+  cinematic: { text: [0.45, 0.75], clean: [0.50, 0.85], bleed: 'none' },
+  luxury: { text: [0.45, 0.70], clean: [0.50, 0.80], bleed: 'none' },
+  pop: { text: [0.60, 0.95], clean: [0.65, 1.00], bleed: 'edges' },
+  lifestyle: { text: [0.55, 0.85], clean: [0.60, 0.95], bleed: 'bottom' },
+  duo_split: { text: [0.70, 0.90], clean: [0.75, 1.00], bleed: 'none' },
+  typo: { text: [0.10, 0.30], clean: [0.10, 0.30], bleed: 'none' },
+  tech: { text: [0.55, 0.85], clean: [0.60, 0.95], bleed: 'bottom' },
+  action: { text: [0.60, 0.90], clean: [0.65, 1.00], bleed: 'bottom' },
+  corporate: { text: [0.50, 0.80], clean: [0.55, 0.90], bleed: 'none' },
+  miniature: { text: [0.60, 0.90], clean: [0.65, 1.00], bleed: 'none' },
+  premium_generic: { text: [0.55, 0.87], clean: [0.60, 1.00], bleed: 'bottom' },
+  carousel: { text: [0.55, 0.87], clean: [0.60, 1.00], bleed: 'right' },
+};
+for (const [fam, ss] of Object.entries(SUBJECT_SCALES)) {
+  if (ART_DIRECTIONS[fam]) ART_DIRECTIONS[fam].subject_scale = ss;
+}
 
 // Códigos del catálogo → familia de dirección. Cubre la unión de
 // INTENT_STYLES de las intenciones que el demo asigna (promo, tips,
@@ -687,6 +738,7 @@ const ART_DIRECTION_BY_CODE = {
   '/isometric': 'miniature', '/actionfigure': 'miniature', '/dollhouse': 'miniature', '/crystal': 'miniature',
   '/candyversion': 'miniature', '/popup': 'miniature', '/toydoll': 'miniature', '/tinyhumans': 'miniature',
   '/branding': 'corporate',
+  '/carousel': 'carousel', '/carrusel': 'carousel',
 };
 
 // Familia por vocabulario del código/nombre/prompt — para los códigos
@@ -698,6 +750,7 @@ function artFamilyFor(style) {
   const name = String((style && style.name) || '').toLowerCase();
   const pr = String((style && style.prompt) || '').toLowerCase();
   const t = `${code} ${name} ${pr}`;
+  if (/carousel|carrusel/.test(t)) return 'carousel';
   if (/before/.test(t) && /after|despu/.test(t)) return 'duo_split';
   if (/flat[ -]?lay|knolling|cenital|top[ -]?down/.test(t)) return 'flatlay';
   if (/macro|close[ -]?up|detalle extremo/.test(t)) return 'macro';
@@ -742,6 +795,8 @@ function artDirectionFor(style) {
     `- Camera: ${d.camera}.`,
     `- Texture / medium: ${d.texture}.`,
     `- Color usage: ${d.color}.`,
+    // (v231) subject_scale: el rango medido de ocupación del héroe.
+    d.subject_scale ? `- Subject scale (hero occupancy, measured on winning pieces): the hero occupies ${Math.round(d.subject_scale.text[0] * 100)}–${Math.round(d.subject_scale.text[1] * 100)}% of the frame WIDTH when a headline is composited later, ${Math.round(d.subject_scale.clean[0] * 100)}–${Math.round(d.subject_scale.clean[1] * 100)}% in a clean piece${d.subject_scale.bleed === 'bottom' ? '; the hero may bleed off the BOTTOM edge of the frame' : d.subject_scale.bleed === 'right' ? '; the hero may bleed off the RIGHT edge of the frame' : d.subject_scale.bleed === 'edges' ? '; the hero may bleed off the frame edges' : ''}.` : null,
     st && st.prompt ? `- Style signature (from the catalog): ${st.prompt}` : null,
   ].filter(Boolean).join('\n');
 }
@@ -868,7 +923,10 @@ function qaRetryDirective(qa) {
     fixes.push(`CONCEPT: the scene MUST clearly show exactly this: ${qa.concept}. Remove any wrong or literally-misread object — if the concept definition prohibits something (NEVER...), it MUST NOT appear in any form.`);
   }
   if (qa.failures.includes('text')) {
-    fixes.push('NO TEXT: absolutely NO rendered text anywhere — no words, no letters, no signs, no labels, no text on screens, no watermark words, in ANY language. A completely clean scene: the headline is composited afterwards by code.');
+    // (v231) Framing positivo también en la corrección: la escena
+    // limpia se describe por lo que SÍ es (superficies en blanco y
+    // vacías), no con la enumeración de negaciones de antes.
+    fixes.push('TEXT: the scene must be completely clean — every sign, screen, label and printed surface blank and empty, with no rendered words, letters or numbers of any kind in any language; the headline is composited afterwards by code.');
   }
   if (qa.failures.includes('treatment')) {
     fixes.push(`TREATMENT: the assigned treatment MUST be unmistakable this time: ${qa.treatmentExpect}.`);

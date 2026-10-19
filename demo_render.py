@@ -74,10 +74,27 @@ def load_spec(path):
 
 
 def B(fonts_dir, size):
-    return ImageFont.truetype(os.path.join(fonts_dir, "Montserrat-Bold.ttf"), size)
+    # (v231) TRES ROLES TIPOGRÁFICOS (adopción del estudio — sistema
+    # Airbnb/Predis): el TITULAR va en ExtraBold (800, voz display).
+    # Fallback a Bold si el asset falta (deploy parcial).
+    p = os.path.join(fonts_dir, "Montserrat-ExtraBold.ttf")
+    if not os.path.isfile(p):
+        p = os.path.join(fonts_dir, "Montserrat-Bold.ttf")
+    return ImageFont.truetype(p, size)
+
+
+def SB(fonts_dir, size):
+    # (v231) Rol ETIQUETA: SemiBold (600) — pill y rótulos chicos.
+    p = os.path.join(fonts_dir, "Montserrat-SemiBold.ttf")
+    if not os.path.isfile(p):
+        p = os.path.join(fonts_dir, "Montserrat-Bold.ttf")
+    return ImageFont.truetype(p, size)
 
 
 def R(fonts_dir, size):
+    # (v231) Rol BAJADA: Regular (400) verdadero. OJO histórico: el
+    # archivo que viajaba como "Montserrat-Regular.ttf" era en rigor
+    # el SemiBold; la instancia Regular real se generó del VF oficial.
     return ImageFont.truetype(os.path.join(fonts_dir, "Montserrat-Regular.ttf"), size)
 
 
@@ -262,7 +279,7 @@ def photo_bg(photo_path, fade_start=0.38, fade_end=0.68, focus=0.5):
 
 
 def pill_nuevo(d, fonts_dir, text, C, y=64, x_right=None, left=False):
-    f = B(fonts_dir, 34)
+    f = SB(fonts_dir, 34)  # (v231) la pill es rol etiqueta: SemiBold
     tracking = 6
     pad_x, pad_y = 34, 15
     w = tw(d, text, f, tracking) + pad_x * 2
@@ -824,15 +841,54 @@ def sub_wrap(draw, fonts_dir, text, max_w, size=40, max_lines=2):
     return f2, lines[:max_lines]
 
 
+# (v231) PRESUPUESTO DE TEXTO MEDIBLE (adopción n.º 1 del estudio):
+# el bloque de texto (titular + bajada) ocupa como máximo el 20% del
+# área de la pieza — el rango medido en las piezas ganadoras es
+# 8–20%. La medición es la caja del bloque (alto × MAX_W) sobre el
+# área del lienzo; el baseline pre-v231 medía ~25%.
+TEXT_BUDGET_PCT = 20.0
+
+
+def text_area_pct(total):
+    """% del área de la pieza que ocupa un bloque de `total` px."""
+    return (float(total) * MAX_W) / float(W * H) * 100.0
+
+
 def block_layout(draw, fonts_dir, p, hs):
     """Mide el bloque de texto (barra + titular + sublínea).
-    (v209) SIN botón CTA: el CTA vive en el caption, nunca pintado."""
+    (v209) SIN botón CTA: el CTA vive en el caption, nunca pintado.
+    (v231) GUARD DE ÁREA: si el bloque supera el presupuesto (20%),
+    cede en este orden — titular más chico, bajada más chica, bajada
+    recortada a 1 línea — hasta entrar. Régimen estricto sobre foto:
+    sobre la foto manda el titular; la bajada es lo primero que cede."""
     f, lines = wrap_fit(draw, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 118), 3)
     f2, slines = sub_wrap(draw, fonts_dir, p.get("subline", ""), MAX_W, 40, 2)
-    head_h = sum(f.size + int(f.size * 0.08) for _ in lines)
-    sub_h = sum(f2.size + 10 for _ in slines)
-    total = 9 + 30 + head_h + 18 + sub_h + 14
-    return {"f": f, "lines": lines, "f2": f2, "slines": slines, "total": total}
+
+    def _total():
+        head_h = sum(f.size + int(f.size * 0.08) for _ in lines)
+        sub_h = sum(f2.size + 10 for _ in slines)
+        return 9 + 30 + head_h + 18 + sub_h + 14
+
+    total = _total()
+    if text_area_pct(total) > TEXT_BUDGET_PCT:
+        for size in (100, 88, 78, 68):
+            if f.size <= size:
+                continue
+            f, lines = wrap_fit(draw, fonts_dir, p.get("headline", ""), MAX_W, size, 3)
+            total = _total()
+            if text_area_pct(total) <= TEXT_BUDGET_PCT:
+                break
+    if text_area_pct(total) > TEXT_BUDGET_PCT and slines:
+        for ssize in (34, 30):
+            f2, slines = sub_wrap(draw, fonts_dir, p.get("subline", ""), MAX_W, ssize, 2)
+            total = _total()
+            if text_area_pct(total) <= TEXT_BUDGET_PCT:
+                break
+    if text_area_pct(total) > TEXT_BUDGET_PCT and len(slines) > 1:
+        slines = slines[:1]
+        total = _total()
+    return {"f": f, "lines": lines, "f2": f2, "slines": slines, "total": total,
+            "area_pct": round(text_area_pct(total), 1)}
 
 
 def block_draw(d, fonts_dir, p, C, lay, y, dark, center=False, accent_override=None):
@@ -877,7 +933,7 @@ def draw_footer(d, fonts_dir, p, dark_bg):
     col = (198, 212, 226) if dark_bg else (110, 128, 148)
     name = str(p.get("style_name") or "").strip()
     if name:
-        f = R(fonts_dir, 24)
+        f = SB(fonts_dir, 24)  # (v231) rótulo = rol etiqueta (SemiBold)
         ltext(d, MX, H - 56, ("ESTILO · " + name).upper(), f, fill=col, tracking=3)
 
 
@@ -1199,6 +1255,61 @@ def white_fade_top(img):
     return white_fade(img.transpose(Image.FLIP_TOP_BOTTOM), 0.52, 0.86).transpose(Image.FLIP_TOP_BOTTOM)
 
 
+# (v231) CONTRASTE ≥ 4,5:1 (adopción n.º 6 — vara WCAG AA de las
+# reseñas pro): ratio de luminancia relativa entre el color del texto
+# y el fondo REAL detrás del bloque (muestreado de la pieza ya
+# compuesta, scrims incluidos).
+def _rel_lum(rgb):
+    def _f(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = rgb
+    return 0.2126 * _f(r) + 0.7152 * _f(g) + 0.0722 * _f(b)
+
+
+def contrast_ratio(rgb_a, rgb_b):
+    la, lb = _rel_lum(rgb_a), _rel_lum(rgb_b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _band_mean_rgb(img, rect):
+    x0, y0, x1, y1 = [int(v) for v in rect]
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(W, x1), min(H, y1)
+    if x1 <= x0 or y1 <= y0:
+        return (128, 128, 128)
+    crop = img.crop((x0, y0, x1, y1)).resize((24, 24))
+    px = list(crop.getdata())
+    n = max(1, len(px))
+    return tuple(sum(c[i] for c in px) // n for i in range(3))
+
+
+def _pill_for(p):
+    """(v231) TEST DE SUSTRACCIÓN a nivel render (adopción n.º 10): la
+    pila máxima por pieza es titular + UN elemento extra (bajada O
+    pastilla, nunca ambos). La regla vive en el spec desde v228; esto
+    es la red de seguridad del renderer para cualquier spec que la
+    viole: la pastilla cede."""
+    if not str(p.get("pill") or "").strip():
+        return ""
+    if str(p.get("headline") or "").strip() and str(p.get("subline") or "").strip():
+        return ""
+    return p.get("pill")
+
+
+def _note_zone(zone, total, rect):
+    """Registra la medición del bloque para el log/tests: zona, % de
+    área y la REGLA DE BANDAS (Valentino, 2026-10-18 — "nada de
+    palabras en el medio del posteo"): el centro vertical del bloque
+    NUNCA puede caer en el tercio medio de la pieza; el texto vive
+    solo en la banda superior o la inferior."""
+    cy = (rect[1] + rect[3]) / 2.0
+    band_ok = not (H / 3.0 < cy < 2.0 * H / 3.0)
+    _LAST_ZONE.update(zone=zone, area=round(text_area_pct(total), 1), band_ok=band_ok)
+    return band_ok
+
+
 def _sk_panel(fonts_dir, p, C, hs, base, lay):
     """Panel editorial (última ratio de la regla): foto arriba y panel
     pleno de la paleta del cliente abajo con el bloque completo. El
@@ -1210,10 +1321,11 @@ def _sk_panel(fonts_dir, p, C, hs, base, lay):
     img = Image.new("RGB", (W, H), C["poster_bg"] if dark else WHITE)
     img.paste(base.crop((0, 0, W, photo_h)), (0, 0))
     d = ImageDraw.Draw(img)
-    if p.get("pill"):
+    if _pill_for(p):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
     y = block_draw(d, fonts_dir, p, C, lay, photo_h + 36, dark)
     draw_footer(d, fonts_dir, p, dark)
+    _note_zone("panel", total, (0, photo_h, W, H))
     return img, y
 
 
@@ -1235,6 +1347,12 @@ def _sk_photo_block(fonts_dir, p, C, hs, prefer, kind):
         return _sk_panel(fonts_dir, p, C, hs, img, lay)
     rb, rt = text_rects(lay["total"])
     rect = rb if zone == "bottom" else rt
+    # (v231) REGLA DE BANDAS (Valentino, 2026-10-18 — "nada de
+    # palabras en el medio del posteo"): si el centro vertical del
+    # bloque cayera en el tercio medio (bloque gigante), la pieza cae
+    # al panel editorial inferior. El texto vive SOLO en las bandas.
+    if not _note_zone(zone, lay["total"], rect):
+        return _sk_panel(fonts_dir, p, C, hs, img, lay)
     if kind == "velo":
         dark = True
     elif kind == "claro":
@@ -1257,8 +1375,20 @@ def _sk_photo_block(fonts_dir, p, C, hs, prefer, kind):
         img = local_scrim(img, rect, NAVY if dark else WHITE, 225)
     elif busy > ZONE_SCRIM:
         img = local_scrim(img, rect, NAVY if dark else WHITE, int(min(235, 100 + busy * 190)))
+    # (v231) GATE DE CONTRASTE ≥ 4,5:1 (adopción n.º 6): el titular se
+    # mide contra el fondo REAL detrás del bloque (ya con scrims); si
+    # no alcanza la vara, se refuerza el velo localizado y se remide.
+    text_rgb = (255, 255, 255) if dark else C["headline"]
+    ratio = contrast_ratio(text_rgb, _band_mean_rgb(img, rect))
+    if ratio < 4.5:
+        img = local_scrim(img, rect, NAVY if dark else WHITE, 235)
+        ratio = contrast_ratio(text_rgb, _band_mean_rgb(img, rect))
+    if ratio < 4.5:
+        img = local_scrim(img, rect, NAVY if dark else WHITE, 255)
+        ratio = contrast_ratio(text_rgb, _band_mean_rgb(img, rect))
+    _LAST_ZONE["contrast"] = round(ratio, 2)
     d = ImageDraw.Draw(img)
-    if p.get("pill"):
+    if _pill_for(p):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
     aov = C["btn"] if kind == "velo" else None
     if zone == "bottom":
@@ -1327,35 +1457,19 @@ def sk_claro(fonts_dir, p, C, hs):
 
 
 def sk_centro(fonts_dir, p, C, hs):
-    """Cita/retrato: panel central translúcido (tono según la luz) y texto centrado."""
+    """(v231) RETIRADO — REGLA DE VALENTINO (2026-10-18, textual):
+    "Nada de palabras en el medio del posteo". El texto va SOLO en
+    las bandas superior o inferior de la pieza, NUNCA en el centro —
+    posteos, historias y reels. Este esqueleto dibujaba un panel
+    central con el texto en el medio (pisó la cara del personaje en
+    una pieza real): quedó retirado SIN excepciones por identidad de
+    familia, y cualquier spec que lo pida cae al panel editorial
+    inferior (sk_panel) — el mismo destino que ya tenía cuando el
+    panel central pisaba una cara."""
     img = _v2_base(fonts_dir, p, C)
-    dark = band_lum(img, 0.3, 0.7) < 160
     probe = ImageDraw.Draw(img)
     lay = block_layout(probe, fonts_dir, p, hs)
-    panel_h = lay["total"] + 72
-    cy0 = (H - panel_h) // 2 + 24
-    # (v209) El panel central tampoco pisa caras: si una cae dentro del
-    # panel, la pieza pasa al panel editorial inferior; si la zona es
-    # muy cargada, el panel se opaca más para no pelear con la foto.
-    _an = analyze_photo(img, p)
-    _prect = (80, cy0, W - 80, cy0 + panel_h)
-    if _rect_hits_face(_an["faces"], _prect):
-        _LAST_ZONE.update(zone="panel", busy=1.0)
-        return _sk_panel(fonts_dir, p, C, hs, img, lay)
-    _palpha = 168 if dark else 208
-    if _rect_busy(_an["grid"], _prect) > 0.5 or _rect_hits_face(_an["all"], _prect):
-        _palpha = 238
-    _LAST_ZONE.update(zone="centro", busy=round(_rect_busy(_an["grid"], _prect), 2))
-    panel = Image.new("RGB", (W - 160, panel_h), NAVY if dark else WHITE)
-    mask = Image.new("L", (W - 160, panel_h), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 160, panel_h], radius=36, fill=_palpha)
-    img.paste(panel, (80, cy0), mask)
-    d = ImageDraw.Draw(img)
-    if p.get("pill"):
-        pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
-    y = block_draw(d, fonts_dir, p, C, lay, cy0 + 36, dark, center=True)
-    draw_footer(d, fonts_dir, p, band_lum(img, 0.85, 1.0) < 150)
-    return img, y
+    return _sk_panel(fonts_dir, p, C, hs, img, lay)
 
 
 def sk_duo(fonts_dir, p, C, hs):
@@ -1374,7 +1488,7 @@ def sk_duo(fonts_dir, p, C, hs):
     d = ImageDraw.Draw(img)
     d.rectangle([W // 2 - 3, 0, W // 2 + 3, int(H * 0.78)], fill=(255, 255, 255))
     # chips ANTES / DESPUÉS
-    fchip = B(fonts_dir, 28)
+    fchip = SB(fonts_dir, 28)  # (v231) chips = rol etiqueta (SemiBold)
     for label, x0, fill, tcol in (("ANTES", MX, NAVY, (255, 255, 255)), ("DESPUÉS", W - MX, C["accent"], C["accent_text"])):
         wch = tw(d, label, fchip, 4) + 44
         xa = x0 if label == "ANTES" else x0 - wch
@@ -1387,6 +1501,7 @@ def sk_duo(fonts_dir, p, C, hs):
     _rb, _rt = text_rects(lay["total"])
     _busy_duo = _rect_busy(_an["grid"], _rb)
     _LAST_ZONE.update(zone="duo", busy=round(_busy_duo, 2))
+    _note_zone("duo", lay["total"], _rb)  # (v231) banda inferior + área
     if _rect_hits_face(_an["all"], _rb) or _busy_duo > 0.55:
         img = local_scrim(img, _rb, NAVY, 235)
         d = ImageDraw.Draw(img)
@@ -1419,7 +1534,7 @@ def sk_poster(fonts_dir, p, C, hs):
     dark_bg = _lum(bg) < 0.5
     img = Image.new("RGB", (W, H), bg)
     d = ImageDraw.Draw(img)
-    if p.get("pill"):
+    if _pill_for(p):
         pill_nuevo(d, fonts_dir, str(p["pill"]).upper(), C)
     # (v205) Sin nombre del negocio impreso arriba: la identidad
     # la cargan el medallón, la paleta y el titular — no un rótulo.
@@ -1479,20 +1594,27 @@ def sk_poster(fonts_dir, p, C, hs):
         rule_col = C["accent"] if _lum(C["accent"]) <= _lum(C["btn"]) else C["btn"]
         if rule_col == head_col:
             rule_col = C["btn"] if rule_col == C["accent"] else C["accent"]
-    y = cy + r + 78
+    # (v231) REGLA DE BANDAS (Valentino, 2026-10-18) también en el
+    # póster: el bloque se ancla a la BANDA INFERIOR — antes colgaba
+    # del medallón y su centro caía en el tercio medio de la pieza.
+    # El layout sale de block_layout: manda el guard de área (≤20%).
+    lay = block_layout(d, fonts_dir, p, hs)
+    y = max(cy + r + 56, H - 104 - lay["total"])
+    block_top = y
     d.rectangle([cx - 60, y, cx + 60, y + 10], fill=rule_col)
     y += 52
-    f, lines = wrap_fit(d, fonts_dir, p.get("headline", ""), MAX_W, min(hs, 148), 3)
+    f, lines = lay["f"], lay["lines"]
     for ln in lines:
         y = ctext(d, cx, y, ln, f, head_col)
         y += int(f.size * 0.10)
     y += 16
     sub_col = _blend(bg, (255, 255, 255), 0.78) if dark_bg else _blend(bg, NAVY, 0.62)
-    f2, slines = sub_wrap(d, fonts_dir, p.get("subline", ""), MAX_W, 42, 2)
+    f2, slines = lay["f2"], lay["slines"]
     for ln in slines:
         y = ctext(d, cx, y, ln, f2, sub_col)
         y += 12
     y += 34
+    _note_zone("poster", lay["total"], (0, block_top, W, y))
     draw_footer(d, fonts_dir, p, dark_bg)
     return img, y
 
@@ -1508,6 +1630,19 @@ SKELETONS_V2 = {
 }
 
 
+def _hero_width_frac(p, zoom):
+    """Ancho del héroe (caja 'hero' del manifest) como fracción del
+    ancho del lienzo, al zoom indicado. None si la foto no declara
+    héroe (nada que verificar)."""
+    try:
+        boxes = _manifest_faces_canvas(p.get("photo"), float(p.get("focus", 0.5) or 0.5), zoom, "hero")
+        if not boxes:
+            return None
+        return max((x1 - x0) for (x0, y0, x1, y1) in boxes) / float(W)
+    except Exception:
+        return None
+
+
 def render_v2(fonts_dir, p, C, hs):
     tr = p.get("treatment") or {}
     skel = str(tr.get("skeleton") or "abajo")
@@ -1516,11 +1651,34 @@ def render_v2(fonts_dir, p, C, hs):
     # el spec de render): la foto sale limpia — sin bloque, sin scrims
     # de texto, solo el grado del tratamiento. El póster es tipográfico
     # por definición: nunca va por esta vía.
-    if skel != "poster" and not str(p.get("headline") or "").strip() \
-            and not str(p.get("pill") or "").strip():
-        _LAST_ZONE.update(zone="clean", busy=0.0)
-        return _sk_clean(fonts_dir, p, C, skel), H
-    return fn(fonts_dir, p, C, hs)
+    clean = skel != "poster" and not str(p.get("headline") or "").strip() \
+        and not str(p.get("pill") or "").strip()
+    if clean:
+        _LAST_ZONE.update(zone="clean", busy=0.0, area=0.0, band_ok=True)
+        img, bottom = _sk_clean(fonts_dir, p, C, skel), H
+    else:
+        img, bottom = fn(fonts_dir, p, C, hs)
+    # (v231) SUBJECT_SCALE verificado (adopción n.º 2): si el héroe de
+    # la foto queda por debajo del rango de su familia (con texto o
+    # limpio según la pieza), se reintenta UNA vez con crop tight
+    # (zoom) — el mismo patrón de ajuste/reintento que usa el QA.
+    ss = p.get("subject_scale") or {}
+    if ss and p.get("photo") and skel != "poster":
+        rng = ss.get("clean") if clean else ss.get("text")
+        if rng:
+            zoom = 1.28 if tr.get("crop") == "tight" else 1.0
+            frac = _hero_width_frac(p, zoom)
+            if frac is not None:
+                _LAST_ZONE["hero"] = round(frac, 2)
+                if frac < float(rng[0]) - 0.03 and tr.get("crop") != "tight":
+                    p2 = dict(p)
+                    p2["treatment"] = dict(tr, crop="tight")
+                    if clean:
+                        img, bottom = _sk_clean(fonts_dir, p2, C, skel), H
+                    else:
+                        img, bottom = fn(fonts_dir, p2, C, hs)
+                    _LAST_ZONE["scale_adj"] = "zoom"
+    return img, bottom
 
 
 def main():
@@ -1541,7 +1699,7 @@ def main():
         # reales del catálogo); si no, los estilos legacy de siempre.
         fn = render_v2 if p.get("treatment") else STYLES.get(str(p.get("style") or "promo"), style_promo)
         bottom, img = None, None
-        _LAST_ZONE.update(zone="", busy=0.0)
+        _LAST_ZONE.update(zone="", busy=0.0, area=None, band_ok=None, contrast=None, hero=None, scale_adj=None)
         for hs in (150, 130, 112, 96):
             # re-render limpio en cada intento
             img, bottom = fn(fonts_dir, p, C, hs)
@@ -1555,7 +1713,7 @@ def main():
         if img.mode != "RGB":
             img = img.convert("RGB")
         img.save(out, quality=90)
-        print("post-%d OK style=%s bottom=%d zone=%s busy=%s" % (int(spec.get("index_offset", 0)) + i, p.get("style", "promo"), bottom, _LAST_ZONE.get("zone") or "-", _LAST_ZONE.get("busy", 0)))
+        print("post-%d OK style=%s bottom=%d zone=%s busy=%s area=%s band_ok=%s contrast=%s hero=%s" % (int(spec.get("index_offset", 0)) + i, p.get("style", "promo"), bottom, _LAST_ZONE.get("zone") or "-", _LAST_ZONE.get("busy", 0), _LAST_ZONE.get("area"), _LAST_ZONE.get("band_ok"), _LAST_ZONE.get("contrast"), _LAST_ZONE.get("hero")))
 
     print("DONE %d" % len(spec["posts"]))
 

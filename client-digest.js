@@ -72,6 +72,68 @@ function textWordSet(text) {
   return set;
 }
 
+// ---------- números y candado de verdad de promos (v231) ----------
+// Adopción del estudio de patrones (Predis: "la oferta con número ES
+// el titular") CON el candado de verdad de Valentino: un número de
+// promo (precio, %, NxM) solo puede aparecer en un titular si ESE
+// número está en el digest del cliente. Sin número en el digest, la
+// promo se vende sin número — inventarlo es humo y está prohibido.
+/* numbersInText(text) → Set de tokens numéricos canónicos del texto:
+ * precios ($12.500 → '12500'), decimales (2,5 → '2.5'), porcentajes
+ * (20% → '20') y ofertas NxM ('2x1' como token propio + componentes). */
+function numbersInText(text) {
+  const out = new Set();
+  const t = String(text || '');
+  const nxm = /(\d+)\s?x\s?(\d+)/gi;
+  let m;
+  while ((m = nxm.exec(t))) { out.add(`${m[1]}x${m[2]}`); out.add(m[1]); out.add(m[2]); }
+  const re = /\d+(?:[.,]\d+)?/g;
+  while ((m = re.exec(t))) {
+    let tok = m[0];
+    if (/^\d{1,3}(\.\d{3})+$/.test(tok)) tok = tok.replace(/\./g, ''); // miles AR: 12.500 → 12500
+    else tok = tok.replace(',', '.');
+    if (tok.includes('.')) tok = tok.replace(/\.?0+$/, ''); // 2.50 → 2.5 ; 20.0 → 20
+    if (tok) out.add(tok);
+  }
+  return out;
+}
+/* Todos los números que el digest conoce: productos, servicios,
+ * promos, catálogo, bio-link, diferencial y temas del feed. */
+function digestNumbers(digest) {
+  const out = new Set();
+  if (!digest || typeof digest !== 'object') return out;
+  const chunks = [];
+  const pushItems = (list, fields) => {
+    for (const x of (Array.isArray(list) ? list : [])) {
+      if (x && typeof x === 'object') for (const f of fields) chunks.push(String(x[f] || ''));
+      else chunks.push(String(x || ''));
+    }
+  };
+  pushItems(digest.productos, ['nombre', 'precio']);
+  pushItems(digest.servicios, ['nombre', 'precio']);
+  pushItems(digest.promos, ['titulo', 'nombre', 'precio']);
+  if (digest.catalog) pushItems(digest.catalog.items, ['nombre', 'precio']);
+  if (digest.bio_link) pushItems(digest.bio_link.items, ['nombre', 'precio']);
+  chunks.push(String(digest.diferencial || ''));
+  for (const t of (digest.temas_feed || [])) chunks.push(String(t || ''));
+  for (const c of chunks) for (const n of numbersInText(c)) out.add(n);
+  return out;
+}
+/* promoNumberGuard(topic, digest) — el candado aplicado a UN tema:
+ * si el tema es promo y su titular trae números que el digest no
+ * conoce, devuelve { ok:false, numbers:[…] }; si el tema salió del
+ * digest (_digest) o no hay digest con fundamento, pasa siempre (sus
+ * números SON los del digest por construcción / no hay verdad que
+ * contrastar: el catálogo sin digest es la vidriera genérica). */
+function promoNumberGuard(topic, digest) {
+  if (!topic || topic.kind !== 'promo' || topic._digest) return { ok: true, numbers: [] };
+  if (!digest || !hasFoundation(digest)) return { ok: true, numbers: [] };
+  const allowed = digestNumbers(digest);
+  const bad = [...numbersInText(`${topic.headline || ''} ${topic.subline || ''}`)]
+    .filter((n) => !allowed.has(n));
+  return bad.length ? { ok: false, numbers: bad } : { ok: true, numbers: [] };
+}
+
 // ---------- anclas y chequeo de pertenencia ----------
 /* anchorsOf(digest) → [{text, words[]}] ordenadas por especificidad.
  * Una pieza PERTENECE si su titular+caption contiene ≥1 ancla: la frase
@@ -907,13 +969,23 @@ function deriveTopics(digest, opts) {
     if (t) topics.push(t);
   }
   // 2) PROMO — promo real; si no hay, el ítem N.º 2 como novedad.
+  // (v231) TITULAR-OFERTA CON NÚMERO (adopción Predis): en promo, el
+  // titular ES la oferta con su número — si el título de la promo no
+  // trae número pero el digest conoce su precio, el precio sube al
+  // titular (o a la bajada si el título ya es largo). El número sale
+  // SIEMPRE del digest: sin número en el digest, la promo sale sin
+  // número (candado de verdad, promoNumberGuard).
   const promo = (digest.promos || [])[0];
   if (promo && (promo.titulo || promo)) {
     const A = String(promo.titulo || promo).trim();
+    const promoPrice = (promo && typeof promo === 'object') ? String(promo.precio || '').trim() : '';
+    const tituloWords = A.split(/\s+/).filter(Boolean).length;
+    const tituloHasNum = numbersInText(A).size > 0;
+    const priceInHeadline = !!promoPrice && !tituloHasNum && tituloWords <= 4;
     const t = mk('promo', A, {
       tag: 'PROMO',
-      headline: (x) => x,
-      subline: () => '',
+      headline: (x) => (priceInHeadline ? `${x} a ${promoPrice}` : x),
+      subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `A ${promoPrice}, como lo ves` : ''),
       cta: 'Quiero aprovecharla',
       caption: (x) => `${x} en ${bizPh} 🔥\n\nEs por tiempo limitado: cuando se termina, se termina.\n\nEscribinos y te lo reservamos 📩`,
     });
@@ -1064,6 +1136,8 @@ module.exports = {
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
   dnaFragmentFromDigest,
+  // (v231) Adopción de patrones: candado de números de promo
+  numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda
   parsePriceNum, sameItemName, detectContradictions, inferStar,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor,

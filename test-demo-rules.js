@@ -133,11 +133,17 @@ const ok = (name, fn) => { if (fn) fn(); passed++; console.log('  ✓', name); }
   assert.strictEqual(zones[0], 'bottom', `pote: zone=${zones[0]} (el bloque debe bajar)`);
   passed++; console.log('  ✓ (b) pote de crema: el bloque baja (zone=bottom)');
 
-  // (c) La cara de "Novias" (beauty-11, arriba): cara en ambas bandas
-  // útiles → panel editorial, el texto jamás sobre la cara.
+  // (c) La cara de "Novias" (beauty-11, arriba): el texto JAMÁS sobre
+  // la cara. Hasta v230 el bloque medía ~400px y su rectángulo
+  // inferior (y0=831) rozaba la caja de la cara (termina en 841) →
+  // ambas bandas prohibidas → panel. Con el guard de área de v231 el
+  // bloque mide 311px y la banda inferior (y0=929) queda VERIFICABLE-
+  // MENTE libre de cara → el bloque baja (la regla dura es "nunca
+  // sobre la cara", y abajo no la toca; el panel sigue siendo el
+  // destino cuando ambas bandas están prohibidas de verdad).
   zones = renderZones([P('beauty-11.webp', 'arriba', 0.56, 'Novias: tu prueba va incluida')]);
-  assert.strictEqual(zones[0], 'panel', `novias: zone=${zones[0]} (debe ser panel)`);
-  passed++; console.log('  ✓ (c) cara de la novia: panel editorial (zone=panel)');
+  assert.strictEqual(zones[0], 'bottom', `novias: zone=${zones[0]} (debe bajar: la banda inferior quedó libre de cara)`);
+  passed++; console.log('  ✓ (c) cara de la novia: el bloque baja a la banda libre (zone=bottom, jamás sobre la cara)');
 
   // (a) Los pinceles (beauty-3, claro abajo): nunca zona alta sobre el
   // flat-lay; abajo con scrim o panel.

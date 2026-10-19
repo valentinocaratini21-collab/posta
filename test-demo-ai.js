@@ -278,7 +278,7 @@ const llmJson = (content, usage) => ({
     const dir = demoAi.compositionDirectives(clsF, 'Los horarios que más rinden');
     ok(/60-70%/.test(dir), 'la directiva exige personaje al 60-70% del cuadro');
     ok(/TOP THIRD/.test(dir), 'la directiva reserva el tercio superior para el titular');
-    ok(/FORBIDDEN/.test(dir) && /window/i.test(dir), 'la directiva prohíbe la oficina detallada con ventanales');
+    ok(!/FORBIDDEN/.test(dir) && /soft, blurred/.test(dir) && /clear empty surfaces/i.test(dir), '(v231) fondo suave en POSITIVO: superficies vacías y calma, sin lista de prohibiciones');
     ok(/wall clock/i.test(dir), 'la directiva inyecta el objeto-concepto del tema');
     const dirPlain = demoAi.compositionDirectives({ formula: { character_scale: 0.7, background: 'plain', headline: 'large' } }, 'Auditoría de tu Instagram');
     ok(/flat solid color/i.test(dirPlain), 'fórmula plain → fondo de color pleno');
@@ -543,7 +543,7 @@ const llmJson = (content, usage) => ({
     ok(qBad && qBad.failures.join() === 'concept,text', 'las fallas nombran concepto y texto');
     const dirQa = demoAi.qaRetryDirective(qBad);
     ok(/NEVER/.test(dirQa) && /printed PHOTOS/.test(dirQa), 'la directiva reforzada trae el concepto correcto con sus NEVER');
-    ok(/NO TEXT/.test(dirQa) && /composited afterwards/.test(dirQa), 'la directiva reforzada prohíbe el texto en imperativo');
+    ok(/completely clean/.test(dirQa) && /composited afterwards/.test(dirQa) && !/NO TEXT:/.test(dirQa), '(v231) la directiva reforzada describe la escena limpia en positivo');
     ok(!/TREATMENT:/.test(dirQa), 'la directiva NO refuerza lo que pasó (tratamiento estaba ok)');
 
     const qTrat = await demoAi.qaDemoPiece({

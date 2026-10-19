@@ -118,6 +118,20 @@ def main():
         img.save(a.out)
         return
 
+    # (v231) GUARD DE ÁREA (adopción n.º 1, reflejo del de
+    # demo_render.py): el bloque del titular ocupa ≤20% del área de la
+    # pieza. Si el auto-fit lo dejó por encima, el tamaño sigue
+    # bajando hasta entrar en presupuesto (a menor tamaño las mismas
+    # palabras entran igual o mejor en las 3 líneas).
+    def _block_area_pct(n_lines, sz):
+        return (int(sz * 1.2) * n_lines) * max_w / float(W * H) * 100.0
+
+    while size > int(W * 0.04) and _block_area_pct(len(lines), size) > 20.0:
+        size -= 4
+        font = load_font(True, size)
+        lines = wrap(draw, headline, font, max_w, 3)
+    area_pct = _block_area_pct(len(lines), size)
+
     # Fondo ADAPTATIVO detrás del texto (2026-10-16): se mide la luz real
     # de la zona del titular y se actúa en consecuencia — desenfoque suave
     # del fondo (calma las fotos cargadas) + degradado cuya fuerza depende
@@ -153,6 +167,38 @@ def main():
             alpha = int(alpha_max * (yy / max(grad_h, 1))) if zone_bottom else int(alpha_max * (1 - yy / max(grad_h, 1)))
             od.line([(0, zy0 + yy), (W, zy0 + yy)], fill=(0, 0, 0, alpha))
         img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+
+    # (v231) GATE DE CONTRASTE ≥ 4,5:1 MEDIDO (adopción n.º 6): con el
+    # degradado ya aplicado, se mide la luminancia real de la banda
+    # del titular contra el blanco del texto; si no alcanza la vara,
+    # se suma UN velo oscuro localizado detrás del bloque y se remide.
+    contrast = None
+    if not ink_rgb:
+        def _rel_lum(rgb):
+            def _f(c):
+                c = c / 255.0
+                return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+            return 0.2126 * _f(rgb[0]) + 0.7152 * _f(rgb[1]) + 0.0722 * _f(rgb[2])
+
+        def _band_ratio():
+            band = img.crop((margin_x, text_y, W - margin_x, text_y + text_h)).resize((1, 1))
+            lb = _rel_lum(band.getpixel((0, 0)))
+            lw = _rel_lum((255, 255, 255))
+            hi, lo = max(lw, lb), min(lw, lb)
+            return (hi + 0.05) / (lo + 0.05)
+
+        contrast = _band_ratio()
+        if contrast < 4.5:
+            try:
+                veil = Image.new('RGBA', img.size, (0, 0, 0, 0))
+                vd = ImageDraw.Draw(veil)
+                vd.rectangle([0, text_y - int(H * 0.02), W, text_y + text_h + int(H * 0.02)], fill=(0, 0, 0, 150))
+                veil = veil.filter(ImageFilter.GaussianBlur(radius=max(4, int(W * 0.006))))
+                img = Image.alpha_composite(img.convert('RGBA'), veil).convert('RGB')
+                draw = ImageDraw.Draw(img)
+                contrast = _band_ratio()
+            except Exception:
+                pass
 
     # Sombra SUAVE: capa de texto en negro, desenfocada, apenas corrida —
     # reemplaza la sombra dura corrida (3,3) que se veía barata.
@@ -196,6 +242,7 @@ def main():
             pass
 
     img.save(a.out)
+    print('ok area=%.1f contrast=%s' % (area_pct, ('%.2f' % contrast) if contrast is not None else '-'))
     # Variantes livianas de la pieza FINAL (con titular) para la UI.
     try:
         base = a.out.rsplit('.', 1)[0]
@@ -206,7 +253,6 @@ def main():
                 img.save(base + suf, 'WEBP', quality=q)
     except Exception:
         pass
-    print('ok')
 
 
 if __name__ == '__main__':

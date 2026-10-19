@@ -69,4 +69,51 @@ function modeFromWeekKinds(kinds, selfPos) {
   return modes[selfPos] || 'text';
 }
 
-module.exports = { KIND_BY_TIPO, kindOfTipo, textCountForBatch, planWeekTextModes, modeFromWeekKinds };
+// ---------- Cuotas de intención semanal (v231, adopción Predis) ----------
+// Además de la dosificación de TEXTO, la semana se audita por
+// INTENCIÓN (el mix valor / comunidad / ventas del style guide de
+// Predis): ~2 valor, ~2 comunidad, ~1 venta en la semana de 5. No se
+// fuerza un mix fino — solo se corrige el caso DEGENERADO (la semana
+// sale TODA promo, o TODA tip) canjeando picks de la ventana por
+// picks del buffer ya generado (cero llamadas de IA extra).
+const INTENT_BY_KIND = {
+  tip: 'valor',
+  social: 'comunidad',
+  promo: 'venta', reserva: 'venta', novedad: 'venta', sorteo: 'venta',
+};
+function intentOfKind(kind) { return INTENT_BY_KIND[kind] || 'comunidad'; }
+function intentOfTipo(tipo) { return intentOfKind(kindOfTipo(tipo)); }
+function intentMixOf(picks) {
+  const mix = { valor: 0, comunidad: 0, venta: 0 };
+  for (const p of (Array.isArray(picks) ? picks : [])) mix[intentOfTipo(p && p.tipo)]++;
+  return mix;
+}
+// picks: ventana (los primeros `deficit`) + buffer. Devuelve la lista
+// reordenada (ventana corregida + buffer con los canjeados) y cuántos
+// canjes hizo. Sin buffer útil o sin degeneración → la misma lista.
+function rebalanceIntentPicks(picks, deficit) {
+  const list = (Array.isArray(picks) ? picks : []).slice();
+  const n = Math.min(Math.max(parseInt(deficit, 10) || 0, 0), list.length);
+  if (n < 3 || list.length <= n) return { picks: list, swapped: 0 };
+  const win = list.slice(0, n);
+  const buf = list.slice(n);
+  const countIn = (arr, it) => arr.filter((p) => intentOfTipo(p && p.tipo) === it).length;
+  let swapped = 0;
+  for (const dom of ['venta', 'valor', 'comunidad']) {
+    let c = countIn(win, dom);
+    const limit = c === n ? n - 2 : (n >= 4 && c >= n - 1 ? n - 2 : null);
+    if (limit === null) continue;
+    for (let i = win.length - 1; i >= 0 && c > limit; i--) {
+      if (intentOfTipo(win[i] && win[i].tipo) !== dom) continue;
+      const bi = buf.findIndex((p) => intentOfTipo(p && p.tipo) !== dom);
+      if (bi < 0) break;
+      const [incoming] = buf.splice(bi, 1);
+      buf.push(win[i]);
+      win[i] = incoming;
+      c--; swapped++;
+    }
+  }
+  return { picks: [...win, ...buf], swapped };
+}
+
+module.exports = { KIND_BY_TIPO, kindOfTipo, textCountForBatch, planWeekTextModes, modeFromWeekKinds, INTENT_BY_KIND, intentOfKind, intentOfTipo, intentMixOf, rebalanceIntentPicks };

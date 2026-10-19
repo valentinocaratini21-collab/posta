@@ -41,8 +41,13 @@ async function main() {
   // ---------- 3. Restyle ----------
   t('endpoint photo-restyle existe', serverSrc.includes("app.post('/api/drafts/:id/photo-restyle'"));
   t('restyle usa EDITS con la foto como base (refs:[basePath])', /refs:\s*\[basePath\][\s\S]{0,80}restyle:\s*true/.test(serverSrc));
-  t('restyle: refNote exige MISMO producto', /keep the EXACT same product\/subject from the reference photo/.test(serverSrc));
-  t('restyle: nunca inventa el producto', /Do NOT invent a different product/.test(serverSrc));
+  // (v231) La nota de restyle vive en ref-roles.js (rol 'restyle') y
+  // conceptShot la compone con buildRefNote: las garantías son las
+  // mismas frases, ahora en el texto del rol.
+  const refRolesSrc = fs.readFileSync('ref-roles.js', 'utf8');
+  t('restyle: la nota sale del rol restyle de ref-roles', serverSrc.includes("refRoles.buildRefNote(['restyle'])"));
+  t('restyle: refNote exige MISMO producto', /keep the EXACT same product\/subject from the reference photo/.test(refRolesSrc));
+  t('restyle: nunca inventa el producto', /Do NOT invent a different product/.test(refRolesSrc));
 
   // ---------- 4. Reference lock ----------
   t('db.js: columna product_ref', dbSrc.includes('ADD COLUMN product_ref'));
