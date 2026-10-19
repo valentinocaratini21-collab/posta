@@ -115,11 +115,13 @@ async function publishSinglePost(db, post, opts = {}) {
     db.prepare(
       `UPDATE posts SET status = 'published', ig_permalink = ?, ig_media_id = ?, published_at = datetime('now') WHERE id = ?`
     ).run(result.permalink || '', result.mediaId || '', post.id);
-    // Historia gemela (2026-10-17): cada posteo de feed publicado sale
-    // también como historia el mismo día (+3 h), sin trabajo del cliente.
-    // Se crea con el generador de historias (tipo repost: la foto del
-    // posteo sobre la tarjeta de marca) y queda marcada source='twin'.
-    // Tope: 2 gemelas por día por usuario (ritmo sano de historias).
+    // Historia gemela (2026-10-17; FIX v231 2026-10-18): cada posteo de
+    // feed publicado sale también como historia el mismo día (+3 h), sin
+    // trabajo del cliente. La gemela lleva UN SOLO gancho corto (el
+    // titular del posteo, en banda, nunca el caption) y SOLO si la fuente
+    // pasa el lint vigente: createTwinStory chequea y, si omite, lo deja
+    // registrado en events (twin_story_omitted) con el motivo. Queda
+    // marcada source='twin'. Tope: 2 gemelas por día por usuario.
     try {
       if (!isStory && !demoMode && (post.media_type === 'image' || post.media_type === 'carousel')) {
         const twinsToday = db.prepare(
@@ -127,16 +129,18 @@ async function publishSinglePost(db, post, opts = {}) {
         ).get(post.user_id).c;
         if (twinsToday < 2) {
           const deps = proStoryDeps(db);
-          const ctx = { postCaption: String(post.caption || '').split('\n')[0] };
           const abs = post.image_path && post.image_path.startsWith('/media/')
             ? path.join(PRO_MEDIA_DIR, path.basename(post.image_path)) : null;
-          if (abs && fs.existsSync(abs)) ctx.postImageAbs = abs;
-          const twin = require('./stories').generateStory({
-            db, uid: post.user_id, type: 'repost', ctx,
-            brand: deps.getBrand(post.user_id), mediaDir: deps.mediaDir,
+          const r = require('./stories').createTwinStory({
+            db, post, brand: deps.getBrand(post.user_id), mediaDir: deps.mediaDir,
+            postImageAbs: abs && fs.existsSync(abs) ? abs : null,
             scheduleAt: new Date(Date.now() + 3 * 3600 * 1000).toISOString(),
           });
-          if (twin && twin.id) db.prepare(`UPDATE posts SET source = 'twin' WHERE id = ?`).run(twin.id);
+          if (r && r.status === 'created' && r.id) {
+            db.prepare(`UPDATE posts SET source = 'twin' WHERE id = ?`).run(r.id);
+          } else if (r && r.status === 'omitted') {
+            console.error(`[twin-story] omitida post=${post.id}: ${r.reason}`);
+          }
         }
       }
     } catch (e) { console.error('[twin-story]', e.message); }
@@ -907,10 +911,17 @@ function proStoryDeps(db) {
       const ctx = {};
       try {
         const p = db.prepare(
-          `SELECT caption, image_path FROM posts WHERE user_id = ? AND media_type = 'image'
+          `SELECT caption, image_path, source_topic, intent FROM posts WHERE user_id = ? AND media_type = 'image'
            AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid);
         if (p) {
           ctx.postCaption = String(p.caption || '').split('\n')[0];
+          // (v231) El repost diario usa el MISMO titular chequeado que la
+          // gemela: si la fuente no pasa el lint, no hay repost ese día.
+          try {
+            const S = require('./stories');
+            const chk = S.twinSourceCheck(p, S.twinContextFor(db, uid));
+            if (chk.ok) ctx.postHeadline = chk.headline;
+          } catch (e) {}
           const abs = p.image_path && p.image_path.startsWith('/media/')
             ? path.join(PRO_MEDIA_DIR, path.basename(p.image_path)) : null;
           if (abs && fs.existsSync(abs)) ctx.postImageAbs = abs;

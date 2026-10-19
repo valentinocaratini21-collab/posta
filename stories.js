@@ -4,20 +4,35 @@
 //   poll      → encuesta "esto o aquello" (A/B)
 //   question  → pregunta abierta a la audiencia
 //   countdown → promo/evento con fecha ("TERMINA EN X DÍAS")
-//   repost    → "mirá el último post" (repost del post del día)
+//   repost    → historia gemela: espeja un posteo con UN gancho corto
+//
+// REGLAS DE LA GEMELO (v231, 2026-10-18 — la captura de Valentino: la vieja
+// pegaba el «mirá el último post» gigante + el caption ENTERO del posteo,
+// duplicado y sobre los ojos de la mascota):
+//   · La gemela lleva UN SOLO gancho corto = el titular del posteo (≤8
+//     palabras). NUNCA el caption, NUNCA duplicado.
+//   · Si el caption/titular del posteo fuente no pasa el lint vigente
+//     (anti-empalmes + captionPasses), la gemela NO sale: queda registrada
+//     como omitida con el motivo (events: twin_story_omitted).
+//   · El texto va en banda superior o inferior según las zonas tranquilas
+//     de la foto (brand-card.py --band auto): nunca en el centro, nunca
+//     sobre caras u ojos.
 //
 // Render: brand-card.py en modo story (paleta del cliente SIEMPRE, texto
 // grande y legible, safe areas de IG). Se guardan como posts con
 // media_type='story' — la publicación la hace el pipeline existente
 // (processDuePosts → publishStory). Nada se publica sin el flujo normal.
 //
-// Exporta: { STORY_TYPES, buildStoryContent, renderStoryPng, generateStory, dailyStories }
+// Exporta: { STORY_TYPES, buildStoryContent, renderStoryPng, generateStory,
+//            dailyStories, twinSourceCheck, twinContextFor, createTwinStory }
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
+const { makeHeadline, captionPasses } = require('./generator');
+const { captionOpenIsGarbled } = require('./hooks');
 
 const BRAND_CARD_PY = path.join(__dirname, 'brand-card.py');
 const STORY_W = 1080;
@@ -34,7 +49,8 @@ function clean(s, max) {
 // buildStoryContent(type, ctx) → { headline, sub } | null
 // Puro y determinista (sin IA): plantillas en rioplatense.
 // ctx: { business, rubro, weekPosts:[{caption}], pollA, pollB, question,
-//        promoTitle, eventDate (AAAA-MM-DD), postCaption }
+//        promoTitle, eventDate (AAAA-MM-DD), postHeadline (gemela: titular
+//        ya chequeado por twinSourceCheck), postImageAbs }
 // ---------------------------------------------------------------------------
 function buildStoryContent(type, ctx) {
   const c = ctx || {};
@@ -60,11 +76,97 @@ function buildStoryContent(type, ctx) {
     return { headline: title, sub: when };
   }
   if (type === 'repost') {
-    const cap = clean(c.postCaption, 90);
-    if (!cap) return null; // sin post del día: no hay repost
-    return { headline: 'MIRÁ EL ÚLTIMO POST', sub: cap };
+    // GEMELA (v231): UN solo gancho corto = el titular del posteo, ya
+    // derivado y linteado por twinSourceCheck (ctx.postHeadline). El
+    // caption NO entra a la historia: ni como sub ni como titular. Sin
+    // titular limpio no hay gemela.
+    const hook = clean(c.postHeadline, 90);
+    if (!hook) return null;
+    if (hook.split(/\s+/).length > 8) return null;
+    return { headline: hook, sub: '' };
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// twinSourceCheck(post, opts) — la puerta de la gemela (v231).
+// post: { caption, source_topic, intent } (la fila del posteo fuente).
+// opts: { business, category, dna, igUsername } — el lint corre con los
+// MISMOS insumos que usa la generación (así un caption sano no cae por
+// gates que exigen el ADN, y uno roto no pasa por ningún atajo).
+// Devuelve { ok:true, headline } | { ok:false, reason }.
+// El titular se deriva IGUAL que en el pipeline que compone la pieza
+// (makeHeadline sobre la primera línea, ≤6 palabras ⇒ ≤8 de la regla).
+// ---------------------------------------------------------------------------
+function twinSourceCheck(post, opts) {
+  const o = opts || {};
+  const business = o.business || '';
+  const caption = String((post && post.caption) || '');
+  if (!caption.trim()) return { ok: false, reason: 'sin_caption' };
+  // Anti-empalmes primero: la firma exacta del post 112 ("El De escéptica
+  // a fan:…") frena la gemela aunque el resto del caption esté sano.
+  if (captionOpenIsGarbled(caption, business)) {
+    return { ok: false, reason: 'apertura_empalmada' };
+  }
+  const gate = captionPasses(caption, {
+    business, dna: o.dna || null, ig_username: o.igUsername || '',
+  });
+  if (!gate.ok) return { ok: false, reason: 'caption_no_pasa_lint: ' + gate.reason };
+  let headline = '';
+  try { headline = clean(makeHeadline(caption.split('\n')[0], 6, 70, o.category || null), 90); } catch (e) {}
+  if (headline && (captionOpenIsGarbled(headline, business) || headline.split(/\s+/).length > 8)) headline = '';
+  if (!headline) {
+    // Sin titular limpio desde el caption: línea corta derivada del tema
+    // guardado del posteo (source_topic/intent), con el mismo lint.
+    const topic = clean(post && (post.source_topic || post.intent), 90);
+    if (topic && !captionOpenIsGarbled(topic, business)) {
+      try { headline = clean(makeHeadline(topic, 6, 70, o.category || null), 90); } catch (e) { headline = ''; }
+      if (headline && captionOpenIsGarbled(headline, business)) headline = '';
+    }
+  }
+  if (!headline) return { ok: false, reason: 'sin_titular_limpio' };
+  return { ok: true, headline };
+}
+
+// Contexto de lint de un usuario para la gemela: nombre, rubro, ADN e IG
+// (las fuentes que la generación usa para captionPasses).
+function twinContextFor(db, uid) {
+  const out = { business: '', category: null, dna: null, igUsername: '' };
+  try {
+    const prof = db.prepare('SELECT business_name, category, ig_username FROM profiles WHERE user_id = ?').get(uid) || {};
+    out.business = prof.business_name || '';
+    out.category = prof.category || null;
+    out.igUsername = prof.ig_username || '';
+    const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+    if (dr && dr.dna_json) { try { out.dna = JSON.parse(dr.dna_json); } catch (e) {} }
+  } catch (e) {}
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// createTwinStory({ db, post, brand, mediaDir, postImageAbs, scheduleAt })
+// La gemela completa (v231): chequea la fuente, y recién si pasa genera la
+// historia (tipo repost) marcada source='twin' la hace el llamador.
+// Devuelve { status:'created', id, path, headline, band }
+//        | { status:'omitted', reason } — registrado en events con motivo.
+// Lanza solo si el render falla (el llamador ya captura, como antes).
+// ---------------------------------------------------------------------------
+function createTwinStory({ db, post, brand, mediaDir, postImageAbs = null, scheduleAt = null }) {
+  const uid = post.user_id;
+  const chk = twinSourceCheck(post, twinContextFor(db, uid));
+  if (!chk.ok) {
+    try {
+      db.prepare(`INSERT INTO events (user_id, name, props) VALUES (?, 'twin_story_omitted', ?)`)
+        .run(uid, JSON.stringify({ post_id: post.id, reason: chk.reason }));
+    } catch (e) { /* el registro nunca frena al scheduler */ }
+    return { status: 'omitted', reason: chk.reason };
+  }
+  const out = generateStory({
+    db, uid, type: 'repost',
+    ctx: { postHeadline: chk.headline, postImageAbs },
+    brand, mediaDir, scheduleAt,
+  });
+  return { status: 'created', id: out.id, path: out.path, headline: chk.headline, band: out.band || null };
 }
 
 function daysUntil(ymd) {
@@ -80,7 +182,7 @@ function daysUntil(ymd) {
 // renderStoryPng({ headline, sub, business, bgHex, textHex, logoAbs, photoAbs, outDir })
 // → '/media/xxx.png' (1080×1920). Lanza si PIL/python falla (no silencioso).
 // ---------------------------------------------------------------------------
-function renderStoryPng({ headline, sub, business, bgHex, textHex, logoAbs, photoAbs, outDir }) {
+function renderStoryPng({ headline, sub, business, bgHex, textHex, logoAbs, photoAbs, outDir, band, meta }) {
   const out = path.join(outDir, `story-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.png`);
   const args = [BRAND_CARD_PY,
     '--mode', 'story', '--w', String(STORY_W), '--h', String(STORY_H),
@@ -88,10 +190,15 @@ function renderStoryPng({ headline, sub, business, bgHex, textHex, logoAbs, phot
     '--sub', clean(sub, 120),
     '--bg', String(bgHex || '#0A1E33'), '--text', String(textHex || '#FFFFFF'),
     '--business', clean(business, 48), '--out', out];
+  // (v231) Banda del bloque de texto: las historias no llevan palabras en
+  // el medio — 'auto' deja que el renderer elija la banda tranquila.
+  if (band) args.push('--band', String(band));
   if (logoAbs && fs.existsSync(logoAbs)) args.push('--logo', logoAbs);
   if (photoAbs && fs.existsSync(photoAbs)) args.push('--photo', photoAbs);
-  execFileSync('python3', args, { timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] });
+  const stdout = execFileSync('python3', args, { timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
   if (!fs.existsSync(out)) throw new Error('brand-card.py no generó la story');
+  const m = /band=(top|bottom)/.exec(stdout || '');
+  if (meta) meta.band = m ? m[1] : null;
   return '/media/' + path.basename(out);
 }
 
@@ -116,17 +223,18 @@ function generateStory({ db, uid, type, ctx, brand, mediaDir, scheduleAt = null 
       photoAbs = pickStockPhoto(prof && prof.category, `${uid}:${type}:${new Date().toISOString().slice(0, 10)}`);
     } catch (e) {}
   }
+  const meta = {};
   const mediaPath = renderStoryPng({
     headline: content.headline, sub: content.sub,
     business: b.business || '', bgHex: b.bgHex, textHex: b.textHex,
-    logoAbs: b.logoAbs || null, photoAbs, outDir: mediaDir,
+    logoAbs: b.logoAbs || null, photoAbs, outDir: mediaDir, band: 'auto', meta,
   });
   const status = scheduleAt ? 'scheduled' : 'draft';
   const r = db.prepare(
     `INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, tipo)
      VALUES (?,?,?,?,?,?, 'story', 'story')`
   ).run(uid, mediaPath, content.headline, '', scheduleAt || null, status);
-  return { id: Number(r.lastInsertRowid), path: mediaPath };
+  return { id: Number(r.lastInsertRowid), path: mediaPath, band: meta.band || null };
 }
 
 // ---------------------------------------------------------------------------
@@ -168,10 +276,10 @@ async function dailyStories(db, deps) {
       if (nToday >= STORIES_PER_DAY) { out.skipped++; continue; }
       const brand = getBrand(uid) || {};
       const ctx = getCtx(uid) || {};
-      // Orden: repost (si hay post del día) → poll/question alternados → countdown (si hay promo)
+      // Orden: repost (si hay post del día con titular limpio) → poll/question alternados → countdown (si hay promo)
       const dayNum = Number(today.slice(8, 10));
       const types = [];
-      if (ctx.postCaption) types.push('repost');
+      if (ctx.postHeadline) types.push('repost');
       types.push(dayNum % 2 === 0 ? 'poll' : 'question');
       if (ctx.promoTitle && ctx.eventDate) types.push('countdown');
       const hours = ['13:00', '19:00'];
@@ -190,4 +298,4 @@ async function dailyStories(db, deps) {
   return out;
 }
 
-module.exports = { STORY_TYPES, STORIES_PER_DAY, buildStoryContent, renderStoryPng, generateStory, dailyStories, daysUntil };
+module.exports = { STORY_TYPES, STORIES_PER_DAY, buildStoryContent, renderStoryPng, generateStory, dailyStories, daysUntil, twinSourceCheck, twinContextFor, createTwinStory };

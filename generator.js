@@ -473,6 +473,7 @@ TÉCNICAS DE HOOK (elegí UNA por caption, la que mejor pegue con el tema):
 
 REGLAS DE ORO:
 - Sé ESPECÍFICO: nombrá el producto, el precio si hay promo, el día, el lugar. Lo genérico no vende.
+- PROMO CON NÚMERO (v231): si la pieza es promo y los datos del negocio traen el precio o descuento, la oferta con su número ARRANCA el caption ("Sushi libre a $9.900 los martes"). Si los datos NO traen número para esa promo, vendela sin número: JAMÁS inventes un precio, un porcentaje ni un 2x1 que el negocio no declaró.
 - Variá la ESTRUCTURA: algunos captions cuentan una mini historia, otros son una lista corta, otros van directo en 2-3 líneas. Nunca repitas la misma estructura en captions seguidos.
 - 1 o 2 emojis bien puestos, nunca más. Cada emoji tiene que sumar, no decorar.
 - El CTA es UNA acción concreta: escribinos, comentá X, guardalo, pasá por el local.
@@ -614,6 +615,16 @@ function captionPasses(caption, input) {
   if (blockCount > 3) return { ok: false, reason: `tiene ${blockCount} bloques de texto (máximo 3: gancho / desarrollo / CTA, separados por una línea en blanco)` };
   const emojiTotal = (c.match(/\p{Extended_Pictographic}/gu) || []).length;
   if (emojiTotal > 4) return { ok: false, reason: `tiene ${emojiTotal} emojis (máximo 4: uno o dos bien puestos venden, el resto es ruido)` };
+  // ANTI-EMPALME EN LA PUERTA (v231, 2026-10-18): el detector de aperturas
+  // empalmadas (captionOpenIsGarbled, lint v3) vivía SOLO en applyPostyHook.
+  // Toda ruta gateada únicamente por captionPasses (plantillas con el
+  // fallback "va el primero", ideas del chat, chequeo de la gemela) podía
+  // entregar un "El De escéptica a fan:…" — la firma exacta del post 112.
+  // Ahora la puerta misma lo frena: un caption empalmado no pasa, venga
+  // de donde venga (CAPTION-54-EMPALME-FRENA-LA-SALIDA).
+  if (captionOpenIsGarbled(c, (input && input.business) || '')) {
+    return { ok: false, reason: 'apertura empalmada: la primera línea cose dos aperturas o deja un artículo colgando (tipo "El De escéptica a fan:…") — reescribí la apertura limpia, en una sola frase' };
+  }
   if (hasPlaceholders(c)) return { ok: false, reason: 'contiene texto inventado o de ejemplo (tipo "XYZ")' };
   const hasCta = CTA_SIGNALS.some(s => low.includes(s)) || /\bdm\b/.test(low);
   if (!hasCta) return { ok: false, reason: 'le falta un llamado a la acción claro (DM, comentario, guardado…)' };

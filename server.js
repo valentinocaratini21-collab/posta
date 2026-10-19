@@ -196,6 +196,7 @@ const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
 const { sendEmail, magicLinkEmail } = require('./email');
@@ -6486,6 +6487,18 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     const picks = pool.slice(0, deficit + 2);
     if (!picks.length) return { ok: false, reason: 'no_ideas' };
+    // 🎯 CUOTAS DE INTENCIÓN (v231, adopción Predis): si la ventana sale
+    // degenerada (toda venta, o toda una sola intención), se canjean
+    // picks de la ventana por picks del buffer YA generado — cero IA
+    // extra. Antes del equilibrio de grilla y del plan de texto.
+    try {
+      const rb = cleanPieces.rebalanceIntentPicks(picks, deficit);
+      if (rb.swapped) {
+        picks.splice(0, picks.length, ...rb.picks);
+        const mix = cleanPieces.intentMixOf(picks.slice(0, deficit));
+        console.log(`[pipeline:${tag}] usuario ${uid}: intención reequilibrada (${rb.swapped} canjes) — valor ${mix.valor} / comunidad ${mix.comunidad} / venta ${mix.venta}`);
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] rebalance de intención falló:`, e.message); }
     // 🧩 EQUILIBRIO DE GRILLA (v224): si la grilla del cliente tiene un
     // patrón fuerte, la tanda se ORDENA por posición (el tipo de cada idea
     // calza con la columna donde va a caer) y cada idea lleva su consigna
@@ -6665,9 +6678,15 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
           // (v230) La foto del producto EXACTO de esta pieza (si el mapa
           // foto→producto la conoce en su álbum) manda como referencia.
+          // (v231) Y viaja con su ROL declarado: esas refs son el
+          // producto real (preservar forma y etiqueta); el resto, fotos.
+          let refRolesForRefs = null;
           try {
             const mappedRefs = photoMappedRefsFor(uid, [idea.titulo, caption.split('\n')[0]]);
-            if (mappedRefs.length) refs = [...mappedRefs, ...refs.filter((r) => !mappedRefs.includes(r))].slice(0, 2);
+            if (mappedRefs.length) {
+              refs = [...mappedRefs, ...refs.filter((r) => !mappedRefs.includes(r))].slice(0, 2);
+              refRolesForRefs = refs.map((r) => (mappedRefs.includes(r) ? 'product' : 'photo'));
+            }
           } catch (e) {}
           // 2026-10-14: TARJETA INMEDIATA (pedido de Valentino) — el borrador
           // nace AHORA con su texto y sin imagen: la tarjeta aparece en la
@@ -6711,7 +6730,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           for (let attempt = 0; attempt < 3 && !imagePath; attempt++) {
           try {
             imagePath = await conceptShotGenerateQueued({
-              uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, apiKey: key,
+              uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, refRoles: refRolesForRefs, apiKey: key,
               usedStyles, styleOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
             });
           } catch (e) {
@@ -9251,11 +9270,21 @@ function learningsLineOf(learnings) {
 // El director de arte devuelve 5 bloques (JSON) y el CÓDIGO ensambla el
 // prompt final: la línea visual abre tal cual, la paleta va verbatim, la
 // zona del titular se dimensiona según el largo REAL del titular, y el
-// bloque AVOID (con las exclusiones del rubro) cierra siempre idéntico.
+// estándar positivo de escena (con las exclusiones del rubro) cierra
+// siempre idéntico.
 // Lo que antes dependía de que el modelo "se acordara" de cumplir, ahora
 // es imposible de omitir. Si el JSON falla, se usa el texto crudo como
 // núcleo y los bloques garantizados se agregan igual: nunca peor que antes.
-const PROMPT_AVOID_BASE = 'AVOID: generic stock-photo or image-bank aesthetic; deformed hands, fingers, faces or proportions — anatomy always natural and realistic; any readable text, letters or numbers anywhere in the image — anything that would naturally carry text (screens, signs, price tags, labels, storefronts, printed clothing) stays BLANK, OFF, EMPTY or BLURRED until illegible; logos, icons or recognizable aesthetics of real brands; watermarks or stock-site seals; flat gray backgrounds or empty studio voids without atmosphere; any decorative element covering the product — the product is always the visual center.';
+// (v231) ESTÁNDAR POSITIVO DE ESCENA — reemplaza a PROMPT_AVOID_BASE.
+// La lista de ~10 negaciones con la que cerraba cada prompt ("AVOID:
+// generic stock…; deformed hands…; any readable text…") salió: las
+// guías oficiales de Google (Nano Banana) y OpenAI (gpt-image) piden
+// describir la escena por lo que SÍ es. Cada prohibición vieja tiene
+// acá su equivalente positivo (foto artesanal, anatomía natural,
+// superficies en blanco/apagadas/vacías/borrosas, atmósfera real,
+// producto como centro visual). Las exclusiones puntuales del rubro
+// (rubroAvoidFor) quedan: son datos del negocio, no la lista base.
+const PROMPT_SCENE_STANDARD = 'SCENE STANDARD (this is what the image IS): a bespoke, art-directed photograph made for this exact business — crafted on location, with a real place and real atmosphere, never a stock or image-bank look. Anatomy is natural and realistic (hands, fingers, faces and proportions true to life). Every surface that could carry writing — screens, signs, price tags, labels, storefronts, printed clothing — is blank, dark, empty or softly blurred, so the whole frame stays clean and completely text-free. The background is a living part of the scene with depth and texture, in the palette tones — never a flat gray or empty studio void. The product is the visual center of the frame: fully visible, beautifully lit, the unmistakable hero.';
 function rubroAvoidFor(category) {
   const r = String(category || '').toLowerCase();
   if (/gastronom|cafeter|panader|pizzer|rotiser|helader|pasteler|carnicer/.test(r)) return ' Also avoid: dishes from cuisines other than this business\'s own; readable menus, chalkboards or price tags; raw meat on display (unless the business is a butcher shop).';
@@ -9275,15 +9304,26 @@ function headlineZoneLine(headline) {
 function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headline, category }) {
   const parts = [];
   if (visualStyle && String(visualStyle).trim()) parts.push(String(visualStyle).trim());
-  const order = ['sujeto', 'momento', 'contexto', 'luz', 'composicion'];
+  // (v231) FÓRMULA OFICIAL (guías de Google Nano Banana y OpenAI
+  // gpt-image): el núcleo se ensambla en el orden escena → sujeto →
+  // acción → composición → estilo, abierto por la declaración de uso
+  // explícita. Antes el orden era sujeto → momento → contexto y el
+  // cierre era la lista de negaciones; ahora cada bloque lleva su
+  // etiqueta de rol y cierra el estándar positivo de la escena.
+  parts.push('USE: a vertical 4:5 Instagram post photograph for this business.');
+  const B = (k) => String((blocks && blocks[k]) || '').trim().replace(/\.$/, '');
+  const escena = [B('contexto'), B('contextoExtra')].filter(Boolean).join('. ');
+  const sujeto = B('sujeto');
+  const accion = B('momento');
+  const composicion = [B('composicion'), B('luz')].filter(Boolean).join('. ');
   const core = [];
-  if (blocks) {
-    for (const k of order) {
-      const v = String((blocks && blocks[k]) || '').trim().replace(/\.$/, '');
-      if (v) core.push(v);
-    }
+  if (blocks && (escena || sujeto || accion || composicion)) {
+    if (escena) core.push(`SCENE: ${escena}.`);
+    if (sujeto) core.push(`HERO SUBJECT: ${sujeto} — the hero of the frame.`);
+    if (accion) core.push(`ACTION: ${accion}.`);
+    if (composicion) core.push(`COMPOSITION & LIGHT: ${composicion}.`);
   }
-  if (core.length) parts.push(core.join('. ') + '.');
+  if (core.length) parts.push(core.join('\n'));
   else if (rawText && String(rawText).trim()) parts.push(String(rawText).trim());
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   if (hexes.length) parts.push(`The client's exact brand colors (${hexes.join(', ')}) are woven into the scene through props, clothing, packaging and set details — integrated in the world of the photo, never as a flat color background.`);
@@ -9291,7 +9331,7 @@ function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headlin
   // sujeto usa el encuadre completo. Con titular, la zona se dimensiona
   // según su largo real, como siempre.
   if (String(headline || '').trim()) parts.push(headlineZoneLine(headline));
-  parts.push(PROMPT_AVOID_BASE + rubroAvoidFor(category));
+  parts.push(PROMPT_SCENE_STANDARD + rubroAvoidFor(category));
   if (visualStyle && String(visualStyle).trim()) parts.push("If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it.");
   return parts.join('\n');
 }
@@ -9398,7 +9438,7 @@ async function expandArtBrief({ headline, tipo, angle, businessName, category, p
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content:
-`Sos un director de arte publicitario de clase mundial. Expandís un brief corto en los bloques de un prompt de imagen publicitaria (en inglés). Devolvé SOLO un JSON válido, sin explicaciones ni markdown, con exactamente estas 5 claves (cada una, una o dos frases concretas de hasta 30 palabras): {"sujeto": el producto/persona protagonista exacto, con su nombre y aspecto; "momento": la acción o momento vivo que está pasando (nunca la cosa quieta); "contexto": el lugar real del negocio, nombrando UN detalle verificable del brief o, si no hay ninguno, el elemento más específico del rubro (el horno, el mostrador, la camilla); "luz": la iluminación física (fuente, dirección, hora); "composicion": plano, lente y qué va en primer plano y en el fondo}. El prompt final lo ensambla el código con tus bloques: NO escribas la paleta, NI la zona del titular, NI bloque AVOID, NI reglas — eso lo agrega el código siempre igual.
+`Sos un director de arte publicitario de clase mundial. Expandís un brief corto en los bloques de un prompt de imagen publicitaria (en inglés). Devolvé SOLO un JSON válido, sin explicaciones ni markdown, con exactamente estas 5 claves (cada una, una o dos frases concretas de hasta 30 palabras): {"sujeto": el producto/persona protagonista exacto, con su nombre y aspecto; "momento": la acción o momento vivo que está pasando (nunca la cosa quieta); "contexto": el lugar real del negocio, nombrando UN detalle verificable del brief o, si no hay ninguno, el elemento más específico del rubro (el horno, el mostrador, la camilla); "luz": la iluminación física (fuente, dirección, hora); "composicion": plano, lente y qué va en primer plano y en el fondo}. El prompt final lo ensambla el código con tus bloques EN EL ORDEN DE LA FÓRMULA OFICIAL (escena → sujeto → acción → composición → estilo): NO escribas la paleta, NI la zona del titular, NI el estándar de escena, NI reglas — eso lo agrega el código siempre igual.
 
 El prompt DEBE exigir:
 - UNA IDEA POR PIEZA (regla dura v209): la escena expresa UN solo concepto — el del brief. Nada de dos ideas, dos productos protagonistas, dos promos ni dos momentos en la misma imagen: si el brief trae más de un ángulo, gana el primero y el resto se descarta.
@@ -9418,7 +9458,7 @@ El prompt DEBE exigir:
 - MOMENTO, NO BODEGÓN (2026-10-10, Uma — datos de engagement): en gastronomía, cafetería y moda, la escena por DEFECTO es ACCIÓN/PERSONA/MOMENTO, no bodegón estático. El bodegón perfecto no vende; el momento real sí. Preferir: manos en acción (cocinando, sirviendo, cortando), POV en primera persona desde la cocina o el mostrador, cliente usando el producto, behind-the-scenes del local en movimiento, el dueño hablando a cámara. El plato/producto solo, quieto y perfecto sobre fondo lindo es la VARIANTE, no el default. En los demás rubros, mismo principio: si hay una persona que pueda protagonizar el momento, que lo protagonice.
 - ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
 - PESO MÁXIMO A LA LÍNEA VISUAL DEL CLIENTE: si el brief trae el bloque "LÍNEA VISUAL OBLIGATORIA", tus bloques tienen que CONVIVIR con ella (misma luz, mismo espíritu, mismo feed). El código la antepone tal cual al prompt final y cierra con la línea de supremacía: vos solo asegurate de que ningún bloque la contradiga.
-- PROHIBICIONES QUE TUS BLOQUES DEBEN RESPETAR (el bloque AVOID formal lo agrega el código al final, siempre idéntico; tus bloques jamás deben pedir ni insinuar lo prohibido): estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible — CERO texto legible en la imagen, sin excepción: lo que naturalmente llevaría texto (pantallas, carteles, etiquetas, vidrieras, ropa con estampa) va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible; el ÚNICO texto de la pieza es el titular y lo agrega el código DESPUÉS, nunca el generador; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
+- PROHIBICIONES QUE TUS BLOQUES DEBEN RESPETAR (el ESTÁNDAR POSITIVO de escena lo agrega el código al final, siempre idéntico; tus bloques jamás deben pedir ni insinuar lo prohibido): estética de stock genérico o de banco de imágenes; manos, dedos, caras o proporciones deformadas — anatomía siempre natural y realista; texto deformado, garbled, truncado o ilegible — CERO texto legible en la imagen, sin excepción: lo que naturalmente llevaría texto (pantallas, carteles, etiquetas, vidrieras, ropa con estampa) va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible; el ÚNICO texto de la pieza es el titular y lo agrega el código DESPUÉS, nunca el generador; logos, iconos o estética reconocible de marcas reales (nada de iconos de Instagram/WhatsApp/Amazon ni logos de otras empresas); marcas de agua o sellos de bancos de imágenes; fondos grises planos o fondos de estudio vacíos sin ambiente.
 - Ningún elemento decorativo (emoji, sticker, marco, sello) puede tapar el producto: que ningún elemento decorativo cubra el producto; el producto ocupa el centro visual siempre.
 - VARA DE CALIDAD (piezas de referencia aprobadas 2026-10-03): la imagen tiene que sentirse PREMIUM y profesional — composición limpia con aire, un protagonista claro, iluminación cuidada, acabado de publicidad de alto nivel. Nada de estética amateur, genérica o de "IA barata". REGLA DE ZONA DEL TITULAR (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular en posteos publicados): el tercio superior de la imagen es ZONA LIMPIA RESERVADA — solo fondo suave, desenfocado o degradado liso; NINGÚN sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido puede asomarse ni tocar esa zona. El protagonista y la acción viven del centro hacia abajo. El titular se compone después por código en ese tercio superior y tiene que respirar: nada detrás que lo choque ni le compita.
 - REGLA ZERO-TEXT (reemplaza draft 75 — fallas reales 2026-10-05: el generador horneaba texto en inglés, typos como "Backgnina"/"inatogram", logos de marcas reales y claims inventados en pantallas y carteles): CERO texto legible en la imagen — ni una palabra, ni una letra, ni un número, en ningún idioma. Si la escena incluye pantallas, carteles, vidrieras, interfaces, celulares, etiquetas, ropa con estampas o fondos con letras: TODO va en BLANCO, APAGADO, VACÍO o DESENFOCADO hasta ser ilegible — nunca palabras "reales del negocio", nunca iconos de marcas reales. El ÚNICO texto que lleva la pieza es el titular, que se compone DESPUÉS por código.
@@ -9502,7 +9542,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
         messages: [
           { role: 'system', content:
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
-{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true}
+{"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
 - headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
@@ -9511,7 +9551,9 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
 - brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena).
 - detalle: UNA frase concreta sobre ESTA imagen: nombrá un elemento visible (el titular, un objeto, un color) y, si algo falla, qué. PROHIBIDO responder "..." o genéricos tipo "cumple con todos los requisitos" sin nombrar nada visible (Mora 2026-10-18: ids 404/456/459/462 volvieron con detalle "...").
-- anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).` },
+- anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).
+- contraste_ok (v231, SOLO AUDITORÍA — adopción del estudio de patrones: contraste de texto ≥ 4,5:1 estilo WCAG AA): si la imagen lleva texto, ¿el texto se lee con contraste fuerte contra lo que tiene detrás (fondo, placa o sombra)? Texto claro sobre fondo claro, o texto oscuro sobre fondo oscuro, o letras que se pierden contra una foto cargada → false. Sin texto → true.
+- elementos_ok (v231, SOLO AUDITORÍA — test de sustracción de las reseñas pro de Predis): la pieza tiene UN solo protagonista y UNA sola idea; contá los elementos que compiten: si hay 3 o más focos compitiendo (varios productos protagonistas, carteles, props decorativos que pelean con el héroe) → false. Menos es más: si sacando un elemento la pieza mejora, ese elemento sobra.` },
           { role: 'user', content: [
             { type: 'text', text: 'Evaluá esta imagen contra el brief.' },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
@@ -9536,6 +9578,8 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
       claims_ok: parsed.claims_ok !== false,
       mobile_ok: parsed.mobile_ok !== false,
       anatomia_ok: parsed.anatomia_ok !== false, // manos/caras deformadas = pieza descartada
+      contraste_ok: parsed.contraste_ok !== false, // (v231) SOLO auditoría: jamás entra en qaPassed
+      elementos_ok: parsed.elementos_ok !== false, // (v231) SOLO auditoría: test de sustracción
       detalle: String(parsed.detalle || '').slice(0, 140),
     };
   } catch (e) {
@@ -9675,7 +9719,7 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
   if (absRefs.length) {
     const form = new FormData();
     form.append('model', model);
-    form.append('prompt', prompt + ' ' + (refNote || 'IMPORTANT: keep the SAME product from the reference photos, recognizable (same colors, same packaging, same photographic style), but in a different scene/moment than the photos.'));
+    form.append('prompt', prompt + ' ' + (refNote || refRoles.buildRefNote(['product'])));
     // UNA sola imagen de referencia: OpenAI rechaza múltiples campos 'image'
     // ("Duplicate parameter"). Va la primera (la de mayor prioridad: logo > producto > fotos).
     const p0 = absRefs[0];
@@ -9824,7 +9868,7 @@ function conceptShotGenerateQueued(args) {
     else s.waiters.push(run);
   });
 }
-async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
+async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, refRoles: callerRefRoles = null, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -9915,6 +9959,12 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
     .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
   const userRefCount = absRefs.length;
+  // (v231) Roles por índice, EN PARALELO a absRefs (adopción de
+  // patrones: cada referencia declara su rol — producto real, logo,
+  // foto, personaje, estilo). callerRefRoles[i] corresponde a refs[i];
+  // lo que el pipeline suma declara su rol al entrar. La nota final se
+  // compone con refRoles.buildRefNote al final de este bloque.
+  let roles = absRefs.map((_, i) => (Array.isArray(callerRefRoles) && callerRefRoles[i]) || 'photo');
   // Reference lock (producto consistente): la primera foto de producto de la
   // semana viaja como referencia para que el producto se vea IDÉNTICO en todos
   // los posteos. Solo si el caller no pasó refs propias.
@@ -9924,6 +9974,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     try {
       if (fs.existsSync(prp) && fs.statSync(prp).isFile()) {
         absRefs = [prp, ...absRefs].slice(0, 3);
+        roles = ['product', ...roles].slice(0, 3);
         refNote = 'IMPORTANT: the reference photo shows the client\'s REAL product — it must appear IDENTICAL in the new image (same shape, same colors, same packaging, same labels, same proportions). Do NOT redesign or reinterpret the product. Only change the scene/style around it.';
       }
     } catch (e) {}
@@ -9939,6 +9990,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       const lp = path.join(MEDIA_DIR, path.basename(lfp));
       if (fs.existsSync(lp) && fs.statSync(lp).isFile()) {
         absRefs = [lp, ...absRefs].slice(0, 3); // el logo va PRIMERO, máx 3 refs totales
+        roles = ['logo', ...roles].slice(0, 3);
         logoPresent = true;
       }
     }
@@ -9952,6 +10004,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
     if (fill.length) {
       absRefs = [...absRefs, ...fill].slice(0, 3);
+      roles = [...roles, ...fill.map(() => 'photo')].slice(0, 3);
       if (!refNote) refNote = 'IMPORTANT: the reference photos are the client\'s REAL photos — keep the same products, people and places recognizable (same look, same photographic style), in a new scene. Never a generic stock look.';
     }
   }
@@ -9964,16 +10017,23 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     const feedRefs = visualProfile.ref_paths.filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
     if (feedRefs.length) {
       absRefs = [...absRefs, ...feedRefs].slice(0, 3);
+      roles = [...roles, ...feedRefs.map(() => 'character')].slice(0, 3);
       refNote = 'IMPORTANT: keep the SAME recurring subject/character from the reference photos (it appears in every post of this client), recognizable and consistent, in a new scene.';
     }
   }
   // MODO RESTYLE: la foto del cliente es la protagonista — el MISMO producto,
   // solo cambia el estilo. Pisa cualquier refNote anterior (incluso el logo:
   // en restyle la foto base manda).
+  // (v231) La nota final sale de los ROLES por índice (ref-roles.js):
+  // cada referencia declara qué es y cómo usarla, en vez de la nota
+  // única que pisaba a las demás. refNoteOverride del caller manda
+  // textual; en restyle la foto base ES la pieza (rol 'restyle').
   if (restyle) {
-    refNote = refNoteOverride || 'IMPORTANT: keep the EXACT same product/subject from the reference photo — identical shape, colors, packaging, labels, details and proportions. Do NOT invent a different product, do NOT redesign it. ONLY change the photographic style, lighting and scene as directed.';
+    refNote = refNoteOverride || refRoles.buildRefNote(['restyle']);
   } else if (refNoteOverride) {
     refNote = refNoteOverride;
+  } else if (absRefs.length) {
+    refNote = refRoles.buildRefNote(roles.length ? roles : absRefs.map(() => 'photo'));
   }
   let b64;
   try {
@@ -10080,7 +10140,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
           return;
         }
         const qaPassed = !!(qa.texto_ok && qa.colores_ok && qa.claims_ok && qa.mobile_ok && qa.brand_ok && qa.anatomia_ok && qa.headline_clear !== false);
-        try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
+        try { console.log(('[qa-audit] passed=' + qaPassed + ' ' + JSON.stringify({texto: qa.texto_ok, colores: qa.colores_ok, claims: qa.claims_ok, mobile: qa.mobile_ok, marca: qa.brand_ok, anatomia: qa.anatomia_ok, headline_clear: qa.headline_clear, contraste: qa.contraste_ok, elementos: qa.elementos_ok, detalle: qa.detalle})).slice(0, 600)); } catch (e) {}
         db.prepare('INSERT INTO qa_audit (passed, result, image_path) VALUES (?, ?, ?)').run(qaPassed ? 1 : 0, JSON.stringify(qa).slice(0, 4000), `/media/${imgName}`);
         // ===== Reintento CORRECTIVO (2026-10-16): si la auditoría encontró un
         // defecto DURO, se regenera UNA vez con la corrección explícita en el
@@ -10153,6 +10213,18 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
 // scroll-stop QA de visión con 1 reintento. Devuelve
 // { coverPath, slidePaths, caption, scrollScore, needsReview }.
 // Lanza si no se puede armar (el llamador cae a imagen simple).
+// (v231) Gramática de carrusel (adopción Predis/IKEA): continuidad de
+// escena entre placas — mismo fondo, misma luz, misma cámara; solo
+// cambia el producto (uno por placa). La primera placa corre el
+// sujeto a la derecha y lo corta levemente por ese borde (bleed
+// lateral medido: invita al swipe).
+function carouselContinuityNote(idx) {
+  const base = 'CAROUSEL CONTINUITY (this image is ONE slide of a carousel set): the EXACT same scene as its sibling slides — same setting, same background, same surface, same light, same camera angle and distance; ONLY the product changes. ONE single product in the frame, the unmistakable hero.';
+  return idx === 0
+    ? base + ' This is the FIRST slide: the product sits slightly RIGHT of center and is gently cropped by the right edge of the frame, inviting the swipe to the next slide.'
+    : base;
+}
+
 async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }) {
   if (!splitCarouselSlides) throw new Error('carousel no disponible');
   costs.assertAiOk(uid);
@@ -10194,7 +10266,7 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
   let coverScoreSum = 0;
   const slideJobs = split.slides.map((s, idx) => (async () => {
     const styleOut = {};
-    let extraPrompt = '';
+    let extraPrompt = carouselContinuityNote(idx);
     let p = null, sScore = 0, sOk = false;
     for (let attempt = 0; attempt < 2 && !sOk; attempt++) {
       try {
@@ -10212,7 +10284,7 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
             sScore = qa.score;
             console.log(`[carousel] placa ${idx + 1} scroll-stop: score=${qa.score} (intento ${attempt + 1})`);
             if (qa.pass) { sOk = true; break; }
-            extraPrompt = `SCROLL-STOP FIX: ${qa.fixes.join(' ')}. Regenerate as a high-impact Instagram image that stops the scroll in half a second.`;
+            extraPrompt = `${carouselContinuityNote(idx)} SCROLL-STOP FIX: ${qa.fixes.join(' ')}. Regenerate as a high-impact Instagram image that stops the scroll in half a second.`;
           } else { sOk = true; } // QA no disponible: se acepta la placa
         } else { sOk = true; }
       } catch (e) { console.error(`[carousel] placa ${idx + 1} falló:`, e.message); break; }
@@ -11030,19 +11102,26 @@ app.post('/api/story-generate', requireAuth, requireTrialValid, express.json(), 
       logoAbs: (() => { try { return logoAbsPath(uid); } catch (e) { return null; } })(),
     };
     // Contexto: último post del día (para repost).
-    let postCaption = '', postImageAbs = null;
+    let postCaption = '', postImageAbs = null, postHeadline = '';
     try {
       const p = db.prepare(
-        `SELECT caption, image_path FROM posts WHERE user_id = ? AND media_type = 'image'
+        `SELECT caption, image_path, source_topic, intent FROM posts WHERE user_id = ? AND media_type = 'image'
          AND date(created_at) = date('now') ORDER BY id DESC LIMIT 1`).get(uid);
       if (p) {
         postCaption = String(p.caption || '').split('\n')[0];
+        // (v231) Repost = gemela: el titular entra SOLO si la fuente pasa
+        // el lint vigente (twinSourceCheck). Caption fallado → sin titular
+        // → generateStory('repost') no genera nada.
+        try {
+          const chk = S.twinSourceCheck(p, S.twinContextFor(db, uid));
+          if (chk.ok) postHeadline = chk.headline;
+        } catch (e) {}
         const abs = p.image_path && p.image_path.startsWith('/media/')
           ? path.join(MEDIA_DIR, path.basename(p.image_path)) : null;
         if (abs && fs.existsSync(abs)) postImageAbs = abs;
       }
     } catch (e) {}
-    const ctx = { business, postCaption, postImageAbs, pollA, pollB, question, promoTitle, eventDate };
+    const ctx = { business, postCaption, postHeadline, postImageAbs, pollA, pollB, question, promoTitle, eventDate };
     const out = S.generateStory({ db, uid, type, ctx, brand, mediaDir: MEDIA_DIR, scheduleAt: null });
     res.json({ ok: true, id: out.id, path: out.path, type });
   } catch (e) {
@@ -13301,7 +13380,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v230';
+const BUILD_ID = '20261018-v231';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
