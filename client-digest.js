@@ -97,13 +97,31 @@ function anchorsOf(digest) {
     for (const seg of String(digest.diferencial).split(/[.;|·]/)) push(seg, 'diferencial');
   }
   if (digest.ciudad) push(digest.ciudad, 'ciudad');
+  // (v230) LECTURA PROFUNDA: el catálogo extendido puede traer más
+  // ítems que la lista principal (capada para prompts) — todos son
+  // productos reales del cliente, todos anclan. Y el LÉXICO: las formas
+  // con las que el cliente nombra sus productos (apodos incluidos) son
+  // anclas de primera clase: una pieza que lo nombra como él lo nombra
+  // pertenece a su cuenta.
+  if (digest.catalog && Array.isArray(digest.catalog.items)) {
+    for (const p of digest.catalog.items) push(p && (p.nombre || p), 'producto');
+  }
+  if (digest.bio_link && Array.isArray(digest.bio_link.items)) {
+    for (const p of digest.bio_link.items) push(p && (p.nombre || p), 'producto');
+  }
+  if (digest.lexicon && Array.isArray(digest.lexicon.entries)) {
+    for (const e of digest.lexicon.entries) {
+      if (e.dice) push(e.dice, 'lexico');
+      for (const ap of (e.apodos || [])) push(ap, 'lexico');
+    }
+  }
   // Dedup por frase normalizada, conservando el orden de especificidad.
   const seen = new Set();
   return anchors.filter((a) => {
     const k = a.phrase;
     if (seen.has(k)) return false;
     seen.add(k); return true;
-  }).slice(0, 24);
+  }).slice(0, 32);
 }
 function anchorsFromTexts(list) {
   const d = { productos: [], servicios: [], temas_feed: [] };
@@ -258,6 +276,17 @@ function itemList(raw, max) {
   }
   return out;
 }
+/* Como itemList, pero cada ítem conserva su FUENTE de lectura (la que
+ * traía el dato crudo o la default): las contradicciones y la trazabi-
+ * lidad de la lectura profunda trabajan por fuente. */
+function itemListF(raw, max, defFuente) {
+  const fmap = new Map();
+  for (const r of (Array.isArray(raw) ? raw : [])) {
+    const n = r && typeof r === 'object' ? (r.nombre || r.titulo || r.name) : r;
+    if (n) { const k = norm(String(n)); if (!fmap.has(k)) fmap.set(k, (r && r.fuente) || defFuente); }
+  }
+  return itemList(raw, max).map((x) => ({ ...x, fuente: fmap.get(norm(x.nombre)) || defFuente }));
+}
 function strList(raw, max, len) {
   const out = []; const seen = new Set();
   for (const r of (Array.isArray(raw) ? raw : [raw])) {
@@ -277,6 +306,12 @@ function emptyDigest() {
     servicios: [], productos: [], promos: [], temas_feed: [],
     protagonista: '', paleta: [], registro: null, ciudad: '', diferencial: '',
     has_booking: false, fuentes: {},
+    // (v230) LECTURA PROFUNDA: bloques extendidos (ver sección al final).
+    // null/vacío = todavía no leídos; el hash de anclas NO los cubre (la
+    // trazabilidad de v229 no se invalida: el hash sigue siendo el de
+    // productos/servicios/promos/temas/protagonista/ciudad/diferencial).
+    catalog: null, bio_link: null, lexicon: null, photo_map: null,
+    inferred_star: null, contradictions: [], question_candidates: [],
   };
 }
 
@@ -299,12 +334,19 @@ function buildFromParts(parts) {
   const dna = (p.dna && typeof p.dna === 'object') ? p.dna : null;
 
   // --- productos / servicios / promos ---
-  const dnaProds = dna ? itemList([...(dna.productos || []), ...(dna.producto_estrella ? [{ nombre: dna.producto_estrella }] : [])], 10) : [];
-  const dnaServs = dna ? itemList(dna.servicios || [], 10) : [];
-  const webItems = p.web ? itemList(p.web.services || [], 10) : [];
+  // (v230) Cada ítem conserva su FUENTE: las contradicciones entre
+  // fuentes y su resolución por frescura trabajan sobre estas listas.
+  const dnaProds = dna ? itemListF([...(dna.productos || []), ...(dna.producto_estrella ? [{ nombre: dna.producto_estrella }] : [])], 12, 'dna') : [];
+  const dnaServs = dna ? itemListF(dna.servicios || [], 10, 'dna') : [];
+  const webItems = p.web ? itemListF(p.web.services || [], 10, 'web') : [];
+  const catalogItems = (p.catalog && Array.isArray(p.catalog.items)) ? itemListF(p.catalog.items, 48, 'web-catalog') : [];
+  const bioItems = (p.bioLink && Array.isArray(p.bioLink.items)) ? itemListF(p.bioLink.items, 20, 'bio-link') : [];
   // La web mezcla productos y servicios en una sola lista: todo entra
   // como ítem vendible; la distinción fina la hace el kind al derivar.
-  d.productos = itemList([...dnaProds, ...webItems], 10);
+  // Prioridad de la lista principal (capada, higiene de prompts): ADN
+  // del dueño → catálogo profundo (web + PDF) → link de bio → home.
+  // El catálogo COMPLETO vive en el bloque catalog (abajo).
+  d.productos = itemList([...dnaProds, ...catalogItems, ...bioItems, ...webItems], 12);
   d.servicios = itemList([...dnaServs], 10);
   const dnaPromos = dna ? [...(dna.promos_activas || []), ...(dna.promos || [])] : [];
   d.promos = itemList(dnaPromos, 5).map((x) => ({ titulo: x.nombre, ...(x.precio ? { precio: x.precio } : {}) }));
@@ -368,6 +410,77 @@ function buildFromParts(parts) {
   if (p.feed) d.fuentes.feed = { at: now, handle: String(p.feed.handle || '').slice(0, 40), posts: Array.isArray(p.feed.captions) ? p.feed.captions.length : 0 };
   if (p.form) d.fuentes.form = { at: now };
   if (dna) d.fuentes.dna = { at: now };
+
+  // ===== (v230) LECTURA PROFUNDA: los 6 bloques extendidos =====
+  // Catálogo completo: TODOS los ítems leídos de la web profunda y los
+  // PDFs (la lista principal de arriba queda capada para los prompts).
+  if (catalogItems.length) {
+    d.catalog = {
+      items: catalogItems.slice(0, 48),
+      pages: (p.catalog && p.catalog.pages) || 0,
+      pdfs: (p.catalog && p.catalog.pdfs) || 0,
+      at: (p.catalog && p.catalog.at) || now,
+    };
+    d.fuentes.catalog = { at: d.catalog.at, items: d.catalog.items.length };
+  }
+  // Link de la bio: destinos reales del linktree/equivalente + los
+  // ítems legibles de su tienda o página de reservas.
+  if (p.bioLink && (p.bioLink.url || (p.bioLink.destinations || []).length)) {
+    d.bio_link = {
+      url: String(p.bioLink.url || '').slice(0, 300),
+      kind: String(p.bioLink.kind || 'site').slice(0, 20),
+      destinations: strList(p.bioLink.destinations || [], 12, 300),
+      items: bioItems.slice(0, 20),
+      at: p.bioLink.at || now,
+    };
+    d.fuentes.bio_link = { at: d.bio_link.at, kind: d.bio_link.kind };
+  }
+  // Contradicciones entre fuentes (mismo ítem, precio distinto): se
+  // registran SIEMPRE y la resolución (fuente más fresca) es el precio
+  // que ve el resto del sistema — nunca se mezclan en silencio.
+  const fuenteAts = { dna: p.dnaAt || null, web: p.web ? now : null, catalog: (p.catalog && p.catalog.at) || null, 'bio-link': (p.bioLink && p.bioLink.at) || null };
+  const priced = [];
+  for (const [bucket, list] of Object.entries({ dna: [...dnaProds, ...dnaServs], web: webItems, catalog: catalogItems, 'bio-link': bioItems })) {
+    for (const it of list) {
+      if (it && it.precio) priced.push({ nombre: it.nombre, precio: it.precio, fuente: it.fuente || bucket, at: fuenteAts[bucket] });
+    }
+  }
+  d.contradictions = detectContradictions(priced);
+  for (const c of d.contradictions) {
+    for (const it of [...d.productos, ...d.servicios]) {
+      if (sameItemName(it.nombre, c.item)) it.precio = c.resolucion;
+    }
+  }
+  // Producto estrella INFERIDO (frecuencia en su feed + prominencia en
+  // su web + rendimiento medido): con evidencia, nunca adivinado.
+  d.inferred_star = inferStar({
+    items: [...d.productos, ...d.servicios],
+    captions: p.feed && Array.isArray(p.feed.captions) ? p.feed.captions : [],
+    orderNames: [...catalogItems, ...webItems, ...bioItems].map((x) => x.nombre),
+    metrics: (p.starSignals && p.starSignals.metrics) || [],
+    dnaStar: dna && dna.producto_estrella ? String(dna.producto_estrella) : '',
+  });
+  // Léxico propio: cómo nombra ÉL sus productos (apodos, slogans,
+  // frases características), minado de sus captions + el copy de su web.
+  const lexTexts = [];
+  if (p.feed && Array.isArray(p.feed.captions)) for (const c of p.feed.captions) lexTexts.push(String(c || ''));
+  if (p.webCopy) lexTexts.push(String(p.webCopy));
+  if (p.web && p.web.description) lexTexts.push(String(p.web.description));
+  if (dna && Array.isArray(dna.tono_ejemplos)) for (const t of dna.tono_ejemplos) lexTexts.push(String(t || ''));
+  // El léxico se aprende sobre ítems REALES: todos los productos y los
+  // servicios con fuente (ADN/web/catálogo). Los servicios minados de
+  // la bio son especulativos (una frase de la bio puede ser un slogan,
+  // no un servicio) y contaminarían entradas y frases.
+  d.lexicon = buildLexicon({ texts: lexTexts, items: [...d.productos, ...d.servicios.filter((s) => s && s.fuente)] });
+  if (d.lexicon) d.fuentes.lexicon = { at: now, entries: d.lexicon.entries.length, frases: d.lexicon.frases.length };
+  // Mapa foto→producto: la clasificación por visión corre AFUERA (con
+  // sus topes y guardas de gasto); acá solo se adoptan las entradas ya
+  // clasificadas: { claveFoto: { item, confianza } }.
+  if (p.photoEntries && typeof p.photoEntries === 'object' && Object.keys(p.photoEntries).length) {
+    d.photo_map = { entries: sanitizePhotoEntries(p.photoEntries), at: now };
+    if (Object.keys(d.photo_map.entries).length) d.fuentes.photo_map = { at: now, fotos: Object.keys(d.photo_map.entries).length };
+    else d.photo_map = null;
+  }
   d.built_at = now;
   return finalizeDigest(d);
 }
@@ -385,7 +498,337 @@ function digestHashOf(digest) {
 }
 function finalizeDigest(d) {
   d.hash = digestHashOf(d);
+  // (v230) Los candidatos a pregunta (para "Posty pregunta") se derivan
+  // del estrella inferido y de las contradicciones: determinísticos.
+  d.question_candidates = questionCandidatesOf(d);
   return d;
+}
+
+// =====================================================================
+// (v230) LECTURA PROFUNDA — helpers puros de los 6 bloques extendidos.
+// Todo determinístico, USD 0: la única pieza con costo (la visión del
+// mapa de fotos) corre afuera y acá solo se adoptan sus resultados.
+// =====================================================================
+function parsePriceNum(str) {
+  const s = String(str || '').replace(/[$\s]/g, '').replace(/^(ars|usd)/i, '');
+  if (!s) return null;
+  // Formato AR: 11.900 = once mil novecientos; 1.234,56 con decimales.
+  let v = s;
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(v)) v = v.replace(/\./g, '').replace(',', '.');
+  else if (/^\d+,\d{1,2}$/.test(v)) v = v.replace(',', '.');
+  else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, '');
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+/* ¿Dos nombres hablan del MISMO ítem? Igualdad normalizada o solape
+ * alto de palabras distintivas (≥0,6) compartiendo al menos una —
+ * "Blend Patagonia" vs "Blend Patagonia 500g" sí; "Café 250g" vs
+ * "Café 500g" no (el tamaño es distintivo y baja el solape). */
+function sameItemName(a, b) {
+  const na = norm(a); const nb = norm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const wa = new Set(distinctiveWords(a));
+  const wb = new Set(distinctiveWords(b));
+  if (!wa.size || !wb.size) return false;
+  let inter = 0;
+  for (const w of wa) if (wb.has(w)) inter++;
+  if (!inter) return false;
+  return inter / Math.max(wa.size, wb.size) >= 0.6;
+}
+
+/* detectContradictions(priced) — priced: [{nombre, precio, fuente, at}].
+ * Agrupa por ítem; si ≥2 fuentes dan precios numéricos DISTINTOS, hay
+ * contradicción. Resolución: la fuente MÁS FRESCA (por `at`); en empate
+ * de fecha manda el orden de viveza (el link de bio se actualiza sin
+ * tocar la web; el ADN es lo más viejo por definición). */
+const FRESH_TIE = ['bio-link', 'pdf', 'web-catalog', 'web', 'dna'];
+function detectContradictions(priced) {
+  const groups = [];
+  for (const p of (priced || [])) {
+    if (!p || !p.nombre || parsePriceNum(p.precio) == null) continue;
+    let g = groups.find((x) => sameItemName(x.item, p.nombre));
+    if (!g) { g = { item: p.nombre, byFuente: new Map() }; groups.push(g); }
+    const prev = g.byFuente.get(p.fuente);
+    if (!prev) g.byFuente.set(p.fuente, { precio: String(p.precio), num: parsePriceNum(p.precio), at: p.at || null });
+  }
+  const out = [];
+  for (const g of groups) {
+    if (g.byFuente.size < 2) continue;
+    const nums = new Set([...g.byFuente.values()].map((v) => v.num));
+    if (nums.size < 2) continue;
+    const entries = [...g.byFuente.entries()].map(([fuente, v]) => ({ fuente, ...v }));
+    entries.sort((a, b) => {
+      const ta = Date.parse(a.at || '') || 0; const tb = Date.parse(b.at || '') || 0;
+      if (tb !== ta) return tb - ta;
+      return FRESH_TIE.indexOf(a.fuente) - FRESH_TIE.indexOf(b.fuente);
+    });
+    const win = entries[0];
+    const valores = {};
+    for (const e of entries) valores[e.fuente] = e.precio;
+    out.push({
+      item: g.item, campo: 'precio', valores,
+      resolucion: win.precio, fuente_resolucion: win.fuente,
+      at: new Date().toISOString(),
+    });
+  }
+  return out.slice(0, 6);
+}
+
+/* inferStar — puntúa cada ítem con TRES señales reales y devuelve el
+ * ganador SOLO si hay evidencia suficiente y no hay empate en la cima:
+ * · frecuencia: en cuántos de sus captions recientes aparece;
+ * · prominencia: qué tan arriba está en su catálogo/web;
+ * · rendimiento: si su posteo con más alcance lo menciona.
+ * La confianza sale del puntaje y de la distancia al segundo. */
+function inferStar({ items, captions, orderNames, metrics, dnaStar }) {
+  const list = (items || []).filter((x) => x && (x.nombre || x));
+  if (!list.length) return null;
+  const caps = (captions || []).slice(0, 20);
+  const scored = list.map((it) => {
+    const nombre = String(it.nombre || it);
+    const anchors = anchorsFromTexts([nombre]);
+    const hit = (text) => pieceAnchored(text, anchors).ok;
+    let score = 0;
+    const evidence = [];
+    let mentions = 0;
+    for (const c of caps) if (hit(c)) mentions++;
+    if (mentions > 0) { score += mentions * 2; evidence.push(`aparece en ${mentions} de sus últimos ${caps.length} posteos`); }
+    const oi = (orderNames || []).findIndex((n) => sameItemName(n, nombre));
+    if (oi === 0) { score += 3; evidence.push('es lo primero que muestra su catálogo'); }
+    else if (oi === 1) { score += 2; evidence.push('está entre lo primero de su catálogo'); }
+    else if (oi === 2) { score += 1; }
+    let bestReach = 0;
+    for (const m of (metrics || [])) {
+      if (m && m.text && hit(m.text)) bestReach = Math.max(bestReach, Number(m.reach) || 0);
+    }
+    if (bestReach > 0) {
+      score += bestReach >= 1000 ? 4 : bestReach >= 300 ? 3 : 2;
+      evidence.push('su posteo con más alcance lo menciona');
+    }
+    if (dnaStar && sameItemName(dnaStar, nombre)) { score += 2; evidence.push('figura como estrella en la ficha del negocio'); }
+    return { item: nombre, score, evidence };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored[0];
+  const second = scored[1];
+  if (!top || top.score < 4) return null;
+  if (second && second.score >= top.score) return null; // empate: no se adivina
+  let confidence = Math.min(0.95, 0.45 + 0.08 * top.score);
+  if (second && second.score >= top.score - 2) confidence *= 0.8;
+  return {
+    item: top.item,
+    confidence: Math.round(confidence * 100) / 100,
+    evidence: top.evidence,
+    score: top.score,
+    at: new Date().toISOString(),
+  };
+}
+
+/* buildLexicon — mina los textos REALES del cliente (captions + copy de
+ * su web + ejemplos de tono del ADN) y aprende cómo nombra ÉL a cada
+ * ítem del digest: la forma que usa (dice), los apodos (formas más
+ * cortas que el nombre formal) y sus frases características repetidas. */
+function lexSegments(text) {
+  const out = [];
+  for (const part of String(text || '').split(/[\n\r|·•]+/)) {
+    for (const s of part.split(/(?<=[.!?…])\s+|\s+—\s+|\s+-\s+/)) {
+      const c = cleanSegment(s).replace(/[.!?…]+$/, '').trim();
+      if (c) out.push(c);
+    }
+  }
+  return out;
+}
+function buildLexicon({ texts, items }) {
+  const segs = [];
+  for (const t of (texts || [])) segs.push(...lexSegments(t));
+  if (!segs.length) return null;
+  const segWords = segs.map((s) => norm(s).split(' ').filter(Boolean));
+  const entries = [];
+  for (const it of (items || [])) {
+    const nombre = String((it && (it.nombre || it)) || '').trim();
+    if (nombre.length < 3) continue;
+    const dw = distinctiveWords(nombre);
+    if (!dw.length) continue;
+    const dwForms = new Set();
+    for (const w of dw) for (const f of wordForms(w)) dwForms.add(f);
+    const candCount = new Map();
+    segs.forEach((seg, si) => {
+      const words = seg.split(' ').filter(Boolean);
+      if (words.length < 2 || words.length > 9) return;
+      const norms = segWords[si];
+      const hits = [];
+      norms.forEach((w, wi) => { if (dwForms.has(w)) hits.push(wi); });
+      if (!hits.length) return;
+      let start = Math.min(...hits);
+      if (start > 0 && /^(el|la|los|las|nuestro|nuestra|nuestros|nuestras|mi|su)$/.test(norms[start - 1])) start--;
+      let end = Math.min(words.length, Math.max(...hits) + 2);
+      while (end > start + 1 && STOP.has(norms[end - 1])) end--;
+      const candWords = words.slice(start, end);
+      if (candWords.length < 1 || candWords.length > 4) return;
+      const cand = candWords.join(' ');
+      if (norm(cand) === norm(nombre)) return;
+      candCount.set(cand, (candCount.get(cand) || 0) + 1);
+    });
+    // Una forma de UNA palabra vista una sola vez no es un hábito de
+    // nombre: es una mención al pasar (o la palabra del rubro).
+    for (const [c, n] of [...candCount.entries()]) {
+      if (n < 2 && c.split(' ').filter(Boolean).length === 1) candCount.delete(c);
+    }
+    if (!candCount.size) continue;
+    // Gana la forma más usada; en empate, la MÁS CORTA (la forma natural
+    // de nombrarlo le gana a la frase larga que la contiene).
+    const ranked = [...candCount.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].split(' ').length - b[0].split(' ').length)
+      .map(([c]) => c);
+    const nombreWords = nombre.split(' ').filter(Boolean).length;
+    const firstWord = norm(nombre).split(' ')[0];
+    // "dice" necesita sustancia: ≥2 palabras, o una sola palabra que NO
+    // sea la primera del nombre formal (la primera sola es solo el rubro:
+    // "Café" no es una forma de nombrar a "Café en grano 250g";
+    // "Patagonia" sí es una forma de nombrar al "Blend Patagonia").
+    const dice = ranked.find((c) => {
+      const w = c.split(' ').filter(Boolean);
+      return w.length >= 2 || norm(c) !== firstWord;
+    }) || null;
+    const apodos = ranked
+      .filter((c) => c !== dice && c.split(' ').filter(Boolean).length < nombreWords)
+      .slice(0, 2);
+    entries.push({ item: nombre, ...(dice ? { dice } : {}), apodos });
+  }
+  // Frases características: segmentos de 3-8 palabras que se REPITEN
+  // (≥2 veces) en sus textos — su muletilla buena, su slogan de hecho.
+  const freq = new Map();
+  for (const s of segs) {
+    const w = s.split(' ').filter(Boolean);
+    if (w.length < 3 || w.length > 8) continue;
+    if (CTA_ONLY_RE.test(norm(s))) continue;
+    const k = norm(s);
+    const prev = freq.get(k);
+    freq.set(k, { text: s, count: (prev ? prev.count : 0) + 1 });
+  }
+  const itemNorms = new Set((items || []).map((it) => norm((it && (it.nombre || it)) || '')));
+  const frases = [...freq.values()]
+    .filter((f) => f.count >= 2 && !itemNorms.has(norm(f.text)))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+    .map((f) => f.text);
+  if (!entries.length && !frases.length) return null;
+  return { entries, frases, at: new Date().toISOString() };
+}
+/* Bloque de prompt para captions/titulares: sus nombres mandan. */
+function lexiconBlock(lexicon) {
+  if (!lexicon || typeof lexicon !== 'object') return '';
+  const lines = [];
+  for (const e of (lexicon.entries || []).slice(0, 8)) {
+    if (!e || !e.item) continue;
+    const bits = [];
+    if (e.dice) bits.push(`él lo nombra "${e.dice}"`);
+    if ((e.apodos || []).length) bits.push(`apodos suyos: ${e.apodos.map((a) => `"${a}"`).join(', ')}`);
+    if (bits.length) lines.push(`- ${e.item}: ${bits.join(' · ')}`);
+  }
+  const out = [];
+  if (lines.length) {
+    out.push('LÉXICO DEL CLIENTE (nombrá sus productos EXACTAMENTE como los nombra él en su Instagram y su web; esas formas mandan sobre el nombre formal del catálogo):');
+    out.push(...lines);
+  }
+  if ((lexicon.frases || []).length) {
+    out.push(`Frases características del cliente (su voz real; podés reutilizar UNA tal cual si encaja): ${lexicon.frases.slice(0, 4).map((f) => `"${f}"`).join(' · ')}`);
+  }
+  return out.join('\n');
+}
+
+/* Mapa foto→producto: adopción y consulta de entradas clasificadas. */
+function sanitizePhotoEntries(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (!v || typeof v !== 'object') continue;
+    const item = String(v.item || v.nombre || '').replace(/\s+/g, ' ').trim();
+    if (item.length < 3) continue;
+    const conf = Number(v.confianza != null ? v.confianza : v.confidence);
+    out[String(k).slice(0, 300)] = { item: item.slice(0, 90), confianza: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.8 };
+    if (Object.keys(out).length >= 200) break;
+  }
+  return out;
+}
+function photoProductFor(digest, key) {
+  if (!digest || !digest.photo_map || !digest.photo_map.entries || !key) return null;
+  const e = digest.photo_map.entries[String(key)];
+  return e && e.item ? e.item : null;
+}
+
+/* Candidatos a pregunta para la próxima build ("Posty pregunta"): el
+ * estrella inferido se CONFIRMA con un toque y cada contradicción se
+ * resuelve preguntando — leer propone, el dueño valida. */
+function questionCandidatesOf(d) {
+  if (!d || typeof d !== 'object') return [];
+  const out = [];
+  const star = d.inferred_star;
+  if (star && star.item && (star.confidence || 0) >= 0.5) {
+    out.push({ tipo: 'estrella', item: star.item, texto: `¿Tu producto estrella es ${star.item}?` });
+  }
+  for (const c of (d.contradictions || []).slice(0, 2)) {
+    const vs = Object.entries(c.valores || {}).map(([f, v]) => `${v} (${f === 'bio-link' ? 'link de bio' : f === 'web-catalog' ? 'catálogo web' : f === 'pdf' ? 'PDF' : f})`).join(' vs ');
+    if (vs) out.push({ tipo: 'contradiccion', item: c.item, texto: `¿Cuál es el precio actual de ${c.item}? Figura ${vs}.` });
+  }
+  return out.slice(0, 3);
+}
+
+/* applyDeepBlocks(stored, fresh) — merge del refresco semanal: los
+ * bloques profundos FRESCOS reemplazan a los viejos (el fresco se
+ * construyó desde el ADN vigente: lo editado a mano sigue mandando
+ * porque el ADN es la primera fuente de cada lista). El mapa de fotos
+ * se fusiona por clave (clasificar es caro: lo ya clasificado queda).
+ * Nunca pisa un bloque con vacío: si la corrida fresca no leyó un
+ * bloque, el guardado queda. */
+function applyDeepBlocks(stored, fresh) {
+  const out = { ...(stored || emptyDigest()) };
+  if (!fresh) return finalizeDigest(out);
+  // Listas: unión con prioridad del fresco (se construyó desde el ADN
+  // vigente) — una corrida parcial (solo web, solo feed) nunca borra
+  // ítems que aportó otra fuente y todavía no se re-leyó.
+  const unionItems = (freshList, storedList, cap) => {
+    const res = []; const seen = new Set();
+    for (const it of [...(freshList || []), ...(storedList || [])]) {
+      const n = it && (it.nombre || it.titulo || it);
+      if (!n) continue;
+      const k = norm(String(n));
+      if (seen.has(k)) continue;
+      seen.add(k); res.push(it);
+      if (res.length >= cap) break;
+    }
+    return res;
+  };
+  if (fresh.catalog && (fresh.catalog.items || []).length) {
+    out.catalog = fresh.catalog;
+    out.productos = unionItems(fresh.productos, out.productos, 12);
+    out.servicios = unionItems(fresh.servicios, out.servicios, 10);
+    out.promos = (fresh.promos && fresh.promos.length) ? fresh.promos : out.promos;
+    if (fresh.fuentes && fresh.fuentes.catalog) out.fuentes = { ...(out.fuentes || {}), catalog: fresh.fuentes.catalog };
+  }
+  if (fresh.bio_link) {
+    out.bio_link = fresh.bio_link;
+    out.productos = unionItems(fresh.productos, out.productos, 12);
+    if (fresh.fuentes && fresh.fuentes.bio_link) out.fuentes = { ...(out.fuentes || {}), bio_link: fresh.fuentes.bio_link };
+  }
+  // El léxico se re-mina de los captions: solo reemplaza si la corrida
+  // fresca TUVO feed (sin captions, el "fresco" sería parcial).
+  if (fresh.lexicon && fresh.fuentes && fresh.fuentes.feed) {
+    out.lexicon = fresh.lexicon;
+    if (fresh.fuentes.lexicon) out.fuentes = { ...(out.fuentes || {}), lexicon: fresh.fuentes.lexicon };
+  }
+  if (fresh.photo_map && fresh.photo_map.entries && Object.keys(fresh.photo_map.entries).length) {
+    const mergedEntries = { ...((out.photo_map && out.photo_map.entries) || {}), ...fresh.photo_map.entries };
+    out.photo_map = { entries: mergedEntries, at: fresh.photo_map.at || new Date().toISOString() };
+    if (fresh.fuentes && fresh.fuentes.photo_map) out.fuentes = { ...(out.fuentes || {}), photo_map: { at: out.photo_map.at, fotos: Object.keys(mergedEntries).length } };
+  }
+  if (fresh.inferred_star) out.inferred_star = fresh.inferred_star;
+  // Las contradicciones se recalculan cuando hubo lectura fresca con
+  // precios (aunque el resultado sea "ya no se contradicen": [] manda).
+  if (fresh.catalog || fresh.bio_link) out.contradictions = fresh.contradictions || [];
+  else if (Array.isArray(fresh.contradictions) && fresh.contradictions.length) out.contradictions = fresh.contradictions;
+  out.built_at = new Date().toISOString();
+  return finalizeDigest(out);
 }
 function hasFoundation(digest) {
   if (!digest) return false;
@@ -414,6 +857,15 @@ function deriveTopics(digest, opts) {
   const items = [...(digest.productos || []), ...(digest.servicios || [])]
     .filter((x) => x && (x.nombre || x));
   const name = (x) => String((x && (x.nombre || x)) || '').trim();
+  // (v230) El producto estrella INFERIDO (con confianza ≥0,5) abre la
+  // rotación: la novedad de la semana es él. La confirmación del dueño
+  // llega por el loop de preguntas (question_candidates).
+  let starName = '';
+  if (digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5) {
+    const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
+    if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
+    if (si >= 0) starName = name(items[0]);
+  }
   const temasFeed = (digest.temas_feed || []).filter((t) => String(t).length >= 3);
   const used = new Set();
   const topics = [];
@@ -431,6 +883,7 @@ function deriveTopics(digest, opts) {
       caption: frame.caption(A),
       _digest: 1,
       digest_anchor: A,
+      ...(starName && norm(A) === norm(starName) ? { _star: 1 } : {}),
     };
     used.add(key);
     return t;
@@ -592,7 +1045,11 @@ function dnaFragmentFromDigest(digest) {
   if ((digest.servicios || []).length) frag.servicios = digest.servicios;
   if ((digest.promos || []).length) frag.promos_activas = digest.promos.map((pr) => ({ nombre: pr.titulo, ...(pr.precio ? { precio: pr.precio } : {}) }));
   const first = (digest.productos || [])[0] || (digest.servicios || [])[0];
-  if (first) frag.producto_estrella = first.nombre || first;
+  // (v230) El estrella INFERIDO con confianza le gana al "primer ítem
+  // de la lista": viene de su feed, su web y su rendimiento medidos.
+  const starInf = (digest.inferred_star && (digest.inferred_star.confidence || 0) >= 0.5) ? digest.inferred_star.item : '';
+  if (starInf) frag.producto_estrella = starInf;
+  else if (first) frag.producto_estrella = first.nombre || first;
   if (digest.diferencial) frag.diferencial = digest.diferencial;
   if (digest.ciudad) frag.ubicacion = digest.ciudad;
   const webSrc = digest.fuentes && digest.fuentes.web && digest.fuentes.web.url;
@@ -607,4 +1064,8 @@ module.exports = {
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
   dnaFragmentFromDigest,
+  // (v230) Lectura profunda
+  parsePriceNum, sameItemName, detectContradictions, inferStar,
+  buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor,
+  questionCandidatesOf, applyDeepBlocks,
 };

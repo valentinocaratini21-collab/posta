@@ -119,6 +119,14 @@ function captionExtrasFor(uid) {
     try { const bb = (typeof briefBlockFor === 'function' && briefBlockFor(db, uid)) || ''; if (bb) parts.push(bb); } catch (e) {}
     const rest = (typeof captionPromptExtras === 'function' && captionPromptExtras(db, uid)) || '';
     if (rest) parts.push(rest);
+    // (v230) LÉXICO DEL CLIENTE (bloque lexicon del digest): sus
+    // productos se nombran como ÉL los nombra — junto al Caption Style
+    // Lock, es la otra mitad de "que suene a él".
+    try {
+      const dg = digestForUser(uid);
+      const lb = dg ? clientDigest.lexiconBlock(dg.lexicon) : '';
+      if (lb) parts.push(lb);
+    } catch (e) {}
     return parts.join('\n\n');
   }
   catch (e) { return ''; }
@@ -188,6 +196,7 @@ const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
 const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
@@ -594,11 +603,50 @@ function stampPostDigest(postId, uid, unanchored) {
     if (h) db.prepare('UPDATE posts SET digest_hash = ? WHERE id = ?').run(h, postId);
   } catch (e) {}
 }
+// (v230) FOTO↔PRODUCTO en clientes: si el mapa foto→producto del digest
+// cubre fotos del ÁLBUM del cliente con EL producto del que habla la
+// pieza, esas fotos van como referencia de la generación (la imagen
+// nace de la foto del producto exacto, no de una foto cualquiera).
+// La clave del mapa es el hash del contenido: se cachea por ruta (los
+// archivos de MEDIA_DIR son inmutables por nombre).
+const photoKeyCache = new Map();
+function photoMappedRefsFor(uid, texts) {
+  try {
+    const digest = digestForUser(uid);
+    const entries = digest && digest.photo_map && digest.photo_map.entries;
+    if (!entries || !Object.keys(entries).length) return [];
+    const joined = (texts || []).filter(Boolean).join(' ');
+    if (!joined) return [];
+    const targets = new Set();
+    const itemNames = [...(digest.productos || []), ...(digest.servicios || []), ...((digest.catalog && digest.catalog.items) || [])]
+      .map((x) => (x && (x.nombre || x)) || '').filter(Boolean);
+    for (const n of itemNames) {
+      if (clientDigest.pieceAnchored(joined, clientDigest.anchorsFromTexts([n])).ok) targets.add(clientDigest.norm(n));
+    }
+    if (!targets.size) return [];
+    const rows = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid);
+    const out = [];
+    for (const r of rows) {
+      const abs = path.join(MEDIA_DIR, path.basename(String(r.file_path || '')));
+      let ck = photoKeyCache.get(abs);
+      if (ck === undefined) {
+        ck = deepRead.photoContentKey(abs);
+        photoKeyCache.set(abs, ck);
+        if (photoKeyCache.size > 500) photoKeyCache.clear();
+      }
+      if (!ck) continue;
+      const e = entries[ck];
+      if (e && e.item && targets.has(clientDigest.norm(e.item))) out.push(r.file_path);
+      if (out.length >= 2) break;
+    }
+    return out;
+  } catch (e) { return []; }
+}
 // Compila el digest de la prueba desde las fuentes que la ruta ya
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep }) {
   try {
     return clientDigest.buildFromParts({
       business, category,
@@ -607,8 +655,62 @@ function buildTrialDigest({ business, category, webData, feed, formText, feedPal
       form: formText ? { description: formText } : null,
       feedPalette: feedPalette || null,
       registro: registro || null,
+      // (v230) LECTURA PROFUNDA: catálogo completo (web profunda + PDFs),
+      // link de la bio seguido y mapa foto→producto de las fotos de su
+      // web — los recolectan las rutas con sus carreras acotadas.
+      catalog: (deep && deep.catalog) || null,
+      bioLink: (deep && deep.bioLink) || null,
+      photoEntries: (deep && deep.photoEntries) || null,
+      webCopy: webData ? String(webData.description || '') : '',
     });
   } catch (e) { console.error('[digest] build trial:', e.message); return null; }
+}
+// (v230) Lectura profunda de la prueba, cacheada por URL como el
+// contexto web (una web que se prueba dos veces no se re-crawlea):
+// catálogo profundo y link de bio corren con carrera — si la fuente es
+// lenta, la prueba sigue con el fundamento de v229 y la lectura queda
+// hecha para la próxima (la promesa sigue en segundo plano).
+const trialDeepPromises = new Map();
+function trialDeepCatalog(webData) {
+  if (!webData || !webData.url) return Promise.resolve(null);
+  const key = 'cat:' + webData.url;
+  let p = trialDeepPromises.get(key);
+  if (!p) {
+    p = deepRead.fetchDeepCatalog(webData.url).catch(() => null);
+    trialDeepPromises.set(key, p);
+    if (trialDeepPromises.size > 300) trialDeepPromises.clear();
+    p.then(() => { const t = setTimeout(() => trialDeepPromises.delete(key), 30 * 60 * 1000); if (t.unref) t.unref(); });
+  }
+  return p;
+}
+function trialBioLink(link) {
+  if (!link) return Promise.resolve(null);
+  const key = 'bio:' + link;
+  let p = trialDeepPromises.get(key);
+  if (!p) {
+    p = deepRead.fetchBioLink(link).catch(() => null);
+    trialDeepPromises.set(key, p);
+    if (trialDeepPromises.size > 300) trialDeepPromises.clear();
+    p.then(() => { const t = setTimeout(() => trialDeepPromises.delete(key), 30 * 60 * 1000); if (t.unref) t.unref(); });
+  }
+  return p;
+}
+const raceMs = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
+/* Mapa foto→producto de la PRUEBA: clasifica las fotos de SU web contra
+ * los ítems ya conocidos (web + catálogo), bajo el MISMO tope diario del
+ * demo con IA y solo si hay clave. Best-effort total: sin mapa, la
+ * semana sale con el gate foto↔tema de siempre. */
+async function trialPhotoEntries(webPhotos, itemNames) {
+  try {
+    if (!Array.isArray(webPhotos) || !webPhotos.length || !itemNames || !itemNames.length) return null;
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey || !costs.demoAiCapOk()) return null;
+    const photos = webPhotos.filter((w) => w && w.url && w.path).slice(0, deepRead.VISION_MAX_PHOTOS)
+      .map((w) => ({ key: w.url, path: w.path }));
+    if (!photos.length) return null;
+    const entries = await deepRead.classifyDigestPhotos({ photos, items: itemNames, apiKey, fetchImpl: null });
+    return entries && Object.keys(entries).length ? entries : null;
+  } catch (e) { return null; }
 }
 // Transferencia TOTAL al registrarse: la cuenta nace con el fundamento
 // de la prueba sembrado (digest persistido + ADN + perfil + colores).
@@ -6561,6 +6663,12 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               || makeHeadline(idea.titulo, 5, 70, (profile && profile.category) || null));
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
+          // (v230) La foto del producto EXACTO de esta pieza (si el mapa
+          // foto→producto la conoce en su álbum) manda como referencia.
+          try {
+            const mappedRefs = photoMappedRefsFor(uid, [idea.titulo, caption.split('\n')[0]]);
+            if (mappedRefs.length) refs = [...mappedRefs, ...refs.filter((r) => !mappedRefs.includes(r))].slice(0, 2);
+          } catch (e) {}
           // 2026-10-14: TARJETA INMEDIATA (pedido de Valentino) — el borrador
           // nace AHORA con su texto y sin imagen: la tarjeta aparece en la
           // app en segundos ("creando imagen…") y la imagen se completa en
@@ -11562,9 +11670,19 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       }
       webExtraPhotos = await trialWebPhotos(webData);
     }
+    // (v230) LECTURA PROFUNDA: catálogo completo de su web (páginas de
+    // catálogo + PDFs enlazados) y mapa foto→producto de las fotos del
+    // sitio, cada uno con su carrera: la prueba nunca espera de más.
+    let deep = null;
+    if (webData) {
+      const catalog = await raceMs(trialDeepCatalog(webData), 7000);
+      const itemNames = [...(webData.services || []), ...((catalog && catalog.items) || []).map((x) => x.nombre)];
+      const photoEntries = await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000);
+      deep = { catalog, photoEntries };
+    }
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep });
     const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
@@ -12024,14 +12142,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
     }
 
-    // (v229) FUNDAMENTO: el digest se compila con TODO lo recolectado
-    // (feed real: bio + captions; web; formulario) ANTES del spec — los
-    // temas de la semana se derivan de él, no del catálogo por rubro.
-    const trialDigest = buildTrialDigest({
-      business, category, webData,
-      feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
-      formText: richGoal, feedPalette, registro: feedRegister,
-    });
+    // (v230) LECTURA PROFUNDA: el link de la bio empieza a seguirse YA
+    // (en paralelo con la clasificación del feed y la web); el digest se
+    // compila más abajo, cuando la web y sus fotos ya están, para que
+    // catálogo/bio-link/mapa entren en la MISMA compilación.
+    const bioLinkPromise = trialBioLink(trialProfile && trialProfile.link);
 
     // (v198) CLASIFICACIÓN DEL FEED (ilustrado vs foto real): corre en
     // paralelo con el spec y el render de plantillas — la semana de
@@ -12072,6 +12187,26 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         webExtraPhotos = await trialWebPhotos(webData);
       }
     }
+    // (v230) LECTURA PROFUNDA + (v229) FUNDAMENTO: el digest se compila
+    // con TODO lo recolectado (feed real: bio + captions; web; formulario;
+    // catálogo profundo, link de bio y mapa foto→producto con sus
+    // carreras acotadas) justo ANTES del spec — los temas de la semana
+    // se derivan de él, no del catálogo por rubro.
+    let deep = null;
+    {
+      const catalog = webData ? await raceMs(trialDeepCatalog(webData), 6000) : null;
+      const bioLink = await raceMs(bioLinkPromise, 4000);
+      const itemNames = [...((webData && webData.services) || []),
+        ...((catalog && catalog.items) || []).map((x) => x.nombre),
+        ...((bioLink && bioLink.items) || []).map((x) => x.nombre)];
+      const photoEntries = webExtraPhotos.length ? await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : null;
+      deep = { catalog, bioLink, photoEntries };
+    }
+    const trialDigest = buildTrialDigest({
+      business, category, webData,
+      feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
+      formText: richGoal, feedPalette, registro: feedRegister, deep,
+    });
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
     const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest });
@@ -13166,7 +13301,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v229';
+const BUILD_ID = '20261018-v230';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -13347,11 +13482,19 @@ app.listen(PORT, () => {
 //    (productos/servicios reales, USD 0).
 //  · IG conectado → bio/temas del feed re-minados (≥7 días) y locks de
 //    estilo re-analizados si tienen ≥30 días (con kill-switch de gasto).
+// (v230) LECTURA PROFUNDA, en las mismas cadencias:
+//  · con la web (30 días o primera vez): catálogo completo del sitio
+//    (páginas de catálogo/tienda/menú + PDFs enlazados, USD 0).
+//  · con el feed (7 días): link de la bio seguido hasta su tienda/
+//    reserva; léxico re-minado de los captions frescos; mapa
+//    foto→producto para las fotos nuevas (álbum + publicados, caché
+//    por contenido, tope por corrida, guarda de gasto); estrella
+//    inferido y contradicciones recalculados con el rendimiento.
 // Merge: lo editado a mano en el ADN manda — las listas del digest se
 // re-derivan del ADN vigente y solo se reemplazan los bloques cuya
 // fuente se refrescó en esta corrida.
 async function refreshDigestsSweep() {
-  const summary = { users: 0, web: 0, feed: 0, locks: 0, saved: 0, errors: 0 };
+  const summary = { users: 0, web: 0, feed: 0, locks: 0, saved: 0, errors: 0, catalog: 0, bioLink: 0, photoMap: 0 };
   const DAY = 24 * 3600 * 1000;
   const ageOf = (iso) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Date.now() - t : Infinity; };
   try {
@@ -13370,7 +13513,11 @@ async function refreshDigestsSweep() {
           || !stored || ageOf(stored.fuentes && stored.fuentes.web && stored.fuentes.web.at) >= 30 * DAY);
         const feedStale = !!(prof.ig_connected && prof.ig_username)
           && (!stored || ageOf(stored.fuentes && stored.fuentes.feed && stored.fuentes.feed.at) >= 7 * DAY);
-        if (!webStale && !feedStale && stored) continue;
+        // (v230) El catálogo profundo se lee con la cadencia de la web
+        // (30 días) y también la PRIMERA vez que falta el bloque.
+        const catalogDue = !!webUrl && (!stored || !stored.catalog
+          || ageOf(stored.fuentes && stored.fuentes.catalog && stored.fuentes.catalog.at) >= 30 * DAY);
+        if (!webStale && !feedStale && !catalogDue && stored) continue;
         const parts = {
           business: prof.business_name || (stored && stored.business) || '',
           category: (stored && stored.category) || prof.category || '',
@@ -13402,7 +13549,16 @@ async function refreshDigestsSweep() {
             }
           } catch (e) { /* sin presupuesto o estudio fallido: el bloque web-extract ya refrescó lo esencial */ }
         }
+        // (v230) CATÁLOGO PROFUNDO con la cadencia de la web: páginas de
+        // catálogo/tienda/menú del propio sitio + PDFs enlazados (USD 0).
+        if ((webStale || catalogDue) && webUrl) {
+          try {
+            const cat = await deepRead.fetchDeepCatalog(webUrl);
+            if (cat && cat.items && cat.items.length) { parts.catalog = cat; summary.catalog++; }
+          } catch (e) { /* catálogo ilegible esta vuelta: se sigue */ }
+        }
         if (feedStale) {
+          let feedLink = '';
           try {
             const data = await feedAudit.fetchAuditData(prof.ig_username);
             if (data && data.ok && data.profile) {
@@ -13411,9 +13567,49 @@ async function refreshDigestsSweep() {
                 captions: (data.posts || []).map((x) => String((x && x.caption) || '').slice(0, 240)).filter(Boolean).slice(0, 12),
                 name: data.profile.name || '', handle: data.profile.handle || prof.ig_username,
               };
+              feedLink = data.profile.link || '';
               summary.feed++;
             }
           } catch (e) { /* feed no disponible: se sigue */ }
+          // (v230) LINK DE LA BIO con la cadencia del feed: se sigue
+          // hasta su tienda/reserva y los ítems legibles entran al digest.
+          if (feedLink) {
+            try {
+              const bl = await deepRead.fetchBioLink(feedLink);
+              if (bl) { parts.bioLink = bl; summary.bioLink++; }
+            } catch (e) { /* link caído: se sigue */ }
+          }
+          // (v230) MAPA FOTO→PRODUCTO con la cadencia del feed: fotos de
+          // su álbum + sus posteos publicados, SOLO las no clasificadas
+          // (caché por hash de contenido en el propio mapa), tope duro
+          // por corrida y guarda de gasto — si el guarda frena, el mapa
+          // se completa en la próxima cadencia, en silencio.
+          try {
+            const key = openaiKeyFor(uid);
+            if (key) {
+              const candPaths = [];
+              try {
+                for (const r of db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid)) candPaths.push(r.file_path);
+                for (const r of db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND status = 'published' AND image_path LIKE '/media/%' ORDER BY id DESC LIMIT 8`).all(uid)) candPaths.push(r.image_path);
+              } catch (e) {}
+              const already = (stored && stored.photo_map && stored.photo_map.entries) || {};
+              const photos = [];
+              for (const fp of candPaths) {
+                if (photos.length >= deepRead.VISION_MAX_PHOTOS) break;
+                const abs = path.join(MEDIA_DIR, path.basename(String(fp || '')));
+                const k = deepRead.photoContentKey(abs);
+                if (!k || already[k] || photos.some((x) => x.key === k)) continue;
+                photos.push({ key: k, path: abs });
+              }
+              if (photos.length) {
+                costs.assertAiOk(uid);
+                const itemNames = [...((stored && stored.productos) || []), ...((stored && stored.servicios) || [])]
+                  .map((x) => (x && (x.nombre || x)) || '').filter(Boolean);
+                const entries = await deepRead.classifyDigestPhotos({ photos, items: itemNames, apiKey: key, userId: uid });
+                if (entries && Object.keys(entries).length) { parts.photoEntries = entries; summary.photoMap += Object.keys(entries).length; }
+              }
+            }
+          } catch (e) { /* mapa best-effort: nunca frena el refresco */ }
           try {
             const cs = db.prepare('SELECT analyzed_at FROM ig_caption_style WHERE user_id = ?').get(uid);
             const vs = db.prepare('SELECT analyzed_at FROM ig_visual_style WHERE user_id = ?').get(uid);
@@ -13426,7 +13622,17 @@ async function refreshDigestsSweep() {
             }
           } catch (e) { /* locks: best-effort, nunca frenan el refresco */ }
         }
-        if (!stored && !webFresh && !feedFresh) {
+        // (v230) Señales del estrella inferido: su rendimiento medido
+        // (los captions de sus posteos con más alcance, 90 días).
+        if (feedStale || webStale || catalogDue) {
+          try {
+            const mrows = db.prepare(`SELECT p.caption AS caption, m.reach AS reach FROM post_metrics m JOIN posts p ON p.id = m.post_id
+              WHERE p.user_id = ? AND p.status = 'published' AND p.published_at >= datetime('now', '-90 days') AND m.reach > 0
+              ORDER BY m.reach DESC LIMIT 12`).all(uid);
+            if (mrows.length) parts.starSignals = { metrics: mrows.map((r) => ({ text: String(r.caption || '').slice(0, 160), reach: r.reach })) };
+          } catch (e) {}
+        }
+        if (!stored && !webFresh && !feedFresh && !parts.catalog && !parts.bioLink) {
           const seeded = clientDigest.buildFromParts(parts);
           if (clientDigest.hasFoundation(seeded)) { clientDigest.saveDigest(db, uid, seeded); summary.saved++; }
           continue;
@@ -13448,7 +13654,10 @@ async function refreshDigestsSweep() {
         }
         if (fresh.diferencial) merged.diferencial = fresh.diferencial;
         merged.built_at = new Date().toISOString();
-        clientDigest.saveDigest(db, uid, merged);
+        // (v230) Los bloques profundos se fusionan sobre el merge de
+        // siempre (aditivo, por bloque; el mapa de fotos por clave).
+        const finalDigest = clientDigest.applyDeepBlocks(merged, fresh);
+        clientDigest.saveDigest(db, uid, finalDigest);
         summary.saved++;
       } catch (e) { summary.errors++; console.error('[digest-refresh] usuario ' + uid + ':', e.message); }
     }

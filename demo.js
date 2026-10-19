@@ -155,7 +155,11 @@ function stockPhotos3(category, business) {
 // client_digest del negocio (sus productos/servicios/temas reales) y el
 // payload viaja con el digest — las semanas cacheadas con el motor
 // anterior (temas de plantilla por rubro) quedan invalidadas a propósito.
-const DEMO_ENGINE_V = 18;
+// v19 (v230 LECTURA PROFUNDA): el digest suma catálogo completo, link de
+// bio, léxico, mapa foto→producto, estrella inferido y contradicciones;
+// el gate de fotos sube a foto↔PRODUCTO cuando el mapa cubre la foto y
+// el estrella inferido abre la rotación de temas.
+const DEMO_ENGINE_V = 19;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -429,14 +433,29 @@ function pickPhotoGated(topic, poolFams, used, ctx) {
 // cualquiera que pase el gate. SIN rango de repetición: una foto de su web
 // ilustra UN posteo de la semana y el resto lo cubre el stock (la semana
 // nunca repite visuales — si el sitio tiene 1 sola foto útil, sale 1 vez).
+// (v230) RANGO 0 — FOTO↔PRODUCTO: si el mapa foto→producto del digest
+// (photo_map) cubre la foto y dice que ESA foto ES el producto del tema
+// (su ancla), gana sobre cualquier match de tema: ya no es "una foto de
+// café para un posteo de café", es LA foto de ESE blend para el posteo
+// de ESE blend. El gate de mundo/temas prohibidos sigue mandando.
 function pickWebPhoto(topic, webPool, used, ctx) {
   if (!webPool || !webPool.length) return null;
+  const productHit = (w) => !!(topic && topic.digest_anchor && w.producto && clientDigest.sameItemName(w.producto, topic.digest_anchor));
   const tiers = [
+    (w) => productHit(w),
     (w) => !!(topic && topic.tema && w.temas.includes(topic.tema)),
     () => true,
   ];
-  for (const tier of tiers) {
-    const hit = webPool.find((w) => !used.has(w.path) && temasPassGate(w.temas, ctx) && tier(w));
+  for (let ti = 0; ti < tiers.length; ti++) {
+    const hit = webPool.find((w) => {
+      if (used.has(w.path)) return false;
+      // El rango 0 puede rescatar una foto cuyos tags de alt/archivo no
+      // alcanzan el mundo (la visión la identificó como EL producto) —
+      // pero NUNCA una con un tema prohibido para este público.
+      const gateOk = temasPassGate(w.temas, ctx)
+        || (ti === 0 && productHit(w) && !(w.temas || []).some((x) => ctx.forb.has(x)));
+      return gateOk && tiers[ti](w);
+    });
     if (hit) return hit;
   }
   return null;
@@ -1147,7 +1166,17 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // republican) — y entran al pool pasando el MISMO gate foto↔tema: sin
   // temas derivables, quedan afuera igual que un stock sin tags.
   const webPool = (Array.isArray(extraPhotos) ? extraPhotos : [])
-    .filter((w) => w && typeof w.path === 'string' && Array.isArray(w.temas) && w.temas.length);
+    .filter((w) => w && typeof w.path === 'string' && Array.isArray(w.temas) && w.temas.length)
+    .map((w) => ({ ...w })); // copias: el spec anota (mapa) sin mutar al llamador
+  // (v230) MAPA FOTO→PRODUCTO: si el digest trae photo_map, cada foto de
+  // la web queda anotada con el producto que la visión identificó en
+  // ella (clave = su URL). pickWebPhoto usa esa anotación como rango 0.
+  if (digest && digest.photo_map && digest.photo_map.entries) {
+    for (const w of webPool) {
+      const prod = w.url ? clientDigest.photoProductFor(digest, w.url) : null;
+      if (prod) w.producto = prod;
+    }
+  }
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
   // los ÁNGULOS, no la categoría. bioText = la bio real del perfil (v192):
   // la semana hereda los temas de SU línea, no solo los del formulario.
@@ -1184,6 +1213,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   const posterAt = new Set();
 
   let styleObjs, photos;
+  const photoProductOf = new Map(); // (v230) idx → producto, cuando la foto elegida vino del mapa foto→producto
   const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
     && base.styles.every((c) => { const IS = imageStyles(); return IS && IS.getStyle(c); });
   if (baseStylesOk && Array.isArray(base.photos) && base.photos.length >= n) {
@@ -1212,8 +1242,13 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       if (!isPoster) {
         const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe });
         // Un tema entra si lo puede ilustrar el stock O una foto de su web.
+        // (v230) También entra si el mapa foto→producto cubre una foto de
+        // su web con EL producto del tema (aunque sus tags no matcheen).
         if (!topicPhotoMatchable(t, poolFams, ctx)
-          && !webPool.some((w) => temasPassGate(w.temas, ctx))) continue;
+          && !webPool.some((w) => temasPassGate(w.temas, ctx))
+          && !(t.digest_anchor && webPool.some((w) => w.producto
+            && clientDigest.sameItemName(w.producto, t.digest_anchor)
+            && !(w.temas || []).some((x) => ctx.forb.has(x))))) continue;
       }
       chosen.push(t);
       chosenPoster.push(isPoster);
@@ -1268,7 +1303,13 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       // exacto de tema, después cualquier pase del gate; sin uso repetido
       // salvo que no quede otra que pase.
       const webHit = pickWebPhoto(topics[i], webPool, usedWeb, ctx);
-      if (webHit) { usedWeb.add(webHit.path); photos[i] = webHit.path; continue; }
+      if (webHit) {
+        usedWeb.add(webHit.path); photos[i] = webHit.path;
+        if (webHit.producto && topics[i].digest_anchor && clientDigest.sameItemName(webHit.producto, topics[i].digest_anchor)) {
+          photoProductOf.set(i, webHit.producto);
+        }
+        continue;
+      }
       const famName = pickPhotoGated(topics[i], poolFams, usedFams, ctx);
       if (!famName) {
         // No debería pasar (la selección ya exigió match): si pasa, el
@@ -1316,6 +1357,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       : (treatmentOverrides.get(i) || (st ? treatmentForStyle(st) : null));
     return {
       photo: photos[i],
+      // (v230) Trazabilidad del gate foto↔PRODUCTO: el producto exacto
+      // que el mapa identificó en la foto elegida (si vino del mapa).
+      photo_product: photoProductOf.get(i) || undefined,
       style: st ? st.code : 'promo',
       style_name: st ? st.name : '',
       treatment: trFinal,

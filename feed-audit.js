@@ -157,12 +157,17 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
   }
   // Seguidos: el embed lo trae como "following_count" o como edge_follow.
   const followingRaw = f(/"following_count":(\d+)/) || f(/"edge_follow":\{"count":(\d+)/);
+  // (v230) LECTURA PROFUNDA: el link de la bio (external_url del perfil)
+  // — la puerta a su tienda/reserva real (bloque bio_link del digest).
+  const linkRaw = f(/"external_url":"((?:[^"\\]|\\.){1,300})"/);
+  const bioLink = linkRaw ? linkRaw.replace(/\\\//g, '/').replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => { try { return String.fromCharCode(parseInt(h, 16)); } catch (e) { return ''; } }) : '';
   return {
     ok: true,
     profile: {
       handle: ig,
       name: fullName,
       bio,
+      link: /^https?:\/\//i.test(bioLink) ? bioLink : '',
       followers: f(/"followers_count":(\d+)/) ? parseInt(f(/"followers_count":(\d+)/), 10) : null,
       posts_count: f(/"posts_count":(\d+)/) ? parseInt(f(/"posts_count":(\d+)/), 10) : null,
       following: followingRaw ? parseInt(followingRaw, 10) : null,
@@ -188,6 +193,9 @@ function trialProfileFromAudit(data, fallbackPic) {
     handle: p.handle,
     name: p.name || '',
     bio: p.bio || '',
+    // (v230) El link de su bio, tal cual lo publicó (la lectura profunda
+    // lo sigue hasta su tienda/reserva: bloque bio_link del digest).
+    link: p.link || '',
     followers: num(p.followers),
     posts_count: num(p.posts_count),
     following: num(p.following),
