@@ -383,6 +383,12 @@ function emptyDigest() {
     // (v235) Identificación de rubro versionada (rubro-id.js): fuente de
     // verdad de rubro+subrubro+confianza+fuente. null = aún no clasificado.
     rubro_id: null,
+    // (v238) POSTY PREGUNTA: lo que el DUEÑO respondió en persona (la
+    // fuente más fuerte): { estrella, mas_vendido, cliente, no_publicar,
+    // precios: {normItem: {item, precio}}, promos_ninguna_at }. El
+    // refresco semanal lo preserva (applyDeepBlocks) y los candidatos a
+    // pregunta lo respetan (questionCandidatesOf). null = sin respuestas.
+    dueno: null,
   };
 }
 
@@ -893,10 +899,16 @@ function questionCandidatesOf(d) {
     });
   }
   const star = d.inferred_star;
-  if (star && star.item && (star.confidence || 0) >= 0.5) {
+  // (v238) Si el dueño ya confirmó su estrella (Posty pregunta), no hay
+  // nada que confirmar: el candidato no nace.
+  const starDelDueno = (d.dueno && d.dueno.estrella) || (star && star.fuente === 'dueno');
+  if (star && star.item && (star.confidence || 0) >= 0.5 && !starDelDueno) {
     out.push({ tipo: 'estrella', item: star.item, texto: `¿Tu producto estrella es ${star.item}?` });
   }
+  const preciosDueno = (d.dueno && d.dueno.precios && typeof d.dueno.precios === 'object') ? d.dueno.precios : {};
   for (const c of (d.contradictions || []).slice(0, 2)) {
+    // (v238) Una contradicción que el dueño ya resolvió no se repregunta.
+    if (preciosDueno[norm(c.item)]) continue;
     const vs = Object.entries(c.valores || {}).map(([f, v]) => `${v} (${f === 'bio-link' ? 'link de bio' : f === 'web-catalog' ? 'catálogo web' : f === 'pdf' ? 'PDF' : f})`).join(' vs ');
     if (vs) out.push({ tipo: 'contradiccion', item: c.item, texto: `¿Cuál es el precio actual de ${c.item}? Figura ${vs}.` });
   }
@@ -951,11 +963,27 @@ function applyDeepBlocks(stored, fresh) {
     out.photo_map = { entries: mergedEntries, at: fresh.photo_map.at || new Date().toISOString() };
     if (fresh.fuentes && fresh.fuentes.photo_map) out.fuentes = { ...(out.fuentes || {}), photo_map: { at: out.photo_map.at, fotos: Object.keys(mergedEntries).length } };
   }
-  if (fresh.inferred_star) out.inferred_star = fresh.inferred_star;
+  // (v238) El estrella que confirmó el DUEÑO (Posty pregunta) no lo pisa
+  // una inferencia fresca: la respuesta en persona es la fuente más
+  // fuerte. El bloque `dueno` entero sobrevive por la copia base de
+  // arriba (el fresco nunca lo trae).
+  if (fresh.inferred_star && !(out.inferred_star && out.inferred_star.fuente === 'dueno')) out.inferred_star = fresh.inferred_star;
   // Las contradicciones se recalculan cuando hubo lectura fresca con
   // precios (aunque el resultado sea "ya no se contradicen": [] manda).
   if (fresh.catalog || fresh.bio_link) out.contradictions = fresh.contradictions || [];
   else if (Array.isArray(fresh.contradictions) && fresh.contradictions.length) out.contradictions = fresh.contradictions;
+  // (v238) …pero una contradicción que el dueño ya resolvió con su
+  // precio no resucita en el refresco: su precio manda y se reaplica.
+  const preciosDueno = (out.dueno && out.dueno.precios && typeof out.dueno.precios === 'object') ? out.dueno.precios : null;
+  if (preciosDueno && Object.keys(preciosDueno).length && Array.isArray(out.contradictions)) {
+    out.contradictions = out.contradictions.filter((c) => !(c && preciosDueno[norm(c.item)]));
+    for (const rec of Object.values(preciosDueno)) {
+      if (!rec || !rec.item || !rec.precio) continue;
+      for (const it of [...(out.productos || []), ...(out.servicios || [])]) {
+        if (it && it.nombre && sameItemName(it.nombre, rec.item)) it.precio = rec.precio;
+      }
+    }
+  }
   // (v235) RUBRO_ID: el guardado MANDA — el merge nunca lo reemplaza por
   // la clasificación fresca. Solo se completa si el guardado no tenía
   // (digest viejo). La reclasificación la decide el barrido semanal
@@ -997,7 +1025,16 @@ function deriveTopics(digest, opts) {
   // rotación: la novedad de la semana es él. La confirmación del dueño
   // llega por el loop de preguntas (question_candidates).
   let starName = '';
-  if (digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5) {
+  // (v238) POSTY PREGUNTA: lo que el dueño confirmó en persona abre la
+  // rotación — su estrella primero; si no hay estrella de ninguna
+  // fuente, lo que MÁS VENDE (también dicho por él) lidera igual.
+  const duenoStar = (digest.dueno && (digest.dueno.estrella || (!digest.inferred_star && digest.dueno.mas_vendido))) || '';
+  if (duenoStar) {
+    const si = items.findIndex((x) => sameItemName(name(x), duenoStar));
+    if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
+    if (si >= 0) starName = name(items[0]);
+  }
+  if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);

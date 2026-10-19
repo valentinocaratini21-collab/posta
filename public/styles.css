@@ -2024,6 +2024,21 @@ textarea.in{resize:vertical;min-height:96px}
 .idea-comp-add input{font-size:16px;border:1.5px solid #D8E2EC;border-radius:999px;padding:5px 12px;width:140px;background:#fff;color:#0A1E33}
 .idea-comps-hint{font-size:13px;color:#7A8A99;margin-top:8px;line-height:1.45}
 
+/* v238 — Posty pregunta: la tarjeta de la pregunta semanal, en la paleta
+   de Posty (celeste), hermana del bloque de ideas pero distinta: acá
+   Posty PREGUNTA y el cliente responde con un toque o una línea. */
+.hs-question{background:#F4FAFD;border:2px solid #BFE0F1;border-radius:16px;padding:16px 18px;margin:14px 0 4px;text-align:left}
+.hs-question-title{font-weight:800;font-size:17px;color:#0A1E33;margin-bottom:6px}
+.hs-question-text{font-size:15px;color:#33506B;line-height:1.5}
+.pq-opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pq-opt{border:1.5px solid #2793C8;background:#fff;color:#14507E;font-weight:700;font-size:14.5px;border-radius:999px;padding:8px 14px;cursor:pointer;touch-action:manipulation}
+.pq-opt:active{background:#EAF4FA}
+.pq-opt:disabled{opacity:.55;cursor:default}
+.pq-text-row{display:flex;gap:8px;margin-top:12px;align-items:center}
+.pq-text-row .pq-input{flex:1;font-size:16px;border:1.5px solid #C9DCEB;border-radius:999px;padding:9px 14px;background:#fff;color:#0A1E33;min-width:0}
+.pq-foot{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.pq-hint{font-size:12.5px;color:#7A8A99;line-height:1.4}
+
 /* v157 — fixes de captura real (Valentino, iPhone): (a) las tarjetas del
    panel de semana explotaban a ancho completo en el carrusel mobile porque
    .lp-day no tenía ancho definido y la imagen empujaba; (b) al filtrar

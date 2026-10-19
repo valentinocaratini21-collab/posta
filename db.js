@@ -584,6 +584,26 @@ CREATE TABLE IF NOT EXISTS posty_ideas (
 );
 CREATE INDEX IF NOT EXISTS idx_posty_ideas_user ON posty_ideas(user_id, status, id);
 CREATE INDEX IF NOT EXISTS idx_posty_ideas_angle ON posty_ideas(user_id, angle_key, created_at);
+-- Posty pregunta (2026-10-19, v238): máximo 1 pregunta por semana y por
+-- cuenta, sobre los huecos del fundamento (rubro sin confirmar, estrella
+-- inferido, contradicción de precios, huecos del ADN). qkey es la
+-- memoria: lo resuelto no vuelve por 42 días. Sin notificaciones nuevas:
+-- vive en Schedule y en el reporte semanal (ver posty-questions.js).
+CREATE TABLE IF NOT EXISTS posty_questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  week_key TEXT NOT NULL DEFAULT '',
+  qkey TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT '',
+  texto TEXT NOT NULL DEFAULT '',
+  opciones_json TEXT NOT NULL DEFAULT '[]',
+  ref_json TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',
+  respuesta TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  acted_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_posty_questions_user ON posty_questions(user_id, status, id);
 -- Caché semanal de la lectura pública de cada competidor (la misma maquinaria
 -- de la prueba/auditoría; cadencia semanal, nada de scraping agresivo).
 CREATE TABLE IF NOT EXISTS competitor_snapshots (

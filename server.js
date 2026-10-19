@@ -196,6 +196,7 @@ const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
@@ -1480,6 +1481,10 @@ app.get('/api/week/report', requireAuth, (req, res) => {
       nextCount: (next && next.n) || 0,
       opportunity,
       ideas: weekIdeas,
+      // (v238) POSTY PREGUNTA: la pregunta de la semana viaja también en
+      // el reporte (la tarjeta interactiva vive en Schedule; el reporte
+      // la anuncia y la misma pregunta es UNA sola entre superficies).
+      question: weeklyQuestionFor(uid),
       gridNote,
     });
   } catch (e) { res.json({ ok: false }); }
@@ -1975,6 +1980,60 @@ app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res)
     console.error('[ideas-loop] make:', e.message);
     res.status(500).json({ error: 'No pude armar el posteo ahora 😅 Probá en un rato' });
   }
+});
+
+// ---------- 🤔 POSTY PREGUNTA (2026-10-19, v238) ----------
+// Máximo 1 pregunta por semana, sobre lo que el fundamento no pudo leer
+// solo: confirmar el rubro dudoso (prioridad máxima: de él cuelgan
+// posteos y prompts), confirmar el estrella inferido, resolver una
+// contradicción de precios, o un hueco del ADN (estrella, más vendido,
+// promos, cliente ideal, qué NO publicar jamás). Selección y redacción
+// determinísticas en posty-questions.js (cero IA). La pregunta se
+// asegura AL LEER (mismo patrón que el barrido de ideas): la tarjeta
+// vive en Schedule — donde aterriza el ritual de fotos del lunes — y
+// el reporte semanal la lleva como dato. Sin popups, sin push nuevo.
+// La respuesta cae al digest y al ADN como fuente más fuerte.
+function weeklyQuestionFor(uid) {
+  try {
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    return postyQuestions.ensureWeeklyQuestion(db, uid, wk);
+  } catch (e) { return null; }
+}
+
+app.get('/api/questions/current', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  res.json({ ok: true, question: weeklyQuestionFor(uid) });
+});
+
+app.post('/api/questions/:id/answer', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const body = req.body || {};
+    const r = postyQuestions.applyAnswer(db, uid, req.params.id, {
+      value: typeof body.value === 'string' ? body.value : '',
+      text: typeof body.text === 'string' ? body.text : '',
+    });
+    if (!r.ok) {
+      if (r.reason === 'gone') return res.status(404).json({ error: 'Esa pregunta ya no está 😅' });
+      if (r.reason === 'empty') return res.status(400).json({ error: 'Contame con tus palabras y lo guardo 😊' });
+      if (r.reason === 'bad_option') return res.status(400).json({ error: 'Esa opción no es válida 😅' });
+      return res.status(400).json({ error: 'No pude guardarla 😅' });
+    }
+    try { track(uid, 'question_answered', r.applied || ''); } catch (e) {}
+    res.json({ ok: true, applied: r.applied });
+  } catch (e) {
+    console.error('[posty-pregunta] answer:', e.message);
+    res.status(500).json({ error: 'No pude guardarla 😅 Probá de nuevo' });
+  }
+});
+
+app.post('/api/questions/:id/dismiss', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const r = postyQuestions.dismissQuestion(db, uid, req.params.id);
+    try { track(uid, 'question_dismissed', String(req.params.id)); } catch (e) {}
+    res.json({ ok: true, changed: r.changed });
+  } catch (e) { res.status(500).json({ error: 'No pude guardarla 😅' }); }
 });
 
 // Los endpoints admin del loop viven tras requireAdminToken (definido más
@@ -10095,11 +10154,17 @@ function qaFactsLine(dna, digest) {
     for (const s of (dna.servicios || [])) addItem('Servicio real', s);
     for (const pr of [...(dna.promos_activas || []), ...(dna.promos || [])]) addItem('Promo real', pr);
     if (dna.producto_estrella) addItem('Producto estrella', dna.producto_estrella);
+    // (v238) POSTY PREGUNTA: lo que el dueño prohibió publicar viaja
+    // como hecho duro al QA — una pieza que lo toca no pasa claims_ok.
+    const noPubDna = String(dna.no_publicar || '').replace(/\s+/g, ' ').trim();
+    if (noPubDna) facts.push(`NUNCA publicar: ${noPubDna.slice(0, 120)}`);
   }
   if (digest && typeof digest === 'object') {
     for (const p of (digest.productos || [])) addItem('Producto real', p);
     for (const s of (digest.servicios || [])) addItem('Servicio real', s);
     for (const pr of (digest.promos || [])) addItem('Promo real', pr);
+    const noPubDg = (digest.dueno && String(digest.dueno.no_publicar || '').replace(/\s+/g, ' ').trim()) || '';
+    if (noPubDg && !facts.some((f) => f.startsWith('NUNCA publicar'))) facts.push(`NUNCA publicar: ${noPubDg.slice(0, 120)}`);
   }
   return facts.slice(0, 14).join(' | ').slice(0, 700);
 }
@@ -14214,7 +14279,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v237';
+const BUILD_ID = '20261019-v238';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

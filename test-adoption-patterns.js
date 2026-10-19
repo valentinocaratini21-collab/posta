@@ -314,7 +314,7 @@ print(m.text_area_pct(409) > 20.0, round(m.text_area_pct(300), 1))
 
 console.log('== Versiones ==');
 ok('BUILD_ID v235 + motores de la prueba en 24 (identificación de rubro)', () => {
-  assert.ok(srv.includes("const BUILD_ID = '20261019-v237'"));
+  assert.ok(srv.includes("const BUILD_ID = '20261019-v238'"));
   assert.strictEqual(demo.DEMO_ENGINE_V, 24);
   assert.ok(fs.readFileSync('public/prueba.html', 'utf8').includes('const TRIAL_ENGINE_V = 24;'));
 });

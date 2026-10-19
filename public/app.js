@@ -430,7 +430,7 @@ async function enhanceWeekReport() {
     const day = new Date().getDay(); // 1=lun ... 3=mié
     const showFull = r.has && day >= 1 && day <= 3;
     const opp = r.opportunity;
-    if (!showFull && !opp) return;
+    if (!showFull && !opp && !r.question) return;
     let h = '<div class="hs-report">';
     if (showFull) {
       h += `<div class="hs-report-title">🎉 Tu semana pasada en Posty</div>`;
@@ -448,6 +448,12 @@ async function enhanceWeekReport() {
     }
     if (opp) {
       h += `<div class="hs-report-line">📅 <b>Se viene ${esc(opp.name)}</b> ${opp.daysLeft === 0 ? '¡hoy!' : opp.daysLeft === 1 ? '¡mañana!' : `en ${opp.daysLeft} días`} — tu semana va a tener un posteo especial ✨</div>`;
+    }
+    // (v238) POSTY PREGUNTA: el reporte semanal anuncia la pregunta de
+    // la semana; la respuesta se da en SU tarjeta de Schedule (una sola
+    // pregunta entre las dos superficies, un solo lugar para tocar).
+    if (r.question && r.question.texto) {
+      h += `<div class="hs-report-line">🤔 <b>Posty te pregunta:</b> ${esc(r.question.texto)} <span style="color:var(--mut)">Respondela en la tarjeta de tu semana 👇</span></div>`;
     }
     h += '</div>';
     slot.innerHTML = h;
@@ -621,6 +627,92 @@ function wireIdeasBlock(slot) {
     addBtn.onclick = doAdd;
     inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doAdd(); } };
   }
+}
+// 🤔 POSTY PREGUNTA (v238): UNA pregunta por semana sobre lo que el
+// fundamento no pudo leer solo (rubro a confirmar, estrella, precios,
+// huecos del negocio). La tarjeta vive en Schedule, entre las ideas y
+// el chat — donde aterriza el ritual de fotos del lunes — y sigue el
+// patrón de las ideas: caché de sesión y pintado SINCRÓNICO desde la
+// caché en cada render (sin flash, sin fetch por repintado, sin popup).
+// Un toque (opciones) o una línea de texto; "Ahora no" no insiste.
+let QUESTION_CACHE_HTML = null; // null = todavía no cargó; '' = esta semana no hay pregunta
+function questionCardHTML(q) {
+  let h = `<div class="hs-question" data-qid="${q.id}">`;
+  h += '<div class="hs-question-title">🤔 Posty te pregunta</div>';
+  h += `<div class="hs-question-text">${esc(q.texto)}</div>`;
+  if ((q.opciones || []).length) {
+    h += '<div class="pq-opts">';
+    for (const o of q.opciones) h += `<button type="button" class="pq-opt" data-q-opt="${esc(o.value)}">${esc(o.label)}</button>`;
+    h += '</div>';
+  }
+  if (q.allow_text !== false) {
+    h += '<div class="pq-text-row"><input type="text" class="in pq-input" id="pqInput" placeholder="O escribilo con tus palabras…" maxlength="200" autocomplete="off"><button type="button" class="btn btn-primary btn-sm" id="pqSend">Guardar</button></div>';
+  }
+  h += '<div class="pq-foot"><button type="button" class="btn btn-ghost btn-sm" id="pqDismiss">Ahora no</button><span class="pq-hint">Una sola por semana: es para que tus posteos sean de TU negocio, no genéricos.</span></div>';
+  h += '</div>';
+  return h;
+}
+function questionSwap(html) {
+  QUESTION_CACHE_HTML = html;
+  const cur = document.getElementById('hs-question');
+  if (cur) { cur.dataset.done = '1'; cur.innerHTML = html; wireQuestionCard(cur); }
+}
+async function enhanceQuestion(force) {
+  const slot = document.getElementById('hs-question');
+  if (!slot) return;
+  if (!force && QUESTION_CACHE_HTML !== null) {
+    if (slot.dataset.done !== '1') {
+      slot.dataset.done = '1';
+      slot.innerHTML = QUESTION_CACHE_HTML;
+      wireQuestionCard(slot);
+    }
+    return;
+  }
+  if (slot.dataset.done && !force) return;
+  slot.dataset.done = '1';
+  let r;
+  try { r = await api.get('/api/questions/current'); } catch (e) { slot.dataset.done = ''; return; }
+  if (!r || !r.ok) { slot.dataset.done = ''; return; }
+  questionSwap(r.question ? questionCardHTML(r.question) : '');
+}
+function wireQuestionCard(slot) {
+  const card = slot && slot.querySelector('.hs-question[data-qid]');
+  if (!card || card.dataset.wired) return;
+  card.dataset.wired = '1';
+  const id = card.getAttribute('data-qid');
+  const inp = card.querySelector('#pqInput');
+  const answer = async (payload) => {
+    try {
+      await api.post('/api/questions/' + id + '/answer', payload);
+      questionSwap('<div class="hs-question"><div class="hs-question-text">✅ ¡Gracias! Ya lo tengo en cuenta para tus próximos posteos.</div></div>');
+      try { toast('✅ ¡Gracias! Respuesta guardada'); } catch (e) {}
+    } catch (e) {
+      try { toast('😅 ' + ((e && e.message) || 'No pude guardarla, probá de nuevo')); } catch (e2) {}
+    }
+  };
+  card.querySelectorAll('[data-q-opt]').forEach((b) => {
+    b.onclick = () => {
+      const v = b.getAttribute('data-q-opt');
+      // "No, es otro": no envía nada — enfoca el texto para que lo escriba.
+      if (v === '__otro__') { if (inp) { inp.focus(); inp.placeholder = 'Escribí cuál es…'; } return; }
+      b.disabled = true;
+      answer({ value: v });
+    };
+  });
+  const send = card.querySelector('#pqSend');
+  const doSend = () => {
+    const t = String((inp && inp.value) || '').trim();
+    if (!t) { if (inp) { inp.focus(); inp.placeholder = 'Escribí tu respuesta 😊'; } return; }
+    answer({ text: t });
+  };
+  if (send) send.onclick = doSend;
+  if (inp) inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doSend(); } };
+  const dis = card.querySelector('#pqDismiss');
+  if (dis) dis.onclick = async () => {
+    dis.disabled = true;
+    try { await api.post('/api/questions/' + id + '/dismiss', {}); } catch (e) {}
+    questionSwap('<div class="hs-question"><div class="hs-question-text">👌 Dale — la semana que viene te pregunto otra cosa.</div></div>');
+  };
 }
 function lpGoTrial(e) {
   if (e) e.preventDefault();
@@ -10554,6 +10646,7 @@ async function scheduleView() {
     ${failedBlock}
     ${homeWeekBlock}
     <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
+    <div id="hs-question"></div>
     ${homeChatBlock}
     ${armBlock}
   </div>`;
@@ -10755,6 +10848,7 @@ function bindSchedule() {
   // ampliación hover/toque de la vista Semana).
   try { bindSchedFilter(); } catch (e) {}
   try { enhanceIdeas(); } catch (e) {} // 💡 v223: ideas con ciclo propio (caché de sesión; su slot vive fuera de la agenda)
+  try { enhanceQuestion(); } catch (e) {} // 🤔 v238: Posty pregunta — tarjeta propia sobre el chat, mismo ciclo anti-flash
   // (v236) Chip de ideas: el cableado sigue el patrón de la casa (se
   // recablea en cada pintado) y el estado visible se re-aplica
   // sincrónico tras el render — badge, expandido y panel como estaban.
