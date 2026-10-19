@@ -167,7 +167,8 @@ function pickHook({ intent, usedHookIds = [] } = {}) {
 // voseo terminados en vocal acentuada (regalá, mirá, probá, vení…): el tema
 // exacto del empalme real de v142 ("Regalá mamá…") pasaba hookFits. Se usa
 // lookahead de no-letra (incluye acentuadas) en vez de \b.
-const IMPERATIVE_START = /^(regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire)(?=$|[^a-záéíóúüñ])/i;
+const IMP_WORDS = 'regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire';
+const IMPERATIVE_START = new RegExp('^(?:' + IMP_WORDS + ')(?=$|[^a-záéíóúüñ])', 'i');
 const PRICE_FORMULA = /más barato|bajamos de precio|bajó|sin margen|te sale menos|descuento|liquidación/i;
 
 function hookFits(hook, { tema, negocio, hasPrice } = {}) {
@@ -232,8 +233,29 @@ function captionOpenIsGarbled(caption, negocio) {
   const bizRaw = String(negocio || '').trim();
   let masked = first;
   if (bizRaw.length >= 3) {
-    const esc = bizRaw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    masked = first.replace(new RegExp(esc, 'gi'), 'Negocio');
+    // LINT v4 (Parte 62, mediodía 2026-10-19): la máscara cubre el nombre
+    // y sus FORMAS CORTAS — la cabeza antes del primer/último «de» y las
+    // dos primeras palabras si el nombre abre con artículo («La Cocina»
+    // por «La Cocina de Ana», «La Casa de Té» por «La Casa de Té de
+    // Ana»): nombrar corto es como los negocios se nombran, y la v3 lo
+    // marcaba como empalme. El token va en minúscula: capitalizado, un
+    // artículo ajeno («El Café Aroma…» → «El Negocio…») gatillaba solo
+    // la firma (c).
+    const variants = new Set([bizRaw]);
+    if (/^(?:el|la|los|las|lo)\s/i.test(bizRaw)) {
+      const toks = bizRaw.split(/\s+/);
+      const lowToks = toks.map((t) => t.toLowerCase());
+      const deFirst = lowToks.indexOf('de');
+      const deLast = lowToks.lastIndexOf('de');
+      if (deFirst >= 2) variants.add(toks.slice(0, deFirst).join(' '));
+      if (deLast >= 2 && deLast !== deFirst) variants.add(toks.slice(0, deLast).join(' '));
+      if (toks.length >= 3) variants.add(toks.slice(0, 2).join(' '));
+    }
+    const sorted = [...variants].filter((v) => v.length >= 4).sort((a, b) => b.length - a.length);
+    for (const v of sorted) {
+      const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      masked = masked.replace(new RegExp(esc, 'gi'), 'negocio');
+    }
   }
   if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(masked)) return true;
   // (d) LINT v3 (Juli, 2026-10-18) — la firma residual pre-registrada el
@@ -248,7 +270,69 @@ function captionOpenIsGarbled(caption, negocio) {
   // capitalizado (id 111); "Día de la Madre" no matchea (nombre propio).
   if (/[a-záéíóúñü]\s+(?:Lo|La|El|Los|Las|Un|Una)\s+[a-záéíóúñü]/.test(masked)) return true;
   if (/[a-záéíóúñü]\s+Día a día/.test(masked)) return true;
+  // (d') LINT v4 (Parte 62): el tema-título también se cose tras
+  // puntuación débil (coma, punto y coma, dos puntos — el separador le
+  // robaba a la v3 el «carácter en minúscula» que exigía antes del
+  // título) y con titulares que la lista de la v3 no traía: «Cómo…» y
+  // «Consejos…» son arranque de título, nunca palabra común capitalizada
+  // a mitad de frase en español sano.
+  if (/[a-záéíóúñü,:;—–-]\s+(?:Lo|La|El|Los|Las|Un|Una|Cómo|Consejos)\s+[a-záéíóúñü]/.test(masked)) return true;
+  // (d'') El fragmento «De…» (la firma del 112 sin su «El» inicial):
+  // «De» capitalizada tras palabra común o puntuación, seguida de
+  // minúscula que NO sea artículo — los nombres de persona («María De
+  // los Ángeles», «Juan De Dios») quedan fuera por esa guarda.
+  if (/[a-záéíóúñü,:;—–-]\s+De\s+(?!el\s|la\s|los\s|las\s|un\s|una\s)[a-záéíóúñü]/.test(masked)) return true;
+  // (f) LINT v4: el espejo de la firma (b) para los signos de CIERRE —
+  // un «?» o «!» seguido de minúscula es una pregunta o exclamación
+  // incrustada sin su signo de apertura (los ids 93/109 escritos sin
+  // «¿») SOLO si el segmento no abre con «¿»/«¡»: la pregunta que abre
+  // la línea y sigue en minúscula («¿te duele la uña? turno esta
+  // semana…») es el estilo del dueño, no una costura — la firma es el
+  // fragmento incrustado en un segmento que no lo abrió.
+  for (const mk of masked.matchAll(/[?!]\s+[a-záéíóúñü]/g)) {
+    const pre = masked.slice(0, mk.index);
+    const segStart = Math.max(pre.lastIndexOf('. '), pre.lastIndexOf('? '), pre.lastIndexOf('! '), pre.lastIndexOf(': '), pre.lastIndexOf('; '), pre.lastIndexOf(' — '));
+    const seg = (segStart >= 0 ? pre.slice(segStart + 2) : pre).trim();
+    if (seg.startsWith('¿') || seg.startsWith('¡')) continue;
+    return true;
+  }
   const biz = String(negocio || '').trim().toLowerCase();
+  // (e) LINT v4: la FÓRMULA cosida tras el tema. Las costuras de
+  // producción (v142 y familia) no siempre traen la firma del título: a
+  // veces un tema-declarativo queda pegado a la fórmula imperativa del
+  // banco («<tema>, Regalá … con <negocio>») con una coma, un punto y
+  // coma, una raya o un emoji de por medio. La firma general: un
+  // imperativo del banco pegado tras esa puntuación débil, con al
+  // menos 3 palabras de tema antes, en una línea que no abre con
+  // imperativo (la cadena de imperativos del dueño — «Vení, probá…» —
+  // abre con uno) y cuyo fragmento nombra al negocio (las fórmulas
+  // del banco se renderizan con el negocio adentro). Un CTA suelto
+  // tras una declaración («…, probá el blend») no nombra al negocio:
+  // no se marca.
+  // NOTA: esta función tiene que quedar AUTOCONTENIDA (sin referencias a
+  // constantes del módulo): el harness de entrenamiento la evalúa desde
+  // su fuente para inyectarla en el stub de captionPasses. Por eso la
+  // lista de imperativos se repite acá en vez de usar IMP_WORDS.
+  const IMP_LOCAL = 'regalá|regala|vení|veni|pasá|pasa|mirá|mira|probá|proba|descubrí|descubri|aprovechá|aprovecha|sumate|pedí|pedi|hacé|hace|conocé|conoce|animate|fijate|escribinos|reservá|reserva|comprá|compra|llamá|llama|visitá|visita|elegí|elegi|salí|sali|dale|entrá|entra|jugá|juga|soñá|soña|creá|crea|armá|arma|pedile|contanos|mostrá|mostra|buscá|busca|hacete|hacelo|hacela|mira|mire';
+  const startsImp = new RegExp('^(?:' + IMP_LOCAL + ')(?=$|[^a-záéíóúüñ])', 'i');
+  if (biz && biz.length >= 3 && !startsImp.test(first)) {
+    const impRe = new RegExp('(?:^|[^a-záéíóúüñ])(' + IMP_LOCAL + ')(?=$|[^a-záéíóúüñ])', 'gi');
+    let im;
+    while ((im = impRe.exec(first)) !== null) {
+      // Solo COSTURA: el imperativo tiene que venir pegado tras una
+      // puntuación débil (coma, punto y coma, dos puntos, raya) o un
+      // emoji separador. Tras un punto es una oración nueva legítima
+      // (el CTA de siempre: «…en todo. Escribinos por DM y reservá…»)
+      // y tras «y» es la cadena de acciones del mismo CTA: ninguno de
+      // los dos es un fragmento cosido.
+      const beforeText = first.slice(0, im.index);
+      if (!/[,;:—–-]\s*$/.test(beforeText) && !/\p{Extended_Pictographic}\s*$/u.test(beforeText)) continue;
+      const wordsBefore = beforeText.split(/\s+/).filter(Boolean).length;
+      if (wordsBefore < 3) continue;
+      const frag = first.slice(im.index).trim();
+      if (frag.toLowerCase().includes(biz)) return true;
+    }
+  }
   if (biz && biz.length >= 3) {
     const hits = first.toLowerCase().split(biz).length - 1;
     if (hits >= 2) return true;

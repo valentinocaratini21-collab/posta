@@ -121,6 +121,33 @@ t('garbled: tema-título cosido sigue marcado (id 406)',
 t('garbled: caption sano sin el nombre no se toca',
   captionOpenIsGarbled('Las medialunas salen del horno a las ocho en punto', 'Lo de Marta') === false);
 
+// 11. captionOpenIsGarbled LINT v4 (Parte 62, mediodía 2026-10-19):
+// costuras sin la firma pelada + formas cortas del nombre.
+t('v4: fórmula cosida tras coma',
+  captionOpenIsGarbled('El pan de campo recién horneado, Regalá una presencia digital con Posty', 'Posty') === true);
+t('v4: tema-título Cómo tras verbo',
+  captionOpenIsGarbled('Te mostramos Cómo crear contenido sin estrés en tu cuenta', 'Posty') === true);
+t('v4: pregunta incrustada sin apertura',
+  captionOpenIsGarbled('Haciendo contenido sin estrés? en Posty te lo resolvemos', 'Posty') === true);
+t('v4: fragmento De tras dos puntos',
+  captionOpenIsGarbled('Novedad de la casa: De escéptica a fan: el cambio de una clienta real', 'Posty') === true);
+t('v4: empalme tras el nombre enmascarado',
+  captionOpenIsGarbled('En Lo de Marta, Lo que nuestros usuarios dicen de Posty en Posty', 'Lo de Marta') === true);
+t('v4: nombre corto no es empalme (La Cocina)',
+  captionOpenIsGarbled('La Cocina abre también los domingos al mediodía', 'La Cocina de Ana') === false);
+t('v4: nombre corto de cadena (La Casa de Té)',
+  captionOpenIsGarbled('La Casa de Té abre los sábados desde las diez', 'La Casa de Té de Ana') === false);
+t('v4: artículo ajeno + nombre (El Café Aroma)',
+  captionOpenIsGarbled('El Café Aroma abre temprano con medialunas recién hechas', 'Café Aroma') === false);
+t('v4: persona con De no es tema-título',
+  captionOpenIsGarbled('María De los Ángeles contó que las facturas son las mejores del barrio', 'Lo de Marta') === false);
+t('v4: CTA tras punto es oración nueva, no costura',
+  captionOpenIsGarbled('Esta semana 25% de descuento en tortas. Escribinos por DM y reservá la tuya.', 'Lo de Marta') === false);
+t('v4: pregunta que abre y sigue en minúscula es estilo, no costura',
+  captionOpenIsGarbled('¿te duele la uña encarnada? turno de podología esta semana', 'Posty') === false);
+t('v4: cadena de imperativos del dueño no es costura',
+  captionOpenIsGarbled('Vení, probá las facturas calentitas de siempre', 'Lo de Marta') === false);
+
 // 10. node --check hooks.js
 let checkOk = false;
 try {
