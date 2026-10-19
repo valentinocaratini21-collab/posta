@@ -889,6 +889,71 @@ function captionPasses(caption, input) {
       }
     }
   }
+  // CUERPO-M79 (Juli, 2026-10-19 — medición M9 + directiva M79 del cerebro):
+  // la generación nueva ya no falla en el hook: falla en el CUERPO, donde
+  // captionPasses no miraba. Casos reales de producción: el id 407
+  // (2026-10-18) pasó TODOS los gates con "El día de mamá se merece lo
+  // mejor. ¿Sabías que con Posty…"; el id 113 quedó scheduled con
+  // "¿Sabías que un community manager humano te puede salir $300.000…";
+  // el id 423 (cuenta 3, hoy) abrió con "La madera que hace la
+  // diferencia"; y la semana 2026-10-19 de la cuenta 12 abrió CUATRO
+  // posteos con el mismo dispositivo ("¿Cuántas veces te pasó/agarró…?",
+  // ids 407/408/409/414). Tres gates angostos:
+  // (a) MULETILLA DE CUERPO: "¿sabías que" como APERTURA DE ORACIÓN en
+  //     cualquier parte del caption (inicio o tras . ! ? …), no solo en
+  //     la primera línea. El checklist ítem 5 lo prohibía solo en el
+  //     prompt y el BANNED_PATTERNS de hooks solo mira hooks. El uso
+  //     subordinado ("contó que su clienta no sabías que…" NO es
+  //     apertura de oración) no se rechaza.
+  // (b) VACÍO + FRASE QUEMADA: "merece/merecés lo mejor" sin dato en la
+  //     misma oración (qué, cuánto, cuándo) y "hace la diferencia" a
+  //     secas — relleno de folleto que no dice nada del negocio.
+  // (c) REPETICIÓN INTRA-SEMANA (M79.2): si el caller pasa los captions
+  //     anteriores de la tanda/semana (input.prevCaptions, como ya hace
+  //     generateCaptions), dos posteos no pueden compartir DISPOSITIVO
+  //     DE APERTURA: misma familia interrogativa ("¿cuántas veces te…",
+  //     "¿te preguntaste…", "¿te imaginás…") o misma apertura
+  //     interrogativa/exclamativa de 3 palabras. Un caption sano en
+  //     soledad puede ser un defecto en su semana.
+  {
+    for (const m of low.matchAll(/sabias que/g)) {
+      const before = low.slice(0, m.index).replace(/[\s¿¡\p{Extended_Pictographic}]/gu, '');
+      if (before === '' || /[.!?…]$/.test(before)) {
+        return { ok: false, reason: 'muletilla de cuerpo (M79): "¿Sabías que…?" como apertura de oración está prohibida en cualquier parte del caption, no solo al inicio — abrí la oración con el dato o la escena concreta del negocio' };
+      }
+    }
+    for (const sent of low.split(/[.!?…\n]+/)) {
+      if (/\blo mejor\b/.test(sent) && !/[\d$%]/.test(sent) && /\b(merec\w+|es lo mejor|solo lo mejor|simplemente lo mejor)\b/.test(sent)) {
+        return { ok: false, reason: 'superlativo vacío (M79): "se merece lo mejor" sin decir qué, cuánto o cuándo es relleno de folleto — nombrá el producto o el dato concreto, o sacá la frase' };
+      }
+    }
+    if (/\bhace la diferencia\b/.test(low)) {
+      return { ok: false, reason: 'frase quemada (M79): "hace la diferencia" no dice nada del negocio — contá EN QUÉ se diferencia (el material, el tiempo, el precio real), con el dato' };
+    }
+    const prevsM79 = [];
+    if (input && Array.isArray(input.prevCaptions)) prevsM79.push(...input.prevCaptions);
+    if (input && input.prevCaption) prevsM79.push(input.prevCaption);
+    if (prevsM79.length) {
+      const deviceOf = (txt) => {
+        const fl = (String(txt || '').split('\n')[0] || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const words = fl.replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+        if (!words.length) return null;
+        const head = words.slice(0, 4).join(' ');
+        if (/^cuantas veces te\b/.test(head)) return 'cuantas-veces-te';
+        if (/^cuantas veces\b/.test(head)) return 'cuantas-veces';
+        if (/^te preguntaste\b/.test(head)) return 'te-preguntaste';
+        if (/^te imagina/.test(head)) return 'te-imaginas';
+        if (/^sabias que\b/.test(head)) return 'sabias-que';
+        if (fl.includes('¿')) return 'q:' + words.slice(0, 3).join(' ');
+        if (fl.includes('¡')) return 'e:' + words.slice(0, 3).join(' ');
+        return null;
+      };
+      const dev = deviceOf(c);
+      if (dev && prevsM79.map(deviceOf).includes(dev)) {
+        return { ok: false, reason: `dispositivo de apertura repetido en la misma semana (M79): otro posteo de esta tanda ya abrió con la misma fórmula ("${dev.startsWith('q:') || dev.startsWith('e:') ? dev.slice(2) : dev}") — un solo uso por semana; abrí con la escena, el dato o una afirmación` };
+      }
+    }
+  }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====
   // Precios del caption vs lista de precios del negocio: un precio desactualizado
   // o inventado se rechaza (se avisa y se corrige antes de publicar).
