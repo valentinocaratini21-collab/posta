@@ -5444,13 +5444,18 @@ function weekCardHTML(d, o) {
     : isV ? `<video src="${esc(d.image_path)}" muted playsinline preload="metadata"></video>`
     : `<img src="${esc(d.image_path)}" alt="" loading="lazy">`;
   const capFull = String(d.caption || d.source_topic || '');
+  // ⚡ Publicar ahora (v241, paridad con la tarjeta de revisión de v240):
+  // solo si hay pieza lista y el estado lo permite (programado o borrador,
+  // nunca en revisión). El mount .pcard-pubnowm recibe el progreso del flujo.
+  const canPubNow = !isPending && !!d.image_path && (d.status === 'scheduled' || d.status === 'draft') && !d.needs_review;
   const acts = isPub ? (o.dia ? '<div class="pcard-actions hs-acts"></div>' : '')
     : `<div class="pcard-actions hs-acts">
+        ${canPubNow ? '<button type="button" data-pc-act="pubnow" class="pcard-approve">⚡ Publicar ahora</button>' : ''}
         ${d.status === 'scheduled' ? '<button type="button" data-pc-act="hold">⏸ Frenar</button>' : ''}
         <button type="button" data-pc-act="edit-cap">✏️ Editar</button>
         ${isV || isPending ? '' : '<button type="button" data-pc-act="image">🖼️ Imagen</button>'}
         <button type="button" data-pc-act="skip">🗑️ Eliminar</button>
-      </div>`;
+      </div><div class="pubnow-mount pcard-pubnowm"></div>`;
   // data-sched-at / data-day-label: los usa pcSkip para deshacer y para
   // "Armar otro" (la igmock del carrusel original no los traía).
   let dayLabel = '';
@@ -7279,6 +7284,28 @@ async function pcApprove(id, card, btn) {
   });
   toast('✅ Aprobado — sale a su hora');
 }
+// --- Publicar ahora desde la tarjeta de Schedule (v241): el MISMO
+// publishNowFlow de la tarjeta de revisión — hoja de OK explícito,
+// progreso en el mount de ESTA tarjeta, y al salir bien refresco como
+// hace Frenar. Si el editor de caption está abierto, se guarda antes
+// (mismo PATCH que pcSaveCap), como hace bindReview con data-revcap. ---
+async function pcPublishNow(id, root, btn) {
+  if (btn) btn.disabled = true;
+  const mount = root ? root.querySelector('.pcard-pubnowm') : null;
+  if (!mount) { if (btn) btn.disabled = false; return; }
+  const ta = root.querySelector('.pcard-edit textarea');
+  if (ta) {
+    const v = ta.value.trim();
+    try { await api.patch('/api/posts/' + encodeURIComponent(id), { caption: v }); } catch (e) {}
+    const ce = root.querySelector('.pcard-cap, .igmock-cap');
+    if (ce) { ce.dataset.full = v; ce.textContent = v; ce.style.display = ''; }
+    const we = root.querySelector('.pcard-edit');
+    if (we) we.remove();
+  }
+  const res = await publishNowFlow(id, mount);
+  if (res && res.ok) { try { render(); } catch (e) {} }
+  else if (btn) btn.disabled = false;
+}
 // --- UN solo listener delegado para [data-pc-act] ---
 function pcOnClick(e) {
   const el = e.target && e.target.closest ? e.target.closest('[data-pc-act]') : null;
@@ -7295,6 +7322,7 @@ function pcOnClick(e) {
   if (act === 'image') { pcOpenImageSheet(id); return; }
   if (act === 'skip') { pcSkip(id, root); return; }
   if (act === 'approve') { pcApprove(id, root, el); return; }
+  if (act === 'pubnow') { pcPublishNow(id, root, el); return; }
   if (act === 'tiktok') { pcShareTikTok(id, el); return; }
   if (act === 'img-style') {
     const wrap = root.querySelector('.pcsheet-stylewrap');
