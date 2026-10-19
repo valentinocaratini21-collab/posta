@@ -180,7 +180,7 @@ console.log('== Pertenencia: el chequeo determinístico ==');
     const srvSrc = fs.readFileSync('server.js', 'utf8');
     const schSrc = fs.readFileSync('scheduler.js', 'utf8');
     const demoSrc = fs.readFileSync('demo.js', 'utf8');
-    ok(demoSrc.includes('const DEMO_ENGINE_V = 22;'), 'DEMO_ENGINE_V = 22 (prompts de Valentino)');
+    ok(demoSrc.includes('const DEMO_ENGINE_V = 23;'), 'DEMO_ENGINE_V = 22 (prompts de Valentino)');
     ok(srvSrc.includes('seedFromTrialDigest(r.lastInsertRowid, trial_ig)'), 'register siembra el digest');
     ok(srvSrc.includes('seedFromTrialDigest(userId, payload.trial_ig)'), 'magic-link siembra el digest');
     ok(srvSrc.includes('qaFactsLine(dna, digestForUser(uid))'), 'qaFactsLine contrasta contra ADN + digest completos');

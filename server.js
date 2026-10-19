@@ -6594,6 +6594,12 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         console.log(`[pipeline:${tag}] usuario ${uid}: cerebro comercial — venta ${m.venta} / reserva ${m.reserva} / consulta ${m.consulta} / prueba ${m.prueba} / autoridad ${m.autoridad}${sp.stats.degraded ? ` (${sp.stats.degraded} degradadas sin prueba)` : ''}${sp.swapped ? ` (${sp.swapped} canjes)` : ''}`);
       }
     } catch (e) { console.error(`[pipeline:${tag}] cerebro comercial falló:`, e.message); }
+    // (v234) SELECCIÓN QUE SABE: el perfil de feed de la semana (línea
+    // de feed desde el digest — registro + paleta con roles — más el
+    // patrón de grilla cuando el bloque de abajo lo computa) viaja a
+    // cada pre-pick de estilo: un preset que rompe la línea del feed
+    // queda fuera ANTES del score.
+    let weekFeedProfile = null;
     // 🧩 EQUILIBRIO DE GRILLA (v224): si la grilla del cliente tiene un
     // patrón fuerte, la tanda se ORDENA por posición (el tipo de cada idea
     // calza con la columna donde va a caer) y cada idea lleva su consigna
@@ -6625,6 +6631,13 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           if (note && picks[i]) picks[i]._gridNote = note;
         });
         gridAppliedLine = gridPattern.reportLine(gPat, shift);
+        // (v234) El patrón de grilla también alimenta el perfil de
+        // feed del dataset de selección (columnas con tono consistente
+        // = línea de feed consolidada).
+        try {
+          const fp = require('./image-styles').feedProfileFromDigest(digestForUser(uid), { gridPattern: gPat });
+          if (fp) weekFeedProfile = fp;
+        } catch (e) {}
       }
     } catch (e) { console.error(`[pipeline:${tag}] equilibrio de grilla:`, e.message); }
     // 🧹 LIMPIEZA (2026-10-18): dosificación 2-de-5 TAMBIÉN en clientes —
@@ -6681,6 +6694,8 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     const weekFavorites = (() => { try { return getStyleFavorites(uid); } catch (e) { return []; } })();
     const weekBoosts = (() => { try { return require('./learning').getClientBoosts(db, uid) || {}; } catch (e) { return {}; } })();
     const usedStyles = [];
+    // (v234) Sin patrón de grilla, el perfil de feed sale del digest solo.
+    if (!weekFeedProfile) { try { weekFeedProfile = require('./image-styles').feedProfileFromDigest(weekDigest); } catch (e) { weekFeedProfile = null; } }
     // Director de semana: cada posteo cumple un ROL DE ESCENA distinto para
     // que la semana se vea diseñada (variada), no generada en serie. La
     // rotación arranca en un punto distinto cada semana (hash de weekKey).
@@ -6852,6 +6867,12 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               rubro: (profile && profile.category) || '', businessName: (profile && profile.business_name) || '',
               usedThisWeek: usedStyles, boosts: weekBoosts, favorites: weekFavorites,
               digest: weekDigest, avoidFamilies: usedFamilies,
+              // (v234) La intención de VENTA de la pieza (cerebro
+              // comercial, idea._sales) y el perfil de feed de la
+              // semana entran al pick: el preset tiene que servir a
+              // lo que la pieza vende y no romper la línea del feed.
+              salesIntent: (idea._sales && idea._sales.intent) || '',
+              feedProfile: weekFeedProfile,
             });
             if (pk && pk.style) {
               preStyleCode = pk.style.code;
@@ -13544,7 +13565,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v233';
+const BUILD_ID = '20261018-v234';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

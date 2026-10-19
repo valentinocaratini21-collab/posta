@@ -160,7 +160,7 @@ function stockPhotos3(category, business) {
 // bio, léxico, mapa foto→producto, estrella inferido y contradicciones;
 // el gate de fotos sube a foto↔PRODUCTO cuando el mapa cubre la foto y
 // el estrella inferido abre la rotación de temas.
-const DEMO_ENGINE_V = 22;
+const DEMO_ENGINE_V = 23;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -599,13 +599,26 @@ function dishOf(text) {
 // Elige UN estilo del catálogo por posteo: todos distintos, intención del
 // posteo primero (misma tabla INTENT_STYLES del producto), diversidad de
 // composición garantizada (≥3 esqueletos si hay 3+ posteos).
-function pickDemoStyles({ topics, category, subcat, business }) {
+function pickDemoStyles({ topics, category, subcat, business, feedProfile = null, offerProfile = null }) {
   const IS = imageStyles();
   if (!IS) return topics.map(() => null);
   let pool = demoStylePool(category, business);
   const excl = STYLE_AUDIENCE_EXCLUDE[subcat || category];
   if (excl) pool = pool.filter((s) => !excl.test(s.code + ' ' + s.name));
   if (!pool.length) pool = demoStylePool(category, business);
+  // (v234) SELECCIÓN QUE SABE también en la prueba: el dataset de
+  // selección filtra el pool (misma cascada que pickStyle: exigencias
+  // jamás, feed/posicionamiento con relajación en cascada) y puntúa
+  // cada candidato. evidenceOk: la pieza de antes/después de la prueba
+  // es un formato editorial DECLARADO de la pieza (su etiqueta lo
+  // dice), no un resultado de un cliente real — el filtro de evidencia
+  // es para las semanas automáticas de clientes (pickStyle).
+  if (IS.datasetFilterList) {
+    try {
+      const gate = IS.datasetFilterList(pool, { feedProfile, offerProfile, evidenceOk: true });
+      if (gate.kept && gate.kept.length) pool = gate.kept;
+    } catch (e) { /* sin dataset: pool como hasta v233 */ }
+  }
   const used = new Set();
   const usedSkeletons = new Set();
   const picks = topics.map((t) => {
@@ -616,6 +629,15 @@ function pickDemoStyles({ topics, category, subcat, business }) {
       if (used.has(s.code)) continue;
       const tr = treatmentForStyle(s);
       let score = Math.random() * 9;
+      // (v234) Términos del dataset (la escala de pickStyle dada
+      // vuelta: acá mayor puntaje gana) — la intención de venta del
+      // tema (trialTopicSales vía deriveTopics; el relleno va capado
+      // a autoridad), la línea de feed heredada y el posicionamiento.
+      if (IS.datasetScoreDelta) {
+        try {
+          score -= IS.datasetScoreDelta(s, { feedProfile, offerProfile, salesIntent: t.intent || 'autoridad', kind: t.kind || '' });
+        } catch (e) { /* sin dataset: score como hasta v233 */ }
+      }
       const ii = intentList.indexOf(s.code);
       if (ii >= 0) score += 100 - ii;
       // Un posteo de ANTES/DESPUÉS pide el estilo antes/después: la pieza
@@ -672,13 +694,22 @@ function pickDemoStyles({ topics, category, subcat, business }) {
 // conservando grade y crop del estilo. El póster de marca cuenta como
 // esqueleto 'poster' en la misma contabilidad (máximo 1 por semana).
 const VARIETY_FALLBACK_SKELS = ['abajo', 'arriba', 'claro', 'velo', 'centro'];
-function enforceSkeletonVariety({ styleObjs, topics, category, subcat, business, posterAt }) {
+function enforceSkeletonVariety({ styleObjs, topics, category, subcat, business, posterAt, feedProfile = null, offerProfile = null }) {
   const overrides = new Map();
   const IS = imageStyles();
   if (!IS) return overrides;
   let pool = demoStylePool(category, business);
   const excl = STYLE_AUDIENCE_EXCLUDE[subcat || category];
   if (excl) pool = pool.filter((s) => !excl.test(s.code + ' ' + s.name));
+  // (v234) La reparación de variedad respeta el mismo gate del
+  // dataset que pickDemoStyles: no puede reintroducir un preset
+  // contraindicado para este negocio/feed.
+  if (IS.datasetFilterList) {
+    try {
+      const gate = IS.datasetFilterList(pool, { feedProfile, offerProfile, evidenceOk: true });
+      if (gate.kept && gate.kept.length) pool = gate.kept;
+    } catch (e) { /* sin dataset: pool como hasta v233 */ }
+  }
   const usedCodes = new Set(styleObjs.filter(Boolean).map((s) => s.code));
   const usedSkels = new Set();
   if (posterAt && posterAt.size) usedSkels.add('poster');
@@ -1245,6 +1276,16 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   const posterMode = !photoPath && (subcat === 'contenido' || cat === 'profesionales' || cat === 'servicios');
   const posterAt = new Set();
 
+  // (v234) SELECCIÓN QUE SABE en la prueba: perfiles para el dataset
+  // de selección — feed desde la herencia visual ya calculada (el
+  // digest de la prueba + el registro medido del feed) y oferta desde
+  // el digest. Sin digest ni registro, el pick queda como hasta v233.
+  let demoFeedProfile = null, demoOfferProfile = null;
+  try {
+    const ISx = imageStyles();
+    if (ISx && ISx.feedProfileFromDigest) demoFeedProfile = ISx.feedProfileFromDigest(digest, { registro: feedRegister });
+    if (ISx && ISx.offerProfileFromDigest) demoOfferProfile = ISx.offerProfileFromDigest(digest);
+  } catch (e) { /* sin perfiles: comportamiento histórico */ }
   let styleObjs, photos;
   const photoProductOf = new Map(); // (v230) idx → producto, cuando la foto elegida vino del mapa foto→producto
   const baseStylesOk = base && Array.isArray(base.styles) && base.styles.length >= n
@@ -1255,7 +1296,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     photos = base.photos.slice(0, n);
   } else if (photoPath) {
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
-    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business });
+    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile });
     photos = topics.map(() => ({ userPhoto: true }));
   } else {
     // (v196) SELECCIÓN CON GATE DURO: se recorren los temas del pool desde
@@ -1319,7 +1360,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     // (La variedad de esqueletos la garantiza enforceSkeletonVariety más
     // abajo, para todas las ramas — el remiendo puntual de v196 que solo
     // miraba los dos primeros posteos con foto quedó subsumido.)
-    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business });
+    styleObjs = pickDemoStyles({ topics, category: cat, subcat, business, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile });
     // Fotos con el gate, en dos pasadas: primero los temas CON tema (las
     // fotos exactas son pocas y son para ellos), después los genéricos — si
     // no, un posteo sin tema se queda con la única foto de pelo y los de
@@ -1364,7 +1405,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   }
   // (v197) VARIEDAD ESTRUCTURAL: ningún esqueleto de render se repite
   // en la semana (garantía, no puntaje — ver enforceSkeletonVariety).
-  const treatmentOverrides = enforceSkeletonVariety({ styleObjs, topics, category: cat, subcat, business, posterAt });
+  const treatmentOverrides = enforceSkeletonVariety({ styleObjs, topics, category: cat, subcat, business, posterAt, feedProfile: demoFeedProfile, offerProfile: demoOfferProfile });
   // (v205) VARIEDAD DE LENGUAJES DE DISEÑO: sobre los esqueletos ya
   // únicos de v197, la semana reparte ≥3 lenguajes distinguibles a
   // ojo y ninguno pasa de 2 posteos (ver enforceDesignLanguages).

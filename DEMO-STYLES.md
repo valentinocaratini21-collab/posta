@@ -11,6 +11,27 @@ acento y CTA con la paleta del cliente, Montserrat.
 Sin IA paga en el camino del demo (regla de costo + velocidad): el estilo
 se materializa como tratamiento determinístico local.
 
+## (v234) El dataset de selección también elige en la prueba
+
+`pickDemoStyles` (y la reparación de variedad) consumen el dataset del
+estudio de selección (`prompt-selection-map.json`, vía
+`image-styles.datasetFilterList/datasetScoreDelta`):
+
+- **Gate duro en cascada** sobre el pool del rubro: fuera los presets
+  que exigen lo que el negocio no tiene (local/producto/envasado/
+  protagonista según el digest de la prueba), los que rompen la línea
+  de feed heredada (registro medido del feed + paleta del digest, solo
+  si el feed está consolidado) y los de prioridad baja; relajación en
+  cascada posicionamiento → feed, exigencias jamás.
+- **Score**: la intención de venta del tema (`salesIntent` de
+  `trialTopicSales`; el relleno va capado a autoridad), la compatibilidad
+  con la línea de feed y el posicionamiento suman/resta con la misma
+  escala de `pickStyle` (intención −150, feed −150, posición −100,
+  kind −50, prioridad media +100, dado vuelta porque acá mayor gana).
+- `evidenceOk` en la prueba: la pieza de antes/después es un formato
+  editorial declarado (su etiqueta lo dice), no el resultado de un
+  cliente real — el filtro de evidencia rige en las semanas de clientes.
+
 ## Selección de estilos (`demo.js → pickDemoStyles`)
 
 - Pool = misma lógica que `/api/image-styles`: `brandSafe`, sin

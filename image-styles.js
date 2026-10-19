@@ -18,6 +18,27 @@ const STYLES = require('./image-styles-data').concat(require('./image-styles-rub
 const BY_CODE = {};
 for (const s of STYLES) BY_CODE[s.code] = s;
 
+// ---------- (v234) SELECCIÓN QUE SABE: dataset de selección ----------
+// prompt-selection-map.json — la clasificación de los 1.267 presets del
+// estudio de selección (2026-10-18): por code, gramática (familia, tono,
+// temperatura…), negocio ideal (rubros_gana, oferta, posicionamiento),
+// intención de VENTA que cubre (la taxonomía del cerebro comercial),
+// kinds, líneas de feed compatibles y las que ROMPE, contraindicaciones
+// duras (exige-local/envasado/producto/protagonista, UGC en premium…)
+// y prioridad. Es un insumo de pickStyle: filtros duros nuevos antes
+// del score y términos de score del dataset (ver pickStyle). Si el
+// archivo no está o un code no existe en el mapa, el comportamiento
+// para ese code es IDÉNTICO a v233 (degradación segura).
+let SELECTION_MAP = null;
+try {
+  const m = require('./prompt-selection-map.json');
+  if (m && typeof m === 'object' && Object.keys(m).length) SELECTION_MAP = m;
+} catch (e) { SELECTION_MAP = null; }
+function selectionFor(code) {
+  if (!SELECTION_MAP || !code) return null;
+  return SELECTION_MAP[String(code)] || null;
+}
+
 function getStyle(code) {
   if (!code) return null;
   const c = String(code).trim().toLowerCase();
@@ -287,7 +308,234 @@ function digestStyleMatch(style, digest) {
   return matchAgainstAnchors(style, anchors);
 }
 
-// pickStyle({ intent, tipo, theme, angle, rubro, businessName, usedThisWeek, digest, avoidFamilies }) → { style, reason, intent, intentSource, family, digestMatch } | null
+// ---------- (v234) Perfiles que el dataset consume, desde el digest ----------
+// feedProfile: la LÍNEA del feed del cliente (qué líneas de feed rompe
+// un preset es un filtro duro SOLO si el feed está consolidado —
+// `confident`). Señales, en orden de fuerza: el registro medido del
+// feed ('light'|'dark' que ya calculan la prueba y el digest), el color
+// de FONDO de la paleta con roles, la luminancia media extrema de la
+// paleta, la temperatura/saturación de los colores saturados y el
+// patrón de grilla (columnas con tono consistente) si el llamador lo
+// pasa en opts.gridPattern. Sin señal confiable de tono no se inventa
+// ninguna: `confident=false` y el filtro de feed no corre (el término
+// de score por compatibilidad sí puede aplicar con las líneas que haya).
+function hexToHsl(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2;
+  if (mx === mn) return { h: 0, s: 0, l };
+  const d = mx - mn;
+  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  let h;
+  if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (mx === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return { h: h * 60, s, l };
+}
+// HSV: la saturación HSL explota en los tintes casi blancos (un crema
+// cálido da s≈1), así que temperatura/saturación/sobriedad del feed se
+// miden en HSV, donde un fondo crema ES poco saturado (s≈0,14).
+function hexToHsv(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const d = mx - mn;
+  const s = mx === 0 ? 0 : d / mx;
+  let h = 0;
+  if (d > 0) {
+    if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (mx === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  return { h, s, v: mx };
+}
+function feedProfileFromDigest(digest, opts = {}) {
+  const registro = opts.registro || (digest && digest.registro) || null;
+  if (!digest && !registro && !opts.gridPattern) return null;
+  const lineas = [];
+  const push = (l) => { if (l && !lineas.includes(l)) lineas.push(l); };
+  if (registro === 'light') push('luminoso');
+  if (registro === 'dark') push('oscuro');
+  let fondoLum = null;
+  const hues = [], sats = [], lums = [], satsAll = [];
+  const pal = (digest && Array.isArray(digest.paleta)) ? digest.paleta : [];
+  for (const p of pal) {
+    const hsl = hexToHsl(p && p.hex);
+    const hsv = hexToHsv(p && p.hex);
+    if (!hsl || !hsv) continue;
+    lums.push(hsl.l);
+    satsAll.push(hsv.s);
+    const rol = String((p && p.rol) || '').toLowerCase();
+    if (rol === 'fondo' || rol === 'background') fondoLum = hsl.l;
+    if (hsv.s > 0.15) { hues.push(hsv.h); sats.push(hsv.s); }
+  }
+  if (fondoLum != null) {
+    if (fondoLum >= 0.62) push('luminoso');
+    if (fondoLum <= 0.35) push('oscuro');
+  } else if (lums.length) {
+    const mean = lums.reduce((a, b) => a + b, 0) / lums.length;
+    if (mean >= 0.70) push('luminoso');
+    if (mean <= 0.30) push('oscuro');
+  }
+  if (hues.length) {
+    const warm = hues.filter((h) => h <= 70 || h >= 330).length;
+    const cool = hues.filter((h) => h >= 160 && h <= 295).length;
+    if (warm / hues.length >= 0.6 && warm > cool) push('calido');
+    else if (cool / hues.length >= 0.6 && cool > warm) push('frio');
+    const ms = sats.reduce((a, b) => a + b, 0) / sats.length;
+    if (ms >= 0.55) push('saturado');
+  }
+  // Sobrio: paleta entera apagada (saturación HSV media ≤0,16) — la
+  // línea que rompe un preset saturado en un taller o una funeraria.
+  if (satsAll.length >= 2 && satsAll.reduce((a, b) => a + b, 0) / satsAll.length <= 0.16) push('sobrio');
+  // Minimalista: fondo casi blanco y paleta corta (≤3 colores).
+  if (fondoLum != null && fondoLum >= 0.93 && pal.length >= 1 && pal.length <= 3) push('minimalista');
+  let gridTone = null;
+  const gp = opts.gridPattern;
+  if (gp && Array.isArray(gp.columns)) {
+    const tones = gp.columns.map((c) => c && c.tone).filter(Boolean);
+    const cl = tones.filter((t) => t === 'claro').length;
+    const os = tones.filter((t) => t === 'oscuro').length;
+    if (cl >= 2 && cl > os) gridTone = 'claro';
+    if (os >= 2 && os > cl) gridTone = 'oscuro';
+    if (gridTone === 'claro') push('luminoso');
+    if (gridTone === 'oscuro') push('oscuro');
+  }
+  const confident = !!(registro || fondoLum != null || gridTone);
+  return { lineas, confident };
+}
+// offerProfile: qué TIENE el negocio para que los presets que EXIGEN
+// algo no caigan donde eso no existe. Reglas determinísticas sobre
+// campos del digest (documentadas, conservadoras: ante la duda el
+// filtro NO corre — tieneLocal solo es false con evidencia textual de
+// "a domicilio/online", porque filtrar presets de local a un negocio
+// que SÍ tiene local es peor que el status quo):
+//  · tieneProducto: hay productos vendibles en el digest.
+//  · tieneEnvasado: algún producto/catálogo nombra formato envasado
+//    (gramos/ml, frasco, botella, lata, pote, pack…).
+//  · tieneProtagonista: el digest conoce a la persona (protagonista).
+//  · tieneLocal: evidencia "a domicilio/online" ⇒ false; rubro de
+//    local físico o turnos con servicios ⇒ true; si no, true (default
+//    conservador = el filtro exige-local no se dispara).
+//  · posicionamiento: 'premium' solo con señal textual (lujo, de
+//    autor, exclusivo, alta gama…); 'popular' con señal de precio
+//    (económico, accesible, mayorista); si no, 'medio'.
+const PACK_FORMAT_RE = /\b(100|200|250|500|750|1000)\s?(g|gr|kg|ml|l)\b|frasco|botella|lata|pote|envase|pack de|bolsa de|presentaci/i;
+const NO_LOCAL_RE = /a domicilio|domicilio|100%\s*online|solo online|env[ií]os a todo/i;
+const PREMIUM_SIGNAL_RE = /premium|lujo|luxury|exclusiv|alta gama|de autor|gourmet|boutique/i;
+const POPULAR_SIGNAL_RE = /econ[oó]mic|accesible|barato|mayorista|low ?cost/i;
+const LOCAL_CATEGORIES = new Set(['gastronomia', 'restaurante', 'cafeteria', 'bar', 'pizzeria', 'pasteleria', 'panaderia', 'cerveceria', 'parrilla', 'barberia', 'peluqueria', 'fitness', 'gimnasio', 'mascotas', 'veterinaria', 'salud', 'odontologia', 'inmobiliaria', 'autos', 'joyeria', 'flores', 'floreria', 'turismo', 'hotel']);
+function offerProfileFromDigest(digest) {
+  if (!digest) return null;
+  const catItems = (digest.catalog && Array.isArray(digest.catalog.items)) ? digest.catalog.items : [];
+  const itemNames = [...(digest.productos || []), ...catItems].map((x) => String((x && x.nombre) || ''));
+  const text = `${digest.diferencial || ''} ${digest.business || ''} ${digest.subcat || ''}`;
+  let tieneLocal = true;
+  if (NO_LOCAL_RE.test(text)) tieneLocal = false;
+  else if (LOCAL_CATEGORIES.has(String(digest.category || '').toLowerCase())) tieneLocal = true;
+  else if (digest.has_booking && (digest.servicios || []).length) tieneLocal = true;
+  let posicionamiento = 'medio';
+  if (PREMIUM_SIGNAL_RE.test(text)) posicionamiento = 'premium';
+  else if (POPULAR_SIGNAL_RE.test(text)) posicionamiento = 'popular';
+  return {
+    tieneLocal,
+    tieneProducto: (digest.productos || []).length > 0,
+    tieneEnvasado: itemNames.some((n) => PACK_FORMAT_RE.test(n)),
+    tieneProtagonista: !!(digest.protagonista && String(digest.protagonista).trim()),
+    posicionamiento,
+  };
+}
+// Contraindicaciones del dataset para UN preset, por nivel de cascada:
+//  · never — exigencias contra la oferta real (exige-local/envasado/
+//    producto/protagonista): NUNCA se relajan ni las salta un favorito.
+//  · pos — posicionamiento (UGC/gráfica agresiva en marca premium) y
+//    prioridad baja del dataset: se relajan primero.
+//  · feed — el preset rompe la línea del feed (solo con feed confiado):
+//    se relaja después. Sin entry en el dataset → null (v233 puro).
+function datasetContraFor(entry, { feedProfile = null, offerProfile = null, evidenceOk = false } = {}) {
+  if (!entry) return null;
+  const contra = Array.isArray(entry.contraindicaciones) ? entry.contraindicaciones : [];
+  const never = [], pos = [], feed = [];
+  // Antes/después sin evidencia real: un dúo generado por IA presentado
+  // como resultado del negocio es un resultado fabricado (regla de
+  // verdad) — fuera del automático salvo que el llamador declare
+  // evidencia real del cliente (evidenceOk).
+  if (contra.includes('requiere-evidencia-real-antes-despues') && !evidenceOk) never.push('sin-evidencia');
+  if (offerProfile) {
+    if (contra.includes('exige-local-fisico') && offerProfile.tieneLocal === false) never.push('exige-local');
+    if (contra.includes('exige-producto-envasado') && offerProfile.tieneEnvasado === false) never.push('exige-envasado');
+    if (contra.includes('exige-producto-fisico') && offerProfile.tieneProducto === false) never.push('exige-producto');
+    if (contra.includes('exige-protagonista-humano') && offerProfile.tieneProtagonista === false) never.push('exige-protagonista');
+    if (offerProfile.posicionamiento === 'premium'
+      && (contra.includes('ugc-no-marca-premium') || contra.includes('grafica-agresiva-no-premium'))) pos.push('no-premium');
+  }
+  if (entry.prioridad === 'baja') pos.push('prioridad-baja');
+  if (feedProfile && feedProfile.confident && Array.isArray(entry.feed_rompe)
+    && entry.feed_rompe.some((l) => (feedProfile.lineas || []).includes(l))) feed.push('rompe-feed');
+  return { never, pos, feed };
+}
+// Filtro en cascada sobre una lista arbitraria de estilos (lo usa el
+// demo, que no pasa por pickStyle): etapa 0 = sin ninguna contra;
+// etapa 1 = se relaja posicionamiento/prioridad; etapa 2 = también el
+// feed; las exigencias (never) no se relajan jamás — si todo el pool
+// las viola, se devuelve la lista original marcada 'historico'.
+function datasetFilterList(styles, { feedProfile = null, offerProfile = null, favorites = [], evidenceOk = false } = {}) {
+  const list = Array.isArray(styles) ? styles : [];
+  if (!SELECTION_MAP || !list.length) return { kept: list.slice(), relaxed: null };
+  const favSet = new Set((favorites || []).map(String));
+  const blockedAt = (s, stage) => {
+    const c = datasetContraFor(SELECTION_MAP[s.code], { feedProfile, offerProfile, evidenceOk });
+    if (!c) return false;
+    if (c.never.length) return true;
+    if (favSet.has(s.code)) return false;
+    if (stage <= 1 && c.feed.length) return true;
+    if (stage <= 0 && c.pos.length) return true;
+    return false;
+  };
+  for (const stage of [0, 1, 2]) {
+    const kept = list.filter((s) => !blockedAt(s, stage));
+    if (kept.length) return { kept, relaxed: stage === 0 ? null : stage === 1 ? 'posicionamiento' : 'feed' };
+  }
+  return { kept: list.slice(), relaxed: 'historico' };
+}
+// Términos de score del dataset (escala de pickStyle: MENOR gana).
+// Los comparte pickStyle y, con el signo dado vuelta, pickDemoStyles.
+const KIND_BY_TIPO_DS = { promo: 'promo', sorteo: 'promo', novedad: 'novedad', reserva: 'reserva', tip: 'tip', social: 'social', detras: 'social' };
+function datasetScoreDelta(style, { feedProfile = null, offerProfile = null, salesIntent = '', kind = '', map = undefined } = {}) {
+  const m = map === undefined ? SELECTION_MAP : map;
+  const e = (m && style) ? m[style.code] : null;
+  if (!e) return 0;
+  let ds = 0;
+  if (salesIntent && Array.isArray(e.intenciones) && e.intenciones.includes(salesIntent)) ds -= 150;
+  if (feedProfile && Array.isArray(feedProfile.lineas) && feedProfile.lineas.length
+    && Array.isArray(e.feed_compatible) && e.feed_compatible.some((l) => feedProfile.lineas.includes(l))) ds -= 150;
+  if (offerProfile && offerProfile.posicionamiento && Array.isArray(e.posicionamiento)
+    && e.posicionamiento.includes(offerProfile.posicionamiento)) ds -= 100;
+  if (kind && Array.isArray(e.kinds) && e.kinds.includes(kind)) ds -= 50;
+  if (e.prioridad === 'media') ds += 100;
+  return ds;
+}
+// La familia de rotación sale del dataset cuando el code está
+// clasificado (misma taxonomía que styleFamilyOf, pero asignada por
+// descriptores completos, sin las trampas de substring del fallback).
+function familyOfStyle(style, map) {
+  // map === null → dataset deshabilitado a propósito (v233 puro);
+  // map === undefined → el mapa global; un objeto → ese mapa.
+  if (map === null) return styleFamilyOf(style);
+  const e = (map && style && map[style.code]) || selectionFor(style && style.code);
+  return (e && e.familia) || styleFamilyOf(style);
+}
+
+// pickStyle({ intent, tipo, theme, angle, rubro, businessName, usedThisWeek, digest, avoidFamilies, feedProfile, offerProfile, salesIntent, dataset }) → { style, reason, intent, intentSource, family, digestMatch, dataset } | null
+// (v234) feedProfile/offerProfile: si no vienen, se derivan del digest.
+// salesIntent: la intención de VENTA de la pieza (cerebro comercial);
+// si un camino no la tiene, el término de score simplemente no aplica.
+// dataset: false simula el mapa ausente (comportamiento v233 exacto).
 // La INTENCIÓN puede viajar EXPLÍCITA desde el generador. Precedencia:
 //   1) `intent` explícito válido → se usa directo ('explicit')
 //   2) detectIntent por keywords del tema/ángulo ('keywords') — el refinamiento
@@ -298,7 +546,7 @@ function digestStyleMatch(style, digest) {
 // La fantasía solo sale si la intención es 'viral'.
 // Prioridad de candidatos: 1) intención + rubro · 2) rubro brandSafe ·
 // 3) intención · 4) cualquiera brandSafe. (En viral se salta el 2.)
-function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [] } = {}) {
+function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [], feedProfile = null, offerProfile = null, salesIntent = '', evidenceOk = false, dataset = undefined } = {}) {
   let resolved, intentSource;
   if (intent && INTENT_STYLES[intent]) { resolved = intent; intentSource = 'explicit'; }
   else {
@@ -311,18 +559,71 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
   const fantasyOk = resolved === 'viral';
   // No repetir en la semana: se prefieren estilos no usados; si no queda
   // ninguno libre, se permite repetir (mejor que no generar).
-  const pool = ranked.filter(s => (fantasyOk || s.brandSafe) && !forbidden.has(s.code));
   const matchesRubro = (s) => rubroMatch(s, rubro);
-  const intentRubro = pool.filter(s => matchesRubro(s) && !used.has(s.code));
-  const rubroSafe = STYLES.filter(s => s.brandSafe && matchesRubro(s) && !used.has(s.code) && !forbidden.has(s.code));
-  const intentOnly = pool.filter(s => !used.has(s.code));
-  const anySafe = STYLES.filter(s => s.brandSafe && !used.has(s.code) && !forbidden.has(s.code));
-  const fallbackSafe = STYLES.filter(s => s.brandSafe && !forbidden.has(s.code));
-  const cands = intentRubro.length ? intentRubro
-    : (!fantasyOk && rubroSafe.length) ? rubroSafe
-    : intentOnly.length ? intentOnly
-    : anySafe.length ? anySafe
-    : fallbackSafe;
+  const favSet = new Set((favorites || []).map(String));
+  // (v234) SELECCIÓN QUE SABE: el dataset de selección entra como
+  // filtros duros ANTES del score (el match léxico del digest jamás
+  // resucita un contraindicado) y como términos de score. Perfiles
+  // efectivos: los que pasa el llamador o los derivados del digest.
+  // `dataset: false` simula el archivo ausente → v233 idéntico.
+  const dsMap = dataset === false ? null : (dataset && typeof dataset === 'object' ? dataset : SELECTION_MAP);
+  // El modo viral es EXPLÍCITO (fantasía deliberada, como la elección
+  // manual): el dataset marca esos presets 'baja'/'solo-viral-o-manual'
+  // POR CONSTRUCCIÓN (los 48 no-brandSafe) y sus filtros/score son de
+  // posteo comercial — no gobiernan el viral. brandSafe/NEVER_STYLES y
+  // el filtro de evidencia siguen valiendo como en v233.
+  const dsActive = !!dsMap && !fantasyOk;
+  const effFeed = feedProfile || (digest ? feedProfileFromDigest(digest) : null);
+  const effOffer = offerProfile || (digest ? offerProfileFromDigest(digest) : null);
+  const contraCache = new Map();
+  const contraFor = (s) => {
+    if (!dsMap) return null;
+    if (!contraCache.has(s.code)) contraCache.set(s.code, datasetContraFor(dsMap[s.code], { feedProfile: effFeed, offerProfile: effOffer, evidenceOk }));
+    return contraCache.get(s.code);
+  };
+  // Etapas de la cascada (spec del estudio §7.5): 0 = filtros del
+  // dataset completos · 1 = se relaja posicionamiento/prioridad ·
+  // 2 = también el feed · 3 = histórico v233. Las reglas NEVER_STYLES
+  // y brandSafe valen en TODAS las etapas; las exigencias del dataset
+  // (exige-*) en las etapas 0–2; el favorito explícito del cliente
+  // salta posicionamiento y feed, NUNCA las exigencias.
+  const blockedAt = (s, stage) => {
+    if (forbidden.has(s.code)) return true;
+    if (!dsActive || stage >= 3) return false;
+    const c = contraFor(s);
+    if (!c) return false;
+    if (c.never.length) return true;
+    if (favSet.has(s.code)) return false;
+    if (stage <= 1 && c.feed.length) return true;
+    if (stage <= 0 && c.pos.length) return true;
+    return false;
+  };
+  // Los pools de v233, parametrizados por la etapa de la cascada.
+  const buildAll = (stage) => {
+    const pool = ranked.filter(s => (fantasyOk || s.brandSafe) && !blockedAt(s, stage));
+    const intentRubro = pool.filter(s => matchesRubro(s) && !used.has(s.code));
+    const rubroSafe = STYLES.filter(s => s.brandSafe && matchesRubro(s) && !used.has(s.code) && !blockedAt(s, stage));
+    const intentOnly = pool.filter(s => !used.has(s.code));
+    const anySafe = STYLES.filter(s => s.brandSafe && !used.has(s.code) && !blockedAt(s, stage));
+    const fallbackSafe = STYLES.filter(s => s.brandSafe && !blockedAt(s, stage));
+    let cands = intentRubro.length ? intentRubro
+      : (!fantasyOk && rubroSafe.length) ? rubroSafe
+      : intentOnly.length ? intentOnly
+      : anySafe.length ? anySafe
+      : fallbackSafe;
+    const mergedCodes = new Set();
+    if (dAnchors && dAnchors.length) {
+      const inPool = new Set(cands.map((s) => s.code));
+      const merged = STYLES.filter((s) => (fantasyOk || s.brandSafe) && !blockedAt(s, stage)
+        && !used.has(s.code) && rubroMatch(s, rubro) && !inPool.has(s.code)
+        && matchFor(s).points >= DIGEST_MATCH_MIN);
+      if (merged.length) {
+        for (const s of merged) mergedCodes.add(s.code);
+        cands = [...cands, ...merged];
+      }
+    }
+    return { all: cands, mergedCodes };
+  };
   // (v233) PICK CONSCIENTE DEL DIGEST: las anclas del negocio puntúan
   // cada candidato (match léxico contra su texto) y los presets del
   // rubro que nombran los productos/servicios reales del cliente —
@@ -337,25 +638,62 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
     if (!matchCache.has(s.code)) matchCache.set(s.code, matchAgainstAnchors(s, dAnchors));
     return matchCache.get(s.code);
   };
-  const mergedCodes = new Set();
-  let all = cands;
-  if (dAnchors && dAnchors.length) {
-    const inPool = new Set(cands.map((s) => s.code));
-    const merged = STYLES.filter((s) => (fantasyOk || s.brandSafe) && !forbidden.has(s.code)
-      && !used.has(s.code) && rubroMatch(s, rubro) && !inPool.has(s.code)
-      && matchFor(s).points >= DIGEST_MATCH_MIN);
-    if (merged.length) {
-      for (const s of merged) mergedCodes.add(s.code);
-      all = [...cands, ...merged];
+  // (v234) CASCADA: se construye el pool con los filtros completos
+  // (etapa 0); si queda vacío, se relaja en orden — posicionamiento,
+  // después feed, histórico al final — y la relajación queda escrita
+  // en el motivo del pick (`dataset:relaxed-*`, auditable en
+  // posts.style_reason).
+  let built = null, relaxed = null, stageUsed = 3;
+  for (const stage of [0, 1, 2, 3]) {
+    const b = buildAll(stage);
+    if (b.all.length) {
+      built = b;
+      stageUsed = stage;
+      relaxed = !dsMap ? null : stage === 0 ? null : stage === 1 ? 'posicionamiento' : stage === 2 ? 'feed' : 'historico';
+      break;
+    }
+  }
+  let all = built.all;
+  const mergedCodes = built.mergedCodes;
+  // (v234) COBERTURA DE LA INTENCIÓN DE VENTA: los pools por intención
+  // de estilo son chicos (5–27) y a veces NINGÚN candidato cubre la
+  // intención de venta que el cerebro comercial declaró para la pieza
+  // — el término de score no puede elegir lo que no está en el pool.
+  // Solo en ese caso el pool se ensancha con los presets del RUBRO
+  // (misma etapa de filtros) que sí la cubren: el −150 hace el resto,
+  // y un match de digest fuerte (≥1 punto = −250) le sigue ganando a
+  // la cobertura — pertenencia primero, cobertura en el desempate.
+  if (dsActive && salesIntent) {
+    const covers = (s) => { const e = dsMap[s.code]; return !!(e && Array.isArray(e.intenciones) && e.intenciones.includes(salesIntent)); };
+    if (!all.some(covers)) {
+      const inAll = new Set(all.map((s) => s.code));
+      const extra = STYLES.filter((s) => s.brandSafe && !used.has(s.code) && rubroMatch(s, rubro)
+        && !blockedAt(s, stageUsed) && covers(s) && !inAll.has(s.code));
+      if (extra.length) all = [...all, ...extra];
+    }
+    // Y si algún candidato cubre, la cobertura pasa a ser la capa que
+    // manda: el score elige ENTRE los que cubren (preferidos los del
+    // rubro o con match de digest). Medido con la sonda del estudio:
+    // con los pesos puros, 39 de 56 picks sin cobertura tenían un
+    // candidato limpio que SÍ cubría y perdían por acumulación de
+    // términos de compatibilidad (−150 feed −100 pos −50 kind contra
+    // −150 de intención) — la intención de venta es el trabajo de la
+    // pieza (cerebro comercial); la compatibilidad desempata adentro.
+    const coveringHere = all.filter(covers);
+    if (coveringHere.length) {
+      const pref = coveringHere.filter((s) => rubroMatch(s, rubro) || matchFor(s).points >= DIGEST_MATCH_MIN);
+      all = pref.length ? pref : coveringHere;
     }
   }
   // (v233) ROTACIÓN DE FAMILIA: si la semana ya usó familias de
   // dirección, los candidatos de esas familias quedan fuera (la
   // variedad es de gramática visual, no solo de preset). Si el filtro
   // vaciara el pool, se ignora: mejor repetir familia que no generar.
+  // (v234) La familia sale del dataset cuando el code está clasificado.
+  const famOf = (s) => familyOfStyle(s, dsMap);
   const avoidFam = new Set((avoidFamilies || []).map(String));
   if (avoidFam.size) {
-    const kept = all.filter((s) => !avoidFam.has(styleFamilyOf(s)));
+    const kept = all.filter((s) => !avoidFam.has(famOf(s)));
     if (kept.length) all = kept;
   }
   // Learning loop: el boost SOLO reordena dentro del pool ya validado
@@ -370,31 +708,39 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
   // Favoritos del cliente (v186, elegidos en Ajustes con vista previa):
   // ordenan PRIMERO dentro del pool ya validado — un favorito prohibido o
   // ya usado esta semana no está en cands y jamás resucita por esta vía.
-  const favSet = new Set((favorites || []).map(String));
+  // (El Set vive arriba, junto a la cascada del dataset, porque el
+  // favorito también salta los filtros de posicionamiento/feed.)
   // El match del digest pesa como ~2,5 posiciones del ranking por
   // punto: un preset que nombra el producto real del cliente le gana
   // al genérico de la intención. Los que entraron por el merge del
   // digest parten de un índice virtual 2 (detrás del podio genérico,
   // pero su match los levanta); el resto conserva el índice -1
   // histórico de los pools de rubro. Desempate: mayor match primero.
+  // (v234) Términos del dataset sobre la misma escala: intención de
+  // venta cubierta −150 · feed compatible −150 · posicionamiento
+  // alineado −100 · kind cubierto −50 · prioridad media +100.
+  const dsKind = KIND_BY_TIPO_DS[String(tipo || '').toLowerCase()] || '';
   const scored = all
     .map((s) => {
       const m = matchFor(s);
       const ri = ranked.indexOf(s);
       const idx = ri >= 0 ? ri : (mergedCodes.has(s.code) ? 2 : -1);
-      return { s, m, score: idx * 100 + (matchesRubro(s) ? 0 : 10) - learnBoost(s.code) * 120 - (favSet.has(s.code) ? 100000 : 0) - m.points * DIGEST_MATCH_WEIGHT };
+      const ds = dsActive ? datasetScoreDelta(s, { feedProfile: effFeed, offerProfile: effOffer, salesIntent, kind: dsKind, map: dsMap }) : 0;
+      return { s, m, score: idx * 100 + (matchesRubro(s) ? 0 : 10) - learnBoost(s.code) * 120 - (favSet.has(s.code) ? 100000 : 0) - m.points * DIGEST_MATCH_WEIGHT + ds };
     })
     .sort((a, b) => (a.score - b.score) || (b.m.points - a.m.points));
   const chosen = scored.length ? scored[0].s : null;
   if (!chosen) return null;
   const chosenMatch = matchFor(chosen);
+  const dsNote = dsActive ? (dsMap[chosen.code] ? (relaxed ? ` · dataset:relaxed-${relaxed}` : ' · dataset:ok') : '') : '';
   return {
     style: chosen,
-    reason: `elegí ${chosen.code} porque ${INTENT_PHRASE[resolved] || 'va con el posteo'}${chosenMatch.points >= DIGEST_MATCH_MIN && chosenMatch.words.length ? ` · matchea con su negocio (${chosenMatch.words.slice(0, 3).join(', ')})` : ''}`,
+    reason: `elegí ${chosen.code} porque ${INTENT_PHRASE[resolved] || 'va con el posteo'}${chosenMatch.points >= DIGEST_MATCH_MIN && chosenMatch.words.length ? ` · matchea con su negocio (${chosenMatch.words.slice(0, 3).join(', ')})` : ''}${dsNote}`,
     intent: resolved,
     intentSource,
-    family: styleFamilyOf(chosen),
+    family: famOf(chosen),
     digestMatch: chosenMatch,
+    dataset: dsActive ? { applied: !!dsMap[chosen.code], relaxed } : null,
   };
 }
 
@@ -415,4 +761,4 @@ function styleFragment(style, paletteHex) {
   ].join('\n');
 }
 
-module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch, styleFamilyOf, digestStyleMatch, DIGEST_MATCH_MIN, DIGEST_MATCH_WEIGHT };
+module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch, styleFamilyOf, digestStyleMatch, DIGEST_MATCH_MIN, DIGEST_MATCH_WEIGHT, selectionFor, feedProfileFromDigest, offerProfileFromDigest, datasetContraFor, datasetFilterList, datasetScoreDelta, familyOfStyle };
