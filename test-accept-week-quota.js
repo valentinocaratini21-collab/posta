@@ -1,11 +1,11 @@
 // test-accept-week-quota.js — Regresión del fix 2026-10-18 (v215):
 // el cupo al ACEPTAR se evalúa contra la semana DEL POSTEO (lun–dom de su
 // fecha destino), no contra la semana actual ni un contador global.
-// Escenario tipo cuenta 12: semana actual 5/5 programados (Esencial) +
+// Escenario tipo cuenta 12: semana actual 7/7 programados (Esencial) +
 // borradores propuestos para la semana que viene. Antes del fix, aceptar
 // el del lunes 19 devolvía 403 plan_limit (el modal de tope) aunque la
 // semana que viene estaba fresca. Después: acepta y confirma su fecha;
-// un 6º de la MISMA semana sí devuelve plan_limit con week_key de esa
+// un 8º de la MISMA semana sí devuelve plan_limit con week_key de esa
 // semana; accept-all respeta la misma regla por semana.
 // Extensión v216 (2026-10-18): schedule-all ("Programar mi semana") era el
 // último pariente con el criterio viejo — todo-o-nada contra la semana
@@ -13,10 +13,14 @@
 // devolvía 403 global y no programaba nada (sin waiting), F devolvía 403
 // sin week_key ni waiting — 17/22 con 5 fallos, todos en E/F. DESPUÉS:
 // E programa los 2 de la semana que viene (fechas dentro de esa semana),
-// el 6º queda borrador y reportado en waiting { id, week_key: esta,
+// el 8º queda borrador y reportado en waiting { id, week_key: esta,
 // reason: 'plan_limit' }, sin 403; F conserva el 403 SOLO para el tope
 // verdadero (nada programable) pero con week_key de la semana del posteo
 // y el waiting reportado.
+// Actualización 2026-10-19 (commit 63fb5695): la escalera por roles subió
+// Esencial a 7 posteos/semana (Plan 1 = 7 posteos + 1 reel). Los fixtures
+// de "semana llena" pasaron de 5 a 7 programados y el posteo que desborda
+// el cupo es ahora el 8º (antes el 6º); el borde de C pasó de 4/5 a 6/7.
 // Uso: node test-accept-week-quota.js
 const fs = require('fs');
 const os = require('os');
@@ -98,13 +102,17 @@ async function api(cookie, method, p, body) {
     const at = (ymd) => `${ymd} 15:00:00`;
     const isoAt = (ymd) => `${ymd}T13:00:00.000Z`; // 10:00 ART
 
-    // ── Usuario A: 5/5 esta semana + borrador lunes que viene + borrador 6º esta semana
+    // ── Usuario A: 7/7 esta semana + borrador lunes que viene + borrador 8º esta semana
     const uA = await register('a@example.com');
     ok(uA.status === 200 || uA.status === 201, `register A (${uA.status})`);
     const uidA = uidOf('a@example.com');
-    for (let i = 0; i < 5; i++) seedPost(uidA, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado ' + (i + 1));
+    // 7 programados pero el domingo queda LIBRE a propósito: si el 8º
+    // apuntara a un día ocupado, el asignador de integridad de agenda
+    // (2026-10-16) lo correría a la semana que viene y el cupo de ESTA
+    // semana nunca se evaluaría.
+    [0, 0, 1, 2, 3, 4, 5].forEach((dOff, i) => seedPost(uidA, 'scheduled', at(shiftDays(THIS_MON, dOff)), 'Programado ' + (i + 1)));
     const dNext = seedPost(uidA, 'draft', null, 'Borrador lunes que viene');
-    const dSixth = seedPost(uidA, 'draft', null, 'Borrador sexto de esta semana');
+    const dEighth = seedPost(uidA, 'draft', null, 'Borrador octavo de esta semana');
 
     // A1: aceptar el del lunes 19 (semana que viene) con esta semana llena
     const r1 = await api(uA.cookie, 'PATCH', `/api/posts/${dNext}`, { scheduled_at: isoAt(NEXT_MON) });
@@ -114,17 +122,17 @@ async function api(cookie, method, p, body) {
     const rowNext = db.prepare('SELECT status, scheduled_at FROM posts WHERE id = ?').get(dNext);
     ok(rowNext.status === 'scheduled' && String(rowNext.scheduled_at).slice(0, 10) === NEXT_MON, 'A1 el posteo quedó programado en su fecha');
 
-    // A2: un 6º de la MISMA semana sí es tope verdadero
-    const r2 = await api(uA.cookie, 'PATCH', `/api/posts/${dSixth}`, { scheduled_at: isoAt(shiftDays(THIS_MON, 5)) });
-    ok(r2.status === 403 && r2.data && r2.data.plan_limit === true, `A2 el 6º de la misma semana devuelve plan_limit (status ${r2.status})`);
+    // A2: un 8º de la MISMA semana sí es tope verdadero
+    const r2 = await api(uA.cookie, 'PATCH', `/api/posts/${dEighth}`, { scheduled_at: isoAt(shiftDays(THIS_MON, 6)) });
+    ok(r2.status === 403 && r2.data && r2.data.plan_limit === true, `A2 el 8º de la misma semana devuelve plan_limit (status ${r2.status})`);
     ok(r2.data && r2.data.week_key === THIS_MON, `A2 el 403 trae week_key de ESTA semana ${THIS_MON} (vino ${r2.data && r2.data.week_key})`);
-    const rowSixth = db.prepare('SELECT status FROM posts WHERE id = ?').get(dSixth);
-    ok(rowSixth.status === 'draft', 'A2 el 6º quedó como borrador (no se programó)');
+    const rowEighth = db.prepare('SELECT status FROM posts WHERE id = ?').get(dEighth);
+    ok(rowEighth.status === 'draft', 'A2 el 8º quedó como borrador (no se programó)');
 
-    // ── Usuario B: 5/5 esta semana + 2 borradores → accept-all a la semana que viene
+    // ── Usuario B: 7/7 esta semana + 2 borradores → accept-all a la semana que viene
     const uB = await register('b@example.com');
     const uidB = uidOf('b@example.com');
-    for (let i = 0; i < 5; i++) seedPost(uidB, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado B' + (i + 1));
+    for (let i = 0; i < 7; i++) seedPost(uidB, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado B' + (i + 1));
     const b1 = seedPost(uidB, 'draft', null, 'B1');
     const b2 = seedPost(uidB, 'draft', null, 'B2');
     const r3 = await api(uB.cookie, 'POST', '/api/posts/accept-all', {
@@ -136,10 +144,14 @@ async function api(cookie, method, p, body) {
     ok(r3.status === 200 && r3.data && r3.data.accepted === 2, `B accept-all acepta los 2 de la semana que viene (status ${r3.status}, accepted ${r3.data && r3.data.accepted})`);
     ok(r3.data && r3.data.next_week === 2, `B la respuesta marca next_week=2 (vino ${r3.data && r3.data.next_week})`);
 
-    // ── Usuario C: 4/5 esta semana + 3 borradores con fechas de ESTA semana → solo cabe 1
+    // ── Usuario C: 6/7 esta semana + 3 borradores con fechas de ESTA semana → solo cabe 1
     const uC = await register('c@example.com');
     const uidC = uidOf('c@example.com');
-    for (let i = 0; i < 4; i++) seedPost(uidC, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado C' + (i + 1));
+    // 6 programados en 4 días: vie/sáb/dom quedan libres para que los 3
+    // borradores apunten a días libres de ESTA semana y compitan por el
+    // único lugar que deja el cupo (si un día estuviera ocupado, el
+    // asignador correría ese borrador a la semana que viene).
+    [0, 0, 1, 1, 2, 3].forEach((dOff, i) => seedPost(uidC, 'scheduled', at(shiftDays(THIS_MON, dOff)), 'Programado C' + (i + 1)));
     const c1 = seedPost(uidC, 'draft', null, 'C1 viernes');
     const c2 = seedPost(uidC, 'draft', null, 'C2 sábado');
     const c3 = seedPost(uidC, 'draft', null, 'C3 domingo');
@@ -156,17 +168,17 @@ async function api(cookie, method, p, body) {
     // ── Usuario D: crear directo programado a la semana que viene con esta semana llena
     const uD = await register('d@example.com');
     const uidD = uidOf('d@example.com');
-    for (let i = 0; i < 5; i++) seedPost(uidD, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado D' + (i + 1));
+    for (let i = 0; i < 7; i++) seedPost(uidD, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado D' + (i + 1));
     const r5 = await api(uD.cookie, 'POST', '/api/posts', {
       image_path: '/media/test.jpg', caption: 'Directo a la semana que viene', scheduled_at: isoAt(NEXT_MON), media_type: 'image',
     });
     ok(r5.status === 200 && r5.data && r5.data.ok, `D crear programado a la semana que viene NO salta plan_limit (status ${r5.status})`);
 
-    // ── Usuario E: schedule-all ("Programar mi semana") — 5/5 esta semana +
-    // 2 borradores de la que viene + el 6º de esta semana. Antes del fix v216
+    // ── Usuario E: schedule-all ("Programar mi semana") — 7/7 esta semana +
+    // 2 borradores de la que viene + el 8º de esta semana. Antes del fix v216
     // el endpoint era todo-o-nada contra la semana ACTUAL: devolvía 403
     // global y no programaba NADA. Después: programa los de la semana que
-    // viene, el 6º queda borrador y reportado en waiting (id + week_key +
+    // viene, el 8º queda borrador y reportado en waiting (id + week_key +
     // motivo), sin 403.
     const seedDraftWk = (uid, wk, caption) => {
       const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, needs_review, week_key)
@@ -176,10 +188,10 @@ async function api(cookie, method, p, body) {
     const uE = await register('e@example.com');
     ok(uE.status === 200 || uE.status === 201, `register E (${uE.status})`);
     const uidE = uidOf('e@example.com');
-    for (let i = 0; i < 5; i++) seedPost(uidE, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado E' + (i + 1));
+    for (let i = 0; i < 7; i++) seedPost(uidE, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado E' + (i + 1));
     const eNext1 = seedDraftWk(uidE, NEXT_MON, 'E borrador que viene 1');
     const eNext2 = seedDraftWk(uidE, NEXT_MON, 'E borrador que viene 2');
-    const eSixth = seedDraftWk(uidE, THIS_MON, 'E sexto de esta semana');
+    const eEighth = seedDraftWk(uidE, THIS_MON, 'E octavo de esta semana');
     const r6 = await api(uE.cookie, 'POST', '/api/posts/schedule-all', {});
     ok(r6.status === 200 && r6.data && r6.data.ok === true, `E schedule-all NO devuelve 403 global con la semana actual llena (status ${r6.status})`);
     const eSched = (r6.data && r6.data.scheduled) || [];
@@ -188,22 +200,22 @@ async function api(cookie, method, p, body) {
       `E programó exactamente los 2 borradores de la semana que viene (scheduled ${eSched.length})`);
     ok(eSched.every((s) => { const d = String(s.scheduled_at || '').slice(0, 10); return d >= NEXT_MON && d <= shiftDays(NEXT_MON, 6); }),
       'E los programados caen dentro de la semana que viene (lun–dom)');
-    ok(eWait.length === 1 && eWait[0].id === eSixth && eWait[0].week_key === THIS_MON && eWait[0].reason === 'plan_limit',
-      `E el 6º quedó en espera reportado (week_key ${eWait[0] && eWait[0].week_key}, reason ${eWait[0] && eWait[0].reason})`);
-    const rowE6 = db.prepare('SELECT status FROM posts WHERE id = ?').get(eSixth);
-    ok(rowE6.status === 'draft', 'E el 6º sigue como borrador en la DB');
+    ok(eWait.length === 1 && eWait[0].id === eEighth && eWait[0].week_key === THIS_MON && eWait[0].reason === 'plan_limit',
+      `E el 8º quedó en espera reportado (week_key ${eWait[0] && eWait[0].week_key}, reason ${eWait[0] && eWait[0].reason})`);
+    const rowE8 = db.prepare('SELECT status FROM posts WHERE id = ?').get(eEighth);
+    ok(rowE8.status === 'draft', 'E el 8º sigue como borrador en la DB');
 
     // ── Usuario F: schedule-all sin nada programable por cupo — el 403
     // queda SOLO para el tope verdadero (ningún borrador pudo programarse)
     // y trae los datos de la semana DEL POSTEO + el waiting reportado.
     const uF = await register('f@example.com');
     const uidF = uidOf('f@example.com');
-    for (let i = 0; i < 5; i++) seedPost(uidF, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado F' + (i + 1));
-    const fSixth = seedDraftWk(uidF, THIS_MON, 'F sexto de esta semana');
+    for (let i = 0; i < 7; i++) seedPost(uidF, 'scheduled', at(shiftDays(THIS_MON, i)), 'Programado F' + (i + 1));
+    const fEighth = seedDraftWk(uidF, THIS_MON, 'F octavo de esta semana');
     const r7 = await api(uF.cookie, 'POST', '/api/posts/schedule-all', {});
     ok(r7.status === 403 && r7.data && r7.data.plan_limit === true, `F sin programables por cupo → 403 plan_limit (status ${r7.status})`);
     ok(r7.data && r7.data.week_key === THIS_MON, `F el 403 trae week_key de la semana del posteo ${THIS_MON} (vino ${r7.data && r7.data.week_key})`);
-    ok(r7.data && Array.isArray(r7.data.waiting) && r7.data.waiting.length === 1 && r7.data.waiting[0].id === fSixth && r7.data.waiting[0].reason === 'plan_limit',
+    ok(r7.data && Array.isArray(r7.data.waiting) && r7.data.waiting.length === 1 && r7.data.waiting[0].id === fEighth && r7.data.waiting[0].reason === 'plan_limit',
       'F el 403 reporta el borrador en espera (id + week_key + motivo)');
   } catch (e) {
     fails++;
