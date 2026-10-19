@@ -266,7 +266,7 @@ const CAFE_URL = 'https://cafearoma.example/fotos/cafe.jpg';
     const srv = fs.readFileSync('server.js', 'utf8');
     const demoSrc = fs.readFileSync('demo.js', 'utf8');
     const feedSrc = fs.readFileSync('feed-audit.js', 'utf8');
-    ok(srv.includes("const BUILD_ID = '20261019-v239'"), 'BUILD_ID v230');
+    ok(srv.includes("const BUILD_ID = '20261019-v243'"), 'BUILD_ID v230');
     ok(srv.includes('deepRead.fetchDeepCatalog(webUrl)'), 'el sweep lee el catálogo profundo');
     ok(srv.includes('deepRead.fetchBioLink(feedLink)'), 'el sweep sigue el link de la bio');
     ok(srv.includes('classifyDigestPhotos'), 'el sweep clasifica fotos con guarda de gasto');

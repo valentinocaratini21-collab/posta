@@ -188,6 +188,32 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   }
   // 8) Cierre de la regla 5b: pregunta cortada ⇒ "…" final y sin "?".
   if (questionIsCut()) out = out.replace(/\s*[?….]+$/, '').trim() + '…';
+  // 9) FRAGMENTO DECLARATIVO = PUNTOS SUSPENSIVOS (Mora 2026-10-19, ids
+  // reales 482/473 — extensión de la regla 5b de Valentino a toda
+  // oración cortada): el recorte por palabras + sinColgada también deja
+  // DECLARATIVAS cortadas que parecen completas, porque sinColgada
+  // borra la preposición final y disfraza el corte ("Halloween: tu
+  // Instagram, el alma de la fiesta" → "…, el alma"; "…a medida,
+  // ideales para tu comedor" → "…, ideales"). Si el titular es un
+  // prefijo propio de la oración elegida (la oración sigue y el
+  // titular no la contiene entera), cierra con "…" igual que la
+  // pregunta cortada: nunca se presenta un fragmento como frase
+  // completa. Una exclamación cortada entra en la misma regla (el "!"
+  // del paso 6 se reemplaza por "…"). Espejo en server.js.
+  const declarIsCut = () => {
+    if (seedIsQuestion || seedWordsQ.length < 3) return false;
+    const ow = normWordsQ(out);
+    if (!(ow.length < seedWordsQ.length && ow.every((w, i) => seedWordsQ[i] === w))) return false;
+    // Solo cuando el corte se llevó un COMPLEMENTO que la última
+    // palabra conservada exige: la primera palabra cortada es "de/del"
+    // (complemento del nombre: "el alma DE la fiesta") o "para"
+    // (finalidad del adjetivo/nombre: "ideales PARA tu comedor"). Un
+    // adjunto opcional cortado ("hechos hoy EN el local", "$12.500
+    // recién salida") deja un titular de estilo nominal completo y NO
+    // lleva "…" (test-character-lock (f): no-pregunta intacta).
+    return ['de', 'del', 'para'].includes(seedWordsQ[ow.length]);
+  };
+  if (declarIsCut()) out = out.replace(/\s*[!….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
 }
 const HOOKS = {

@@ -417,6 +417,32 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   }
   // 8) Cierre de la regla 5b: pregunta cortada ⇒ "…" final y sin "?".
   if (questionIsCut()) out = out.replace(/\s*[?….]+$/, '').trim() + '…';
+  // 9) FRAGMENTO DECLARATIVO = PUNTOS SUSPENSIVOS (Mora 2026-10-19, ids
+  // reales 482/473 — extensión de la regla 5b de Valentino a toda
+  // oración cortada): el recorte por palabras + sinColgada también deja
+  // DECLARATIVAS cortadas que parecen completas, porque sinColgada
+  // borra la preposición final y disfraza el corte ("Halloween: tu
+  // Instagram, el alma de la fiesta" → "…, el alma"; "…a medida,
+  // ideales para tu comedor" → "…, ideales"). Si el titular es un
+  // prefijo propio de la oración elegida (la oración sigue y el
+  // titular no la contiene entera), cierra con "…" igual que la
+  // pregunta cortada: nunca se presenta un fragmento como frase
+  // completa. Una exclamación cortada entra en la misma regla (el "!"
+  // del paso 6 se reemplaza por "…"). Espejo en generator.js.
+  const declarIsCut = () => {
+    if (seedIsQuestion || seedWordsQ.length < 3) return false;
+    const ow = normWordsQ(out);
+    if (!(ow.length < seedWordsQ.length && ow.every((w, i) => seedWordsQ[i] === w))) return false;
+    // Solo cuando el corte se llevó un COMPLEMENTO que la última
+    // palabra conservada exige: la primera palabra cortada es "de/del"
+    // (complemento del nombre: "el alma DE la fiesta") o "para"
+    // (finalidad del adjetivo/nombre: "ideales PARA tu comedor"). Un
+    // adjunto opcional cortado ("hechos hoy EN el local", "$12.500
+    // recién salida") deja un titular de estilo nominal completo y NO
+    // lleva "…" (test-character-lock (f): no-pregunta intacta).
+    return ['de', 'del', 'para'].includes(seedWordsQ[ow.length]);
+  };
+  if (declarIsCut()) out = out.replace(/\s*[!….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
 }
 const app = express();
@@ -10264,12 +10290,12 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
 {"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
-- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). Si la imagen NO lleva texto → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
 - claims_ok: NO hay datos comerciales inventados del negocio: precios, direcciones, teléfonos, promos, features o nombres de producto que no existan. El ÚNICO texto comercial permitido es el titular: "${String(headline || '').slice(0, 80)}"${headline ? '' : ' (la imagen NO debe llevar texto comercial)'}. Datos reales del negocio para contrastar: ${dnaFacts || 'no hay datos'}. Ante la duda: si el texto menciona un dato comercial que NO sea el titular permitido → claims_ok false.
-- brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena).
+- brand_ok: la imagen tiene identidad visual PROPIA del rubro y la marca del cliente: NO imita el estilo de marcas famosas (prohibido estética tipo Netflix/plataformas de streaming, Spotify, McDonald's, Apple: nada de fondo negro + rojo cinematográfico, logos parecidos ni tipografías de marca ajena). Si marcás brand_ok=false, el detalle TIENE que nombrar QUÉ marca famosa imita (Mora 2026-10-19, id 482: un brand_ok=false con detalle genérico "recuerda a marcas famosas" sin nombre no es evidencia auditable y no cuenta como falla).
 - detalle: UNA frase concreta sobre ESTA imagen: nombrá un elemento visible (el titular, un objeto, un color) y, si algo falla, qué. PROHIBIDO responder "..." o genéricos tipo "cumple con todos los requisitos" sin nombrar nada visible (Mora 2026-10-18: ids 404/456/459/462 volvieron con detalle "...").
 - anatomia_ok: inspección de anatomía en todo lo generado — manos, caras, dedos y proporciones tienen que verse naturales; si hay un artefacto detectado = pieza descartada (anatomia_ok false).
 - contraste_ok (v231, SOLO AUDITORÍA — adopción del estudio de patrones: contraste de texto ≥ 4,5:1 estilo WCAG AA): si la imagen lleva texto, ¿el texto se lee con contraste fuerte contra lo que tiene detrás (fondo, placa o sombra)? Texto claro sobre fondo claro, o texto oscuro sobre fondo oscuro, o letras que se pierden contra una foto cargada → false. Sin texto → true.
@@ -14497,7 +14523,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v242';
+const BUILD_ID = '20261019-v243';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

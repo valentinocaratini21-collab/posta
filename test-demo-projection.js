@@ -205,7 +205,7 @@ async function partB() {
   try {
     ok(await waitBoot(), 'server booteó');
     const ver = await (await fetch(`${BASE}/api/version`)).json();
-    ok(ver.build === '20261019-v239', '/api/version es v228');
+    ok(ver.build === '20261019-v243', '/api/version es v228');
 
     // B1: stream SIN @ → el flujo termina igual y NO hay proyección.
     const fd = new FormData();
@@ -317,7 +317,7 @@ function partC() {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   ok(srv.includes("send('profile'"), 'el server emite el evento profile');
   ok(srv.includes('profile: trialProfile'), 'el payload final lleva profile');
-  ok(srv.includes("const BUILD_ID = '20261019-v239'"), 'BUILD_ID en v228');
+  ok(srv.includes("const BUILD_ID = '20261019-v243'"), 'BUILD_ID en v228');
   // v212: la prueba acepta la web del negocio + chau Posty malabareando.
   ok(html.includes('id="webCard"') && html.includes('id="f_web"'), 'prueba.html trae la tarjeta web y el campo de link (v212)');
   ok(html.includes('/api/trial/web-prefill'), 'prueba.html llama al web-prefill (v212)');
