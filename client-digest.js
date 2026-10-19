@@ -27,6 +27,7 @@
  * Todo determinístico, USD 0: minería por reglas sobre textos reales.
  * ===================================================================== */
 const crypto = require('crypto');
+const rubroId = require('./rubro-id'); // (v235) clasificador especialista de rubro
 
 const DIGEST_VERSION = 1;
 
@@ -300,11 +301,16 @@ function temasFromFreeText(text) {
   for (const [tema, re] of TEXT_TEMAS) if (re.test(t) && !out.includes(tema)) out.push(tema);
   return out.slice(0, 6);
 }
-/* Tema fotográfico para un texto-ancla (gate foto↔tema del demo). */
-function temaForText(text, category) {
+/* Tema fotográfico para un texto-ancla (gate foto↔tema del demo).
+ * (v235) El subrubro puede afinar el tema cuando la categoría no alcanza
+ * (belleza no tiene tema propio: makeup/unas/estetica sí heredan del
+ * texto; sushi/panadería caen a comida como su rubro padre). */
+const SUBCAT_TEMA = { sushi: 'comida', parrilla: 'comida', pizzeria: 'comida', panaderia: 'comida', cafe: 'cafe', veterinaria: 'mascotas', petshop: 'mascotas', floreria: 'flores', vivero: 'flores' };
+function temaForText(text, category, subcat) {
   const temas = temasFromFreeText(text);
   if (temas.length) return temas[0];
   const byCat = { gastronomia: 'comida', cafeteria: 'cafe', belleza: null, moda: 'moda', flores: 'flores', mascotas: 'mascotas', fitness: 'fitness', hogar: 'hogar', deco: 'hogar', bar: 'bar' };
+  if (subcat && SUBCAT_TEMA[subcat] && byCat[category] == null) return SUBCAT_TEMA[subcat];
   return byCat[category] || null;
 }
 
@@ -374,6 +380,9 @@ function emptyDigest() {
     // productos/servicios/promos/temas/protagonista/ciudad/diferencial).
     catalog: null, bio_link: null, lexicon: null, photo_map: null,
     inferred_star: null, contradictions: [], question_candidates: [],
+    // (v235) Identificación de rubro versionada (rubro-id.js): fuente de
+    // verdad de rubro+subrubro+confianza+fuente. null = aún no clasificado.
+    rubro_id: null,
   };
 }
 
@@ -391,8 +400,42 @@ function buildFromParts(parts) {
   const d = emptyDigest();
   const now = new Date().toISOString();
   d.business = String(p.business || (p.web && p.web.name) || (p.feed && p.feed.name) || '').slice(0, 80);
-  d.category = String(p.category || (p.web && p.web.categoryHint) || '').slice(0, 40);
+  // (v235) categoryHint es el @type CRUDO de schema.org ('BeautySalon'),
+  // no una categoría: se mapea con el voto JSON-LD de rubro-id.js. Antes
+  // de v235 el campo nunca llegaba (undefined) y esta línea era inerte.
+  const hintVote = (p.web && p.web.categoryHint) ? rubroId.jsonldVote(p.web.categoryHint) : null;
+  d.category = String(p.category || (hintVote ? hintVote.rubro : '') || '').slice(0, 40);
   d.subcat = String(p.subcat || '').slice(0, 40);
+  // (v235) RUBRO_ID: si el llamador resolvió el rubro (prueba con su
+  // pregunta, registro con lo confirmado), ese bloque MANDA y define
+  // category/subcat. Sin resolución explícita, se clasifica desde las
+  // señales presentes SOLO para trazabilidad y candidatos a pregunta —
+  // category/subcat NO se tocan acá (quien refresca decide; ver el
+  // barrido semanal en server.js, que nunca reescribe en silencio).
+  if (p.rubroId && p.rubroId.rubro) {
+    d.rubro_id = { ...p.rubroId };
+    d.category = String(p.rubroId.rubro).slice(0, 40);
+    d.subcat = String(p.rubroId.subrubro || '').slice(0, 40);
+  } else if (p.web || p.feed || p.form || p.dna) {
+    try {
+      const cls = rubroId.classifyBusiness({
+        jsonldType: (p.web && p.web.categoryHint) || '',
+        catalogText: [((p.web && p.web.services) || []).join(' · '), (p.catalogItems || []).join(' · ')].join(' '),
+        webText: [(p.web && p.web.name) || '', (p.web && p.web.description) || ''].join(' '),
+        bio: (p.feed && p.feed.bio) || '', fullName: (p.feed && p.feed.name) || '',
+        handle: (p.feed && (p.feed.handle || p.feed.username)) || '',
+        captions: (p.feed && p.feed.captions) || [],
+        igCategory: (p.feed && p.feed.category) || '',
+        formText: [(p.form && p.form.description) || '', (p.form && p.form.goal) || ''].join(' '),
+      });
+      d.rubro_id = {
+        v: 1, rubro: cls.rubro, subrubro: cls.subrubro || '', confianza: cls.confianza,
+        fuente: 'deteccion', segura: cls.segura, nivel_duda: cls.nivel_duda,
+        needs_question: cls.necesita_pregunta, sin_confirmar: !cls.segura,
+        candidatas: cls.candidatas, evidencia: cls.evidencia,
+      };
+    } catch (e) { /* la clasificación jamás rompe el digest */ }
+  }
   const dna = (p.dna && typeof p.dna === 'object') ? p.dna : null;
 
   // --- productos / servicios / promos ---
@@ -825,6 +868,30 @@ function photoProductFor(digest, key) {
 function questionCandidatesOf(d) {
   if (!d || typeof d !== 'object') return [];
   const out = [];
+  // (v235) RUBRO PRIMERO: es el primer dominó (de él cuelgan temas y
+  // prompts). Si la identificación quedó sin confirmar, la pregunta va
+  // con las candidatas reales y su evidencia — la consume "Posty
+  // pregunta"; en la prueba la misma duda se pregunta ANTES de generar.
+  const rid = d.rubro_id;
+  if (rid && rid.needs_question && Array.isArray(rid.candidatas) && rid.candidatas.length) {
+    // Las opciones salen de questionOptions: en duda de SUBRUBRO ofrece
+    // los subrubros del rubro firme (makeup/uñas/estética…), no solo la
+    // candidata agregada.
+    let opciones = rubroId.questionOptions({ rubro: rid.rubro, nivel_duda: rid.nivel_duda || 'rubro', candidatas: rid.candidatas });
+    if (!opciones.length) {
+      opciones = rid.candidatas.slice(0, 3).map((c) => ({
+        rubro: c.rubro, subrubro: c.subrubro || '', label: rubroId.labelFor(c.rubro, c.subrubro),
+      }));
+    }
+    const labels = opciones.map((o) => o.label);
+    out.push({
+      tipo: 'rubro', rubro: rid.rubro, subrubro: rid.subrubro || '', opciones,
+      evidencia: rid.evidencia || [],
+      texto: labels.length >= 2
+        ? `¿Tu negocio es más ${labels[0]} o ${labels[1]}?`
+        : `¿Confirmás que tu rubro es ${labels[0]}?`,
+    });
+  }
   const star = d.inferred_star;
   if (star && star.item && (star.confidence || 0) >= 0.5) {
     out.push({ tipo: 'estrella', item: star.item, texto: `¿Tu producto estrella es ${star.item}?` });
@@ -889,6 +956,13 @@ function applyDeepBlocks(stored, fresh) {
   // precios (aunque el resultado sea "ya no se contradicen": [] manda).
   if (fresh.catalog || fresh.bio_link) out.contradictions = fresh.contradictions || [];
   else if (Array.isArray(fresh.contradictions) && fresh.contradictions.length) out.contradictions = fresh.contradictions;
+  // (v235) RUBRO_ID: el guardado MANDA — el merge nunca lo reemplaza por
+  // la clasificación fresca. Solo se completa si el guardado no tenía
+  // (digest viejo). La reclasificación la decide el barrido semanal
+  // explícitamente (server.js refreshDigestsSweep): si difiere con
+  // confianza alta, adopta dejando pregunta pendiente — nunca en
+  // silencio.
+  if (!out.rubro_id && fresh.rubro_id) out.rubro_id = fresh.rubro_id;
   out.built_at = new Date().toISOString();
   return finalizeDigest(out);
 }
@@ -949,7 +1023,7 @@ function deriveTopics(digest, opts) {
     const t = {
       kind,
       tag: frame.tag || '',
-      tema: temaForText(A, category),
+      tema: temaForText(A, category, (digest && digest.subcat) || ''),
       headline: capWords(frame.headline(A), 6),
       subline: frame.subline ? capWords(frame.subline(A), 8) : '',
       cta: frame.cta || '',
@@ -1156,4 +1230,6 @@ module.exports = {
   parsePriceNum, sameItemName, detectContradictions, inferStar,
   buildLexicon, lexiconBlock, sanitizePhotoEntries, photoProductFor,
   questionCandidatesOf, applyDeepBlocks,
+  // (v235) Identificación de rubro (rubro-id.js re-exportado)
+  rubroId,
 };

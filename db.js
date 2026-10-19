@@ -78,6 +78,9 @@ CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id, created_at);
 try { db.exec(`ALTER TABLE profiles ADD COLUMN competitors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN monthly_goal TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Subrubro confirmado del negocio (v235, rubro-id.js): la clave fina junto
+// a profiles.category — lo leen pickStyle/deriveTopics/photoGate.
+try { db.exec(`ALTER TABLE profiles ADD COLUMN subrubro TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Página pública del negocio (v169): link para la bio de IG — /p/<page_slug>.
 try { db.exec(`ALTER TABLE profiles ADD COLUMN whatsapp TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN page_slug TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

@@ -1,6 +1,6 @@
 // Harness de image-styles.js (NO va al zip). node test-image-styles.js
 'use strict';
-const { STYLES, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, pickStyle, styleFragment } = require('./image-styles');
+const { STYLES, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, pickStyle, styleFragment, rubroMatch } = require('./image-styles');
 
 let pass = 0, fail = 0;
 function t(name, cond, extra) {
@@ -57,7 +57,9 @@ for (const [intent, tipo, theme, rubro0] of intents) {
   for (const rubro of rubros3) {
     const p = pickStyle({ tipo, theme, angle: '', rubro });
     const top3 = (INTENT_STYLES[intent] || []).slice(0, 3);
-    const isRubro = p && (p.style.rubros || []).some(x => rubro.includes(x) || x.includes(rubro));
+    // (v235) "del rubro" se juzga con el rubroMatch de producción, que
+    // resuelve alias (restaurante⇒gastronomia, cosmética⇒belleza…).
+    const isRubro = p && rubroMatch(p.style, rubro);
     t(`pick ${intent}/${rubro} en top-3 o del rubro`, p && (top3.includes(p.style.code) || isRubro), p && p.style.code);
     t(`pick ${intent}/${rubro} razón menciona intención`, p && p.reason.includes(INTENT_PHRASE[intent].split(' ')[0].replace(/[()]/g, '').slice(0, 6)), p && p.reason);
     t(`pick ${intent}/${rubro} no fantasía salvo viral`, p && (intent === 'viral' || p.style.brandSafe), p && p.style.code);
@@ -134,7 +136,9 @@ t('detect no roba intenciones existentes', detectIntent({ tipo: 'novedad', theme
 
 // 11. Presets por rubro: cobertura ≥30 y pickStyle prefiere el rubro
 const RUBROS25 = ['moda','gastronomia','belleza','fitness','mascotas','salud','hogar','inmobiliaria','autos','educacion','turismo','eventos','tecnologia','deco','joyeria','fotografia','profesionales','flores','bar','cafeteria','barberia','servicios','viajes','arte','otro'];
-const rubroHit = (s, r) => (s.rubros || []).some(x => r.includes(x) || x.includes(r));
+// (v235) rubroHit usa el matcher de producción con alias (antes: includes
+// naive — los picks correctos por alias, p. ej. florería⇒flores, fallaban).
+const rubroHit = (s, r) => rubroMatch(s, r);
 for (const r of RUBROS25) {
   const n = STYLES.filter(s => rubroHit(s, r)).length;
   t(`rubro ${r} ≥30 presets`, n >= 30, n);

@@ -212,10 +212,33 @@ function intentSourceOf({ tipo = '', theme = '', angle = '' } = {}, resolved) {
   return 'default';
 }
 
+// (v235) ALIAS DE RUBRO: el catálogo y los perfiles históricos hablan
+// dialectos distintos ('ropa' en profiles viejos, 'restaurante'/
+// 'florería'/'peluquería' en tags de presets…). El alias se resuelve en
+// LA FUENTE (catMap de server.js ya siembra 'moda') y acá como red para
+// las filas ya guardadas: el pool de moda NUNCA más vacío por un nombre.
+const RUBRO_ALIASES = {
+  ropa: 'moda', indumentaria: 'moda', restaurante: 'gastronomia',
+  floreria: 'flores', cosmetica: 'belleza', estetica: 'belleza',
+  peluqueria: 'belleza', veterinaria: 'mascotas', gimnasio: 'fitness',
+  pasteleria: 'cafeteria', panaderia: 'cafeteria', parrilla: 'gastronomia',
+  pizzeria: 'gastronomia', vivero: 'flores', odontologia: 'salud',
+  cerveceria: 'bar',
+};
+function aliasRubro(r) {
+  const x = String(r || '').toLowerCase().trim();
+  return RUBRO_ALIASES[x] || x;
+}
 function rubroMatch(style, rubro) {
   const r = String(rubro || '').toLowerCase().trim();
   if (!r) return false;
-  return (style.rubros || []).some(x => r.includes(x) || x.includes(r));
+  const forms = new Set([r, aliasRubro(r)]);
+  return (style.rubros || []).some((x0) => {
+    const x = String(x0 || '').toLowerCase().trim();
+    const xf = [x, aliasRubro(x)];
+    for (const a of forms) for (const b of xf) { if (a && b && (a.includes(b) || b.includes(a))) return true; }
+    return false;
+  });
 }
 
 // ---------- (v233) Familia de dirección de un preset ----------
@@ -546,7 +569,7 @@ function familyOfStyle(style, map) {
 // La fantasía solo sale si la intención es 'viral'.
 // Prioridad de candidatos: 1) intención + rubro · 2) rubro brandSafe ·
 // 3) intención · 4) cualquiera brandSafe. (En viral se salta el 2.)
-function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [], feedProfile = null, offerProfile = null, salesIntent = '', evidenceOk = false, dataset = undefined } = {}) {
+function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', subrubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [], feedProfile = null, offerProfile = null, salesIntent = '', evidenceOk = false, dataset = undefined } = {}) {
   let resolved, intentSource;
   if (intent && INTENT_STYLES[intent]) { resolved = intent; intentSource = 'explicit'; }
   else {
@@ -559,7 +582,10 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
   const fantasyOk = resolved === 'viral';
   // No repetir en la semana: se prefieren estilos no usados; si no queda
   // ninguno libre, se permite repetir (mejor que no generar).
-  const matchesRubro = (s) => rubroMatch(s, rubro);
+  // (v235) El subrubro confirmado también abre el pool: un preset
+  // taggeado 'peluqueria' sirve a belleza/peluqueria, uno 'sushi' a
+  // gastronomia/sushi — vía el mismo rubroMatch con alias.
+  const matchesRubro = (s) => rubroMatch(s, rubro) || (subrubro ? rubroMatch(s, subrubro) : false);
   const favSet = new Set((favorites || []).map(String));
   // (v234) SELECCIÓN QUE SABE: el dataset de selección entra como
   // filtros duros ANTES del score (el match léxico del digest jamás

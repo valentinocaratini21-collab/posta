@@ -487,6 +487,16 @@ html{scroll-behavior:smooth}
         <button class="btn btn-primary btn-block" id="btnWebTrialGo">Armar mi semana 👀</button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="wfBack">← Volver</button></p>
       </div>
+      <!-- (v235) La pregunta de rubro: SOLO aparece si Posty no está 100%
+           seguro del rubro — antes de generar, con un toque. -->
+      <div id="rubroCard" style="display:none">
+        <div style="text-align:center;margin-bottom:14px"><span class="pill">UNA PREGUNTA RÁPIDA 🎯</span></div>
+        <h3 style="text-align:center;margin:0 0 6px">Para armarte la semana exacta:</h3>
+        <p class="tiny" style="text-align:center;margin:0 0 14px">¿Tu negocio es más bien…?</p>
+        <div id="rubroOpts" style="display:grid;gap:10px"></div>
+        <p style="text-align:center;margin-top:14px"><button type="button" class="linklike" id="rubroOther">Otro rubro →</button></p>
+        <p style="text-align:center;margin-top:4px"><button type="button" class="linklike" id="rubroSkip">Saltar por ahora</button></p>
+      </div>
       <!-- Fallback: formulario detallado actual (si el prefill falla) -->
       <div id="detailForm" style="display:none">
         <p class="tiny" style="margin:0 0 14px">No pudimos traer tu perfil de Instagram — completalo acá 👇</p>
@@ -780,7 +790,7 @@ const CATS = {"moda":"Moda / Tienda de ropa","gastronomia":"Gastronomía / Resta
 let TRIAL = null;      // respuesta del backend
 // Motor de la prueba (sincronizado con DEMO_ENGINE_V en demo.js): una
 // semana guardada por un motor viejo NO se restaura — se genera de nuevo.
-const TRIAL_ENGINE_V = 23;
+const TRIAL_ENGINE_V = 24;
 let COUNTRY = 'AR';
 let TONE = 'vos';
 // Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
@@ -984,6 +994,13 @@ let GEN_PREFILL = false; // la generación actual viene del prefill (saltea las 
 let WEB = null;          // respuesta de /api/trial/web-prefill (v212)
 let GEN_WEB = false;     // la generación actual viene de la web del negocio
 let OPT_PHOTO = null;    // foto opcional subida por el visitante (campo 'photo' del multipart)
+// (v235) IDENTIFICACIÓN DE RUBRO: si el estudio del @/web no cerró el
+// rubro con certeza total, el server devuelve rubro_check y la pregunta
+// se hace ACÁ, antes de generar (orden de Valentino). RUBRO_ANS guarda
+// la respuesta {rubro, subcat, src: 'pregunta'|'form'|'skip'}.
+let PENDING_RUBRO = null; // rubro_check vigente {needed, options, detected}
+let RUBRO_FROM = null;    // tarjeta de origen: 'prefill' | 'web'
+let RUBRO_ANS = null;     // respuesta del visitante (null = sin responder)
 const cleanIg = (v) => String(v || '').trim().replace(/^@+/, '');
 
 async function onIgSubmit() {
@@ -1009,9 +1026,13 @@ async function onIgSubmit() {
 }
 function showPrefillCard(j) {
   PREFILL = j;
+  PENDING_RUBRO = (j.rubro_check && j.rubro_check.needed) ? j.rubro_check : null;
+  RUBRO_FROM = 'prefill';
+  RUBRO_ANS = null;
   $('#stepIg').style.display = 'none';
   $('#detailForm').style.display = 'none';
   const wc = $('#webCard'); if (wc) wc.style.display = 'none';
+  const rc = $('#rubroCard'); if (rc) rc.style.display = 'none';
   const img = $('#pfPhoto');
   img.src = j.photo || 'ai-avatar.png';
   $('#pf_name').value = j.name || '';
@@ -1022,6 +1043,7 @@ function showPrefillCard(j) {
 }
 function showDetailForm() {
   PREFILL = null; GEN_PREFILL = false; GEN_WEB = false;
+  PENDING_RUBRO = null; RUBRO_ANS = null;
   $('#stepIg').style.display = 'none';
   $('#prefillCard').style.display = 'none';
   const wc = $('#webCard'); if (wc) wc.style.display = 'none';
@@ -1052,9 +1074,13 @@ async function onWebSubmit() {
 }
 function showWebCard(j) {
   WEB = j;
+  PENDING_RUBRO = (j.rubro_check && j.rubro_check.needed) ? j.rubro_check : null;
+  RUBRO_FROM = 'web';
+  RUBRO_ANS = null;
   $('#stepIg').style.display = 'none';
   $('#prefillCard').style.display = 'none';
   $('#detailForm').style.display = 'none';
+  const rc2 = $('#rubroCard'); if (rc2) rc2.style.display = 'none';
   $('#wfPhoto').src = (j.photos && j.photos[0]) || 'ai-avatar.png';
   $('#wf_name').value = j.name || '';
   $('#wf_desc').value = j.description || '';
@@ -1074,6 +1100,9 @@ function startTrialWeb() {
   const name = $('#wf_name').value.trim();
   if (!name) { toast('Contanos el nombre de tu negocio 🙂'); try { $('#wf_name').focus(); } catch (e) {} return; }
   if (!$('#wf_cat').value) { toast('Elegí tu rubro así los posteos salen a medida 👇'); try { $('#wf_cat').focus(); } catch (e) {} return; }
+  // (v235) LA PREGUNTA DE RUBRO VA ANTES DE GENERAR: si Posty no está
+  // 100% seguro y todavía no respondiste, primero la tarjeta de un toque.
+  if (PENDING_RUBRO && !RUBRO_ANS) { showRubroCard(); return; }
   GEN_PREFILL = false;
   GEN_WEB = true;
   TRIAL_BIZ = name;
@@ -1103,6 +1132,8 @@ function startTrialPrefill() {
   const name = $('#pf_name').value.trim();
   if (!name) { toast('Contanos el nombre de tu negocio 🙂'); try { $('#pf_name').focus(); } catch (e) {} return; }
   if (!$('#pf_cat').value) { toast('Elegí tu rubro así los posteos salen a medida 👇'); try { $('#pf_cat').focus(); } catch (e) {} return; }
+  // (v235) LA PREGUNTA DE RUBRO VA ANTES DE GENERAR (ver startTrialWeb).
+  if (PENDING_RUBRO && !RUBRO_ANS) { showRubroCard(); return; }
   GEN_PREFILL = true;
   GEN_WEB = false;
   TRIAL_BIZ = name;
@@ -1111,6 +1142,64 @@ function startTrialPrefill() {
   trk('prueba_step', { step: 'prefill_go' });
   runGeneration();
 }
+
+// ---------- (v235) La tarjeta de la pregunta de rubro ----------
+// Un toque y genera: tocar una opción confirma rubro+subrubro y sigue
+// el flujo de la tarjeta de origen en el mismo toque. "Otro rubro"
+// vuelve a la tarjeta origen con el select clásico enfocado (lo que
+// quede elegido ahí cuenta como respuesta 'form'). "Saltar" genera con
+// el rubro padre seguro y queda registrado como sin confirmar.
+function rubroOriginCard() { return RUBRO_FROM === 'web' ? '#webCard' : '#prefillCard'; }
+function rubroOriginSelect() { return RUBRO_FROM === 'web' ? '#wf_cat' : '#pf_cat'; }
+function rubroProceed() {
+  $('#rubroCard').style.display = 'none';
+  if (RUBRO_FROM === 'web') startTrialWeb(); else startTrialPrefill();
+}
+function showRubroCard() {
+  const opts = (PENDING_RUBRO && PENDING_RUBRO.options) || [];
+  $('#prefillCard').style.display = 'none';
+  const wc = $('#webCard'); if (wc) wc.style.display = 'none';
+  const box = $('#rubroOpts');
+  box.innerHTML = opts.map((o, i) => `<button type="button" class="btn btn-primary btn-block" data-rubro-i="${i}">${esc(o.label)}</button>`).join('');
+  box.querySelectorAll('[data-rubro-i]').forEach((b) => {
+    b.onclick = () => {
+      const o = opts[parseInt(b.dataset.rubroI, 10)];
+      if (!o) return;
+      const sel = $(rubroOriginSelect());
+      if (sel && CATS[o.rubro]) sel.value = o.rubro;
+      RUBRO_ANS = { rubro: o.rubro, subcat: o.subrubro || '', src: 'pregunta' };
+      trk('prueba_step', { step: 'rubro_answer', rubro: o.rubro, subcat: o.subrubro || '' });
+      rubroProceed();
+    };
+  });
+  $('#rubroCard').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  trk('prueba_step', { step: 'rubro_question' });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const other = $('#rubroOther'), skip = $('#rubroSkip');
+  if (other) other.onclick = () => {
+    // Toma el control con el select clásico: lo que quede elegido ahí
+    // es su respuesta (fuente 'form'); si lo cambia, el listener de
+    // change lo actualiza.
+    const sel = $(rubroOriginSelect());
+    RUBRO_ANS = { rubro: sel ? sel.value : '', subcat: '', src: 'form' };
+    $('#rubroCard').style.display = 'none';
+    $(rubroOriginCard()).style.display = 'block';
+    if (sel) { try { sel.focus(); } catch (e) {} }
+    trk('prueba_step', { step: 'rubro_other' });
+  };
+  if (skip) skip.onclick = () => {
+    RUBRO_ANS = { rubro: '', subcat: '', src: 'skip' };
+    trk('prueba_step', { step: 'rubro_skip' });
+    rubroProceed();
+  };
+  // Si toca el select de rubro a mano, su elección manda (fuente 'form').
+  for (const id of ['#pf_cat', '#wf_cat', '#f_cat']) {
+    const el = $(id);
+    if (el) el.addEventListener('change', () => { RUBRO_ANS = { rubro: el.value, subcat: '', src: 'form' }; });
+  }
+});
 
 // ---------- 3 preguntas rápidas antes de generar ----------
 // La conclusión: mejor esperar un poquito y preguntar qué quiere,
@@ -1210,6 +1299,13 @@ function buildGenFormData() {
   fd.append('business', TRIAL_BIZ);
   fd.append('ig', cleanIg($('#f_ig').value));
   fd.append('category', GEN_WEB ? $('#wf_cat').value : (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value));
+  // (v235) La respuesta a la pregunta de rubro viaja con su fuente:
+  // 'pregunta' (un toque), 'form' (select tocado a mano) o 'skip'
+  // (saltó: el server genera con el rubro padre seguro, sin inventar).
+  if (RUBRO_ANS) {
+    fd.append('subcat', RUBRO_ANS.subcat || '');
+    fd.append('rubro_src', RUBRO_ANS.src || '');
+  }
   // (v212) La web del negocio: el server la lee y enriquece la semana
   // (servicios, paleta y fotos). La descripción viaja TAL como quedó
   // editada en la tarjeta.
@@ -1689,7 +1785,8 @@ function finishGeneration(data, genSecs) {
     localStorage.setItem('posta_trial_profile', JSON.stringify({
       saved_at: Date.now(),
       business_name: TRIAL_BIZ,
-      category: GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value,
+      category: (TRIAL && TRIAL.category) || (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value),
+      subcat: (TRIAL && TRIAL.subcat) || (RUBRO_ANS && RUBRO_ANS.subcat) || '',
       description: '',
       competitors: '',
       ig_username: cleanIg($('#f_ig').value),
@@ -2276,7 +2373,7 @@ function closeReg() {
       const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
       if (tp && typeof tp === 'object') {
         const pf = {};
-        ['business_name', 'category', 'description', 'competitors', 'ig_username', 'tone', 'brand_colors']
+        ['business_name', 'category', 'subcat', 'description', 'competitors', 'ig_username', 'tone', 'brand_colors']
           .forEach((k) => { if (tp[k] !== undefined) pf[k] = tp[k]; });
         if (Object.keys(pf).length) body.trial_profile = pf;
       }

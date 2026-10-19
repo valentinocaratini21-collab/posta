@@ -14,6 +14,7 @@ const https = require('https');
 const db = require('./db');
 const captions = require('./demo-captions');
 const clientDigest = require('./client-digest');
+const rubroId = require('./rubro-id'); // (v235) subrubros canónicos del clasificador
 const demoAi = require('./demo-ai'); // (v231) subject_scale por familia de arte
 
 const DEMO_SCRIPT = path.join(__dirname, 'demo_render.py');
@@ -160,7 +161,12 @@ function stockPhotos3(category, business) {
 // bio, léxico, mapa foto→producto, estrella inferido y contradicciones;
 // el gate de fotos sube a foto↔PRODUCTO cuando el mapa cubre la foto y
 // el estrella inferido abre la rotación de temas.
-const DEMO_ENGINE_V = 23;
+// v24 (v235 IDENTIFICACIÓN ESPECIALISTA DE RUBRO): la prueba clasifica
+// con el voto multi-señal de rubro-id.js (web/IG/handle/captions/JSON-LD)
+// y PREGUNTA antes de generar cuando no hay certeza; digest.subcat deja
+// de ser '' en clientes y belleza sin subrubro confirmado usa el mundo
+// visual NEUTRO (no más pelo por default).
+const DEMO_ENGINE_V = 24;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -345,6 +351,14 @@ const PHOTO_WORLD = {
   // posteo de un estudio de makeup, y menos un antes/despues.
   peluqueria: ['pelo', 'local', 'personas', 'retrato', 'rostro'],
   makeup: ['makeup', 'skincare', 'cosmetica', 'rostro', 'retrato', 'personas', 'local', 'cafe'],
+  // (v235) belleza SIN subrubro confirmado (el dueño no respondió la
+  // pregunta de rubro): mundo NEUTRO — solo temas que sirven a cualquier
+  // oficio de belleza. Ni pelo ni makeup ni uñas: no se le asigna un
+  // oficio a quien no lo confirmó (regla de Valentino).
+  'belleza-neutro': ['local', 'personas', 'retrato', 'rostro', 'cafe'],
+  // (v235) subrubros nuevos con mundo propio.
+  unas: ['unas', 'rostro', 'retrato', 'local', 'personas', 'cafe', 'skincare', 'cosmetica'],
+  estetica: ['skincare', 'cosmetica', 'rostro', 'retrato', 'local', 'personas', 'cafe'],
   barberia: ['barberia', 'pelo', 'local', 'retrato', 'personas', 'moda', 'cafe'],
   fitness: ['fitness', 'personas', 'retrato', 'local', 'equipo', 'airelibre'],
   mascotas: ['mascotas', 'local', 'retrato', 'personas', 'bano', 'veterinaria', 'hogar', 'cafe'],
@@ -376,11 +390,14 @@ const PHOTO_STRONG_TEMAS = new Set([
   'dental', 'salud', 'tech', 'reparacion', 'autos', 'viaje', 'playa',
 ]);
 
-function photoGateCtx({ category, subcat, topic, isCafe }) {
-  // (v199) El mundo se resuelve por subrubro: belleza sin subrubro es
-  // peluquería (ver PHOTO_WORLD.peluqueria). AUDIENCE_FORBIDDEN_TEMAS no
-  // tiene entrada 'peluqueria': cae a la de la categoría (belleza).
-  const key = subcat || (category === 'belleza' ? 'peluqueria' : category);
+function photoGateCtx({ category, subcat, topic, isCafe, neutralDefault }) {
+  // (v199) El mundo se resuelve por subrubro. (v235) Belleza sin subrubro:
+  // con contexto de cliente/prueba (neutralDefault, digest presente) el
+  // mundo es NEUTRO — el default pelo quedó solo para el harness legacy
+  // sin digest, cuyos temas de banco SON de peluquería. AUDIENCE_
+  // FORBIDDEN_TEMAS no tiene entrada por subrubro nuevo: cae a la de la
+  // categoría.
+  const key = subcat || (category === 'belleza' ? (neutralDefault ? 'belleza-neutro' : 'peluqueria') : category);
   const world = new Set(PHOTO_WORLD[key] || PHOTO_WORLD[category] || PHOTO_WORLD.otro);
   const forb = new Set(AUDIENCE_FORBIDDEN_TEMAS[key] || AUDIENCE_FORBIDDEN_TEMAS[category] || []);
   if (topic && topic.tema) for (const c of (TEMA_CONFLICTS[topic.tema] || [])) forb.add(c);
@@ -603,7 +620,7 @@ function pickDemoStyles({ topics, category, subcat, business, feedProfile = null
   const IS = imageStyles();
   if (!IS) return topics.map(() => null);
   let pool = demoStylePool(category, business);
-  const excl = STYLE_AUDIENCE_EXCLUDE[subcat || category];
+  const excl = STYLE_AUDIENCE_EXCLUDE[subcat] || STYLE_AUDIENCE_EXCLUDE[category] || null; // (v235) subrubro manda; la categoría respalda
   if (excl) pool = pool.filter((s) => !excl.test(s.code + ' ' + s.name));
   if (!pool.length) pool = demoStylePool(category, business);
   // (v234) SELECCIÓN QUE SABE también en la prueba: el dataset de
@@ -699,7 +716,7 @@ function enforceSkeletonVariety({ styleObjs, topics, category, subcat, business,
   const IS = imageStyles();
   if (!IS) return overrides;
   let pool = demoStylePool(category, business);
-  const excl = STYLE_AUDIENCE_EXCLUDE[subcat || category];
+  const excl = STYLE_AUDIENCE_EXCLUDE[subcat] || STYLE_AUDIENCE_EXCLUDE[category] || null; // (v235) subrubro manda; la categoría respalda
   if (excl) pool = pool.filter((s) => !excl.test(s.code + ' ' + s.name));
   // (v234) La reparación de variedad respeta el mismo gate del
   // dataset que pickDemoStyles: no puede reintroducir un preset
@@ -1224,7 +1241,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // Subrubro (makeup ≠ peluquería; contenido ≠ servicios genéricos): cambia
   // los ÁNGULOS, no la categoría. bioText = la bio real del perfil (v192):
   // la semana hereda los temas de SU línea, no solo los del formulario.
-  const subcat = demoSubcat({ business, category: cat, goal, bioText });
+  // (v235) Manda el subrubro del DIGEST (clasificador multi-señal de
+  // rubro-id.js, confirmado por pregunta o detectado con certeza); el
+  // demoSubcat histórico queda como respaldo cuando el digest no trae.
+  const subcat = (digest && digest.subcat && rubroId.SUBRUBROS[cat] && rubroId.SUBRUBROS[cat].includes(digest.subcat))
+    ? digest.subcat
+    : ((digest && digest.subcat === 'contenido') ? 'contenido' : demoSubcat({ business, category: cat, goal, bioText }));
+  // (v235) Belleza sin subrubro confirmado en contexto de digest: el
+  // gate de fotos usa el mundo NEUTRO (ver photoGateCtx).
+  const neutralDefault = !!(digest && !subcat);
   const topicsBase = (subcat && captions.DEMO_TOPICS[subcat])
     ? captions.DEMO_TOPICS[subcat]
     : (captions.DEMO_TOPICS[cat] || captions.DEMO_TOPICS.otro);
@@ -1314,7 +1339,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       const t = allTopics[k];
       const isPoster = posterMode && topicOffset === 0 && chosen.length === 0;
       if (!isPoster) {
-        const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe });
+        const ctx = photoGateCtx({ category: cat, subcat, topic: t, isCafe, neutralDefault });
         // Un tema entra si lo puede ilustrar el stock O una foto de su web.
         // (v230) También entra si el mapa foto→producto cubre una foto de
         // su web con EL producto del tema (aunque sus tags no matcheen).
@@ -1347,7 +1372,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
             const chk = clientDigest.pieceAnchored(`${t.headline || ''} ${t.caption || ''}`, anchors);
             if (chk.ok) continue;
             const cand = digestTopics.find((dt) => dt && !inUse.has(dt.digest_anchor)
-              && topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe })));
+              && topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe, neutralDefault })));
             if (cand) {
               inUse.add(cand.digest_anchor);
               topics[i] = cand;
@@ -1372,7 +1397,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       .sort((a, b) => (topics[b].tema ? 1 : 0) - (topics[a].tema ? 1 : 0));
     const usedWeb = new Set();
     for (const i of order) {
-      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe });
+      const ctx = photoGateCtx({ category: cat, subcat, topic: topics[i], isCafe, neutralDefault });
       // (v212) Primero las fotos de SU web (son suyas y venden más): match
       // exacto de tema, después cualquier pase del gate; sin uso repetido
       // salvo que no quede otra que pase.
@@ -2241,17 +2266,25 @@ function extractIgBiography(html) {
 // (barberia antes que bar, cafeteria antes que gastronomia genérica).
 const CATEGORY_KEYWORDS = [
   [/caf[eé]|coffee|cafeter[ií]a|barista|tostadur[ií]a|espresso|cappuccino|latte|pasteler[ií]a|panader[ií]a|brunch|medialuna|churro|desayuno|merienda/i, 'cafeteria'],
-  [/peluquer[ií]a|barber[ií]a|\bbarber\b|corte de pelo|peluquer[ií]a canina/i, 'barberia'],
+  // (v235) "peluquería canina" salió de esta fila: es mascotas, no barbería.
+  [/peluquer[ií]a|barber[ií]a|\bbarber\b|corte de pelo/i, 'barberia'],
   [/\bbar\b|pub|cocteler[ií]a|cocktail|trago|cervecer[ií]a|birra|\bvino\b|vinoteca/i, 'bar'],
-  [/gimnasio|fitness|\bgym\b|entreno|crossfit|personal trainer|musculaci[oó]n|yoga|pilates/i, 'fitness'],
+  // (v235) entrenador personal / preparador físico / entrenamiento: fitness.
+  [/gimnasio|fitness|\bgym\b|entreno|entrenamiento|entrenador|preparador f[ií]sico|crossfit|personal trainer|musculaci[oó]n|yoga|pilates/i, 'fitness'],
+  // (v235) muebles ANTES que gastronomía: "muebles de cocina" es hogar,
+  // no cocina — la fila específica gana a la genérica de más abajo.
+  [/muebler[ií]a|f[aá]brica de muebles|muebles de cocina|muebles a medida/i, 'hogar'],
   [/restaurant|parrilla|pizzer[ií]a|sushi|hamburguesa|comida|empanada|men[uú]|chef|cocina|gastronom|rotiser[ií]a|helader[ií]a|chiviter[ií]a/i, 'gastronomia'],
   [/hotel|hostel|excursi[oó]n|aerol[ií]nea|vacaci[oó]n|posada|caba[nñ]a|apart hotel/i, 'turismo'],
   [/ropa|moda|indumentaria|vestimenta|boutique|streetwear|prenda|tienda de ropa|calzado|zapatilla/i, 'moda'],
-  [/belleza|beauty|maquillaje|make ?up|est[eé]tica|skincare|\bspa\b|u[nñ]as|pesta[nñ]as|depilaci[oó]n|masaje|cosm[eé]tica/i, 'belleza'],
-  [/mascota|perr[oa]|gat[oa]|veterinaria|\bpet\b|guarder[ií]a canina/i, 'mascotas'],
+  // (v235) bordes \b en uñas/pestañas: "vacunas" y "algunas" NO son uñas.
+  [/belleza|beauty|maquillaje|make ?up|est[eé]tica|skincare|\bspa\b|\bu[nñ]as\b|\bpesta[nñ]as\b|depilaci[oó]n|masaje|cosm[eé]tica/i, 'belleza'],
+  // (v235) peluquería canina, baño canino, pet shop y vacunas: mascotas.
+  [/mascota|perr[oa]|gat[oa]|veterinari[oa]|vacunas|peluquer[ií]a canina|ba[ñn]o canino|pet ?shop|\bpet\b|guarder[ií]a canina/i, 'mascotas'],
   [/odontolog|cl[ií]nica|kinesiolog|nutricionista|psic[oó]log|m[eé]dic[oa]|salud dental|fisioterapia|optica/i, 'salud'],
   [/mueble|muebler[ií]a|colch[oó]n|blanquer[ií]a|\bhogar\b/i, 'hogar'],
-  [/inmobiliaria|real estate|propiedad|alquiler|departamento|terreno|tasaci[oó]n/i, 'inmobiliaria'],
+  // (v235) construcción/obra: constructora es inmobiliaria, no 'otro'.
+  [/inmobiliaria|real estate|propiedad|alquiler|departamento|terreno|tasaci[oó]n|constructora|construcci[oó]n|\bobras\b|desarrollos inmobiliarios|reformas integrales/i, 'inmobiliaria'],
   [/concesionaria|veh[ií]culo|taller mec[aá]nico|repuesto|\bmoto\b|neum[aá]tico|gomer[ií]a/i, 'autos'],
   [/escuela|colegio|universidad|curs[ao]s|clases|academia|instituto|educaci[oó]n|taller de/i, 'educacion'],
   [/hotel|hostel|excursi[oó]n|aerol[ií]nea|vacaci[oó]n|posada|caba[nñ]a|apart hotel/i, 'turismo'],
@@ -2261,7 +2294,8 @@ const CATEGORY_KEYWORDS = [
   [/joyer[ií]a|relojer[ií]a|\boro\b|plater[ií]a|anillo/i, 'joyeria'],
   [/fotograf|photography|retrato|estudio fotogr[aá]fico/i, 'fotografia'],
   [/abogad|contad[oó]r|arquitecto|ingeniero|escribano|estudio jur[ií]dico|consultora/i, 'profesionales'],
-  [/flores|florer[ií]a|florister[ií]a/i, 'flores'],
+  // (v235) vivero/plantas: flores, no 'otro'.
+  [/flores|florer[ií]a|florister[ií]a|vivero|plantas|macetas|suculentas|jardiner[ií]a/i, 'flores'],
   [/plomero|electricista|alba[nñ]il|carpintero|limpieza|fumigaci[oó]n|reparaci[oó]n|servicio t[eé]cnico/i, 'servicios'],
   [/viajes|agencia de viajes/i, 'viajes'],
   [/tatuaje|tattoo|galer[ií]a|m[uú]sic[oa]|banda|\barte\b|artista/i, 'arte'],
@@ -2270,6 +2304,9 @@ const CATEGORY_KEYWORDS = [
 // matchea, devuelve 'otro'.
 function categoryFromText(text) {
   const t = String(text || '');
+  // (v235) La peluquería CANINA es mascotas, no belleza: esta guarda va
+  // ANTES del atajo de makeup (cuya regex incluye "peluquer").
+  if (/peluquer[ií]a canina|ba[ñn]o canino|pet ?shop/i.test(t)) return 'mascotas';
   // La palabra ESPECÍFICA manda sobre la familia genérica: una bio que dice
   // maquillaje/make-up es belleza (y el subrubro makeup lo resuelve
   // demoSubcat), aunque también mencione "peluquería" al pasar. Solo una

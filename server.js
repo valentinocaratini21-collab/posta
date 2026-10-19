@@ -196,6 +196,7 @@ const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
@@ -643,14 +644,105 @@ function photoMappedRefsFor(uid, texts) {
     return out;
   } catch (e) { return []; }
 }
+// (v235) Mapa categoría-de-prueba → profiles.category, UNA sola copia
+// (antes vivía duplicado en seedFromTrialDigest y applyTrialProfile).
+// FIX de la auditoría: moda → 'moda' (era 'ropa', un valor que NINGÚN
+// preset del catálogo declara: el pool de prompts de todo cliente de
+// moda quedaba vacío). rubroMatch suma alias para las filas viejas.
+const TRIAL_CAT_MAP = { moda: 'moda', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+
+/* (v235) Resolución de rubro de la PRUEBA — el orden de Valentino: la
+ * pregunta va ANTES de generar. Los endpoints de estudio (prefill /
+ * web-prefill) clasifican y devuelven rubro_check; el front pregunta
+ * con un toque si hay duda y reenvía la confirmación como fields
+ * (category + subcat + rubro_src='pregunta'). Una edición manual del
+ * select llega con rubro_src='form' y también manda. Sin confirmación:
+ * manda el voto multi-señal; si duda, category = rubro padre seguro y
+ * subcat = '' (jamás un subrubro inventado), registrado sin_confirmar. */
+function resolveTrialRubro({ fields, webData, feed, formText, catalogItems }) {
+  const f = fields || {};
+  const src = String(f.rubro_src || '');
+  const catSel = String(f.category || '').trim();
+  const subSel = String(f.subcat || '').trim();
+  const signals = {
+    jsonldType: (webData && webData.categoryHint) || '',
+    catalogText: [((webData && webData.services) || []).join(' · '), (catalogItems || []).join(' · ')].join(' '),
+    webText: [(webData && webData.name) || '', (webData && webData.description) || ''].join(' '),
+    bio: (feed && feed.bio) || '', fullName: (feed && feed.name) || '',
+    handle: (feed && (feed.handle || feed.username)) || String(f.ig || '').replace(/^@/, ''),
+    captions: (feed && feed.captions) || [],
+    igCategory: (feed && feed.category) || '',
+    formText: [formText || '', f.business || ''].join(' '),
+  };
+  const cls = rubroId.classifyBusiness(signals);
+  if ((src === 'pregunta' || src === 'form') && catSel && rubroId.RUBROS.includes(catSel)) {
+    return rubroId.resolveRubro({ confirmed: { rubro: catSel, subrubro: subSel, fuente: src }, cls });
+  }
+  const res = rubroId.resolveRubro({ cls });
+  if (src === 'skip' && !cls.segura) {
+    // Saltó la pregunta: se genera con el padre seguro y queda el
+    // registro (la pregunta sigue viva en question_candidates).
+    res.rubroId.fuente = 'skip';
+    res.rubroCheck.needed = false;
+  }
+  return res;
+}
+
+/* (v235) Desempate por VISIÓN — la ÚNICA llamada paga posible de la
+ * identificación, y solo cuando el voto determinístico quedó cerca
+ * (rubroId.needsVisionTiebreak). Una llamada batch gpt-4o-mini sobre
+ * 3-4 fotos (mismo patrón que deep-read.classifyDigestPhotos), atrás
+ * del tope diario del demo y con carrera de 6 s; cualquier falla deja
+ * el voto determinístico. Devuelve la clasificación re-votada con la
+ * familia 'vision', o null si no hubo desempate. */
+async function classifyWithVision(signals, photoUrls) {
+  const cls = rubroId.classifyBusiness(signals);
+  try {
+    if (!rubroId.needsVisionTiebreak(cls)) return cls;
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey || !costs.demoAiCapOk()) return cls;
+    const options = rubroId.questionOptions(cls);
+    if (options.length < 2) return cls;
+    const urls = (photoUrls || []).filter((u) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 4);
+    if (urls.length < 2) return cls;
+    const list = options.map((o, i) => `${i + 1}. ${o.label}`).join('\n');
+    const resp = await Promise.race([
+      fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: `Estas fotos son de UN negocio. ¿A cuál de estas opciones corresponde?\n${list}\nRespondé SOLO un JSON {"i": N} con el número de la opción (1 a ${options.length}). Si ninguna encaja, {"i": 0}.` },
+            ...urls.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
+          ] }],
+          response_format: { type: 'json_object' }, max_tokens: 20, temperature: 0,
+        }),
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('vision-timeout')), 6000)),
+    ]).catch(() => null);
+    if (!resp || !resp.ok) return cls;
+    const data = await resp.json().catch(() => null);
+    try { costs.trackUsage(data && data.usage, 'rubro-vision', null); } catch (e) {}
+    const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const idx = parseInt((JSON.parse(String(txt || '{}')) || {}).i, 10);
+    if (!idx || !options[idx - 1]) return cls;
+    const win = options[idx - 1];
+    return rubroId.classifyBusiness({ ...signals, visionKey: win.rubro + (win.subrubro ? '/' + win.subrubro : '') });
+  } catch (e) { return cls; }
+}
+
 // Compila el digest de la prueba desde las fuentes que la ruta ya
 // recolectó (web + feed + formulario). Determinístico, USD 0. El digest
 // viaja en el payload de la prueba y en trial_cache: es el fundamento
 // que la conversión siembra en la cuenta.
-function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep }) {
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro, deep, rubro }) {
   try {
     return clientDigest.buildFromParts({
-      business, category,
+      business,
+      category: rubro ? rubro.category : category,
+      subcat: rubro ? (rubro.subcat || '') : undefined,
+      rubroId: rubro ? rubro.rubroId : undefined,
       web: webData ? { name: webData.name, description: webData.description, services: webData.services || [], city: webData.city, palette: webData.palette || [], url: webData.url, categoryHint: webData.categoryHint } : null,
       feed: feed ? { bio: feed.bio || '', captions: feed.captions || [], name: feed.name || '', handle: feed.handle || '' } : null,
       form: formText ? { description: formText } : null,
@@ -753,8 +845,9 @@ function seedFromTrialDigest(userId, igRaw) {
     // descripción si falta, IG si el digest lo conoce.
     try {
       const prof = getProfile(userId) || {};
-      // Mismo catMap que applyTrialProfile (la otra puerta de entrada).
-      const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+      // (v235) UNA sola copia del mapa: TRIAL_CAT_MAP (junto a
+      // buildTrialDigest) — la comparte applyTrialProfile.
+      const catMap = TRIAL_CAT_MAP;
       const sets = [];
       const vals = [];
       const mappedCat = catMap[digest.category] || '';
@@ -768,6 +861,10 @@ function seedFromTrialDigest(userId, igRaw) {
       }
       const handle = digest.fuentes && digest.fuentes.feed && digest.fuentes.feed.handle;
       if (handle && !prof.ig_username) { sets.push('ig_username = ?'); vals.push(String(handle).slice(0, 40)); }
+      // (v235) Subrubro confirmado: viaja del digest (rubro_id/digest.subcat)
+      // a profiles.subrubro si el perfil todavía no tiene uno.
+      const profSub = String(digest.subcat || (digest.rubro_id && digest.rubro_id.subrubro) || '').slice(0, 40);
+      if (profSub && !prof.subrubro) { sets.push('subrubro = ?'); vals.push(profSub); }
       if (sets.length) { sets.push("updated_at = datetime('now')"); vals.push(userId); db.prepare(`UPDATE profiles SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals); }
     } catch (e) { console.error('[digest] seed perfil:', e.message); }
     // Colores de marca desde la paleta del digest (si Ajustes no tiene).
@@ -1808,7 +1905,7 @@ app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res)
 function applyTrialProfile(userId, tp) {
   if (!tp || typeof tp !== 'object') return;
   try {
-    const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+    const catMap = TRIAL_CAT_MAP; // (v235) copia única, junto a buildTrialDigest
     const businessName = String(tp.business_name || '').slice(0, 80);
     if (businessName) {
       getProfile(userId);
@@ -1824,6 +1921,12 @@ function applyTrialProfile(userId, tp) {
         'vender',
         userId
       );
+      // (v235) El subrubro confirmado en la prueba también se aplica
+      // (solo si el perfil no tiene uno cargado).
+      const tpSub = String(tp.subcat || '').slice(0, 40);
+      if (tpSub) {
+        try { db.prepare(`UPDATE profiles SET subrubro=? WHERE user_id=? AND (subrubro IS NULL OR subrubro='')`).run(tpSub, userId); } catch (e) {}
+      }
     }
     // brand_colors: mismo formato que /api/settings (JSON de hex válidos, >= 2)
     const bc = (tp.brand_colors || []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
@@ -6864,7 +6967,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try {
             const pk = pickStyle({
               intent: resolveExplicitIntent({ tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '' }).intent, tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '',
-              rubro: (profile && profile.category) || '', businessName: (profile && profile.business_name) || '',
+              rubro: (profile && profile.category) || '', subrubro: (weekDigest && weekDigest.subcat) || (profile && profile.subrubro) || '', businessName: (profile && profile.business_name) || '',
               usedThisWeek: usedStyles, boosts: weekBoosts, favorites: weekFavorites,
               digest: weekDigest, avoidFamilies: usedFamilies,
               // (v234) La intención de VENTA de la pieza (cerebro
@@ -10084,7 +10187,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     const explicitIntent = (intent && IS[intent]) ? { intent, source: 'forced' } : known;
     stylePick = style
       ? { style: getStyle(style), reason: `estilo elegido manualmente (${style})`, intent: explicitIntent.intent || '', intentSource: explicitIntent.source === 'forced' ? 'explicit' : 'manual' }
-      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: getStyleFavorites(uid), digest: digestForStyle, avoidFamilies: usedFamilies });
+      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', subrubro: (digestForStyle && digestForStyle.subcat) || profile.subrubro || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: getStyleFavorites(uid), digest: digestForStyle, avoidFamilies: usedFamilies });
     if (stylePick && stylePick.style) {
       if (!stylePick.family) { try { stylePick.family = famOf(stylePick.style); } catch (e) {} }
       if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
@@ -11939,10 +12042,15 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       const photoEntries = await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 7000);
       deep = { catalog, photoEntries };
     }
+    // (v235) RUBRO ANTES DE GENERAR: confirmación del front (la pregunta
+    // de /prueba viaja como fields) o voto multi-señal con las fuentes
+    // de esta ruta. La categoría resuelta gobierna spec, digest e ideas.
+    const rubroRes = resolveTrialRubro({ fields, webData, feed: null, formText: richGoal, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre) });
+    const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
-    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep });
-    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest });
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -11954,7 +12062,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
-      business, ig, category,
+      business, ig, category: effCategory,
+      subcat: rubroRes.subcat || '', // (v235) subrubro confirmado/detectado (viaja al registro)
+      rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada en el payload
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
@@ -12021,12 +12131,31 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
   let prof = null;
   try { prof = await demo.fetchIgProfile(ig); } catch (e) { prof = null; }
   const name = (prof && prof.name) || '';
-  const category = demo.categoryFromText((bio ? bio + ' ' : '') + name);
+  // (v235) IDENTIFICACIÓN ESPECIALISTA: el estudio del @ ya parsea los
+  // posteos del embed (mismo HTML, cero fetches nuevos) — sus captions
+  // entran al voto multi-señal junto a bio + nombre + HANDLE. La
+  // categoría legada (un solo regex sobre bio+nombre) queda como piso:
+  // si el voto no tiene NINGUNA señal, manda ella.
+  let embedPosts = [];
+  try { embedPosts = feedAudit.parseEmbedPosts(html) || []; } catch (e) { embedPosts = []; }
+  const captions = embedPosts.map((p) => p.caption).filter(Boolean).slice(0, 12);
+  const signals = {
+    bio: bio || '', fullName: name, handle: ig, captions,
+    igCategory: (prof && prof.category) || '',
+  };
+  const cls = await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean));
+  const resolved = rubroId.resolveRubro({ cls });
+  const legacyCat = demo.categoryFromText((bio ? bio + ' ' : '') + name);
+  const hasVotes = (cls.candidatas || []).length > 0;
   res.json({
     ok: true,
     ig,
     name,
-    category,
+    category: hasVotes ? resolved.category : legacyCat,
+    subcat: hasVotes ? (resolved.subcat || '') : '',
+    // La pregunta de rubro viaja acá: el front la muestra ANTES de
+    // generar (orden de Valentino) y reenvía la confirmación.
+    rubro_check: hasVotes ? resolved.rubroCheck : { needed: false, options: [], detected: null },
     photo: (prof && prof.pic) || null, // dataURL de la foto de perfil
   });
 });
@@ -12108,6 +12237,18 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     new Promise((r) => setTimeout(() => r(null), 11000)),
   ]).catch(() => null);
   if (!data) return res.json({ ok: false, error: 'No pudimos leer esa web (puede estar caída o bloquear lecturas automáticas)' });
+  // (v235) La web se clasifica con el voto multi-señal: su @type JSON-LD
+  // (categoryHint, la auto-declaración del negocio) + nombre/descripción/
+  // servicios. La categoría legada queda como piso si no hay señales.
+  const webSignals = {
+    jsonldType: data.categoryHint || '',
+    catalogText: (data.services || []).join(' · '),
+    webText: [data.name || '', data.description || ''].join(' '),
+  };
+  const wcls = await classifyWithVision(webSignals, (data.photos || []).map((p) => p.url));
+  const wresolved = rubroId.resolveRubro({ cls: wcls });
+  const wLegacy = demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' '));
+  const wHasVotes = (wcls.candidatas || []).length > 0;
   res.json({
     ok: true,
     web: data.url,
@@ -12115,7 +12256,9 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     description: data.description || '',
     services: data.services || [],
     city: data.city || '',
-    category: demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' ')),
+    category: wHasVotes ? wresolved.category : wLegacy,
+    subcat: wHasVotes ? (wresolved.subcat || '') : '',
+    rubro_check: wHasVotes ? wresolved.rubroCheck : { needed: false, options: [], detected: null },
     palette: data.palette || [],
     photos: (data.photos || []).map((p) => p.url),
     photoCount: (data.photos || []).length,
@@ -12461,17 +12604,28 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       const photoEntries = webExtraPhotos.length ? await raceMs(trialPhotoEntries(webExtraPhotos, itemNames), 6000) : null;
       deep = { catalog, bioLink, photoEntries };
     }
+    // (v235) RUBRO ANTES DEL SPEC: la confirmación del front (pregunta o
+    // select tocado a mano) manda; si no, el voto multi-señal con TODO lo
+    // recolectado (feed real + web + formulario). Con duda: padre seguro
+    // y subrubro vacío — ningún posteo nace de un subrubro inventado.
+    const rubroRes = resolveTrialRubro({
+      fields, webData,
+      feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
+      formText: richGoal,
+      catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre),
+    });
+    const effCategory = rubroRes.category;
     const trialDigest = buildTrialDigest({
       business, category, webData,
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
-      formText: richGoal, feedPalette, registro: feedRegister, deep,
+      formText: richGoal, feedPalette, registro: feedRegister, deep, rubro: rubroRes,
     });
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
-    const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
+    const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
     const withPhotos = specPosts.map((p) => (
       (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
     ));
@@ -12841,7 +12995,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
-      business, ig, category,
+      business, ig, category: effCategory,
+      subcat: rubroRes.subcat || '', // (v235) subrubro confirmado/detectado
+      rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
@@ -13565,7 +13721,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v234';
+const BUILD_ID = '20261019-v235';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -13921,6 +14077,32 @@ async function refreshDigestsSweep() {
         // (v230) Los bloques profundos se fusionan sobre el merge de
         // siempre (aditivo, por bloque; el mapa de fotos por clave).
         const finalDigest = clientDigest.applyDeepBlocks(merged, fresh);
+        // (v235) RECLASIFICACIÓN DE RUBRO — NUNCA en silencio: lo que el
+        // dueño confirmó (pregunta/formulario) no se toca jamás. Si la
+        // lectura fresca difiere con CONFIANZA ALTA de lo guardado, se
+        // adopta pero queda needs_question + log (Posty pregunta lo
+        // confirma con el dueño). Si difiere sin certeza, se conserva lo
+        // guardado y la duda fresca queda como candidatas.
+        try {
+          const oldR = (stored && stored.rubro_id) || null;
+          const newR = (fresh && fresh.rubro_id) || null;
+          const ownerSet = !!(oldR && (oldR.fuente === 'pregunta' || oldR.fuente === 'form'));
+          if (newR && !ownerSet) {
+            const differs = !oldR || oldR.rubro !== newR.rubro || (oldR.subrubro || '') !== (newR.subrubro || '');
+            if (differs && newR.segura) {
+              finalDigest.rubro_id = { ...newR, needs_question: true, pending_reason: 'reclasificacion' };
+              finalDigest.category = newR.rubro;
+              finalDigest.subcat = newR.subrubro || '';
+              console.log(`[rubro-id] usuario ${uid}: ${oldR ? oldR.rubro + '/' + (oldR.subrubro || '-') : '(sin rubro)'} -> ${newR.rubro}/${newR.subrubro || '-'} (confianza ${newR.confianza}) — queda pregunta pendiente`);
+              summary.rubroReclassified = (summary.rubroReclassified || 0) + 1;
+            } else if (differs && oldR) {
+              finalDigest.rubro_id = { ...oldR, needs_question: true, candidatas: newR.candidatas || oldR.candidatas || [] };
+            } else if (!oldR) {
+              finalDigest.rubro_id = newR;
+              if (newR.segura) { finalDigest.category = newR.rubro; finalDigest.subcat = newR.subrubro || ''; }
+            }
+          }
+        } catch (e) { /* la reclasificación nunca frena el refresco */ }
         clientDigest.saveDigest(db, uid, finalDigest);
         summary.saved++;
       } catch (e) { summary.errors++; console.error('[digest-refresh] usuario ' + uid + ':', e.message); }

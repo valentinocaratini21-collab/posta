@@ -216,7 +216,10 @@ async function fetchBusinessSite(rawUrl) {
       const arr = Array.isArray(j) ? j : (j['@graph'] || [j]);
       for (const it of arr) {
         const t = String((it && it['@type']) || '');
-        if (/localbusiness|store|restaurant|café|cafe|beautysalon|hairsalon|hotels|dentist|medicalbusiness|professionalservice|foodestablishment/i.test(t) || (it && it.name && it.address)) {
+        // (v235) la aceptación suma los @type que el clasificador de
+        // rubro sabe mapear (rubro-id.js JSONLD_MAP): uñas, mascotas,
+        // autos, flores, fitness, inmobiliaria/construcción, etc.
+        if (/localbusiness|store|restaurant|café|cafe|beautysalon|hairsalon|nailsalon|dayspa|barbershop|hotels|dentist|medicalbusiness|professionalservice|foodestablishment|petstore|veterinarycare|autorepair|autoparts|autodealer|florist|healthclub|exercisegym|sportsclub|realestate|generalcontractor|bakery|cafeorcoffeeshop|fastfood|barorpub|brewery|clothingstore|jewelrystore|furniturestore|homegoodsstore|electronicsstore|tattooparlor|travelagency|school|college|pharmacy|optician|winery|liquorstore|grocerystore|supermarket|bookstore|hardwarestore/i.test(t) || (it && it.name && it.address)) {
           ld = it; break;
         }
       }
@@ -342,6 +345,11 @@ async function fetchBusinessSite(rawUrl) {
     city,
     palette: palette.slice(0, 2),
     photos,
+    // (v235) categoryHint: el @type declarado en el JSON-LD del propio
+    // sitio — la cabecera de este módulo lo prometía desde v209 y el
+    // result nunca lo devolvía. Lo consume rubro-id.js (familia jsonld,
+    // la señal más declarativa: el negocio se auto-clasificó).
+    categoryHint: ld ? (Array.isArray(ld['@type']) ? ld['@type'].join(' ') : String(ld['@type'] || '')) : '',
   };
   // Temas por foto: gate-compatible (sin temas → el gate la deja afuera,
   // igual que al stock sin tags — regla v196). Señales: alt/contexto +

@@ -11,6 +11,48 @@ acento y CTA con la paleta del cliente, Montserrat.
 Sin IA paga en el camino del demo (regla de costo + velocidad): el estilo
 se materializa como tratamiento determinístico local.
 
+## (v235) La prueba identifica el rubro como especialista — y pregunta si duda
+
+El rubro/subrubro de la prueba ya no sale de un regex único sobre
+bio+nombre: lo vota `rubro-id.js` (`classifyBusiness`) con las señales
+que el sistema ya recolecta — @type JSON-LD de la web (`categoryHint`,
+que `web-extract` por fin devuelve), vocabulario de productos/servicios
+del catálogo web, bio + nombre + **handle**, captions + hashtags del
+feed, categoría declarada de IG, texto del formulario y, SOLO como
+desempate con el voto cerca, visión batch gpt-4o-mini sobre 3-4 fotos
+(≤ USD 0,01, atrás del tope diario del demo; en tests, stub).
+
+- **La vara de "100% seguro"** (documentada en `rubro-id.js`): puntaje
+  ≥6, margen ≥4 sobre la 2.ª candidata y ≥2 familias de señales
+  independientes (un @type JSON-LD que vota por el ganador cuenta por
+  dos: es la auto-declaración del negocio). Debajo de eso hay DUDA y no
+  se adivina: padre seguro + subrubro vacío.
+- **La pregunta va ANTES de generar**: `prefill`/`web-prefill` devuelven
+  `rubro_check {needed, options, detected}`; si hay duda, `/prueba`
+  muestra la tarjeta de un toque (`#rubroCard`) y recién con la
+  respuesta (`rubro_src=pregunta|form|skip` + `subcat`) se genera. Sin
+  duda, cero fricción: la tarjeta ni aparece.
+- **Subrubros** solo donde cambian posteos Y prompts: belleza
+  {peluqueria, makeup, unas, estetica}, gastronomía {sushi, parrilla,
+  pizzeria}, cafetería {cafe, panaderia}, mascotas {veterinaria,
+  petshop}, autos {taller, repuestos}, inmobiliaria {inmobiliaria,
+  constructora}, fitness {gimnasio, entrenador}, flores {floreria,
+  vivero}. `buildDemoSpec` los toma del digest (el `demoSubcat`
+  histórico queda de respaldo) y `photoGateCtx` usa su mundo: belleza
+  SIN subrubro confirmado, en contexto de digest, usa el mundo
+  `belleza-neutro` (local/personas/retrato/rostro/café) — el default
+  pelo quedó solo para el harness legacy sin digest.
+- El resultado vive versionado en `digest.rubro_id` (fuente:
+  deteccion/pregunta/form/skip), siembra `profiles.category` +
+  `profiles.subrubro` al registrarse y alimenta
+  `question_candidates` tipo `rubro`. El barrido semanal puede
+  reclasificar pero NUNCA en silencio (log + pregunta pendiente; lo
+  confirmado por el dueño no se toca).
+- `rubroMatch` resuelve alias en ambos lados (ropa⇒moda,
+  restaurante⇒gastronomía, florería⇒flores, cosmética/peluquería⇒
+  belleza…): el pool de moda nunca más vacío, y `pickStyle` acepta el
+  subrubro confirmado para abrir pools taggeados por subrubro.
+
 ## (v234) El dataset de selección también elige en la prueba
 
 `pickDemoStyles` (y la reparación de variedad) consumen el dataset del
