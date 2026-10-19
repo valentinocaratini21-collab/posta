@@ -17,19 +17,23 @@ const AI_LIMITS = {
   total:    { chatPerDay: 150, weeksPerDay: 1, regensPerDay: 8 },
 };
 
+// Escalera por roles (decisión de Valentino 2026-10-19): nombres y precios NO
+// cambian; la venta es por resultado — Plan 1 = Community Manager (presencia),
+// Plan 2 = + Growth (crecimiento), Plan 3 = + Atención al cliente (consultas
+// respondidas). Growth y Atención operan gated hasta Meta Live.
 const PLANS_AR = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
     price: 39900,
     currency: 'ARS',
-    postsPerWeek: 5,
+    postsPerWeek: 7,
     reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
     ai: AI_LIMITS.esencial,
     features: [
-      '5 posteos por semana, automáticos',
+      '7 posteos por semana, automáticos',
       '1 reel por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
@@ -54,6 +58,8 @@ const PLANS_AR = {
       'Diseños + captions + hashtags',
       'Publicación automática programada',
       'Estrategia para diferenciarte de tu competencia',
+      'Pauta gestionada (fee 10%)',
+      'Reporte semanal de resultados',
     ],
     highlighted: true,
   },
@@ -65,7 +71,7 @@ const PLANS_AR = {
     postsPerWeek: 7,
     reelsPerWeek: 5,
     storiesPerWeek: 7,
-    tagline: 'Presencia total, todos los días',
+    tagline: 'Tus consultas, siempre respondidas',
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
@@ -75,7 +81,11 @@ const PLANS_AR = {
       'Diseños + captions + hashtags',
       'Publicación automática programada',
       'Estrategia para diferenciarte de tu competencia',
-      'Revisión de estrategia mensual',
+      'Pauta gestionada (fee 10%)',
+      'Reporte semanal de resultados',
+      'Comentarios y DMs respondidos (Posty redacta, vos aprobás con un toque)',
+      'Seguimiento de consultas sin respuesta',
+      'Reseñas de Google gestionadas',
     ],
   },
 };
@@ -87,13 +97,13 @@ const PLANS_UY = {
     name: 'Esencial',
     price: 890,
     currency: 'UYU',
-    postsPerWeek: 5,
+    postsPerWeek: 7,
     reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
     ai: AI_LIMITS.esencial,
     features: [
-      '5 posteos por semana, automáticos',
+      '7 posteos por semana, automáticos',
       '1 reel por semana',
       'Ideas estratégicas para tu negocio',
       'Diseños + captions + hashtags',
@@ -118,6 +128,8 @@ const PLANS_UY = {
       'Diseños + captions + hashtags',
       'Publicación automática programada',
       'Estrategia para diferenciarte de tu competencia',
+      'Pauta gestionada (fee 10%)',
+      'Reporte semanal de resultados',
     ],
     highlighted: true,
   },
@@ -129,7 +141,7 @@ const PLANS_UY = {
     postsPerWeek: 7,
     reelsPerWeek: 5,
     storiesPerWeek: 7,
-    tagline: 'Presencia total, todos los días',
+    tagline: 'Tus consultas, siempre respondidas',
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
@@ -139,7 +151,11 @@ const PLANS_UY = {
       'Diseños + captions + hashtags',
       'Publicación automática programada',
       'Estrategia para diferenciarte de tu competencia',
-      'Revisión de estrategia mensual',
+      'Pauta gestionada (fee 10%)',
+      'Reporte semanal de resultados',
+      'Comentarios y DMs respondidos (Posty redacta, vos aprobás con un toque)',
+      'Seguimiento de consultas sin respuesta',
+      'Reseñas de Google gestionadas',
     ],
   },
 };
