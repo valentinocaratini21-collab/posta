@@ -1317,6 +1317,22 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     }
   }
   specPosts.forEach((sp, i) => { sp.text_mode = textModes[i] || 'text'; });
+  // (2026-10-18) PILA DE TEXTO ACOTADA (amendment, misma vara que
+  // clientes): en las piezas CON texto, el máximo es titular (≤6) + UN
+  // solo elemento extra — la bajada (≤8 palabras) o la pastilla, nunca
+  // los dos juntos. El catálogo trae tag Y bajada en los 162 temas, así
+  // que hoy TODOS los sistemas apilan titular + bajada + pastilla. Gana
+  // la bajada (vende más que la etiqueta): si la pieza tiene bajada, la
+  // pastilla sale; la bajada se capa a 8 palabras por cláusula. Se aplica
+  // en el spec, antes de cualquier renderer, así que alcanza a todos los
+  // esqueletos que dibujan pill (claro, abajo, dúo, póster, workspace y
+  // el resto de demo_render.py) y a la ruta IA de /prueba, que consume
+  // este mismo spec. Las limpias no cambian: paraRender ya las desnuda.
+  specPosts.forEach((sp) => {
+    if (sp.text_mode !== 'text') return;
+    if (sp.subline) sp.subline = captions.capHeadlineWords(sp.subline, 8);
+    if (sp.subline && sp.pill) sp.pill = '';
+  });
   // (v197) La foto de perfil aparece como máximo en 2 piezas y con
   // tratamientos DISTINTOS entre sí: el medallón protagonista del
   // póster (si lo hay) y una marca suave grande sobre UNA pieza con

@@ -1353,6 +1353,36 @@ async function runWeeklyIdeasLoop() {
   return { ok: true, made, skipped };
 }
 
+// ---------- Limpieza de piezas (2026-10-18): dosificación 2-de-5 ----------
+// La lógica pura vive en clean-pieces.js (testeable con fixtures): el
+// mapeo tipo→kind, el conteo 2-de-5 y la planificación de la tanda con
+// el MISMO asignador del demo (assignTextModes).
+const cleanPieces = require('./clean-pieces');
+const kindOfTipo = cleanPieces.kindOfTipo;
+const planWeekTextModes = cleanPieces.planWeekTextModes;
+// Modo de UNA pieza contra la composición de su semana (palanca
+// regen-post y creaciones individuales): se reconstruye la semana de
+// posteos imagen (sin cancelados) en orden de creación, con la pieza
+// incluida — en su posición si ya existe (selfId) o al final si es
+// nueva — y se corre el MISMO asignador: si la semana ya tiene sus 2 con
+// texto mejor rankeados, la pieza sale limpia; si hay lugar y su kind
+// rankea, sale con texto. Determinista y consistente con lo que el
+// pipeline semanal decide para esa misma semana.
+function weekTextModeFor(uid, weekKey, kind, selfId) {
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT id, tipo FROM posts WHERE user_id = ? AND week_key = ? AND status != 'cancelled' AND media_type = 'image' ORDER BY id ASC`).all(uid, weekKey || '');
+  } catch (e) {}
+  const kinds = [];
+  let selfPos = -1;
+  for (const r of rows) {
+    if (selfId && r.id === selfId) { selfPos = kinds.length; kinds.push(kind); }
+    else kinds.push(kindOfTipo(r.tipo));
+  }
+  if (selfPos < 0) { selfPos = kinds.length; kinds.push(kind); }
+  return cleanPieces.modeFromWeekKinds(kinds, selfPos);
+}
+
 // "Hacelo": crea el posteo como BORRADOR por el pipeline normal de un posteo
 // (mismo camino que regenerar un borrador: contenido + imagen de concepto).
 // Un borrador NO consume cupo (el cupo cuenta programados/publicados): si la
@@ -1366,11 +1396,18 @@ async function makeIdeaDraft(uid, idea) {
     : idea.source === 'winner' ? 'social' : 'detras';
   const topic = [idea.title, idea.brief].filter(Boolean).join('. ');
   const content = await generateContent(contentInputFor(uid, topic, tipo, 0), key);
-  const caption = String((content && content.caption) || '').trim();
+  let caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId);
   const hashtags = String((content && content.hashtags) || '');
-  const headline = makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.title, 5, 70, rubroOf(uid));
+  // 🧹 Limpieza (creación individual): el modo se decide contra la
+  // composición de la semana destino — la pieza entra como la más nueva.
+  const wkForMode = idea.week_key || mondayKeyOf(tzToday(userTz(uid)));
+  const mode = weekTextModeFor(uid, wkForMode, kindOfTipo(tipo), null);
+  if (mode === 'clean') {
+    try { caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(tipo), (getProfile(uid) || {}).tone || ''); } catch (e) {}
+  }
+  const headline = mode === 'clean' ? '' : (makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.title, 5, 70, rubroOf(uid)));
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map((r) => r.file_path); } catch (e) {}
   const wk = idea.week_key || mondayKeyOf(tzToday(userTz(uid)));
@@ -1423,13 +1460,22 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   const tipo = post.tipo || 'social';
   const topic = [title, brief].filter(Boolean).join('. ');
   const content = await generateContent(contentInputFor(uid, topic, tipo, 0), key);
-  const caption = String((content && content.caption) || '').trim();
+  let caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId);
   const hashtags = String((content && content.hashtags) || '');
+  // 🧹 Limpieza: el modo sale de la composición de SU semana — si la
+  // semana ya tiene sus 2 con texto, el regenerado sale limpio; si hay
+  // lugar y su kind rankea, con texto. Pieza limpia: el título dirigido
+  // manda el TEMA pero no se quema en la imagen, y el caption cierra
+  // con CTA. Pieza con texto: el titular es el dirigido, como siempre.
+  const mode = weekTextModeFor(uid, post.week_key, kindOfTipo(tipo), post.id);
+  if (mode === 'clean') {
+    try { caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(tipo), (getProfile(uid) || {}).tone || ''); } catch (e) {}
+  }
   // El titular de la pieza es el dirigido (≤6 palabras, completo); si el
   // recorte duro lo dejara vacío, cae a la apertura del caption.
-  const headline = makeHeadline(title, 6, 70, rubroOf(uid)) || makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid));
+  const headline = mode === 'clean' ? '' : (makeHeadline(title, 6, 70, rubroOf(uid)) || makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)));
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map((r) => r.file_path); } catch (e) {}
   let productRef = null;
@@ -1467,7 +1513,7 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath), post.id);
   try { track(uid, 'admin_regen_post', String(post.id)); } catch (e) {}
-  return { ok: true, post_id: post.id, headline };
+  return { ok: true, post_id: post.id, headline, textMode: mode };
 }
 
 app.get('/api/ideas', requireAuth, (req, res) => {
@@ -3064,7 +3110,7 @@ app.post('/api/admin/regen-post', requireAdminToken, express.json(), async (req,
       return res.status(502).json({ ok: false, error: 'no se pudo regenerar: ' + r.reason });
     }
     console.log(`[admin] regen-post ${postId} (usuario ${post.user_id}) → "${title}"${unscheduled ? ' [estaba programado: desprogramado]' : ''}`);
-    res.json({ ok: true, post_id: post.id, user_id: post.user_id, status: 'draft', week_key: post.week_key, unscheduled, title, headline: r.headline || null });
+    res.json({ ok: true, post_id: post.id, user_id: post.user_id, status: 'draft', week_key: post.week_key, unscheduled, title, headline: r.headline || null, text_mode: r.textMode || 'text' });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
 // Extensión de prueba por soporte (v182): setea trial_extended_until =
@@ -3713,11 +3759,18 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   const idea = ((ideas || []).find(i => !rej || !String(i.titulo || '').toLowerCase().includes(rej)) || (ideas || [])[0]);
   if (!idea) return { ok: false, reason: 'no_ideas' };
   const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, 0), key);
-  const caption = String((content && content.caption) || '').trim();
+  let caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
   const hashtags = String((content && content.hashtags) || '');
-  const headline = makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.titulo, 5, 70, rubroOf(uid));
+  // 🧹 Limpieza (creación individual): el reemplazo entra como la pieza
+  // más nueva de su semana — el modo sale de la composición de esa
+  // semana, igual que en la palanca regen-post.
+  const mode = weekTextModeFor(uid, weekKey, kindOfTipo(idea.tipo), null);
+  if (mode === 'clean') {
+    try { caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(idea.tipo), (getProfile(uid) || {}).tone || ''); } catch (e) {}
+  }
+  const headline = mode === 'clean' ? '' : (makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.titulo, 5, 70, rubroOf(uid)));
   let refs = [];
   try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
   const styleOut2 = {};
@@ -6230,6 +6283,18 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         gridAppliedLine = gridPattern.reportLine(gPat, shift);
       }
     } catch (e) { console.error(`[pipeline:${tag}] equilibrio de grilla:`, e.message); }
+    // 🧹 LIMPIEZA (2026-10-18): dosificación 2-de-5 TAMBIÉN en clientes —
+    // hasta hoy el 100% de las piezas salía con titular y la regla vivía
+    // solo en el demo. Con los picks ya ordenados (equilibrio incluido),
+    // cada pick lleva su modo: 'text' (titular compuesto como siempre) o
+    // 'clean' (sin titular hacia la generación; el caption cierra con
+    // CTA). El pick del carousel queda exento de la cuenta (planWeekTextModes).
+    try {
+      const tm = planWeekTextModes(picks, deficit);
+      picks.forEach((p, ix) => { p._textMode = tm.modes[ix] || 'text'; });
+      const nText = picks.slice(0, deficit).filter((p) => p._textMode === 'text').length;
+      console.log(`[pipeline:${tag}] usuario ${uid}: limpieza — ${nText} con texto / ${Math.max(0, deficit - nText)} limpias en la tanda${tm.carouselIdx >= 0 ? ` (carousel exento: pick ${tm.carouselIdx})` : ''}`);
+    } catch (e) { console.error(`[pipeline:${tag}] limpieza (dosificación):`, e.message); }
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
@@ -6242,6 +6307,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     try { isFounder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
     const needRev = (!isFounder && autopilot.trustLevel(db, uid) === 0) ? 1 : 0;
     let created = 0;
+    // 🧹 Vigilancia de limpieza: modos y largos de caption de ESTA corrida,
+    // medibles contra la línea de base del 2026-10-18 (100% de piezas con
+    // texto; captions de 293-490 caracteres).
+    const runCleanStats = { text: 0, clean: 0, carousel: 0, capLens: [] };
     let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
     let firstImgError = ''; // 2026-10-14: primer error de imagen, para diagnóstico visible (last-result)
     // Contabilidad por slot (2026-10-15): cada slot que no produce posteo
@@ -6333,15 +6402,26 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         } catch (e) {}
         try {
           const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i), key);
-          const caption = String((content && content.caption) || '').trim();
+          let caption = String((content && content.caption) || '').trim();
           const hashtags = String((content && content.hashtags) || '');
           if (!caption) throw new Error('caption vacío');
           recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
+          // 🧹 Pieza LIMPIA (dosificación 2-de-5): sin titular en la
+          // imagen — la idea y el CTA viven en el caption, que CIERRA
+          // con el CTA (ensureCaptionCtaClose, el mismo del demo).
+          const cleanPiece = !isCarousel && idea._textMode === 'clean';
+          if (cleanPiece) {
+            try { caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(idea.tipo), (profile && profile.tone) || ''); } catch (e) {}
+          }
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
           if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); noteSlotFail('dup', 'caption duplicado en 24h'); claimed--; continue; }
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
-          const headline = makeHeadline(caption.split('\n')[0], 6, 70, (profile && profile.category) || null)
-            || makeHeadline(idea.titulo, 5, 70, (profile && profile.category) || null);
+          // Pieza limpia: headline vacío — la generación no reserva zona
+          // de titular, no se compone titular y el salvavidas stock
+          // tampoco lo pinta (ambos miran este mismo valor).
+          const headline = cleanPiece ? ''
+            : (makeHeadline(caption.split('\n')[0], 6, 70, (profile && profile.category) || null)
+              || makeHeadline(idea.titulo, 5, 70, (profile && profile.category) || null));
           let refs = [];
           try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
           // 2026-10-14: TARJETA INMEDIATA (pedido de Valentino) — el borrador
@@ -6491,6 +6571,11 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                 finalIntent || 'tips', finalProductRef, finalHookId);
             if (carInfo && carInfo.lastInsertRowid) runCreatedIds.add(carInfo.lastInsertRowid);
           }
+          // 🧹 Vigilancia de limpieza: modo y largo final de la pieza creada.
+          if (isCarousel) runCleanStats.carousel++;
+          else if (cleanPiece) runCleanStats.clean++;
+          else runCleanStats.text++;
+          try { runCleanStats.capLens.push(String(isCarousel ? (carouselGen && carouselGen.caption) : caption || '').length); } catch (e) {}
           created++;
         } catch (e) {
           claimed--;
@@ -6505,6 +6590,23 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // 5 workers: la semana entera (5 posteos) sale en una sola oleada.
     await Promise.all([worker(), worker(), worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
+    // 🧹 Vigilancia de limpieza: las dos medianas de la corrida quedan en
+    // el resultado (visible vía /api/week/last-result) y en el log, para
+    // comparar contra la línea de base del 2026-10-18 (100% con texto;
+    // captions de 293-490 caracteres). Señal durable por posteo: el
+    // image_prompt de una pieza CON texto lleva la línea "HEADLINE ZONE"
+    // y el de una limpia no — la proporción se puede auditar sobre los
+    // posteos guardados sin columnas nuevas.
+    const cleanStats = (() => {
+      const imgTotal = runCleanStats.text + runCleanStats.clean;
+      const lens = [...runCleanStats.capLens].sort((a, b) => a - b);
+      return {
+        withText: runCleanStats.text, clean: runCleanStats.clean, carousel: runCleanStats.carousel,
+        pctText: imgTotal ? Math.round((runCleanStats.text / imgTotal) * 100) : 0,
+        captionMedianChars: lens.length ? lens[Math.floor((lens.length - 1) / 2)] : 0,
+      };
+    })();
+    if (created > 0) console.log(`[pipeline:${tag}] usuario ${uid} limpieza: ${cleanStats.withText}/${cleanStats.withText + cleanStats.clean} posteos imagen con texto (${cleanStats.pctText}%), mediana de caption ${cleanStats.captionMedianChars} caracteres`);
     // 🧩 Si la tanda se armó respetando el patrón de la grilla, queda la
     // marca para la línea del reporte semanal (solo si salió algún posteo).
     if (created > 0 && gridAppliedLine) {
@@ -6564,9 +6666,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     if (created < deficit) {
       try { recordSweepFailure(uid, weekKey, 'partial_week'); } catch (e) {}
       console.error(`[pipeline:${tag}] usuario ${uid}: semana parcial ${created}/${deficit} — slotFails: ${JSON.stringify(slotFails)} errs: ${JSON.stringify(slotErrs)}`);
-      return { ok: true, created, existing, deficit, incomplete: true, slotFails, slotErrs };
+      return { ok: true, created, existing, deficit, incomplete: true, slotFails, slotErrs, cleanStats };
     }
-    return { ok: true, created, existing, deficit, slotFails };
+    return { ok: true, created, existing, deficit, slotFails, cleanStats };
   } finally {
     NEXTWEEK_RUNNING.delete(uid);
   }
@@ -8934,7 +9036,10 @@ function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headlin
   else if (rawText && String(rawText).trim()) parts.push(String(rawText).trim());
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   if (hexes.length) parts.push(`The client's exact brand colors (${hexes.join(', ')}) are woven into the scene through props, clothing, packaging and set details — integrated in the world of the photo, never as a flat color background.`);
-  parts.push(headlineZoneLine(headline));
+  // Pieza LIMPIA (sin titular): NO se reserva la zona del titular — el
+  // sujeto usa el encuadre completo. Con titular, la zona se dimensiona
+  // según su largo real, como siempre.
+  if (String(headline || '').trim()) parts.push(headlineZoneLine(headline));
   parts.push(PROMPT_AVOID_BASE + rubroAvoidFor(category));
   if (visualStyle && String(visualStyle).trim()) parts.push("If anything above contradicts the client's visual line, the CLIENT'S VISUAL LINE wins — always follow it.");
   return parts.join('\n');
@@ -11875,7 +11980,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               const sp = specPosts[i];
               const topicText = `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`;
               let prompt = await expandArtBrief({
-                headline: sp.headline,
+                // Pieza limpia (dosificación): sin titular hacia la
+                // generación — assembleImagePrompt no reserva zona y la
+                // foto usa el encuadre completo (igual que en clientes).
+                headline: sp.text_mode === 'clean' ? '' : sp.headline,
                 tipo: sp.kind || 'social',
                 angle: sp.subline || '',
                 theme: sp.tema || sp.headline,
@@ -12864,7 +12972,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v227';
+const BUILD_ID = '20261018-v228';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -13037,4 +13145,4 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, planWeekTextModes, weekTextModeFor, kindOfTipo };
