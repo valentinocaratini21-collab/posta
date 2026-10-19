@@ -2642,6 +2642,7 @@ function reviewCardHTML(drafts, slots, title) {  const s = slots || [];
           <input class="in" data-revhash="${d.id}" value="${esc(d.hashtags || '')}" placeholder="#tuMarca #rubro" aria-label="Hashtags del borrador ${i + 1}" style="margin-top:6px;padding:8px 10px">
         </div>
         <button class="igmock-accept" data-revaccept="${d.id}">✅ Aceptar<span data-revacceptwhen="${d.id}">${(() => { const wt = fmtWhenTxt(isoToLocalInput(s[i] || '')); return wt === 'Elegir día y hora' ? '' : ` · sale ${wt}`; })()}</span></button>
+        ${d.needs_review ? '' : `<button class="igmock-now" data-pubnow="${d.id}" style="margin-top:8px">⚡ Publicar ahora</button>`}
         <div class="igmock-whenrow"><label class="igmock-when2"><span>📅</span><span data-revwhentxt="${d.id}">${fmtWhenPill(isoToLocalInput(s[i] || ''))}</span><input type="datetime-local" data-revwhen="${d.id}" value="${isoToLocalInput(s[i] || '')}" aria-label="Día y hora para el borrador ${i + 1}" class="rev-dt-hide"></label>${tipoBadge(d.tipo)}</div>
         <div class="igmock-icos" style="margin-top:8px">
           <button data-revedit="${d.id}">✏️ Editar</button>
@@ -3055,6 +3056,19 @@ function pickRejectReason() {
   // Publicar un borrador AHORA (sin esperar la programación)
   $$('[data-revnow]').forEach(b => b.onclick = async () => {
     const id = +b.dataset.revnow;
+    b.disabled = true;
+    try {
+      const ta = document.querySelector(`[data-revcap="${id}"]`);
+      if (ta) await api.patch('/api/posts/' + id, { action: 'save-draft', caption: ta.value }).catch(() => {});
+    } catch (e) {}
+    const mount = document.getElementById('revnowm-' + id);
+    await publishNowFlow(id, mount);
+    render();
+  });
+  // "⚡ Publicar ahora" (v240): botón visible junto a Aceptar — el link
+  // discreto data-revnow existía pero no se encontraba; mismo flujo y mount.
+  $$('[data-pubnow]').forEach(b => b.onclick = async () => {
+    const id = +b.dataset.pubnow;
     b.disabled = true;
     try {
       const ta = document.querySelector(`[data-revcap="${id}"]`);
