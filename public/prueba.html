@@ -30,6 +30,22 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 12px 40px rgba(10,30,51,.07)}
 .form-card{max-width:640px;margin:28px auto 60px}
 .field{margin-bottom:18px}
+.hero-lockup{display:flex;align-items:center;justify-content:center;gap:12px}
+.hero-ava{width:54px;height:54px;border-radius:50%;box-shadow:0 6px 18px rgba(39,147,200,.4)}
+.audit-hook{text-align:center;font-size:16px;font-weight:700;color:var(--navy);max-width:560px;margin:26px auto 0;line-height:1.5}
+.audit-hook .hl2{color:var(--cel)}
+.form-or{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:var(--mut);font-weight:800;font-size:13px;letter-spacing:2px}
+.form-or:before,.form-or:after{content:"";flex:1;height:2px;background:var(--line);border-radius:2px}
+.price-contrast{text-align:center;font-size:16.5px;color:var(--mut);max-width:600px;margin:-34px auto 0;line-height:1.55}
+.price-contrast b{color:var(--navy)}
+.minifaq{max-width:640px;margin:44px auto 6px}
+.minifaq h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:14px}
+.faq-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:10px;box-shadow:0 6px 20px rgba(10,30,51,.04)}
+.faq-item summary{font-weight:800;font-size:15.5px;cursor:pointer;list-style:none;color:var(--navy)}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary:after{content:"+";float:right;color:var(--cel);font-weight:900}
+.faq-item[open] summary:after{content:"–"}
+.faq-item p{margin:10px 0 0;color:var(--mut);font-size:15px;line-height:1.55}
 .field label{display:block;font-weight:700;font-size:14px;margin-bottom:8px}
 .field input[type=text],.field select,.field textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:13px 15px;font-family:inherit;font-size:16px;color:var(--navy);background:#fff;outline:none;transition:border .15s}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cel)}
@@ -414,31 +430,31 @@ html{scroll-behavior:smooth}
 <div id="v-onboarding">
   <div class="wrap">
     <div class="hero">
-      <span class="pill">🤖 TU COMMUNITY MANAGER</span>
-      <img src="ai-avatar.png" alt="Posty" style="width:96px;height:96px;border-radius:50%;box-shadow:0 8px 24px rgba(39,147,200,.45);margin-bottom:4px">
-      <h1>¡Hola! Soy Posty 🤖</h1>
+      <div class="hero-lockup"><img src="ai-avatar.png" alt="Posty" class="hero-ava"><span class="pill">TU COMMUNITY MANAGER</span></div>
+      <h1>¡Hola! Soy Posty</h1>
       <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Te armo tu semana de Instagram — diseños, textos y hashtags con la onda de tu negocio.</p>
       <p class="sub">Vos solo aprobás, yo me ocupo de todo. Poné tu @ y mirá tu semana como si ya fueras cliente. Sin tarjeta.</p>
       <div class="cta-row"><a class="btn btn-primary" href="#formCard">Armar mi semana 👇</a></div>
     </div>
+    <p class="audit-hook">Y de regalo, el <span class="hl2">diagnóstico de tu Instagram</span>: qué mejorar, qué subir y qué bajar.</p>
     <div class="card form-card" id="formCard">
       <div class="err" id="obErr"></div>
-      <!-- Paso 1: solo el @ de Instagram -->
+      <!-- Paso 1: el @ de Instagram y, pegada abajo, la web del negocio -->
       <div id="stepIg">
         <div class="field"><label>Tu Instagram</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty trae tu nombre, tu rubro y tu foto de perfil.</div></div>
         <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana 👀</button>
-        <p class="tiny" style="margin-top:10px">Tu semana lista en ~1 minuto.</p>
+        <div class="form-or"><span>o</span></div>
+        <div id="webOptBox">
+          <div class="field" style="margin-bottom:10px"><label>La web de tu negocio</label><input type="text" id="f_web" placeholder="www.tunegocio.com.ar" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty lee tu web: nombre, servicios, colores y fotos.</div></div>
+          <button class="btn btn-primary btn-block" id="btnWebGo">Leer mi web 🌐</button>
+        </div>
+        <p class="tiny" style="margin-top:16px">Tu semana lista en ~1 minuto.</p>
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
         <p class="tiny" style="margin-top:6px">Solo tu @ público — sin contraseña, sin permisos</p>
         <p style="text-align:center;margin-top:14px"><button type="button" class="linklike" id="photoOptLink">📷 Subir una foto de mi negocio (opcional)</button></p>
         <div id="photoOptBox" style="display:none;margin-top:10px;text-align:center">
           <input type="file" id="optPhoto" accept="image/jpeg,image/png,image/webp" style="font-size:14px;max-width:100%">
           <p class="tiny" id="optPhotoName" style="margin-top:6px;min-height:18px"></p>
-        </div>
-        <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="webOptLink">🌐 ¿Sin Instagram? Pegá la web de tu negocio</button></p>
-        <div id="webOptBox" style="display:none;margin-top:10px">
-          <div class="field" style="margin-bottom:10px"><label>La web de tu negocio</label><input type="text" id="f_web" placeholder="www.tunegocio.com.ar" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty lee tu web: nombre, servicios, colores y fotos.</div></div>
-          <button class="btn btn-primary btn-block" id="btnWebGo">Leer mi web 🌐</button>
         </div>
       </div>
       <!-- Prefill OK: Posty encontró tu negocio -->
@@ -481,6 +497,7 @@ html{scroll-behavior:smooth}
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
       </div>
     </div>
+    <p class="price-contrast">Un community manager cobra ~$300.000 por mes. <b>Posty, desde $39.900.</b></p>
 
   <div class="work3">
     <h3>Así trabajo yo 👇</h3>
@@ -502,6 +519,13 @@ html{scroll-behavior:smooth}
       <div class="ej-card"><img src="prueba-ej4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💇 Peluquería — combo corte + color</p></div>
     </div>
     <p class="ej-foot">Diseño + caption + hashtags, con las fotos y los colores de cada negocio.</p>
+  </div>
+
+  <div class="minifaq">
+    <h3>Preguntas rápidas</h3>
+    <details class="faq-item"><summary>¿Tengo que dar mi contraseña?</summary><p>No: te conectás con Meta, sin compartir contraseñas.</p></details>
+    <details class="faq-item"><summary>¿Cuánto tarda mi semana?</summary><p>En ~1 minuto la tenés lista.</p></details>
+    <details class="faq-item"><summary>¿Puedo cancelar cuando quiero?</summary><p>Sí, cuando quieras.</p></details>
   </div>
 
   </div>
@@ -847,7 +871,6 @@ function show(id) {
   $('#btnWebGo').onclick = onWebSubmit;
   $('#btnWebTrialGo').onclick = startTrialWeb;
   $('#f_web').addEventListener('keydown', (e) => { if (e.key === 'Enter') onWebSubmit(); });
-  $('#webOptLink').onclick = () => { const b = $('#webOptBox'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; };
   $('#wfBack').onclick = () => { WEB = null; GEN_WEB = false; $('#webCard').style.display = 'none'; $('#stepIg').style.display = 'block'; };
   $('#btnGo2').onclick = startTrialFallback;
   $('#btnPrefillGo').onclick = startTrialPrefill;
