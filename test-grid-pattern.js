@@ -147,7 +147,7 @@ ok('db.js: tabla grid_pattern_snapshots', () => {
 });
 ok('server.js: motor + wiring en el pipeline + reporte + BUILD_ID v224', () => {
   const srv = fs.readFileSync('./server.js', 'utf8');
-  for (const needle of ['gridPatternFor', 'computeGridPattern', 'markGridApplied', 'gridAheadCount', '_gridNote', 'gridNote: idea._gridNote', 'gridNote,', "const BUILD_ID = '20261019-v236'"]) {
+  for (const needle of ['gridPatternFor', 'computeGridPattern', 'markGridApplied', 'gridAheadCount', '_gridNote', 'gridNote: idea._gridNote', 'gridNote,', "const BUILD_ID = '20261019-v237'"]) {
     assert.ok(srv.includes(needle), 'falta en server.js: ' + needle);
   }
 });

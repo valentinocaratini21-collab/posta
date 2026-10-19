@@ -184,8 +184,8 @@ ok('buildRefNote etiqueta cada imagen con su rol e instrucción', () => {
   assert.strictEqual(refRoles.buildRefNote([]), '');
 });
 ok('conceptShot compone la nota desde los roles (y el caller declara product)', () => {
-  assert.ok(srv.includes('refRoles.buildRefNote(roles.length ? roles : absRefs.map(() => \'photo\'))'));
-  assert.ok(srv.includes("refRolesForRefs = refs.map((r) => (mappedRefs.includes(r) ? 'product' : 'photo'))"));
+  assert.ok(srv.includes('refNote = refRoles.buildRefNote(roles);')); // (v237) la nota sale de los roles EFECTIVAMENTE enviados
+  assert.ok(srv.includes('albumRefsForPiece(uid, { tipo: idea.tipo')); // (v237) selección por pieza: mapeada (rol product) > tag > recencia
   assert.ok(srv.includes('refRoles: refRolesForRefs'));
 });
 ok('la ruta ilustrada del demo usa la nota de roles (personaje + estilo)', () => {
@@ -314,7 +314,7 @@ print(m.text_area_pct(409) > 20.0, round(m.text_area_pct(300), 1))
 
 console.log('== Versiones ==');
 ok('BUILD_ID v235 + motores de la prueba en 24 (identificación de rubro)', () => {
-  assert.ok(srv.includes("const BUILD_ID = '20261019-v236'"));
+  assert.ok(srv.includes("const BUILD_ID = '20261019-v237'"));
   assert.strictEqual(demo.DEMO_ENGINE_V, 24);
   assert.ok(fs.readFileSync('public/prueba.html', 'utf8').includes('const TRIAL_ENGINE_V = 24;'));
 });

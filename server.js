@@ -1783,7 +1783,8 @@ async function makeIdeaDraft(uid, idea) {
   }
   const headline = mode === 'clean' ? '' : (makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.title, 5, 70, rubroOf(uid)));
   let refs = [];
-  try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map((r) => r.file_path); } catch (e) {}
+  let albumRoles = null;
+  try { const picked = albumRefsForPiece(uid, { tipo, texts: [idea.title, caption.split('\n')[0]].filter(Boolean).join(' ') }); refs = picked.refs; albumRoles = picked.roles.length ? picked.roles : null; } catch (e) {}
   let productRef = null;
   try {
     const r = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND week_key = ?
@@ -1798,7 +1799,7 @@ async function makeIdeaDraft(uid, idea) {
     try {
       imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: idea.title, porque: idea.why },
-        tipo, headline, refs, apiKey: key, styleOut, productRef,
+        tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut, productRef,
       });
     } catch (e) {
       console.error(`[ideas-loop] imagen falló (intento ${attempt + 1}/3):`, e.message);
@@ -1851,7 +1852,8 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   // recorte duro lo dejara vacío, cae a la apertura del caption.
   const headline = mode === 'clean' ? '' : (makeHeadline(title, 6, 70, rubroOf(uid)) || makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)));
   let refs = [];
-  try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map((r) => r.file_path); } catch (e) {}
+  let albumRoles = null;
+  try { const picked = albumRefsForPiece(uid, { tipo, texts: [title, caption.split('\n')[0]].filter(Boolean).join(' ') }); refs = picked.refs; albumRoles = picked.roles.length ? picked.roles : null; } catch (e) {}
   let productRef = null;
   try {
     const r = db.prepare(`SELECT image_path FROM posts WHERE user_id = ? AND week_key = ?
@@ -1866,7 +1868,7 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
     try {
       imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: title, porque: brief },
-        tipo, headline, refs, apiKey: key, styleOut, productRef,
+        tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut, productRef,
       });
     } catch (e) {
       console.error(`[admin-regen] imagen falló (intento ${attempt + 1}/3):`, e.message);
@@ -4192,7 +4194,8 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   }
   const headline = mode === 'clean' ? '' : (makeHeadline(caption.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(idea.titulo, 5, 70, rubroOf(uid)));
   let refs = [];
-  try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
+  let albumRoles = null;
+  try { const picked = albumRefsForPiece(uid, { tipo: idea.tipo, texts: [idea.titulo, caption.split('\n')[0]].filter(Boolean).join(' ') }); refs = picked.refs; albumRoles = picked.roles.length ? picked.roles : null; } catch (e) {}
   const styleOut2 = {};
   // INVARIANTE: todo borrador sale con imagen real de IA. Si la IA falla
   // tras reintentos, no se crea el borrador (nunca un bloque plano).
@@ -4213,7 +4216,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     try {
       imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
-        tipo: idea.tipo, headline, refs, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
+        tipo: idea.tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
       });
     } catch (e) {
       console.error(`[review] IA imagen falló (intento ${attempt + 1}/3):`, e.message);
@@ -4948,34 +4951,169 @@ function albumMission(uid) {
   }
   return row;
 }
+// ---------- (v237) Calidad del material del cliente ----------
+// Una foto del cliente es material SAGRADO (su producto real), pero no
+// toda foto sirve para todo: una foto oscura o movida no puede ser la
+// base de un posteo publicado tal cual. El gate combina DOS señales:
+// (1) medición DETERMINÍSTICA (photo-quality.py, PIL: luminancia
+// media, varianza de bordes como proxy de nitidez, resolución útil) y
+// (2) la clasificación por visión que ya corre al subir (suma el
+// juicio "producto cortado"). Los issues quedan en
+// assets.album_quality como csv ('oscura,movida,baja-res,cortada') o
+// 'ok'. Una foto CON issues queda marcada SOLO-REFERENCIA:
+// albumQualityIssues() la detecta; el festejo no se dispara con ella
+// y el fallback de brand-card por claims la prefiere última. Como
+// REFERENCIA de una pieza nueva SÍ puede viajar (el modelo la usa de
+// guía; la QA de fidelidad cuida el resultado).
+const PHOTO_QUALITY_ISSUE_SET = new Set(['oscura', 'movida', 'baja-res', 'cortada']);
+function albumQualityIssues(q) {
+  return String(q || '').split(',').map((s) => s.trim()).filter((s) => PHOTO_QUALITY_ISSUE_SET.has(s));
+}
+const _photoQualityCache = new Map(); // path -> Promise<metrics|null> (los archivos del álbum son inmutables por nombre)
+function measurePhotoQuality(absPath) {
+  if (_photoQualityCache.has(absPath)) return _photoQualityCache.get(absPath);
+  const { execFile } = require('child_process');
+  const p = new Promise((resolve) => {
+    execFile('python3', [path.join(__dirname, 'photo-quality.py'), absPath], { timeout: 20000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try { const j = JSON.parse(String(stdout || '').trim()); resolve(j && !j.error ? j : null); }
+      catch (e) { resolve(null); }
+    });
+  });
+  _photoQualityCache.set(absPath, p);
+  return p;
+}
+// Umbrales documentados (calibrados conservadores: solo lo CLARAMENTE
+// malo se marca): luminancia media <38/255 = foto oscura; lado menor
+// <720px = resolución insuficiente para un posteo 4:5 nítido;
+// stddev de bordes <5.0 = foto movida o sin detalle.
+function qualityIssuesFromMetrics(m) {
+  if (!m) return [];
+  const out = [];
+  if (typeof m.lum === 'number' && m.lum < 38) out.push('oscura');
+  if (Math.min(m.w || 0, m.h || 0) < 720) out.push('baja-res');
+  if (typeof m.edge === 'number' && m.edge < 5.0) out.push('movida');
+  return out;
+}
 async function tagAlbumPhoto(uid, assetId, filePath) {
   try {
     // v181: los videos del álbum NO se clasifican por imagen (llevan tag
     // 'video' de nacimiento); mandar un .mp4 como imagen rompería la llamada.
     if (!/\.(jpe?g|png|webp)$/i.test(String(filePath || ''))) return;
-    const key = openaiKeyFor(uid);
-    if (!key) return;
     const abs = path.join(MEDIA_DIR, path.basename(String(filePath)));
     if (!fs.existsSync(abs)) return;
+    // (v237) La medición determinística corre SIEMPRE (no depende de
+    // la key de IA) y se guarda aunque la visión no corra.
+    const metrics = await measurePhotoQuality(abs).catch(() => null);
+    const issues = qualityIssuesFromMetrics(metrics);
+    const key = openaiKeyFor(uid);
+    if (!key) {
+      db.prepare('UPDATE assets SET album_quality = ? WHERE id = ?').run(issues.length ? issues.join(',') : 'ok', assetId);
+      return;
+    }
     const b64 = fs.readFileSync(abs).toString('base64');
     const mime = /\.png$/i.test(filePath) ? 'image/png' : /\.webp$/i.test(filePath) ? 'image/webp' : 'image/jpeg';
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', max_tokens: 8,
+        model: 'gpt-4o-mini', max_tokens: 80,
         messages: [{ role: 'user', content: [
-          { type: 'text', text: 'Clasificá esta foto de un negocio en UNA sola palabra: producto (un producto, plato o prenda en primer plano), local (el espacio, interior o frente del negocio), equipo (personas trabajando o el dueño), otro. Respondé solo la palabra, sin punto.' },
+          { type: 'text', text: 'Clasificá esta foto de un negocio y su CALIDAD. Respondé SOLO con JSON: {"tag":"producto","calidad":"buena"} — tag: producto (un producto, plato o prenda en primer plano), local (el espacio, interior o frente del negocio), equipo (personas trabajando o el dueño), otro. calidad: buena, oscura (muy poca luz), movida (borrosa, fuera de foco) o cortada (el producto o sujeto principal está cortado por el borde de la foto).' },
           { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}` } },
         ] }],
       }),
       signal: AbortSignal.timeout(30000),
     });
     const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'vision-album-tag', model: 'gpt-4o-mini', json: j });
+    const raw = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+    const parsed = parseLooseJson(raw);
+    let tag = parsed && ['producto', 'local', 'equipo'].includes(String(parsed.tag || '').toLowerCase()) ? String(parsed.tag).toLowerCase() : null;
+    if (!tag) { // compatibilidad: la respuesta de una palabra de siempre
+      const w = raw.toLowerCase();
+      tag = ['producto', 'local', 'equipo'].includes(w) ? w : 'otro';
+    }
+    const visionQuality = parsed && String(parsed.calidad || '').toLowerCase();
+    if (['oscura', 'movida', 'cortada'].includes(visionQuality) && !issues.includes(visionQuality)) issues.push(visionQuality);
+    db.prepare('UPDATE assets SET album_tag = ?, album_quality = ? WHERE id = ?').run(tag, issues.length ? issues.join(',') : 'ok', assetId);
+  } catch (e) { /* clasificar nunca bloquea */ }
+}
+// (v237) Los VIDEOS del álbum se clasifican por su MINIATURA (visión:
+// producto/local/equipo) y su ORIENTACIÓN sale del probe de ffprobe
+// (ancho/alto del stream). Queda en las columnas del asset: album_tag
+// y album_quality ('orientacion=vertical|horizontal|cuadrado'). La
+// SELECCIÓN de videos para reels y el crop por sujeto NO viven acá:
+// son del motor de reels (build MOTION, otra sesión) — traspaso
+// documentado en el reporte de la build.
+async function tagAlbumVideo(uid, assetId, thumbPath, dims) {
+  try {
+    const orient = dims && dims.w && dims.h ? (dims.h > dims.w ? 'vertical' : dims.w > dims.h ? 'horizontal' : 'cuadrado') : '';
+    if (orient) {
+      try { db.prepare('UPDATE assets SET album_quality = ? WHERE id = ?').run('orientacion=' + orient, assetId); } catch (e) {}
+    }
+    const key = openaiKeyFor(uid);
+    if (!key || !thumbPath) return;
+    const abs = path.join(MEDIA_DIR, path.basename(String(thumbPath)));
+    if (!fs.existsSync(abs)) return;
+    const b64 = fs.readFileSync(abs).toString('base64');
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 8,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: 'Clasificá esta imagen (miniatura de un video de un negocio) en UNA sola palabra: producto (un producto, plato o prenda en primer plano), local (el espacio, interior o frente del negocio), equipo (personas trabajando o el dueño), otro. Respondé solo la palabra, sin punto.' },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b64}` } },
+        ] }],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'vision-album-tag', model: 'gpt-4o-mini', json: j });
     const w = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').toLowerCase().trim();
     const tag = ['producto', 'local', 'equipo'].includes(w) ? w : 'otro';
     db.prepare('UPDATE assets SET album_tag = ? WHERE id = ?').run(tag, assetId);
   } catch (e) { /* clasificar nunca bloquea */ }
+}
+// ---------- (v237) Selección de fotos del álbum POR PIEZA ----------
+// Hasta v236 los llamadores tomaban "las 2 fotos más recientes" a
+// ciegas: una foto de otro producto, vieja o mala podía terminar de
+// referencia de cualquier pieza. Ahora la selección puntúa por pieza:
+//   tier 0 — la foto MAPEADA al ítem de la pieza (photo_map del
+//            fundamento: ESTA foto es ESTE producto/servicio);
+//   tier 1 — el tag que la pieza pide (producto por defecto; equipo
+//            para detrás de escena/proceso; local para el lugar);
+//   tier 2 — otra foto clasificada; tier 3 — sin clasificar.
+// Dentro del tier, una foto con issues de calidad pierde medio paso
+// (puede viajar como referencia, pero una limpia gana) y la recencia
+// es SOLO el desempate final. Devuelve hasta `max` { refs, roles }
+// listos para conceptShot (la mapeada viaja con rol 'product': es el
+// producto EXACTO de la pieza).
+function desiredAlbumTag(tipo, texts) {
+  const t = `${tipo || ''} ${texts || ''}`.toLowerCase();
+  if (/(detras|detrás|proceso|backstage|equipo|staff|haciendo|elaboraci|preparaci|trabajando)/.test(t)) return 'equipo';
+  if (/(local|venue|sucursal|nuestro espacio|el lugar|interior|frente)/.test(t)) return 'local';
+  return 'producto';
+}
+function albumRefsForPiece(uid, { tipo = '', texts = '', max = 2 } = {}) {
+  let rows = [];
+  try {
+    rows = db.prepare(`SELECT file_path, album_tag, album_quality FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 12`).all(uid);
+  } catch (e) { rows = []; }
+  if (!rows.length) return { refs: [], roles: [] };
+  let mapped = [];
+  try { mapped = photoMappedRefsFor(uid, [texts]); } catch (e) { mapped = []; } // photoMappedRefsFor recibe la LISTA de textos de la pieza
+  const mappedSet = new Set(mapped);
+  const want = desiredAlbumTag(tipo, texts);
+  const scored = rows.map((r, i) => {
+    const isMapped = mappedSet.has(r.file_path);
+    const tier = isMapped ? 0 : (r.album_tag === want ? 1 : (r.album_tag ? 2 : 3));
+    const bad = albumQualityIssues(r.album_quality).length ? 1 : 0;
+    return { file_path: r.file_path, role: isMapped ? 'product' : 'photo', score: tier * 2 + bad, _i: i };
+  }).sort((a, b) => (a.score - b.score) || (a._i - b._i));
+  const top = scored.slice(0, Math.max(1, max));
+  return { refs: top.map((s) => s.file_path), roles: top.map((s) => s.role) };
 }
 // El festejo: la primera foto de la semana se convierte en un posteo
 // terminado con ESA foto de base (edición IA: el producto queda idéntico,
@@ -4987,6 +5125,26 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     if (!key) return;
     const mission = albumMission(uid);
     if (mission.post_id) return; // ya hubo festejo esta semana
+    // (v237) GATE DE CALIDAD: el festejo convierte SU foto en un
+    // posteo — una foto oscura/movida/cortada NO se festeja (quedaría
+    // publicada tal cual si la IA degrada). La foto mala queda como
+    // referencia para piezas futuras; el festejo espera una buena.
+    // La medición es determinística y síncrona acá (la clasificación
+    // por visión corre en paralelo y puede no haber terminado).
+    try {
+      const row = db.prepare('SELECT album_quality FROM assets WHERE id = ?').get(assetId);
+      let issues = albumQualityIssues(row && row.album_quality);
+      if (!issues.length) {
+        const abs = path.join(MEDIA_DIR, path.basename(String(filePath)));
+        const m = await measurePhotoQuality(abs).catch(() => null);
+        issues = qualityIssuesFromMetrics(m);
+        if (issues.length) { try { db.prepare('UPDATE assets SET album_quality = ? WHERE id = ?').run(issues.join(','), assetId); } catch (e) {} }
+      }
+      if (issues.length) {
+        console.log(`[album] usuario ${uid}: foto ${assetId} NO se festeja — calidad: ${issues.join(', ')} (queda como referencia)`);
+        return;
+      }
+    } catch (e) { /* si el gate no puede medir, no bloquea el festejo */ }
     const profile = getProfile(uid) || {};
     const titulo = 'Lo nuevo de mi negocio, en foto real';
     const content = await generateContent(contentInputFor(uid, titulo, 'foto', 0), key);
@@ -4994,18 +5152,30 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     if (!caption) return;
     const hashtags = String((content && content.hashtags) || '');
     const headline = makeHeadline(caption.split('\n')[0], 6, 70, profile.category || null) || '';
+    // (v237) El festejo es un RESTYLE declarado como tal: la idea
+    // ("el producto y la escena EXACTAMENTE iguales") y la nota de rol
+    // por fin dicen lo mismo (antes la nota genérica pedía una escena
+    // NUEVA sobre la misma pieza).
+    const genOut = {};
     const imagePath = await conceptShotGenerateQueued({
       uid,
       idea: { titulo, porque: 'El cliente subió esta foto REAL de su negocio: usala como base y mejorala (luz, encuadre, fondo prolijo) manteniendo el producto y la escena EXACTAMENTE iguales.' },
-      tipo: 'foto', headline, refs: [filePath], apiKey: key,
+      tipo: 'foto', headline, refs: [filePath], refRoles: ['restyle'], restyle: true, resultOut: genOut, apiKey: key,
     });
     if (!imagePath) return;
     const tz = userTz(uid);
     const weekKey = mondayKeyOf(tzToday(tz));
-    const needRev = trainingWheelsActive(uid) ? 1 : 0;
+    // (v237) client_photo=1 SOLO si la imagen final ES la foto del
+    // cliente o un restyle que PASÓ la fidelidad. Si la fidelidad
+    // falló y cayó al fallback, la imagen ES su foto original (sigue
+    // siendo client_photo) pero va a revisión; si quedó sin verificar,
+    // no se afirma que sea su foto y también va a revisión.
+    const fid = genOut.fidelity || 'n/a';
+    const isClientPhoto = (fid === 'passed' || fid === 'fallback') ? 1 : 0;
+    const needRev = (trainingWheelsActive(uid) || fid === 'fallback' || fid === 'unverified') ? 1 : 0;
     const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, needs_review, source, client_photo, week_key, tipo, strategy_why)
-      VALUES (?,?,?,?, 'draft', 'image', ?, 'album', 1, ?, 'foto', 'Posteo creado desde la foto real que subió el cliente')`)
-      .run(uid, imagePath, caption, hashtags, needRev, weekKey);
+      VALUES (?,?,?,?, 'draft', 'image', ?, 'album', ?, ?, 'foto', 'Posteo creado desde la foto real que subió el cliente')`)
+      .run(uid, imagePath, caption, hashtags, needRev, isClientPhoto, weekKey);
     try { db.prepare('UPDATE album_missions SET post_id = ? WHERE user_id = ? AND week_key = ?').run(ins.lastInsertRowid, uid, weekKey); } catch (e) {}
     console.log(`[album] usuario ${uid}: foto ${assetId} convertida en el posteo ${ins.lastInsertRowid} ✨`);
     try { push.sendPush(uid, { title: 'Tu foto ya es un posteo ✨', body: 'Posty la convirtió en un posteo listo para publicar. Miralo en tu semana 👇', url: '/#/app/semana' }).catch(() => {}); } catch (e) {}
@@ -5016,7 +5186,7 @@ app.get('/api/album', requireAuth, (req, res) => {
     const uid = req.session.userId;
     // v181: el álbum incluye los VIDEOS del cliente (kind='video', con
     // miniatura en thumb_path). Los counts de progreso son solo de fotos.
-    const rows = db.prepare(`SELECT id, file_path, album_tag, kind, thumb_path, created_at FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
+    const rows = db.prepare(`SELECT id, file_path, album_tag, album_quality, kind, thumb_path, created_at FROM assets WHERE user_id = ? AND kind IN ('photo','video') ORDER BY created_at DESC LIMIT 20`).all(uid);
     const photos = rows.filter(r => r.kind === 'photo');
     // Clasificación perezosa: hasta 3 sin clasificar por visita, en 2º plano.
     let lazy = 0;
@@ -5058,7 +5228,7 @@ app.get('/api/album', requireAuth, (req, res) => {
     } catch (e) {}
     res.json({
       ok: true,
-      photos: rows.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '' })),
+      photos: rows.map(ph => ({ id: ph.id, path: ph.file_path, tag: ph.album_tag || '', quality: ph.album_quality || '', kind: ph.kind || 'photo', thumb: ph.thumb_path || '' })),
       videos: rows.length - photos.length,
       counts, targets: ALBUM_TARGETS,
       week: { photos: weekPhotos, videos: weekVideos, goal_min: 3, goal_max: 5, week_key: weekKeyNow },
@@ -5070,9 +5240,10 @@ app.get('/api/album', requireAuth, (req, res) => {
 // Subida al álbum (v181): fotos como siempre (≤15 MB) y VIDEOS del cliente
 // (mp4/mov, ≤60 MB, ≤90 s validados con ffprobe). El tope de 20 ítems es
 // TOTAL (fotos + videos) para cuidar el disco del volumen. Los videos
-// quedan con miniatura (thumb_path) y tag 'video' — no se clasifican por
-// imagen ni disparan el festejo (eso es de fotos). Posty los usa como
-// material estrella de los reels (reel-engine).
+// quedan con miniatura (thumb_path) y nacen con tag 'video'; (v237) en
+// segundo plano se clasifican por visión sobre la miniatura y guardan
+// su orientación, pero NO disparan el festejo (eso es de fotos).
+// Posty los usa como material estrella de los reels (reel-engine).
 const _albumRawImg = express.raw({ type: 'image/*', limit: '15mb' });
 const _albumRawVid = express.raw({ type: 'video/*', limit: '60mb' });
 function albumVideoDuration(absFile) {
@@ -5080,6 +5251,22 @@ function albumVideoDuration(absFile) {
   return new Promise((resolve) => {
     execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', absFile],
       { timeout: 20000 }, (err, out) => resolve(err ? 0 : (parseFloat(out) || 0)));
+  });
+}
+// (v237) Probe completo del video: duración + dimensiones del stream
+// (la orientación se guarda al clasificar — tagAlbumVideo).
+function albumVideoProbe(absFile) {
+  const { execFile } = require('child_process');
+  return new Promise((resolve) => {
+    execFile('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-show_entries', 'format=duration', '-of', 'json', absFile],
+      { timeout: 20000 }, (err, out) => {
+        if (err) return resolve({ dur: 0, w: 0, h: 0 });
+        try {
+          const j = JSON.parse(String(out || '{}'));
+          const st = (j.streams && j.streams[0]) || {};
+          resolve({ dur: parseFloat(j.format && j.format.duration) || 0, w: st.width || 0, h: st.height || 0 });
+        } catch (e) { resolve({ dur: 0, w: 0, h: 0 }); }
+      });
   });
 }
 function albumVideoThumb(absFile, dur, thumbAbs) {
@@ -5103,7 +5290,8 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
       const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${ext}`;
       const abs = path.join(MEDIA_DIR, name);
       fs.writeFileSync(abs, req.body);
-      const dur = await albumVideoDuration(abs);
+      const probe = await albumVideoProbe(abs);
+      const dur = probe.dur;
       if (!dur) { try { fs.unlinkSync(abs); } catch (e) {} return res.status(400).json({ error: 'No pude leer ese video 😅 Probá con otro.' }); }
       if (dur > 90) { try { fs.unlinkSync(abs); } catch (e) {} return res.status(400).json({ error: 'Ese video dura más de 90 segundos 🎬 Subí uno más corto y Posty lo usa en tus reels.' }); }
       const thumbName = `${name}.thumb.jpg`;
@@ -5113,6 +5301,10 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
       const ins = db.prepare('INSERT INTO assets (user_id, file_path, kind, album_tag, thumb_path) VALUES (?,?,?,?,?)')
         .run(uid, `/media/${name}`, 'video', 'video', thumbPath);
       console.log(`[album] usuario ${uid}: video ${name} (${Math.round(dur)}s) guardado 🎬`);
+      // (v237) Clasificación del video en segundo plano: tag por
+      // visión sobre la miniatura + orientación desde el probe. La
+      // selección de videos para reels queda en el motor (MOTION).
+      tagAlbumVideo(uid, ins.lastInsertRowid, thumbPath, probe);
       return res.json({ ok: true, id: ins.lastInsertRowid, path: `/media/${name}`, kind: 'video', thumb: thumbPath, mission_done: false });
     }
     const ext = ct.includes('jpeg') || ct.includes('jpg') ? 'jpg' : ct.includes('webp') ? 'webp' : 'png';
@@ -6081,8 +6273,9 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
     try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
     let voice = '';
     try { if (typeof voiceExamples === 'function') voice = voiceExamples(db, uid) || ''; } catch (e) {}
-    const refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`)
-      .all(uid).map(r => r.file_path).filter(Boolean);
+    // (v237) Refs del álbum POR PIEZA (mapeada/tag/calidad), no las 2
+    // más recientes a ciegas.
+    const refs = albumRefsForPiece(uid, { tipo, texts: topic }).refs;
     const baseInput = {
       business: profile.business_name,
       category: profile.category,
@@ -6986,18 +7179,16 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             : (makeHeadline(caption.split('\n')[0], 6, 70, (profile && profile.category) || null)
               || makeHeadline(idea.titulo, 5, 70, (profile && profile.category) || null));
           let refs = [];
-          try { refs = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 2`).all(uid).map(r => r.file_path); } catch (e) {}
-          // (v230) La foto del producto EXACTO de esta pieza (si el mapa
-          // foto→producto la conoce en su álbum) manda como referencia.
-          // (v231) Y viaja con su ROL declarado: esas refs son el
-          // producto real (preservar forma y etiqueta); el resto, fotos.
+          // (v237) Selección de fotos del álbum POR PIEZA (albumRefsForPiece):
+          // la foto mapeada al ítem de la pieza (rol 'product') manda,
+          // después el tag que la pieza pide, y la recencia solo
+          // desempata. (Reemplaza el "las 2 más recientes" + merge
+          // manual de v230/v231, que quedan dentro del selector.)
           let refRolesForRefs = null;
           try {
-            const mappedRefs = photoMappedRefsFor(uid, [idea.titulo, caption.split('\n')[0]]);
-            if (mappedRefs.length) {
-              refs = [...mappedRefs, ...refs.filter((r) => !mappedRefs.includes(r))].slice(0, 2);
-              refRolesForRefs = refs.map((r) => (mappedRefs.includes(r) ? 'product' : 'photo'));
-            }
+            const picked = albumRefsForPiece(uid, { tipo: idea.tipo, texts: [idea.titulo, caption.split('\n')[0]].filter(Boolean).join(' ') });
+            refs = picked.refs;
+            refRolesForRefs = picked.roles.length ? picked.roles : null;
           } catch (e) {}
           // 2026-10-14: TARJETA INMEDIATA (pedido de Valentino) — el borrador
           // nace AHORA con su texto y sin imagen: la tarjeta aparece en la
@@ -9364,14 +9555,28 @@ app.get('/api/photo-mission', requireAuth, async (req, res) => {
 // Product shot con IA: si el cliente no subió fotos ESTA semana pero tiene de
 // antes, la IA genera una variación nueva BASADA en sus fotos reales (referencia).
 // Así el sistema "aprende" cómo se ve su producto y no repite las mismas fotos.
-// Helper: fragmento de estilo para product-shot (estilo manual o auto-pick
-// por tema/rubro). Va AL FINAL del prompt, con supremacía de paleta.
-// Devuelve '' si el módulo no está. Nunca lanza.
-function styleFragFor(styleCode, settings, profile) {
+// Helper: fragmento de estilo para product-shot y la foto de stock
+// (estilo manual o auto-pick). (v237) El auto-pick es el pick COMPLETO
+// del sistema cuando hay uid (fundamento + feed + oferta + intención de
+// venta + baseReal: la base es SU foto, solo presets editables); sin
+// uid cae al pick simple de siempre. Nunca lanza.
+function styleFragFor(styleCode, settings, profile, opts = {}) {
   try {
-    const st = styleCode
-      ? getStyle(styleCode)
-      : ((pickStyle({ theme: '', rubro: (profile && profile.category) || '', favorites: (settings && settings.user_id) ? getStyleFavorites(settings.user_id) : [] }) || {}).style || null);
+    let st = styleCode ? getStyle(styleCode) : null;
+    if (!st && opts.uid) {
+      const digest = (() => { try { return digestForUser(opts.uid); } catch (e) { return null; } })();
+      const pick = pickStyle({
+        theme: opts.theme || '', rubro: (profile && profile.category) || (digest && digest.categoria) || '',
+        digest, feedProfile: require('./image-styles').feedProfileFromDigest(digest), offerProfile: require('./image-styles').offerProfileFromDigest(digest),
+        salesIntent: opts.salesIntent || '', baseReal: true,
+        favorites: getStyleFavorites(opts.uid), boosts: require('./learning').getClientBoosts(db, opts.uid) || {},
+      });
+      st = (pick && pick.style) || null;
+      if (opts.pickOut) { opts.pickOut.style = st; opts.pickOut.reason = (pick && pick.reason) || ''; }
+    }
+    if (!st) {
+      st = ((pickStyle({ theme: opts.theme || '', rubro: (profile && profile.category) || '', favorites: (settings && settings.user_id) ? getStyleFavorites(settings.user_id) : [] }) || {}).style || null);
+    }
     if (!st) return '';
     const hexes = (typeof parseBrandHexes === 'function' && settings) ? parseBrandHexes(settings.brand_colors) : [];
     return '\n' + styleFragment(st, hexes);
@@ -9383,58 +9588,82 @@ app.post('/api/product-shot', requireAuth, requireTrialValid, express.json(), as
     catch (e) { if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message }); throw e; }
     if (!costs.checkRate(req.session.userId, 'regen', aiLimitsFor(req.session.userId).regensPerDay).ok)
       return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
+    const uid = req.session.userId;
     const { refs = [], idea = '', angle = '', style = '' } = req.body || {};
-    const profile = getProfile(req.session.userId);
-    const settings = getSettings(req.session.userId);
+    const profile = getProfile(uid);
+    const settings = getSettings(uid);
     const apiKey = settings.openai_key || process.env.OPENAI_API_KEY || '';
     if (!apiKey) return res.status(400).json({ error: 'Sin clave de OpenAI' });
-    const absRefs = refs.slice(0, 2)
+    let absRefs = refs.slice(0, 3)
       .map(fp => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
       .filter(p => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
     if (!absRefs.length) return res.status(400).json({ error: 'Sin fotos de referencia' });
-    const prompt =
-      `Foto promocional fotorrealista para el Instagram de "${profile.business_name || 'un negocio'}"` +
-      `${profile.category ? ` (${profile.category})` : ''}. ` +
-      `INSPIRADA EN las fotos de referencia: el MISMO producto, los MISMOS colores, la MISMA estética y estilo fotográfico. ` +
-      `Tiene que parecer sacada en el mismo lugar, otro momento. ` +
-      `Tema del posteo: ${idea || 'novedad'}. ${angle || ''} ` +
-      `Sin texto, sin letras, sin logos, sin marcas de agua. Calidad de fotografía comercial profesional.` +
-      styleFragFor(style, settings, profile);
-    // Fallback de modelo (2026-10-15): si gpt-image-2 rechaza, reintenta con
-    // gpt-image-1 (mismo criterio que genConceptImage; latch compartido).
-    const models = GPT_IMAGE_2_DOWN ? ['gpt-image-1'] : ['gpt-image-2', 'gpt-image-1'];
-    let r = null, usedModel = models[0], lastErr = '';
-    for (const m of models) {
-      usedModel = m;
-      const form = new FormData();
-      form.append('model', m);
-      form.append('prompt', prompt);
-      // UNA sola imagen: OpenAI rechaza múltiples campos 'image' ("Duplicate parameter").
-      const p0 = absRefs[0];
-      const buf = fs.readFileSync(p0);
-      const ext = path.extname(p0).toLowerCase();
-      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-      form.append('image', new Blob([buf], { type: mime }), 'ref' + ext);
-      form.append('size', '1024x1024');
-      form.append('quality', costs.IMAGE_QUALITY); // config en costs.js (env IMAGE_QUALITY)
-      r = await fetch('https://api.openai.com/v1/images/edits', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-        signal: AbortSignal.timeout(120000),
-      });
-      if (r.ok) break;
-      lastErr = await r.text().catch(() => '');
-      if (m === 'gpt-image-2') { GPT_IMAGE_2_DOWN = true; console.error('[product-shot] gpt-image-2 rechazó; fallback a gpt-image-1:', lastErr.slice(0, 160)); }
+    // (v237) Transporte: el motor manda UNA referencia — la foto del
+    // producto manda, el logo va ÚLTIMO (si el cliente pasó su logo
+    // entre las refs, no puede tapar a su producto).
+    try {
+      const logoPaths = new Set(db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'logo'`).all(uid)
+        .map((r) => path.join(MEDIA_DIR, path.basename(String(r.file_path || '')))));
+      absRefs = [...absRefs.filter((p) => !logoPaths.has(p)), ...absRefs.filter((p) => logoPaths.has(p))];
+    } catch (e) {}
+    const baseRef = absRefs[0];
+    // (v237) El pick COMPLETO (fundamento + feed + oferta + intención
+    // de venta + baseReal) — hasta v236 este era el pick más débil del
+    // sistema (sin digest, sin dataset, sin intención). El estilo
+    // manual del cliente sigue ganando.
+    const digest = (() => { try { return digestForUser(uid); } catch (e) { return null; } })();
+    const salesIntent = (() => {
+      const b = String((req.body && req.body.salesIntent) || '');
+      if (['venta', 'reserva', 'consulta', 'prueba', 'autoridad'].includes(b)) return b;
+      const t = `${idea} ${angle}`.toLowerCase();
+      if (/(promo|oferta|descuento|%|precio|compr)/.test(t)) return 'venta';
+      if (/(reserv|turno|agenda|cupo)/.test(t)) return 'reserva';
+      return '';
+    })();
+    const manualStyle = style ? getStyle(style) : null;
+    const pick = manualStyle ? null : pickStyle({
+      theme: idea, rubro: (profile && profile.category) || (digest && digest.categoria) || '',
+      digest, feedProfile: require('./image-styles').feedProfileFromDigest(digest), offerProfile: require('./image-styles').offerProfileFromDigest(digest),
+      salesIntent, baseReal: true, tipo: 'foto',
+      favorites: getStyleFavorites(uid), boosts: require('./learning').getClientBoosts(db, uid) || {},
+    });
+    const styleObj = manualStyle || (pick && pick.style) || null;
+    const hexes = (typeof parseBrandHexes === 'function' && settings) ? parseBrandHexes(settings.brand_colors) : [];
+    const star = (digest && digest.estrella && (digest.estrella.nombre || digest.estrella.name)) || '';
+    // (v237) El prompt se arma con la fórmula oficial
+    // (assembleImagePrompt) y ABRE con la cláusula de fidelidad: la
+    // base es la foto REAL de su producto. Fuera el "INSPIRADA EN" de
+    // siempre — no es una inspiración, es SU producto.
+    const subjectLine = `Photorealistic commercial promotional photograph for the Instagram of "${(profile && profile.business_name) || (digest && digest.nombre) || 'un negocio'}"${(profile && profile.category) ? ` (${profile.category})` : ''}. The reference photo shows the client's REAL product${star ? ` (${star})` : ''}: the product in the new image must be THAT EXACT product — same shape, same colors, same packaging, same label — photographed in the same place, at a different moment, with professional commercial quality. Post theme: ${idea || 'novedad'}. ${angle || ''} No text, no letters, no watermarks.`;
+    const prompt = assembleImagePrompt({
+      blocks: null,
+      rawText: `${refRoles.FIDELITY_CLAUSE}\n${subjectLine}`,
+      visualStyle: '',
+      paletteHex: hexes,
+      headline: '',
+      category: (profile && profile.category) || '',
+      styleDirection: styleObj ? styleFragment(styleObj, hexes) : '',
+    });
+    // (v237) Generación por el transporte compartido (genConceptImage:
+    // latch gpt-image-2→1, telemetría y tamaño 4:5 — antes este
+    // endpoint generaba CUADRADO 1024×1024 con su propio loop).
+    const note = refRoles.buildRefNote(['product']);
+    let b64 = await genConceptImage(apiKey, prompt, [baseRef], note, uid, '1024x1280', null, 'product-shot');
+    // (v237) QA DE FIDELIDAD bloqueante: la base es su producto real.
+    const gate = await fidelityGate({
+      uid, key: apiKey, baseAbs: baseRef, resultB64: b64,
+      regen: () => genConceptImage(apiKey, `${prompt}\n\n${refRoles.FIDELITY_REINFORCE}`, [baseRef], note, uid, '1024x1280', null, 'product-shot'),
+    });
+    let fidelity = gate.status;
+    if (gate.status === 'passed' && gate.b64) b64 = gate.b64;
+    else if (gate.status === 'unverified' && gate.b64) b64 = gate.b64;
+    else if (gate.status === 'fallback') {
+      try { b64 = fs.readFileSync(baseRef).toString('base64'); }
+      catch (e) { fidelity = 'unverified'; }
     }
-    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${lastErr.slice(0, 200)}`);
-    const data = await r.json();
-    costs.trackUsage({ feature: 'concept-shot', userId: req.session.userId, model: usedModel, images: 1, json: data });
-    const b64 = data && data.data && data.data[0] && data.data[0].b64_json;
-    if (!b64) throw new Error('OpenAI no devolvió imagen');
     const name = saveImageB64(b64);
-    console.log(`[product-shot] generado para usuario ${req.session.userId} (${absRefs.length} refs)`);
-    res.json({ ok: true, path: `/media/${name}` });
+    console.log(`[product-shot] generado para usuario ${uid} (fidelidad: ${fidelity}${styleObj ? `, estilo ${styleObj.code}` : ''})`);
+    res.json({ ok: true, path: `/media/${name}`, fidelity, style: styleObj ? styleObj.code : '', reason: manualStyle ? 'manual' : ((pick && pick.reason) || '') });
   } catch (e) {
     console.error('[product-shot]', e.message);
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, error: e.message });
@@ -9935,6 +10164,87 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
     return null; // QA silencioso: no bloquea la entrega de la imagen
   }
 }
+// ---------- (v237) QA DE FIDELIDAD — el candado del material del cliente ----------
+// Cuando una pieza nace del material REAL del cliente (su foto como
+// base en un restyle, o su foto de producto como referencia), ningún
+// QA comparaba el resultado contra su foto original: un restyle podía
+// "embellecer" cambiando la etiqueta, la forma o el color de SU
+// producto y nadie lo detectaba. qaFidelityB64 recibe LAS DOS imágenes
+// (la primera es la original del cliente; la segunda, el resultado) y
+// juzga SOLO identidad del producto/sujeto con una rúbrica acotada y
+// determinística. Devuelve { ok, detalle } o null ante cualquier
+// falla (red, API, JSON ilegible, veredicto no booleano): null =
+// SIN VERIFICAR — no bloquea, pero queda marcado (ver fidelityGate).
+async function qaFidelityB64(origB64, resultB64, apiKey) {
+  try {
+    if (!origB64 || !resultB64 || !apiKey) return null;
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.1,
+        max_tokens: 200,
+        messages: [
+          { role: 'system', content:
+`Sos el control de FIDELIDAD del material de un cliente. Te muestro DOS imágenes: la PRIMERA es la foto ORIGINAL del cliente (su producto real) y la SEGUNDA es el resultado generado a partir de ella. Tu único trabajo es juzgar si el producto/sujeto principal de la segunda es EL MISMO que el de la primera.
+Respondé SOLO con JSON, sin explicaciones: {"fidelidad_ok":true,"detalle":"..."}
+- fidelidad_ok = true SOLO si es reconociblemente el MISMO producto/sujeto: misma forma y silueta, mismos colores, mismo packaging/envase, misma etiqueta (mismo texto y diseño legibles en el mismo lugar), mismas proporciones y detalles distintivos.
+- La escena, la luz, el fondo y el encuadre PUEDEN cambiar: eso no es infidelidad.
+- fidelidad_ok = false si el producto fue rediseñado, reemplazado por uno parecido, recoloreado, si su etiqueta cambió o desapareció, si las proporciones o la forma cambiaron, o si el sujeto principal ya no es el de la foto original.
+- Si en la primera imagen NO hay un producto (es un lugar o una persona), juzgá la identidad del sujeto principal: mismo lugar reconocible o misma persona → true; otro lugar u otra persona → false.
+- detalle: UNA frase concreta nombrando qué comparaste (el producto y su etiqueta/forma/color) y, si falla, qué cambió.` },
+          { role: 'user', content: [
+            { type: 'text', text: 'PRIMERA imagen: la foto ORIGINAL del cliente.' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${origB64}` } },
+            { type: 'text', text: 'SEGUNDA imagen: el resultado generado. ¿El producto/sujeto es EL MISMO?' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${resultB64}` } },
+          ] },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'vision-fidelity', model: 'gpt-4o-mini', json: j });
+    const raw = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+    const parsed = parseLooseJson(raw);
+    if (!parsed || typeof parsed.fidelidad_ok !== 'boolean') return null;
+    return { ok: parsed.fidelidad_ok, detalle: String(parsed.detalle || '').slice(0, 140) };
+  } catch (e) {
+    return null; // sin veredicto: el llamador degrada a "sin verificar", nunca bloquea por error del QA
+  }
+}
+// La puerta completa (síncrona y bloqueante SOLO donde hay material
+// del cliente — los llamadores deciden): veredicto → si es infiel,
+// UN reintento regenerando con la cláusula de fidelidad reforzada →
+// si vuelve a fallar, FALLBACK a la foto original (el llamador la
+// compone por código; acá solo se dictamina). Degradación honesta:
+// sin key, con el tope de IA alcanzado o con el QA sin veredicto, el
+// estado es 'unverified' — la imagen se entrega pero queda marcada
+// como sin verificar, jamás se bloquea por un error del control.
+// regen(refuerzo) debe devolver el b64 regenerado (o lanzar).
+// Devuelve { status: 'passed'|'fallback'|'unverified', b64?, detalle }.
+async function fidelityGate({ uid, key, baseAbs, resultB64, regen }) {
+  if (!key) return { status: 'unverified', detalle: 'sin clave para verificar' };
+  try { costs.assertAiOk(uid); } catch (e) { return { status: 'unverified', detalle: 'tope de IA alcanzado' }; }
+  let origB64 = null;
+  try { origB64 = fs.readFileSync(baseAbs).toString('base64'); } catch (e) { return { status: 'unverified', detalle: 'foto original ilegible' }; }
+  if (!origB64) return { status: 'unverified', detalle: 'foto original ilegible' };
+  const v1 = await qaFidelityB64(origB64, resultB64, key);
+  if (!v1) return { status: 'unverified', detalle: 'QA de fidelidad sin veredicto' };
+  if (v1.ok) return { status: 'passed', detalle: v1.detalle };
+  console.log(`[qa-fidelidad] uid ${uid}: resultado INFIEL (${v1.detalle || 'sin detalle'}) — reintento con cláusula reforzada`);
+  let b64b = null;
+  try { b64b = await regen(true); } catch (e) { console.error('[qa-fidelidad] regeneración falló:', e.message); }
+  if (!b64b) return { status: 'fallback', detalle: v1.detalle };
+  const v2 = await qaFidelityB64(origB64, b64b, key);
+  if (!v2) return { status: 'unverified', b64: b64b, detalle: 'QA sin veredicto en el reintento' };
+  if (v2.ok) return { status: 'passed', b64: b64b, detalle: v2.detalle, retried: true };
+  console.log(`[qa-fidelidad] uid ${uid}: el reintento también es infiel (${v2.detalle || 'sin detalle'}) — fallback a la foto original del cliente`);
+  return { status: 'fallback', detalle: v2.detalle || v1.detalle };
+}
+
 // ---------- Chequeo automático de marca (Style Lock) ----------
 // Visión post-generación con gpt-4o (el usuario lo pidió explícito, no mini):
 // verifica paleta integrada, logo idéntico y línea visual. Nunca lanza:
@@ -10070,7 +10380,13 @@ async function genConceptImageModel(apiKey, prompt, absRefs, refNote, uid, model
     form.append('model', model);
     form.append('prompt', prompt + ' ' + (refNote || refRoles.buildRefNote(['product'])));
     // UNA sola imagen de referencia: OpenAI rechaza múltiples campos 'image'
-    // ("Duplicate parameter"). Va la primera (la de mayor prioridad: logo > producto > fotos).
+    // ("Duplicate parameter"). Viaja absRefs[0] y SOLO esa: desde v237
+    // los llamadores mandan en absRefs EXACTAMENTE las referencias que
+    // la nota describe (conceptShotGenerateInner planifica el
+    // transporte con prioritizeRefPairs: el producto/la foto base del
+    // cliente mandan; el logo solo viaja primero en piezas de marca).
+    // Si un llamador futuro manda más de una, la nota tiene que
+    // nombrar solo la primera.
     const p0 = absRefs[0];
     const buf = fs.readFileSync(p0);
     const ext = path.extname(p0).toLowerCase();
@@ -10217,7 +10533,7 @@ function conceptShotGenerateQueued(args) {
     else s.waiters.push(run);
   });
 }
-async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, refRoles: callerRefRoles = null, apiKey, style = null, usedStyles = null, usedFamilies = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
+async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, refRoles: callerRefRoles = null, apiKey, style = null, usedStyles = null, usedFamilies = null, styleOut = null, resultOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -10326,26 +10642,26 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // (v231) Roles por índice, EN PARALELO a absRefs (adopción de
   // patrones: cada referencia declara su rol — producto real, logo,
   // foto, personaje, estilo). callerRefRoles[i] corresponde a refs[i];
-  // lo que el pipeline suma declara su rol al entrar. La nota final se
-  // compone con refRoles.buildRefNote al final de este bloque.
+  // lo que el pipeline suma declara su rol al entrar.
   let roles = absRefs.map((_, i) => (Array.isArray(callerRefRoles) && callerRefRoles[i]) || 'photo');
   // Reference lock (producto consistente): la primera foto de producto de la
   // semana viaja como referencia para que el producto se vea IDÉNTICO en todos
   // los posteos. Solo si el caller no pasó refs propias.
-  let refNote;
   if (productRef && !userRefCount) {
     const prp = path.join(MEDIA_DIR, path.basename(String(productRef)));
     try {
       if (fs.existsSync(prp) && fs.statSync(prp).isFile()) {
         absRefs = [prp, ...absRefs].slice(0, 3);
         roles = ['product', ...roles].slice(0, 3);
-        refNote = 'IMPORTANT: the reference photo shows the client\'s REAL product — it must appear IDENTICAL in the new image (same shape, same colors, same packaging, same labels, same proportions). Do NOT redesign or reinterpret the product. Only change the scene/style around it.';
       }
     } catch (e) {}
   }
-  // Style Lock: logo de marca del cliente — se sube UNA vez (asset kind='logo') y
-  // va SIEMPRE como primera referencia: la marca sale idéntica en todos los posteos.
-  // (refNote ya declarado arriba: el reference-lock de producto puede haberlo seteado.)
+  // Style Lock: logo de marca del cliente — se sube UNA vez (asset
+  // kind='logo'). (v237) Ya NO va siempre primero: el transporte de
+  // gpt-image manda UNA sola referencia (ver la planificación de
+  // transporte más abajo), y con el logo primero la foto real del
+  // producto podía no llegar nunca al modelo. El logo entra al pool
+  // con su rol y la prioridad decide qué viaja según la pieza.
   let logoPresent = false;
   try {
     const logoRow = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'logo' ORDER BY id ASC LIMIT 1`).get(uid);
@@ -10353,15 +10669,14 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     if (lfp) {
       const lp = path.join(MEDIA_DIR, path.basename(lfp));
       if (fs.existsSync(lp) && fs.statSync(lp).isFile()) {
-        absRefs = [lp, ...absRefs].slice(0, 3); // el logo va PRIMERO, máx 3 refs totales
-        roles = ['logo', ...roles].slice(0, 3);
+        absRefs = [...absRefs, lp].slice(0, 3);
+        roles = [...roles, 'logo'].slice(0, 3);
         logoPresent = true;
       }
     }
   } catch (e) {}
   // Boost N2 (level-boosts): si el llamador no pasó refs explícitas, las fotos
   // REALES del cliente tienen prioridad como referencia (no banco genérico).
-  // El logo de marca sigue primero (Style Lock); las fotos van después.
   if (!userRefCount && brief.photoRefs && brief.photoRefs.length && absRefs.length < 3) {
     const fill = brief.photoRefs
       .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
@@ -10369,12 +10684,9 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     if (fill.length) {
       absRefs = [...absRefs, ...fill].slice(0, 3);
       roles = [...roles, ...fill.map(() => 'photo')].slice(0, 3);
-      if (!refNote) refNote = 'IMPORTANT: the reference photos are the client\'s REAL photos — keep the same products, people and places recognizable (same look, same photographic style), in a new scene. Never a generic stock look.';
     }
   }
-  if (logoPresent) {
-    refNote = 'IMPORTANT: the FIRST reference image is the client\'s brand logo — it must appear IDENTICAL (same design, same colors, same art style), as the protagonist or clearly visible, in a new scene. Do NOT redesign or reinterpret it.';
-  } else if (visualProfile && visualProfile.subject_always_present && Array.isArray(visualProfile.ref_paths) && visualProfile.ref_paths.length && absRefs.length < 3) {
+  if (!logoPresent && visualProfile && visualProfile.subject_always_present && Array.isArray(visualProfile.ref_paths) && visualProfile.ref_paths.length && absRefs.length < 3) {
     // Style Lock visual: si un sujeto/personaje aparece en todos los posteos del
     // feed, sumar refs del feed (hasta completar 3 refs totales) para que el
     // generador lo mantenga reconocible en la nueva escena.
@@ -10382,29 +10694,82 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     if (feedRefs.length) {
       absRefs = [...absRefs, ...feedRefs].slice(0, 3);
       roles = [...roles, ...feedRefs.map(() => 'character')].slice(0, 3);
-      refNote = 'IMPORTANT: keep the SAME recurring subject/character from the reference photos (it appears in every post of this client), recognizable and consistent, in a new scene.';
     }
   }
-  // MODO RESTYLE: la foto del cliente es la protagonista — el MISMO producto,
-  // solo cambia el estilo. Pisa cualquier refNote anterior (incluso el logo:
-  // en restyle la foto base manda).
-  // (v231) La nota final sale de los ROLES por índice (ref-roles.js):
-  // cada referencia declara qué es y cómo usarla, en vez de la nota
-  // única que pisaba a las demás. refNoteOverride del caller manda
-  // textual; en restyle la foto base ES la pieza (rol 'restyle').
-  if (restyle) {
-    refNote = refNoteOverride || refRoles.buildRefNote(['restyle']);
-  } else if (refNoteOverride) {
-    refNote = refNoteOverride;
-  } else if (absRefs.length) {
-    refNote = refRoles.buildRefNote(roles.length ? roles : absRefs.map(() => 'photo'));
+  // En restyle la foto base del cliente ES la pieza: su rol manda.
+  if (restyle && absRefs.length) roles[0] = 'restyle';
+  // (v237) ¿Hay material del cliente en juego? (su foto como base o su
+  // producto como referencia) → la fórmula cambia de GENERACIÓN a
+  // EDICIÓN: cláusula de fidelidad obligatoria en el prompt y QA de
+  // fidelidad bloqueante tras generar (más abajo).
+  const clientMaterial = !!(restyle || roles.includes('product') || roles.includes('restyle'));
+  if (clientMaterial) prompt = `${prompt}\n\n${refRoles.FIDELITY_CLAUSE}`;
+  // (v237) PLANIFICACIÓN DE TRANSPORTE — la honestidad del pipeline:
+  // el transporte de gpt-image (images/edits) acepta UNA imagen. Hasta
+  // v236 la nota describía hasta 3 referencias pero el modelo veía
+  // solo absRefs[0] — y el logo iba primero, así que la foto del
+  // producto del cliente podía no viajar nunca. Ahora: las referencias
+  // se PRIORIZAN por rol (ref-roles.prioritizeRefPairs: el producto y
+  // la foto base mandan; el logo solo primero en piezas de marca/
+  // identidad o si es la única referencia), se envía el tope del
+  // transporte y la NOTA se compone SOLO con las referencias
+  // efectivamente enviadas. transportMax es el único lugar que conoce
+  // el límite del motor: si mañana la ruta manda más, sube acá.
+  const TRANSPORT_MAX = 1;
+  let clientBaseRef = null;
+  let refNote;
+  {
+    const pairs = refRoles.prioritizeRefPairs(
+      absRefs.map((ref, i) => ({ ref, role: roles[i] || 'photo' })),
+      { brandPiece: intent === 'identidad' },
+    );
+    const sent = pairs.slice(0, TRANSPORT_MAX);
+    if (sent.length < pairs.length) {
+      console.log(`[transporte-refs] uid ${uid}: ${pairs.length} referencias candidatas, viaja${sent.length === 1 ? '' : 'n'} ${sent.length} (${sent.map((p) => p.role).join(',')}); roles que NO viajan: ${pairs.slice(TRANSPORT_MAX).map((p) => p.role).join(',')}`);
+    }
+    absRefs = sent.map((p) => p.ref);
+    roles = sent.map((p) => p.role);
+    const basePair = sent.find((p) => p.role === 'product' || p.role === 'restyle');
+    clientBaseRef = basePair ? basePair.ref : null;
+    // MODO RESTYLE: la foto del cliente es la protagonista — el MISMO
+    // producto, solo cambia el estilo. refNoteOverride del caller
+    // manda textual; en restyle la foto base ES la pieza (rol
+    // 'restyle'); si no, la nota sale de los roles ENVIADOS.
+    if (restyle) refNote = refNoteOverride || refRoles.buildRefNote(roles.length ? roles : ['restyle']);
+    else if (refNoteOverride) refNote = refNoteOverride;
+    else if (roles.length) refNote = refRoles.buildRefNote(roles);
   }
+  const genOnce = (reinforce) => genConceptImage(key, withStyle(prompt) + (reinforce ? `\n\n${refRoles.FIDELITY_REINFORCE}` : ''), absRefs, refNote, uid);
   let b64;
   try {
-    b64 = await genConceptImage(key, withStyle(prompt), absRefs, refNote, uid);
+    b64 = await genOnce(false);
   } catch (e) {
     console.error('[concept-shot] openai:', e.message);
     throw new Error('OpenAI no pudo generar la imagen: ' + e.message);
+  }
+  // (v237) QA DE FIDELIDAD — bloqueante SOLO con material del cliente
+  // (clientBaseRef = su foto base o su foto de producto, ya ENVIADA).
+  // Infiel → 1 reintento con la cláusula reforzada → infiel de nuevo
+  // ⇒ b64 pasa a ser LA FOTO ORIGINAL (el composite por código de más
+  // abajo le aplica titular y grade como a cualquier foto) y el
+  // llamador marca la pieza (resultOut.fidelity). Sin veredicto (sin
+  // key, tope de IA, error del QA) → se entrega marcada 'unverified'.
+  // En generación de cero este bloque no corre: el QA sigue siendo la
+  // auditoría de siempre.
+  if (resultOut) { resultOut.fidelity = clientBaseRef ? 'unverified' : 'n/a'; resultOut.fidelityDetail = ''; }
+  if (clientBaseRef) {
+    try {
+      const gate = await fidelityGate({ uid, key, baseAbs: clientBaseRef, resultB64: b64, regen: () => genOnce(true) });
+      if (resultOut) { resultOut.fidelity = gate.status; resultOut.fidelityDetail = gate.detalle || ''; }
+      if (gate.status === 'passed' && gate.b64) b64 = gate.b64;
+      else if (gate.status === 'unverified' && gate.b64) b64 = gate.b64;
+      else if (gate.status === 'fallback') {
+        try { b64 = fs.readFileSync(clientBaseRef).toString('base64'); }
+        catch (e) { if (resultOut) resultOut.fidelity = 'unverified'; console.error('[qa-fidelidad] no se pudo leer la foto original para el fallback:', e.message); }
+      }
+    } catch (e) {
+      console.error('[qa-fidelidad] gate falló (se entrega sin verificar):', e.message);
+    }
   }
   // QA de visión DESACTIVADO (2026-10-02): causaba timeouts (hasta 6 reintentos
   // encadenados = 15 min). Se genera una vez y se entrega. El usuario puede
@@ -10550,8 +10915,14 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
                     if (qa2 && qa2.claims_ok === false) {
                       let photoAbs = null;
                       try {
-                        const a = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 1`).get(uid);
-                        if (a && a.file_path && fs.existsSync(a.file_path)) photoAbs = a.file_path;
+                        // (v237) La foto de la degradación se elige SIN
+                        // issues de calidad primero (una foto marcada
+                        // solo-referencia no va a una brand card).
+                        const a = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY (CASE WHEN album_quality IS NULL OR album_quality = '' OR album_quality = 'ok' THEN 0 ELSE 1 END), created_at DESC LIMIT 1`).get(uid);
+                        if (a && a.file_path) {
+                          const cand = path.join(MEDIA_DIR, path.basename(String(a.file_path)));
+                          if (fs.existsSync(cand)) photoAbs = cand;
+                        }
                       } catch (e) {}
                       const prof2 = getProfile(uid) || {};
                       const cardAbs = brandCardPng({ headline: cleanHeadline || '', bgHex: (hexes && hexes[0]) || '#0A1E33', textHex: '#FFFFFF', business: prof2.business_name || '', logoAbs: null, photoAbs, outDir: MEDIA_DIR });
@@ -11281,10 +11652,17 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
   }
 });
 
-// Restylear la foto ACTUAL de un borrador con un estilo elegido ("🎨 Restylear
-// mi foto"). A diferencia de /photo-style (que genera una foto nueva), acá la
-// foto del cliente es la BASE: gpt-image-2 EDITS mantiene el MISMO producto,
-// solo cambia el estilo. Mantiene caption, hashtags y horario.
+// Restylear la foto ACTUAL de un borrador ("🎨 Restylear mi foto"). A
+// diferencia de /photo-style (que genera una foto nueva), acá la foto
+// del cliente es la BASE: gpt-image-2 EDITS mantiene el MISMO
+// producto, solo cambia el estilo. Mantiene caption, hashtags y
+// horario.
+// (v237) El estilo dejó de ser obligatorio-manual: si el cliente no
+// elige, Posty AUTO-ELIGE con el pick completo (fundamento + feed +
+// oferta + intención de venta de la pieza + baseReal: SOLO presets
+// relight/reframe — un new-scene jamás sale como "restyle" de su
+// foto). La elección queda visible en style_reason y el cliente la
+// puede cambiar como siempre eligiendo otro estilo.
 app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -11294,8 +11672,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
       return res.json({ ok: false, error: costs.MSG_REGEN_RATE });
     const postId = Number(req.params.id);
     const { style = '' } = req.body || {};
-    const st = getStyle(style);
-    if (!postId || !st) return res.status(400).json({ ok: false, error: 'Estilo inválido' });
+    if (!postId) return res.status(400).json({ ok: false, error: 'Borrador inválido' });
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
@@ -11305,17 +11682,45 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absBase || !fs.existsSync(absBase))
       return res.status(400).json({ ok: false, error: 'El borrador no tiene foto para restylear' });
+    const manual = style ? getStyle(style) : null;
+    if (style && !manual) return res.status(400).json({ ok: false, error: 'Estilo inválido' });
+    let st = manual;
+    let reason = manual ? 'manual' : '';
+    if (!st) {
+      const digest = (() => { try { return digestForUser(uid); } catch (e) { return null; } })();
+      const IS = require('./image-styles');
+      const pick = IS.pickStyle({
+        digest,
+        feedProfile: IS.feedProfileFromDigest(digest),
+        offerProfile: IS.offerProfileFromDigest(digest),
+        salesIntent: String(post.sales_intent || ''),
+        baseReal: true,
+        tipo: post.tipo || '',
+        theme: String(post.caption || '').split('\n')[0],
+        rubro: rubroOf(uid),
+        favorites: getStyleFavorites(uid),
+        boosts: require('./learning').getClientBoosts(db, uid) || {},
+      });
+      st = (pick && pick.style) || IS.getStyle('/goldenhour');
+      reason = (pick && pick.reason) || 'auto:fallback';
+    }
+    if (!st) return res.status(400).json({ ok: false, error: 'Estilo inválido' });
     const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
     const styleOut = {};
+    const genOut = {};
     const newPath = await conceptShotGenerateQueued({
-      uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline,
-      refs: [basePath], style: st.code, styleOut, restyle: true,
+      uid, idea: String(post.caption || ''), tipo: post.tipo || '', intent: post.intent || null, headline,
+      refs: [basePath], refRoles: ['restyle'], style: st.code, styleOut, resultOut: genOut, restyle: true,
     });
     if (!newPath) throw new Error('sin imagen');
-    db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?,
+    // (v237) Si la fidelidad cayó al fallback, la imagen final es la
+    // foto original con composite: la pieza va a revisión humana.
+    const fid = genOut.fidelity || 'n/a';
+    const needRev = fid === 'fallback' ? 1 : (post.needs_review ? 1 : 0);
+    db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?, needs_review = ?,
       source_topic = COALESCE(NULLIF(source_topic,''), 'restyle'), prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?`)
-      .run(String(newPath), st.code, `restyle de tu foto con ${st.code}`, String(styleOut.intent || ''), String(post.image_path || ''), postId);
-    res.json({ ok: true, path: newPath, style: st.code });
+      .run(String(newPath), st.code, `restyle de tu foto con ${st.code}${manual ? '' : ' (elegido por Posty)'}`, String(styleOut.intent || ''), needRev, String(post.image_path || ''), postId);
+    res.json({ ok: true, path: newPath, style: st.code, reason, fidelity: fid });
   } catch (e) {
     console.error('[photo-restyle]', e.message);
     if (e && e.name === 'AiCapExceeded') return res.json({ ok: false, capped: true, error: e.message });
@@ -11349,7 +11754,9 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
     if (!apiKey) return res.status(400).json({ ok: false, error: 'Sin clave de OpenAI' });
     const b64 = await genConceptImage(apiKey,
       'Enhance this photo professionally: fix lighting, white balance, exposure, sharpness and contrast. Keep the EXACT same composition, subjects, framing and colors — it must remain recognizably the SAME photo, just professionally finished. Do not add, remove or move anything.',
-      [absBase], null, uid);
+      // (v237) La nota de rol viaja con la foto: el transporte manda
+      // esta única referencia y la nota dice exactamente eso.
+      [absBase], refRoles.buildRefNote(['restyle']), uid);
     const newPath = `/media/${saveImageB64(b64)}`;
     db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
     res.json({ ok: true, path: newPath });
@@ -12845,7 +13252,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               // del demo (DEMO_AI_DAILY_CAP_USD) sigue mandando. El
               // pipeline de clientes NO usa este override (su techo
               // mensual por usuario no lo admite: ver genConceptImage).
-              const genGpt = (p) => genConceptImage(demoApiKey, p, refs, demoAi.REF_NOTE, null, 'demo-ai-image', 'high');
+              // (v237) La nota para gpt-image nombra SOLO la referencia
+              // que su transporte efectivamente manda (la primera: el
+              // personaje) — la nota de 2 roles va solo a Nano, que
+              // recibe todas (demoAi.REF_NOTE sigue siendo la de
+              // Nano vía el parámetro refNote de abajo).
+              const genGpt = (p) => genConceptImage(demoApiKey, p, refs, refRoles.buildRefNote(['character']), null, 'demo-ai-image', 'high');
               let gen = await demoAi.generateDemoPieceImage({ prompt, refs, geminiKey, genGpt, refNote: demoAi.REF_NOTE });
               if (!gen) return null;
               // v205: QA VISUAL con reintento — la pieza cruda se chequea
@@ -13802,7 +14214,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v236';
+const BUILD_ID = '20261019-v237';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

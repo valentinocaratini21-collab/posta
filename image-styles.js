@@ -230,11 +230,17 @@ function aliasRubro(r) {
   return RUBRO_ALIASES[x] || x;
 }
 function rubroMatch(style, rubro) {
-  const r = String(rubro || '').toLowerCase().trim();
+  // (v237) Normalización de acentos: las categorías reales de los
+  // perfiles llegan CON acento ('gastronomía', 'cafetería',
+  // 'peluquería') y los rubros del catálogo van sin acento — sin
+  // quitar diacríticos, el match léxico fallaba en silencio y el pick
+  // caía a pools genéricos (medido: un sushi y una parrilla elegían
+  // el mismo preset de neón). Se normalizan AMBOS lados.
+  const r = String(rubro || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!r) return false;
   const forms = new Set([r, aliasRubro(r)]);
   return (style.rubros || []).some((x0) => {
-    const x = String(x0 || '').toLowerCase().trim();
+    const x = String(x0 || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const xf = [x, aliasRubro(x)];
     for (const a of forms) for (const b of xf) { if (a && b && (a.includes(b) || b.includes(a))) return true; }
     return false;
@@ -554,7 +560,68 @@ function familyOfStyle(style, map) {
   return (e && e.familia) || styleFamilyOf(style);
 }
 
-// pickStyle({ intent, tipo, theme, angle, rubro, businessName, usedThisWeek, digest, avoidFamilies, feedProfile, offerProfile, salesIntent, dataset }) → { style, reason, intent, intentSource, family, digestMatch, dataset } | null
+// ---------- (v237) EDIT_MODE: qué se puede HACER con el preset sobre
+// material real del cliente ----------
+// Cuando la base es una FOTO DEL CLIENTE (restyle, product-shot), no
+// todo preset sirve: algunos solo existen como escena generada de cero
+// y aplicarlos "sobre" su foto obliga al modelo a reconstruir el
+// producto — el riesgo de infidelidad que la QA de fidelidad persigue.
+// Cada preset se clasifica por su texto (y su familia/render del
+// dataset) en uno de tres modos:
+//   relight   — dirección de luz/grade/mood sobre el sujeto tal cual
+//               está: aplicable a la foto real sin reconstruirla.
+//   reframe   — recorte, fondo o superficie nueva ALREDEDOR del mismo
+//               sujeto (packshot sobre fondo, flat-lay, podio): el
+//               sujeto queda, cambia el marco.
+//   new-scene — exige una escena construida (cartelera, póster,
+//               miniatura, levitación, dúo antes/después, render no
+//               fotográfico…): solo para generación de cero, JAMÁS
+//               como restyle de la foto del cliente.
+// El campo vive en el dataset (prompt-selection-map.json, estampado
+// por la misma regla) y esta función es la fuente de verdad: si un
+// code no está en el mapa o el mapa no trae el campo, se clasifica al
+// vuelo con las mismas reglas documentadas. Orden de las reglas:
+//   1) el campo del dataset, si existe;
+//   2) familias ESTRUCTURALMENTE de redibujo (miniature/typo/
+//      duo_split/carousel: miniaturas, tipografía pura, dúos,
+//      multplaca) → new-scene;
+//   3) render no fotográfico (3D, ilustración) → new-scene;
+//   4) familia levitation (el producto flota en un espacio
+//      construido) → new-scene;
+//   5) vocabulario de ESCENA construida en el texto → new-scene;
+//   6) familia 'pop' SOLO si el texto es gráfico (poster,
+//      infografía, collage, tipografía) → new-scene; el 'pop'
+//      fotográfico del dataset (p. ej. /food, foto editorial de un
+//      plato) sigue de largo — no es un redibujo;
+//   7) vocabulario de MARCO (fondo seamless/blanco, cenital, podio,
+//      superficie) o familias flatlay/studio → reframe;
+//   8) el resto → relight.
+const EDIT_FAMILY_NEW_SCENE = new Set(['miniature', 'typo', 'duo_split', 'carousel']);
+const EDIT_SCENE_RE = /\b(billboard|movie poster|film poster|poster|aerial|drone|storefront|cityscape|landscape|seascape|skyline|interior scene|exterior scene|diorama|venue|room scene|environment|setting|scene|unboxing|timelapse)\b/;
+const EDIT_GRAPHIC_RE = /\b(poster|infographic|infograf|collage|typograph|tipograf|graphic design|illustration|ilustraci)\b/;
+const EDIT_FRAME_RE = /\b(seamless|white background|plain background|solid background|studio backdrop|backdrop|flat[ -]?lay|top[ -]?down|overhead|knolling|podium|pedestal|surface|background)\b/;
+function editModeOf(style, map) {
+  const s = typeof style === 'string' ? getStyle(style) : style;
+  if (!s) return 'new-scene';
+  const m = map === undefined ? SELECTION_MAP : map;
+  const e = (m && s.code) ? m[s.code] : null;
+  if (e && e.edit_mode) return e.edit_mode;
+  const fam = (e && e.familia) || styleFamilyOf(s);
+  const t = `${s.code || ''} ${s.name || ''} ${s.prompt || ''}`.toLowerCase();
+  if (EDIT_FAMILY_NEW_SCENE.has(fam)) return 'new-scene';
+  if (e && e.render && e.render !== 'foto') return 'new-scene';
+  if (fam === 'levitation') return 'new-scene';
+  if (EDIT_SCENE_RE.test(t)) return 'new-scene';
+  if (fam === 'pop' && EDIT_GRAPHIC_RE.test(t)) return 'new-scene';
+  if (EDIT_FRAME_RE.test(t) || fam === 'flatlay' || fam === 'studio') return 'reframe';
+  return 'relight';
+}
+const EDIT_MODES = ['relight', 'reframe', 'new-scene'];
+
+// pickStyle({ intent, tipo, theme, angle, rubro, businessName, usedThisWeek, digest, avoidFamilies, feedProfile, offerProfile, salesIntent, dataset, baseReal }) → { style, reason, intent, intentSource, family, digestMatch, dataset } | null
+// (v237) baseReal: la base de la pieza es material REAL del cliente
+// (su foto): solo compiten presets relight/reframe (editModeOf) — un
+// new-scene JAMÁS sale con base real, en ninguna etapa de la cascada.
 // (v234) feedProfile/offerProfile: si no vienen, se derivan del digest.
 // salesIntent: la intención de VENTA de la pieza (cerebro comercial);
 // si un camino no la tiene, el término de score simplemente no aplica.
@@ -569,7 +636,7 @@ function familyOfStyle(style, map) {
 // La fantasía solo sale si la intención es 'viral'.
 // Prioridad de candidatos: 1) intención + rubro · 2) rubro brandSafe ·
 // 3) intención · 4) cualquiera brandSafe. (En viral se salta el 2.)
-function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', subrubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [], feedProfile = null, offerProfile = null, salesIntent = '', evidenceOk = false, dataset = undefined } = {}) {
+function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', subrubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [], feedProfile = null, offerProfile = null, salesIntent = '', evidenceOk = false, dataset = undefined, baseReal = false } = {}) {
   let resolved, intentSource;
   if (intent && INTENT_STYLES[intent]) { resolved = intent; intentSource = 'explicit'; }
   else {
@@ -615,6 +682,11 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
   // salta posicionamiento y feed, NUNCA las exigencias.
   const blockedAt = (s, stage) => {
     if (forbidden.has(s.code)) return true;
+    // (v237) Con base REAL del cliente, un preset new-scene está
+    // bloqueado en TODAS las etapas (como NEVER_STYLES): un "restyle"
+    // que reconstruye la escena no es un restyle. No lo salta ni el
+    // favorito (el favorito ordena entre los aplicables a su foto).
+    if (baseReal && editModeOf(s, dsMap) === 'new-scene') return true;
     if (!dsActive || stage >= 3) return false;
     const c = contraFor(s);
     if (!c) return false;
@@ -679,6 +751,10 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
       break;
     }
   }
+  // (v237) Con baseReal el pool puede quedar vacío si TODO el catálogo
+  // aplicable fuera new-scene: se devuelve null (sin estilo) antes que
+  // violar la regla — el llamador decide su respaldo.
+  if (!built) return null;
   let all = built.all;
   const mergedCodes = built.mergedCodes;
   // (v234) COBERTURA DE LA INTENCIÓN DE VENTA: los pools por intención
@@ -787,4 +863,4 @@ function styleFragment(style, paletteHex) {
   ].join('\n');
 }
 
-module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch, styleFamilyOf, digestStyleMatch, DIGEST_MATCH_MIN, DIGEST_MATCH_WEIGHT, selectionFor, feedProfileFromDigest, offerProfileFromDigest, datasetContraFor, datasetFilterList, datasetScoreDelta, familyOfStyle };
+module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch, styleFamilyOf, digestStyleMatch, DIGEST_MATCH_MIN, DIGEST_MATCH_WEIGHT, selectionFor, feedProfileFromDigest, offerProfileFromDigest, datasetContraFor, datasetFilterList, datasetScoreDelta, familyOfStyle, editModeOf, EDIT_MODES };

@@ -52,7 +52,10 @@ async function main() {
   // ---------- 4. Reference lock ----------
   t('db.js: columna product_ref', dbSrc.includes('ADD COLUMN product_ref'));
   t('conceptShotGenerate acepta productRef', /productRef\s*=\s*null/.test(serverSrc));
-  t('reference lock: refNote de producto idéntico', /must appear IDENTICAL in the new image/.test(serverSrc));
+  // (v237) La nota literal del candado se jubiló: la garantía vive en
+  // ref-roles (rol 'product' + FIDELITY_CLAUSE que conceptShot inyecta
+  // cuando hay material del cliente) — los pins miran las casas nuevas.
+  t('reference lock: garantía de producto idéntico (cláusula v237)', serverSrc.includes('refRoles.FIDELITY_CLAUSE') && /must remain IDENTICAL/.test(refRolesSrc));
   t('pipeline: weekProductRef lookup por intent=producto', serverSrc.includes('weekProductRef'));
   t('pipeline: guarda product_ref en INSERT', serverSrc.includes('finalProductRef'));
   t('regenerateOneDraft usa reference lock', /regenProductRef/.test(serverSrc));

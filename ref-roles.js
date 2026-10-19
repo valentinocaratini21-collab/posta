@@ -53,4 +53,39 @@ function buildRefNote(roles) {
  * (solo estilo). */
 const DEMO_REF_NOTE = buildRefNote(['character', 'style']);
 
-module.exports = { REF_ROLE_TEXT, REF_ROLES, buildRefNote, DEMO_REF_NOTE };
+/* ---------- (v237) TRANSPORTE HONESTO + FIDELIDAD ----------
+ * El transporte de gpt-image (images/edits) acepta UNA sola imagen de
+ * referencia (ver genConceptImageModel en server.js): hasta v236 la
+ * nota describía hasta 3 referencias con sus roles, pero el modelo
+ * veía SOLO la primera — y el orden ponía el LOGO primero, así que en
+ * piezas de producto la foto real del producto podía no llegar nunca.
+ * Ahora el pipeline decide QUÉ referencia viaja con esta prioridad y
+ * compone la nota SOLO con las referencias efectivamente enviadas:
+ *   restyle (la foto base ES la pieza) y product (el producto real del
+ *   cliente) mandan; después su material (photo/character); el logo
+ *   solo viaja primero cuando es la ÚNICA referencia (pieza de marca /
+ *   identidad) o cuando el llamador declara la pieza de marca
+ *   (brandPiece); style cierra (es contexto, no sujeto). */
+const REF_PRIORITY = { restyle: 0, product: 1, photo: 2, character: 2, logo: 3, style: 4 };
+function prioritizeRefPairs(pairs, { brandPiece = false } = {}) {
+  const prio = (role) => {
+    if (role === 'logo' && brandPiece) return 0;
+    return REF_PRIORITY[role] !== undefined ? REF_PRIORITY[role] : REF_PRIORITY.photo;
+  };
+  return (Array.isArray(pairs) ? pairs : [])
+    .map((p, i) => ({ ref: p && p.ref, role: (p && REF_ROLE_TEXT[p.role]) ? p.role : 'photo', _i: i }))
+    .filter((p) => p.ref)
+    .sort((a, b) => (prio(a.role) - prio(b.role)) || (a._i - b._i))
+    .map(({ ref, role }) => ({ ref, role }));
+}
+
+/* Cláusulas de FIDELIDAD (v237): obligatorias en TODO prompt que toque
+ * material del cliente (su foto como base o como referencia de
+ * producto). La fórmula de EDICIÓN no es la de generación: generar de
+ * cero puede inventar la escena; editar el material del cliente NO
+ * puede tocar su producto. La QA de fidelidad (server.js) verifica el
+ * cumplimiento contra la foto original y bloquea si se viola. */
+const FIDELITY_CLAUSE = "FIDELITY TO THE CLIENT'S REAL MATERIAL (non-negotiable): the product/subject from the client's photo must remain IDENTICAL — same shape, same colors, same packaging, same label, same proportions, same details. Only the photographic treatment may change (light, color grade, framing, and the background ONLY where the style direction explicitly allows it). Never redesign, reinterpret, replace, 'improve' or beautify the product itself, and never swap it for a similar one.";
+const FIDELITY_REINFORCE = "FIDELITY CORRECTION — the previous version CHANGED the client's real product. Regenerate keeping the product/subject from the reference photo EXACTLY identical (same shape, colors, packaging, label and proportions — pixel-faithful identity), changing ONLY the photographic treatment around it.";
+
+module.exports = { REF_ROLE_TEXT, REF_ROLES, buildRefNote, DEMO_REF_NOTE, REF_PRIORITY, prioritizeRefPairs, FIDELITY_CLAUSE, FIDELITY_REINFORCE };

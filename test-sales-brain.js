@@ -289,7 +289,7 @@ ok('server/generator/db/demo conectados al cerebro', () => {
   assert.ok(dbSrc.includes('ADD COLUMN sales_intent') && dbSrc.includes('ADD COLUMN sales_angle'), 'columnas de trazabilidad');
   assert.strictEqual(typeof demo.closeTrialCaption, 'function');
   assert.strictEqual(typeof captions.ensureCaptionCloseForIntent, 'function');
-  assert.ok(srv.includes("const BUILD_ID = '20261019-v236'"), 'BUILD_ID v233');
+  assert.ok(srv.includes("const BUILD_ID = '20261019-v237'"), 'BUILD_ID v233');
   assert.strictEqual(demo.DEMO_ENGINE_V, 24);
 });
 

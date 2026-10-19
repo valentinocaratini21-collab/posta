@@ -464,19 +464,29 @@ function extractGeminiImageB64(j) {
 // del modelo (la pieza final es 1080×1350: 2K ya la supera ~2×; el tier
 // 4K cuesta USD 0,24/img sin diferencia visible tras el downscale, por
 // eso no se usa). Si la API rechaza el parámetro, se reintenta sin él.
-async function genNanoImage({ prompt, refPath, apiKey, fetchImpl } = {}) {
-  if (!apiKey || !refPath) return null;
-  let refB64 = null; let refMime = 'image/jpeg';
-  try {
-    refB64 = fs.readFileSync(refPath).toString('base64');
-    const ext = path.extname(refPath).toLowerCase();
-    refMime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-  } catch (e) { return null; }
-  if (!refB64) return null;
+async function genNanoImage({ prompt, refPath, refPaths, apiKey, fetchImpl } = {}) {
+  // (v237) TRANSPORTE HONESTO también en Nano: Gemini SÍ acepta varias
+  // imágenes por pedido — viajan TODAS las referencias (hasta 3) y la
+  // nota de roles (DEMO_REF_NOTE: Image 1 = personaje, Image 2 =
+  // estilo) describe exactamente lo que el modelo recibe. Hasta v236
+  // viajaba solo la primera y la nota describía una segunda fantasma.
+  const paths = (Array.isArray(refPaths) && refPaths.length ? refPaths : [refPath]).filter(Boolean).slice(0, 3);
+  if (!apiKey || !paths.length) return null;
+  const refParts = [];
+  for (const p of paths) {
+    try {
+      const data = fs.readFileSync(p).toString('base64');
+      if (!data) continue;
+      const ext = path.extname(p).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      refParts.push({ inline_data: { mime_type: mime, data } });
+    } catch (e) { /* una referencia ilegible no frena a las demás */ }
+  }
+  if (!refParts.length) return null;
   const doFetch = fetchImpl || fetch;
   const parts = [
     { text: String(prompt || '') },
-    { inline_data: { mime_type: refMime, data: refB64 } },
+    ...refParts,
   ];
   const configs = [
     { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '4:5', imageSize: '2K' } },
@@ -515,12 +525,17 @@ async function genNanoImage({ prompt, refPath, apiKey, fetchImpl } = {}) {
 // envuelve genConceptImage con su costFeature) → null (plantilla).
 // El refNote se agrega acá SOLO para Nano: genConceptImage ya lo suma
 // en su rama edits, y duplicarlo en gpt no aporta.
+// (v237) Honestidad por motor: Nano recibe TODAS las referencias
+// (genNanoImage manda cada una como inline_data) y la nota de 2 roles
+// es literal; gpt-image recibe SOLO la primera (su transporte es de
+// una imagen), así que el server le pasa a genGpt una nota de UN rol
+// (el personaje) — ninguna ruta describe referencias fantasma.
 // Devuelve { b64, engine: 'nano'|'gpt' } o null.
 async function generateDemoPieceImage({ prompt, refs, geminiKey, genGpt, refNote, fetchImpl } = {}) {
   if (geminiKey) {
     const b64 = await genNanoImage({
       prompt: refNote ? `${prompt}\n\n${refNote}` : prompt,
-      refPath: (refs || [])[0],
+      refPaths: refs || [],
       apiKey: geminiKey,
       fetchImpl,
     }).catch(() => null);

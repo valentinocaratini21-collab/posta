@@ -301,6 +301,7 @@ CREATE INDEX IF NOT EXISTS idx_assets_user ON assets(user_id, kind);
 `);
 try { db.exec(`ALTER TABLE assets ADD COLUMN album_tag TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE assets ADD COLUMN thumb_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE assets ADD COLUMN album_quality TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v237) gate de calidad del material del cliente: issues separados por coma ('oscura,movida,baja-res,cortada'), 'ok', u 'orientacion=…' en videos
 
 // Demo pública: rate limit de generaciones por IP por día (5/día)
 db.exec(`
