@@ -79,8 +79,17 @@ Derivado de los campos existentes del estilo (`code` + `prompt`):
 | Esqueleto `velo` | vocabulario oscuro (dark/night/neon/cinematic/noir/moody/midnight) → foto oscurecida pareja, titular blanco |
 | Esqueleto `claro` | vocabulario luminoso (bright/airy/clean/minimal/studio/packshot/flat lay) → velo blanco, texto navy |
 | Esqueleto `abajo`/`arriba` | resto: degradé de marca abajo o arriba, por hash estable del code |
-| Grade | warm (warm/golden/cozy/sunset) · vivid (vibrant/pop/saturated) · soft (soft/pastel/muted/dreamy) · cool (cool/fresh) · neutral |
-| Crop | `tight` (zoom 1.35) si macro/close-up/detail/zoom |
+| Grade | warm (warm/golden/cozy/sunset/gold + ember/firelight/amber/candlelit/sunlit/terracotta) · vivid (vibrant/pop/saturated/vivid/colorful + neon/electric/bold) · soft (soft/pastel/muted/dreamy/gentle + airy/delicate/milky) · cool (cool/fresh/blue + frost/icy/mint) · neutral — vocabulario ampliado en v233: el texto del preset deriva el grade con más fidelidad |
+| Crop | `tight` (zoom 1.28) si macro/close-up/detail/zoom + fills the frame/frame-filling/tight crop/extreme close |
+
+**Límite (v233, documentado):** el *viewpoint* del preset (flat-lay /
+cenital / top-down) NO se deriva a ningún parámetro del tratamiento
+porque `demo_render.py` no tiene consumidor para viewpoint: los
+esqueletos son duo/centro/velo/claro/abajo/arriba/poster y ninguno es
+cenital (el flat-lay hoy cae en `claro` por vocabulario luminoso). El
+`subject_scale` tampoco sale del tratamiento: lo fija `buildDemoSpec`
+desde la familia de dirección de arte del estilo. No se inventan
+parámetros sin consumidor real en el render.
 
 El render v2 (`demo_render.py → render_v2`) suavizó el grade base: el
 motor viejo lavaba la foto (velo blanco 0,42 + brillo 1,22); el v2 usa

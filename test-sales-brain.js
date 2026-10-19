@@ -289,8 +289,8 @@ ok('server/generator/db/demo conectados al cerebro', () => {
   assert.ok(dbSrc.includes('ADD COLUMN sales_intent') && dbSrc.includes('ADD COLUMN sales_angle'), 'columnas de trazabilidad');
   assert.strictEqual(typeof demo.closeTrialCaption, 'function');
   assert.strictEqual(typeof captions.ensureCaptionCloseForIntent, 'function');
-  assert.ok(srv.includes("const BUILD_ID = '20261018-v232'"), 'BUILD_ID v232');
-  assert.strictEqual(demo.DEMO_ENGINE_V, 21);
+  assert.ok(srv.includes("const BUILD_ID = '20261018-v233'"), 'BUILD_ID v233');
+  assert.strictEqual(demo.DEMO_ENGINE_V, 22);
 });
 
 console.log(`\n✅ test-sales-brain: ${passed} verificaciones OK`);

@@ -1145,7 +1145,7 @@ function dnaFragmentFromDigest(digest) {
 
 module.exports = {
   DIGEST_VERSION,
-  norm, distinctiveWords, anchorsOf, anchorsFromTexts, pieceAnchored,
+  norm, distinctiveWords, wordForms, textWordSet, anchorsOf, anchorsFromTexts, pieceAnchored,
   offeringsFromText, temasFromFreeText, temaForText,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,

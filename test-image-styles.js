@@ -9,7 +9,7 @@ function t(name, cond, extra) {
 }
 
 // 1. Presets
-t('1227 presets (179 + 1001 por rubro + 23 vectorayush + 9 sifuyik + 15 UGC)', STYLES.length === 1227, STYLES.length);
+t('1267 presets (1255 del catálogo + 12 arquetipos style-lock v233)', STYLES.length === 1267, STYLES.length);
 t('todos con campos', STYLES.every(s => s.code && s.name && s.prompt && Array.isArray(s.rubros) && typeof s.brandSafe === 'boolean'));
 const safe = ['/food', '/flatlay', '/luxury', '/product', '/macro', '/lifestyle', '/cozy'];
 t('brandSafe core', safe.every(c => getStyle(c) && getStyle(c).brandSafe === true));
@@ -24,7 +24,7 @@ const fantasyAll = ['/legoify', '/clay', '/miniatureworld', '/isometric', '/pape
 t('fantasía no brandSafe (41)', fantasyAll.every(c => getStyle(c) && getStyle(c).brandSafe === false), fantasyAll.filter(c => !getStyle(c) || getStyle(c).brandSafe !== false));
 t('getStyle case-insensitive y sin slash', getStyle('/LEGOIFY') && getStyle('/LEGOIFY').code === '/legoify' && getStyle('food').code === '/food');
 t('getStyle inválido → null', getStyle('/noexiste') === null);
-t('listStyles 1227', listStyles().length === 1227);
+t('listStyles 1267', listStyles().length === 1267);
 
 // 2. Fragmento: contiene estilo + paleta, y la supremacía de paleta
 const frag = styleFragment('/food', ['#E63946', '#F4A261']);
@@ -99,10 +99,10 @@ t('frases de nuevas intenciones', INTENT_PHRASE.anuncio && INTENT_PHRASE.educati
 
 // 9. 150 presets nuevos: unicidad y calidad de datos
 const codes = STYLES.map(s => s.code);
-t('codes únicos (1227)', new Set(codes).size === 1227, codes.length - new Set(codes).size);
+t('codes únicos (1267)', new Set(codes).size === 1267, codes.length - new Set(codes).size);
 const normPrompt = p => p.toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
 const prompts = STYLES.map(s => normPrompt(s.prompt));
-t('prompts distintos entre sí (1227)', new Set(prompts).size === 1227, prompts.length - new Set(prompts).size);
+t('prompts distintos entre sí (1267)', new Set(prompts).size === 1267, prompts.length - new Set(prompts).size);
 t('prompts con largo razonable (15-60 palabras)', STYLES.every(s => { const w = s.prompt.split(/\s+/).length; return w >= 15 && w <= 60; }),
   STYLES.filter(s => { const w = s.prompt.split(/\s+/).length; return w < 15 || w > 60; }).map(s => s.code));
 t('toda intención con ≥3 estilos válidos', Object.entries(INTENT_STYLES).every(([k, arr]) => arr.length >= 3 && arr.every(c => getStyle(c))),
@@ -181,7 +181,7 @@ for (const [rubro, theme] of rubroThemes) {
 }
 t('pickStyle devuelve preset del rubro en top-3 (25/25)', rubroTop3 === rubroThemes.length, rubroTop3 + '/' + rubroThemes.length);
 
-// 12. Performance del require con 1227 presets
+// 12. Performance del require con 1267 presets
 const t0 = Date.now();
 delete require.cache[require.resolve('./image-styles')];
 delete require.cache[require.resolve('./image-styles-data')];

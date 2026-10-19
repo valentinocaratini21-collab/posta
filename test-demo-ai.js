@@ -612,10 +612,13 @@ const llmJson = (content, usage) => ({
     const gen = demoAi.artDirectionFor('/zzz-estilo-inexistente');
     ok(DIMS.every((d) => gen.includes(d)) && /premium editorial/.test(gen), 'estilo sin familia → dirección genérica premium completa');
     ok(demoAi.artDirectionFor(null).length > 100, 'sin estilo → dirección genérica (nunca bloque vacío)');
-    // Acepta el objeto estilo del catálogo (nombre + firma reales).
+    // Acepta el objeto estilo del catálogo (trae su nombre real).
+    // (v233) La firma del preset ya NO se repite en la dirección: entra
+    // una sola vez en el slot de dirección de estilo del brief
+    // (assembleImagePrompt vía stylePreset) — ver test-prompt-catalog-wiring.
     const stObj = IS.getStyle('/flatlay');
-    ok(/Flat lay/.test(demoAi.artDirectionFor(stObj)) && /Style signature/.test(demoAi.artDirectionFor(stObj)),
-      'con el objeto estilo, la dirección trae su nombre y su firma del catálogo');
+    ok(/Flat lay/.test(demoAi.artDirectionFor(stObj)) && !/Style signature/.test(demoAi.artDirectionFor(stObj)),
+      'con el objeto estilo, la dirección trae su nombre y NO duplica la firma del catálogo');
   }
 
   console.log(fails ? `\n✗ test-demo-ai: ${fails} fallas` : '\nTODO OK — test-demo-ai');

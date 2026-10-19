@@ -6672,6 +6672,14 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     }
     // Estilos de imagen: un solo tracker por semana para no repetir estilo
     // entre borradores (lo comparten los 5 workers del pool).
+    // (v233) + tracker de FAMILIAS de dirección (la variedad semanal es
+    // de gramática visual, no solo de preset) y los insumos del pick
+    // consciente: digest del cliente, favoritos y boosts de aprendizaje
+    // se resuelven UNA vez por corrida, no por posteo.
+    const usedFamilies = [];
+    const weekDigest = (() => { try { return digestForUser(uid); } catch (e) { return null; } })();
+    const weekFavorites = (() => { try { return getStyleFavorites(uid); } catch (e) { return []; } })();
+    const weekBoosts = (() => { try { return require('./learning').getClientBoosts(db, uid) || {}; } catch (e) { return {}; } })();
     const usedStyles = [];
     // Director de semana: cada posteo cumple un ROL DE ESCENA distinto para
     // que la semana se vea diseñada (variada), no generada en serie. La
@@ -6819,7 +6827,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             try {
               carouselGen = await generateCarouselSet({
                 uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
-                tipo: idea.tipo, caption, key, usedStyles,
+                tipo: idea.tipo, caption, key, usedStyles, usedFamilies,
               });
               console.log(`[pipeline:${tag}] carousel para "${idea.titulo || i}": ${carouselGen.slidePaths.length} placas`);
             } catch (e) {
@@ -6828,6 +6836,31 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             }
           }
           if (!isCarousel) {
+          // (v233) EL PRESET NACE CON LA IDEA: el estilo se pre-elige
+          // ACÁ — con el digest del cliente (match léxico contra sus
+          // productos reales), la memoria de la semana (sin repetir
+          // código ni familia) y los favoritos/boosts — y viaja como
+          // `style` fijo de la idea: adentro, el brief de arte se
+          // escribe sabiendo qué dirección se aplicará y los 3
+          // reintentos usan el MISMO preset. La reserva en
+          // usedStyles/usedFamilies es inmediata (sincrónica): los
+          // workers vecinos ya ven el estilo como tomado.
+          let preStyleCode = null;
+          try {
+            const pk = pickStyle({
+              intent: resolveExplicitIntent({ tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '' }).intent, tipo: idea.tipo || '', theme: idea.titulo || '', angle: idea.angulo || idea.porque || '',
+              rubro: (profile && profile.category) || '', businessName: (profile && profile.business_name) || '',
+              usedThisWeek: usedStyles, boosts: weekBoosts, favorites: weekFavorites,
+              digest: weekDigest, avoidFamilies: usedFamilies,
+            });
+            if (pk && pk.style) {
+              preStyleCode = pk.style.code;
+              if (!usedStyles.includes(preStyleCode)) usedStyles.push(preStyleCode);
+              const fam = pk.family || (() => { try { return require('./image-styles').styleFamilyOf(pk.style); } catch (e) { return ''; } })();
+              if (fam && !usedFamilies.includes(fam)) usedFamilies.push(fam);
+              console.log(`[pipeline:${tag}] preset de "${idea.titulo || i}": ${preStyleCode} — ${pk.reason}`);
+            }
+          } catch (e) { console.error(`[pipeline:${tag}] pre-pick de estilo falló:`, e.message); }
           // Reintentos de imagen IA (2026-10-06, Valentino): un bloque plano
           // NUNCA se muestra como posteo terminado. Hasta 3 intentos con
           // backoff corto antes de saltar la idea.
@@ -6835,7 +6868,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try {
             imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, refRoles: refRolesForRefs, apiKey: key,
-              usedStyles, styleOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
+              style: preStyleCode, usedStyles, usedFamilies, styleOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
             });
           } catch (e) {
             if (!firstImgError) firstImgError = String((e && e.message) || e).slice(0, 300);
@@ -9405,7 +9438,7 @@ function headlineZoneLine(headline) {
   const pct = w >= 5 ? 40 : w >= 3 ? 33 : 30;
   return `HEADLINE ZONE: the top ${pct}% of the frame is a clean, soft, uncluttered background reserved for a headline that code adds later — no subject, prop, hand, sign or sharp element may enter that zone; the subject and the action live from the middle of the frame down, with generous margins from every edge.`;
 }
-function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headline, category }) {
+function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headline, category, styleDirection = '' }) {
   const parts = [];
   if (visualStyle && String(visualStyle).trim()) parts.push(String(visualStyle).trim());
   // (v231) FÓRMULA OFICIAL (guías de Google Nano Banana y OpenAI
@@ -9431,6 +9464,13 @@ function assembleImagePrompt({ blocks, rawText, visualStyle, paletteHex, headlin
   else if (rawText && String(rawText).trim()) parts.push(String(rawText).trim());
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   if (hexes.length) parts.push(`The client's exact brand colors (${hexes.join(', ')}) are woven into the scene through props, clothing, packaging and set details — integrated in the world of the photo, never as a flat color background.`);
+  // (v233) DIRECCIÓN DE ESTILO DEL CATÁLOGO: el preset elegido (de los
+  // prompts que pasó Valentino) es LA dirección de estilo declarada de
+  // la pieza y ocupa SU posición en la fórmula oficial — tras
+  // composición/luz y paleta, ANTES de la zona del titular. Hasta v232
+  // el fragmento viajaba como apéndice al final del prompt, donde
+  // competía con todo lo anterior y llegaba tarde.
+  if (styleDirection && String(styleDirection).trim()) parts.push(String(styleDirection).trim());
   // Pieza LIMPIA (sin titular): NO se reserva la zona del titular — el
   // sujeto usa el encuadre completo. Con titular, la zona se dimensiona
   // según su largo real, como siempre.
@@ -9502,7 +9542,7 @@ function topStyleMemoryLine(uid) {
     return rows.map(x => `${x.code} (alcance prom. ${Math.round(x.r || 0)})`).join(', ');
   } catch (e) { return ''; }
 }
-async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole, gridNote }, apiKey, costFeature) {
+async function expandArtBrief({ headline, tipo, angle, businessName, category, paletteHex, dnaBits, learningsLine, theme, styleRules, visualStyle, tasteBlock, memoryLine, sceneRole, gridNote, stylePreset = null }, apiKey, costFeature) {
   const hexes = Array.isArray(paletteHex) ? paletteHex : [];
   // ===== Track D — señales de aprendizaje (bloque delimitado; no toca el inspo del track C) =====
   // style_rules también son ley en la estética: p.ej. "sin emojis" o "siempre con
@@ -9573,7 +9613,7 @@ Familia visual: ${fam}
 ${theme ? `Tema del posteo (informá la escena, NO lo pongas como texto salvo que sea el titular): ${String(theme).slice(0, 160)}` : ''}
 ${angle ? `Ángulo estratégico (expresalo visualmente, sin texto): ${String(angle).slice(0, 200)}` : 'Sin ángulo: escena fuerte del rubro.'}
 ${dnaBits ? `Contexto del negocio: ${String(dnaBits).slice(0, 300)}` : ''}
-${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${sceneRole ? `\nRol de escena de este posteo dentro de la semana (cada posteo de la semana cumple un rol distinto — la semana completa debe verse variada): ${String(sceneRole).slice(0, 220)}. El momento y el contexto TIENEN que cumplir ese rol.` : ''}${gridNote ? `\n${String(gridNote).slice(0, 420)}` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}`.trim() },
+${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 200)}` : ''}${sceneRole ? `\nRol de escena de este posteo dentro de la semana (cada posteo de la semana cumple un rol distinto — la semana completa debe verse variada): ${String(sceneRole).slice(0, 220)}. El momento y el contexto TIENEN que cumplir ese rol.` : ''}${gridNote ? `\n${String(gridNote).slice(0, 420)}` : ''}${memoryLine ? `\nMemoria visual de ESTE cliente — los estilos que más rindieron en su cuenta: ${String(memoryLine).slice(0, 240)}. Que la escena herede su luz, su encuadre y su espíritu (sin copiar la escena exacta).` : ''}${styleBrief ? `\n${styleBrief}` : ''}${stylePreset ? `\nDirección de estilo elegida del catálogo de Posty para ESTA pieza (${stylePreset.code} — ${stylePreset.name}): "${String(stylePreset.prompt || '').slice(0, 300)}". El preset NACE con la idea: escribí los bloques PARA esa dirección — la escena, la luz y la composición tienen que ser coherentes con ella; el código la declara como la dirección de estilo del prompt final.` : ''}`.trim() },
       ],
     }),
     signal: AbortSignal.timeout(60000),
@@ -9593,7 +9633,7 @@ ${learningsLine ? `Qué rinde en su Instagram: ${String(learningsLine).slice(0, 
     const parsed = JSON.parse(content);
     if (parsed && typeof parsed === 'object' && (parsed.sujeto || parsed.momento || parsed.contexto)) blocks = parsed;
   } catch (e) {}
-  return assembleImagePrompt({ blocks, rawText: blocks ? '' : content.trim(), visualStyle, paletteHex: hexes, headline, category });
+  return assembleImagePrompt({ blocks, rawText: blocks ? '' : content.trim(), visualStyle, paletteHex: hexes, headline, category, styleDirection: stylePreset ? styleFragment(stylePreset, hexes) : '' });
 }
 // idea puede venir como string u objeto {titulo, porque, angulo, headline}.
 function parseIdea(idea) {
@@ -9972,7 +10012,7 @@ function conceptShotGenerateQueued(args) {
     else s.waiters.push(run);
   });
 }
-async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, refRoles: callerRefRoles = null, apiKey, style = null, usedStyles = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
+async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headline, refs, refRoles: callerRefRoles = null, apiKey, style = null, usedStyles = null, usedFamilies = null, styleOut = null, restyle = false, refNoteOverride = null, productRef = null, extraPrompt = '', sceneRole = '', gridNote = '' }) {
   costs.assertAiOk(uid); // kill-switch diario: tira AiCapExceeded (mensaje amable) si se superó el tope
   const ideaObj = parseIdea(idea);
   const settings = getSettings(uid);
@@ -9998,6 +10038,46 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       if (getCreds(db, uid)) analyzeVisualStyle(db, uid).catch(() => {});
     } catch (e) {}
   }
+  // (v233) EL PRESET NACE CON LA IDEA: el estilo del catálogo se elige
+  // ACÁ, ANTES de expandir el brief — consciente del DIGEST del cliente
+  // (match léxico contra sus productos/servicios/temas reales) y con
+  // rotación de FAMILIA dentro de la semana (usedFamilies). El brief se
+  // escribe sabiendo qué dirección se aplicará y el fragmento entra en
+  // la posición de DIRECCIÓN DE ESTILO del prompt ensamblado
+  // (assembleImagePrompt vía expandArtBrief), no como apéndice final.
+  // La INTENCIÓN viaja EXPLÍCITA desde el generador, como siempre:
+  // resolveExplicitIntent() la resuelve de lo que el generador YA SABE;
+  // el caller puede forzarla con `intent` o fijar el estilo con `style`.
+  // Las reglas NEVER_STYLES y brandSafe filtran antes que cualquier
+  // score (también antes que el match del digest).
+  let stylePick = null;
+  // Learning loop: lo que rinde para ESTE cliente sube en el ranking
+  // (solo reordena dentro de lo válido; jamás rompe brandSafe/NEVER_STYLES).
+  let learnBoosts = {};
+  try { learnBoosts = require('./learning').getClientBoosts(db, uid) || {}; } catch (e) {}
+  let digestForStyle = null;
+  try { digestForStyle = digestForUser(uid); } catch (e) {}
+  try {
+    const { INTENT_STYLES: IS, resolveExplicitIntent: rei, styleFamilyOf: famOf } = require('./image-styles');
+    const known = rei({ tipo: String(tipo || ''), theme, angle });
+    const explicitIntent = (intent && IS[intent]) ? { intent, source: 'forced' } : known;
+    stylePick = style
+      ? { style: getStyle(style), reason: `estilo elegido manualmente (${style})`, intent: explicitIntent.intent || '', intentSource: explicitIntent.source === 'forced' ? 'explicit' : 'manual' }
+      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: getStyleFavorites(uid), digest: digestForStyle, avoidFamilies: usedFamilies });
+    if (stylePick && stylePick.style) {
+      if (!stylePick.family) { try { stylePick.family = famOf(stylePick.style); } catch (e) {} }
+      if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
+      if (Array.isArray(usedFamilies) && stylePick.family && !usedFamilies.includes(stylePick.family)) usedFamilies.push(stylePick.family);
+      if (styleOut) {
+        styleOut.code = stylePick.style.code;
+        styleOut.name = stylePick.style.name || '';
+        styleOut.reason = stylePick.reason;
+        styleOut.intent = stylePick.intent || '';
+        styleOut.family = stylePick.family || '';
+      }
+      console.log(`[style] ${stylePick.style.code} — ${stylePick.reason} (intent: ${stylePick.intent || '-'}${stylePick.intentSource ? `, src: ${stylePick.intentSource}` : ''}${stylePick.family ? `, familia: ${stylePick.family}` : ''})`);
+    } else stylePick = null;
+  } catch (e) { console.error('[style] pick falló:', e.message); stylePick = null; }
   const briefBase = {
     headline: cleanHeadline,
     tipo: String(tipo || ''),
@@ -10013,6 +10093,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     gridNote,
     styleRules,
     visualStyle,
+    stylePreset: stylePick ? stylePick.style : null,
   };
   // Niveles que se sienten (level-boosts): el nivel del usuario cambia REALMENTE
   // el payload que recibe el modelo. N1 = briefBase idéntico (baseline).
@@ -10027,38 +10108,12 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   // N4+: el Style Lock visual se verifica en el prompt de imagen (si la
   // generación lo ignora, el brand-check post-generación entra en retry).
   if (brief.styleLockVerify) prompt = `${prompt}\n\n${brief.styleLockVerify}`;
-  // Estilos de imagen (image-styles.js): la INTENCIÓN viaja EXPLÍCITA desde el
-  // generador. resolveExplicitIntent() la resuelve de lo que el generador YA
-  // SABE (tipo determinista + refinamiento por keywords); el caller puede
-  // pasar `intent` directo para forzarla. Precedencia en pickStyle: intent
-  // explícito > keywords del tema/ángulo > intent desde tipo > default. El
-  // fragmento va AL FINAL del prompt, DESPUÉS del Style Lock visual — la
-  // paleta manda. Las reglas NEVER_STYLES filtran combinaciones prohibidas.
-  let stylePick = null, styleFrag = '';
-  // Learning loop: lo que rinde para ESTE cliente sube en el ranking
-  // (solo reordena dentro de lo válido; jamás rompe brandSafe/NEVER_STYLES).
-  let learnBoosts = {};
-  try { learnBoosts = require('./learning').getClientBoosts(db, uid) || {}; } catch (e) {}
-  try {
-    const { INTENT_STYLES: IS, resolveExplicitIntent: rei } = require('./image-styles');
-    const known = rei({ tipo: String(tipo || ''), theme, angle });
-    const explicitIntent = (intent && IS[intent]) ? { intent, source: 'forced' } : known;
-    stylePick = style
-      ? { style: getStyle(style), reason: `estilo elegido manualmente (${style})`, intent: explicitIntent.intent || '', intentSource: explicitIntent.source === 'forced' ? 'explicit' : 'manual' }
-      : pickStyle({ intent: explicitIntent.intent, tipo: String(tipo || ''), theme, angle, rubro: profile.category || '', businessName: profile.business_name || '', usedThisWeek: usedStyles, boosts: learnBoosts, favorites: getStyleFavorites(uid) });
-    if (stylePick && stylePick.style) {
-      styleFrag = styleFragment(stylePick.style, hexes);
-      if (Array.isArray(usedStyles) && !usedStyles.includes(stylePick.style.code)) usedStyles.push(stylePick.style.code);
-      if (styleOut) {
-        styleOut.code = stylePick.style.code;
-        styleOut.name = stylePick.style.name || '';
-        styleOut.reason = stylePick.reason;
-        styleOut.intent = stylePick.intent || '';
-      }
-      console.log(`[style] ${stylePick.style.code} — ${stylePick.reason} (intent: ${stylePick.intent || '-'}${stylePick.intentSource ? `, src: ${stylePick.intentSource}` : ''})`);
-    } else stylePick = null;
-  } catch (e) { console.error('[style] pick falló:', e.message); stylePick = null; styleFrag = ''; }
-  const withStyle = (p) => (styleFrag ? `${p}\n\n${styleFrag}` : p) + (extraPrompt ? `\n\n${extraPrompt}` : '');
+  // (v233) La dirección de estilo YA VIAJA DENTRO del prompt: el preset
+  // se eligió antes del brief y assembleImagePrompt lo insertó en su
+  // posición de la fórmula — el prompt final lleva el texto del preset
+  // UNA sola vez (y con su code, que queda en posts.image_prompt vía
+  // rememberPrompt). Acá solo se suma el extraPrompt del llamador.
+  const withStyle = (p) => p + (extraPrompt ? `\n\n${extraPrompt}` : '');
   let absRefs = (refs || []).slice(0, 2)
     .map((fp) => path.join(MEDIA_DIR, path.basename(String(fp || ''))))
     .filter((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
@@ -10329,7 +10384,7 @@ function carouselContinuityNote(idx) {
     : base;
 }
 
-async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }) {
+async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles, usedFamilies = null }) {
   if (!splitCarouselSlides) throw new Error('carousel no disponible');
   costs.assertAiOk(uid);
   const settings = getSettings(uid);
@@ -10376,7 +10431,7 @@ async function generateCarouselSet({ uid, idea, tipo, caption, key, usedStyles }
       try {
         p = await conceptShotGenerateQueued({
           uid, idea: { titulo: `${titulo}: ${s.title}`, porque: s.text }, tipo,
-          headline: '', refs: [], apiKey, usedStyles, styleOut, extraPrompt: extraPrompt || undefined,
+          headline: '', refs: [], apiKey, usedStyles, usedFamilies, styleOut, extraPrompt: extraPrompt || undefined,
         });
         // Scroll-stop QA de visión sobre la placa generada.
         if (qaScrollStopB64) {
@@ -12491,6 +12546,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
             const makePiece = async (i) => {
               const sp = specPosts[i];
               const topicText = `${sp.tema || ''} ${sp.headline || ''} ${sp.subline || ''}`;
+              // (v233) UNA SOLA INYECCIÓN del preset: el estilo del
+              // catálogo entra UNA vez, dentro del brief, en la
+              // posición de DIRECCIÓN DE ESTILO de assembleImagePrompt
+              // (vía stylePreset de expandArtBrief). Hasta v232 entraba
+              // DOS veces: como fragmento pegado tras el brief y como
+              // "style signature" dentro de la dirección de arte.
+              let styleObj = null;
+              try { styleObj = sp.style ? getStyleDemo(sp.style) : null; } catch (e) { styleObj = null; }
               let prompt = await expandArtBrief({
                 // Pieza limpia (dosificación): sin titular hacia la
                 // generación — assembleImagePrompt no reserva zona y la
@@ -12504,12 +12567,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                 paletteHex: [accent, btn].filter(Boolean),
                 visualStyle,
                 sceneRole: demoAi.SCENE_ROLES[i % demoAi.SCENE_ROLES.length],
+                stylePreset: styleObj,
               }, demoApiKey, 'demo-ai-brief');
-              let styleObj = null;
-              try {
-                styleObj = sp.style ? getStyleDemo(sp.style) : null;
-                if (styleObj) prompt += '\n\n' + styleFragment(styleObj, [accent, btn].filter(Boolean));
-              } catch (e) { /* el fragmento de estilo es opcional */ }
               // v205: DIRECCIÓN DE ARTE completa del estilo nombrado —
               // manda sobre el brief y el fragmento; solo cede ante las
               // directivas duras que siguen (fórmula/tratamiento y
@@ -13485,7 +13544,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v232';
+const BUILD_ID = '20261018-v233';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

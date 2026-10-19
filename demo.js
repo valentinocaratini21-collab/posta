@@ -160,7 +160,7 @@ function stockPhotos3(category, business) {
 // bio, léxico, mapa foto→producto, estrella inferido y contradicciones;
 // el gate de fotos sube a foto↔PRODUCTO cuando el mapa cubre la foto y
 // el estrella inferido abre la rotación de temas.
-const DEMO_ENGINE_V = 21;
+const DEMO_ENGINE_V = 22;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -553,12 +553,24 @@ function treatmentForStyle(style) {
     for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     skeleton = h % 2 === 0 ? 'abajo' : 'arriba';
   }
+  // (v233) El preset DICE MÁS: el vocabulario de temperatura/luz del
+  // texto del catálogo deriva el grade con más fidelidad (ámbar/leña/
+  // vela → warm; neón/eléctrico → vivid; aireado/delicado → soft;
+  // escarcha/menta → cool) y el de encuadre deriva el crop (llenar el
+  // cuadro / close extremo → tight). SOLO se derivan parámetros que
+  // demo_render.py ya honra (apply_grade: warm/cool/vivid/soft/neutral;
+  // crop 'tight' = zoom 1.28). LÍMITE DOCUMENTADO: el viewpoint
+  // (flat-lay/cenital) NO tiene consumidor en el render — los esqueletos
+  // son duo/centro/velo/claro/abajo/arriba/poster, sin variante
+  // cenital — y el subject_scale sale de la familia de arte
+  // (buildDemoSpec), no del tratamiento: acá no se inventan parámetros
+  // sin consumidor.
   let grade = 'neutral';
-  if (/warm|golden|cozy|sunset|gold/.test(both)) grade = 'warm';
-  else if (/vibrant|pop|saturated|vivid|colorful/.test(both)) grade = 'vivid';
-  else if (/soft|pastel|muted|dreamy|gentle/.test(both)) grade = 'soft';
-  else if (/cool|fresh|blue/.test(both)) grade = 'cool';
-  const crop = /macro|close[ -]?up|detail|zoom/.test(both) ? 'tight' : 'normal';
+  if (/warm|golden|cozy|sunset|gold|ember|firelight|amber|candlelit|sunlit|terracotta/.test(both)) grade = 'warm';
+  else if (/vibrant|pop|saturated|vivid|colorful|neon|electric|bold/.test(both)) grade = 'vivid';
+  else if (/soft|pastel|muted|dreamy|gentle|airy|delicate|milky/.test(both)) grade = 'soft';
+  else if (/cool|fresh|blue|frost|icy|mint/.test(both)) grade = 'cool';
+  const crop = /macro|close[ -]?up|detail|zoom|fills the frame|frame[ -]filling|tight crop|extreme close/.test(both) ? 'tight' : 'normal';
   return { skeleton, grade, crop };
 }
 

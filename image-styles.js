@@ -4,9 +4,13 @@
 // brandSafe=false → fantasía pura: solo con intención explícita (diversión/viral)
 // o elección manual, NUNCA por default.
 //
-// Regla de oro: el fragmento del estilo se suma AL FINAL del prompt,
-// DESPUÉS del Style Lock visual, y siempre con la línea de supremacía de
-// paleta — el estilo jamás puede cambiar los colores de marca.
+// Regla de oro: el estilo jamás puede cambiar los colores de marca — el
+// fragmento siempre lleva la línea de supremacía de paleta. (v233) En la
+// generación de posteos el fragmento ya NO es un apéndice al final del
+// prompt: entra en la posición de DIRECCIÓN DE ESTILO del ensamblado
+// (assembleImagePrompt, tras composición/paleta, antes de la zona del
+// titular), y el preset se elige ANTES de escribir el brief, consciente
+// del digest del cliente (ver pickStyle).
 'use strict';
 
 const STYLES = require('./image-styles-data').concat(require('./image-styles-rubros'));
@@ -193,7 +197,97 @@ function rubroMatch(style, rubro) {
   return (style.rubros || []).some(x => r.includes(x) || x.includes(r));
 }
 
-// pickStyle({ intent, tipo, theme, angle, rubro, businessName, usedThisWeek }) → { style, reason, intent, intentSource } | null
+// ---------- (v233) Familia de dirección de un preset ----------
+// La gramática visual del preset (la misma taxonomía de familias que la
+// dirección de arte del demo): dos piezas con presets distintos pero de
+// la MISMA familia se leen como el mismo look — la rotación semanal es
+// por familia, no solo por código. Mapa exacto para los códigos
+// principales + fallback por vocabulario (código/nombre/prompt).
+const STYLE_FAMILY_BY_CODE = {
+  '/flatlay': 'flatlay', '/knolling': 'flatlay', '/ingredientflat': 'flatlay', '/anatomy': 'flatlay', '/arch-pastelflatlay': 'flatlay',
+  '/product': 'studio', '/packshot': 'studio', '/productad': 'studio', '/premium': 'studio', '/mockup': 'studio', '/360view': 'studio', '/heroshot': 'studio', '/arch-whitepackshot': 'studio', '/arch-beigeminimal': 'studio',
+  '/macro': 'macro',
+  '/levitate': 'levitation', '/floating': 'levitation', '/splash': 'levitation', '/packaging': 'levitation',
+  '/cinematic': 'cinematic', '/movieposter': 'cinematic', '/billboard': 'cinematic', '/neon': 'cinematic', '/ad': 'cinematic', '/arch-gymdark': 'cinematic',
+  '/luxury': 'luxury', '/gold': 'luxury', '/luxedark': 'luxury',
+  '/popart': 'pop', '/gianttype': 'pop', '/couponburst': 'pop', '/poster': 'pop', '/infographic': 'pop', '/arch-infographic': 'pop', '/arch-fashioneditorial': 'pop', '/arch-meme': 'pop',
+  '/lifestyle': 'lifestyle', '/cozy': 'lifestyle', '/happyclient': 'lifestyle', '/ownerportrait': 'lifestyle', '/ugcselfie': 'lifestyle', '/ugcreview': 'lifestyle', '/ugchand': 'lifestyle', '/ugcvideocall': 'lifestyle', '/arch-founder': 'lifestyle', '/arch-ugcraw': 'lifestyle', '/arch-warmfood': 'lifestyle',
+  '/beforeafter': 'duo_split', '/ugcbeforeafter': 'duo_split',
+  '/quote': 'typo',
+  '/techad': 'tech', '/futuristic': 'tech',
+  '/unboxing': 'action', '/timelapse': 'action', '/assemblyguide': 'action', '/workspace': 'action', '/chefaction': 'action', '/handsatwork': 'action',
+  '/branding': 'corporate',
+  '/carousel': 'carousel', '/carrusel': 'carousel',
+  '/clay': 'miniature', '/legoify': 'miniature', '/miniatureworld': 'miniature', '/papercraft': 'miniature', '/isometric': 'miniature', '/actionfigure': 'miniature', '/dollhouse': 'miniature', '/crystal': 'miniature', '/candyversion': 'miniature', '/popup': 'miniature', '/toydoll': 'miniature', '/tinyhumans': 'miniature', '/arch-mascot3d': 'miniature', '/arch-foodmascot': 'miniature',
+};
+function styleFamilyOf(style) {
+  const s = typeof style === 'string' ? getStyle(style) : style;
+  const code = String((s && s.code) || (typeof style === 'string' ? style : '') || '').toLowerCase();
+  if (code && STYLE_FAMILY_BY_CODE[code]) return STYLE_FAMILY_BY_CODE[code];
+  const t = `${code} ${String((s && s.name) || '').toLowerCase()} ${String((s && s.prompt) || '').toLowerCase()}`;
+  if (/carousel|carrusel/.test(t)) return 'carousel';
+  if (/before/.test(t) && /after|despu/.test(t)) return 'duo_split';
+  if (/flat[ -]?lay|knolling|cenital|top[ -]?down/.test(t)) return 'flatlay';
+  if (/macro|close[ -]?up|detalle extremo/.test(t)) return 'macro';
+  if (/levitat|floating|flot|splash/.test(t)) return 'levitation';
+  if (/cinematic|cinematogr|movie|film|noir|neon|billboard|cartelera/.test(t)) return 'cinematic';
+  if (/luxury|lujo|gold|premium elegant|elegante oscuro/.test(t)) return 'luxury';
+  if (/pop|poster|póster|infographic|infograf|graphic|gr[aá]fic|collage|magazine|revista|editorial/.test(t)) return 'pop';
+  if (/quote|frase|tipograf|typograph/.test(t)) return 'typo';
+  if (/tech|futur|digital|cyber/.test(t)) return 'tech';
+  if (/unboxing|assembly|timelapse|workspace|escritorio|hands at work|manos/.test(t)) return 'action';
+  if (/ugc|lifestyle|estilo de vida|cozy|acogedor|client|owner|portrait|retrato|candid/.test(t)) return 'lifestyle';
+  if (/brand|corpor|identidad|oficina|office|juntas|lobby|jur[ií]d|legal|biblioteca|consult|profes|prof-/.test(t)) return 'corporate';
+  if (/clay|lego|miniatur|papercraft|paper|isometric|toy|doll|diorama|mascot/.test(t)) return 'miniature';
+  if (/product|packshot|studio|estudio|mockup|hero|catalog|cat[aá]logo/.test(t)) return 'studio';
+  return 'premium_generic';
+}
+
+// ---------- (v233) Match léxico preset ↔ digest del cliente ----------
+// LOS PROMPTS DE VALENTINO MANDAN: el preset se elige consciente del
+// fundamento — un preset cuyo texto (código/nombre/prompt) nombra los
+// productos/servicios/temas REALES del negocio puntúa por match léxico
+// contra las ANCLAS del digest (client-digest.anchorsOf). Las palabras
+// se derivan del TEXTO del ancla sin excluir el nombre del negocio
+// (a diferencia del chequeo de pertenencia de captions, acá "sushi" en
+// "Sushi Go" SÍ describe el mundo del cliente y tiene que poder
+// matchear el preset /sushiart). Puntaje: frase completa del ancla en
+// el texto del preset = 3; cada palabra distintiva presente = 1;
+// tope 8. Los filtros duros (brandSafe / NEVER_STYLES) se aplican
+// ANTES y este match jamás los revierte: solo ordena entre válidos.
+const DIGEST_MATCH_MIN = 2;
+const DIGEST_MATCH_WEIGHT = 250;
+const DIGEST_MATCH_CAP = 8;
+let _cd = null;
+function clientDigestMod() {
+  if (_cd === null) { try { _cd = require('./client-digest'); } catch (e) { _cd = false; } }
+  return _cd || null;
+}
+function matchAgainstAnchors(style, anchors) {
+  const cd = clientDigestMod();
+  if (!cd || !style || !Array.isArray(anchors) || !anchors.length) return { points: 0, words: [] };
+  const text = cd.norm(`${style.code || ''} ${style.name || ''} ${style.prompt || ''}`);
+  const textWords = cd.textWordSet(text);
+  const matched = new Set();
+  let phraseHits = 0;
+  for (const a of anchors) {
+    if (a.phrase && a.phrase.split(' ').length >= 2 && text.includes(a.phrase)) { phraseHits++; continue; }
+    for (const w of cd.distinctiveWords(a.text)) {
+      if (matched.has(w)) continue;
+      for (const f of cd.wordForms(w)) { if (textWords.has(f)) { matched.add(w); break; } }
+    }
+  }
+  return { points: Math.min(DIGEST_MATCH_CAP, phraseHits * 3 + matched.size), words: [...matched] };
+}
+function digestStyleMatch(style, digest) {
+  const cd = clientDigestMod();
+  if (!cd || !digest) return { points: 0, words: [] };
+  let anchors = [];
+  try { anchors = cd.anchorsOf(digest); } catch (e) { return { points: 0, words: [] }; }
+  return matchAgainstAnchors(style, anchors);
+}
+
+// pickStyle({ intent, tipo, theme, angle, rubro, businessName, usedThisWeek, digest, avoidFamilies }) → { style, reason, intent, intentSource, family, digestMatch } | null
 // La INTENCIÓN puede viajar EXPLÍCITA desde el generador. Precedencia:
 //   1) `intent` explícito válido → se usa directo ('explicit')
 //   2) detectIntent por keywords del tema/ángulo ('keywords') — el refinamiento
@@ -204,7 +298,7 @@ function rubroMatch(style, rubro) {
 // La fantasía solo sale si la intención es 'viral'.
 // Prioridad de candidatos: 1) intención + rubro · 2) rubro brandSafe ·
 // 3) intención · 4) cualquiera brandSafe. (En viral se salta el 2.)
-function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [] } = {}) {
+function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '', businessName = '', usedThisWeek = [], boosts = {}, favorites = [], digest = null, avoidFamilies = [] } = {}) {
   let resolved, intentSource;
   if (intent && INTENT_STYLES[intent]) { resolved = intent; intentSource = 'explicit'; }
   else {
@@ -229,6 +323,41 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
     : intentOnly.length ? intentOnly
     : anySafe.length ? anySafe
     : fallbackSafe;
+  // (v233) PICK CONSCIENTE DEL DIGEST: las anclas del negocio puntúan
+  // cada candidato (match léxico contra su texto) y los presets del
+  // rubro que nombran los productos/servicios reales del cliente —
+  // aunque no estén en el ranking por intención — ENTRAN al pool si el
+  // match es fuerte (≥ DIGEST_MATCH_MIN). Sin digest (o sin anclas) el
+  // comportamiento es idéntico al histórico: mismo pool, mismo score.
+  let dAnchors = null;
+  try { const cd = clientDigestMod(); if (cd && digest) dAnchors = cd.anchorsOf(digest); } catch (e) { dAnchors = null; }
+  const matchCache = new Map();
+  const matchFor = (s) => {
+    if (!dAnchors || !dAnchors.length) return { points: 0, words: [] };
+    if (!matchCache.has(s.code)) matchCache.set(s.code, matchAgainstAnchors(s, dAnchors));
+    return matchCache.get(s.code);
+  };
+  const mergedCodes = new Set();
+  let all = cands;
+  if (dAnchors && dAnchors.length) {
+    const inPool = new Set(cands.map((s) => s.code));
+    const merged = STYLES.filter((s) => (fantasyOk || s.brandSafe) && !forbidden.has(s.code)
+      && !used.has(s.code) && rubroMatch(s, rubro) && !inPool.has(s.code)
+      && matchFor(s).points >= DIGEST_MATCH_MIN);
+    if (merged.length) {
+      for (const s of merged) mergedCodes.add(s.code);
+      all = [...cands, ...merged];
+    }
+  }
+  // (v233) ROTACIÓN DE FAMILIA: si la semana ya usó familias de
+  // dirección, los candidatos de esas familias quedan fuera (la
+  // variedad es de gramática visual, no solo de preset). Si el filtro
+  // vaciara el pool, se ignora: mejor repetir familia que no generar.
+  const avoidFam = new Set((avoidFamilies || []).map(String));
+  if (avoidFam.size) {
+    const kept = all.filter((s) => !avoidFam.has(styleFamilyOf(s)));
+    if (kept.length) all = kept;
+  }
   // Learning loop: el boost SOLO reordena dentro del pool ya validado
   // (brandSafe + NEVER_STYLES se filtraron arriba; el boost jamás los revierte).
   // Peso 120: un favorito probado del cliente (+1.0) supera al #1 genérico,
@@ -242,22 +371,38 @@ function pickStyle({ intent = null, tipo = '', theme = '', angle = '', rubro = '
   // ordenan PRIMERO dentro del pool ya validado — un favorito prohibido o
   // ya usado esta semana no está en cands y jamás resucita por esta vía.
   const favSet = new Set((favorites || []).map(String));
-  const scored = cands
-    .map((s) => ({ s, score: ranked.indexOf(s) * 100 + (matchesRubro(s) ? 0 : 10) - learnBoost(s.code) * 120 - (favSet.has(s.code) ? 100000 : 0) }))
-    .sort((a, b) => a.score - b.score);
+  // El match del digest pesa como ~2,5 posiciones del ranking por
+  // punto: un preset que nombra el producto real del cliente le gana
+  // al genérico de la intención. Los que entraron por el merge del
+  // digest parten de un índice virtual 2 (detrás del podio genérico,
+  // pero su match los levanta); el resto conserva el índice -1
+  // histórico de los pools de rubro. Desempate: mayor match primero.
+  const scored = all
+    .map((s) => {
+      const m = matchFor(s);
+      const ri = ranked.indexOf(s);
+      const idx = ri >= 0 ? ri : (mergedCodes.has(s.code) ? 2 : -1);
+      return { s, m, score: idx * 100 + (matchesRubro(s) ? 0 : 10) - learnBoost(s.code) * 120 - (favSet.has(s.code) ? 100000 : 0) - m.points * DIGEST_MATCH_WEIGHT };
+    })
+    .sort((a, b) => (a.score - b.score) || (b.m.points - a.m.points));
   const chosen = scored.length ? scored[0].s : null;
   if (!chosen) return null;
+  const chosenMatch = matchFor(chosen);
   return {
     style: chosen,
-    reason: `elegí ${chosen.code} porque ${INTENT_PHRASE[resolved] || 'va con el posteo'}`,
+    reason: `elegí ${chosen.code} porque ${INTENT_PHRASE[resolved] || 'va con el posteo'}${chosenMatch.points >= DIGEST_MATCH_MIN && chosenMatch.words.length ? ` · matchea con su negocio (${chosenMatch.words.slice(0, 3).join(', ')})` : ''}`,
     intent: resolved,
     intentSource,
+    family: styleFamilyOf(chosen),
+    digestMatch: chosenMatch,
   };
 }
 
-// Fragmento que se suma AL FINAL del prompt de gpt-image-2, DESPUÉS del
-// Style Lock visual. La línea de supremacía de paleta es innegociable:
-// el estilo jamás cambia los colores de marca.
+// Fragmento de dirección de estilo del preset. (v233) En la generación
+// de posteos lo inserta assembleImagePrompt en la posición de
+// DIRECCIÓN DE ESTILO (tras composición/paleta, antes de HEADLINE
+// ZONE) — ya no es el apéndice final. La línea de supremacía de paleta
+// es innegociable: el estilo jamás cambia los colores de marca.
 function styleFragment(style, paletteHex) {
   const s = typeof style === 'string' ? getStyle(style) : style;
   if (!s) return '';
@@ -270,4 +415,4 @@ function styleFragment(style, paletteHex) {
   ].join('\n');
 }
 
-module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch };
+module.exports = { STYLES, BY_CODE, getStyle, listStyles, INTENT_STYLES, INTENT_PHRASE, detectIntent, detectIntentKeywords, resolveExplicitIntent, intentFromTipo, FANTASY_STYLES, NEVER_STYLES, forbiddenStyles, pickStyle, styleFragment, rubroMatch, styleFamilyOf, digestStyleMatch, DIGEST_MATCH_MIN, DIGEST_MATCH_WEIGHT };

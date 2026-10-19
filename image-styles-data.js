@@ -653,6 +653,49 @@ const STYLES = [
   { code: '/ugcpet', name: 'UGC con mascota', brandSafe: true,
     rubros: ['mascotas', 'veterinaria', 'hogar'],
     prompt: 'Adorable UGC moment: cute pet interacting with the product, slightly imperfect framing, natural home light, genuine candid joy, the kind of photo a customer would proudly send to a friend.' },
+  // ---------- (v233) Arquetipos del Style Lock (posty-training/style-lock-etapa2) ----------
+  // Los 12 prompts de arquetipo que Valentino pasó para entrenar el
+  // Style Lock (2026-09-30) nunca habían llegado a producción: vivían
+  // en un .md de fixtures. Ahora son presets del catálogo, adaptados a
+  // dirección de estilo de posteo de negocio (sin texto horneado: el
+  // titular lo compone el código). Los de fantasía/meme quedan
+  // brandSafe=false — solo elección manual o intención viral.
+  { code: '/arch-mascot3d', name: 'Mascota 3D del negocio', brandSafe: false,
+    rubros: [],
+    prompt: '3D Pixar-style mascot scene: the brand mascot character (rounded friendly 3D render, glossy finish, big expressive eyes) as the protagonist inside a real scene of its trade — serving, fixing, welcoming — soft studio-grade light, full body, centered composition, cheerful premium character advertising.' },
+  { code: '/arch-foodmascot', name: 'Mascota del plato', brandSafe: false,
+    rubros: ['gastronomia', 'restaurante'],
+    prompt: 'Anthropomorphic food mascot illustration: the signature dish itself as a smiling cartoon character with rosy cheeks, waving at the camera in front of its own food stall at golden hour, festive warm colors, playful flat illustration style.' },
+  { code: '/arch-beigeminimal', name: 'Minimalismo beige', brandSafe: true,
+    rubros: ['deco', 'hogar', 'belleza', 'estetica', 'cosmetica', 'indumentaria'],
+    prompt: 'Minimalist product photography: a single ceramic piece on a beige seamless background, soft diffused daylight, lots of negative space, calm Scandinavian aesthetic, serene premium still life, no text.' },
+  { code: '/arch-meme', name: 'Promo meme saturada', brandSafe: false,
+    rubros: [],
+    prompt: 'Loud meme-style promo photography: the product shot with ultra saturated colors, hot pink and cyan background, high contrast, deliberately tacky viral aesthetic, generous clean space at the top reserved for a headline composited later, no baked text.' },
+  { code: '/arch-gymdark', name: 'Gym oscuro contraste', brandSafe: true,
+    rubros: ['fitness', 'gimnasio'],
+    prompt: 'Dark moody gym photography: athlete lifting a barbell in a near-black gym, dramatic hard side light, deep shadows, high contrast, sweat visible, intense powerful mood.' },
+  { code: '/arch-founder', name: 'Fundadora a cámara', brandSafe: true,
+    rubros: [],
+    prompt: 'Founder talking to camera: medium shot of the business owner in her thirties, warm genuine smile, work apron of the trade, inside her real shop with the workspace behind, natural window light, authentic small-business feel, vertical framing.' },
+  { code: '/arch-pastelflatlay', name: 'Flat-lay pasteles', brandSafe: true,
+    rubros: ['papeleria', 'libreria', 'cosmetica', 'belleza', 'deco'],
+    prompt: 'Top-down pastel flat-lay: the products neatly arranged on a pale pink background, soft daylight, delicate sweet aesthetic, generous negative space, gentle feminine editorial composition.' },
+  { code: '/arch-ugcraw', name: 'UGC crudo de celular', brandSafe: true,
+    rubros: [],
+    prompt: 'Amateur smartphone photo: the product held in a hand, messy real everyday background, harsh flash look, slightly tilted framing, unpolished authentic snapshot, no aesthetic pretension.' },
+  { code: '/arch-whitepackshot', name: 'Packshot fondo blanco', brandSafe: true,
+    rubros: [],
+    prompt: 'E-commerce packshot: the product centered on a pure white infinite background, soft studio shadow, crisp commercial product photography, no text.' },
+  { code: '/arch-infographic', name: 'Infografía de carrusel', brandSafe: true,
+    rubros: ['educacion', 'salud', 'servicios'],
+    prompt: 'Infographic carousel slide design: deep navy background, simple flat icons in a clean grid, generous empty space at the top reserved for the headline (composited later by code), friendly educational design, no baked text.' },
+  { code: '/arch-warmfood', name: 'Comida cálida a leña', brandSafe: true,
+    rubros: ['gastronomia', 'restaurante', 'parrilla'],
+    prompt: 'Warm appetizing food photography: close-up of sizzling grilled steak and asado cuts on a dark wooden table, steam rising, golden hour side light, rustic parrilla restaurant, rich warm tones, no text.' },
+  { code: '/arch-fashioneditorial', name: 'Editorial de moda', brandSafe: true,
+    rubros: ['moda', 'indumentaria'],
+    prompt: 'High-fashion editorial photography: model in an oversized blazer posing against a neutral gray studio background, dramatic soft light, generous negative space, Vogue-style minimalist composition, no text.' },
 ];
 
 module.exports = STYLES;

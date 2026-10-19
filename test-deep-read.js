@@ -266,7 +266,7 @@ const CAFE_URL = 'https://cafearoma.example/fotos/cafe.jpg';
     const srv = fs.readFileSync('server.js', 'utf8');
     const demoSrc = fs.readFileSync('demo.js', 'utf8');
     const feedSrc = fs.readFileSync('feed-audit.js', 'utf8');
-    ok(srv.includes("const BUILD_ID = '20261018-v232'"), 'BUILD_ID v230');
+    ok(srv.includes("const BUILD_ID = '20261018-v233'"), 'BUILD_ID v230');
     ok(srv.includes('deepRead.fetchDeepCatalog(webUrl)'), 'el sweep lee el catálogo profundo');
     ok(srv.includes('deepRead.fetchBioLink(feedLink)'), 'el sweep sigue el link de la bio');
     ok(srv.includes('classifyDigestPhotos'), 'el sweep clasifica fotos con guarda de gasto');
@@ -274,7 +274,7 @@ const CAFE_URL = 'https://cafearoma.example/fotos/cafe.jpg';
     ok(srv.includes('clientDigest.lexiconBlock(dg.lexicon)'), 'captionExtrasFor inyecta el léxico');
     ok(srv.includes('photoMappedRefsFor(uid,'), 'el pipeline usa la foto del producto como referencia');
     ok(srv.includes('trialDeepCatalog(webData)') && srv.includes('trialBioLink('), 'la prueba recolecta catálogo y bio-link');
-    ok(demoSrc.includes('photoProductFor') && demoSrc.includes('const DEMO_ENGINE_V = 21;'), 'demo: mapa en el gate + motor v21');
+    ok(demoSrc.includes('photoProductFor') && demoSrc.includes('const DEMO_ENGINE_V = 22;'), 'demo: mapa en el gate + motor v22');
     ok(feedSrc.includes('external_url'), 'feed-audit expone el link de la bio');
   }
 

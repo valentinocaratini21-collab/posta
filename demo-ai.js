@@ -778,9 +778,12 @@ function styleOf(style) {
 }
 
 // El bloque de dirección de arte que se inyecta en el prompt final:
-// completo (las 6 dimensiones) + la firma del estilo del catálogo.
-// Va DESPUÉS del brief y del fragmento de estilo y ANTES de las
-// directivas duras: manda sobre todo lo anterior.
+// completo (las 6 dimensiones de la FAMILIA). Va DESPUÉS del brief y
+// ANTES de las directivas duras: la familia MANDA sobre el look.
+// (v233) La firma del preset (su texto del catálogo) ya NO se repite
+// acá: entra UNA sola vez en la posición de DIRECCIÓN DE ESTILO del
+// brief ensamblado (assembleImagePrompt, vía stylePreset) — antes el
+// mismo texto viajaba dos veces en el mismo prompt.
 function artDirectionFor(style) {
   const st = styleOf(style);
   const code = String((st && st.code) || (typeof style === 'string' ? style : '') || '');
@@ -797,7 +800,6 @@ function artDirectionFor(style) {
     `- Color usage: ${d.color}.`,
     // (v231) subject_scale: el rango medido de ocupación del héroe.
     d.subject_scale ? `- Subject scale (hero occupancy, measured on winning pieces): the hero occupies ${Math.round(d.subject_scale.text[0] * 100)}–${Math.round(d.subject_scale.text[1] * 100)}% of the frame WIDTH when a headline is composited later, ${Math.round(d.subject_scale.clean[0] * 100)}–${Math.round(d.subject_scale.clean[1] * 100)}% in a clean piece${d.subject_scale.bleed === 'bottom' ? '; the hero may bleed off the BOTTOM edge of the frame' : d.subject_scale.bleed === 'right' ? '; the hero may bleed off the RIGHT edge of the frame' : d.subject_scale.bleed === 'edges' ? '; the hero may bleed off the frame edges' : ''}.` : null,
-    st && st.prompt ? `- Style signature (from the catalog): ${st.prompt}` : null,
   ].filter(Boolean).join('\n');
 }
 
