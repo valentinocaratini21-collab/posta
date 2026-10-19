@@ -5,6 +5,7 @@ const { execSync } = require('child_process');
 const {
   INTENTS, HOOKS, BANNED_PATTERNS, isBanned,
   pickHook, renderHook, ensureCaptionOpensWithHook, hookIntentMap,
+  captionOpenIsGarbled,
 } = require('./hooks');
 
 let pass = 0, fail = 0;
@@ -108,7 +109,19 @@ t('antepone con \\n\\n cuando falta', prepended === hookText + '\n\n' + noHook);
 t('idempotente: segunda llamada no duplica', ensureCaptionOpensWithHook(prepended, hookText) === prepended);
 t('hook vacío no toca el caption', ensureCaptionOpensWithHook(noHook, '') === noHook);
 
-// 9. node --check hooks.js
+// 9. captionOpenIsGarbled: exención del nombre del negocio (2026-10-19)
+t('garbled: nombre con artículo propio no es empalme (Lo de Marta)',
+  captionOpenIsGarbled('En Lo de Marta las facturas salen calentitas y con dulce de leche casero', 'Lo de Marta') === false);
+t('garbled: apertura con el nombre al frente (La Cocina de Ana)',
+  captionOpenIsGarbled('La Cocina de Ana abre también los domingos al mediodía', 'La Cocina de Ana') === false);
+t('garbled: empalme real sigue marcado (post 112)',
+  captionOpenIsGarbled('El De escéptica a fan: cómo cambió mi rutina', 'Posty') === true);
+t('garbled: tema-título cosido sigue marcado (id 406)',
+  captionOpenIsGarbled('Lo que nos dijo una clienta después de probar Lo que nuestros usuarios dicen de Posty en Posty', 'Posty') === true);
+t('garbled: caption sano sin el nombre no se toca',
+  captionOpenIsGarbled('Las medialunas salen del horno a las ocho en punto', 'Lo de Marta') === false);
+
+// 10. node --check hooks.js
 let checkOk = false;
 try {
   execSync('node --check hooks.js', { cwd: __dirname, stdio: 'pipe' });

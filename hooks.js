@@ -222,18 +222,32 @@ function captionOpenIsGarbled(caption, negocio) {
   if (/\w\.:(?!\/)/.test(first)) return true;
   if (/\.\s+[a-záéíóúñ]/.test(first)) return true;
   if (/[¿¡]/.test(first.slice(1))) return true;
-  if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(first)) return true;
+  // EXENCIÓN DEL NOMBRE (2026-10-19): las dos firmas de abajo miran
+  // artículos y mayúsculas, y un nombre de negocio puede contenerlas
+  // legítimas ("Lo de Marta", "La Cocina de Ana") sin que haya empalme.
+  // Se evalúan sobre `masked`: el caption con el nombre del negocio
+  // reemplazado por un token neutro. El resto de las reglas
+  // (puntuación, duplicación del nombre, largo) no dependen de esto y
+  // corren sobre el texto real.
+  const bizRaw = String(negocio || '').trim();
+  let masked = first;
+  if (bizRaw.length >= 3) {
+    const esc = bizRaw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    masked = first.replace(new RegExp(esc, 'gi'), 'Negocio');
+  }
+  if (/^(?:El|La|Los|Las|el|la|los|las)\s+[A-ZÁÉÍÓÚÑ]/.test(masked)) return true;
   // (d) LINT v3 (Juli, 2026-10-18) — la firma residual pre-registrada el
   // 17/10 apareció en generación NUEVA: id 406, "Lo que nos dijo una
   // clienta después de probar Lo que nuestros usuarios dicen de Posty en
-  // Posty" — un tema-TÍTULO cosido a mitad de frase. Su delator no depende
-  // del nombre del negocio: una palabra común (Lo/La/El/Los/Las/Un/Una) con
-  // mayúscula tras una palabra en minúscula y seguida de minúscula. Si lo
-  // que sigue también va en mayúscula es nombre propio ("nuestro local de
-  // La Plata abre…") y no se marca. Ídem el modismo "Día a día"
+  // Posty" — un tema-TÍTULO cosido a mitad de frase. Su delator: una
+  // palabra común (Lo/La/El/Los/Las/Un/Una) con mayúscula tras una
+  // palabra en minúscula y seguida de minúscula (evaluado sobre el
+  // texto con el nombre del negocio enmascarado — ver exención arriba).
+  // Si lo que sigue también va en mayúscula es nombre propio ("nuestro
+  // local de La Plata abre…") y no se marca. Ídem el modismo "Día a día"
   // capitalizado (id 111); "Día de la Madre" no matchea (nombre propio).
-  if (/[a-záéíóúñü]\s+(?:Lo|La|El|Los|Las|Un|Una)\s+[a-záéíóúñü]/.test(first)) return true;
-  if (/[a-záéíóúñü]\s+Día a día/.test(first)) return true;
+  if (/[a-záéíóúñü]\s+(?:Lo|La|El|Los|Las|Un|Una)\s+[a-záéíóúñü]/.test(masked)) return true;
+  if (/[a-záéíóúñü]\s+Día a día/.test(masked)) return true;
   const biz = String(negocio || '').trim().toLowerCase();
   if (biz && biz.length >= 3) {
     const hits = first.toLowerCase().split(biz).length - 1;
