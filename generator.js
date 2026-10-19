@@ -141,12 +141,28 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   out = sinColgada(out.replace(/[,;:]+$/, '').trim().split(' ').filter(Boolean)).join(' ').replace(/[,;:]+$/, '').trim();
   // 5) Sentence case con nombres propios y siglas preservados.
   out = headlineCase(out, sRaw);
+  // 5b) PREGUNTA CORTADA = PUNTOS SUSPENSIVOS (regla de Valentino
+  // 2026-10-19): si la oración elegida es una PREGUNTA y el recorte la
+  // deja INCOMPLETA, el titular NO se cierra con "?" como si estuviera
+  // entera — termina con "…". Una pregunta cerrada a la mitad parece
+  // completa y queda gramaticalmente rota (defecto vivo: post 413,
+  // "¿listo para que tu Instagram sea?"). Si la pregunta entra entera,
+  // el cierre "?" de siempre se mantiene (paso 6). Espejo en server.js.
+  const seedIsQuestion = /^\s*¿/.test(seed) || /\?\s*$/.test(seed);
+  const normWordsQ = (t) => String(t || '').replace(/\u0001/g, '.').toLowerCase().split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}$]/gu, '')).filter(Boolean);
+  const seedWordsQ = normWordsQ(seed);
+  const questionIsCut = () => {
+    if (!seedIsQuestion || seedWordsQ.length < 3) return false;
+    const ow = normWordsQ(out);
+    return !(ow.length >= seedWordsQ.length && seedWordsQ.every((w, i) => ow[i] === w));
+  };
   // 6) CIERRE DE SIGNOS (Mora 2026-10-18, ids reales 458/461): el recorte por
   // palabras dejaba preguntas abiertas sin su cierre (¿cuántas veces te
   // imaginaste creando contenido" sin "?"). Si el titular abre con ¿/¡, el
   // signo de cierre es obligatorio: se restaura siempre. Sin efecto en
-  // titulares que no abren con signo.
-  if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+  // titulares que no abren con signo. (v239: una pregunta CORTADA no se
+  // cierra — la manda la regla 5b, no este paso.)
+  if (out.startsWith('¿') && !out.endsWith('?') && !questionIsCut()) out = out.replace(/[.]+$/, '') + '?';
   if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
   // 7) CAP DE PALABRAS DURO (v209, regla de pieza de Valentino
   // 2026-10-18): garantía FINAL — ningún titular sale de acá con más de
@@ -166,10 +182,12 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
       }
       out = picked || sinColgada(ws.slice(0, maxWords)).join(' ');
       out = out.replace(/[,;:]+$/, '').trim();
-      if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+      if (out.startsWith('¿') && !out.endsWith('?') && !questionIsCut()) out = out.replace(/[.]+$/, '') + '?';
       if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
     }
   }
+  // 8) Cierre de la regla 5b: pregunta cortada ⇒ "…" final y sin "?".
+  if (questionIsCut()) out = out.replace(/\s*[?….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
 }
 const HOOKS = {
@@ -594,6 +612,28 @@ function perfNumbers(input) {
   return out;
 }
 
+// PREGUNTA CORTADA Y CERRADA (regla de Valentino 2026-10-19): un titular
+// que termina en "?" pero es PREFIJO ESTRICTO de la pregunta completa de
+// su fuente (caption/brief) es un defecto: la pregunta quedó cortada a
+// la mitad y encima cerrada, como si estuviera entera. La forma válida
+// es la pregunta completa con "?" o el corte con "…" y sin cierre
+// (makeHeadline lo garantiza; captionPasses lo frena como red).
+// Devuelve true SOLO ante ese patrón exacto.
+function truncatedClosedQuestion(headline, sourceText) {
+  const h = String(headline || '').trim();
+  if (!h.endsWith('?')) return false;
+  const src = String(sourceText || '');
+  let q = '';
+  const mInv = src.match(/¿[^?]*\?/);
+  if (mInv) q = mInv[0];
+  else { const m2 = src.match(/[^.!?…]*\?/); if (m2) q = m2[0]; }
+  if (!q) return false;
+  const norm = (t) => String(t || '').toLowerCase().split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}$]/gu, '')).filter(Boolean);
+  const hw = norm(h), qw = norm(q);
+  if (!hw.length || hw.length >= qw.length) return false;
+  return hw.every((w, i) => qw[i] === w);
+}
+
 // Puerta de calidad automática: el cliente nunca ve un caption mediocre.
 // Devuelve { ok, reason }.
 // `input` (opcional) aporta { dna, business } para el chequeo de grounding:
@@ -639,6 +679,19 @@ function captionPasses(caption, input) {
   const tagNorm = (t) => t.slice(1).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const badTag = (c.match(/#[\p{L}\p{N}_]+/gu) || []).map(tagNorm).find(t => IRRELEVANT_TAGS.includes(t));
   if (badTag) return { ok: false, reason: `hashtag irrelevante: #${badTag} no le vende nada al negocio` };
+  // PREGUNTA CORTADA Y CERRADA (regla de Valentino 2026-10-19): si la
+  // primera línea — la que se quema como titular en la imagen — es una
+  // pregunta TRUNCADA respecto de la pregunta completa del brief o del
+  // propio caption y encima cierra con "?", queda gramaticalmente
+  // rota y parece completa: se rechaza. Válido: la pregunta entera con
+  // "?" o el corte con "…" sin signo de cierre.
+  {
+    const firstLineQ = (c.split('\n')[0] || '').trim();
+    const qSources = [input && input.titulo, input && input.tema, input && input.topic, input && input.title, c].filter(Boolean).join('\n');
+    if (truncatedClosedQuestion(firstLineQ, qSources)) {
+      return { ok: false, reason: 'pregunta cortada y cerrada: la primera línea es una pregunta incompleta que cierra con "?" como si estuviera entera — completala o cortala con "…" sin el signo de cierre' };
+    }
+  }
   // Hook: la primera línea no puede ser una intro genérica.
   const firstLine = (c.split('\n')[0] || '').trim();
   if (/^(hola|buenas)[,!.\s]|les (contamos|queremos contar)|queremos contarles|en este posteo? (les |te )?(vamos a|queremos)/i.test(firstLine)) {
@@ -3832,4 +3885,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };

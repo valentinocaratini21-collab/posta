@@ -1078,6 +1078,7 @@ function getPendingDogfood(db, userId) {
 
 module.exports = {
   HOUSE,
+  POSTY_LOOK, // (v239) el pipeline de clientes (server.js) lo reusa para el character lock de la cuenta de la casa
   ANGLES,
   HOUSE_HASHTAG_BLOCKS,
   HOUSE_CTA_VARIANTS,

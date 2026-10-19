@@ -226,7 +226,7 @@ ok('el ítem confirmado por el dueño abre la rotación de temas', () => {
 console.log('== 7) Contrato de deploy ==');
 ok('server: endpoints + reporte + BUILD_ID v238', () => {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
-  assert.ok(srv.includes("const BUILD_ID = '20261019-v238'"));
+  assert.ok(srv.includes("const BUILD_ID = '20261019-v239'"));
   assert.ok(srv.includes("app.get('/api/questions/current'"));
   assert.ok(srv.includes("app.post('/api/questions/:id/answer'"));
   assert.ok(srv.includes("app.post('/api/questions/:id/dismiss'"));

@@ -370,12 +370,28 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
   out = sinColgada(out.replace(/[,;:]+$/, '').trim().split(' ').filter(Boolean)).join(' ').replace(/[,;:]+$/, '').trim();
   // 5) Sentence case con nombres propios y siglas preservados.
   out = headlineCase(out, sRaw);
+  // 5b) PREGUNTA CORTADA = PUNTOS SUSPENSIVOS (regla de Valentino
+  // 2026-10-19): si la oración elegida es una PREGUNTA y el recorte la
+  // deja INCOMPLETA, el titular NO se cierra con "?" como si estuviera
+  // entera — termina con "…". Una pregunta cerrada a la mitad parece
+  // completa y queda gramaticalmente rota (defecto vivo: post 413,
+  // "¿listo para que tu Instagram sea?"). Si la pregunta entra entera,
+  // el cierre "?" de siempre se mantiene (paso 6). Espejo en generator.js.
+  const seedIsQuestion = /^\s*¿/.test(seed) || /\?\s*$/.test(seed);
+  const normWordsQ = (t) => String(t || '').replace(/\u0001/g, '.').toLowerCase().split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}$]/gu, '')).filter(Boolean);
+  const seedWordsQ = normWordsQ(seed);
+  const questionIsCut = () => {
+    if (!seedIsQuestion || seedWordsQ.length < 3) return false;
+    const ow = normWordsQ(out);
+    return !(ow.length >= seedWordsQ.length && seedWordsQ.every((w, i) => ow[i] === w));
+  };
   // 6) CIERRE DE SIGNOS (Mora 2026-10-18, ids reales 458/461): el recorte por
   // palabras dejaba preguntas abiertas sin su cierre (¿cuántas veces te
   // imaginaste creando contenido" sin "?"). Si el titular abre con ¿/¡, el
   // signo de cierre es obligatorio: se restaura siempre. Sin efecto en
-  // titulares que no abren con signo.
-  if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+  // titulares que no abren con signo. (v239: una pregunta CORTADA no se
+  // cierra — la manda la regla 5b, no este paso.)
+  if (out.startsWith('¿') && !out.endsWith('?') && !questionIsCut()) out = out.replace(/[.]+$/, '') + '?';
   if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
   // 7) CAP DE PALABRAS DURO (v209, regla de pieza de Valentino
   // 2026-10-18): garantía FINAL — ningún titular sale de acá con más de
@@ -395,10 +411,12 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
       }
       out = picked || sinColgada(ws.slice(0, maxWords)).join(' ');
       out = out.replace(/[,;:]+$/, '').trim();
-      if (out.startsWith('¿') && !out.endsWith('?')) out = out.replace(/[.]+$/, '') + '?';
+      if (out.startsWith('¿') && !out.endsWith('?') && !questionIsCut()) out = out.replace(/[.]+$/, '') + '?';
       if (out.startsWith('¡') && !out.endsWith('!')) out = out.replace(/[.]+$/, '') + '!';
     }
   }
+  // 8) Cierre de la regla 5b: pregunta cortada ⇒ "…" final y sin "?".
+  if (questionIsCut()) out = out.replace(/\s*[?….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
 }
 const app = express();
@@ -1799,12 +1817,13 @@ async function makeIdeaDraft(uid, idea) {
     if (p && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) productRef = p;
   } catch (e) {}
   const styleOut = {};
+  const genOut = {}; // (v239) veredictos de QA (personaje/fidelidad)
   let imagePath = null;
   for (let attempt = 0; attempt < 3 && !imagePath; attempt++) {
     try {
       imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: idea.title, porque: idea.why },
-        tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut, productRef,
+        tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut, resultOut: genOut, productRef,
       });
     } catch (e) {
       console.error(`[ideas-loop] imagen falló (intento ${attempt + 1}/3):`, e.message);
@@ -1815,7 +1834,7 @@ async function makeIdeaDraft(uid, idea) {
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
     VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, String(idea.title || '').slice(0, 200), String('idea:' + (idea.angle_key || '')).slice(0, 120),
-      tipo, String(idea.why || '').slice(0, 500), wk, trainingWheelsActive(uid) ? 1 : 0,
+      tipo, String(idea.why || '').slice(0, 500), wk, (trainingWheelsActive(uid) || genOut.character === 'failed') ? 1 : 0,
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath));
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
@@ -1868,12 +1887,13 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
     if (p && fs.existsSync(path.join(MEDIA_DIR, path.basename(p)))) productRef = p;
   } catch (e) {}
   const styleOut = {};
+  const genOut = {}; // (v239) veredictos de QA (personaje/fidelidad)
   let imagePath = null;
   for (let attempt = 0; attempt < 3 && !imagePath; attempt++) {
     try {
       imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: title, porque: brief },
-        tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut, productRef,
+        tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut, resultOut: genOut, productRef,
       });
     } catch (e) {
       console.error(`[admin-regen] imagen falló (intento ${attempt + 1}/3):`, e.message);
@@ -1893,6 +1913,8 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
       String(title || '').slice(0, 200), 'regen:mapa-sitio', String(brief || '').slice(0, 500),
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath), post.id);
+  // (v239) QA de personaje: identidad no garantizada ⇒ la pieza queda en revisión.
+  if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(post.id); console.log(`[admin-regen] post ${post.id}: protagonista no garantizado — needs_review`); } catch (e) {} }
   stampPostDigest(post.id, uid, content && content._anchored === false); // (v229) el reemplazo hereda el fundamento vigente
   try { track(uid, 'admin_regen_post', String(post.id)); } catch (e) {}
   return { ok: true, post_id: post.id, headline, textMode: mode };
@@ -4256,6 +4278,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   let albumRoles = null;
   try { const picked = albumRefsForPiece(uid, { tipo: idea.tipo, texts: [idea.titulo, caption.split('\n')[0]].filter(Boolean).join(' ') }); refs = picked.refs; albumRoles = picked.roles.length ? picked.roles : null; } catch (e) {}
   const styleOut2 = {};
+  const genOut2 = {}; // (v239) veredictos de QA (personaje/fidelidad)
   // INVARIANTE: todo borrador sale con imagen real de IA. Si la IA falla
   // tras reintentos, no se crea el borrador (nunca un bloque plano).
   let imagePath = null;
@@ -4275,7 +4298,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     try {
       imagePath = await conceptShotGenerateQueued({
         uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo },
-        tipo: idea.tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut: styleOut2, productRef: regenProductRef,
+        tipo: idea.tipo, headline, refs, refRoles: albumRoles, apiKey: key, styleOut: styleOut2, resultOut: genOut2, productRef: regenProductRef,
       });
     } catch (e) {
       console.error(`[review] IA imagen falló (intento ${attempt + 1}/3):`, e.message);
@@ -4286,7 +4309,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt)
     VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`)
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
-      String(idea.porque || '').slice(0, 500), weekKey || '', trainingWheelsActive(uid) ? 1 : 0,
+      String(idea.porque || '').slice(0, 500), weekKey || '', (trainingWheelsActive(uid) || genOut2.character === 'failed') ? 1 : 0,
       String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath));
   stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
@@ -5155,6 +5178,57 @@ function desiredAlbumTag(tipo, texts) {
   if (/(local|venue|sucursal|nuestro espacio|el lugar|interior|frente)/.test(t)) return 'local';
   return 'producto';
 }
+// ---------- (v239) CHARACTER LOCK — el protagonista no se inventa ----------
+// GARANTÍA (Valentino, 2026-10-19: "esto no le puede pasar a nuestros
+// clientes"): toda pieza con un PROTAGONISTA RECURRENTE — el personaje/
+// mascota de la cuenta o la persona que aparece siempre en su feed —
+// se genera con SU referencia como referencia que viaja, con cláusula
+// de identidad en el prompt y con QA de identidad bloqueante
+// (qaCharacterB64/characterGate): identidad distinta o no verificable
+// ⇒ la pieza NO se entrega como buena (reintento → needs_review).
+// Vale para la casa (Posty) y para cualquier cliente, igual que la
+// fidelidad del producto protege su material en v237.
+// Devuelve { refAbs, kind: 'character'|'person', label, house } o null
+// si la cuenta no tiene un protagonista recurrente identificable.
+function protagonistRefFor(uid) {
+  try {
+    const profile = getProfile(uid) || {};
+    // LA CASA: @posty.hacetodo ES un personaje — su referencia es el
+    // avatar oficial, el mismo que usa dogfood.js (POSTY_LOOK).
+    const handle = String(profile.ig_username || '').toLowerCase().replace(/^@/, '').trim();
+    if (handle === 'posty.hacetodo') {
+      const candidates = [
+        path.join(MEDIA_DIR, 'posty-mascot.png'),
+        path.join(__dirname, 'public', 'ai-avatar.png'),
+      ];
+      for (const p of candidates) {
+        try { if (fs.existsSync(p) && fs.statSync(p).isFile()) return { refAbs: p, kind: 'character', label: (dogfood && dogfood.POSTY_LOOK) || '', house: true }; } catch (e) {}
+      }
+      return null;
+    }
+    // CLIENTES: el perfil visual dice que un sujeto aparece en TODOS
+    // los posteos y hay referencias reales de su feed descargadas.
+    let vp = null;
+    try { vp = getVisualStyle(db, uid); } catch (e) {}
+    if (!vp || !vp.subject_always_present || !Array.isArray(vp.ref_paths) || !vp.ref_paths.length) return null;
+    const refAbs = vp.ref_paths.find((p) => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch (e) { return false; } });
+    if (!refAbs) return null;
+    const subj = String(vp.recurring_subject || '');
+    let digest = null;
+    try { digest = digestForUser(uid); } catch (e) {}
+    const prota = String((digest && digest.protagonista) || '').trim();
+    const isChar = /personaje|mascota|avatar|muñeco|muñeca|dibujo|ilustraci|caricatura|character|mascot|robot/i.test(subj);
+    const isPerson = vp.face_frequency === 'siempre'
+      || /dueñ|propietari|persona|mujer|hombre|fundador|emprendedor/i.test(subj)
+      || /dueñ|propietari|persona|mujer|hombre|fundador|emprendedor/i.test(prota);
+    if (isChar) return { refAbs, kind: 'character', label: subj || prota, house: false };
+    if (isPerson) return { refAbs, kind: 'person', label: subj || prota, house: false };
+    // El digest nombra un protagonista y el sujeto está siempre: lock.
+    if (prota) return { refAbs, kind: 'character', label: prota, house: false };
+    return null;
+  } catch (e) { return null; }
+}
+
 function albumRefsForPiece(uid, { tipo = '', texts = '', max = 2 } = {}) {
   let rows = [];
   try {
@@ -7266,6 +7340,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // palabras y nunca un bloque plano. Si la IA falla tras los
           // reintentos, la idea se salta (no se crea el borrador).
           const styleOut = {};
+          const genOut = {}; // (v239) veredictos de QA (personaje/fidelidad) de ESTA pieza
           let imagePath = null;
           let carouselGen = null;
           // Reference lock: la primera foto de producto de la semana viaja como
@@ -7323,7 +7398,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           try {
             imagePath = await conceptShotGenerateQueued({
               uid, idea: { titulo: idea.titulo, porque: idea.porque || idea.angulo }, tipo: idea.tipo, headline, refs, refRoles: refRolesForRefs, apiKey: key,
-              style: preStyleCode, usedStyles, usedFamilies, styleOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
+              style: preStyleCode, usedStyles, usedFamilies, styleOut, resultOut: genOut, productRef, sceneRole: nextSceneRole(), gridNote: idea._gridNote || '',
             });
           } catch (e) {
             if (!firstImgError) firstImgError = String((e && e.message) || e).slice(0, 300);
@@ -7408,8 +7483,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               claimed--;
               continue;
             }
+            // (v239) QA de personaje: identidad no garantizada ⇒ revisión.
+            if (genOut.character === 'failed') { try { db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(pendingId); console.log(`[pipeline:${tag}] post ${pendingId}: protagonista no garantizado — needs_review`); } catch (e) {} }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle);
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, (genOut.character === 'failed' ? 1 : needRev), finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle);
             if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           } else {
@@ -10310,6 +10387,92 @@ async function fidelityGate({ uid, key, baseAbs, resultB64, regen }) {
   return { status: 'fallback', detalle: v2.detalle || v1.detalle };
 }
 
+// ---------- (v239) QA DE PERSONAJE — el candado del protagonista ----------
+// Análogo al QA de fidelidad, pero para la IDENTIDAD del protagonista
+// recurrente de la cuenta (su personaje/mascota, o la persona que
+// aparece siempre en su feed; en la cuenta de la casa, Posty). Ningún
+// QA comparaba al protagonista contra su referencia: el pipeline podía
+// entregar un robot genérico de visor LED en vez de Posty — o inventar
+// OTRA persona en el feed de un cliente — y nadie lo frenaba (defecto
+// vivo 2026-10-19, posteos 413/414 de la cuenta 12). qaCharacterB64
+// recibe LAS DOS imágenes (la primera es la referencia real del
+// protagonista; la segunda, el resultado) y juzga SOLO identidad con
+// una rúbrica acotada. Devuelve { ok, detalle } o null ante cualquier
+// falla (red, API, JSON ilegible): null = SIN VERIFICAR — no bloquea,
+// pero queda marcado (ver characterGate).
+async function qaCharacterB64(refB64, resultB64, apiKey, kind) {
+  try {
+    if (!refB64 || !resultB64 || !apiKey) return null;
+    const esPersona = kind === 'person';
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.1,
+        max_tokens: 200,
+        messages: [
+          { role: 'system', content:
+`Sos el control de PERSONAJE de una cuenta de Instagram. Te muestro DOS imágenes: la PRIMERA es la referencia REAL del protagonista recurrente de la cuenta (${esPersona ? 'la persona que aparece siempre en su feed' : 'su personaje/mascota'}) y la SEGUNDA es el resultado generado. Tu único trabajo es juzgar si el protagonista de la segunda es EL MISMO que el de la primera.
+Respondé SOLO con JSON, sin explicaciones: {"personaje_ok":true,"detalle":"..."}
+- personaje_ok = true SOLO si es reconociblemente EL MISMO protagonista: mismo tipo de cara (si la referencia tiene una cara PINTADA tipo cartoon, la segunda tiene ESA cara pintada — una cara de visor negro LED con ojos brillantes es OTRO personaje), mismos ojos y cejas, mismas marcas distintivas, mismos colores y proporciones, y su accesorio o rasgo firma presente y igual (por ejemplo, la bola de la antena de su color).
+${esPersona ? '- Tratándose de una PERSONA: misma cara, mismo pelo, mismos rasgos y contextura reconocibles → true; otra persona, aunque se le parezca, → false.' : '- Si en la segunda imagen el protagonista fue rediseñado, reemplazado por uno genérico parecido, recoloreado o perdió sus marcas/accesorio firma → false.'}
+- La escena, el fondo, la ropa/pose y los objetos PUEDEN cambiar: eso no es cambio de identidad.
+- Si el protagonista NO aparece en la segunda imagen → false.
+- detalle: UNA frase concreta nombrando qué comparaste (cara, ojos, marcas, accesorio) y, si falla, qué cambió.` },
+          { role: 'user', content: [
+            { type: 'text', text: 'PRIMERA imagen: la referencia REAL del protagonista de la cuenta.' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${refB64}` } },
+            { type: 'text', text: 'SEGUNDA imagen: el resultado generado. ¿El protagonista es EL MISMO?' },
+            { type: 'image_url', image_url: { url: `data:image/png;base64,${resultB64}` } },
+          ] },
+        ],
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    costs.trackUsage({ feature: 'vision-character', model: 'gpt-4o-mini', json: j });
+    const raw = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+    const parsed = parseLooseJson(raw);
+    if (!parsed || typeof parsed.personaje_ok !== 'boolean') return null;
+    return { ok: parsed.personaje_ok, detalle: String(parsed.detalle || '').slice(0, 140) };
+  } catch (e) {
+    return null; // sin veredicto: el llamador degrada a "sin verificar", nunca bloquea por error del QA
+  }
+}
+// La puerta completa (síncrona y bloqueante SOLO en piezas con
+// protagonista con lock — los llamadores deciden): veredicto → si el
+// protagonista es DISTINTO, UN reintento regenerando con la cláusula
+// de identidad reforzada → si vuelve a fallar, status 'failed': la
+// pieza se entrega marcada needs_review (resultOut.character), jamás
+// como buena. No hay fallback a una foto original como en fidelidad:
+// la escena es generada; lo que protege al cliente es la marca de
+// revisión, no una foto que no es la pieza. Degradación honesta: sin
+// key, con el tope de IA alcanzado o con el QA sin veredicto, el
+// estado es 'unverified' — se entrega marcada como sin verificar.
+// regen() debe devolver el b64 regenerado (o lanzar).
+// Devuelve { status: 'passed'|'failed'|'unverified', b64?, detalle }.
+async function characterGate({ uid, key, refAbs, resultB64, regen, kind }) {
+  if (!key) return { status: 'unverified', detalle: 'sin clave para verificar' };
+  try { costs.assertAiOk(uid); } catch (e) { return { status: 'unverified', detalle: 'tope de IA alcanzado' }; }
+  let refB64 = null;
+  try { refB64 = fs.readFileSync(refAbs).toString('base64'); } catch (e) { return { status: 'unverified', detalle: 'referencia del protagonista ilegible' }; }
+  if (!refB64) return { status: 'unverified', detalle: 'referencia del protagonista ilegible' };
+  const v1 = await qaCharacterB64(refB64, resultB64, key, kind);
+  if (!v1) return { status: 'unverified', detalle: 'QA de personaje sin veredicto' };
+  if (v1.ok) return { status: 'passed', detalle: v1.detalle };
+  console.log(`[qa-personaje] uid ${uid}: protagonista DISTINTO (${v1.detalle || 'sin detalle'}) — reintento con cláusula reforzada`);
+  let b64b = null;
+  try { b64b = await regen(); } catch (e) { console.error('[qa-personaje] regeneración falló:', e.message); }
+  if (!b64b) return { status: 'failed', detalle: v1.detalle };
+  const v2 = await qaCharacterB64(refB64, b64b, key, kind);
+  if (!v2) return { status: 'unverified', b64: b64b, detalle: 'QA sin veredicto en el reintento' };
+  if (v2.ok) return { status: 'passed', b64: b64b, detalle: v2.detalle, retried: true };
+  console.log(`[qa-personaje] uid ${uid}: el reintento también cambió al protagonista (${v2.detalle || 'sin detalle'}) — la pieza queda para revisión`);
+  return { status: 'failed', b64: b64b, detalle: v2.detalle || v1.detalle };
+}
+
 // ---------- Chequeo automático de marca (Style Lock) ----------
 // Visión post-generación con gpt-4o (el usuario lo pidió explícito, no mini):
 // verifica paleta integrada, logo idéntico y línea visual. Nunca lanza:
@@ -10761,6 +10924,30 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       roles = [...roles, ...feedRefs.map(() => 'character')].slice(0, 3);
     }
   }
+  // (v239) CHARACTER LOCK: si la cuenta tiene un protagonista
+  // recurrente con lock (protagonistRefFor), SU referencia entra al
+  // pool como rol 'character' y PRIMERA de la lista — sin importar el
+  // logo. Antes, el único camino del personaje era el bloque de arriba
+  // (refs del perfil visual), gateado por !logoPresent y con la
+  // prioridad empatada con 'photo': el personaje perdía el transporte
+  // y el modelo inventaba un protagonista genérico (defecto vivo
+  // 2026-10-19: posteos 413/414 de la casa con un robot de visor LED
+  // que no es Posty). En restyle no corre: la foto base del cliente
+  // ES el sujeto y su identidad la cubre el QA de fidelidad.
+  let protagonist = null;
+  let protagonistRefAbs = null;
+  if (!restyle) {
+    try { protagonist = protagonistRefFor(uid); } catch (e) { protagonist = null; }
+    if (protagonist && protagonist.refAbs) {
+      const pAbs = protagonist.refAbs;
+      const idx = absRefs.indexOf(pAbs);
+      if (idx === -1) {
+        absRefs = [pAbs, ...absRefs].slice(0, 3);
+        roles = ['character', ...roles].slice(0, 3);
+      } else roles[idx] = 'character';
+      protagonistRefAbs = pAbs;
+    }
+  }
   // En restyle la foto base del cliente ES la pieza: su rol manda.
   if (restyle && absRefs.length) roles[0] = 'restyle';
   // (v237) ¿Hay material del cliente en juego? (su foto como base o su
@@ -10786,7 +10973,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
   {
     const pairs = refRoles.prioritizeRefPairs(
       absRefs.map((ref, i) => ({ ref, role: roles[i] || 'photo' })),
-      { brandPiece: intent === 'identidad' },
+      { brandPiece: intent === 'identidad', protagonist: !!protagonistRefAbs },
     );
     const sent = pairs.slice(0, TRANSPORT_MAX);
     if (sent.length < pairs.length) {
@@ -10804,13 +10991,44 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     else if (refNoteOverride) refNote = refNoteOverride;
     else if (roles.length) refNote = refRoles.buildRefNote(roles);
   }
+  // (v239) Si la referencia del protagonista efectivamente VIAJA, el
+  // prompt suma la cláusula de identidad con su descripción: la nota
+  // de rol sola no alcanzaba — hace falta la orden explícita de no
+  // rediseñarlo. (Si no viaja, no se promete lo que el modelo no vio:
+  // la misma honestidad de transporte de v237.)
+  const characterSent = !!protagonistRefAbs && roles.includes('character');
+  if (characterSent) {
+    prompt = `${prompt}\n\n${refRoles.CHARACTER_CLAUSE}${protagonist && protagonist.label ? `\nThe protagonist is: ${protagonist.label}.` : ''}`;
+  }
   const genOnce = (reinforce) => genConceptImage(key, withStyle(prompt) + (reinforce ? `\n\n${refRoles.FIDELITY_REINFORCE}` : ''), absRefs, refNote, uid);
+  const genExtra = (extra) => genConceptImage(key, withStyle(prompt) + (extra ? `\n\n${extra}` : ''), absRefs, refNote, uid);
   let b64;
   try {
     b64 = await genOnce(false);
   } catch (e) {
     console.error('[concept-shot] openai:', e.message);
     throw new Error('OpenAI no pudo generar la imagen: ' + e.message);
+  }
+  // (v239) QA DE PERSONAJE — bloqueante SOLO en piezas con
+  // protagonista con lock cuya referencia viajó (characterSent).
+  // GARANTÍA (casa y clientes, textual de Valentino: "esto no le
+  // puede pasar a nuestros clientes"): pieza con protagonista
+  // recurrente + identidad distinta tras el reintento ⇒
+  // resultOut.character='failed' y los llamadores marcan la pieza
+  // needs_review=1 — jamás se entrega un protagonista inventado como
+  // si estuviera bien. Sin veredicto ⇒ 'unverified' (no bloquea, como
+  // la fidelidad). Corre ANTES del QA de fidelidad: si el reintento de
+  // personaje cambia la imagen, la fidelidad juzga la versión final.
+  if (resultOut) { resultOut.character = characterSent ? 'unverified' : 'n/a'; resultOut.characterDetail = ''; }
+  if (characterSent) {
+    try {
+      const cGate = await characterGate({ uid, key, refAbs: protagonistRefAbs, resultB64: b64, kind: (protagonist && protagonist.kind) || 'character', regen: () => genExtra(refRoles.CHARACTER_REINFORCE) });
+      if (resultOut) { resultOut.character = cGate.status; resultOut.characterDetail = cGate.detalle || ''; }
+      if (cGate.b64) b64 = cGate.b64;
+      if (cGate.status === 'failed') console.log(`[qa-personaje] uid ${uid}: identidad del protagonista NO garantizada (${cGate.detalle || 'sin detalle'}) — la pieza queda marcada para revisión`);
+    } catch (e) {
+      console.error('[qa-personaje] gate falló (se entrega sin verificar):', e.message);
+    }
   }
   // (v237) QA DE FIDELIDAD — bloqueante SOLO con material del cliente
   // (clientBaseRef = su foto base o su foto de producto, ya ENVIADA).
@@ -14279,7 +14497,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v238';
+const BUILD_ID = '20261019-v239';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

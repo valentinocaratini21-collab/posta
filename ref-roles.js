@@ -65,10 +65,17 @@ const DEMO_REF_NOTE = buildRefNote(['character', 'style']);
  *   cliente) mandan; después su material (photo/character); el logo
  *   solo viaja primero cuando es la ÚNICA referencia (pieza de marca /
  *   identidad) o cuando el llamador declara la pieza de marca
- *   (brandPiece); style cierra (es contexto, no sujeto). */
+ *   (brandPiece); style cierra (es contexto, no sujeto).
+ * (v239) CHARACTER LOCK: si el llamador declara que la pieza tiene un
+ * PROTAGONISTA recurrente con lock (protagonist), la referencia del
+ * personaje/persona manda sobre TODAS las demás — es la identidad de
+ * la cuenta: si viaja otra cosa, el modelo inventa un personaje
+ * genérico (defecto vivo 2026-10-19: la cuenta de la casa salió con un
+ * robot de visor LED que no es Posty). */
 const REF_PRIORITY = { restyle: 0, product: 1, photo: 2, character: 2, logo: 3, style: 4 };
-function prioritizeRefPairs(pairs, { brandPiece = false } = {}) {
+function prioritizeRefPairs(pairs, { brandPiece = false, protagonist = false } = {}) {
   const prio = (role) => {
+    if (role === 'character' && protagonist) return -1;
     if (role === 'logo' && brandPiece) return 0;
     return REF_PRIORITY[role] !== undefined ? REF_PRIORITY[role] : REF_PRIORITY.photo;
   };
@@ -88,4 +95,18 @@ function prioritizeRefPairs(pairs, { brandPiece = false } = {}) {
 const FIDELITY_CLAUSE = "FIDELITY TO THE CLIENT'S REAL MATERIAL (non-negotiable): the product/subject from the client's photo must remain IDENTICAL — same shape, same colors, same packaging, same label, same proportions, same details. Only the photographic treatment may change (light, color grade, framing, and the background ONLY where the style direction explicitly allows it). Never redesign, reinterpret, replace, 'improve' or beautify the product itself, and never swap it for a similar one.";
 const FIDELITY_REINFORCE = "FIDELITY CORRECTION — the previous version CHANGED the client's real product. Regenerate keeping the product/subject from the reference photo EXACTLY identical (same shape, colors, packaging, label and proportions — pixel-faithful identity), changing ONLY the photographic treatment around it.";
 
-module.exports = { REF_ROLE_TEXT, REF_ROLES, buildRefNote, DEMO_REF_NOTE, REF_PRIORITY, prioritizeRefPairs, FIDELITY_CLAUSE, FIDELITY_REINFORCE };
+/* Cláusulas de CHARACTER LOCK (v239): obligatorias en todo prompt de
+ * una pieza cuyo protagonista recurrente (personaje/mascota de la
+ * cuenta, o la persona que aparece siempre en su feed) viaja como
+ * referencia. Generar la escena nueva NO autoriza a rediseñar al
+ * protagonista: sin esta cláusula y sin la referencia, el modelo
+ * inventa un personaje genérico plausible — y la cuenta pierde su
+ * cara. La QA de personaje (server.js) verifica el cumplimiento
+ * contra la referencia y bloquea si se viola: pieza con protagonista
+ * recurrente + identidad distinta o no verificable ⇒ NO se entrega
+ * como buena (reintento → needs_review), para la casa y para
+ * cualquier cliente, igual que con la fidelidad del producto. */
+const CHARACTER_CLAUSE = "CHARACTER IDENTITY LOCK (non-negotiable): the protagonist of this piece is the EXACT character/person from the character reference image — identical face design (if the reference shows a PAINTED cartoon face, the result has that same painted face: NEVER a black LED visor screen, glowing digital eyes or a generic robot face unless the reference itself has them), identical eyes, eyebrows and expression style, identical distinctive marks, colors and proportions, and its signature accessory exactly as in the reference. Never redesign, reinterpret, genericize or replace the protagonist with a different or generic character/person. Only the scene, pose and props around the protagonist change.";
+const CHARACTER_REINFORCE = "CHARACTER CORRECTION — the previous version REPLACED the protagonist with a different, generic character/person. Regenerate with the protagonist EXACTLY as in the character reference image: identical face design, eyes, eyebrows, distinctive marks, colors, proportions and signature accessory. Do not invent a new character design and do not change who the protagonist is.";
+
+module.exports = { REF_ROLE_TEXT, REF_ROLES, buildRefNote, DEMO_REF_NOTE, REF_PRIORITY, prioritizeRefPairs, FIDELITY_CLAUSE, FIDELITY_REINFORCE, CHARACTER_CLAUSE, CHARACTER_REINFORCE };

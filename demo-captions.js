@@ -922,14 +922,23 @@ function capHeadlineWords(headline, max = 6) {
   if (!h) return h;
   const words = h.split(' ');
   if (words.length <= max) return h;
+  let out = '';
   const clauses = h.split(/\s*[:;—]\s*|\s+-\s+/).map((s) => s.trim()).filter(Boolean);
   for (const c of clauses) {
     const cw = c.split(' ');
-    if (cw.length >= 2 && cw.length <= max) return c.replace(/[.,;:]+$/, '');
+    if (cw.length >= 2 && cw.length <= max) { out = c.replace(/[.,;:]+$/, ''); break; }
   }
-  let kept = words.slice(0, max);
-  while (kept.length > 2 && HEADLINE_HANG_WORDS.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!¡?¿]+$/, ''))) kept.pop();
-  return kept.join(' ').replace(/[.,;:]+$/, '');
+  if (!out) {
+    let kept = words.slice(0, max);
+    while (kept.length > 2 && HEADLINE_HANG_WORDS.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!¡?¿]+$/, ''))) kept.pop();
+    out = kept.join(' ').replace(/[.,;:]+$/, '');
+  }
+  // PREGUNTA CORTADA = PUNTOS SUSPENSIVOS (regla de Valentino
+  // 2026-10-19): si la entrada era una pregunta y el recorte la dejó
+  // incompleta, cierra con "…" — jamás con "?" a la mitad (mismo
+  // criterio que makeHeadline en generator.js/server.js).
+  if (/^\s*¿/.test(h) || /\?\s*$/.test(h)) out = out.replace(/\s*[?….]+$/, '') + '…';
+  return out;
 }
 
 // Dosificación de texto (regla 3 de la enmienda): en una semana de 5,
