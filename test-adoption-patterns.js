@@ -313,10 +313,10 @@ print(m.text_area_pct(409) > 20.0, round(m.text_area_pct(300), 1))
 });
 
 console.log('== Versiones ==');
-ok('BUILD_ID v231 + motores de la prueba en 20', () => {
-  assert.ok(srv.includes("const BUILD_ID = '20261018-v231'"));
-  assert.strictEqual(demo.DEMO_ENGINE_V, 20);
-  assert.ok(fs.readFileSync('public/prueba.html', 'utf8').includes('const TRIAL_ENGINE_V = 20;'));
+ok('BUILD_ID v232 + motores de la prueba en 21 (cerebro comercial)', () => {
+  assert.ok(srv.includes("const BUILD_ID = '20261018-v232'"));
+  assert.strictEqual(demo.DEMO_ENGINE_V, 21);
+  assert.ok(fs.readFileSync('public/prueba.html', 'utf8').includes('const TRIAL_ENGINE_V = 21;'));
 });
 
 console.log(`\n✅ test-adoption-patterns: ${passed} verificaciones OK`);

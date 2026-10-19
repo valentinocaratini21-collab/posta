@@ -790,6 +790,8 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN source TEXT DEFAULT ''`); } catch (e
 try { db.exec(`ALTER TABLE posts ADD COLUMN client_photo INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN image_prompt TEXT`); } catch (e) { /* ya existe */ } // prompt exacto que generó la imagen (medición prompt↔alcance)
 try { db.exec(`ALTER TABLE posts ADD COLUMN digest_hash TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // FUNDAMENTO (v229): hash del client_digest con el que nació la pieza (sufijo ':sin-ancla' si no pasó el chequeo de pertenencia) — el loop de calidad mide % de piezas con ancla por semana
+try { db.exec(`ALTER TABLE posts ADD COLUMN sales_intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // CEREBRO COMERCIAL (v232): intención de venta declarada con la que nació la pieza (venta/reserva/consulta/prueba/autoridad)
+try { db.exec(`ALTER TABLE posts ADD COLUMN sales_angle TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // CEREBRO COMERCIAL (v232): ángulo de venta de la pieza — el sistema de aprendizajes agrega rendimiento por ángulo y la semana siguiente prefiere los ganadores de ESTE negocio
 // Backfill: filas importadas antes de esta migración (source='') se marcan
 // 'trial' por el prefijo de image_path que solo escribe importTrialWeek.
 // client_photo queda en 0 para esas filas (no se puede determinar a posteriori

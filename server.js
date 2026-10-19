@@ -1589,6 +1589,7 @@ async function runWeeklyIdeasLoop() {
 // mapeo tipo→kind, el conteo 2-de-5 y la planificación de la tanda con
 // el MISMO asignador del demo (assignTextModes).
 const cleanPieces = require('./clean-pieces');
+const salesBrain = require('./sales-brain'); // 🧠 (v232) CEREBRO COMERCIAL
 const kindOfTipo = cleanPieces.kindOfTipo;
 const planWeekTextModes = cleanPieces.planWeekTextModes;
 // Modo de UNA pieza contra la composición de su semana (palanca
@@ -4582,7 +4583,9 @@ function ideasInputFor(uid) {
     excluded: excludedTopicsLine(uid),
     approved: approvedTopicsLine(uid),
     outcome: outcomeBrief(uid),
-    contentPerf: contentPerformanceLine(uid),
+    // (v232) El brief de ideas también sabe qué ÁNGULOS rinden en esta
+    // cuenta (además de qué tipos): el cerebro comercial se realimenta.
+    contentPerf: contentPerformanceLine(uid) + anglePerformanceFor(uid).line,
   });
 }
 // Hook engine: rotación de 8 semanas por cliente (hooks.js).
@@ -4596,7 +4599,7 @@ function recordHookUse(uid, hookId) {
   if (!uid || !hookId) return;
   try { db.prepare(`INSERT INTO hook_usage (user_id, hook_id) VALUES (?,?)`).run(uid, hookId); } catch (e) {}
 }
-function contentInputFor(uid, topic, tipo, seed) {
+function contentInputFor(uid, topic, tipo, seed, sales) {
   const profile = getProfile(uid);
   let styleRules = [];
   try { styleRules = db.prepare('SELECT rule_text FROM style_rules WHERE user_id = ? AND active = 1').all(uid).map(r => r.rule_text); } catch (e) {}
@@ -4624,6 +4627,12 @@ function contentInputFor(uid, topic, tipo, seed) {
     golden: goldenExamples(uid), // "rueditas": posteos aprobados como few-shot ("así o parecido")
     captionExtras: captionExtrasFor(uid), // checklist anti-genérico + voz real del cliente (Caption Style Lock)
     anchors: digestAnchorsFor(uid), // (v229) FUNDAMENTO: anclas del digest para el chequeo de pertenencia en generateContent
+    // 🧠 (v232) CEREBRO COMERCIAL: la intención de venta declarada de
+    // la pieza, con su ángulo y su prueba — el prompt de captions la
+    // obedece y cierra acorde (CAPTION_CRAFT, regla v232).
+    salesIntent: (sales && sales.intent) || '',
+    salesAngle: (sales && sales.angle) || '',
+    salesProof: (sales && sales.proof) || '',
   });
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
@@ -6135,6 +6144,70 @@ function contentPerformanceLine(userId) {
     return `\nRENDIMIENTO MEDIDO de tu cuenta (últimos 90 días, datos reales de Instagram):\n${lines.join('\n')}`;
   } catch (e) { return ''; }
 }
+/* 🧠 (v232) CEREBRO COMERCIAL — realimentación por ÁNGULO: el espejo de
+ * contentPerformanceLine pero agrupando por posts.sales_angle. Devuelve
+ * { line, scores }: la línea alimenta el brief de ideas y los scores
+ * (ratio vs el promedio de la cuenta, mismo encogimiento bayesiano)
+ * alimentan al planificador semanal, que prefiere los ángulos
+ * ganadores de ESTE negocio sin bloquear la rotación. */
+function anglePerformanceFor(userId) {
+  try {
+    const rows = db.prepare(`
+      SELECT p.sales_angle AS angle,
+             COALESCE(m.reach, p.ig_reach, 0) AS reach,
+             COALESCE(m.likes, p.ig_likes, 0) AS likes,
+             COALESCE(m.comments, p.ig_comments, 0) AS comments,
+             COALESCE(m.saved, 0) AS saved
+      FROM posts p
+      LEFT JOIN post_metrics m ON m.post_id = p.id
+      WHERE p.user_id = ?
+        AND p.status = 'published'
+        AND COALESCE(p.published_at, p.created_at) > datetime('now', '-90 days')
+        AND COALESCE(p.sales_angle, '') != ''
+    `).all(userId);
+    const scores = salesBrain.scoreAngles(rows);
+    const keys = Object.keys(scores);
+    if (!keys.length) return { line: '', scores };
+    const lines = keys
+      .filter((a) => scores[a] >= 1.25 || scores[a] <= 0.75)
+      .sort((a, b) => Math.abs(Math.log(scores[b])) - Math.abs(Math.log(scores[a])))
+      .slice(0, 3)
+      .map((a) => {
+        const x = (Math.round(scores[a] * 10) / 10).toFixed(1).replace(/\.0$/, '');
+        return scores[a] >= 1.25
+          ? `- Tus posteos con ángulo "${a}" rinden ${x}x tu promedio: PREFERILO con variación.`
+          : `- Tus posteos con ángulo "${a}" rinden ${x}x tu promedio: usalo menos o reformulalo.`;
+      });
+    if (!lines.length) return { line: '', scores };
+    return { line: `\nRENDIMIENTO POR ÁNGULO de tu cuenta (últimos 90 días):\n${lines.join('\n')}`, scores };
+  } catch (e) { return { line: '', scores: {} }; }
+}
+/* 🧠 (v232) Objeciones REALES del público del cliente: se minan de sus
+ * comentarios y DMs (las colas que ya junta el sistema community-pro)
+ * buscando las señales de fricción — precio, demora, garantía, stock,
+ * talle, envío. Alimentan el ángulo objeción→respuesta del cerebro
+ * comercial: la respuesta nace de lo que SU gente pregunta de verdad. */
+const OBJECTION_RE = /(cu[aá]nto|precio|caro|sale\b|demora|tarda|garant|env[ií]o|queda[n]?|stock|dura\b|obra social|talle|cambio|devol)/i;
+function mineObjectionsFor(uid) {
+  try {
+    const rows = [
+      ...db.prepare(`SELECT text FROM comment_queue WHERE user_id = ? AND COALESCE(text, '') != '' ORDER BY created_at DESC LIMIT 40`).all(uid),
+      ...db.prepare(`SELECT text FROM dm_queue WHERE user_id = ? AND COALESCE(text, '') != '' ORDER BY created_at DESC LIMIT 40`).all(uid),
+    ];
+    const seen = new Set();
+    const out = [];
+    for (const r of rows) {
+      const t = String((r && r.text) || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      if (t.length < 8 || !OBJECTION_RE.test(t)) continue;
+      const k = t.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(t);
+      if (out.length >= 5) break;
+    }
+    return out;
+  } catch (e) { return []; }
+}
 function recordSignal(userId, post, signal) {
   try {
     const tz = userTz(userId);
@@ -6499,6 +6572,28 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         console.log(`[pipeline:${tag}] usuario ${uid}: intención reequilibrada (${rb.swapped} canjes) — valor ${mix.valor} / comunidad ${mix.comunidad} / venta ${mix.venta}`);
       }
     } catch (e) { console.error(`[pipeline:${tag}] rebalance de intención falló:`, e.message); }
+    // 🧠 CEREBRO COMERCIAL (v232): sobre el mix ya saneado, cada pick
+    // recibe su intención de VENTA + ángulo + prueba desde el digest
+    // (las cuotas salen del negocio: reservas si toma turnos, venta
+    // anclada a su estrella, escasez solo con dato; sin prueba, la
+    // pieza se degrada a autoridad en vez de vender humo). Mismo canje
+    // ventana/buffer de v231, cero IA extra. Viaja en idea._sales y se
+    // persiste en posts.sales_intent / posts.sales_angle.
+    let salesStats = null;
+    try {
+      const digest = digestForUser(uid);
+      if (digest) {
+        const ang = anglePerformanceFor(uid);
+        const sp = salesBrain.planSalesWeek(picks, deficit, digest, {
+          angleScores: ang.scores,
+          objections: mineObjectionsFor(uid),
+        });
+        picks.splice(0, picks.length, ...sp.picks);
+        salesStats = sp.stats;
+        const m = sp.stats.mix;
+        console.log(`[pipeline:${tag}] usuario ${uid}: cerebro comercial — venta ${m.venta} / reserva ${m.reserva} / consulta ${m.consulta} / prueba ${m.prueba} / autoridad ${m.autoridad}${sp.stats.degraded ? ` (${sp.stats.degraded} degradadas sin prueba)` : ''}${sp.swapped ? ` (${sp.swapped} canjes)` : ''}`);
+      }
+    } catch (e) { console.error(`[pipeline:${tag}] cerebro comercial falló:`, e.message); }
     // 🧩 EQUILIBRIO DE GRILLA (v224): si la grilla del cliente tiene un
     // patrón fuerte, la tanda se ORDENA por posición (el tipo de cada idea
     // calza con la columna donde va a caer) y cada idea lleva su consigna
@@ -6545,7 +6640,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       console.log(`[pipeline:${tag}] usuario ${uid}: limpieza — ${nText} con texto / ${Math.max(0, deficit - nText)} limpias en la tanda${tm.carouselIdx >= 0 ? ` (carousel exento: pick ${tm.carouselIdx})` : ''}`);
     } catch (e) { console.error(`[pipeline:${tag}] limpieza (dosificación):`, e.message); }
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
-    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
     // scheduleAllDrafts ya filtra lo que no está a la altura).
@@ -6646,6 +6741,10 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
         if (weekFullNow()) { weekFullStop = true; return; }
         claimed++;
         const idea = picks[i];
+        // 🧠 (v232) La decisión comercial de la pieza (si el cerebro la
+        // planificó): viaja al prompt de captions y queda persistida.
+        const salesIntent = (idea._sales && idea._sales.intent) || '';
+        const salesAngle = (idea._sales && idea._sales.angle) || '';
         let isCarousel = false;
         let pendingId = null; // tarjeta inmediata (se crea más abajo, tras el texto)
         try {
@@ -6653,7 +6752,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           if (!carouselClaimed && (ri.intent === 'tips' || ri.intent === 'educativo')) { carouselClaimed = true; isCarousel = true; }
         } catch (e) {}
         try {
-          const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i), key);
+          const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i, idea._sales), key);
           let caption = String((content && content.caption) || '').trim();
           const hashtags = String((content && content.hashtags) || '');
           if (!caption) throw new Error('caption vacío');
@@ -6663,7 +6762,12 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // con el CTA (ensureCaptionCtaClose, el mismo del demo).
           const cleanPiece = !isCarousel && idea._textMode === 'clean';
           if (cleanPiece) {
-            try { caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(idea.tipo), (profile && profile.tone) || ''); } catch (e) {}
+            // 🧠 (v232) Pieza con intención declarada: cierra según la
+            // intención de venta, no solo según el kind.
+            try {
+              if (salesIntent && demo.ensureCaptionCloseForIntent) caption = demo.ensureCaptionCloseForIntent(caption, salesIntent, (profile && profile.tone) || '');
+              else caption = demo.ensureCaptionCtaClose(caption, kindOfTipo(idea.tipo), (profile && profile.tone) || '');
+            } catch (e) {}
           }
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
           if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); noteSlotFail('dup', 'caption duplicado en 24h'); claimed--; continue; }
@@ -6696,7 +6800,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           // imagen real (la invariante de siempre).
           if (!isCarousel) {
             try {
-              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''), '');
+              const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''), '', salesIntent, salesAngle);
               pendingId = info && info.lastInsertRowid;
               if (pendingId) { runCreatedIds.add(pendingId); stampPostDigest(pendingId, uid, content && content._anchored === false); }
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
@@ -6817,7 +6921,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
               continue;
             }
           } else {
-            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath));
+            const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath), salesIntent, salesAngle);
             if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           } else {
@@ -6826,13 +6930,13 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             const paths = [carouselGen.coverPath, ...carouselGen.slidePaths].slice(0, 5);
             const carInfo = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type,
               carousel_paths, source_topic, source_angle, tipo, strategy_why, week_key, needs_review,
-              style_code, style_reason, intent, product_ref, hook_id)
-              VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?)`)
+              style_code, style_reason, intent, product_ref, hook_id, sales_intent, sales_angle)
+              VALUES (?,?,?,?,'draft','carousel',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
               .run(uid, carouselGen.coverPath, carouselGen.caption, hashtags, JSON.stringify(paths),
                 idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500),
                 weekKey, (needRev || carouselGen.needsReview) ? 1 : 0,
                 'carousel', `carousel automático (${carouselGen.slidePaths.length} placas)`,
-                finalIntent || 'tips', finalProductRef, finalHookId);
+                finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle);
             if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           // 🧹 Vigilancia de limpieza: modo y largo final de la pieza creada.
@@ -12301,10 +12405,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         business, tone, country, idx: i, goalLine,
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
+      // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
       const cleanPiece = specPosts[i].text_mode === 'clean';
       return {
         caption: cleanPiece
-          ? demo.ensureCaptionCtaClose(r.caption, (topics[r.topicIndex] || t).kind, tone)
+          ? demo.closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone)
           : r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline,
@@ -13380,7 +13485,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v231';
+const BUILD_ID = '20261018-v232';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

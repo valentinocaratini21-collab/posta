@@ -87,6 +87,11 @@ const TU_MAP = [
   ['Qué birra va con vos 🍺', 'Qué birra va contigo 🍺'],
   ['Pedilo por DM 📩', 'Pídelo por DM 📩'],
   ['Pedilo por DM 📩', 'Pídelo por DM 📩'],
+  ['Pedilo hoy por DM 📩', 'Pídelo hoy por DM 📩'],
+  ['Reservá tu turno por DM 📩', 'Reserva tu turno por DM 📩'],
+  ['Escribinos tu caso por DM 📩', 'Escríbenos tu caso por DM 📩'],
+  ['Vení a probarlo vos también 📍', 'Ven a probarlo tú también 📍'],
+  ['Guardá este posteo 🔖', 'Guarda este posteo 🔖'],
   ['Pedilos por DM 📩', 'Pídelos por DM 📩'],
   ['Pedilas por DM 📩', 'Pídelas por DM 📩'],
   ['Pedila por DM 📩', 'Pídela por DM 📩'],
@@ -955,7 +960,7 @@ function assignTextModes(topics, videoIdx = -1, textCount = 2) {
 // que contener una señal de llamado a la acción (las mismas que usan las
 // plantillas del catálogo). Las piezas limpias lo exigen: sin titular ni
 // botón en la imagen, el caption es el que vende.
-const CAPTION_CTA_CLOSE_RE = /(por dm|coment[aá]|escribinos|escribime|reserv[aá]|ped[ií]lo|ped[ií] |pas[aá] |guard[aá]|ven[ií] |anotate|sumate|particip[aá]|aprovech|agend[aá]|seguinos|seguime|whatsapp|ya estás adentro|reservamos tu|te esperamos)/i;
+const CAPTION_CTA_CLOSE_RE = /(por dm|coment[aá]|contanos|probaste|escribinos|escribime|reserv[aá]|ped[ií]lo|ped[ií] |pas[aá] |guard[aá]|ven[ií] |anotate|sumate|particip[aá]|aprovech|agend[aá]|seguinos|seguime|whatsapp|ya estás adentro|reservamos tu|te esperamos)/i;
 function captionEndsWithCta(caption) {
   const lines = String(caption || '').split('\n').map((s) => s.trim()).filter(Boolean);
   if (!lines.length) return false;
@@ -978,6 +983,28 @@ function ensureCaptionCtaClose(caption, kind, tone) {
   return out;
 }
 
+/* 🧠 (v232) CEREBRO COMERCIAL: cierre según la INTENCIÓN DE VENTA
+ * declarada de la pieza (no solo su kind): cada intención pide una
+ * acción distinta — venta pide el pedido, reserva pide el turno,
+ * consulta pide el caso, prueba pide la experiencia, autoridad pide
+ * el guardado. Mismo candado que el cierre por kind: si el caption ya
+ * cierra con un llamado, no se duplica. */
+const CTA_CLOSE_BY_SALES_INTENT = {
+  venta: 'Pedilo hoy por DM 📩',
+  reserva: 'Reservá tu turno por DM 📩',
+  consulta: 'Escribinos tu caso por DM 📩',
+  prueba: 'Vení a probarlo vos también 📍',
+  autoridad: 'Guardá este posteo 🔖',
+};
+function ensureCaptionCloseForIntent(caption, intent, tone) {
+  let out = String(caption || '');
+  if (captionEndsWithCta(out)) return out;
+  let close = CTA_CLOSE_BY_SALES_INTENT[intent] || CTA_CLOSE_BY_KIND.social;
+  if (tone === 'tu') close = toTu(close);
+  out = out.replace(/\s+$/, '') + '\n\n' + close;
+  return out;
+}
+
 module.exports = {
   DEMO_TOPICS,
   TU_MAP,
@@ -992,5 +1019,7 @@ module.exports = {
   assignTextModes,
   captionEndsWithCta,
   ensureCaptionCtaClose,
+  CTA_CLOSE_BY_SALES_INTENT,
+  ensureCaptionCloseForIntent,
   TEXT_KIND_RANK,
 };

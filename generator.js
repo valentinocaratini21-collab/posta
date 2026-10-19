@@ -474,6 +474,7 @@ TÉCNICAS DE HOOK (elegí UNA por caption, la que mejor pegue con el tema):
 REGLAS DE ORO:
 - Sé ESPECÍFICO: nombrá el producto, el precio si hay promo, el día, el lugar. Lo genérico no vende.
 - PROMO CON NÚMERO (v231): si la pieza es promo y los datos del negocio traen el precio o descuento, la oferta con su número ARRANCA el caption ("Sushi libre a $9.900 los martes"). Si los datos NO traen número para esa promo, vendela sin número: JAMÁS inventes un precio, un porcentaje ni un 2x1 que el negocio no declaró.
+- CIERRE SEGÚN LA INTENCIÓN DE VENTA (v232): cada pieza nace con UNA intención y el caption trabaja entero para ella, cerrando acorde — venta: pedilo hoy; reserva: reservá tu turno o tu lugar; consulta: escribinos tu caso; prueba: invitá a probarlo o a contar la experiencia; autoridad: que lo guarden o te sigan para más. Si el pedido declara la intención y el ángulo de la pieza, OBEDECELOS, y apoyá la venta en la prueba concreta que trae el pedido (producto, precio, dato real del negocio). Sin prueba real NO se vende: se enseña o se muestra, jamás se finge urgencia ni se inventa escasez.
 - Variá la ESTRUCTURA: algunos captions cuentan una mini historia, otros son una lista corta, otros van directo en 2-3 líneas. Nunca repitas la misma estructura en captions seguidos.
 - 1 o 2 emojis bien puestos, nunca más. Cada emoji tiene que sumar, no decorar.
 - El CTA es UNA acción concreta: escribinos, comentá X, guardalo, pasá por el local.
@@ -1368,7 +1369,13 @@ function goldenLine(golden) {
   return `\nEjemplos de posteos APROBADOS para este cliente (este es el estilo correcto: escribí como estos, no copies el contenido):\n${ex}`;
 }
 
-async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock }, apiKey) {
+async function openaiGenerate({ business, category, description, dna, tone, topic, competitors, goal, taste, tipo, feedback, performance, styleRules, voice, golden, captionExtras, tasteBlock, salesIntent, salesAngle, salesProof }, apiKey) {
+  // 🧠 (v232) CEREBRO COMERCIAL: si la pieza declara su intención de
+  // venta, el brief la nombra con su ángulo y su prueba concreta: el
+  // caption entero trabaja para esa intención y cierra acorde.
+  const salesLine = salesIntent
+    ? `\nIntención de venta de esta pieza: ${salesIntent}${salesAngle ? ` (ángulo: ${salesAngle})` : ''}.${salesProof ? ` Prueba/propuesta concreta a usar — dato real del negocio, no inventes otros: ${salesProof}.` : ''} El caption cierra acorde a la intención.`
+    : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -1401,6 +1408,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
             (voice ? `\n${voice}` : '') +
             (tasteBlock ? `\n${tasteBlock}` : (Array.isArray(styleRules) && styleRules.length ? `\nReglas de estilo del cliente (OBEDECELAS siempre):\n${styleRules.map(r => `- ${r}`).join('\n')}` : '')) +
             goldenLine(golden) +
+            salesLine +
             `\nGenerá el caption y los hashtags, diferenciando el contenido de la competencia.`,
         },
       ],

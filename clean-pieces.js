@@ -116,4 +116,17 @@ function rebalanceIntentPicks(picks, deficit) {
   return { picks: [...win, ...buf], swapped };
 }
 
-module.exports = { KIND_BY_TIPO, kindOfTipo, textCountForBatch, planWeekTextModes, modeFromWeekKinds, INTENT_BY_KIND, intentOfKind, intentOfTipo, intentMixOf, rebalanceIntentPicks };
+/* ---------- (v232) CEREBRO COMERCIAL: intención de VENTA ----------
+ * Taxonomía DISTINTA del mix de contenido de arriba (valor/comunidad/
+ * venta mide variedad editorial; esto mide qué tiene que LOGRAR la
+ * pieza comercialmente): venta / reserva / consulta / prueba /
+ * autoridad. Este mapa es el default estático por kind; el refinado
+ * real — con cuotas que salen del digest, ángulo, prueba y
+ * degradación sin-humo — lo hace sales-brain.planSalesWeek, que corre
+ * DESPUÉS de rebalanceIntentPicks en generateWeekDrafts y extiende su
+ * mecanismo de canje ventana/buffer (v231 no se toca). */
+const SALES_INTENT_BY_KIND = { promo: 'venta', sorteo: 'venta', novedad: 'venta', reserva: 'reserva', tip: 'autoridad', social: 'prueba' };
+function salesIntentOfKind(kind) { return SALES_INTENT_BY_KIND[kind] || 'autoridad'; }
+function salesIntentOfTipo(tipo) { return salesIntentOfKind(kindOfTipo(tipo)); }
+
+module.exports = { KIND_BY_TIPO, kindOfTipo, textCountForBatch, planWeekTextModes, modeFromWeekKinds, INTENT_BY_KIND, intentOfKind, intentOfTipo, intentMixOf, rebalanceIntentPicks, SALES_INTENT_BY_KIND, salesIntentOfKind, salesIntentOfTipo };

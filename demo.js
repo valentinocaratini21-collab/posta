@@ -160,7 +160,7 @@ function stockPhotos3(category, business) {
 // bio, léxico, mapa foto→producto, estrella inferido y contradicciones;
 // el gate de fotos sube a foto↔PRODUCTO cuando el mapa cubre la foto y
 // el estrella inferido abre la rotación de temas.
-const DEMO_ENGINE_V = 20;
+const DEMO_ENGINE_V = 21;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -1358,6 +1358,15 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // ojo y ninguno pasa de 2 posteos (ver enforceDesignLanguages).
   enforceDesignLanguages({ styleObjs, topics, overrides: treatmentOverrides, posterAt });
   const focuses = Array.from({ length: n }, (_, i) => 0.3 + (i % 4) * 0.13);
+  // 🧠 (v232) CEREBRO COMERCIAL en la prueba: los topics derivados del
+  // digest ya traen intención/ángulo/prueba (deriveTopics); los de
+  // RELLENO (DEMO_TOPICS) quedan CAPADOS a intenciones no vendedoras —
+  // el relleno nunca vende lo que no conoce. El spec registra la
+  // intención de cada pieza (design.posts[i].sales_intent).
+  for (const t of topics) {
+    if (!t) continue;
+    if (!t._digest && !t.intent) { t.intent = 'autoridad'; t.angle = 'directo'; t.proof = ''; t._filler = 1; }
+  }
   const specPosts = topics.map((t, i) => {
     let headline = t.headline;
     let subline = t.subline;
@@ -1399,6 +1408,9 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       subject_scale: subjectScale,
       poster: isPoster || undefined,
       kind: t.kind,
+      // (v232) Intención de venta + ángulo declarados de la pieza.
+      sales_intent: t.intent || 'autoridad',
+      sales_angle: t.angle || 'directo',
       tema: t.tema || null,
       focus: focuses[i],
       pill: t.tag,
@@ -1575,6 +1587,16 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
+/* 🧠 (v232) Cierre de caption de la PRUEBA según la intención de
+ * venta del topic: si el topic declara intención (los derivados del
+ * digest la traen; el relleno quedó capado a autoridad), manda la
+ * intención; si no, el cierre por kind de siempre. */
+function closeTrialCaption(caption, topic, tone) {
+  const t = topic || {};
+  if (t.intent) return captions.ensureCaptionCloseForIntent(caption, t.intent, tone);
+  return captions.ensureCaptionCtaClose(caption, t.kind, tone);
+}
+
 async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
   const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null });
@@ -1610,7 +1632,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       return {
         image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
         caption: cleanPiece
-          ? captions.ensureCaptionCtaClose(r.caption, (topics[r.topicIndex] || t).kind, tone)
+          ? closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone)
           : r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline, // titular del diseño (en piezas limpias vive solo en el caption)
@@ -2299,6 +2321,8 @@ module.exports = {
   assignTextModes: captions.assignTextModes,
   captionEndsWithCta: captions.captionEndsWithCta,
   ensureCaptionCtaClose: captions.ensureCaptionCtaClose,
+  ensureCaptionCloseForIntent: captions.ensureCaptionCloseForIntent,
+  closeTrialCaption,
   DEMO_LIMIT_PER_DAY,
   DEMO_ENGINE_V,
   PHOTO_TAGS,

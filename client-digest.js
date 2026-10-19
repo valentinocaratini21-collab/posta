@@ -931,10 +931,21 @@ function deriveTopics(digest, opts) {
   const temasFeed = (digest.temas_feed || []).filter((t) => String(t).length >= 3);
   const used = new Set();
   const topics = [];
+  // 🧠 (v232) CEREBRO COMERCIAL: cada tema derivado nace con intención
+  // de venta, ángulo y prueba DECLARADOS (sales-brain, require perezoso
+  // para no crear un ciclo de módulos). Los temas de RELLENO nunca
+  // pasan por acá: demo.js los capa a autoridad (el relleno no vende
+  // lo que no conoce).
+  let salesBrain = null;
+  try { salesBrain = require('./sales-brain'); } catch (e) { salesBrain = null; }
   const mk = (kind, anchorText, frame) => {
     const A = String(anchorText || '').trim();
     if (A.length < 3) return null;
     const key = norm(A);
+    let sales = {};
+    if (salesBrain) {
+      try { sales = salesBrain.trialTopicSales({ kind, digest_anchor: A }, digest) || {}; } catch (e) { sales = {}; }
+    }
     const t = {
       kind,
       tag: frame.tag || '',
@@ -945,6 +956,9 @@ function deriveTopics(digest, opts) {
       caption: frame.caption(A),
       _digest: 1,
       digest_anchor: A,
+      intent: sales.intent || '',
+      angle: sales.angle || '',
+      proof: sales.proof || '',
       ...(starName && norm(A) === norm(starName) ? { _star: 1 } : {}),
     };
     used.add(key);
