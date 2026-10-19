@@ -4,6 +4,9 @@
 //   audiencia: opt-out recibe push pero no email; fundador (id tipo dogfood)
 //   recibe push pero NO email; trial vencido no recibe nada; misión ya
 //   cumplida no se pide; trial vigente sí recibe.
+// - UN SOLO EMAIL DE LUNES (2026-10-18): el email del ritual va solo a quien
+//   instaló la app (pwa_installed=1); sin app → push sí, email NO (ya recibe
+//   el email semanal de scheduler.js con la misma misión de fotos).
 // - photoRitualEmail: asunto exacto + CTA directo a ?fotos=semana (fetch stub,
 //   jamás sale a Resend de verdad).
 // - GET /api/album: week{photos,videos} acierta en 0/2/5 y respeta el borde
@@ -77,16 +80,17 @@ function shiftYmd(ymd, n) {
 
   // ---------- Matriz de audiencia del sweep ----------
   const NOW_REAL = Date.now();
-  const ins = db.prepare(`INSERT INTO users (email, password_hash, plan_status, trial_ends_at, trial_extended_until, created_at, email_opt_out)
-    VALUES (?, 'x', ?, ?, 0, ?, ?)`);
-  const mk = (email, status, trialEnds, created, oo) => ins.run(email, status, trialEnds, created, oo).lastInsertRowid;
-  const A = mk('a@example.com', 'active', 0, '2026-10-09 12:00:00', 0);            // activo BA → push+email
-  const B = mk('b@example.com', 'active', 0, '2026-10-09 12:00:00', 0);            // activo NY → su 10:00 llega 1 h después
-  const C = mk('c@example.com', 'active', 0, '2026-10-09 12:00:00', 0);            // misión ya cumplida → nada
-  const D = mk('d@example.com', 'active', 0, '2026-10-09 12:00:00', 1);            // opt-out → push sí, email no
-  const E = mk('valentino_bamboo@hotmail.com', 'active', 0, '2026-10-09 12:00:00', 0); // fundador/dogfood → push sí, email NO
-  const F = mk('f@example.com', 'trial', NOW_REAL - 86400000, '2026-10-09 12:00:00', 0); // trial vencido → nada
-  const G = mk('g@example.com', 'trial', NOW_REAL + 2 * 86400000, '2026-10-16 12:00:00', 0); // trial vigente → push+email
+  const ins = db.prepare(`INSERT INTO users (email, password_hash, plan_status, trial_ends_at, trial_extended_until, created_at, email_opt_out, pwa_installed)
+    VALUES (?, 'x', ?, ?, 0, ?, ?, ?)`);
+  const mk = (email, status, trialEnds, created, oo, pwa) => ins.run(email, status, trialEnds, created, oo, pwa ? 1 : 0).lastInsertRowid;
+  const A = mk('a@example.com', 'active', 0, '2026-10-09 12:00:00', 0, 1);            // activo BA con app → push+email
+  const B = mk('b@example.com', 'active', 0, '2026-10-09 12:00:00', 0, 1);            // activo NY con app → su 10:00 llega 1 h después
+  const C = mk('c@example.com', 'active', 0, '2026-10-09 12:00:00', 0, 0);            // misión ya cumplida → nada
+  const D = mk('d@example.com', 'active', 0, '2026-10-09 12:00:00', 1, 0);            // opt-out → push sí, email no
+  const E = mk('valentino_bamboo@hotmail.com', 'active', 0, '2026-10-09 12:00:00', 0, 0); // fundador/dogfood → push sí, email NO
+  const F = mk('f@example.com', 'trial', NOW_REAL - 86400000, '2026-10-09 12:00:00', 0, 0); // trial vencido → nada
+  const G = mk('g@example.com', 'trial', NOW_REAL + 2 * 86400000, '2026-10-16 12:00:00', 0, 1); // trial vigente con app → push+email
+  const H = mk('h@example.com', 'active', 0, '2026-10-09 12:00:00', 0, 0);            // activo BA SIN app → push sí, email NO (lo cubre el email semanal)
   db.prepare('INSERT INTO settings (user_id, timezone) VALUES (?, ?)').run(B, 'America/New_York');
   // C ya subió su foto esta semana (misión cumplida en la semana real actual).
   const wkReal = mondayOfInTz('America/Argentina/Buenos_Aires', new Date());
@@ -100,8 +104,9 @@ function shiftYmd(ymd, n) {
 
   // Lunes 2026-10-19 13:00Z = 10:00 en Buenos Aires, 09:00 en Nueva York.
   let r = await srv.albumRitualSweep({ now: new Date('2026-10-19T13:00:00Z'), pushFn, emailFn });
-  ok(r.pushed === 4 && r.emailed === 2, `sweep1 totales: push ${r.pushed} (esp 4), email ${r.emailed} (esp 2)`);
+  ok(r.pushed === 5 && r.emailed === 2, `sweep1 totales: push ${r.pushed} (esp 5), email ${r.emailed} (esp 2)`);
   ok(byUid(pushSent, A) === 1 && byUid(mailSent, A) === 1, 'A (activo BA): push + email');
+  ok(byUid(pushSent, H) === 1 && byUid(mailSent, H) === 0, 'H (sin app): push sí, email NO (un solo email de lunes: el semanal)');
   ok(byUid(pushSent, B) === 0 && byUid(mailSent, B) === 0, 'B (NY): todavía no es su 10:00');
   ok(byUid(pushSent, C) === 0 && byUid(mailSent, C) === 0, 'C (misión cumplida): no se le pide');
   ok(byUid(pushSent, D) === 1 && byUid(mailSent, D) === 0, 'D (opt-out): push sí, email no');
@@ -117,17 +122,18 @@ function shiftYmd(ymd, n) {
 
   // Dedupe: misma ventana, segunda corrida → cero envíos nuevos.
   r = await srv.albumRitualSweep({ now: new Date('2026-10-19T13:00:00Z'), pushFn, emailFn });
-  ok(r.pushed === 0 && r.emailed === 0 && pushSent.length === 4 && mailSent.length === 2, 'sweep1 repetido: dedupe semanal (0 nuevos)');
+  ok(r.pushed === 0 && r.emailed === 0 && pushSent.length === 5 && mailSent.length === 2, 'sweep1 repetido: dedupe semanal (0 nuevos)');
 
   // 14:00Z = 10:00 en NY (11:00 en BA): solo B, y nadie se repite.
   r = await srv.albumRitualSweep({ now: new Date('2026-10-19T14:00:00Z'), pushFn, emailFn });
   ok(r.pushed === 1 && r.emailed === 1 && byUid(pushSent, B) === 1 && byUid(mailSent, B) === 1, 'sweep2: B recibe en SU 10:00');
-  ok(pushSent.length === 5 && mailSent.length === 3, 'totales tras sweep2: 5 push, 3 email');
+  ok(pushSent.length === 6 && mailSent.length === 3, 'totales tras sweep2: 6 push, 3 email');
 
   // Marcas persistidas por canal.
   const rowOf = (uid) => db.prepare('SELECT pushed_at, emailed_at FROM album_missions WHERE user_id = ?').get(uid);
   ok(rowOf(A) && rowOf(A).pushed_at && rowOf(A).emailed_at, 'A: pushed_at y emailed_at marcados');
   ok(rowOf(D) && rowOf(D).pushed_at && !rowOf(D).emailed_at, 'D: solo pushed_at');
+  ok(rowOf(H) && rowOf(H).pushed_at && !rowOf(H).emailed_at, 'H: solo pushed_at (email unificado en el semanal)');
   ok(rowOf(E) && rowOf(E).pushed_at && !rowOf(E).emailed_at, 'E: solo pushed_at (email jamás)');
   ok(!rowOf(F), 'F: ni siquiera se creó la misión (gate de plan)');
 

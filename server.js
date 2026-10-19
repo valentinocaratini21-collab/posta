@@ -4574,6 +4574,11 @@ app.use('/api/album/photo', (err, req, res, next) => {
 // Audiencia email: el criterio de los emails semanales actuales (plan/trial
 // vigente + email + sin opt-out + cuenta con más de 1 día) y SIN cuentas
 // fundadoras/dogfood (costs.FOUNDER_EMAILS: la id 12 no recibe este email).
+// UN SOLO EMAIL DE LUNES (unificación aprobada por Valentino, 2026-10-18):
+// el email del ritual va SOLO a quien instaló la app (pwa_installed=1).
+// Quien NO la instaló ya recibe el lunes el email semanal de scheduler.js
+// (sendWeeklyReminders), que trae la misma misión de fotos + su racha —
+// mandarle también este era el duplicado que se eliminó. El push no cambia.
 // Ambos canales aterrizan en el bloque de fotos de la semana (?fotos=semana).
 // opts (solo tests): now = instante a evaluar; pushFn/emailFn = senders.
 async function albumRitualSweep(opts = {}) {
@@ -4607,9 +4612,9 @@ async function albumRitualSweep(opts = {}) {
       // --- Email: el mismo pedido, con botón directo a la subida.
       if (!mission.emailed_at && !founder && planOrTrialOk(u.id)) {
         try {
-          const urow = db.prepare('SELECT id, email, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo FROM users WHERE id = ?').get(u.id);
+          const urow = db.prepare('SELECT id, email, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo, COALESCE(pwa_installed, 0) AS pwa FROM users WHERE id = ?').get(u.id);
           const ageOk = !!(urow && urow.created_at && (Date.parse(String(urow.created_at).replace(' ', 'T') + 'Z') < now.getTime() - 86400000));
-          if (urow && urow.email && !urow.oo && ageOk) {
+          if (urow && urow.email && !urow.oo && ageOk && Number(urow.pwa) === 1) {
             const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
             const r = opts.emailFn
               ? await opts.emailFn(urow, base, mission.mission_text)
@@ -12763,7 +12768,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v224';
+const BUILD_ID = '20261018-v225';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
