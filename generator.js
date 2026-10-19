@@ -2,6 +2,7 @@
 // Usa OpenAI si hay API key configurada, si no usa el motor de plantillas local
 // con voz argentina (voseo).
 const { trackUsage, markPhotoSent, photoHash } = require('./costs');
+const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): chequeo de pertenencia + anclas
 // Hook engine (hooks.js): 50 fórmulas por intención + rotación. Se aplica al
 // final de generateContent/generateCaptions: el caption SIEMPRE abre con hook.
 const { pickHook, renderHook, ensureCaptionOpensWithHook, hookFits, captionOpenIsGarbled, HOOKS: HOOK_BANK } = require('./hooks');
@@ -1412,13 +1413,32 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
 
 async function generateContent(input, apiKey) {
   let out = null;
+  // (v229) FUNDAMENTO — chequeo de pertenencia (determinístico): la
+  // pieza pasa si titular+caption contiene ≥1 ancla del digest del
+  // cliente (producto/servicio real, protagonista, ciudad, diferencial,
+  // tema de su feed). Sin ancla, se reintenta UNA vez con feedback por
+  // el mismo loop de calidad; si aun así no ancla, la pieza sale
+  // marcada _anchored=false y el pipeline la registra en
+  // posts.digest_hash con sufijo ':sin-ancla' (la exención de
+  // marca/comunidad es máx 1 por semana: la mide el loop de calidad).
+  const belongAnchors = (input && Array.isArray(input.anchors) && input.anchors.length)
+    ? clientDigest.anchorsFromTexts(input.anchors)
+    : [];
+  const belongCheck = (o) => {
+    if (!belongAnchors.length || !o) return { ok: true, anchor: null };
+    return clientDigest.pieceAnchored(`${input.topic || ''} ${o.overlay || ''} ${o.caption || ''}`, belongAnchors);
+  };
   if (apiKey) {
     try {
       out = await openaiGenerate(input, apiKey);
       const check = captionPasses(out.caption, input);
-      if (!check.ok) {
-        // Puerta de calidad: UN solo reintento con feedback de qué falló. Nunca loopear.
-        const fb = `El caption anterior no pasó el control de calidad: ${check.reason}. Regeneralo corrigiendo eso, sin cambiar el tema.`;
+      const anchored = belongCheck(out);
+      if (!check.ok || !anchored.ok) {
+        // Puerta de calidad + pertenencia: UN solo reintento con feedback de qué falló. Nunca loopear.
+        const reasons = [];
+        if (!check.ok) reasons.push(`El caption anterior no pasó el control de calidad: ${check.reason}.`);
+        if (!anchored.ok) reasons.push(`La pieza anterior no menciona NINGÚN dato real del negocio. Anclas válidas (mencioná al menos UNA, sin inventar otras): ${belongAnchors.slice(0, 6).map((a) => a.text).join(' · ')}.`);
+        const fb = `${reasons.join(' ')} Regeneralo corrigiendo eso, sin cambiar el tema.`;
         try {
           out = await openaiGenerate({ ...input, feedback: fb }, apiKey);
         } catch (e2) {
@@ -1430,6 +1450,7 @@ async function generateContent(input, apiKey) {
     }
   }
   if (!out) out = templateGenerate(input);
+  out._anchored = belongAnchors.length ? belongCheck(out).ok : true;
   // Hook engine: el caption SIEMPRE abre con hook (después de la puerta de calidad).
   return applyPostyHook(out, input);
 }
@@ -1572,21 +1593,47 @@ function sigWords(s) {
     .split(/[^a-z0-9#]+/).filter(w => w.length >= 4 && !TOPIC_STOP.has(w));
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna }) {
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description }) {
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
   const vs = competitors
     ? ` Diferenciate de ${competitors}: mostrá lo que ellos no tienen.`
     : '';
+  // (v229) FUNDAMENTO: la plantilla interpola los productos/servicios
+  // REALES del ADN en los títulos. Antes los 7 esqueletos ignoraban el
+  // ADN por completo: "Sushi Go" con ADN rico recibía los mismos títulos
+  // que una parrilla sin datos (evidencia E3 de la auditoría).
+  const realItems = [];
+  const pushReal = (arr) => {
+    for (const x of (Array.isArray(arr) ? arr : [])) {
+      const n = String((x && (x.nombre || x.titulo)) || x || '').replace(/\s+/g, ' ').trim();
+      if (n.length >= 3 && !realItems.some((r) => r.toLowerCase() === n.toLowerCase())) realItems.push(n);
+    }
+  };
+  if (dna) {
+    pushReal(dna.productos); pushReal(dna.servicios);
+    if (dna.producto_estrella) pushReal([dna.producto_estrella]);
+  }
+  const realPromo = dna
+    ? [...(dna.promos_activas || []), ...(dna.promos || [])]
+      .map((x) => String((x && (x.titulo || x.nombre)) || x || '').replace(/\s+/g, ' ').trim())
+      .find((s) => s.length >= 3) || ''
+    : '';
+  // Sin NINGÚN dato real (ni producto, ni servicio, ni promo, ni
+  // descripción mínima), el fallback NO fabrica la semana: devuelve []
+  // y el llamador aplica su gate (no_dna). Mismo umbral que el pipeline.
+  if (dna && !realItems.length && !realPromo && String(description || '').trim().length < 20) return [];
+  const r1 = realItems[0] || '';
+  const r2 = realItems[1] || '';
   const all = [
-    { formato: 'Novedad', tipo: 'novedad', titulo: `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` + ga },
-    { formato: 'Promo', tipo: 'promo', titulo: 'promo de la semana', angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' + ga },
-    { formato: 'Tip', tipo: 'tip', titulo: `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' + ga },
+    { formato: 'Novedad', tipo: 'novedad', titulo: r1 ? `lo nuevo: ${r1}` : `lo nuevo de ${biz}`, angulo: `Presentá tu novedad como un lanzamiento que nadie se quiere perder.${vs}` + ga },
+    { formato: 'Promo', tipo: 'promo', titulo: realPromo || (r2 ? `promo de la semana: ${r2}` : 'promo de la semana'), angulo: 'Oferta con urgencia real: stock o tiempo limitado. La urgencia vende.' + ga },
+    { formato: 'Tip', tipo: 'tip', titulo: r1 ? `3 tips para aprovechar ${r1}` : `3 tips para ${w.accion} mejor`, angulo: 'Contenido que enseña: posiciona tu marca como experta y se guarda mucho.' + ga },
     { formato: 'Testimonio', tipo: 'social', titulo: 'lo que dicen nuestros clientes', angulo: 'Prueba social: la opinión de un cliente vale más que mil anuncios.' + ga },
-    { formato: 'Detrás de escena', tipo: 'detras', titulo: `cómo preparamos ${w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' + ga },
+    { formato: 'Detrás de escena', tipo: 'detras', titulo: `cómo preparamos ${r1 || w.cosa} cada día`, angulo: 'Humanizá la marca: mostrá el trabajo real detrás del producto.' + ga },
     { formato: 'Comunidad', tipo: 'social', titulo: 'te leemos: ¿qué preferís?', angulo: 'Preguntá y generá comentarios: la interacción dispara el alcance.' + ga },
-    { formato: 'Reel/Video', tipo: 'novedad', titulo: `así se ve ${w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
+    { formato: 'Reel/Video', tipo: 'novedad', titulo: `así se ve ${r1 || w.cosa} en acción`, angulo: 'Video vertical con tus fotos: el formato que más alcance tiene hoy en Instagram.' + ga },
   ];
   // Ángulo "web" (solo si el negocio tiene web estudiada): una idea de la
   // semana lleva tráfico a la web con algo concreto + CTA "link en bio".
@@ -3106,7 +3153,7 @@ async function openaiChatIdea({ messages, profile, taste, photos, library, draft
   const zapatosGuide54 =
     'ZAPATOS-54 (Parte 60, turno noche 2026-10-18, fallos reales del día): la semana de Mili regenerada, el post 112 que salió publicado con el empalme, la tanda 406-410, la QA de titulares de Mora y las reglas de pieza de Valentino. Principio rector: la clave de todo — cada posteo es DEL RUBRO del cliente según SU website o SU Instagram; si una pieza podría salir igual en la cuenta de otro rubro, no sirve. ' +
     'SUBRUBRO-54 (Parte 60) — el tema también es del oficio, no solo la foto. SUBRUBRO-54-TEMA-ES-SUBRUBRO: los TEMAS de la semana nacen del subrubro concreto (una cuenta de makeup recibe ángulos de makeup: duración, novias, antes/después de invitada, errores que arruinan el makeup) y jamás de la categoría amplia — cinco temas de peluquería para una maquilladora es una semana de otro negocio aunque las fotos estén bien. SUBRUBRO-54-FOTO-Y-TEMA-MISMO-OFICIO: tema y foto comparten oficio exacto — un posteo de turnos de peluquería no se ilustra con brochas de makeup ni un antes/después de makeup con una foto de moda de cuerpo entero; compartir la categoría belleza no alcanza. SUBRUBRO-54-GENERICO-NO-ROBA-LA-TEMATICA: la asignación es en dos pasadas también entre oficios — primero los posteos con tema eligen su foto de su oficio, después los genéricos con lo que queda de SU oficio; un genérico jamás se queda con la única foto temática ni empuja al temático a una foto de otro oficio. SUBRUBRO-54-SUBRUBRO-SE-LEE-DEL-PERFIL: el subrubro se lee de los servicios, las fotos y la descripción del perfil o la web del cliente, jamás de la palabra genérica de la categoría ni de una sola palabra de la bio; si el perfil dice makeup, la semana es de makeup aunque el sistema lo haya clasificado belleza. SUBRUBRO-54-ANTES-DESPUES-DEL-OFICIO: un antes/después muestra la transformación DE ESE oficio en primer plano (rostro maquillado, pelo teñido) — jamás un split con una foto genérica de moda o de ambiente como si fuera el resultado. ' +
-    'FUENTE-54 (Parte 60) — la fuente de verdad es lo que el cliente ya tiene. FUENTE-54-RUBRO-SALE-DE-SU-WEB-E-IG: todo posteo sale del rubro del cliente según SU website o SU Instagram — sus servicios, sus productos, su paleta, sus temas, su protagonista y su tono son la materia prima de cada generación, en la prueba y en la semana paga; sin esa fuente no se inventa un rubro vecino. FUENTE-54-TEST-DE-PERTENENCIA: antes de entregar, cada pieza pasa el test de pertenencia — si podría salir igual, sin cambiar casi nada, en la cuenta de otro rubro, NO sirve y se rehace anclada a un dato concreto de este negocio. FUENTE-54-SE-COPIA-Y-SE-AJUSTA-LO-SUYO: se copia y se ajusta lo que el cliente ya tiene y le funciona (sus posteos, su web, su forma de nombrar sus servicios) — jamás se le impone una línea ajena ni se le cambia el protagonista; heredar es el punto de partida, no un adorno. FUENTE-54-TIP-SIN-PRODUCTO-NO-SALE: un tip genérico sin producto, sin servicio ni dato del negocio no sale — ni en cuentas de clientes ni en la cuenta propia de Posty, cuyos temas salen del mapa de su propio sitio; un consejo que cualquier cuenta podría firmar es humo, no contenido. FUENTE-54-WEB-TEXTOS-IG-VISUAL: con web e Instagram, la web manda en los textos (servicios, productos, precios) y el Instagram manda en lo visual (paleta de los últimos posteos, temas, registro); solo con web, la semana sale completa desde la web; solo con Instagram, desde el perfil — jamás se frena por la fuente que falta. ' +
+    'FUENTE-54 (Parte 60) — la fuente de verdad es lo que el cliente ya tiene. FUENTE-54-RUBRO-SALE-DE-SU-WEB-E-IG: todo posteo sale del PRODUCTO EXACTO del cliente según SU website o SU Instagram — no alcanza el rubro ni el nombre pegado: sus productos y servicios reales, su paleta, sus temas, su protagonista y su tono son la materia prima de cada generación, en la prueba y en la semana paga; sin esa fuente no se inventa un rubro vecino ni un producto parecido. FUENTE-54-TEST-DE-PERTENENCIA: antes de entregar, cada pieza pasa el test de pertenencia — si podría salir igual, sin cambiar casi nada, en la cuenta de otro negocio (aunque sea del mismo rubro), NO sirve y se rehace anclada al producto exacto de este negocio. FUENTE-54-SE-COPIA-Y-SE-AJUSTA-LO-SUYO: se copia y se ajusta lo que el cliente ya tiene y le funciona (sus posteos, su web, su forma de nombrar sus servicios) — jamás se le impone una línea ajena ni se le cambia el protagonista; heredar es el punto de partida, no un adorno. FUENTE-54-TIP-SIN-PRODUCTO-NO-SALE: un tip genérico sin producto, sin servicio ni dato del negocio no sale — ni en cuentas de clientes ni en la cuenta propia de Posty, cuyos temas salen del mapa de su propio sitio; un consejo que cualquier cuenta podría firmar es humo, no contenido. FUENTE-54-WEB-TEXTOS-IG-VISUAL: con web e Instagram, la web manda en los textos (servicios, productos, precios) y el Instagram manda en lo visual (paleta de los últimos posteos, temas, registro); solo con web, la semana sale completa desde la web; solo con Instagram, desde el perfil — jamás se frena por la fuente que falta. ' +
     'CAPTION-54 (Parte 60) — el caption se audita como sistema, no pieza a pieza suelta. CAPTION-54-EMPALME-FRENA-LA-SALIDA: un caption empalmado (dos aperturas cosidas, un artículo colgando, el nombre del negocio duplicado) FRENA la salida aunque esté programado — vuelve a borrador y se propone la apertura limpia; que el lint lo detecte no alcanza si la pieza igual sale: programado con empalme no publica, y el caso real (el post que salió a las 18:00 con el empalme a la vista) no se repite. CAPTION-54-DISPOSITIVO-NO-SE-REPITE: el mismo dispositivo de apertura (la misma pregunta retórica, el mismo ¿Sabías que, el mismo ¿Cuántas veces) no abre dos posteos de la misma semana — la semana se audita como conjunto y el segundo se reescribe con otro dispositivo. CAPTION-54-FECHA-VENCIDA-NO-ENTRA: un motivo vencido (el Día de la Madre en la semana siguiente, una promo que ya terminó) no entra a una semana nueva ni queda programado hacia adelante — la fecha de la pieza se valida contra la semana en la que SALE, no contra el día en que se generó. CAPTION-54-APERTURA-VACIA-NO-ES-HOOK: una apertura con forma de hook pero sin contenido (¿Sabías que… seguido de un lugar común, un superlativo vacío como lo mejor sin decir qué) no es un hook — el hook promete un dato concreto de este negocio o se reescribe. CAPTION-54-PROHIBIDA-EN-TODA-VARIANTE: las frases prohibidas se auditan en todas sus variantes y contextos (a otro nivel vale aunque venga con emoji, con mayúsculas o dentro de una frase más larga) — una variante que escapa del listado se trata como la frase misma y se reescribe. ' +
     'IMAGEN-54 (Parte 60) — la foto manda y el texto se ubica, dosificado y cerrado. IMAGEN-54-TEXTO-EN-ZONA-TRANQUILA: el titular va SOLO en las zonas tranquilas de la foto — jamás sobre pinceles, productos, manos trabajando, caras ni ojos; si la foto no tiene zona tranquila, el texto va en panel editorial fuera de la foto, jamás peleando con ella. IMAGEN-54-BOTON-DIBUJADO-NO-EXISTE: ningún botón de CTA se dibuja dentro de la imagen (Reservar ahora, Quiero verlas y sus variantes no existen como píxeles) — un botón que no se puede tocar es un tic de flyer; el CTA vive en el caption, y un botón dibujado además jamás tapa el producto. IMAGEN-54-NOMBRE-NO-SE-ESTAMPA: el nombre del negocio no se estampa como rótulo ni masthead en la imagen — vive en el perfil y en el caption; una semana con el nombre impreso en las cinco piezas es un folleto, no un feed. IMAGEN-54-DOS-DE-CINCO-CON-TEXTO: de cada cinco piezas, exactamente dos llevan titular en la imagen y tres salen con la foto limpia, con la idea y el CTA en el caption — texto en todas es ruido visual y la dosificación se verifica contando la semana entregada. IMAGEN-54-TITULAR-SEIS-Y-CERRADO: el titular tiene seis palabras o menos Y está cerrado — pregunta que abre con ¿ cierra con ?, exclamación con !, y ningún verbo queda colgado sin su complemento; el recorte por cantidad de palabras jamás CREA el titular incompleto: si al acortar queda un verbo pidiendo complemento o una idea a mitad, se corta por la cláusula completa anterior o se reescribe más corto, jamás se entrega el fragmento. ' +
     'VARIEDAD-54 (Parte 60) — variedad que se VE, paleta que se mide, visual que no se repite. VARIEDAD-54-ESTILO-VISUAL-NO-PROMPT: prompts distintos no son variedad — cada pieza lleva una dirección de arte visiblemente distinta (gramática de composición, fondo, luz, distancia de cámara, medio) y la semana se audita A OJO como conjunto: si las cinco se leen como el mismo estilo con otra foto, la semana falló aunque cada prompt fuera distinto. VARIEDAD-54-PERSONAJE-PROTAGONISTA: en piezas ilustradas el personaje ocupa el 60-70% del cuadro, centrado, con fondo simple y UN objeto-concepto grande por tema — jamás el personaje chico perdido en una oficina detallada que se repite en todas las piezas; el titular compuesto sale grande, no débil. VARIEDAD-54-CONCEPTO-NO-LITERAL: un concepto con doble sentido en el rubro se ilustra en su sentido DEL RUBRO (un carrusel de Instagram son fotos y tarjetas en la mano, jamás una calesita) — cada concepto lleva su definición y sus negativos, y si el modelo lo lee literal, la pieza se regenera, no se entrega. VARIEDAD-54-PALETA-RECURRENCIA-Y-LUZ: la paleta sale de los ÚLTIMOS posteos y gana el color que RECURRE en todo el feed, jamás el más vivo de una sola foto; el accent es un color de acción con luz suficiente — un casi-negro recurrente jamás ocupa el rol de accent aunque gane por cantidad. VARIEDAD-54-VISUAL-UNICO-Y-HOY-REAL: ningún visual aparece dos veces en la misma grilla ni en la misma semana, garantizado por identidad y no por parecido; y toda comparación HOY contra CON POSTY usa el perfil real de ahora — una caché vieja como evidencia es un fallo de la muestra, no un detalle. ' +
@@ -3757,4 +3804,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };

@@ -187,6 +187,7 @@ const demo = require('./demo');
 const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
+const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const webExtract = require('./web-extract');
 const { sendEmail, magicLinkEmail } = require('./email');
 const os = require('os');
@@ -567,6 +568,121 @@ function readDna(userId) {
 function writeDna(userId, obj) {
   db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET dna_json=excluded.dna_json, updated_at=datetime('now')`).run(userId, JSON.stringify(obj || {}));
+}
+
+// ---------- FUNDAMENTO (v229): digest del cliente ----------
+// El digest (client-digest.js) es la foto compilada del fundamento del
+// negocio: productos/servicios/promos reales, temas de su feed, paleta,
+// ciudad, diferencial — con la fuente y la fecha de cada bloque. Se
+// construye en la prueba, viaja en su payload, se siembra ENTERO en la
+// cuenta al registrarse y se refresca con cadencia (refreshDigestsSweep).
+function digestForUser(uid) {
+  try { return clientDigest.getDigest(db, uid); } catch (e) { return null; }
+}
+function digestAnchorsFor(uid) {
+  try { return clientDigest.anchorsOf(clientDigest.getDigest(db, uid)).map((a) => a.text); }
+  catch (e) { return []; }
+}
+// Trazabilidad: cada posteo guarda el hash del digest con el que nació
+// (posts.digest_hash); ':sin-ancla' si la pieza no pasó el chequeo de
+// pertenencia — el loop de calidad mide % de piezas con ancla/semana.
+function stampPostDigest(postId, uid, unanchored) {
+  try {
+    const d = digestForUser(uid);
+    if (!d || !postId) return;
+    const h = String(d.hash || '') + (unanchored ? ':sin-ancla' : '');
+    if (h) db.prepare('UPDATE posts SET digest_hash = ? WHERE id = ?').run(h, postId);
+  } catch (e) {}
+}
+// Compila el digest de la prueba desde las fuentes que la ruta ya
+// recolectó (web + feed + formulario). Determinístico, USD 0. El digest
+// viaja en el payload de la prueba y en trial_cache: es el fundamento
+// que la conversión siembra en la cuenta.
+function buildTrialDigest({ business, category, webData, feed, formText, feedPalette, registro }) {
+  try {
+    return clientDigest.buildFromParts({
+      business, category,
+      web: webData ? { name: webData.name, description: webData.description, services: webData.services || [], city: webData.city, palette: webData.palette || [], url: webData.url, categoryHint: webData.categoryHint } : null,
+      feed: feed ? { bio: feed.bio || '', captions: feed.captions || [], name: feed.name || '', handle: feed.handle || '' } : null,
+      form: formText ? { description: formText } : null,
+      feedPalette: feedPalette || null,
+      registro: registro || null,
+    });
+  } catch (e) { console.error('[digest] build trial:', e.message); return null; }
+}
+// Transferencia TOTAL al registrarse: la cuenta nace con el fundamento
+// de la prueba sembrado (digest persistido + ADN + perfil + colores).
+// Solo completa campos vacíos/genéricos: jamás pisa datos del dueño.
+function seedFromTrialDigest(userId, igRaw) {
+  try {
+    const ig = String(igRaw || '').trim().replace(/^@/, '').toLowerCase();
+    if (!ig) return false;
+    const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(ig);
+    if (!hit) return false;
+    let out;
+    try { out = JSON.parse(hit.payload); } catch (e) { return false; }
+    let digest = (out && out.digest && typeof out.digest === 'object') ? out.digest : null;
+    if (!digest) {
+      // Payloads cacheados sin digest (motor anterior): se compila desde
+      // lo que el payload sí trae — el fundamento no se descarta.
+      digest = clientDigest.buildFromParts({
+        business: out.business, category: out.category,
+        web: out.web_info ? { name: out.web_info.name, description: out.web_info.description, services: out.web_info.services || [], city: out.web_info.city, palette: out.web_info.palette || [], url: out.web_info.url } : null,
+        feed: out.profile ? { bio: out.profile.bio, captions: out.profile.captions || [], name: out.profile.name, handle: out.profile.handle } : null,
+        feedPalette: out.feed_palette || null,
+        registro: out.feed_register || null,
+      });
+    }
+    if (!digest || (!clientDigest.hasFoundation(digest) && !digest.business)) return false;
+    clientDigest.saveDigest(db, userId, digest);
+    // ADN: merge respetando lo ya cargado (convención del ADN).
+    try {
+      const cur = readDna(userId);
+      const frag = clientDigest.dnaFragmentFromDigest(digest);
+      const merged = { ...cur };
+      for (const k of Object.keys(frag)) {
+        const empty = cur[k] == null || (Array.isArray(cur[k]) && !cur[k].length) || String(cur[k] || '').trim() === '';
+        if (empty) merged[k] = frag[k];
+      }
+      if (JSON.stringify(merged) !== JSON.stringify(cur)) writeDna(userId, merged);
+    } catch (e) { console.error('[digest] seed ADN:', e.message); }
+    // Perfil: categoría real si la cuenta nació en 'otro'/vacía,
+    // descripción si falta, IG si el digest lo conoce.
+    try {
+      const prof = getProfile(userId) || {};
+      // Mismo catMap que applyTrialProfile (la otra puerta de entrada).
+      const catMap = { moda: 'ropa', gastronomia: 'gastronomia', belleza: 'belleza', fitness: 'fitness', mascotas: 'mascotas', salud: 'salud', hogar: 'hogar', inmobiliaria: 'inmobiliaria', autos: 'servicios', educacion: 'educacion', turismo: 'viajes', eventos: 'eventos', tecnologia: 'tecnologia', deco: 'hogar', joyeria: 'otro', fotografia: 'arte', profesionales: 'servicios', flores: 'otro', bar: 'gastronomia', cafeteria: 'cafeteria', barberia: 'barberia', servicios: 'servicios', viajes: 'viajes', arte: 'arte', otro: 'otro' };
+      const sets = [];
+      const vals = [];
+      const mappedCat = catMap[digest.category] || '';
+      if (mappedCat && mappedCat !== 'otro' && (!prof.category || prof.category === 'otro')) { sets.push('category = ?'); vals.push(mappedCat); }
+      if (!prof.description || prof.description.trim().length < 20) {
+        const descParts = [];
+        if (digest.diferencial) descParts.push(digest.diferencial);
+        const items = [...(digest.productos || []), ...(digest.servicios || [])].map((x) => (x && (x.nombre || x)) || '').filter(Boolean);
+        if (items.length) descParts.push('Ofrece: ' + items.slice(0, 6).join(', ') + '.');
+        if (descParts.length) { sets.push('description = ?'); vals.push(descParts.join(' ').slice(0, 600)); }
+      }
+      const handle = digest.fuentes && digest.fuentes.feed && digest.fuentes.feed.handle;
+      if (handle && !prof.ig_username) { sets.push('ig_username = ?'); vals.push(String(handle).slice(0, 40)); }
+      if (sets.length) { sets.push("updated_at = datetime('now')"); vals.push(userId); db.prepare(`UPDATE profiles SET ${sets.join(', ')} WHERE user_id = ?`).run(...vals); }
+    } catch (e) { console.error('[digest] seed perfil:', e.message); }
+    // Colores de marca desde la paleta del digest (si Ajustes no tiene).
+    try {
+      if ((digest.paleta || []).length >= 2) {
+        getSettings(userId);
+        const st = db.prepare('SELECT brand_colors FROM settings WHERE user_id = ?').get(userId);
+        let has = false;
+        try { const bc = JSON.parse((st && st.brand_colors) || 'null'); has = Array.isArray(bc) && bc.length >= 2; } catch (e) {}
+        if (!has) {
+          const hexes = digest.paleta.map((c) => c.hex).filter((h) => /^#[0-9a-fA-F]{6}$/.test(h || '')).slice(0, 3);
+          if (hexes.length >= 2) db.prepare('UPDATE settings SET brand_colors = ? WHERE user_id = ?').run(JSON.stringify(hexes), userId);
+        }
+      }
+    } catch (e) { console.error('[digest] seed colores:', e.message); }
+    console.log(`[digest] fundamento sembrado desde la prueba → usuario ${userId} (hash ${digest.hash}, ${(digest.productos || []).length} productos, ${(digest.servicios || []).length} servicios, ${(digest.temas_feed || []).length} temas de feed)`);
+    return true;
+  } catch (e) { console.error('[digest] seedFromTrialDigest:', e.message); return false; }
 }
 // Learnings de contenido ("Conocer al cliente a fondo", Track B): qué rinde en el IG del cliente.
 // Lee la tabla content_learnings (la crea otro track); si no existe o no hay datos → null, sin romper.
@@ -990,6 +1106,16 @@ function importTrialWeek(userId, igRaw, expectedBusiness) {
           ON CONFLICT(user_id, post_id) DO UPDATE SET style_code=excluded.style_code, tipo=excluded.tipo, updated_at=datetime('now')`)
           .run(userId, Number(ins.lastInsertRowid), String(p.caption || ''), String(p.hashtags || ''), '', String(out.category || ''), 'approved', '', styleCode, String(dpost.kind || ''));
       } catch (e) { console.error('[posta] importTrialWeek signal:', e.message); }
+      // (v229) Trazabilidad de fundamento: el posteo importado guarda el
+      // hash del digest de la prueba (y ':sin-ancla' si su titular+caption
+      // no contiene ninguna ancla de ese digest).
+      try {
+        if (out.digest && out.digest.hash) {
+          const anch = clientDigest.anchorsOf(out.digest);
+          const un = anch.length ? !clientDigest.pieceAnchored(`${(dpost && dpost.headline) || ''} ${p.caption || ''}`, anch).ok : false;
+          db.prepare('UPDATE posts SET digest_hash = ? WHERE id = ?').run(String(out.digest.hash) + (un ? ':sin-ancla' : ''), Number(ins.lastInsertRowid));
+        }
+      } catch (e) {}
       n++;
     } catch (e) { /* un posteo fallido no frena los demás */ }
   }
@@ -1047,6 +1173,7 @@ app.post('/api/auth/register', (req, res) => {
     try {
       const nImp = importTrialWeek(r.lastInsertRowid, trial_ig);
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
+      seedFromTrialDigest(r.lastInsertRowid, trial_ig); // (v229) FUNDAMENTO: la cuenta nace con el digest de la prueba sembrado
       recordTrialImport(r.lastInsertRowid, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
       streakFromTrialImport(r.lastInsertRowid, nImp);
       // 🚀 Abrir y listo: la semana se arma SOLA (historias + programación + aviso).
@@ -1076,6 +1203,7 @@ app.post('/api/auth/login', (req, res) => {
     const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uidL).c || 0) > 0;
     const nImp = importTrialWeek(uidL, trial_ig);
     if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${uidL}`);
+    seedFromTrialDigest(uidL, trial_ig); // (v229) FUNDAMENTO: siembra del digest también en la puerta de login
     recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
     streakFromTrialImport(uidL, nImp);
     // 🚀 Abrir y listo (login con semana importada): también se arma sola.
@@ -1439,6 +1567,7 @@ async function makeIdeaDraft(uid, idea) {
       tipo, String(idea.why || '').slice(0, 500), wk, trainingWheelsActive(uid) ? 1 : 0,
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath));
+  stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   try { db.prepare(`UPDATE posty_ideas SET status = 'made', post_id = ?, acted_at = datetime('now') WHERE id = ?`).run(r.lastInsertRowid, idea.id); } catch (e) {}
   try { track(uid, 'idea_made', String(idea.id)); } catch (e) {}
   return { ok: true, post_id: r.lastInsertRowid };
@@ -1512,6 +1641,7 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
       String(title || '').slice(0, 200), 'regen:mapa-sitio', String(brief || '').slice(0, 500),
       String(styleOut.code || ''), String(styleOut.reason || ''), String(styleOut.intent || ''), String(productRef || ''),
       String((content && content.hookId) || ''), promptForMedia(imagePath), post.id);
+  stampPostDigest(post.id, uid, content && content._anchored === false); // (v229) el reemplazo hereda el fundamento vigente
   try { track(uid, 'admin_regen_post', String(post.id)); } catch (e) {}
   return { ok: true, post_id: post.id, headline, textMode: mode };
 }
@@ -1657,6 +1787,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
           streakFromTrialImport(userId, nImp);
         } catch (e) { console.error('[posta] importTrialWeek (inmediata):', e.message); }
         applyTrialProfile(userId, trial_profile);
+        seedFromTrialDigest(userId, trial_ig); // (v229) FUNDAMENTO: transferencia total también por magic-link
         track(userId, 'registered');
         evTrack(userId, 'account_created', {});
         req.session.userId = userId;
@@ -1709,6 +1840,7 @@ app.get('/api/auth/magic', (req, res) => {
         streakFromTrialImport(userId, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
       applyTrialProfile(userId, payload.trial_profile);
+      seedFromTrialDigest(userId, payload.trial_ig); // (v229) FUNDAMENTO: transferencia total también en el canje magic
       track(userId, 'registered');
       evTrack(userId, 'account_created', {});
       req.session.userId = userId;
@@ -3806,6 +3938,7 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
     .run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '',
       String(idea.porque || '').slice(0, 500), weekKey || '', trainingWheelsActive(uid) ? 1 : 0,
       String(styleOut2.code || ''), String(styleOut2.reason || ''), String(styleOut2.intent || ''), String(regenProductRef || ''), String((content && content.hookId) || ''), promptForMedia(imagePath));
+  stampPostDigest(r.lastInsertRowid, uid, content && content._anchored === false); // (v229) trazabilidad de fundamento
   console.log(`[review] regenerado borrador ${r.lastInsertRowid} para usuario ${uid}`);
   return { ok: true, id: r.lastInsertRowid };
 }
@@ -4387,6 +4520,7 @@ function contentInputFor(uid, topic, tipo, seed) {
     seedBase: parseInt(seed, 10) || 0,
     golden: goldenExamples(uid), // "rueditas": posteos aprobados como few-shot ("así o parecido")
     captionExtras: captionExtrasFor(uid), // checklist anti-genérico + voz real del cliente (Caption Style Lock)
+    anchors: digestAnchorsFor(uid), // (v229) FUNDAMENTO: anclas del digest para el chequeo de pertenencia en generateContent
   });
 }
 app.post('/api/ideas', requireAuth, requireTrialValid, async (req, res) => {
@@ -6311,6 +6445,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // medibles contra la línea de base del 2026-10-18 (100% de piezas con
     // texto; captions de 293-490 caracteres).
     const runCleanStats = { text: 0, clean: 0, carousel: 0, capLens: [] };
+    // (v229) Vigilancia de pertenencia: piezas de ESTA corrida con ancla
+    // del digest vs sin ancla (la exención de marca/comunidad admite 1).
+    const belongStats = { anchored: 0, unanchored: 0 };
     let imgFailCount = 0; // ideas saltadas por fallo de imagen IA (nunca se crea un bloque plano)
     let firstImgError = ''; // 2026-10-14: primer error de imagen, para diagnóstico visible (last-result)
     // Contabilidad por slot (2026-10-15): cada slot que no produce posteo
@@ -6434,7 +6571,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             try {
               const info = insStmt.run(uid, '', caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, '', '', '', '', String((content && content.hookId) || ''), '');
               pendingId = info && info.lastInsertRowid;
-              if (pendingId) runCreatedIds.add(pendingId);
+              if (pendingId) { runCreatedIds.add(pendingId); stampPostDigest(pendingId, uid, content && content._anchored === false); }
             } catch (e) { console.error(`[pipeline:${tag}] tarjeta inmediata falló:`, e.message); }
           }
           // INVARIANTE: todo borrador sale con imagen real de IA, nunca solo
@@ -6554,7 +6691,7 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
             }
           } else {
             const insInfo = insStmt.run(uid, imagePath, caption, hashtags, idea.titulo || '', idea.angulo || '', idea.tipo || '', String(idea.porque || '').slice(0, 500), weekKey, needRev, finalCode, finalReason, finalIntent, finalProductRef, finalHookId, promptForMedia(imagePath));
-            if (insInfo && insInfo.lastInsertRowid) runCreatedIds.add(insInfo.lastInsertRowid);
+            if (insInfo && insInfo.lastInsertRowid) { runCreatedIds.add(insInfo.lastInsertRowid); stampPostDigest(insInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           } else {
             // El carousel se guarda como UN post con media_type='carousel'.
@@ -6569,12 +6706,15 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                 weekKey, (needRev || carouselGen.needsReview) ? 1 : 0,
                 'carousel', `carousel automático (${carouselGen.slidePaths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId);
-            if (carInfo && carInfo.lastInsertRowid) runCreatedIds.add(carInfo.lastInsertRowid);
+            if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); }
           }
           // 🧹 Vigilancia de limpieza: modo y largo final de la pieza creada.
           if (isCarousel) runCleanStats.carousel++;
           else if (cleanPiece) runCleanStats.clean++;
           else runCleanStats.text++;
+          // (v229) Vigilancia de pertenencia: ancla del digest en la pieza.
+          if (content && content._anchored === false) belongStats.unanchored++;
+          else belongStats.anchored++;
           try { runCleanStats.capLens.push(String(isCarousel ? (carouselGen && carouselGen.caption) : caption || '').length); } catch (e) {}
           created++;
         } catch (e) {
@@ -6590,6 +6730,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     // 5 workers: la semana entera (5 posteos) sale en una sola oleada.
     await Promise.all([worker(), worker(), worker(), worker(), worker()]);
     console.log(`[pipeline:${tag}] usuario ${uid} semana ${weekKey}: ${created}/${picks.length} borradores`);
+    // (v229) Pertenencia de la corrida: la vara es todas con ancla salvo
+    // a lo sumo 1 de marca/comunidad. Queda en el log por corrida.
+    if (created > 0) console.log(`[pipeline:${tag}] usuario ${uid} pertenencia: ${belongStats.anchored} con ancla / ${belongStats.unanchored} sin ancla (digest ${(digestForUser(uid) || {}).hash || '—'})`);
     // 🧹 Vigilancia de limpieza: las dos medianas de la corrida quedan en
     // el resultado (visible vía /api/week/last-result) y en el log, para
     // comparar contra la línea de base del 2026-10-18 (100% con texto;
@@ -9205,19 +9348,34 @@ function parseIdea(idea) {
   if (idea && typeof idea === 'object' && !Array.isArray(idea)) return idea;
   return { titulo: String(idea || '') };
 }
-// 1-2 datos comerciales reales del ADN para contrastar claims en el QA visual.
-function qaFactsLine(dna) {
-  if (!dna || typeof dna !== 'object') return '';
+// Datos comerciales reales para contrastar claims en el QA visual.
+// (v229) FUNDAMENTO: la lista COMPLETA de productos/servicios/promos
+// (ADN + digest), no solo el primero de cada lista — con un solo dato
+// de contraste, el QA no podía detectar un segundo producto inventado.
+function qaFactsLine(dna, digest) {
   const facts = [];
-  if (Array.isArray(dna.productos) && dna.productos.length) {
-    const p = dna.productos[0];
-    if (p && (p.nombre || p.precio)) facts.push(`Producto real: ${(p.nombre || '')}${p.precio ? ` (${p.precio})` : ''}`);
+  const seen = new Set();
+  const addItem = (label, x) => {
+    const nombre = String((x && (x.nombre || x.titulo)) || x || '').replace(/\s+/g, ' ').trim();
+    if (nombre.length < 3) return;
+    const k = nombre.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    const precio = (x && x.precio) ? ` (${x.precio})` : '';
+    facts.push(`${label}: ${nombre}${precio}`);
+  };
+  if (dna && typeof dna === 'object') {
+    for (const p of (dna.productos || [])) addItem('Producto real', p);
+    for (const s of (dna.servicios || [])) addItem('Servicio real', s);
+    for (const pr of [...(dna.promos_activas || []), ...(dna.promos || [])]) addItem('Promo real', pr);
+    if (dna.producto_estrella) addItem('Producto estrella', dna.producto_estrella);
   }
-  if (Array.isArray(dna.promos_activas) && dna.promos_activas.length) {
-    const pr = dna.promos_activas[0];
-    if (pr && (pr.titulo || pr)) facts.push(`Promo real: ${pr.titulo || pr}`);
+  if (digest && typeof digest === 'object') {
+    for (const p of (digest.productos || [])) addItem('Producto real', p);
+    for (const s of (digest.servicios || [])) addItem('Servicio real', s);
+    for (const pr of (digest.promos || [])) addItem('Promo real', pr);
   }
-  return facts.slice(0, 2).join(' | ');
+  return facts.slice(0, 14).join(' | ').slice(0, 700);
 }
 // Ojo crítico: control de calidad visual de la imagen generada con gpt-4o-mini.
 // Verifica texto_ok / colores_ok / claims_ok y devuelve el objeto parseado.
@@ -9804,7 +9962,7 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
       const qa = await qaImageB64(finalB64, {
         headline: cleanHeadline,
         paletteHex: hexes,
-        dnaFacts: qaFactsLine(dna),
+        dnaFacts: qaFactsLine(dna, digestForUser(uid)),
       }, key);
       try {
         db.exec("CREATE TABLE IF NOT EXISTS qa_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), passed INTEGER, result TEXT)");
@@ -9848,6 +10006,28 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
               if (upd.changes) {
                 rememberPrompt(`/media/${nName}`, corrPrompt);
                 console.log(`[qa-correct] post ${post.id}: imagen corregida tras QA duro (${fixes.length} correcciones)`);
+                // (v229) FUNDAMENTO — claims_ok BLOQUEANTE: si la imagen
+                // CORREGIDA también inventa datos comerciales, no se
+                // entrega como pieza normal: degrada a foto propia del
+                // cliente (o brand card) con el titular compuesto por
+                // código y queda marcada para revisión humana.
+                if (qa.claims_ok === false) {
+                  try {
+                    const nb64 = fs.readFileSync(path.join(MEDIA_DIR, nName)).toString('base64');
+                    const qa2 = await qaImageB64(nb64, { headline: cleanHeadline, paletteHex: hexes, dnaFacts: qaFactsLine(dna, digestForUser(uid)) }, key);
+                    if (qa2 && qa2.claims_ok === false) {
+                      let photoAbs = null;
+                      try {
+                        const a = db.prepare(`SELECT file_path FROM assets WHERE user_id = ? AND kind = 'photo' ORDER BY created_at DESC LIMIT 1`).get(uid);
+                        if (a && a.file_path && fs.existsSync(a.file_path)) photoAbs = a.file_path;
+                      } catch (e) {}
+                      const prof2 = getProfile(uid) || {};
+                      const cardAbs = brandCardPng({ headline: cleanHeadline || '', bgHex: (hexes && hexes[0]) || '#0A1E33', textHex: '#FFFFFF', business: prof2.business_name || '', logoAbs: null, photoAbs, outDir: MEDIA_DIR });
+                      db.prepare("UPDATE posts SET image_path = ?, needs_review = 1 WHERE id = ? AND status = 'draft'").run(`/media/${path.basename(cardAbs)}`, post.id);
+                      console.log(`[qa-claims-block] post ${post.id}: claims_ok=false tras la corrección — degradado a ${photoAbs ? 'foto propia del cliente' : 'brand card'} con titular por código + revisión humana`);
+                    }
+                  } catch (e) { console.error('[qa-claims-block]', e.message); }
+                }
               }
             }
           } catch (e) { console.error('[qa-correct]', e.message); }
@@ -11122,7 +11302,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
       photoPath = path.join(os.tmpdir(), `posta-demo-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
       fs.writeFileSync(photoPath, file.buffer);
     }
-    const { posts } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn });
+    const { posts } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, digest: buildTrialDigest({ business, category, formText: goal }) });
     ok = true;
     res.json({ ok: true, posts, remaining: rl.remaining });
   } catch (e) {
@@ -11382,7 +11562,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       }
       webExtraPhotos = await trialWebPhotos(webData);
     }
-    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos });
+    // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
+    // de la semana se derivan de ÉL (web + formulario en esta ruta).
+    const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal });
+    const { posts, spec } = await demo.generateDemo({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest });
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -11398,6 +11581,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
+      digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       ig_pic: igPic, ig_name: igName,
       ideas: (await ideasPromise).slice(0, 6),
       posts,
@@ -11840,6 +12024,15 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       }
     }
 
+    // (v229) FUNDAMENTO: el digest se compila con TODO lo recolectado
+    // (feed real: bio + captions; web; formulario) ANTES del spec — los
+    // temas de la semana se derivan de él, no del catálogo por rubro.
+    const trialDigest = buildTrialDigest({
+      business, category, webData,
+      feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
+      formText: richGoal, feedPalette, registro: feedRegister,
+    });
+
     // (v198) CLASIFICACIÓN DEL FEED (ilustrado vs foto real): corre en
     // paralelo con el spec y el render de plantillas — la semana de
     // plantillas NO espera a la IA. Una sola llamada de visión barata
@@ -11881,7 +12074,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     }
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos });
+    const spec = demo.buildDemoSpec({ business, category, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
     const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(category) ? category : 'otro';
@@ -12253,6 +12446,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       accent, btn, color_source: colorSource,
       feed_register: spec.feedRegister || null,
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
+      digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       feed_kind: feedKind,
       feed_formula: feedFormula,
       feed_palette: feedPalette,
@@ -12972,7 +13166,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261018-v228';
+const BUILD_ID = '20261018-v229';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -13145,4 +13339,122 @@ app.listen(PORT, () => {
 // Track 4 "Pipeline perpetuo": el cron semanal de scheduler.js hace require
 // perezoso de este módulo (ya cargado) para llamar al barrido. No requerir
 // scheduler.js desde acá abajo: server.js ya lo requiere arriba.
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, planWeekTextModes, weekTextModeFor, kindOfTipo };
+// ---------- FUNDAMENTO (v229): refresco del digest con cadencia ----------
+// Lo llama el scheduler los lunes 06:30 (Buenos Aires), ANTES del loop de
+// ideas de las 07:00: el fundamento no queda congelado el día del alta.
+//  · website_url con estudio de ≥30 días → re-estudio solo (mismo merge
+//    que el endpoint manual) + bloque web reconstruido desde web-extract
+//    (productos/servicios reales, USD 0).
+//  · IG conectado → bio/temas del feed re-minados (≥7 días) y locks de
+//    estilo re-analizados si tienen ≥30 días (con kill-switch de gasto).
+// Merge: lo editado a mano en el ADN manda — las listas del digest se
+// re-derivan del ADN vigente y solo se reemplazan los bloques cuya
+// fuente se refrescó en esta corrida.
+async function refreshDigestsSweep() {
+  const summary = { users: 0, web: 0, feed: 0, locks: 0, saved: 0, errors: 0 };
+  const DAY = 24 * 3600 * 1000;
+  const ageOf = (iso) => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? Date.now() - t : Infinity; };
+  try {
+    const rows = db.prepare(`SELECT user_id FROM client_digest
+      UNION SELECT user_id FROM profiles WHERE ig_connected = 1
+      UNION SELECT user_id FROM business_dna WHERE dna_json LIKE '%"website_url"%'`).all().slice(0, 40);
+    for (const row of rows) {
+      const uid = row.user_id;
+      try {
+        summary.users++;
+        const prof = getProfile(uid) || {};
+        let dna = readDna(uid);
+        const stored = clientDigest.getStoredDigest(db, uid);
+        const webUrl = String(dna.website_url || '').trim();
+        const webStale = !!webUrl && (ageOf(dna.website_analyzed_at) >= 30 * DAY
+          || !stored || ageOf(stored.fuentes && stored.fuentes.web && stored.fuentes.web.at) >= 30 * DAY);
+        const feedStale = !!(prof.ig_connected && prof.ig_username)
+          && (!stored || ageOf(stored.fuentes && stored.fuentes.feed && stored.fuentes.feed.at) >= 7 * DAY);
+        if (!webStale && !feedStale && stored) continue;
+        const parts = {
+          business: prof.business_name || (stored && stored.business) || '',
+          category: (stored && stored.category) || prof.category || '',
+          dna, form: { description: prof.description || '' },
+        };
+        let webFresh = null;
+        let feedFresh = null;
+        if (webStale) {
+          try {
+            const wd = await webExtract.fetchBusinessSite(webUrl);
+            if (wd && wd.ok) {
+              webFresh = { name: wd.name, description: wd.description, services: wd.services || [], city: wd.city, palette: wd.palette || [], url: wd.url, categoryHint: wd.categoryHint };
+              summary.web++;
+            }
+          } catch (e) { /* web caída: se sigue con el resto */ }
+          try {
+            const key = openaiKeyFor(uid);
+            if (key) {
+              costs.assertAiOk(uid);
+              const r = await analyzeWebsite(webUrl, key);
+              if (r && r.source !== 'mercadolibre') {
+                const cur = readDna(uid);
+                const patch = { website_url: r.website_url, website_analyzed_at: new Date().toISOString(), website_partial: !!r.partial };
+                for (const f of WEBSITE_DNA_FIELDS) if (websiteFieldHas(r[f])) patch[f] = r[f];
+                writeDna(uid, { ...cur, ...patch });
+                dna = readDna(uid);
+                parts.dna = dna;
+              }
+            }
+          } catch (e) { /* sin presupuesto o estudio fallido: el bloque web-extract ya refrescó lo esencial */ }
+        }
+        if (feedStale) {
+          try {
+            const data = await feedAudit.fetchAuditData(prof.ig_username);
+            if (data && data.ok && data.profile) {
+              feedFresh = {
+                bio: data.profile.bio || '',
+                captions: (data.posts || []).map((x) => String((x && x.caption) || '').slice(0, 240)).filter(Boolean).slice(0, 12),
+                name: data.profile.name || '', handle: data.profile.handle || prof.ig_username,
+              };
+              summary.feed++;
+            }
+          } catch (e) { /* feed no disponible: se sigue */ }
+          try {
+            const cs = db.prepare('SELECT analyzed_at FROM ig_caption_style WHERE user_id = ?').get(uid);
+            const vs = db.prepare('SELECT analyzed_at FROM ig_visual_style WHERE user_id = ?').get(uid);
+            const csStale = !cs || ageOf(cs.analyzed_at) >= 30 * DAY;
+            const vsStale = !vs || ageOf(vs.analyzed_at) >= 30 * DAY;
+            if (csStale || vsStale) {
+              costs.assertAiOk(uid);
+              if (csStale && typeof analyzeCaptionStyle === 'function') { await analyzeCaptionStyle(db, uid); summary.locks++; }
+              if (vsStale && typeof analyzeVisualStyle === 'function') { await analyzeVisualStyle(db, uid); summary.locks++; }
+            }
+          } catch (e) { /* locks: best-effort, nunca frenan el refresco */ }
+        }
+        if (!stored && !webFresh && !feedFresh) {
+          const seeded = clientDigest.buildFromParts(parts);
+          if (clientDigest.hasFoundation(seeded)) { clientDigest.saveDigest(db, uid, seeded); summary.saved++; }
+          continue;
+        }
+        const fresh = clientDigest.buildFromParts({ ...parts, web: webFresh, feed: feedFresh });
+        const merged = { ...(stored || fresh) };
+        if (feedFresh) {
+          merged.temas_feed = fresh.temas_feed;
+          if (fresh.protagonista) merged.protagonista = fresh.protagonista;
+          merged.fuentes = { ...(merged.fuentes || {}), feed: fresh.fuentes.feed };
+          merged.has_booking = !!(merged.has_booking || fresh.has_booking);
+        }
+        if (webFresh) {
+          merged.productos = fresh.productos;
+          merged.servicios = fresh.servicios;
+          merged.promos = fresh.promos;
+          if (fresh.ciudad) merged.ciudad = fresh.ciudad;
+          merged.fuentes = { ...(merged.fuentes || {}), web: fresh.fuentes.web };
+        }
+        if (fresh.diferencial) merged.diferencial = fresh.diferencial;
+        merged.built_at = new Date().toISOString();
+        clientDigest.saveDigest(db, uid, merged);
+        summary.saved++;
+      } catch (e) { summary.errors++; console.error('[digest-refresh] usuario ' + uid + ':', e.message); }
+    }
+  } catch (e) { console.error('[digest-refresh] sweep:', e.message); }
+  console.log(`[digest-refresh] ${JSON.stringify(summary)}`);
+  return summary;
+}
+
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep };

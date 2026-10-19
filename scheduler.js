@@ -616,6 +616,24 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[best-hour] no se pudo programar:', e.message);
   }
+  // 🧭 FUNDAMENTO (v229): refresco del client_digest — lunes 06:30
+  // (Buenos Aires), ANTES del loop de ideas: la web se re-estudia si el
+  // estudio tiene ≥30 días y el feed (bio/temas/locks) se re-mina con su
+  // cadencia, para que las ideas y la semana nazcan del fundamento
+  // vigente, no del día del alta. Require perezoso, mismo patrón.
+  try {
+    cron.schedule('30 6 * * 1', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.runWeeklyDigestRefresh === 'function') {
+          srv.runWeeklyDigestRefresh().catch((e) => console.error('[digest-refresh]', e.message));
+        }
+      } catch (e) { console.error('[digest-refresh] no se pudo cargar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Refresco de fundamento (digest): lunes 06:30 (Buenos Aires)');
+  } catch (e) {
+    console.error('[digest-refresh] no se pudo programar:', e.message);
+  }
   // 💡 Loop de ideas semanal: lunes 07:00 (Buenos Aires) — antes del digest de
   // las 09:00 y del WOW de las 09:30, para que las ideas ya estén en Schedule
   // y en el reporte cuando el cliente mira su semana. Sin notificaciones

@@ -193,6 +193,10 @@ function trialProfileFromAudit(data, fallbackPic) {
     following: num(p.following),
     pic: p.pic || fallbackPic || null,
     photos: (data.posts || []).map((x) => (x && x.thumb) || null).filter(Boolean).slice(0, 9),
+    // (v229) FUNDAMENTO: los captions reales de sus últimos posteos —
+    // de acá el client_digest mina los temas de SU feed (antes el perfil
+    // de la prueba descartaba los captions que parseEmbedPosts ya traía).
+    captions: (data.posts || []).map((x) => String((x && x.caption) || '').slice(0, 240)).filter(Boolean).slice(0, 12),
   };
 }
 

@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const https = require('https');
 const db = require('./db');
 const captions = require('./demo-captions');
+const clientDigest = require('./client-digest');
 
 const DEMO_SCRIPT = path.join(__dirname, 'demo_render.py');
 const DEMO_VIDEO_SCRIPT = path.join(__dirname, 'demo_video.py');
@@ -150,7 +151,11 @@ function stockPhotos3(category, business) {
 // servidor e IndexedDB del navegador): si el motor cambia, ninguna semana
 // vieja se sirve ni se importa. Sincronizado con TRIAL_ENGINE_V en
 // public/prueba.html.
-const DEMO_ENGINE_V = 17;
+// v18 (v229 FUNDAMENTO): los temas de la semana se derivan del
+// client_digest del negocio (sus productos/servicios/temas reales) y el
+// payload viaja con el digest — las semanas cacheadas con el motor
+// anterior (temas de plantilla por rubro) quedan invalidadas a propósito.
+const DEMO_ENGINE_V = 18;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -1134,7 +1139,7 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null }) {
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   // (v212) Fotos del SITIO WEB del negocio (extraPhotos: [{path, temas}]):
@@ -1150,7 +1155,16 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   const topicsBase = (subcat && captions.DEMO_TOPICS[subcat])
     ? captions.DEMO_TOPICS[subcat]
     : (captions.DEMO_TOPICS[cat] || captions.DEMO_TOPICS.otro);
-  const { topics: allTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath);
+  const { topics: goalTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath);
+  // (v229) FUNDAMENTO: los temas se derivan PRIMERO del digest del
+  // negocio (sus productos/servicios/promos/temas reales — ver
+  // client-digest.deriveTopics) y el catálogo por rubro SOLO rellena los
+  // slots sin dato. Solo en la semana principal (topicOffset 0): los
+  // visuales extra de la grilla no repiten los temas del fundamento.
+  const digestTopics = (digest && topicOffset === 0)
+    ? clientDigest.deriveTopics(digest, { count: n, category: cat })
+    : [];
+  const allTopics = digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics;
   // topicOffset (v187): temas desde una posición del pool — lo usan los
   // visuales extra de la grilla CON Posty para NO repetir los temas (ni las
   // fotos, vía excludePhotos) de la semana ya generada.
@@ -1207,6 +1221,31 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (chosen.length) {
       topics = chosen;
       chosenPoster.forEach((b, i) => { if (b) posterAt.add(i); });
+    }
+    // (v229) FUNDAMENTO — chequeo de pertenencia ANTES de renderizar: un
+    // tema de relleno cuyo titular+caption no contiene NINGUNA ancla del
+    // digest (podría salir igual en la cuenta de otro negocio) se
+    // reemplaza por el siguiente tema derivado del digest que pase el
+    // gate de fotos. El slot de póster no se toca (es la pieza de marca).
+    if (digest && digestTopics.length && topics.length) {
+      try {
+        const anchors = clientDigest.anchorsOf(digest);
+        if (anchors.length) {
+          const inUse = new Set(topics.map((t) => t && t.digest_anchor).filter(Boolean));
+          for (let i = 0; i < topics.length; i++) {
+            const t = topics[i];
+            if (!t || t._digest || posterAt.has(i)) continue;
+            const chk = clientDigest.pieceAnchored(`${t.headline || ''} ${t.caption || ''}`, anchors);
+            if (chk.ok) continue;
+            const cand = digestTopics.find((dt) => dt && !inUse.has(dt.digest_anchor)
+              && topicPhotoMatchable(dt, poolFams, photoGateCtx({ category: cat, subcat, topic: dt, isCafe })));
+            if (cand) {
+              inUse.add(cand.digest_anchor);
+              topics[i] = cand;
+            }
+          }
+        }
+      } catch (e) { /* el chequeo nunca frena la prueba */ }
     }
     // Estilos REALES del catálogo del producto: uno distinto por posteo.
     // (La variedad de esqueletos la garantiza enforceSkeletonVariety más
@@ -1432,9 +1471,9 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
   return { resolved, cleanups };
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 

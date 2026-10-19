@@ -518,6 +518,18 @@ CREATE TABLE IF NOT EXISTS business_dna (
   dna_json TEXT NOT NULL DEFAULT '{}',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- FUNDAMENTO (v229): digest compilado del negocio (productos/servicios
+-- reales, promos, temas de su feed, paleta, fuentes con fecha). Tabla
+-- propia a propósito: el ADN sigue siendo la fuente editable por el
+-- dueño; el digest es la foto derivada que consumen la prueba, la
+-- conversión y el chequeo de pertenencia (ver client-digest.js).
+CREATE TABLE IF NOT EXISTS client_digest (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  digest_json TEXT NOT NULL DEFAULT '{}',
+  hash TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS style_rules (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   rule_key TEXT NOT NULL,
@@ -777,6 +789,7 @@ try { db.exec(`ALTER TABLE users ADD COLUMN trial_pause_notified INTEGER DEFAULT
 try { db.exec(`ALTER TABLE posts ADD COLUMN source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN client_photo INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN image_prompt TEXT`); } catch (e) { /* ya existe */ } // prompt exacto que generó la imagen (medición prompt↔alcance)
+try { db.exec(`ALTER TABLE posts ADD COLUMN digest_hash TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // FUNDAMENTO (v229): hash del client_digest con el que nació la pieza (sufijo ':sin-ancla' si no pasó el chequeo de pertenencia) — el loop de calidad mide % de piezas con ancla por semana
 // Backfill: filas importadas antes de esta migración (source='') se marcan
 // 'trial' por el prefijo de image_path que solo escribe importTrialWeek.
 // client_photo queda en 0 para esas filas (no se puede determinar a posteriori
