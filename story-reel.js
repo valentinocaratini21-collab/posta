@@ -177,10 +177,52 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
   const hook = hookFromCaption(post0.caption) || shortText(post0.source_topic || '', 50);
   const mid = beatFromCaption(post0.caption, hookFromCaption(post0.caption)) || shortText(post0.source_angle || '', 52);
   const handle = profile.ig_username ? '@' + String(profile.ig_username).replace(/^@/, '') : (profile.business_name || '');
+  const mood = moodForCategory(profile.category, stockRubroFor(profile.category));
+  const reelPhotos = rot(photos, salt * 2).slice(0, 5);
+  const reelVideos = rot(videos, salt);
+
+  // MOTION v3 (Fase 2, 2026-10-20 — spec-motion-v3.md): con
+  // POSTY_REEL_SCRIPT=1 el guion NACE del fundamento (reel-script.js) y
+  // el motor renderiza subtítulos cinéticos + xfade (reel-engine v3).
+  // Cualquier problema (sin fundamento, IA caída, guion rechazado) cae
+  // al camino v2 de abajo DECLARÁNDOLO en el log — nunca en silencio.
+  // Default OFF: la activación la decide el agente principal al pushear.
+  if (process.env.POSTY_REEL_SCRIPT === '1') {
+    try {
+      const clientDigest = require('./client-digest');
+      const { buildReelScript } = require('./reel-script');
+      const { planKineticCaptions, validateCaptionPlan } = require('./kinetic-captions');
+      const digest = clientDigest.getDigest(db, uid);
+      const script = await buildReelScript({
+        digest, post: post0, durationSec: 15,
+        intent: post0.sales_intent || post0.salesIntent || undefined,
+        apiKey: process.env.OPENAI_API_KEY || '',
+      });
+      if (script && !script.degraded && script.source === 'ai') {
+        const captionPlan = planKineticCaptions(script);
+        const planCheck = validateCaptionPlan(captionPlan);
+        if (planCheck.ok) {
+          console.log(`[reel-script] usuario ${uid}: guion IA ok (${script.totalWords} palabras, intención ${script.intent}, plantilla ${script.intent})`);
+          return buildReelPro({
+            mediaDir, photos: reelPhotos, videos: reelVideos,
+            script, captionPlan, template: script.intent,
+            hook: script.hook, mid: `${script.problem} ${script.solution}`.trim(), cta: script.cta,
+            handle, brandHex, mood,
+          });
+        }
+        console.log(`[reel-script] usuario ${uid}: plan de subtítulos inválido (${planCheck.errors.join(',')}) — sigo con v2`);
+      } else {
+        console.log(`[reel-script] usuario ${uid}: guion degradado (${(script && script.degradeReason) || 'sin_guion'}) — sigo con v2`);
+      }
+    } catch (e) {
+      console.error(`[reel-script] usuario ${uid}: falló la integración v3, sigo con v2:`, e.message);
+    }
+  }
+
   return buildReelPro({
     mediaDir,
-    photos: rot(photos, salt * 2).slice(0, 5),
-    videos: rot(videos, salt),
+    photos: reelPhotos,
+    videos: reelVideos,
     // SIN shortText acá: el motor ajusta el tamaño de fuente para que la
     // frase entre COMPLETA (fitText); cortar antes dejaba ganchos a medias.
     hook: String(hook || '').slice(0, 90),
@@ -188,7 +230,7 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
     cta: '¡Seguinos!',
     handle,
     brandHex,
-    mood: moodForCategory(profile.category, stockRubroFor(profile.category)),
+    mood,
   });
 }
 

@@ -19,3 +19,17 @@ a la duración del reel con fade in/out.
 
 Si una pista se reemplaza, verificar la licencia en la página del archivo
 ANTES de subirla y actualizar esta tabla.
+
+## Mapa de beats (Motion v3, Fase 3 — 2026-10-20)
+
+`assets/music/beats.json` guarda, por pista, el BPM detectado offline y la
+grilla de beats que usa el motor v3 para hacer snap de los cortes de escena
+(±150 ms). Se genera con `node music-beats.js --write` (análisis local con
+ffmpeg, sin dependencias). Si una pista se reemplaza, REGENERAR el mapa.
+
+Estado al 2026-10-20: `chill.mp3` 79.5 BPM (confianza 2.77) · `groove.mp3`
+76 BPM (confianza 3.04) · `upbeat.mp3` SIN grilla detectable (flujo de
+energía plano: la pista no tiene onsets percusivos claros) → con ese mood el
+motor no hace snap y corta con las duraciones del guion, declarado en el
+resultado (`beatsSnapped: 0`). No inventar el tempo: si se quiere snap en
+upbeat, reemplazar la pista por una con percusión marcada y regenerar.
