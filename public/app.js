@@ -724,6 +724,7 @@ function lpGoTrial(e) {
 let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
 function lpInitHero() {
   lpInitCarousel();
+  lpInitWall();
   // — Actividad en vivo "Posty trabajando": rota líneas ilustrativas del negocio de ejemplo.
   const line = document.getElementById('lpLiveLine');
   if (line) {
@@ -854,11 +855,9 @@ function lpCellsHTML(p, tiles) {
     return img;
   }).join('');
 }
-/* ---------- v208: PARED DENSA de perfiles (pedido de Valentino: "la
-   nuestra muestra un perfil solo a la vez, ellos muestran 8 a la vez").
-   Tarjeta compacta por rubro: cabecera + stats + bio corta + grilla 3×3.
-   Desktop: grilla de 4 columnas (8 visibles, el resto tras "Ver los 20
-   perfiles"); celular: tira horizontal con scroll-snap. ---------- */
+/* ---------- Tarjeta compacta de perfil por rubro: cabecera + stats +
+   bio corta + grilla 3×3. Nació como pared densa en v208; desde v211 la
+   landing la muestra en páginas de 4 con flechas (ver lpWallPagesHTML). */
 function lpWallCardHTML(p) {
   const tiles = lpTiles(p);
   const ava = p.ava || tiles[0];
@@ -874,16 +873,82 @@ function lpWallCardHTML(p) {
     <div class="lp-wall-foot">${p.rubro}</div>
   </div>`;
 }
-function lpWallCardsHTML() {
-  return LP_PROFILES.map(lpWallCardHTML).join('');
+/* ---------- v211: la pared pasa a UNA SOLA FILA de 4 con flechas ‹ ›
+   (orden de Valentino 20/10: la grilla 4+4 "ocupa demasiado lugar y no
+   me gusta"). Páginas de 4 con la mecánica del carrusel de /prueba
+   (.ej-*): track que se traslada −100% por página, flechas con .off en
+   los extremos y swipe táctil. En pantallas ≤1023px las páginas se
+   aplanan (display:contents en CSS) y el track vuelve a ser la tira
+   horizontal con scroll-snap de v208: ahí las flechas avanzan de a una
+   tarjeta y el estado .off sale del scroll. ---------- */
+const LP_WALL_PER = 4;
+let LP_WALL_PAGE = 0;
+function lpWallPagesHTML() {
+  const pages = [];
+  for (let i = 0; i < LP_PROFILES.length; i += LP_WALL_PER) {
+    pages.push(`<div class="lp-wall-page">${LP_PROFILES.slice(i, i + LP_WALL_PER).map(lpWallCardHTML).join('')}</div>`);
+  }
+  return pages.join('');
 }
-function lpWallToggle() {
-  const w = document.getElementById('lpWall');
-  const b = document.getElementById('lpWallMore');
-  if (!w) return;
-  const open = w.classList.toggle('open');
-  w.classList.toggle('collapsed', !open);
-  if (b) b.textContent = open ? 'Ver menos ↑' : 'Ver los 20 perfiles ↓';
+function lpWallMobile() { return window.matchMedia('(max-width:1023px)').matches; }
+function lpWallSyncArrows() {
+  const track = document.getElementById('lpWallTrack');
+  const prev = document.getElementById('lpWallPrev');
+  const next = document.getElementById('lpWallNext');
+  if (!track || !prev || !next) return;
+  if (lpWallMobile()) {
+    const max = track.scrollWidth - track.clientWidth;
+    prev.classList.toggle('off', track.scrollLeft <= 2);
+    next.classList.toggle('off', track.scrollLeft >= max - 2);
+    return;
+  }
+  const pages = track.children.length;
+  prev.classList.toggle('off', LP_WALL_PAGE <= 0);
+  next.classList.toggle('off', LP_WALL_PAGE >= pages - 1);
+  const c = document.getElementById('lpWallCount');
+  if (c) c.textContent = (LP_WALL_PAGE + 1) + ' / ' + pages;
+}
+function lpWallSync() {
+  const track = document.getElementById('lpWallTrack');
+  if (!track) return;
+  if (lpWallMobile()) { track.style.transform = ''; lpWallSyncArrows(); return; }
+  const pages = track.children.length;
+  LP_WALL_PAGE = Math.max(0, Math.min(pages - 1, LP_WALL_PAGE));
+  track.style.transform = 'translateX(' + (-LP_WALL_PAGE * 100) + '%)';
+  lpWallSyncArrows();
+}
+function lpWallStep(d) {
+  const track = document.getElementById('lpWallTrack');
+  if (!track) return;
+  if (lpWallMobile()) {
+    const card = track.querySelector('.lp-wall-card');
+    const w = card ? card.offsetWidth + 10 : track.clientWidth;
+    track.scrollBy({ left: d * w, behavior: 'smooth' });
+    return;
+  }
+  LP_WALL_PAGE += d;
+  lpWallSync();
+}
+function lpInitWall() {
+  const track = document.getElementById('lpWallTrack');
+  if (!track || track.dataset.bound) return;
+  track.dataset.bound = '1';
+  let tx = null;
+  track.addEventListener('touchstart', (e) => { tx = e.changedTouches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend', (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    tx = null;
+    if (Math.abs(dx) >= 40 && !lpWallMobile()) lpWallStep(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  let raf = false;
+  track.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = true;
+    requestAnimationFrame(() => { raf = false; lpWallSyncArrows(); });
+  }, { passive: true });
+  window.addEventListener('resize', lpWallSync);
+  lpWallSync();
 }
 function lpProfileHTML(p) {
   const tiles = lpTiles(p);
@@ -1423,10 +1488,14 @@ function landingView(cfg) {
     <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show" id="ejemplos">
       <p class="lp-show-eyebrow">✨ Así queda tu Instagram con Posty</p>
-      <div class="lp-wall collapsed" id="lpWall">
-        <div class="lp-wall-grid" id="lpWallGrid">${lpWallCardsHTML()}</div>
+      <div class="lp-wall" id="lpWall">
+        <button type="button" class="lp-wall-nav prev off" id="lpWallPrev" aria-label="Perfiles anteriores" onclick="lpWallStep(-1)">‹</button>
+        <div class="lp-wall-viewport" id="lpWallViewport">
+          <div class="lp-wall-track" id="lpWallTrack">${lpWallPagesHTML()}</div>
+        </div>
+        <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Perfiles siguientes" onclick="lpWallStep(1)">›</button>
       </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">20 rubros · perfiles armados por Posty</span><button type="button" class="lp-wall-more" id="lpWallMore" onclick="lpWallToggle()">Ver los 20 perfiles ↓</button></div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">20 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 5</span></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">

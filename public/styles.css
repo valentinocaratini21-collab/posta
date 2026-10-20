@@ -2223,6 +2223,39 @@ textarea.in{resize:vertical;min-height:96px}
   .lp-wall-card{flex:0 0 78%;scroll-snap-align:center}
   .lp-wall-more{display:none}
 }
+/* v211: PARED EN UNA SOLA FILA DE 4 CON FLECHAS (landing ES; las reglas
+   .lp-wall-grid de arriba quedan solo para /en, que es estática y las
+   sigue usando). Páginas de 4 con la mecánica del carrusel de /prueba:
+   track trasladado −100% por página y flechas .off en los extremos. */
+.lp-wall{position:relative}
+.lp-wall-viewport{overflow:hidden}
+.lp-wall-track{display:flex;transition:transform .35s ease}
+.lp-wall-page{flex:0 0 100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:2px 2px 10px}
+.lp-wall-nav{position:absolute;top:44%;transform:translateY(-50%);z-index:6;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--txt);font-size:26px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(10,30,51,.18);display:flex;align-items:center;justify-content:center;padding:0 0 3px;transition:opacity .2s;font-family:inherit}
+.lp-wall-nav.prev{left:6px}
+.lp-wall-nav.next{right:6px}
+.lp-wall-nav.off{opacity:.35;pointer-events:none}
+.lp-wall-nav:hover{border-color:var(--cel);color:var(--cel)}
+.lp-wall-count{font-size:13.5px;font-weight:800;color:var(--dim)}
+/* Banda 1024–1180: con 4 columnas la tarjeta mide ~233px y el rótulo
+   "publicaciones" volvía a pelear por ancho (el bug de v210); se aprieta
+   SOLO la tarjeta de pared en esta banda. */
+@media(min-width:1024px) and (max-width:1180px){
+  .lp-wall-card .ig-ava-lg i,.lp-wall-card .ig-ava-lg img{width:38px;height:38px}
+  .lp-wall-card .igp-stats span{font-size:9px;letter-spacing:-.6px}
+}
+/* ≤1023px: las páginas se aplanan (display:contents) y el track es la
+   tira horizontal con scroll-snap de v208; las flechas avanzan de a una
+   tarjeta (lpWallStep) y su .off sale del scroll (lpWallSyncArrows). */
+@media(max-width:1023px){
+  .lp-wall-viewport{overflow:visible}
+  .lp-wall-track{overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:10px;padding:2px 2px 8px;transition:none}
+  .lp-wall-track::-webkit-scrollbar{display:none}
+  .lp-wall-page{display:contents}
+  .lp-wall-page .lp-wall-card{flex:0 0 78%;scroll-snap-align:center}
+  .lp-wall-nav{width:40px;height:40px;font-size:23px;top:40%}
+  .lp-wall-count{display:none}
+}
 .igp-grid.igp-pre>*{opacity:0;transform:scale(.93)}
 .igp-grid.igp-go>*{opacity:1;transform:scale(1);transition:opacity .45s ease,transform .45s ease}
 .igp-grid.igp-go>*:nth-child(2){transition-delay:.09s}
