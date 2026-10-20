@@ -1117,11 +1117,43 @@ function lpAnalisisHTML() {
       <div class="lp-cm-card"><div class="lp-cm-i">🌱</div><h3>¿Recién arrancás?</h3><p class="lp-cm-tag">Tu cuenta nace con plan</p><p>Sin historial no hay diagnóstico inventado: tu cuenta nace con posicionamiento, el kit de perfil completo y una primera vidriera de 9 piezas pensada desde tu mercado.</p></div>
     </div>
     <h3 style="text-align:center;margin:36px 0 4px">Así se ve tu análisis 👇</h3>
-    <p style="text-align:center;color:var(--mut,#5A7186);font-size:13.5px;margin:0 0 18px">Ejemplo con una cafetería de barrio — el tuyo sale de TU cuenta real.</p>
-    <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">🔧</div><h3>A mejorar</h3><p>Publicás a cualquier hora. Tu audiencia mira a las 11 y a las 19: tu semana sale en esos horarios.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>A incrementar</h3><p>Venís con 2 posteos por semana y tu rubro publica 5. Posty te lleva a 7 posteos + 1 reel.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">📉</div><h3>A reducir</h3><p>La mitad de tus piezas son flyers que nadie lee. Menos flyer, más tu producto real.</p></div>
+    <p style="text-align:center;color:var(--mut,#5A7186);font-size:13.5px;margin:0 0 18px">Ejemplo con una cafetería de barrio — el tuyo sale de TU cuenta real, y te llega como una carta de Posty.</p>
+    <style>
+    .lp-letter{max-width:520px;margin:0 auto;background:#fff;border:1.5px solid #E3EDF4;border-radius:22px;box-shadow:0 12px 40px rgba(10,30,51,.08);padding:22px 20px 18px;text-align:left}
+    .lp-letter-head{display:flex;align-items:center;gap:12px}
+    .lp-letter-head img{width:54px;height:54px;border-radius:50%;border:2.5px solid #FEC14D;background:#fff}
+    .lp-letter-head b{display:block;font-size:19px;font-weight:900;color:#0A1E33}
+    .lp-letter-head span{font-size:12.5px;font-weight:700;color:#2793C8}
+    .lp-letter-verdict{background:#2793C8;border-radius:16px;padding:14px 16px;margin-top:14px;color:#fff}
+    .lp-letter-verdict span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1.1px;opacity:.85}
+    .lp-letter-verdict p{font-size:15px;font-weight:800;line-height:1.45;margin:5px 0 0;color:#fff}
+    .lp-letter-f{font-size:13.5px;line-height:1.55;color:#33566B;margin:14px 0 0}
+    .lp-letter-f b{color:#0A1E33}
+    .lp-letter-f span{color:#2793C8;font-weight:700}
+    .lp-letter-plan{background:#0A1E33;border-radius:16px;padding:15px 17px;margin-top:14px}
+    .lp-letter-plan .lp-lp-t{font-size:14.5px;font-weight:900;color:#fff;margin:0 0 8px}
+    .lp-letter-plan p{font-size:13px;line-height:1.55;color:#D7E6EF;margin:6px 0 0}
+    .lp-letter-plan p b{color:#FEC14D}
+    .lp-letter-banner{background:#FEC14D;color:#0A1E33;border-radius:12px;padding:11px 14px;font-size:13.5px;font-weight:800;text-align:center;margin-top:14px}
+    .lp-letter-sign{display:flex;align-items:center;gap:11px;margin-top:16px;padding-top:14px;border-top:2px dashed #C9E2EF}
+    .lp-letter-sign img{width:40px;height:40px;border-radius:50%;border:2px solid #FEC14D;background:#fff}
+    .lp-letter-sign p{margin:0;line-height:1.15}
+    .lp-letter-sign i{font-size:24px;font-weight:900;font-style:italic;color:#0A1E33;letter-spacing:-.5px}
+    .lp-letter-sign i b{color:#FEC14D;font-style:italic}
+    .lp-letter-sign span{display:block;font-size:10px;font-weight:800;color:#2793C8;text-transform:uppercase;letter-spacing:1.1px;margin-top:1px}
+    </style>
+    <div class="lp-letter">
+      <div class="lp-letter-head"><img src="ai-avatar.png" alt="Posty"><div><b>Tu análisis</b><span>Cafetería de barrio · ejemplo</span></div></div>
+      <div class="lp-letter-verdict"><span>Mi veredicto</span><p>“Tenés buen café y buena gente. Hoy tu ritmo es de 2 posteos por semana — y la constancia no depende de tu tiempo: la pongo yo.”</p></div>
+      <p class="lp-letter-f">📈 <b>Tu ritmo de publicación tiene mucho para crecer</b> — hoy: 2 posteos por semana.<br><span>→ Con Posty: tu semana completa, armada y programada.</span></p>
+      <div class="lp-letter-plan">
+        <p class="lp-lp-t">🚀 Mi plan para mejorar todo esto</p>
+        <p><b>① Esta semana:</b> tu semana completa, sin un solo hueco — cada posteo programado en tu franja.</p>
+        <p><b>② La que viene:</b> tu vidriera queda vendiendo sola — nombre buscable, bio que vende y destacadas completas.</p>
+        <p><b>③ De acá en más:</b> te re-mido cada semana y ajusto: lo que funciona, se repite.</p>
+      </div>
+      <p class="lp-letter-banner">Tenés el negocio. La constancia la pongo yo.</p>
+      <div class="lp-letter-sign"><img src="ai-avatar.png" alt="Posty"><p><i>Posty<b>.</b></i><span>Tu community manager</span></p></div>
     </div>
     <p class="lp-cm-close">💡 Y cada posteo te dice su <b>porqué</b>: qué vi, qué decidí y para qué sale. Así de simple.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Ver el análisis de mi cuenta →</a></div>
@@ -10588,6 +10620,16 @@ async function scheduleView() {
   const slots = suggestSlots(drafts.length, schedPosts);
   const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
+  // 📸 Instagram desconectado (2026-10-20): sin conexión ningún posteo puede
+  // salir — se avisa PRIMERO que todo en la agenda, sin tono de error. Se
+  // computa en cada render: al reconectar, el aviso desaparece solo.
+  const igBanner = (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
+    ? `<div class="card card-hi-yl" style="margin:0 0 12px;padding:14px 16px;border-radius:14px">
+        <div style="font-weight:800;font-size:14px;margin-bottom:6px">📸 Tu Instagram no está conectado</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--mut)">Tu semana se sigue armando, pero ningún posteo puede salir hasta que conectes tu cuenta. Es una sola vez y queda.</div>
+        <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?ig=1">Conectar Instagram</a>
+      </div>`
+    : '';
   // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
   let dogfoodPost = null;
   try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
@@ -10695,6 +10737,7 @@ async function scheduleView() {
       <img src="ai-avatar.png" alt="Posty" class="hs-brand-ava">
       <div class="hs-brand-txt"><b>Posty<span style="color:var(--cel)">.</span></b><span>Tu semana, lista sola</span></div>
     </div>
+    ${igBanner}
     ${trialBanner}
     ${dogfoodBlock}
     ${analysisSummaryBlock}
