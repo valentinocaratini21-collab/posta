@@ -14354,6 +14354,159 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
   }
 });
 
+// ---------- Chat público "Hablá con Posty" (landing + /prueba) ----------
+// Canal de atención/venta atendido por Posty (la IA, el personaje), sin
+// login. Cada conversación se guarda en posty_chats para revisión humana;
+// si Posty escala, la respuesta trae el token interno [[ESCALAR]] (se quita
+// del texto visible) y la fila queda con needs_human = 1. Rate limit en
+// memoria: 30 mensajes / 24 h por sesión, 120 / día global del endpoint.
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS posty_chats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT DEFAULT (datetime('now')),
+    session_id TEXT UNIQUE,
+    page TEXT,
+    messages TEXT,
+    contact TEXT,
+    needs_human INTEGER DEFAULT 0
+  )`);
+} catch (e) {}
+
+const POSTY_CHAT_SYS = [
+  'Sos Posty 🤖, el community manager robot de Posty (postyhacetodo.com). Hablás con visitantes de la web — dueños de negocios, en su mayoría de Argentina — en un chat público. Tu trabajo: resolver dudas y acercar a la persona a probar Posty gratis por 3 días, sin ser pesado.',
+  '',
+  'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Nunca devolvés una pregunta vacía: siempre proponés un paso concreto. La prueba gratis de 3 días (sin tarjeta) se ofrece cuando encaja en la conversación — NO en cada mensaje.',
+  '',
+  'QUÉ ES POSTY (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
+  '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana (7 posteos + 1 reel en el plan Esencial), escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
+  '- EL ANÁLISIS: al poner tu @ en la prueba, Posty lee tu Instagram real y te escribe una carta con qué mejorar, qué incrementar y qué reducir, más su plan de ejecución (esta semana / la que viene / de acá en más).',
+  '- Planes (por mes, en pesos): Esencial $39.900 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $79.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa. Total $129.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
+  '- Prueba gratis completa de 3 días, sin tarjeta. Referidos: si 2 amigos se suman, 50% de descuento.',
+  '',
+  'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. La constancia y el trabajo los pone Posty; los resultados dependen de cada negocio. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba.',
+  '- Sobre conectar y publicar: la conexión del Instagram propio y la publicación 100% automática están en la revisión final de Meta. Hoy el cliente prueba todo, ve su semana completa y su análisis; la publicación automática en su cuenta se activa apenas Meta dé el OK final. Decilo así, con naturalidad, SOLO si la persona pregunta por publicar o conectar su cuenta — no lo traigas vos.',
+  '',
+  'IDENTIDAD: sos una inteligencia artificial, el robot Posty. Si preguntan si sos una persona, un robot o una IA, respondé con orgullo: "Soy Posty 🤖, una inteligencia artificial — el mismo que te va a manejar el Instagram. Detrás mío hay un equipo humano que revisa todo."',
+  '',
+  'ESCALACIÓN: si la persona quiere contratar algo a medida, tiene un problema con su cuenta o con un pago, pide hablar con una persona, o no podés resolver lo que pide, pedile UN dato de contacto (WhatsApp o email) así: "Eso te lo resuelve una persona de mi equipo. ¿Me dejás tu WhatsApp o tu email y te contactan hoy?" Cuando la persona deje su contacto (o acepte dejarlo), terminá tu respuesta con el token interno [[ESCALAR]] al final del texto: ese token es invisible para la persona y marca que un humano toma el caso. No uses ese token en ningún otro momento ni lo menciones jamás.',
+].join('\n');
+
+function postyChatParse(raw) {
+  let text = String(raw || '').trim();
+  let escalate = false;
+  if (text.indexOf('[[ESCALAR]]') !== -1) {
+    escalate = true;
+    text = text.split('[[ESCALAR]]').join('').trim();
+  }
+  if (!text) text = '¡Listo! 🤖';
+  return { text: text.slice(0, 1500), escalate };
+}
+
+function postyChatContact(thread) {
+  for (const m of thread) {
+    if (!m || m.role !== 'user') continue;
+    const t = String(m.text || '');
+    const em = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.exec(t);
+    if (em) return em[0].slice(0, 120);
+    const ph = /\+?\d[\d\s().-]{7,}\d/.exec(t);
+    if (ph) {
+      const digits = ph[0].replace(/\D/g, '');
+      if (digits.length >= 8 && digits.length <= 15) return ph[0].trim().slice(0, 40);
+    }
+  }
+  return null;
+}
+
+const postyChatHits = new Map(); // "ip|session" -> [timestamps]
+let postyChatDay = { day: '', count: 0 };
+function postyChatAllowed(key) {
+  const now = Date.now();
+  const day = new Date().toISOString().slice(0, 10);
+  if (postyChatDay.day !== day) postyChatDay = { day, count: 0 };
+  if (postyChatDay.count >= 120) return false;
+  const arr = (postyChatHits.get(key) || []).filter((t) => now - t < 24 * 3600 * 1000);
+  if (arr.length >= 30) { postyChatHits.set(key, arr); return false; }
+  arr.push(now);
+  postyChatHits.set(key, arr);
+  postyChatDay.count++;
+  if (postyChatHits.size > 500 && Math.random() < 0.1) {
+    for (const [k, v] of postyChatHits) {
+      if (!v.some((t) => now - t < 24 * 3600 * 1000)) postyChatHits.delete(k);
+    }
+  }
+  return true;
+}
+
+function postyChatSave(sessionId, page, thread, reply, escalate) {
+  try {
+    const full = thread.concat([{ role: 'assistant', text: reply }]).slice(-24);
+    const contact = postyChatContact(full);
+    db.prepare(`INSERT INTO posty_chats (session_id, page, messages, contact, needs_human)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(session_id) DO UPDATE SET
+        page = excluded.page,
+        messages = excluded.messages,
+        contact = COALESCE(excluded.contact, posty_chats.contact),
+        needs_human = MAX(posty_chats.needs_human, excluded.needs_human)`)
+      .run(sessionId, page, JSON.stringify(full), contact, escalate ? 1 : 0);
+  } catch (e) { console.error('[posta] posty-chat save:', e.message); }
+}
+
+app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) => {
+  const FALLBACK = 'Uy, se me cortó un segundo 🤖 Probá de nuevo en un ratito — y si querés, dejame tu WhatsApp o tu email y te escribe una persona de mi equipo.';
+  const PAUSE = 'Hoy charlamos un montón 🤖 Dejame descansar un rato y seguimos en unas horas. Mientras tanto, tu semana gratis te espera: son 3 días, sin tarjeta.';
+  const body = req.body || {};
+  let sessionId = String(body.session_id || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,80}$/.test(sessionId)) {
+    sessionId = 'srv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  const page = body.page === 'prueba' ? 'prueba' : 'landing';
+  const thread = (Array.isArray(body.messages) ? body.messages : [])
+    .slice(-12)
+    .map((m) => ({
+      role: m && m.role === 'assistant' ? 'assistant' : 'user',
+      text: String((m && m.text) || '').slice(0, 1000),
+    }))
+    .filter((m) => m.text.trim());
+  if (!thread.length || thread[thread.length - 1].role !== 'user') {
+    return res.json({ ok: true, reply: '¡Hola! Soy Posty 🤖 ¿En qué te ayudo? Podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
+  }
+  const ip = demo.clientIp(req);
+  if (!postyChatAllowed(ip + '|' + sessionId)) {
+    postyChatSave(sessionId, page, thread, PAUSE, false);
+    return res.json({ ok: true, reply: PAUSE, limited: true });
+  }
+  try {
+    const apiKey = process.env.OPENAI_API_KEY || '';
+    if (!apiKey) throw new Error('sin OPENAI_API_KEY');
+    const ai = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'system', content: POSTY_CHAT_SYS }].concat(
+          thread.map((m) => ({ role: m.role, content: m.text }))
+        ),
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
+    if (!ai.ok) throw new Error('OpenAI ' + ai.status);
+    const data = await ai.json();
+    try { costs.trackUsage({ feature: 'posty-chat', model: 'gpt-4o-mini', json: data }); } catch (e) {}
+    const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const parsed = postyChatParse(raw);
+    postyChatSave(sessionId, page, thread, parsed.text, parsed.escalate);
+    const out = { ok: true, reply: parsed.text };
+    if (parsed.escalate) out.escalate = true;
+    return res.json(out);
+  } catch (e) {
+    console.error('[posta] posty-chat:', e.message);
+    postyChatSave(sessionId, page, thread, FALLBACK, false);
+    return res.json({ ok: true, reply: FALLBACK });
+  }
+});
+
 // ---------- Rediseño de la prueba: colores y fotos ----------
 // Re-renderiza los posteos con los colores EXACTOS de la marca del cliente
 // y/o nuevas fotos (subidas por él o elegidas de nuestras opciones).
@@ -14921,7 +15074,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v264';
+const BUILD_ID = '20261020-v265';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
