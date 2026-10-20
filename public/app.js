@@ -1150,7 +1150,7 @@ function landingView(cfg) {
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
-    <h1>Tu Instagram vendiendo<br><span class="hl">todos los días, con un solo clic</span></h1>
+    <h1>Tu Instagram trabajando<br><span class="hl">todos los días, con un solo clic</span></h1>
     <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Posteos, reels, historias, comentarios, mensajes y pauta — todo tu Instagram, hecho por Posty. Vos no hacés nada: solo frenás si algo no te cierra.</p>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
       <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
@@ -1278,11 +1278,13 @@ function landingView(cfg) {
       <div class="lp-job"><div class="lp-job-i">📅</div><h3>Caza las fechas que venden</h3><p>Día de la Madre, Navidad, el día de tu rubro: tu semana se adapta sola a lo que la gente está comprando.</p></div>
       <div class="lp-job"><div class="lp-job-i">🎨</div><h3>Diseña con tu marca</h3><p>Tus fotos, tus colores y tu logo en cada pieza. Nada de plantillas iguales para todos.</p></div>
       <div class="lp-job"><div class="lp-job-i">✍️</div><h3>Escribe como tu negocio</h3><p>Textos en rioplatense, con tu tono y cero errores. Como si los hubieras escrito vos.</p></div>
-      <div class="lp-job"><div class="lp-job-i">⏰</div><h3>Publica a la mejor hora</h3><p>Cada posteo sale cuando tu audiencia está mirando. Y te avisa antes, por si querés frenarlo.</p></div>
-      <div class="lp-job"><div class="lp-job-i">🧠</div><h3>Aprende de tus gustos</h3><p>Lo que te encanta se repite; lo que no, no vuelve. Cada semana se parece más a vos.</p></div>
+      <div class="lp-job"><div class="lp-job-i">⏰</div><h3>Publica a la mejor hora</h3><p>Cada posteo sale cuando tu audiencia está mirando. Y te avisa antes, por si querés frenarlo. Y cada posteo sale también como historia.</p></div>
+      <div class="lp-job"><div class="lp-job-i">🧠</div><h3>Aprende de tus gustos</h3><p>Lo que te encanta se repite; lo que no, no vuelve. Cada semana se parece más a vos. Y una vez por semana te pregunta lo justo para conocer tu negocio como un empleado: tu producto estrella, tus promos y qué no publicar jamás.</p></div>
       <div class="lp-job"><div class="lp-job-i">💬</div><h3>Responde tus comentarios</h3><p>Posty lee cada comentario que te dejan, prepara la respuesta en tu tono y la mandás con un toque. Nada sale sin tu OK.</p></div>
       <div class="lp-job"><div class="lp-job-i">📩</div><h3>Responde tus mensajes</h3><p>Los mensajes de Instagram, igual: la respuesta llega lista y la mandás con un toque. Tu bandeja, en cero.</p></div>
       <div class="lp-job"><div class="lp-job-i">🚀</div><h3>Potencia lo que mejor anda</h3><p>Cuando un posteo la rompe, Posty lo detecta y te propone potenciarlo con pauta. Vos fijás el tope de gasto.</p></div>
+      <div class="lp-job"><div class="lp-job-i">💡</div><h3>Ideas nuevas cada semana</h3><p>Posty mira a tu competencia, las fechas que venden y tu posteo que mejor anduvo — y te propone ideas listas para aprobar con un toque.</p></div>
+      <div class="lp-job"><div class="lp-job-i">📊</div><h3>Tu resumen, cada semana</h3><p>Qué posteos funcionaron, qué sigue y el foco del mes — te llega solo, sin que tengas que pedirlo.</p></div>
     </div>
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
@@ -1381,7 +1383,7 @@ function landingView(cfg) {
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">5 posteos</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
       <div class="lp-stat"><div class="lp-stat-n">$1.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
