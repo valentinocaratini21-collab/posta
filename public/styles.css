@@ -1768,19 +1768,23 @@ textarea.in{resize:vertical;min-height:96px}
 #nextStepCta{margin:2px 0 16px;text-align:center}
 #nextStepCta .btn{width:100%}
 
-/* ---------- postyCelebrate(): coreografía de malabares (~3.2s, CSS puro) ---------- */
+/* ---------- postyCelebrate(): malabares DE VERDAD (v256) ---------- */
 /* Overlay temporal fixed: pointer-events:none (no bloquea scroll ni toques), z-index alto,
-   no rompe el layout mobile. El avatar (ai-avatar.png, ~120px) salta + 3 pelotas
-   amarillas #FEC14D (~22px) en cascada de malabares (trayectorias parabólicas cruzadas,
-   desfasadas en fase). El JS remueve el overlay del DOM al terminar. */
-.posty-celebrate{position:fixed;inset:0;pointer-events:none;z-index:10003;overflow:hidden;touch-action:manipulation}
-.posty-celebrate .pc-ava{position:absolute;left:50%;top:50%;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;object-fit:cover;box-shadow:0 10px 30px rgba(10,30,51,.3);animation:pc-jump .62s ease-in-out infinite}
-@keyframes pc-jump{0%,100%{transform:translateY(0)}30%{transform:translateY(-24px)}55%{transform:translateY(0)}75%{transform:translateY(-10px)}}
-.posty-celebrate .pc-ball{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#FEC14D;box-shadow:0 3px 8px rgba(10,30,51,.3)}
-.posty-celebrate .pc-ball.b1{animation:pc-cascade 1.14s ease-in-out infinite}
-.posty-celebrate .pc-ball.b2{animation:pc-cascade 1.14s ease-in-out infinite;animation-delay:-.38s}
-.posty-celebrate .pc-ball.b3{animation:pc-cascade 1.14s ease-in-out infinite;animation-delay:-.76s}
-@keyframes pc-cascade{0%{transform:translate(-64px,18px)}25%{transform:translate(0,-64px)}50%{transform:translate(64px,18px)}75%{transform:translate(0,-64px)}100%{transform:translate(-64px,18px)}}
+   no rompe el layout mobile. Escenario SVG centrado: Posty con BRAZOS y MANOS que
+   agarran, transportan y lanzan 3 pelotas amarillas #FEC14D en cascada física
+   (vuelo parabólico + agarre en la palma, contacto exacto). La física la corre el
+   rAF de postyCelebrate() en app.js; acá solo va la presentación. El JS remueve
+   el overlay del DOM al terminar (~3.3s, con fade desde los 3s). */
+.posty-celebrate{position:fixed;inset:0;pointer-events:none;z-index:10003;overflow:hidden;touch-action:manipulation;display:flex;align-items:center;justify-content:center}
+.posty-celebrate .pc-stage{width:min(82vw,340px);animation:pc-bob .68s ease-in-out infinite;transition:opacity .3s ease}
+.posty-celebrate.pc-out .pc-stage{opacity:0}
+.posty-celebrate .pc-svg{width:100%;height:auto;display:block;overflow:visible;filter:drop-shadow(0 14px 24px rgba(10,30,51,.18))}
+.posty-celebrate .pc-armO{stroke:#0A1E33;stroke-width:21;stroke-linecap:round}
+.posty-celebrate .pc-armI{stroke:#2793C8;stroke-width:15;stroke-linecap:round}
+.posty-celebrate .pc-hand{fill:#2793C8;stroke:#0A1E33;stroke-width:3}
+.posty-celebrate .pc-b{fill:#FEC14D;stroke:#0A1E33;stroke-width:2.5}
+.posty-celebrate .pc-sh{fill:#fff;opacity:.65}
+@keyframes pc-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 /* "Posty está escribiendo": puntitos animados en la burbuja del chat */
 .typing-dots{display:inline-flex;gap:5px;padding:8px 4px;align-items:center}
 .typing-dots span{width:8px;height:8px;border-radius:50%;background:var(--dim);opacity:.35;animation:tdot 1.2s infinite}

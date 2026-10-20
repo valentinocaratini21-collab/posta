@@ -1790,9 +1790,9 @@ function postyConfetti() {
   document.body.appendChild(box);
   setTimeout(() => { try { box.remove(); } catch (e) {} }, 3600);
 }
-// Celebración grande: confetti (ya existente) + coreografía de malabares ~3.2s:
-// el avatar en grande (~120px) saltando + 3 pelotas amarillas en cascada.
-// Todo CSS puro (clases .posty-celebrate / .pc-ava / .pc-ball en styles.css).
+// Celebración grande: confetti (ya existente) + malabares ~3.2s: Posty con
+// brazos y manos que agarran/lanzan 3 pelotas en cascada física (SVG + rAF;
+// escenario .posty-celebrate / .pc-stage en styles.css; v256).
 // Idempotente: si ya hay una celebración en curso, no se apila otra (flag con timestamp).
 let POSTY_CELEBRATE_UNTIL = 0;
 function postyCelebrate() {
@@ -1803,10 +1803,76 @@ function postyCelebrate() {
     if (typeof postyConfetti === 'function') postyConfetti();
     const ov = document.createElement('div');
     ov.className = 'posty-celebrate';
-    ov.innerHTML = '<img class="pc-ava" src="ai-avatar.png" alt="Posty festejando">'
-      + '<span class="pc-ball b1"></span><span class="pc-ball b2"></span><span class="pc-ball b3"></span>';
+    // v256: malabares DE VERDAD — cascada de 3 pelotas con física (vuelo parabólico
+    // + agarre) y MANOS que agarran, transportan y lanzan cada pelota: la pelota
+    // sale de la palma de una mano y cae en la palma de la otra (contacto exacto:
+    // vuelo y agarre salen de la misma función handPos). Antes el avatar no tenía
+    // manos y las pelotas corrían con keyframes independientes: nunca se tocaban.
+    ov.innerHTML = '<div class="pc-stage"><svg class="pc-svg" viewBox="0 0 340 280" aria-hidden="true">'
+      + '<line class="pc-armO" id="pcArmLO" x1="112" y1="150" x2="100" y2="232"/>'
+      + '<line class="pc-armO" id="pcArmRO" x1="228" y1="150" x2="240" y2="232"/>'
+      + '<line class="pc-armI" id="pcArmLI" x1="112" y1="150" x2="100" y2="232"/>'
+      + '<line class="pc-armI" id="pcArmRI" x1="228" y1="150" x2="240" y2="232"/>'
+      + '<image href="ai-avatar-cut.webp" x="100" y="4" width="140" height="167"/>'
+      + '<circle class="pc-hand" id="pcHandL" r="12" cx="100" cy="232"/>'
+      + '<circle class="pc-hand" id="pcHandR" r="12" cx="240" cy="232"/>'
+      + '<circle class="pc-b" id="pcBall0" r="11"/><circle class="pc-b" id="pcBall1" r="11"/><circle class="pc-b" id="pcBall2" r="11"/>'
+      + '<circle class="pc-sh" id="pcSh0" r="3.4"/><circle class="pc-sh" id="pcSh1" r="3.4"/><circle class="pc-sh" id="pcSh2" r="3.4"/>'
+      + '</svg></div>';
     document.body.appendChild(ov);
+    const BEAT = 0.34, FLIGHT = 2 * BEAT, CYCLE = 3 * BEAT;
+    const HC = { L: { x: 100, y: 232 }, R: { x: 240, y: 232 } };
+    function handPos(side, t) {
+      const tt = side === 'R' ? t : t - BEAT;
+      const tau = (((tt % (2 * BEAT)) + 2 * BEAT) % (2 * BEAT)) / (2 * BEAT);
+      const th = 2 * Math.PI * tau + 2.6;
+      const c = HC[side];
+      const dx = 27 * Math.cos(th);
+      return { x: side === 'R' ? c.x + dx : c.x - dx, y: c.y + 13 * Math.sin(th) };
+    }
+    function ballPos(j, t) {
+      const ph = ((t / CYCLE + j / 3) % 1 + 1) % 1;
+      const k = Math.floor(t / CYCLE + j / 3);
+      const ts = ((k + j) % 2 === 0) ? 'R' : 'L';
+      const cs = ts === 'R' ? 'L' : 'R';
+      if (ph < FLIGHT / CYCLE) {
+        const u = ph / (FLIGHT / CYCLE);
+        const tR = t - ph * CYCLE;
+        const a = handPos(ts, tR), b = handPos(cs, tR + FLIGHT);
+        return { x: a.x + (b.x - a.x) * u, y: (a.y - 14) + ((b.y - 14) - (a.y - 14)) * u - 4 * 165 * u * (1 - u) };
+      }
+      const hp = handPos(cs, t);
+      return { x: hp.x, y: hp.y - 14 };
+    }
+    const els = {
+      hL: ov.querySelector('#pcHandL'), hR: ov.querySelector('#pcHandR'),
+      aLO: ov.querySelector('#pcArmLO'), aRO: ov.querySelector('#pcArmRO'),
+      aLI: ov.querySelector('#pcArmLI'), aRI: ov.querySelector('#pcArmRI'),
+      b: [0, 1, 2].map(i => ov.querySelector('#pcBall' + i)),
+      s: [0, 1, 2].map(i => ov.querySelector('#pcSh' + i))
+    };
+    let pcAlive = true;
+    const t0 = performance.now();
+    (function pcFrame() {
+      if (!pcAlive) return;
+      const t = (performance.now() - t0) / 1000;
+      const L = handPos('L', t), R = handPos('R', t);
+      els.hL.setAttribute('cx', L.x); els.hL.setAttribute('cy', L.y);
+      els.hR.setAttribute('cx', R.x); els.hR.setAttribute('cy', R.y);
+      els.aLO.setAttribute('x2', L.x); els.aLO.setAttribute('y2', L.y);
+      els.aLI.setAttribute('x2', L.x); els.aLI.setAttribute('y2', L.y);
+      els.aRO.setAttribute('x2', R.x); els.aRO.setAttribute('y2', R.y);
+      els.aRI.setAttribute('x2', R.x); els.aRI.setAttribute('y2', R.y);
+      for (let j = 0; j < 3; j++) {
+        const p = ballPos(j, t);
+        els.b[j].setAttribute('cx', p.x); els.b[j].setAttribute('cy', p.y);
+        els.s[j].setAttribute('cx', p.x - 3.5); els.s[j].setAttribute('cy', p.y - 3.5);
+      }
+      requestAnimationFrame(pcFrame);
+    })();
+    setTimeout(() => { try { ov.classList.add('pc-out'); } catch (e) {} }, 3000);
     setTimeout(() => {
+      pcAlive = false;
       try { ov.remove(); } catch (e) {}
       try { if (Date.now() >= POSTY_CELEBRATE_UNTIL) POSTY_CELEBRATE_UNTIL = 0; } catch (e2) {}
     }, 3300);
