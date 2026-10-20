@@ -262,14 +262,19 @@ function trialProfileFromAudit(data, fallbackPic) {
 // opts.paletteHues: tonos dominantes del feed (analyzePalette), opcional —
 // sin ese dato la señal de línea visual no se emite.
 // ---------------------------------------------------------------------------
-const TRIAL_HOOK_RE = /[¿¡]|escrib|reserv|pedí|pedi|mirá|mira|vení|veni|probá|proba|aprovech|comentá|comenta|guardá|guarda|compart|sumate|anotá|anota|hacé|hace|descubr|conocé|conoce|encarg|empezá|empeza|agendá|agenda/i;
+const TRIAL_HOOK_RE = /[¿¡]|escrib|reserv|pedí|pedi|mirá|mira|vení|veni|probá|proba|aprovech|comentá|comenta|guardá|guarda|compart|sumate|anotá|anota|hacé|hace|descubr|conocé|conoce|encarg|empezá|empeza|agendá|agenda|\b(book|save|comment|tag|order|try|discover|join|tap|share|message|stop scrolling|check out|grab|shop now)\b/i;
 
-function fmtRate210(x) {
+function fmtRate210(x, lang) {
   const v = Math.round(x * 10) / 10;
+  if (lang === 'en') return String(v);
   return Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ',');
 }
 
 function trialAuditFromData(data, opts = {}) {
+  // (v274 · MODO EN) opts.lang 'en': los hallazgos de la auditoría en vivo
+  // salen en inglés (mismos textos que analysis-engine EN).
+  const en = opts.lang === 'en';
+  const T = (es, enS) => (en ? enS : es);
   if (!data || !data.ok || !Array.isArray(data.posts)) return null;
   const posts = data.posts.filter((p) => p && typeof p === 'object');
   const n = posts.length;
@@ -308,9 +313,9 @@ function trialAuditFromData(data, opts = {}) {
   if (ritmo != null && ritmo < 4) {
     findings.push({
       group: 'incrementar',
-      text: 'Tu ritmo de publicación tiene mucho para crecer',
-      now: fmtRate210(ritmo) + ' posteos por semana',
-      with_posty: '7 posteos + 1 reel por semana: tu semana completa, armada y programada',
+      text: T('Tu ritmo de publicación tiene mucho para crecer', 'Your posting rhythm has plenty of room to grow'),
+      now: fmtRate210(ritmo, opts.lang) + T(' posteos por semana', ' posts per week'),
+      with_posty: T('7 posteos + 1 reel por semana: tu semana completa, armada y programada', '7 posts + 1 reel per week: your full week, built and scheduled'),
     });
   }
 
@@ -331,16 +336,16 @@ function trialAuditFromData(data, opts = {}) {
   if (sinceLast != null && sinceLast >= 7) {
     findings.push({
       group: 'reducir',
-      text: 'Cada día sin publicar es un día que tu negocio no aparece',
-      now: 'hace ' + sinceLast + ' días que no publicás',
-      with_posty: '0 días en silencio: tu semana se programa sola',
+      text: T('Cada día sin publicar es un día que tu negocio no aparece', 'Every day without posting is a day your business does not show up'),
+      now: T('hace ' + sinceLast + ' días que no publicás', 'it has been ' + sinceLast + ' days since your last post'),
+      with_posty: T('0 días en silencio: tu semana se programa sola', '0 silent days: your week schedules itself'),
     });
   } else if (maxGap != null && maxGap >= 10) {
     findings.push({
       group: 'reducir',
-      text: 'Entre posteo y posteo tu perfil pasa rachas largas en silencio',
-      now: 'tu racha más larga fue de ' + maxGap + ' días',
-      with_posty: '0 días en silencio: tu semana se programa sola',
+      text: T('Entre posteo y posteo tu perfil pasa rachas largas en silencio', 'Between posts, your profile goes through long silent stretches'),
+      now: T('tu racha más larga fue de ' + maxGap + ' días', 'your longest stretch was ' + maxGap + ' days'),
+      with_posty: T('0 días en silencio: tu semana se programa sola', '0 silent days: your week schedules itself'),
     });
   }
 
@@ -350,16 +355,16 @@ function trialAuditFromData(data, opts = {}) {
     if (v === 0) {
       findings.push({
         group: 'incrementar',
-        text: 'Todavía no aprovechás los reels, el formato que más empuja Instagram',
-        now: '0 reels en tus últimos ' + n + ' posteos',
-        with_posty: '1 reel por semana, creado por Posty',
+        text: T('Todavía no aprovechás los reels, el formato que más empuja Instagram', 'You are not using reels yet — the format Instagram pushes the most'),
+        now: T('0 reels en tus últimos ' + n + ' posteos', '0 reels in your last ' + n + ' posts'),
+        with_posty: T('1 reel por semana, creado por Posty', '1 reel per week, created by Posty'),
       });
     } else if (v / n < 0.2) {
       findings.push({
         group: 'incrementar',
-        text: 'Los reels aparecen poco en tu mix de formatos',
-        now: 'solo ' + v + ' de ' + n + ' posteos son reels',
-        with_posty: '1 reel por semana, creado por Posty',
+        text: T('Los reels aparecen poco en tu mix de formatos', 'Reels show up very little in your format mix'),
+        now: T('solo ' + v + ' de ' + n + ' posteos son reels', 'only ' + v + ' of your ' + n + ' posts are reels'),
+        with_posty: T('1 reel por semana, creado por Posty', '1 reel per week, created by Posty'),
       });
     }
   }
@@ -379,9 +384,9 @@ function trialAuditFromData(data, opts = {}) {
     if (distinct >= 4 && topShare < 0.6) {
       findings.push({
         group: 'mejorar',
-        text: 'Tus posteos salen en horarios muy repartidos, sin una franja que se repita',
-        now: 'publicás en ' + distinct + ' franjas horarias distintas',
-        with_posty: 'una franja fija: cada posteo sale programado, siempre en horario',
+        text: T('Tus posteos salen en horarios muy repartidos, sin una franja que se repita', 'Your posts go out at scattered times, with no time band that repeats'),
+        now: T('publicás en ' + distinct + ' franjas horarias distintas', 'you post across ' + distinct + ' different time bands'),
+        with_posty: T('una franja fija: cada posteo sale programado, siempre en horario', 'one fixed band: every post goes out scheduled, always on time'),
       });
     }
   }
@@ -401,9 +406,9 @@ function trialAuditFromData(data, opts = {}) {
     if (pct < 50) {
       findings.push({
         group: 'mejorar',
-        text: 'La mayoría de tus captions no abren con un gancho que frene el scroll',
-        now: 'solo ' + hooked + ' de ' + caps.length + ' abren con pregunta o llamado',
-        with_posty: 'Cada caption abre con gancho desde el primer día',
+        text: T('La mayoría de tus captions no abren con un gancho que frene el scroll', 'Most of your captions do not open with a hook that stops the scroll'),
+        now: T('solo ' + hooked + ' de ' + caps.length + ' abren con pregunta o llamado', 'only ' + hooked + ' of ' + caps.length + ' open with a question or a call to action'),
+        with_posty: T('Cada caption abre con gancho desde el primer día', 'Every caption opens with a hook from day one'),
       });
     }
   }
@@ -412,9 +417,9 @@ function trialAuditFromData(data, opts = {}) {
   if (signals.palette_hues != null && signals.palette_hues >= 6) {
     findings.push({
       group: 'mejorar',
-      text: 'Tu feed mezcla varias paletas y se ve desparejo',
-      now: signals.palette_hues + ' tonos dominantes distintos',
-      with_posty: 'una sola línea visual: la tuya, aplicada en cada posteo',
+      text: T('Tu feed mezcla varias paletas y se ve desparejo', 'Your feed mixes several palettes and looks uneven'),
+      now: T(signals.palette_hues + ' tonos dominantes distintos', signals.palette_hues + ' different dominant tones'),
+      with_posty: T('una sola línea visual: la tuya, aplicada en cada posteo', 'one single visual line: yours, applied to every post'),
     });
   }
 

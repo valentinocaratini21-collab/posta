@@ -917,9 +917,10 @@ const CATS = {"moda":"Fashion / Clothing store","gastronomia":"Food / Restaurant
 let TRIAL = null;      // respuesta del backend
 // Motor de la prueba (sincronizado con DEMO_ENGINE_V en demo.js): una
 // semana guardada por un motor viejo NO se restaura — se genera de nuevo.
-const TRIAL_ENGINE_V = 24;
-let COUNTRY = 'AR';
+const TRIAL_ENGINE_V = 25;
+let COUNTRY = 'US';
 let TONE = 'vos';
+const LANG = 'en'; // (v274) esta página ES el funnel EN: toda la prueba sale en inglés
 // Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
 // El límite de 1 prueba por IP lo sigue controlando el servidor.
 const idb = {
@@ -1048,7 +1049,7 @@ function show(id) {
   // Carga la semana guardada directo en resultados, sin pasar por el form.
   if (DEEP_IG && !TEST_KEY_QS) {
     try {
-      const r = await fetch('/api/trial/week?ig=' + encodeURIComponent(DEEP_IG));
+      const r = await fetch('/api/trial/week?lang=' + LANG + '&ig=' + encodeURIComponent(DEEP_IG));
       if (r.ok) {
         const data = await r.json();
         if (data && data.posts && data.posts.length) {
@@ -1142,7 +1143,7 @@ async function onIgSubmit() {
   try {
     const r = await fetch('/api/trial/prefill', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ig }),
+      body: JSON.stringify({ ig, lang: LANG }),
     });
     const j = await r.json().catch(() => ({}));
     // ok:true → tarjeta compacta. ok:false o cualquier error → formulario detallado.
@@ -1191,7 +1192,7 @@ async function onWebSubmit() {
   try {
     const r = await fetch('/api/trial/web-prefill', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ web }),
+      body: JSON.stringify({ web, lang: LANG }),
     });
     const j = await r.json().catch(() => ({}));
     if (r.ok && j && j.ok) { showWebCard(j); return; }
@@ -1442,6 +1443,7 @@ function buildGenFormData() {
   }
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
+  fd.append('lang', LANG);
   fd.append('goal', '');
   fd.append('competitors', '');
   // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
@@ -2306,6 +2308,7 @@ async function submitBrief() {
     fd.append('category', t.category || (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value) || 'otro');
     fd.append('country', COUNTRY);
     fd.append('tone', TONE);
+    fd.append('lang', LANG);
     fd.append('goal', '');
     fd.append('competitors', '');
     fd.append('goal_key', goalKey);
@@ -2625,7 +2628,7 @@ async function sendTrialChat(text) {
     const r = await fetch('/api/trial/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ig: TRIAL.ig, message: text, history: chatHist.slice(-6) }),
+      body: JSON.stringify({ ig: TRIAL.ig, message: text, history: chatHist.slice(-6), lang: LANG }),
     });
     const d = await r.json().catch(() => ({}));
     if (typing) typing.remove();

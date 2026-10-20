@@ -427,7 +427,7 @@ function planSalesWeek(picks, deficit, digest, opts = {}) {
  * anclados a un ítem real por construcción, así que la venta tiene
  * prueba; los de RELLENO no pasan por acá: demo.js los capa a
  * autoridad (el relleno nunca vende lo que no conoce). */
-function trialTopicSales(topic, digest) {
+function trialTopicSales(topic, digest, lang) {
   const signals = digestSignals(digest);
   const kind = String((topic && topic.kind) || '');
   const anchor = String((topic && topic.digest_anchor) || '').trim();
@@ -446,7 +446,7 @@ function trialTopicSales(topic, digest) {
     return { intent: 'autoridad', angle: 'dolor', proof: '' };
   }
   if (kind === 'social') {
-    const proof = signals.proofEvidence.join(' · ') || (anchor ? `tema real de su feed: ${anchor}` : '');
+    const proof = signals.proofEvidence.join(' · ') || (anchor ? (lang === 'en' ? `real topic from their feed: ${anchor}` : `tema real de su feed: ${anchor}`) : '');
     return { intent: 'prueba', angle: 'directo', proof };
   }
   return { intent: 'autoridad', angle: 'directo', proof: '' };

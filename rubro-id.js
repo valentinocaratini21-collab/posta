@@ -93,7 +93,34 @@ const SUBRUBRO_LABELS = {
   gimnasio: 'Gimnasio', entrenador: 'Entrenador personal',
   floreria: 'Florería', vivero: 'Vivero / Plantas',
 };
-function labelFor(rubro, subrubro) {
+// (v274 · MODO EN) Rótulos en inglés US para el flujo EN (la pregunta de
+// rubro de /en/prueba y cualquier superficie que liste opciones).
+const RUBRO_LABELS_EN = {
+  moda: 'Fashion / Clothing store', gastronomia: 'Food / Restaurant',
+  cafeteria: 'Coffee shop', bar: 'Bar / Brewery', belleza: 'Beauty / Salon',
+  barberia: 'Barbershop', fitness: 'Fitness / Gym', mascotas: 'Pets / Vet',
+  salud: 'Health / Dental', hogar: 'Home services', deco: 'Furniture / Decor',
+  inmobiliaria: 'Real estate', autos: 'Auto / Repair shop', educacion: 'Education / Courses',
+  tecnologia: 'Tech / Phones', turismo: 'Tourism / Hotels', viajes: 'Travel agency',
+  eventos: 'Events / Parties', fotografia: 'Photography', arte: 'Art / Design',
+  joyeria: 'Jewelry / Accessories', flores: 'Florist / Plants',
+  profesionales: 'Professional services', servicios: 'Services', otro: 'Other',
+};
+const SUBRUBRO_LABELS_EN = {
+  peluqueria: 'Hair salon', makeup: 'Makeup', unas: 'Nails', estetica: 'Esthetics / Spa',
+  sushi: 'Sushi / Nikkei', parrilla: 'Grill / Restaurant', pizzeria: 'Pizzeria',
+  cafe: 'Specialty coffee', panaderia: 'Bakery / Pastry',
+  veterinaria: 'Veterinary', petshop: 'Pet shop',
+  taller: 'Auto repair', repuestos: 'Parts / Accessories',
+  inmobiliaria: 'Real estate', constructora: 'Construction / Builds',
+  gimnasio: 'Gym', entrenador: 'Personal trainer',
+  floreria: 'Florist', vivero: 'Plants / Nursery',
+};
+function labelFor(rubro, subrubro, lang) {
+  if (lang === 'en') {
+    if (subrubro && SUBRUBRO_LABELS_EN[subrubro]) return SUBRUBRO_LABELS_EN[subrubro];
+    return RUBRO_LABELS_EN[rubro] || 'Other';
+  }
   if (subrubro && SUBRUBRO_LABELS[subrubro]) return SUBRUBRO_LABELS[subrubro];
   return RUBRO_LABELS[rubro] || 'Otro';
 }
@@ -428,14 +455,14 @@ function needsVisionTiebreak(result) {
  * pregunta ("¿Tu negocio es más bien…?"). Nivel 'rubro': las candidatas
  * por rubro con su mejor subrubro. Nivel 'subrubro': los subrubros del
  * rubro firme + la mejor alternativa de otro rubro si compite. */
-function questionOptions(result) {
+function questionOptions(result, lang) {
   const opts = [];
   const seen = new Set();
   const push = (rubro, subrubro) => {
     const key = rubro + '|' + (subrubro || '');
     if (seen.has(key) || opts.length >= 4) return;
     seen.add(key);
-    opts.push({ rubro, subrubro: subrubro || '', label: labelFor(rubro, subrubro) });
+    opts.push({ rubro, subrubro: subrubro || '', label: labelFor(rubro, subrubro, lang) });
   };
   if (!result) return opts;
   if (result.nivel_duda === 'subrubro' && result.rubro) {
@@ -454,7 +481,7 @@ function questionOptions(result) {
  * subcat = '' y sin_confirmar — ningún posteo usa un subrubro que el
  * dueño no confirmó o el voto no cerró. */
 function resolveRubro(input) {
-  const { confirmed, cls } = input || {};
+  const { confirmed, cls, lang } = input || {};
   if (confirmed && confirmed.rubro && RUBROS.includes(confirmed.rubro)) {
     return {
       category: confirmed.rubro,
@@ -486,13 +513,13 @@ function resolveRubro(input) {
     rubroId: { ...base, subrubro: '', fuente: 'deteccion', segura: false, nivel_duda: c.nivel_duda, needs_question: c.candidatas.length > 0, sin_confirmar: true },
     rubroCheck: {
       needed: c.candidatas.length >= 2 || c.nivel_duda === 'subrubro',
-      options: questionOptions(c), detected: c,
+      options: questionOptions(c, lang), detected: c,
     },
   };
 }
 
 module.exports = {
-  RUBROS, SUBRUBROS, RUBRO_LABELS, SUBRUBRO_LABELS, labelFor,
+  RUBROS, SUBRUBROS, RUBRO_LABELS, SUBRUBRO_LABELS, RUBRO_LABELS_EN, SUBRUBRO_LABELS_EN, labelFor,
   JSONLD_MAP, jsonldVote, classifyBusiness, needsVisionTiebreak,
   questionOptions, resolveRubro,
 };

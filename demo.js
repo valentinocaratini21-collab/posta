@@ -75,7 +75,7 @@ const CATEGORY_LABELS = {
   bar: 'Bar / Cervecería',
   otro: 'Otro',
 };
-const COUNTRIES = ['AR', 'UY'];
+const COUNTRIES = ['AR', 'UY', 'US']; // (v274) 'US' entra con el modo EN del motor
 
 // Familia fotográfica por rubro (8 fotos high-key en public/demo-stock/).
 // 65 fotos stock en public/demo-stock/: 10 familias ({fam}.webp original +
@@ -166,7 +166,11 @@ function stockPhotos3(category, business) {
 // y PREGUNTA antes de generar cuando no hay certeza; digest.subcat deja
 // de ser '' en clientes y belleza sin subrubro confirmado usa el mundo
 // visual NEUTRO (no más pelo por default).
-const DEMO_ENGINE_V = 24;
+// (v274) 24 → 25: el motor aprende inglés (modo EN end-to-end). El bump
+// invalida la caché de trials guardados con el motor anterior — clave
+// porque una semana ES cacheada jamás debe servirse a un visitante EN
+// (el idioma además entra al match de la caché en server.js).
+const DEMO_ENGINE_V = 25;
 
 // Tags de las fotos de la biblioteca demo (verificados A OJO sobre el
 // archivo real, 2026-10-17 — la familia "beauty" mezclaba barbería
@@ -1101,13 +1105,31 @@ function phraseAround(goal, kw) {
   return '';
 }
 
-function applyGoal(topics, goal, goal_key, hasPhoto) {
+// (v274 · MODO EN) Reglas de objetivo en inglés: mismos kinds, keywords EN.
+const GOAL_RULES_EN = [
+  { kind: 'promo', kws: ['promo', 'discount', 'offer', 'sale', 'sell', 'deal', 'trade-in', 'clearance', 'off'] },
+  { kind: 'reserva', kws: ['booking', 'bookings', 'appointment', 'appointments', 'reserve', 'reservation'] },
+  { kind: 'novedad', kws: ['new', 'launch', 'arrived', 'just landed', 'model'] },
+  { kind: 'sorteo', kws: ['giveaway', 'raffle'] },
+  { kind: 'social', kws: ['community', 'customers', 'loyal', 'family'] },
+];
+const GOAL_KEY_KWS_EN = {
+  vender: 'sell promo offer',
+  seguidores: 'giveaway followers',
+  lanzamiento: 'launch new',
+  fidelizar: 'community customers',
+};
+
+function applyGoal(topics, goal, goal_key, hasPhoto, lang) {
+  const en = lang === 'en';
+  const RULES = en ? GOAL_RULES_EN : GOAL_RULES;
+  const KEY_KWS = en ? GOAL_KEY_KWS_EN : GOAL_KEY_KWS;
   const clean = sanitizeGoal(goal);
-  const keyKws = (goal_key && GOAL_KEY_KWS[goal_key]) ? GOAL_KEY_KWS[goal_key] + ' ' : '';
+  const keyKws = (goal_key && KEY_KWS[goal_key]) ? KEY_KWS[goal_key] + ' ' : '';
   if (!clean && !keyKws) return { topics, goalLine: '' };
   const g = (keyKws + clean).toLowerCase();
   let ordered = topics;
-  for (const r of GOAL_RULES) {
+  for (const r of RULES) {
     const i = topics.findIndex((t) => t.kind === r.kind);
     if (i >= 0 && r.kws.some((k) => g.includes(k))) {
       if (i > 0) ordered = [topics[i], ...topics.slice(0, i), ...topics.slice(i + 1)];
@@ -1121,7 +1143,7 @@ function applyGoal(topics, goal, goal_key, hasPhoto) {
   // pediste" igual muestra en el caption que lo escuchamos.
   if (!hasPhoto) {
     const short = clean.length > 140 ? clean.slice(0, 140).trimEnd() + '…' : clean;
-    return { topics: ordered, goalLine: '\nTal como pediste: ' + short };
+    return { topics: ordered, goalLine: (en ? '\nAs you asked: ' : '\nTal como pediste: ') + short };
   }
   // Titular con las palabras del cliente: si el párrafo nombra algo que un
   // posteo también nombra (ej. "plan canje"), ese posteo usa su frase como
@@ -1130,7 +1152,7 @@ function applyGoal(topics, goal, goal_key, hasPhoto) {
   const personalized = ordered.map((t) => {
     if (usedPhrase) return t;
     const hay = (t.headline + ' ' + t.caption).toLowerCase();
-    for (const r of GOAL_RULES) {
+    for (const r of RULES) {
       if (r.kind !== t.kind) continue;
       const kw = r.kws.find((k) => g.includes(k) && hay.includes(k));
       if (!kw) continue;
@@ -1144,7 +1166,7 @@ function applyGoal(topics, goal, goal_key, hasPhoto) {
   // Si ya se personalizó un titular, no hace falta el "Tal como pediste".
   if (usedPhrase) return { topics: personalized, goalLine: '' };
   const short = clean.length > 140 ? clean.slice(0, 140).trimEnd() + '…' : clean;
-  return { topics: personalized, goalLine: '\nTal como pediste: ' + short };
+  return { topics: personalized, goalLine: (en ? '\nAs you asked: ' : '\nTal como pediste: ') + short };
 }
 
 // ---------- Render con PIL (Python3) ----------
@@ -1219,7 +1241,11 @@ function renderDemoVideo(imagePaths, runDir, idx) {
 // Construye el spec de diseño (textos, estilos, fotos) sin renderizar.
 // Si recibe `base` ({styles, photos}), reusa esos diseños/fotos en vez de
 // sortear nuevos: así el recolor cambia SOLO los colores, nada más.
-function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null }) {
+function buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, base, topicOffset = 0, excludePhotos = null, bioText = '', profilePicPath = null, feedRegister = null, extraPhotos = null, digest = null, lang }) {
+  // (v274 · MODO EN) lang 'en': catálogo de temas EN, frames del digest EN,
+  // goalLine "As you asked:" y caps de titular con hang-words EN. Sin lang
+  // (o 'es') el comportamiento es idéntico al histórico.
+  const en = lang === 'en';
   const n = Math.min(Math.max(parseInt(count, 10) || 3, 1), 6);
   const cat = CATEGORIES.includes(category) ? category : 'otro';
   // (v212) Fotos del SITIO WEB del negocio (extraPhotos: [{path, temas}]):
@@ -1250,17 +1276,18 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // (v235) Belleza sin subrubro confirmado en contexto de digest: el
   // gate de fotos usa el mundo NEUTRO (ver photoGateCtx).
   const neutralDefault = !!(digest && !subcat);
-  const topicsBase = (subcat && captions.DEMO_TOPICS[subcat])
-    ? captions.DEMO_TOPICS[subcat]
-    : (captions.DEMO_TOPICS[cat] || captions.DEMO_TOPICS.otro);
-  const { topics: goalTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath);
+  const TOPICS_SRC = en ? captions.DEMO_TOPICS_EN : captions.DEMO_TOPICS;
+  const topicsBase = (subcat && TOPICS_SRC[subcat])
+    ? TOPICS_SRC[subcat]
+    : (TOPICS_SRC[cat] || TOPICS_SRC.otro);
+  const { topics: goalTopics, goalLine } = applyGoal(topicsBase, goal, goal_key, !!photoPath, lang);
   // (v229) FUNDAMENTO: los temas se derivan PRIMERO del digest del
   // negocio (sus productos/servicios/promos/temas reales — ver
   // client-digest.deriveTopics) y el catálogo por rubro SOLO rellena los
   // slots sin dato. Solo en la semana principal (topicOffset 0): los
   // visuales extra de la grilla no repiten los temas del fundamento.
   const digestTopics = (digest && topicOffset === 0)
-    ? clientDigest.deriveTopics(digest, { count: n, category: cat })
+    ? clientDigest.deriveTopics(digest, { count: n, category: cat, lang })
     : [];
   const allTopics = digestTopics.length ? [...digestTopics, ...goalTopics] : goalTopics;
   // topicOffset (v187): temas desde una posición del pool — lo usan los
@@ -1287,7 +1314,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
       }
     }
   } catch (e) { /* la auditoría nunca frena la prueba */ }
-  const bar = String(business || '').toUpperCase().slice(0, 26) || 'TU NEGOCIO';
+  const bar = String(business || '').toUpperCase().slice(0, 26) || (en ? 'YOUR BUSINESS' : 'TU NEGOCIO');
 
   // (v196, acotado en v197) MODO PÓSTER DE MARCA: un perfil de
   // servicios/contenido (agencia, CM, profesionales) no es un catálogo
@@ -1455,7 +1482,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     // (v209) TITULARES ≤ 6 PALABRAS, DURO (regla de pieza de Valentino):
     // el catálogo cumple, pero NINGÚN titular sale del armado sin pasar
     // por el cap — recorte limpio por cláusula, nunca a mitad de idea.
-    headline = captions.capHeadlineWords(headline, 6);
+    headline = captions.capHeadlineWords(headline, 6, lang);
     const st = styleObjs[i] || null;
     const isPoster = posterAt.has(i);
     // (v196) El slot de póster manda sobre el tratamiento del estilo: la
@@ -1534,7 +1561,7 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
   // este mismo spec. Las limpias no cambian: paraRender ya las desnuda.
   specPosts.forEach((sp) => {
     if (sp.text_mode !== 'text') return;
-    if (sp.subline) sp.subline = captions.capHeadlineWords(sp.subline, 8);
+    if (sp.subline) sp.subline = captions.capHeadlineWords(sp.subline, 8, lang);
     if (sp.subline && sp.pill) sp.pill = '';
   });
   // (v231) CANDADO DE NÚMEROS DE PROMO (adopción Predis + regla de
@@ -1669,15 +1696,15 @@ function resolveSpecPhotos(specPosts, userPhotoDataUrl) {
  * venta del topic: si el topic declara intención (los derivados del
  * digest la traen; el relleno quedó capado a autoridad), manda la
  * intención; si no, el cierre por kind de siempre. */
-function closeTrialCaption(caption, topic, tone) {
+function closeTrialCaption(caption, topic, tone, lang) {
   const t = topic || {};
-  if (t.intent) return captions.ensureCaptionCloseForIntent(caption, t.intent, tone);
-  return captions.ensureCaptionCtaClose(caption, t.kind, tone);
+  if (t.intent) return captions.ensureCaptionCloseForIntent(caption, t.intent, tone, lang);
+  return captions.ensureCaptionCtaClose(caption, t.kind, tone, lang);
 }
 
-async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest }) {
+async function generateDemo({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText, profilePicPath, feedRegister, extraPhotos, digest, lang }) {
   if (!pythonAvailable()) throw new Error('Generador no disponible en este momento');
-  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null });
+  const spec = buildDemoSpec({ business, category, country, tone, photoPath, goal, goal_key, accent, btn, count, bioText: bioText || '', profilePicPath: profilePicPath || null, feedRegister: feedRegister || null, extraPhotos: extraPhotos || null, digest: digest || null, lang });
   const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
   const cat = CATEGORIES.includes(category) ? category : 'otro';
 
@@ -1702,7 +1729,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     // caption que el gate rechazaría.
     const made = topics.map((t, i) => {
       const r = captions.resolveTrialCaption(topics, cat, {
-        business, tone, country, idx: i, goalLine,
+        business, tone, country, idx: i, goalLine, lang,
       });
       // (v209) Pieza LIMPIA: sin titular ni botón en la imagen, el
       // caption carga la idea y CIERRA con el CTA — garantizado acá.
@@ -1710,7 +1737,7 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
       return {
         image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
         caption: cleanPiece
-          ? closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone)
+          ? closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
           : r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline, // titular del diseño (en piezas limpias vive solo en el caption)

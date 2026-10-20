@@ -274,7 +274,7 @@ const CAFE_URL = 'https://cafearoma.example/fotos/cafe.jpg';
     ok(srv.includes('clientDigest.lexiconBlock(dg.lexicon)'), 'captionExtrasFor inyecta el léxico');
     ok(srv.includes('photoMappedRefsFor(uid,'), 'el pipeline usa la foto del producto como referencia');
     ok(srv.includes('trialDeepCatalog(webData)') && srv.includes('trialBioLink('), 'la prueba recolecta catálogo y bio-link');
-    ok(demoSrc.includes('photoProductFor') && demoSrc.includes('const DEMO_ENGINE_V = 24;'), 'demo: mapa en el gate + motor v22');
+    ok(demoSrc.includes('photoProductFor') && demoSrc.includes('const DEMO_ENGINE_V = 25;'), 'demo: mapa en el gate + motor v22');
     ok(feedSrc.includes('external_url'), 'feed-audit expone el link de la bio');
   }
 

@@ -28,17 +28,46 @@ const EFEMERIDES = [
   [12, 1, 'Cyber Monday', 'Ofertas online', ['tecnologia', 'moda', 'ecommerce']],
 ];
 
+// (v274 · MODO EN) Calendario US: feriados federales + fechas comerciales
+// de EEUU. Una cuenta/prueba EN jamás recibe efemérides argentinas.
+// [mes, día, título, ángulo, rubros relevantes (vacío = todos)]
+const EFEMERIDES_US = [
+  [1, 1, "New Year's Day", 'Start the year with your business', []],
+  [1, 19, 'Martin Luther King Jr. Day', 'Reflective, community-minded content', []],
+  [2, 14, "Valentine's Day", 'Promo for couples or self-gifting', ['moda', 'belleza', 'gastronomia', 'flores', 'joyeria']],
+  [2, 16, "Presidents' Day", 'Weekend sales promo', []],
+  [3, 17, "St. Patrick's Day", 'Fun green-themed content and promos', ['bar', 'cafeteria', 'gastronomia']],
+  [4, 5, 'Easter', 'Family promo and spring content', []],
+  [5, 5, 'Cinco de Mayo', 'Fiesta-themed promo', ['gastronomia', 'bar']],
+  [5, 10, "Mother's Day", "Promo for mom (2nd Sunday of May)", ['moda', 'belleza', 'flores', 'joyeria', 'gastronomia']],
+  [5, 25, 'Memorial Day', 'Weekend sales, respectful tone', []],
+  [6, 21, "Father's Day", "Promo for dad (3rd Sunday of June)", ['moda', 'tecnologia', 'autos', 'barberia']],
+  [7, 4, 'Independence Day', 'Patriotic promo and summer content', []],
+  [9, 7, 'Labor Day', 'End-of-summer sales', []],
+  [10, 31, 'Halloween', 'Halloween promo, fun content', ['moda', 'belleza', 'gastronomia', 'eventos']],
+  [11, 11, 'Veterans Day', 'Institutional, thankful content', []],
+  [11, 26, 'Thanksgiving', 'Gratitude post, no hard selling', []],
+  [11, 27, 'Black Friday', 'The biggest offers of the year', []],
+  [11, 28, 'Small Business Saturday', 'Shop local: the day of local businesses', []],
+  [11, 30, 'Cyber Monday', 'Online offers', ['tecnologia', 'moda']],
+  [12, 24, 'Christmas Eve', 'Holiday greeting', []],
+  [12, 25, 'Christmas', 'Holiday promo', []],
+  [12, 31, "New Year's Eve", 'Year recap and thanks', []],
+];
+
 /**
- * getUpcoming(days=14): efemérides en los próximos N días.
+ * getUpcoming(days=14, lang): efemérides en los próximos N días.
+ * lang 'en' → calendario US (EFEMERIDES_US); cualquier otro → el de AR.
  * Devuelve [{ date, title, angle, rubros }]
  */
-function getUpcoming(days = 14) {
+function getUpcoming(days = 14, lang) {
+  const LIST = lang === 'en' ? EFEMERIDES_US : EFEMERIDES;
   const now = new Date();
   const result = [];
   for (let d = 0; d < days; d++) {
     const dt = new Date(now.getTime() + d * 86400000);
     const m = dt.getMonth() + 1, day = dt.getDate();
-    for (const [em, ed, title, angle, rubros] of EFEMERIDES) {
+    for (const [em, ed, title, angle, rubros] of LIST) {
       if (em === m && ed === day) {
         result.push({
           date: dt.toISOString().slice(0, 10),
@@ -54,11 +83,11 @@ function getUpcoming(days = 14) {
 /**
  * getRelevant(category, days=14): filtra por rubro.
  */
-function getRelevant(category, days = 14) {
+function getRelevant(category, days = 14, lang) {
   const cat = String(category || '').toLowerCase();
-  return getUpcoming(days).filter(e =>
+  return getUpcoming(days, lang).filter(e =>
     e.rubros.length === 0 || e.rubros.some(r => cat.includes(r))
   );
 }
 
-module.exports = { getUpcoming, getRelevant, EFEMERIDES };
+module.exports = { getUpcoming, getRelevant, EFEMERIDES, EFEMERIDES_US };

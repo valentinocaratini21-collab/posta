@@ -290,7 +290,7 @@ ok('server/generator/db/demo conectados al cerebro', () => {
   assert.strictEqual(typeof demo.closeTrialCaption, 'function');
   assert.strictEqual(typeof captions.ensureCaptionCloseForIntent, 'function');
   assert.ok(srv.includes("const BUILD_ID = '20261019-v243'"), 'BUILD_ID v233');
-  assert.strictEqual(demo.DEMO_ENGINE_V, 24);
+  assert.strictEqual(demo.DEMO_ENGINE_V, 25);
 });
 
 console.log(`\n✅ test-sales-brain: ${passed} verificaciones OK`);

@@ -181,6 +181,79 @@ const PLAN_ANCHOR = {
   UY: { cm: '$U 50.000+/mes', desde: '$U 890' },
 };
 
+// (v274 · MODO EN) Planes US — escalera definida por Valentino el
+// 2026-10-20: USD 49 / 99 / 149, mismos roles que AR (Plan 1 = Community
+// Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
+// ⚠️ PUNTO DE CONEXIÓN DE COBRO US: estos precios hoy son SOLO TEXTO en el
+// funnel EN (landing /en y el chat de la prueba). El checkout US va con la
+// cuenta PERSONAL de Stripe de Valentino (decisión 2026-10-20: NO bajo la
+// LLC), que todavía no está dada de alta — su único paso pendiente es la
+// verificación de identidad en Stripe. Cuando exista, el checkout se
+// construye acá (price ids de Stripe por plan) y getPlan(id, 'US') ya
+// devuelve el plan correcto. NO inventar checkout mientras tanto.
+const PLANS_US = {
+  esencial: {
+    id: 'esencial',
+    name: 'Essential',
+    price: 49,
+    currency: 'USD',
+    postsPerWeek: 7,
+    reelsPerWeek: 1,
+    storiesPerWeek: 0,
+    tagline: 'To be present all week long',
+    ai: AI_LIMITS.esencial,
+    features: [
+      '7 posts per week, automatic',
+      '1 reel per week',
+      'Strategic ideas for your business',
+      'Designs + captions + hashtags',
+      'Scheduled automatic publishing',
+      'Analysis of your account, week by week',
+    ],
+  },
+  pro: {
+    id: 'pro',
+    name: 'Pro',
+    price: 99,
+    currency: 'USD',
+    postsPerWeek: 7,
+    reelsPerWeek: 3,
+    storiesPerWeek: 3,
+    tagline: 'To actually grow',
+    ai: AI_LIMITS.pro,
+    features: [
+      '7 posts per week, automatic',
+      '3 reels per week',
+      '3 stories per week',
+      'Strategic ideas for your business',
+      'Designs + captions + hashtags',
+      'Scheduled automatic publishing',
+      'Full competitor breakdown',
+    ],
+  },
+  total: {
+    id: 'total',
+    name: 'Total',
+    price: 149,
+    currency: 'USD',
+    postsPerWeek: 7,
+    reelsPerWeek: 3,
+    storiesPerWeek: 7,
+    tagline: 'Everything, handled for you',
+    ai: AI_LIMITS.total,
+    features: [
+      '7 posts per week, automatic',
+      '3 reels per week',
+      'Daily stories',
+      'Strategic ideas for your business',
+      'Designs + captions + hashtags',
+      'Scheduled automatic publishing',
+      'Full competitor breakdown',
+      'Comment and message replies (you approve each one)',
+    ],
+  },
+};
+
 // Plan por defecto para usuarios sin suscripción paga
 const TRIAL_PLAN = 'esencial';
 
@@ -188,7 +261,9 @@ const TRIAL_PLAN = 'esencial';
 const PLANS = PLANS_AR;
 
 function getPlans(country) {
-  return country === 'UY' ? PLANS_UY : PLANS_AR;
+  if (country === 'UY') return PLANS_UY;
+  if (country === 'US') return PLANS_US;
+  return PLANS_AR;
 }
 
 function getPlan(id, country) {
@@ -206,7 +281,10 @@ function formatPrice(plan) {
   if ((plan.currency || 'ARS') === 'UYU') {
     return '$U ' + Number(plan.price).toLocaleString('es-UY');
   }
+  if ((plan.currency || 'ARS') === 'USD') {
+    return '$' + Number(plan.price).toLocaleString('en-US');
+  }
   return '$' + Number(plan.price).toLocaleString('es-AR');
 }
 
-module.exports = { PLANS, PLANS_AR, PLANS_UY, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice };
+module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice };

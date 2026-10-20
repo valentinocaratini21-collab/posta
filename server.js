@@ -705,7 +705,7 @@ const TRIAL_CAT_MAP = { moda: 'moda', gastronomia: 'gastronomia', belleza: 'bell
  * select llega con rubro_src='form' y también manda. Sin confirmación:
  * manda el voto multi-señal; si duda, category = rubro padre seguro y
  * subcat = '' (jamás un subrubro inventado), registrado sin_confirmar. */
-function resolveTrialRubro({ fields, webData, feed, formText, catalogItems }) {
+function resolveTrialRubro({ fields, webData, feed, formText, catalogItems, lang }) {
   const f = fields || {};
   const src = String(f.rubro_src || '');
   const catSel = String(f.category || '').trim();
@@ -722,9 +722,9 @@ function resolveTrialRubro({ fields, webData, feed, formText, catalogItems }) {
   };
   const cls = rubroId.classifyBusiness(signals);
   if ((src === 'pregunta' || src === 'form') && catSel && rubroId.RUBROS.includes(catSel)) {
-    return rubroId.resolveRubro({ confirmed: { rubro: catSel, subrubro: subSel, fuente: src }, cls });
+    return rubroId.resolveRubro({ confirmed: { rubro: catSel, subrubro: subSel, fuente: src }, cls, lang });
   }
-  const res = rubroId.resolveRubro({ cls });
+  const res = rubroId.resolveRubro({ cls, lang });
   if (src === 'skip' && !cls.segura) {
     // Saltó la pregunta: se genera con el padre seguro y queda el
     // registro (la pregunta sigue viva en question_candidates).
@@ -741,13 +741,13 @@ function resolveTrialRubro({ fields, webData, feed, formText, catalogItems }) {
  * del tope diario del demo y con carrera de 6 s; cualquier falla deja
  * el voto determinístico. Devuelve la clasificación re-votada con la
  * familia 'vision', o null si no hubo desempate. */
-async function classifyWithVision(signals, photoUrls) {
+async function classifyWithVision(signals, photoUrls, lang) {
   const cls = rubroId.classifyBusiness(signals);
   try {
     if (!rubroId.needsVisionTiebreak(cls)) return cls;
     const apiKey = process.env.OPENAI_API_KEY || '';
     if (!apiKey || !costs.demoAiCapOk()) return cls;
-    const options = rubroId.questionOptions(cls);
+    const options = rubroId.questionOptions(cls, lang);
     if (options.length < 2) return cls;
     const urls = (photoUrls || []).filter((u) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 4);
     if (urls.length < 2) return cls;
@@ -759,7 +759,9 @@ async function classifyWithVision(signals, photoUrls) {
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: [
-            { type: 'text', text: `Estas fotos son de UN negocio. ¿A cuál de estas opciones corresponde?\n${list}\nRespondé SOLO un JSON {"i": N} con el número de la opción (1 a ${options.length}). Si ninguna encaja, {"i": 0}.` },
+            { type: 'text', text: lang === 'en'
+              ? `These photos are from ONE business. Which of these options does it match?\n${list}\nReply ONLY with a JSON {"i": N} with the option number (1 to ${options.length}). If none fits, {"i": 0}.`
+              : `Estas fotos son de UN negocio. ¿A cuál de estas opciones corresponde?\n${list}\nRespondé SOLO un JSON {"i": N} con el número de la opción (1 a ${options.length}). Si ninguna encaja, {"i": 0}.` },
             ...urls.map((u) => ({ type: 'image_url', image_url: { url: u, detail: 'low' } })),
           ] }],
           response_format: { type: 'json_object' }, max_tokens: 20, temperature: 0,
@@ -1386,6 +1388,21 @@ function streakFromTrialImport(userId, nImp) {
 //   >0    = posteos importados              → welcome de continuidad
 // No pisa un éxito previo con un 0 posterior: si el usuario ya tenía posteos,
 // el import no se intentó (hadPostsBefore) y no se registra nada.
+/* (v274 · MODO EN) Si la semana de prueba importada nació del funnel EN,
+ * la cuenta guarda su idioma (users.lang = 'en'): el payload cacheado de
+ * la prueba lo declara. Solo sube a 'en'; nunca baja una cuenta a 'es'. */
+function applyTrialLang(userId, igRaw) {
+  try {
+    if (!userId || !igRaw) return;
+    const igKey = String(igRaw).trim().replace(/^@/, '').toLowerCase();
+    if (!igKey) return;
+    const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
+    if (!hit) return;
+    const out = JSON.parse(hit.payload);
+    if (out && out.lang === 'en') db.prepare("UPDATE users SET lang = 'en' WHERE id = ?").run(userId);
+  } catch (e) { /* el idioma nunca frena el alta */ }
+}
+
 function recordTrialImport(userId, trialIg, nImp, hadPostsBefore) {
   const ig = String(trialIg || '').trim().replace(/^@/, '');
   if (!ig || hadPostsBefore) return;
@@ -1418,6 +1435,7 @@ app.post('/api/auth/register', (req, res) => {
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
       const nImp = importTrialWeek(r.lastInsertRowid, trial_ig);
+      applyTrialLang(r.lastInsertRowid, trial_ig); // (v274) cuenta EN si la prueba fue EN
       if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
       seedFromTrialDigest(r.lastInsertRowid, trial_ig); // (v229) FUNDAMENTO: la cuenta nace con el digest de la prueba sembrado
       recordTrialImport(r.lastInsertRowid, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
@@ -1448,6 +1466,7 @@ app.post('/api/auth/login', (req, res) => {
     const uidL = user.id;
     const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uidL).c || 0) > 0;
     const nImp = importTrialWeek(uidL, trial_ig);
+    applyTrialLang(uidL, trial_ig); // (v274) cuenta EN si la prueba fue EN
     if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${uidL}`);
     seedFromTrialDigest(uidL, trial_ig); // (v229) FUNDAMENTO: siembra del digest también en la puerta de login
     recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
@@ -2180,6 +2199,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
         try {
           const expBiz = (trial_profile && trial_profile.business_name) || null;
           const nImp = importTrialWeek(userId, trial_ig, expBiz);
+          applyTrialLang(userId, trial_ig); // (v274) cuenta EN si la prueba fue EN
           if (nImp) console.log(`[posta] semana de prueba importada (sesión inmediata): ${nImp} borradores → usuario ${userId}`);
           recordTrialImport(userId, trial_ig, nImp, false);
           streakFromTrialImport(userId, nImp);
@@ -2568,7 +2588,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, trial_ends_at, trial_extended_until, email_verified FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, trial_ends_at, trial_extended_until, email_verified, lang FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const nowMs = Date.now();
@@ -2590,6 +2610,7 @@ app.get('/api/auth/me', (req, res) => {
       is_trial: user.plan_status !== 'active',
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
+      lang: user.lang === 'en' ? 'en' : 'es', // (v274) idioma de la cuenta (del funnel de la prueba)
     },
   });
 });
@@ -12986,8 +13007,11 @@ app.get('/api/calendar/upcoming', requireAuth, (req, res) => {
   try {
     const { getRelevant } = require('./calendar');
     const p = db.prepare('SELECT category FROM profiles WHERE user_id = ?').get(req.session.userId);
+    // (v274 · MODO EN) Una cuenta EN recibe el calendario US, nunca las
+    // efemérides argentinas: el idioma guardado de la cuenta manda.
+    const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(req.session.userId);
     const days = Math.min(Math.max(Number(req.query.days) || 14, 1), 60);
-    res.json({ ok: true, events: getRelevant(p && p.category, days) });
+    res.json({ ok: true, events: getRelevant(p && p.category, days, u && u.lang) });
   } catch (e) { res.json({ ok: false, error: e.message }); }
 });
 
@@ -13008,6 +13032,9 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  // (v274 · MODO EN) La demo pública también acepta lang='en'.
+  const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
+  const effCountry = lang === 'en' ? 'US' : country;
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const accent = String(fields.accent || '').trim().slice(0, 7);
   const btn = String(fields.btn || '').trim().slice(0, 7);
@@ -13033,7 +13060,7 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
       photoPath = path.join(os.tmpdir(), `posta-demo-up-${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${kind}`);
       fs.writeFileSync(photoPath, file.buffer);
     }
-    const { posts } = await demo.generateDemo({ business, category, country, tone, photoPath, goal, accent, btn, digest: buildTrialDigest({ business, category, formText: goal }) });
+    const { posts } = await demo.generateDemo({ business, category, country: effCountry, tone, photoPath, goal, accent, btn, lang, digest: buildTrialDigest({ business, category, formText: goal }) });
     ok = true;
     res.json({ ok: true, posts, remaining: rl.remaining });
   } catch (e) {
@@ -13125,13 +13152,24 @@ function trialTestMode(req) {
   return !!(k && req.query && req.query.test_key === k);
 }
 
-function buildTrialWeek(n) {
-  const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+// (v274 · MODO EN) Días/meses de la semana según el idioma de la prueba:
+// EN → Sunday…Saturday y formato "Oct 21"; ES → el histórico rioplatense.
+function buildTrialWeek(n, lang) {
+  const en = lang === 'en';
+  const days = en
+    ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    : ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const months = en
+    ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    : ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const now = new Date();
   return Array.from({ length: n }, (_, i) => {
     const d = new Date(now.getTime() + (i + 1) * 86400000);
-    return { day: days[d.getDay()], date: `${d.getDate()} ${months[d.getMonth()]}`, post: i };
+    return {
+      day: days[d.getDay()],
+      date: en ? `${months[d.getMonth()]} ${d.getDate()}` : `${d.getDate()} ${months[d.getMonth()]}`,
+      post: i,
+    };
   });
 }
 
@@ -13141,11 +13179,14 @@ const TRIAL_IMG_MIME = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png'
 // Sin este chequeo, una prueba vieja de otro negocio con el mismo @ se servía
 // e importaba verbatim: marca, fotos y textos ajenos en la semana del cliente
 // (bug 2026-10-03: posteos "FITSWAPP" en la cuenta de otro negocio).
-function trialCacheMatches(out, business, category) {
+function trialCacheMatches(out, business, category, lang) {
   try {
     // Motor de la prueba (v182): una semana generada por un motor viejo NO
     // se sirve desde el cache — se regenera con el motor actual.
     if (!out || Number(out.engine || 0) !== demo.DEMO_ENGINE_V) return false;
+    // (v274) El idioma TAMBIÉN es parte de la identidad de la semana: una
+    // semana ES cacheada jamás se sirve a un visitante EN (ni al revés).
+    if (lang && String(out.lang || 'es') !== String(lang)) return false;
     const b = String((out && out.business) || '').trim().toLowerCase();
     const want = String(business || '').trim().toLowerCase();
     if (!b || !want || b !== want) return false;
@@ -13173,6 +13214,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  // (v274 · MODO EN) Idioma de la prueba: 'en' solo si el funnel EN lo
+  // declara; cualquier otro valor (o su ausencia) = 'es', el histórico.
+  // Con lang 'en' el país efectivo es US (hashtags y calendario US).
+  const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
+  const effCountry = lang === 'en' ? 'US' : country;
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   // Preguntas previas de /prueba (opcionales): objetivo + producto + diferencial.
@@ -13181,7 +13227,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial)].filter(Boolean).join('\n');
   // Colores: si el visitante mandó (ya no se pide en el form), se usan; si no,
   // intentamos los colores REALES de su perfil de Instagram (best-effort) y
   // si no se puede, cae a la paleta curada de su rubro.
@@ -13253,13 +13299,13 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         let cachedOut = null;
         try {
           const probe = JSON.parse(hit.payload);
-          if (trialCacheMatches(probe, business, category)) cachedOut = probe;
+          if (trialCacheMatches(probe, business, category, lang)) cachedOut = probe;
           else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
         } catch (e) { /* payload roto: se regenera */ }
         if (cachedOut) {
           cachedOut.cached = true;
           cachedOut.spots_left = spotsLeft();
-          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length);
+          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
           track(null, 'prueba_done', igKey + '|cached');
           return res.json(cachedOut);
         }
@@ -13293,7 +13339,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // Las ideas (LLM) solo viajan en el payload final: NO alimentan ni el
     // spec ni los diseños ni los captions. Lanzarlas en paralelo con el
     // render en vez de esperarlas antes saca ~1-2s del camino crítico.
-    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors }, null)).catch(() => []);
+    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang }, null)).catch(() => []);
     // (v212) Web del negocio (2/2): su paleta manda si no hay otra fuente de
     // color (con @, manda el feed) y sus fotos entran como material gateado.
     let webExtraPhotos = [];
@@ -13318,12 +13364,12 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // (v235) RUBRO ANTES DE GENERAR: confirmación del front (la pregunta
     // de /prueba viaja como fields) o voto multi-señal con las fuentes
     // de esta ruta. La categoría resuelta gobierna spec, digest e ideas.
-    const rubroRes = resolveTrialRubro({ fields, webData, feed: null, formText: richGoal, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre) });
+    const rubroRes = resolveTrialRubro({ fields, webData, feed: null, formText: richGoal, catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre), lang });
     const effCategory = rubroRes.category;
     // (v229) FUNDAMENTO: el digest se compila ANTES del spec — los temas
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
     const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes });
-    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest });
+    const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest, lang });
     // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
     // nacimiento sobre una cuenta que no se pudo leer.
@@ -13337,12 +13383,12 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         const peersJ = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
         const coldJ = analysisEngine.isColdStart({ hasIg: true, profile: dataJson.profile, posts: dataJson.posts || [] });
         trialAnalysisJson = analysisEngine.gateForPlan(coldJ
-          ? analysisEngine.analyzeColdStart({ business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: ig }, digest: trialDigest, peers: peersJ, reviews: null, ctx: { postsPerWeek: 7, plan: 'trial' } })
-          : analysisEngine.analyzeExisting({ profile: dataJson.profile, posts: dataJson.posts, ctx: { postsPerWeek: 7, plan: 'trial', peers: peersJ, source: 'instagram' } }), 'trial');
+          ? analysisEngine.analyzeColdStart({ business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: ig }, digest: trialDigest, peers: peersJ, reviews: null, ctx: { postsPerWeek: 7, plan: 'trial', lang } })
+          : analysisEngine.analyzeExisting({ profile: dataJson.profile, posts: dataJson.posts, ctx: { postsPerWeek: 7, plan: 'trial', peers: peersJ, source: 'instagram', lang } }), 'trial');
       } else if (!ig) {
         trialAnalysisJson = analysisEngine.gateForPlan(analysisEngine.analyzeColdStart({
           business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: '' },
-          digest: trialDigest, peers: [], reviews: null, ctx: { postsPerWeek: 7, plan: 'trial' },
+          digest: trialDigest, peers: [], reviews: null, ctx: { postsPerWeek: 7, plan: 'trial', lang },
         }), 'trial');
       }
       if (trialAnalysisJson && Array.isArray(posts)) {
@@ -13364,6 +13410,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
+      lang, // (v274) el idioma de la semana viaja en el payload (caché, chat, registro)
       business, ig, category: effCategory,
       subcat: rubroRes.subcat || '', // (v235) subrubro confirmado/detectado (viaja al registro)
       rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada en el payload
@@ -13376,7 +13423,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       ideas: (await ideasPromise).slice(0, 6),
       posts,
       design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
-      week: buildTrialWeek(posts.length),
+      week: buildTrialWeek(posts.length, lang),
       screenshot,
       spots_left: spotsLeft(),
       video_ok: videoOk,
@@ -13446,8 +13493,11 @@ app.post('/api/trial/prefill', express.json({ limit: '16kb' }), async (req, res)
     bio: bio || '', fullName: name, handle: ig, captions,
     igCategory: (prof && prof.category) || '',
   };
-  const cls = await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean));
-  const resolved = rubroId.resolveRubro({ cls });
+  // (v274 · MODO EN) El prefill del funnel EN pide lang='en': las opciones
+  // de la pregunta de rubro salen con rótulos en inglés.
+  const prefillLang = String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
+  const cls = await classifyWithVision(signals, embedPosts.map((p) => p.thumb).filter(Boolean), prefillLang);
+  const resolved = rubroId.resolveRubro({ cls, lang: prefillLang });
   const legacyCat = demo.categoryFromText((bio ? bio + ' ' : '') + name);
   const hasVotes = (cls.candidatas || []).length > 0;
   res.json({
@@ -13548,8 +13598,9 @@ app.post('/api/trial/web-prefill', express.json({ limit: '16kb' }), async (req, 
     catalogText: (data.services || []).join(' · '),
     webText: [data.name || '', data.description || ''].join(' '),
   };
-  const wcls = await classifyWithVision(webSignals, (data.photos || []).map((p) => p.url));
-  const wresolved = rubroId.resolveRubro({ cls: wcls });
+  const webPrefillLang = String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
+  const wcls = await classifyWithVision(webSignals, (data.photos || []).map((p) => p.url), webPrefillLang);
+  const wresolved = rubroId.resolveRubro({ cls: wcls, lang: webPrefillLang });
   const wLegacy = demo.categoryFromText([data.name, data.description, ...(data.services || [])].join(' '));
   const wHasVotes = (wcls.candidatas || []).length > 0;
   res.json({
@@ -13615,13 +13666,16 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   const category = String(fields.category || '').trim();
   const country = String(fields.country || '').trim().toUpperCase();
   const tone = String(fields.tone || 'vos').trim().toLowerCase();
+  // (v274 · MODO EN) Mismo parseo de idioma que /api/trial/generate.
+  const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
+  const effCountry = lang === 'en' ? 'US' : country;
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   const goal_key = ['vender', 'seguidores', 'lanzamiento', 'fidelizar'].includes(String(fields.goal_key || '').trim())
     ? String(fields.goal_key).trim() : '';
   const producto = String(fields.producto || '').replace(/<[^>]*>/g, '').trim().slice(0, 120);
   const diferencial = String(fields.diferencial || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
-  let richGoal = [goal, producto && ('Producto principal: ' + producto), diferencial && ('Diferencial: ' + diferencial)].filter(Boolean).join('\n');
+  let richGoal = [goal, producto && ((lang === 'en' ? 'Main product: ' : 'Producto principal: ') + producto), diferencial && ((lang === 'en' ? 'What makes you different: ' : 'Diferencial: ') + diferencial)].filter(Boolean).join('\n');
   const pal = demo.CATEGORY_COLORS[category] || demo.CATEGORY_COLORS.otro;
   const hexOk = (v) => /^#[0-9a-fA-F]{6}$/.test(String(v || '').trim());
   let accent = hexOk(fields.accent) ? String(fields.accent).trim().toUpperCase() : pal[0];
@@ -13673,14 +13727,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         // paleta (única señal que descarga miniaturas) refina en segundo
         // plano y reemite el evento si suma el hallazgo de línea visual.
         try {
-          const auditBase = feedAudit.trialAuditFromData(data);
+          const auditBase = feedAudit.trialAuditFromData(data, { lang });
           if (auditBase) trialAudit = auditBase;
         } catch (e) { /* la auditoría nunca frena la prueba */ }
         trialAuditPalette = feedAudit.analyzePalette((data && data.posts) || [])
           .then((hues) => {
             if (hues == null) return;
             try {
-              const refined = feedAudit.trialAuditFromData(data, { paletteHues: hues });
+              const refined = feedAudit.trialAuditFromData(data, { paletteHues: hues, lang });
               if (refined) { trialAudit = refined; send('audit', { audit: refined }); }
             } catch (e) { /* best-effort */ }
           })
@@ -13732,7 +13786,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         let cachedOut = null;
         try {
           const probe = JSON.parse(hit.payload);
-          if (trialCacheMatches(probe, business, category)) cachedOut = probe;
+          if (trialCacheMatches(probe, business, category, lang)) cachedOut = probe;
           else console.log(`[posta] trial_cache: la semana de @${igKey} es de otro negocio ("${probe && probe.business}") — regenerando`);
         } catch (e) { /* payload roto: se regenera */ }
         if (cachedOut) {
@@ -13748,8 +13802,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
               try {
                 const coldC = !trialData.ok || analysisEngine.isColdStart({ hasIg: true, profile: trialData.profile, posts: trialData.posts || [] });
                 cachedOut.analysis = analysisEngine.gateForPlan(coldC
-                  ? analysisEngine.analyzeColdStart({ business: { name: business, category, ig_username: ig }, digest: cachedOut.digest || null, peers: [], reviews: null, ctx: { plan: 'trial' } })
-                  : analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: { plan: 'trial' } }), 'trial');
+                  ? analysisEngine.analyzeColdStart({ business: { name: business, category, ig_username: ig }, digest: cachedOut.digest || null, peers: [], reviews: null, ctx: { plan: 'trial', lang } })
+                  : analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: { plan: 'trial', lang } }), 'trial');
               } catch (e) { /* best-effort */ }
             }
             if (cachedOut.analysis && Array.isArray(cachedOut.posts)) {
@@ -13764,7 +13818,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           }
           cachedOut.cached = true;
           cachedOut.spots_left = spotsLeft();
-          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length);
+          cachedOut.week = buildTrialWeek((cachedOut.posts || []).length, cachedOut.lang);
           track(null, 'prueba_done', igKey + '|cached');
           send('done', { out: cachedOut });
           return finish();
@@ -13798,9 +13852,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       fs.writeFileSync(photoPath, file.buffer);
     }
     // 1) Ideas (van en el payload final; el tracker muestra el progreso)
-    send('status', { step: 'empezando', text: 'Dale, estoy armando tu prueba…' });
-    send('status', { step: 'ideas', text: `Estoy pensando ideas para ${business}…` });
-    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors }, null);
+    send('status', { step: 'empezando', text: lang === 'en' ? "OK, I'm building your trial…" : 'Dale, estoy armando tu prueba…' });
+    send('status', { step: 'ideas', text: lang === 'en' ? `I'm thinking up ideas for ${business}…` : `Estoy pensando ideas para ${business}…` });
+    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors, lang }, null);
 
     // (v192) HERENCIA VISUAL DEL PERFIL: la semana sale de SU línea, no de
     // una plantilla genérica del rubro. Con el perfil ya en vuelo (la misma
@@ -13937,6 +13991,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       feed: trialProfile ? { bio: bioText, captions: trialProfile.captions || [], name: trialProfile.name || '', handle: trialProfile.handle || ig } : null,
       formText: richGoal,
       catalogItems: ((deep && deep.catalog && deep.catalog.items) || []).map((x) => x.nombre),
+      lang,
     });
     const effCategory = rubroRes.category;
     const trialDigest = buildTrialDigest({
@@ -13946,9 +14001,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     });
     // 2) Spec + textos: MISMO armado que generateDemo en demo.js (para que
     // el payload final sea idéntico al de /api/trial/generate)
-    const spec = demo.buildDemoSpec({ business, category: effCategory, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest });
+    const spec = demo.buildDemoSpec({ business, category: effCategory, country: effCountry, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, bioText, profilePicPath, feedRegister, extraPhotos: webExtraPhotos, digest: trialDigest, lang });
     const { specPosts, videoIdx, count: n, goalLine, topics } = spec;
-    const week = buildTrialWeek(n); // día/fecha de cada posteo (igual que en out.week)
+    const week = buildTrialWeek(n, lang); // día/fecha de cada posteo (igual que en out.week)
     const cat = demo.CATEGORIES.includes(effCategory) ? effCategory : 'otro';
     const withPhotos = specPosts.map((p) => (
       (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
@@ -13956,14 +14011,14 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // Captions gateados igual que en demo.generateDemo (mismo armado).
     const made = topics.map((t, i) => {
       const r = demo.resolveTrialCaption(topics, cat, {
-        business, tone, country, idx: i, goalLine,
+        business, tone, country: effCountry, idx: i, goalLine, lang,
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
       // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
       const cleanPiece = specPosts[i].text_mode === 'clean';
       return {
         caption: cleanPiece
-          ? demo.closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone)
+          ? demo.closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
           : r.caption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline,
@@ -13971,7 +14026,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     });
     const posts = new Array(n).fill(null);
     // 3) Render con streaming: cada PNG que aparece se emite como post imagen
-    send('status', { step: 'diseno', text: 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
+    send('status', { step: 'diseno', text: lang === 'en' ? "Got the ideas: now I'm designing your posts one by one…" : 'Ya tengo las ideas: ahora estoy diseñando tus posteos uno por uno…' });
     const streamed = await demo.renderSpecPngsStream(withPhotos, { accent, btn, register: spec.feedRegister }, async (i, buf) => {
       posts[i] = {
         type: 'image',
@@ -14013,9 +14068,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       if (cls && cls.kind === 'illustrated') {
         feedKind = 'illustrated';
         if (demoApiKey && costs.demoAiCapOk()) {
-          send('status', { step: 'personaje', text: 'Tu marca es ilustrada: estoy creando tus posteos con tu personaje, en la línea de tu feed…' });
+          send('status', { step: 'personaje', text: lang === 'en' ? "Your brand is illustrated: I'm creating your posts with your character, in your feed's line…" : 'Tu marca es ilustrada: estoy creando tus posteos con tu personaje, en la línea de tu feed…' });
           const aiKeepalive = setInterval(() => {
-            send('status', { step: 'personaje', text: 'Estoy creando tus posteos con tu personaje…' });
+            send('status', { step: 'personaje', text: lang === 'en' ? "I'm creating your posts with your character…" : 'Estoy creando tus posteos con tu personaje…' });
           }, 20000);
           if (aiKeepalive.unref) aiKeepalive.unref();
           try {
@@ -14211,12 +14266,12 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // 4) El video (v182): recorre TODOS los diseños con cortes (tour por
     // las piezas), ya no anima una sola tarjeta estática. Necesita los 5
     // diseños listos, así que arranca acá; los JPG ya están en runDir.
-    send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' });
+    send('status', { step: 'video', text: lang === 'en' ? "I'm creating your week's video…" : 'Estoy creando el video de tu semana…' });
     // v188: el paso de video+extras es el tramo en silencio más largo del
     // stream (la corrida real de v187 se cortó a los ~127 s sin done: el
     // proxy corta la conexión por inactividad). Un status cada 20 s lo
     // mantiene vivo; el front ya sabe mostrarlo (es el mismo tracker).
-    keepalive = setInterval(() => send('status', { step: 'video', text: 'Estoy creando el video de tu semana…' }), 20000);
+    keepalive = setInterval(() => send('status', { step: 'video', text: lang === 'en' ? "I'm creating your week's video…" : 'Estoy creando el video de tu semana…' }), 20000);
     if (keepalive.unref) keepalive.unref();
     const designPaths = specPosts.map((_, i) => path.join(runDir, `post-${i}.jpg`));
     // v187: visuales extra para la grilla CON Posty de la proyección, SIN
@@ -14241,7 +14296,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       };
       const probe = (off) => {
         try {
-          return demo.buildDemoSpec({ business, category, country, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText });
+          return demo.buildDemoSpec({ business, category, country: effCountry, tone, photoPath: null, goal: richGoal, goal_key, accent, btn, count: 1, topicOffset: off, excludePhotos: [...usedPhoto], bioText, lang });
         } catch (e) { return null; }
       };
       for (let off = n; off < n + 3 && posts.length < 3; off++) {
@@ -14326,7 +14381,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     let trialAnalysis = null;
     try {
       const peers = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
-      const ctxA = { postsPerWeek: 7, plan: 'trial', peers, source: 'instagram' };
+      const ctxA = { postsPerWeek: 7, plan: 'trial', peers, source: 'instagram', lang };
       const cold = !ig || !trialData || !trialData.ok || analysisEngine.isColdStart({ hasIg: !!ig, profile: trialData && trialData.profile, posts: (trialData && trialData.posts) || [] });
       if (cold) {
         trialAnalysis = analysisEngine.analyzeColdStart({
@@ -14349,6 +14404,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     const out = {
       ok: true,
       engine: demo.DEMO_ENGINE_V,
+      lang, // (v274) idioma de la semana (caché, chat, registro)
       business, ig, category: effCategory,
       subcat: rubroRes.subcat || '', // (v235) subrubro confirmado/detectado
       rubro_check: rubroRes.rubroCheck, // (v235) la duda queda registrada
@@ -14430,28 +14486,55 @@ function trialChatAllowed(ip) {
 }
 app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) => {
   const ip = demo.clientIp(req);
-  const { ig, message, history } = req.body || {};
+  const { ig, message, history, lang: langHint } = req.body || {};
   const msg = String(message || '').trim().slice(0, 300);
   const igKey = String(ig || '').trim().replace(/^@/, '').toLowerCase();
-  if (!msg) return res.status(400).json({ error: 'Escribí qué querés cambiar 🙂' });
-  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  const hintEn = String(langHint || '').trim().toLowerCase() === 'en';
+  if (!msg) return res.status(400).json({ error: hintEn ? 'Tell me what you want to change 🙂' : 'Escribí qué querés cambiar 🙂' });
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: hintEn ? 'Your Instagram is missing' : 'Falta tu Instagram' });
   const chatChk = trialChatAllowed(ip);
   if (!chatChk.ok) return res.status(429).json({ error: 'chat_limit' });
   const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
-  if (!hit) return res.status(404).json({ error: 'No encontramos tu semana. Generala de nuevo 🙂' });
+  if (!hit) return res.status(404).json({ error: hintEn ? 'We could not find your week. Build it again 🙂' : 'No encontramos tu semana. Generala de nuevo 🙂' });
   let out;
-  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'No pudimos leer tu semana' }); }
+  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: hintEn ? 'We could not read your week' : 'No pudimos leer tu semana' }); }
+  // (v274 · MODO EN) El idioma del chat sale del payload de la prueba: si
+  // la semana nació EN, Posty edita y responde en inglés (precios USD).
+  const en = out.lang === 'en' || hintEn;
   const posts = out.posts || [];
-  if (!posts.length) return res.status(404).json({ error: 'No encontramos tus posteos' });
+  if (!posts.length) return res.status(404).json({ error: en ? 'We could not find your posts' : 'No encontramos tus posteos' });
   const apiKey = process.env.OPENAI_API_KEY || '';
-  if (!apiKey) return res.status(500).json({ error: 'El chat no está disponible ahora. Probá en unos minutos.' });
+  if (!apiKey) return res.status(500).json({ error: en ? 'Chat is not available right now. Try again in a few minutes.' : 'El chat no está disponible ahora. Probá en unos minutos.' });
   const week = out.week || [];
   const postList = posts.map((p, i) => {
     const w = week.find((x) => x.post === i);
-    return { i, dia: w ? w.day : ('posteo ' + (i + 1)), caption: String(p.caption || ''), hashtags: String(p.hashtags || '') };
+    return { i, dia: w ? w.day : ((en ? 'post ' : 'posteo ') + (i + 1)), caption: String(p.caption || ''), hashtags: String(p.hashtags || '') };
   });
-  const hist = Array.isArray(history) ? history.slice(-6).map((h) => `${h.role === 'user' ? 'Dueño' : 'Posta'}: ${String(h.text || '').slice(0, 200)}`).join('\n') : '';
-  const sys =
+  const hist = Array.isArray(history) ? history.slice(-6).map((h) => `${h.role === 'user' ? (en ? 'Owner' : 'Dueño') : (en ? 'Posty' : 'Posta')}: ${String(h.text || '').slice(0, 200)}`).join('\n') : '';
+  // (v274 · MODO EN) System prompt del chat EN: mismo rol y mismas reglas,
+  // en inglés US y con los precios EN (USD 49/99/149 — ver config/plans.js,
+  // bloque PLANS_US: el cobro US va por Stripe, todavía sin alta; el chat
+  // solo informa precios, nunca cobra).
+  const sysEn =
+    'You are the content editor of Posty, a service that builds Instagram posts for local businesses. ' +
+    'You are talking to the owner of "' + String(out.business || 'their business').slice(0, 60) + '" (category: ' + String(out.category || 'general').slice(0, 30) + ') who is on a free trial and ALREADY has their 5 posts created. ' +
+    'They ask for changes. You can ONLY edit texts: the caption and hashtags of one or more posts. ' +
+    'You cannot change designs, photos or headlines (they are part of the image). If they ask to change a post PHOTO, guide them: "tap the post and then the 📷 Change photo button". ' +
+    'If they ask to change COLORS, guide them: "tap the 🎨 Colors button right below". ' +
+    'If they ask to change the design HEADLINE, explain in one line that the headline is part of the design and offer to improve the caption instead. ' +
+    'Write in clear US English, warm and confident, 1-2 lines.\n\n' +
+    'Posts (index, day, current caption, current hashtags):\n' +
+    postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
+    (hist ? '\n\nRecent history:\n' + hist : '') +
+    '\n\nOwner request: "' + msg.replace(/"/g, "'") + '"\n\n' +
+    'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
+    'If the request applies to several posts, include all of them. If it is unclear, edits: [] and ask for clarification in reply. ' +
+    'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
+    'Free 3-day trial, no card. Plans: Essential $49/month (community manager: 7 posts + 1 reel per week), Pro $99/month (adds Growth: 3 reels per week, stories 3x per week), Total $149/month (adds customer care: daily stories, comment and message replies — under $5 a day). ' +
+    'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
+    'If they say no, do not insist. Objections: "too expensive" → under $5 a day on Total, and Essential starts at $49; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
+    '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
+  const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
     'Hablás con el dueño de "' + String(out.business || 'su negocio').slice(0, 60) + '" (rubro: ' + String(out.category || 'general').slice(0, 30) + ') que está probando gratis y YA tiene sus 5 posteos creados. ' +
     'Te pide cambios. Podés editar ÚNICAMENTE los textos: caption y hashtags de uno o varios posteos. ' +
@@ -14471,6 +14554,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Si dice que no, no insistas. Objeciones: "es caro" → menos de $1.500 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
     // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
     (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
+  const sys = en ? sysEn : sysEs;
   try {
     const ai = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -14499,13 +14583,13 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
       try { db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(JSON.stringify(out), igKey); } catch (e) {}
     }
     res.json({
-      reply: String(parsed.reply || 'Listo ✅ ¿Algo más?').slice(0, 300),
+      reply: String(parsed.reply || (en ? 'Done ✅ Anything else?' : 'Listo ✅ ¿Algo más?')).slice(0, 300),
       edits: edits.map((e) => ({ post: e.post, caption: posts[e.post].caption, hashtags: posts[e.post].hashtags })),
       chat_remaining: chatChk.remaining,
     });
   } catch (e) {
     console.error('[posta] trial chat:', e.message);
-    res.status(500).json({ error: 'No pude procesar tu pedido. Probá de nuevo 🙂' });
+    res.status(500).json({ error: en ? 'I could not process that. Try again 🙂' : 'No pude procesar tu pedido. Probá de nuevo 🙂' });
   }
 });
 
@@ -14783,18 +14867,20 @@ app.get('/api/trial/photo-options', (req, res) => {
 // Devuelve la semana si sigue guardada (<72h); si venció o no existe, 404.
 // No regenera nada: es solo lectura del trial_cache.
 app.get('/api/trial/week', (req, res) => {
+  // (v274) El idioma manda: ?lang=en (funnel EN) o el del payload guardado.
+  const qLang = String(req.query.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
   const igKey = String(req.query.ig || '').trim().replace(/^@/, '').toLowerCase();
-  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: 'Falta tu Instagram' });
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: qLang === 'en' ? 'Your Instagram is missing' : 'Falta tu Instagram' });
   const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
   if (!hit || Date.now() - hit.created_at >= 72 * 3600 * 1000) {
     if (hit) { try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey); } catch (e) {} }
-    return res.status(404).json({ error: 'Tu semana ya no está guardada 😅 Generá una nueva en /prueba' });
+    return res.status(404).json({ error: qLang === 'en' ? 'Your week is no longer saved 😅 Build a new one at /en/prueba' : 'Tu semana ya no está guardada 😅 Generá una nueva en /prueba' });
   }
   let out;
   try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: 'Error' }); }
   out.cached = true;
   out.spots_left = spotsLeft();
-  out.week = buildTrialWeek((out.posts || []).length);
+  out.week = buildTrialWeek((out.posts || []).length, out.lang || qLang);
   res.json(out);
 });
 
@@ -15230,7 +15316,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v273';
+const BUILD_ID = '20261020-v274';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

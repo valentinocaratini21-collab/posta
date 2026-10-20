@@ -1077,6 +1077,9 @@ function capWords(s, max) {
 }
 function deriveTopics(digest, opts) {
   const o = opts || {};
+  // (v274 · MODO EN) Con lang 'en' los frames de texto salen en inglés US;
+  // la lógica de selección (estrella, quietos, promos reales) no cambia.
+  const en = o.lang === 'en';
   const count = Math.min(Math.max(parseInt(o.count, 10) || 5, 1), 6);
   const category = o.category || digest.category || 'otro';
   if (!hasFoundation(digest)) return [];
@@ -1147,7 +1150,7 @@ function deriveTopics(digest, opts) {
     const key = norm(A);
     let sales = {};
     if (salesBrain) {
-      try { sales = salesBrain.trialTopicSales({ kind, digest_anchor: A }, digest) || {}; } catch (e) { sales = {}; }
+      try { sales = salesBrain.trialTopicSales({ kind, digest_anchor: A }, digest, o.lang) || {}; } catch (e) { sales = {}; }
     }
     const t = {
       kind,
@@ -1176,7 +1179,13 @@ function deriveTopics(digest, opts) {
   const it1 = pickItem(0);
   if (it1) {
     const A = name(it1);
-    const t = mk('novedad', A, {
+    const t = en ? mk('novedad', A, {
+      tag: 'NEW',
+      headline: (x) => x,
+      subline: (x) => (it1.precio ? `${it1.precio}, just like you see it` : ''),
+      cta: 'I want mine',
+      caption: (x) => `${x} is here at ${bizPh} ✨\n\n${it1.precio ? `Yours for ${it1.precio}. ` : ''}Fresh in and ready for you.\n\nOrder yours today by DM 📩`,
+    }) : mk('novedad', A, {
       tag: 'NUEVO',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `A ${it1.precio}, como lo ves` : ''),
@@ -1199,7 +1208,13 @@ function deriveTopics(digest, opts) {
     const tituloWords = A.split(/\s+/).filter(Boolean).length;
     const tituloHasNum = numbersInText(A).size > 0;
     const priceInHeadline = !!promoPrice && !tituloHasNum && tituloWords <= 4;
-    const t = mk('promo', A, {
+    const t = en ? mk('promo', A, {
+      tag: 'PROMO',
+      headline: (x) => (priceInHeadline ? `${x} at ${promoPrice}` : x),
+      subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `${promoPrice}, just like you see it` : ''),
+      cta: 'I want this deal',
+      caption: (x) => `${x} at ${bizPh} 🔥\n\nFor a limited time only: when it's gone, it's gone.\n\nMessage us and we'll hold yours 📩`,
+    }) : mk('promo', A, {
       tag: 'PROMO',
       headline: (x) => (priceInHeadline ? `${x} a ${promoPrice}` : x),
       subline: () => ((promoPrice && !tituloHasNum && !priceInHeadline) ? `A ${promoPrice}, como lo ves` : ''),
@@ -1211,7 +1226,13 @@ function deriveTopics(digest, opts) {
     const it2 = pickItem(1);
     if (it2) {
       const A = name(it2);
-      const t = mk('novedad', A, {
+      const t = en ? mk('novedad', A, {
+        tag: 'NEW',
+        headline: (x) => x,
+        subline: (x) => (it2.precio ? `${it2.precio}` : ''),
+        cta: 'I want mine',
+        caption: (x) => `${x}, another favorite at ${bizPh} ✨\n\n${it2.precio ? `${it2.precio}. ` : ''}Stop by or order it by DM.\n\nOrder yours today 📩`,
+      }) : mk('novedad', A, {
         tag: 'NUEVO',
         headline: (x) => x,
         subline: (x) => (it2.precio ? `A ${it2.precio}` : ''),
@@ -1226,7 +1247,13 @@ function deriveTopics(digest, opts) {
   if (tipItem) {
     const A = name(tipItem);
     const short = capWords(A, 3);
-    const t = mk('tip', A, {
+    const t = en ? mk('tip', A, {
+      tag: 'TIP',
+      headline: () => `3 keys to ${short.toLowerCase()}`,
+      subline: () => 'What we check before choosing',
+      cta: 'Save this tip',
+      caption: (x) => `3 keys to choosing your ${short.toLowerCase()} well 👇\n\nQuality, detail and the ${bizPh} standard: that's how we do ${x.toLowerCase()}.\n\nSave this post for when you need it 🔖`,
+    }) : mk('tip', A, {
       tag: 'TIP',
       headline: () => `3 claves de ${short.toLowerCase()}`,
       subline: () => 'Lo que miramos antes de elegir',
@@ -1240,7 +1267,13 @@ function deriveTopics(digest, opts) {
     || temasFeed.find((t) => !used.has(norm(t)));
   if (feedTema) {
     const A = String(feedTema);
-    const t = mk('social', A, {
+    const t = en ? mk('social', A, {
+      tag: '',
+      headline: (x) => (/^[a-z]+$/.test(x) ? `${x.charAt(0).toUpperCase() + x.slice(1)}, as always` : x),
+      subline: () => '',
+      cta: '',
+      caption: (x) => `${x} is one of the most requested things at ${bizPh} ✨\n\nThanks for choosing us and recommending us.\n\nTell us: have you tried it yet? 👇`,
+    }) : mk('social', A, {
       tag: '',
       headline: (x) => (/^[a-z]+$/.test(x) ? `${x.charAt(0).toUpperCase() + x.slice(1)}, como siempre` : x),
       subline: () => '',
@@ -1254,7 +1287,13 @@ function deriveTopics(digest, opts) {
   const bookItem = pickItem(0) || it1;
   if (bookItem && digest.has_booking) {
     const A = name(bookItem);
-    const t = mk('reserva', A, {
+    const t = en ? mk('reserva', A, {
+      tag: 'BOOKINGS',
+      headline: (x) => `Book your ${capWords(x, 3).toLowerCase()}`,
+      subline: () => "This week's spots go fast",
+      cta: 'Book now',
+      caption: (x) => `Booking open for ${x.toLowerCase()} at ${bizPh} 📩\n\nThis week's spots fill up fast.\n\nBook yours by DM 📩`,
+    }) : mk('reserva', A, {
       tag: 'TURNOS',
       headline: (x) => `Reservá tu ${capWords(x, 3).toLowerCase()}`,
       subline: () => 'Los lugares de la semana vuelan',
@@ -1265,7 +1304,13 @@ function deriveTopics(digest, opts) {
   } else if (it1) {
     const A = name(it1);
     if (!topics.some((t) => t.kind === 'reserva')) {
-      const t = mk('reserva', A, {
+      const t = en ? mk('reserva', A, {
+        tag: '',
+        headline: (x) => `${capWords(x, 4)}: order today`,
+        subline: () => '',
+        cta: 'Order now',
+        caption: (x) => `${x} is waiting for you at ${bizPh} ✨\n\nOrder it today and pick it up whenever you want.\n\nDM us to order 📩`,
+      }) : mk('reserva', A, {
         tag: '',
         headline: (x) => `${capWords(x, 4)}: pedilo hoy`,
         subline: () => '',

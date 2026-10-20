@@ -7,7 +7,7 @@
 // sin muletillas ("¡Hola!", "¡Descubrí…", "Atención, que…", "Mirá lo que tenemos
 // para vos") · rioplatense con voseo si el cliente es argentino.
 
-const { captionPasses } = require('./generator');
+const { captionPasses, captionPassesEn } = require('./generator');
 
 // ---------- Tono: conversión voseo → tuteo ----------
 // Cada fragmento voseante usado en las plantillas tiene su entrada acá.
@@ -226,8 +226,8 @@ const TAGS_NEUTRAL = {
   otro: ['#pymes', '#negocioslocales', '#comerciolocal', '#apoyolocal'],
 };
 
-function demoHashtags(category, country, tone) {
-  const base = tone === 'tu' ? TAGS_NEUTRAL : country === 'UY' ? TAGS_UY : TAGS_AR;
+function demoHashtags(category, country, tone, lang) {
+  const base = (lang === 'en' || country === 'US') ? TAGS_US : tone === 'tu' ? TAGS_NEUTRAL : country === 'UY' ? TAGS_UY : TAGS_AR;
   const tags = [...(base[category] || base.otro)]
     .sort(() => Math.random() - 0.5)
     .slice(0, 5);
@@ -807,6 +807,582 @@ const DEMO_TOPICS = {
 };
 
 // Para "tú", titulares sin voseo
+// ---------- (v274 · MODO EN) Hashtags US + catálogo de temas en inglés ----------
+// Espejo del catálogo ES con las MISMAS reglas de pieza: una idea por
+// pieza, titulares ≤6 palabras, un solo CTA por caption, sin % ni datos
+// inventados (el número solo si el propio tema lo trae en tag/titular).
+const TAGS_US = {
+  moda: ['#fashion', '#boutique', '#ootd', '#shoplocal', '#newarrivals'],
+  gastronomia: ['#foodie', '#foodlover', '#restaurant', '#eatlocal', '#foodstagram'],
+  belleza: ['#beauty', '#hairsalon', '#hairgoals', '#salonlife', '#balayage'],
+  makeup: ['#makeup', '#mua', '#softglam', '#makeupartist', '#bridalmakeup'],
+  fitness: ['#fitness', '#gymlife', '#training', '#healthylifestyle', '#personaltrainer'],
+  mascotas: ['#petcare', '#doggrooming', '#petlovers', '#dogsofinstagram', '#petshop'],
+  salud: ['#health', '#wellness', '#dentist', '#checkup', '#healthyliving'],
+  hogar: ['#homeservices', '#handyman', '#homeimprovement', '#homerepair', '#localbusiness'],
+  inmobiliaria: ['#realestate', '#realtor', '#househunting', '#justlisted', '#homesforsale'],
+  autos: ['#autorepair', '#mechanic', '#carcare', '#autoshop', '#carlovers'],
+  educacion: ['#education', '#courses', '#learning', '#students', '#skills'],
+  turismo: ['#travel', '#getaway', '#vacation', '#travelagency', '#wanderlust'],
+  eventos: ['#events', '#eventplanner', '#partyplanner', '#celebrations', '#eventproduction'],
+  tecnologia: ['#tech', '#smartphones', '#gadgets', '#phonerepair', '#techtips'],
+  deco: ['#homedecor', '#interiordesign', '#decor', '#homestyle', '#furniture'],
+  joyeria: ['#jewelry', '#handmadejewelry', '#silverjewelry', '#accessories', '#jewelrylover'],
+  fotografia: ['#photography', '#photographer', '#photoshoot', '#portraits', '#photosession'],
+  profesionales: ['#consulting', '#professionalservices', '#smallbusiness', '#businessadvice', '#experts'],
+  flores: ['#florist', '#flowers', '#bouquet', '#flowerlovers', '#freshflowers'],
+  bar: ['#cocktails', '#happyhour', '#barlife', '#drinks', '#nightout'],
+  cafeteria: ['#coffee', '#coffeeshop', '#barista', '#specialtycoffee', '#coffeelovers'],
+  barberia: ['#barbershop', '#barber', '#fade', '#menshair', '#barberlife'],
+  servicios: ['#localservices', '#homeservices', '#repairs', '#bookonline', '#localbusiness'],
+  viajes: ['#travel', '#travelagency', '#trips', '#getaway', '#traveldeals'],
+  arte: ['#art', '#artist', '#originalart', '#artgallery', '#handmade'],
+  otro: ['#smallbusiness', '#shoplocal', '#supportlocal', '#localbusiness', '#entrepreneur'],
+};
+
+const DEMO_TOPICS_EN = {
+  moda: [
+    { kind: 'novedad', tag: 'NEW', photo: 'fashion-1', headline: 'Leather jackets just landed',
+      subline: "The season's most wanted layer.", cta: 'I want one',
+      caption: 'Leather jackets just landed 🧥\n\nNew drop at {BIZ}: the layer every outfit was missing.\n\nDM us to grab yours 📩' },
+    { kind: 'promo', tag: 'DEAL', photo: 'fashion-2', headline: 'Second item 50% off',
+      subline: 'Take two, pay less.', cta: 'See the catalog',
+      caption: 'Second item 50% off 👗\n\nThis week at {BIZ}: take two, pay less.\n\nComment INFO and we send the catalog 👇' },
+    { kind: 'tip', tag: 'TIP', photo: 'fashion-3', headline: '3 ways to wear one jacket',
+      subline: 'One piece, three outfits.', cta: 'See the looks',
+      caption: 'One jacket, three looks 👇\n\n1. With a dress. 2. With jeans and sneakers. 3. Over a hoodie.\n\nSave this for later 🔖' },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'fashion', headline: 'Win a full outfit',
+      subline: 'Free to enter, one minute.', cta: 'Enter now',
+      caption: "Giveaway time 🎁\n\nWe're giving away a full outfit from {BIZ}.\n\nComment I'M IN and you're in 👇" },
+    { kind: 'social', tag: 'COMMUNITY', photo: 'fashion-5', headline: 'Our customers wear it best',
+      subline: 'Real looks, real customers.', cta: 'Get featured',
+      caption: 'Real customers, real looks ✨\n\nThis is how {BIZ} looks out in the wild.\n\nTag us to be featured 📸' },
+    { kind: 'promo', tag: 'SALE', photo: 'fashion-6', headline: 'End-of-season sale is on',
+      subline: 'Last pieces, this week only.', cta: 'Order mine',
+      caption: "The end-of-season sale is on 🛍️\n\nLast pieces at {BIZ}, until they're gone.\n\nDM us to order yours 📩" },
+  ],
+  gastronomia: [
+    { kind: 'social', tag: 'CROWD FAVORITE', photo: 'food-5', headline: 'The plate everyone orders',
+      subline: 'Our best seller, made fresh daily.', cta: 'Try it today',
+      caption: "The one everyone orders 🍽️\n\nOur best seller at {BIZ}, made fresh all day.\n\nStop by and try it today 📍" },
+    { kind: 'promo', tag: '2X1', photo: 'food-6', headline: 'Two-for-one Tuesdays',
+      subline: 'Bring someone, second one free.', cta: 'See the deal',
+      caption: "Two-for-one Tuesdays 🍔\n\nBring someone: the second one is on us at {BIZ}.\n\nTag who you're bringing 👇" },
+    { kind: 'reserva', tag: 'TODAY', photo: 'food-1', headline: "Tonight's table is waiting",
+      subline: 'Weekend tables fill fast.', cta: 'Book my table',
+      caption: "Dinner tonight? 🍝\n\nTables at {BIZ} fill up fast on weekends.\n\nBook yours by DM 📩" },
+    { kind: 'novedad', tag: 'NEW', photo: 'food-3', headline: 'New dish on the menu',
+      subline: 'The one you asked for.', cta: 'Try it first',
+      caption: "New on the menu ✨\n\nThis week {BIZ} adds a dish you've been asking for.\n\nCome try it first 📍" },
+    { kind: 'tip', tag: 'TIP', photo: 'food', headline: 'How we keep it crispy',
+      subline: 'Our kitchen secret, shared.', cta: 'See the trick',
+      caption: 'Crispy every single time 👇\n\nThe secret is the second fry — and we do it for every order at {BIZ}.\n\nSave this trick 🔖' },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'food-4', headline: 'Win dinner for two',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🍽️\n\nDinner for two at {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  belleza: [
+    { kind: 'novedad', tag: 'NEW', photo: 'beauty-8', headline: 'New balayage season is open',
+      subline: 'Soft, lived-in color.', cta: 'Book my chair',
+      caption: "Balayage season is open ✨\n\nSoft, lived-in color is what everyone is booking at {BIZ}.\n\nBook your chair by DM 📩" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'beauty-2', headline: 'Saturday slots just opened',
+      subline: 'A few chairs freed up.', cta: 'Book mine',
+      caption: "Saturday slots just opened 💇\n\nA few chairs freed up this weekend at {BIZ}.\n\nBook yours before they're gone 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'beauty-7', headline: '3 signs your hair needs protein',
+      subline: 'Read them before your next wash.', cta: 'Read the signs',
+      caption: 'Your hair is asking for protein 👇\n\n1. It stretches and breaks. 2. Color fades fast. 3. It feels mushy when wet.\n\nSave this post 🔖' },
+    { kind: 'promo', tag: 'COMBO', photo: 'beauty-2', headline: 'Cut + treatment combo',
+      subline: 'One visit, ready for the month.', cta: 'Book the combo',
+      caption: 'Cut + treatment, one visit ✂️\n\nThe combo that leaves your hair ready for the month, at {BIZ}.\n\nDM us to book yours 📩' },
+    { kind: 'social', tag: 'BEFORE/AFTER', photo: 'beauty-9', headline: 'From dull to glossy',
+      subline: 'Real client, one session.', cta: 'Book my change',
+      caption: 'From dull to glossy ✨\n\nOne session at {BIZ}. Real client, real result.\n\nBook your transformation 📩' },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'beauty-3', headline: 'Win a full glam session',
+      subline: 'For you and a friend.', cta: 'Enter now',
+      caption: "Giveaway 💅\n\nA full glam session at {BIZ} for you and a friend.\n\nComment I'M IN to enter 👇" },
+  ],
+  makeup: [
+    { kind: 'novedad', tag: 'NEW', photo: 'beauty-5', headline: 'New: soft glam menu',
+      subline: 'The most requested look.', cta: 'Book my date',
+      caption: "Soft glam, now on the menu 💄\n\nThe most requested look at {BIZ}, ready for your next event.\n\nBook your date by DM 📩" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'beauty-3', headline: 'Weekend dates are open',
+      subline: 'This month is booking fast.', cta: 'Save my date',
+      caption: "Your event date is open 📅\n\nMakeup bookings for this month are live at {BIZ}.\n\nDM us to save your date 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'beauty-3', headline: 'Makeup that lasts all night',
+      subline: 'The order matters more than the brand.', cta: 'See the steps',
+      caption: 'Makeup that lasts all night 👇\n\nPrimer, thin layers, setting spray. The order matters more than the brand.\n\nSave this for your next event 🔖' },
+    { kind: 'promo', tag: 'BRIDES', photo: 'beauty-5', headline: 'Bridal trial included',
+      subline: 'Every bridal booking, no extra cost.', cta: 'Ask for my date',
+      caption: "Brides, this one's for you 💍\n\nEvery bridal booking at {BIZ} includes a full trial session.\n\nDM us your date 📩" },
+    { kind: 'social', tag: 'BEFORE/AFTER', photo: 'beauty-5', headline: 'The before says it all',
+      subline: 'Real client, one session.', cta: 'Book my glam',
+      caption: 'The before says it all ✨\n\nReal client, one session at {BIZ}.\n\nBook your glam by DM 📩' },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'beauty-4', headline: 'Win a makeup session',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nA full makeup session at {BIZ} is up for grabs.\n\nComment I'M IN to enter 👇" },
+  ],
+  fitness: [
+    { kind: 'novedad', tag: 'NEW', photo: 'fitness-5', headline: 'New morning classes added',
+      subline: 'Train before work: 6 and 7 AM.', cta: 'Start this week',
+      caption: "New morning classes 🌅\n\nTrain before work at {BIZ}: 6 and 7 AM slots are live.\n\nDM us to start this week 📩" },
+    { kind: 'promo', tag: 'BUDDY FRIDAYS', photo: 'fitness-3', headline: 'Bring a friend free Friday',
+      subline: 'Your guest trains free.', cta: 'Bring my friend',
+      caption: "Buddy Fridays 💪\n\nBring a friend to train free every Friday at {BIZ}.\n\nTag your training partner 👇" },
+    { kind: 'tip', tag: 'TIP', photo: 'fitness-1', headline: '3 stretches for desk workers',
+      subline: 'Undo the chair in five minutes.', cta: 'See the stretches',
+      caption: 'Desk workers, read this 👇\n\n3 stretches for you: neck rolls, hip openers, and a two-minute walk every hour.\n\nSave this routine 🔖' },
+    { kind: 'social', tag: 'COMMUNITY', photo: 'fitness-4', headline: 'Our 6 AM crew',
+      subline: 'Rain or shine, they show up.', cta: 'Join the crew',
+      caption: 'The 6 AM crew shows up 🌅\n\nRain or shine, the morning crew at {BIZ} gets it done.\n\nJoin us tomorrow 📍' },
+    { kind: 'promo', tag: 'NO SIGN-UP FEE', photo: 'fitness', headline: 'No sign-up fee this month',
+      subline: 'Start today, skip the fee.', cta: 'Claim my spot',
+      caption: "No sign-up fee this month 🏋️\n\nStart at {BIZ} today and skip the enrollment fee.\n\nDM us to claim your spot 📩" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'fitness-2', headline: 'Book your free assessment',
+      subline: 'We measure, you get a plan.', cta: 'Book mine',
+      caption: "Start with a free assessment 📋\n\nWe measure, you get a plan. That's how we start at {BIZ}.\n\nBook yours by DM 📩" },
+  ],
+  mascotas: [
+    { kind: 'novedad', tag: 'NEW', photo: 'pets', headline: "New: puppy's first groom package",
+      subline: 'A gentle first bath and cut.', cta: 'Book it',
+      caption: "Puppy's first groom 🐶\n\nA gentle first bath-and-cut package for puppies at {BIZ}.\n\nBook it by DM 📩" },
+    { kind: 'promo', tag: 'COMBO', photo: 'pets-1', headline: 'Bath + nail trim combo',
+      subline: 'One visit, full refresh.', cta: 'Book the combo',
+      caption: 'Bath + nail trim combo 🛁\n\nOne visit, full refresh for your dog at {BIZ}.\n\nDM us to book 📩' },
+    { kind: 'tip', tag: 'TIP', photo: 'pets-2', headline: 'How often to bathe your dog',
+      subline: 'Most breeds: every 4 to 6 weeks.', cta: 'Read the guide',
+      caption: 'How often should you bathe your dog? 👇\n\nMost breeds: every 4-6 weeks. Over-bathing dries the skin.\n\nSave this guide 🔖' },
+    { kind: 'social', tag: 'HAPPY PUPS', photo: 'pets-4', headline: "This week's happiest clients",
+      subline: 'Fresh from the tub.', cta: 'Book my pup',
+      caption: "This week's happiest clients 🐾\n\nFresh from the tub at {BIZ}.\n\nBook your pup's turn 📩" },
+    { kind: 'reserva', tag: 'GROOMING', photo: 'pets-3', headline: 'Weekend grooming slots open',
+      subline: 'Bath, cut and nails.', cta: 'Book by DM',
+      caption: 'Weekend grooming slots are open ✂️\n\nBath, cut and nails at {BIZ}.\n\nBook by DM before Friday 📩' },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'pets-5', headline: 'Win a free bath',
+      subline: 'For one lucky pup.', cta: 'Enter now',
+      caption: "Giveaway 🐾\n\nA free bath for one lucky pup, from {BIZ}.\n\nComment I'M IN to enter 👇" },
+  ],
+  salud: [
+    { kind: 'novedad', tag: 'NEW', photo: 'office-3', headline: 'New: same-week appointments',
+      subline: 'No more waiting a month.', cta: 'Book mine',
+      caption: "Same-week appointments 🩺\n\nNo more waiting a month: {BIZ} opened new slots.\n\nBook yours by DM 📩" },
+    { kind: 'reserva', tag: 'CHECKUP', photo: 'office-5', headline: 'Your yearly checkup is due',
+      subline: 'A yearly visit catches things early.', cta: 'Book my checkup',
+      caption: "When was your last checkup? 📅\n\nA yearly visit catches things early. We make it easy at {BIZ}.\n\nBook by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'lifestyle-2', headline: '3 habits for a healthier smile',
+      subline: 'Small habits, real change.', cta: 'See the habits',
+      caption: 'A healthier smile starts here 👇\n\n1. Brush two minutes. 2. Floss daily. 3. Water after coffee.\n\nSave this reminder 🔖' },
+    { kind: 'promo', tag: 'FIRST VISIT', photo: 'office-1', headline: 'First-visit special this month',
+      subline: 'Full first check for new patients.', cta: 'Book my visit',
+      caption: "First visit special 🦷\n\nNew patients at {BIZ} get the full first check this month.\n\nDM us to book 📩" },
+    { kind: 'social', tag: 'TEAM', photo: 'lifestyle-1', headline: 'Meet the team behind your care',
+      subline: 'The people who take care of you.', cta: 'Visit us',
+      caption: 'Meet the team 👋\n\nThe people who take care of you at {BIZ}, up close.\n\nVisit us this week 📍' },
+    { kind: 'tip', tag: 'TIP', photo: 'lifestyle', headline: 'Why flossing actually matters',
+      subline: 'Your brush only reaches 60%.', cta: 'Read why',
+      caption: 'Flossing is not optional 👇\n\nYour brush reaches 60% of the tooth. The rest is floss territory.\n\nSave this post 🔖' },
+  ],
+  hogar: [
+    { kind: 'novedad', tag: 'NEW', photo: 'home-2', headline: 'New: same-day repairs',
+      subline: 'Leaks and fixes, solved today.', cta: 'Book a repair',
+      caption: 'Same-day repairs 🔧\n\nLeaks and fixes solved today by {BIZ}.\n\nDM us to book your visit 📩' },
+    { kind: 'promo', tag: 'DEAL', photo: 'home', headline: 'Free on-site estimate',
+      subline: 'We come, we measure, clear quote.', cta: 'Get my estimate',
+      caption: 'Free on-site estimate 🏠\n\nWe come, we measure, you get a clear quote from {BIZ}.\n\nBook yours by DM 📩' },
+    { kind: 'tip', tag: 'TIP', photo: 'home-6', headline: '3 leaks that cost you money',
+      subline: 'Check them this weekend.', cta: 'See the leaks',
+      caption: 'These leaks are costing you 👇\n\n1. The running toilet. 2. The dripping faucet. 3. The hidden pipe.\n\nSave this checklist 🔖' },
+    { kind: 'reserva', tag: 'BOOK', photo: 'home-4', headline: "This week's visit slots",
+      subline: 'Repairs booked for this week.', cta: 'Reserve mine',
+      caption: "Home visit slots are open 📅\n\n{BIZ} is booking this week's repairs now.\n\nReserve yours by DM 📩" },
+    { kind: 'social', tag: 'REAL HOMES', photo: 'home-1', headline: 'A kitchen we just finished',
+      subline: 'Finished and handed over.', cta: 'Start mine',
+      caption: "Finished and handed over ✨\n\nAnother kitchen done by {BIZ}.\n\nMessage us yours 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'home-5', headline: 'Win a home inspection',
+      subline: 'A full inspection, free.', cta: 'Enter now',
+      caption: "Giveaway 🏠\n\nA full home inspection from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  inmobiliaria: [
+    { kind: 'novedad', tag: 'JUST LISTED', photo: 'home-3', headline: 'Just listed: 3-bed in the city',
+      subline: 'Bright living room, ready to move in.', cta: 'Book a tour',
+      caption: "Just listed 🏡\n\n3 beds, bright living room, ready to move in. Listed by {BIZ}.\n\nDM us for the tour 📩" },
+    { kind: 'promo', tag: 'OPEN HOUSE', photo: 'home', headline: 'Open house this Saturday',
+      subline: 'Walk through, no appointment needed.', cta: 'Get the address',
+      caption: "Open house this Saturday 🔑\n\nCome walk through it with {BIZ}, no appointment needed.\n\nDM us for the address 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'office', headline: '3 things buyers check first',
+      subline: 'Light, noise and water pressure.', cta: 'See the list',
+      caption: 'Buyers check these first 👇\n\n1. Light. 2. Noise. 3. Water pressure.\n\nSave this before your next tour 🔖' },
+    { kind: 'social', tag: 'SOLD', photo: 'home-4', headline: 'Sold: keys handed over',
+      subline: 'Another family home, sold.', cta: 'Sell with us',
+      caption: "Keys handed over 🔑\n\nAnother family home, sold with {BIZ}.\n\nThinking of selling? DM us 📩" },
+    { kind: 'reserva', tag: 'TOURS', photo: 'home-1', headline: 'Weekend tours are open',
+      subline: 'Private tours, Saturday and Sunday.', cta: 'Book my tour',
+      caption: "Tour it this weekend 🏠\n\nPrivate tours with {BIZ} are open for Saturday and Sunday.\n\nBook yours by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'office-1', headline: 'What your pre-approval really covers',
+      subline: 'Your real budget, before the house hunt.', cta: 'Read it',
+      caption: 'Pre-approval, explained simply 👇\n\nIt sets your real budget before you fall for a house.\n\nSave this guide 🔖' },
+  ],
+  autos: [
+    { kind: 'novedad', tag: 'NEW', photo: 'office-4', headline: 'New: full diagnostic scanner',
+      subline: 'Every system scanned before quoting.', cta: 'Book my check',
+      caption: "Full diagnostic, same day 🔧\n\n{BIZ} now scans every system before quoting.\n\nBook your check by DM 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'office-1', headline: 'Oil change + free inspection',
+      subline: 'Full inspection included.', cta: 'Book mine',
+      caption: "Oil change day 🛢️\n\nEvery oil change at {BIZ} includes a free full inspection.\n\nBook yours today 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'office', headline: "3 noises you shouldn't ignore",
+      subline: 'They get expensive when you wait.', cta: 'Hear the noises',
+      caption: "Don't ignore these noises 👇\n\n1. Squeal when braking. 2. Click when turning. 3. A hum that grows with speed.\n\nSave this post 🔖" },
+    { kind: 'promo', tag: 'BRAKES', photo: 'lifestyle-4', headline: 'Brake check week',
+      subline: 'Stopping distance is safety.', cta: 'Book my check',
+      caption: "Brake check week 🚗\n\nStopping distance is safety. {BIZ} checks your brakes this week.\n\nDM us to book 📩" },
+    { kind: 'social', tag: 'ON THE ROAD', photo: 'lifestyle-6', headline: 'Back on the road today',
+      subline: 'In by morning, out by evening.', cta: 'Visit us',
+      caption: 'Back on the road 🚗\n\nIn by morning, out by evening. That is how {BIZ} works.\n\nVisit us for your next service 📍' },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'office-2', headline: 'Win a full car detail',
+      subline: 'For one lucky driver.', cta: 'Enter now',
+      caption: "Giveaway 🚘\n\nA full detail from {BIZ} for one lucky driver.\n\nComment I'M IN to enter 👇" },
+  ],
+  educacion: [
+    { kind: 'novedad', tag: 'NEW', photo: 'office-1', headline: 'New groups start Monday',
+      subline: 'Small groups, real progress.', cta: 'Save my seat',
+      caption: "New groups start Monday 📚\n\nSmall groups, real progress at {BIZ}.\n\nDM us to save your seat 📩" },
+    { kind: 'promo', tag: 'EARLY BIRD', photo: 'office', headline: 'Early bird enrollment open',
+      subline: "Lock this term's price this week.", cta: 'Enroll now',
+      caption: "Early bird enrollment 🎓\n\nSign up this week at {BIZ} and lock this term's price.\n\nMessage us to enroll 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'office-2', headline: 'Study 20 minutes a day',
+      subline: 'Short daily sessions beat marathons.', cta: 'See the method',
+      caption: '20 minutes a day works 👇\n\nShort daily sessions beat weekend marathons. We build the habit with you at {BIZ}.\n\nSave this method 🔖' },
+    { kind: 'social', tag: 'STUDENTS', photo: 'office-4', headline: 'Our students, their words',
+      subline: 'What they say after a term.', cta: 'Join the group',
+      caption: "In their own words ✨\n\nWhat students say after a term at {BIZ}.\n\nDM us to join the next group 📩" },
+    { kind: 'reserva', tag: 'FREE CLASS', photo: 'lifestyle-1', headline: 'Your first class is free',
+      subline: 'Try a real class before you decide.', cta: 'Book my class',
+      caption: "First class free 🎒\n\nTry a real class at {BIZ} before you decide.\n\nBook yours by DM 📩" },
+    { kind: 'promo', tag: 'FAMILY', photo: 'lifestyle-2', headline: 'Siblings enroll together, save more',
+      subline: 'A better rate for families.', cta: 'Ask for details',
+      caption: "Siblings together 👨‍👩‍👧\n\nFamilies enrolling two or more at {BIZ} get a better rate.\n\nMessage us for details 📩" },
+  ],
+  turismo: [
+    { kind: 'novedad', tag: 'NEW', photo: 'lifestyle-2', headline: 'New route: weekend escapes',
+      subline: 'Your next getaway, sorted.', cta: 'See the dates',
+      caption: "Weekend escapes are here 🌴\n\nNew routes from {BIZ} for your next getaway.\n\nDM us for dates 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'lifestyle-6', headline: 'Book early, pay less',
+      subline: 'The best fares go first.', cta: 'Plan my trip',
+      caption: "Early birds pay less ✈️\n\nBooking ahead at {BIZ} unlocks the best fares.\n\nMessage us your dates 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'lifestyle', headline: 'Pack light, travel better',
+      subline: 'Three rules that always work.', cta: 'See the rules',
+      caption: "Pack lighter, travel better 👇\n\n1. Roll, don't fold. 2. One pair of shoes rules. 3. Layers beat bulk.\n\nSave this for your trip 🔖" },
+    { kind: 'social', tag: 'TRAVELERS', photo: 'lifestyle-3', headline: 'Our travelers this month',
+      subline: 'Real trips, real postcards.', cta: 'Tag us',
+      caption: "Postcards from our travelers 📸\n\nReal trips booked with {BIZ}.\n\nTag us on your next trip 📍" },
+    { kind: 'reserva', tag: 'PLAN IT', photo: 'lifestyle-1', headline: 'We plan, you pack',
+      subline: 'Flights, hotels and tours in one place.', cta: 'Book a call',
+      caption: "We plan, you pack 🧳\n\nFlights, hotels and tours in one place: {BIZ}.\n\nBook a planning call by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'lifestyle', headline: 'Win a weekend getaway',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🌴\n\nA weekend getaway from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  eventos: [
+    { kind: 'novedad', tag: 'NEW', photo: 'bar-4', headline: 'New: full production packages',
+      subline: 'Sound, lights and planning, one team.', cta: 'Ask for my date',
+      caption: "Full production, one team 🎉\n\nSound, lights and planning by {BIZ}.\n\nDM us your date 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'bar-2', headline: 'Weekday events, better rates',
+      subline: 'Monday to Thursday pays less.', cta: 'Ask for my date',
+      caption: "Weekday events pay less 🎊\n\nBook your date Monday to Thursday at {BIZ} and save.\n\nMessage us your date 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'bar-3', headline: '3 mistakes that ruin a party',
+      subline: 'Avoid them before your date.', cta: 'See the mistakes',
+      caption: "Don't let these ruin your party 👇\n\n1. No backup plan for rain. 2. Music too loud to talk. 3. Running out of ice.\n\nSave this checklist 🔖" },
+    { kind: 'social', tag: 'REAL PARTIES', photo: 'bar-1', headline: 'Last Saturday, in pictures',
+      subline: 'A real party, produced by us.', cta: 'Book my date',
+      caption: "Last Saturday looked like this 🎶\n\nA real party produced by {BIZ}.\n\nBook your date by DM 📩" },
+    { kind: 'reserva', tag: 'DATES', photo: 'bar-5', headline: "This season's dates are open",
+      subline: 'Booking now for the season.', cta: 'Reserve mine',
+      caption: "Dates are open 📅\n\n{BIZ} is booking this season's events now.\n\nReserve yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'lifestyle-4', headline: 'Win a party package',
+      subline: 'For your next celebration.', cta: 'Enter now',
+      caption: "Giveaway 🎉\n\nA party package from {BIZ} for your next celebration.\n\nComment I'M IN to enter 👇" },
+  ],
+  tecnologia: [
+    { kind: 'novedad', tag: 'NEW', photo: 'tech', headline: 'The latest model just landed',
+      subline: 'Unlocked for every carrier.', cta: 'Get mine',
+      caption: "The latest model is here 📱\n\nIn stock now at {BIZ}, unlocked for every carrier.\n\nDM us to get yours 📩" },
+    { kind: 'promo', tag: 'ACCESSORIES', photo: 'tech-2', headline: 'Accessories 30% off this week',
+      subline: 'Cases, protectors and chargers.', cta: 'Order mine',
+      caption: "30% off accessories 📱\n\nCases, screen protectors and chargers at {BIZ}.\n\nOrder yours by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'tech-1', headline: '3 settings that save battery',
+      subline: 'Two minutes, more hours.', cta: 'See the settings',
+      caption: 'Your battery lasts longer like this 👇\n\n1. Auto brightness. 2. Kill background apps. 3. Power saving at night.\n\nSave this post 🔖' },
+    { kind: 'promo', tag: 'TRADE-IN', photo: 'tech-3', headline: 'Trade in your old phone',
+      subline: 'We take it as part of the payment.', cta: 'Get a quote',
+      caption: "Your old phone is worth money 📱\n\nAt {BIZ} we take it as part of the payment for the new one.\n\nComment INFO for a quote 👇" },
+    { kind: 'social', tag: 'REVIEW', photo: 'office', headline: 'We tested it for a week',
+      subline: 'Our honest review.', cta: 'See the review',
+      caption: "One week with the new model 📱\n\nThe good, the bad and if it's worth it: an honest review by {BIZ}.\n\nSave this review 🔖" },
+    { kind: 'reserva', tag: 'SUPPORT', photo: 'office-1', headline: 'Free diagnosis this week',
+      subline: 'We tell you what is wrong, no charge.', cta: 'Book my slot',
+      caption: "Your slow phone can be fixed 🔧\n\nFree diagnosis at {BIZ}: we tell you what's wrong, no charge.\n\nBook your slot by DM 📩" },
+  ],
+  deco: [
+    { kind: 'novedad', tag: 'NEW', photo: 'home-1', headline: 'New: the Nordic collection',
+      subline: 'Light wood, clean lines.', cta: 'See the collection',
+      caption: "The Nordic collection is here ✨\n\nLight wood and clean lines to refresh your living room, at {BIZ}.\n\nStop by the store today 📍" },
+    { kind: 'promo', tag: 'CLEARANCE', photo: 'home-4', headline: 'Up to 40% off decor',
+      subline: 'Season clearance, this week only.', cta: 'See the pieces',
+      caption: "Up to 40% off decor 🏠\n\nSeason clearance at {BIZ}, this week only.\n\nComment INFO for the catalog 👇" },
+    { kind: 'tip', tag: 'TIP', photo: 'home', headline: '3 small changes, big change',
+      subline: 'No renovation, no big budget.', cta: 'See the ideas',
+      caption: 'Refresh without renovation 👇\n\n1. New cushions. 2. A floor lamp. 3. One big plant.\n\nSave these ideas 🔖' },
+    { kind: 'social', tag: 'REAL HOMES', photo: 'home-5', headline: 'Our pieces, your living rooms',
+      subline: 'Real homes, our pieces.', cta: 'Get advice',
+      caption: "Real homes, our pieces ✨\n\nHow {BIZ} pieces look in our customers' houses.\n\nDM us for free advice 📩" },
+    { kind: 'reserva', tag: 'FREE ADVICE', photo: 'home-2', headline: 'Free decor advice in store',
+      subline: 'We help you choose.', cta: 'Book my advice',
+      caption: "Don't know where to start? 🤔\n\nFree decor advice at {BIZ}: come in, we look and choose together.\n\nBook yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'home-3', headline: 'Win a designer lamp',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 💡\n\nA designer lamp from {BIZ} could light up your home.\n\nComment I'M IN to enter 👇" },
+  ],
+  joyeria: [
+    { kind: 'novedad', tag: 'NEW', photo: 'beauty-6', headline: 'New pieces, handmade daily',
+      subline: 'New pieces every week.', cta: 'See the latest',
+      caption: "Handmade, one by one ✨\n\nNew pieces arrive at {BIZ} every week.\n\nDM us to see the latest 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'beauty-5', headline: 'Second piece 30% off',
+      subline: 'On selected pieces, this week.', cta: 'Order mine',
+      caption: "30% off the second piece 💍\n\nThis week at {BIZ}, on selected pieces.\n\nOrder yours by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'beauty-4', headline: 'How to keep silver shining',
+      subline: 'Three care rules.', cta: 'See the care guide',
+      caption: 'Keep your silver shining 👇\n\nStore it dry, wear it often, clean it with a soft cloth.\n\nSave this care guide 🔖' },
+    { kind: 'social', tag: 'REAL CLIENTS', photo: 'fashion-1', headline: 'Worn by you',
+      subline: 'Our pieces on real customers.', cta: 'Get featured',
+      caption: "Worn by you ✨\n\nOur pieces on real customers of {BIZ}.\n\nTag us wearing yours 📸" },
+    { kind: 'reserva', tag: 'BY APPOINTMENT', photo: 'beauty-2', headline: 'Private viewing appointments',
+      subline: 'See the newest pieces up close.', cta: 'Book mine',
+      caption: "See it up close 💎\n\nPrivate viewings at {BIZ} for our newest pieces.\n\nBook yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'fashion-5', headline: 'Win a silver necklace',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nA silver necklace from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  fotografia: [
+    { kind: 'novedad', tag: 'NEW', photo: 'lifestyle', headline: 'New: mini sessions monthly',
+      subline: 'Short, affordable shoots.', cta: 'Book mine',
+      caption: "Mini sessions are here 📸\n\nShort, affordable shoots with {BIZ}, every month.\n\nDM us to book yours 📩" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'fashion-1', headline: "This month's session dates",
+      subline: 'Booking now for this month.', cta: 'Reserve mine',
+      caption: "Session dates are open 📅\n\n{BIZ} is booking this month's shoots now.\n\nReserve yours by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'fashion-3', headline: 'What to wear to your shoot',
+      subline: 'Solid colors, no logos.', cta: 'See the guide',
+      caption: "What should you wear? 👇\n\nSolid colors, no logos, and one outfit that feels like you.\n\nSave this guide 🔖" },
+    { kind: 'social', tag: 'REAL SHOOTS', photo: 'lifestyle-3', headline: 'A session from last weekend',
+      subline: 'Real people, real light.', cta: 'Book mine',
+      caption: "Last weekend's session ✨\n\nReal people, real light, by {BIZ}.\n\nBook yours by DM 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'lifestyle-4', headline: 'Couple sessions this month',
+      subline: 'A relaxed shoot for two.', cta: 'Ask for dates',
+      caption: "Couple sessions 💑\n\nA relaxed shoot for two, by {BIZ}.\n\nMessage us your date 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'lifestyle-1', headline: 'Win a mini session',
+      subline: 'For you and your favorite person.', cta: 'Enter now',
+      caption: "Giveaway 📸\n\nA free mini session with {BIZ} for you and your favorite person.\n\nComment I'M IN to enter 👇" },
+  ],
+  profesionales: [
+    { kind: 'novedad', tag: 'NEW', photo: 'office-1', headline: 'New: free first consult',
+      subline: 'The first meeting is on us.', cta: 'Book mine',
+      caption: "First consult, free 📋\n\nBring your case to {BIZ}: the first meeting is on us.\n\nBook yours by DM 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'office', headline: 'This month: full review included',
+      subline: 'The deep review, in every new file.', cta: 'Start my file',
+      caption: "A full review of your case 📂\n\nThis month {BIZ} includes the deep review in every new file.\n\nMessage us your case 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'office-2', headline: '3 papers to keep in order',
+      subline: 'Contracts, receipts, IDs.', cta: 'See the list',
+      caption: 'Keep these in order 👇\n\n1. Contracts signed. 2. Tax receipts. 3. IDs up to date.\n\nSave this checklist 🔖' },
+    { kind: 'social', tag: 'CLIENTS', photo: 'office-4', headline: 'Cases we solved this month',
+      subline: 'Real cases, real outcomes.', cta: 'Send my case',
+      caption: "Solved this month ✅\n\nReal cases, real outcomes, by {BIZ}.\n\nDM us yours 📩" },
+    { kind: 'promo', tag: 'FAST REPLY', photo: 'office', headline: 'We answer within the day',
+      subline: 'Your question never waits.', cta: 'Ask today',
+      caption: "Answers within the day ⏱️\n\nAt {BIZ} your question never waits until tomorrow.\n\nMessage us today 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'lifestyle-1', headline: 'When to ask for help early',
+      subline: 'Cheap at the start, costly later.', cta: 'Read why',
+      caption: 'Ask early, save trouble 👇\n\nMost problems are cheap at the start and expensive later.\n\nSave this advice 🔖' },
+  ],
+  contenido: [
+    { kind: 'tip', tag: 'TIP', photo: 'office-1', headline: '3 hooks that stop the scroll',
+      subline: 'Claim, number, before/after.', cta: 'See the hooks',
+      caption: 'Hooks that stop the scroll 👇\n\n1. A bold claim. 2. A real number. 3. A before/after.\n\nSave this playbook 🔖' },
+    { kind: 'tip', tag: 'TIP', photo: 'office-2', headline: 'Post consistently, not constantly',
+      subline: 'Three strong posts beat daily noise.', cta: 'See the rule',
+      caption: "Consistency beats intensity 📈\n\nThree strong posts a week outperform daily noise. That's the {BIZ} rule.\n\nSave this rule 🔖" },
+    { kind: 'social', tag: 'CREATORS', photo: 'lifestyle-1', headline: 'Creators we work with',
+      subline: 'Real people, growing brands.', cta: 'Join the cohort',
+      caption: "The creators behind the brands ✨\n\nReal people growing with {BIZ}.\n\nDM us to join the next cohort 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'office', headline: 'Content audit this month',
+      subline: 'A full review and a plan.', cta: 'Start my audit',
+      caption: "A full audit of your content 🔍\n\n{BIZ} reviews your profile and hands you a plan.\n\nMessage us to start 📩" },
+    { kind: 'reserva', tag: 'STRATEGY CALL', photo: 'office-4', headline: 'Book a strategy call',
+      subline: 'Leave with a content calendar.', cta: 'Reserve mine',
+      caption: "Your content, with a plan 📅\n\nBook a strategy call with {BIZ} and leave with a calendar.\n\nReserve yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'lifestyle-2', headline: 'Win a content audit',
+      subline: 'For one lucky brand.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nA free content audit from {BIZ} for one lucky brand.\n\nComment I'M IN to enter 👇" },
+  ],
+  flores: [
+    { kind: 'novedad', tag: 'NEW', photo: 'flores', headline: 'Fresh arrivals every morning',
+      subline: 'New flowers, every day.', cta: 'Order mine',
+      caption: "Fresh every morning 🌸\n\nNew flowers arrive at {BIZ} daily.\n\nOrder yours by DM 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'flores-1', headline: 'Bouquet of the week',
+      subline: "This week's seasonal bouquet.", cta: 'Order mine',
+      caption: "Bouquet of the week 💐\n\nThis week's seasonal bouquet at {BIZ}.\n\nOrder by DM for pickup 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'flores-2', headline: 'Make your flowers last longer',
+      subline: 'Three simple care rules.', cta: 'See the rules',
+      caption: 'Make them last longer 👇\n\nCut stems at an angle, change the water every two days, keep them out of direct sun.\n\nSave this guide 🔖' },
+    { kind: 'social', tag: 'REAL BOUQUETS', photo: 'flores-3', headline: "This week's real bouquets",
+      subline: 'Made and delivered this week.', cta: 'Order mine',
+      caption: "Made this week 🌷\n\nReal bouquets that left {BIZ} in the last days.\n\nOrder yours by DM 📩" },
+    { kind: 'reserva', tag: 'ORDER AHEAD', photo: 'flores-4', headline: 'Order ahead for your date',
+      subline: 'Ready to pick up on your day.', cta: 'Reserve mine',
+      caption: "Your date, covered 💐\n\nOrder flowers ahead at {BIZ} and pick them up ready.\n\nReserve yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'flores-5', headline: 'Win a seasonal bouquet',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🌸\n\nA seasonal bouquet from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  bar: [
+    { kind: 'novedad', tag: 'NEW', photo: 'bar-3', headline: 'New cocktails on the menu',
+      subline: 'Pouring from tonight.', cta: 'Try one',
+      caption: "New cocktails just dropped 🍸\n\nThe new menu at {BIZ} is pouring from tonight.\n\nStop by and try one 📍" },
+    { kind: 'promo', tag: 'HAPPY HOUR', photo: 'bar-2', headline: 'Happy hour until 8 PM',
+      subline: 'Every day, drinks and bites.', cta: 'See the menu',
+      caption: "Happy hour 🍻\n\nEvery day until 8 PM at {BIZ}: drinks and bites at happy-hour prices.\n\nTag your crew 👇" },
+    { kind: 'tip', tag: 'TIP', photo: 'bar-1', headline: 'How we build a perfect highball',
+      subline: 'Small details, big result.', cta: 'See the trick',
+      caption: "The perfect highball 👇\n\nCold glass, big ice, a hard pour. That's the {BIZ} way.\n\nSave this trick 🔖" },
+    { kind: 'social', tag: 'LAST NIGHT', photo: 'bar-4', headline: 'Last night at the bar',
+      subline: 'Real nights, real people.', cta: 'Join us',
+      caption: "Last night looked like this 🎶\n\nReal nights at {BIZ}.\n\nJoin us this weekend 📍" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'bar-5', headline: 'Win a round for your table',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🍻\n\nA round for your table at {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'lifestyle-4', headline: 'Book your table for Friday',
+      subline: 'Friday fills up fast.', cta: 'Reserve mine',
+      caption: "Friday fills up fast 🍸\n\nBook your table at {BIZ} before the weekend rush.\n\nReserve by DM 📩" },
+  ],
+  cafeteria: [
+    { kind: 'novedad', tag: 'NEW', photo: 'food', headline: 'New: single-origin of the month',
+      subline: 'For espresso and filter.', cta: 'Try it',
+      caption: "Single-origin of the month ☕\n\nA new bean at {BIZ}, roasted for espresso and filter.\n\nCome try it today 📍" },
+    { kind: 'promo', tag: 'COMBO', photo: 'food-4', headline: 'Coffee + pastry combo',
+      subline: 'The perfect pair, every morning.', cta: 'Order mine',
+      caption: "The perfect pair ☕\n\nCoffee and pastry together at {BIZ}, every morning.\n\nOrder yours at the counter or by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'food-1', headline: 'Espresso at home, café level',
+      subline: 'Fresh beans and 25 seconds.', cta: 'See the guide',
+      caption: 'Café-level espresso at home 👇\n\nFresh beans, hot portafilter, 25 seconds. The rest is practice.\n\nSave this guide 🔖' },
+    { kind: 'social', tag: 'REGULARS', photo: 'lifestyle-1', headline: 'Our morning regulars',
+      subline: 'The ones who start their day here.', cta: 'Join us',
+      caption: "The morning crowd ☀️\n\nThe regulars who start their day at {BIZ}.\n\nJoin us tomorrow 📍" },
+    { kind: 'reserva', tag: 'BRUNCH', photo: 'lifestyle', headline: 'Weekend brunch is back',
+      subline: 'Saturdays and Sundays from 10 AM.', cta: 'Book my table',
+      caption: "Brunch is back 🥐\n\nWeekends at {BIZ}: brunch from 10 AM.\n\nBook your table by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'food-2', headline: 'Win breakfast for two',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway ☕\n\nBreakfast for two at {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  barberia: [
+    { kind: 'novedad', tag: 'NEW', photo: 'beauty-4', headline: 'New: skin fade specialists',
+      subline: 'Fades are the house specialty.', cta: 'Book my chair',
+      caption: "Fades done right ✂️\n\nSkin fades are the specialty at {BIZ}.\n\nBook your chair by DM 📩" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'beauty-2', headline: 'Weekend chairs are open',
+      subline: 'Saturday appointments, live now.', cta: 'Book mine',
+      caption: "Weekend chairs are open 💈\n\n{BIZ} opened Saturday appointments.\n\nBook yours before Friday 📩" },
+    { kind: 'novedad', tag: 'TREND', photo: 'beauty-5', headline: 'The cut everyone asks for',
+      subline: 'The style of the month.', cta: 'Get mine',
+      caption: "The most requested cut ✂️\n\nThis is the style walking out of {BIZ} all month.\n\nDM us to get yours 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'beauty-1', headline: 'Keep your fade fresh longer',
+      subline: 'Cold water, light product.', cta: 'See the guide',
+      caption: 'Keep the fade fresh 👇\n\nCold water, light product, and a cleanup every two weeks.\n\nSave this guide 🔖' },
+    { kind: 'promo', tag: 'COMBO', photo: 'fashion-5', headline: 'Cut + beard combo',
+      subline: 'The full service, under an hour.', cta: 'Book the combo',
+      caption: "Cut + beard, one visit 💈\n\nThe full combo at {BIZ}, in under an hour.\n\nBook the combo by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'beauty-3', headline: 'Win a full service',
+      subline: 'Cut, beard and finish.', cta: 'Enter now',
+      caption: "Giveaway ✂️\n\nA full service at {BIZ}: cut, beard and finish.\n\nComment I'M IN to enter 👇" },
+  ],
+  servicios: [
+    { kind: 'novedad', tag: 'NEW', photo: 'office-2', headline: 'New: online booking is live',
+      subline: 'Book in one minute, from the profile.', cta: 'Book online',
+      caption: "Book online in one minute 📲\n\n{BIZ} now takes bookings right from the profile.\n\nTap the link in bio to book 🔗" },
+    { kind: 'promo', tag: 'DEAL', photo: 'office-4', headline: 'Free quotes within the day',
+      subline: 'A clear quote, today.', cta: 'Get my quote',
+      caption: "Quotes within the day 📋\n\nSend {BIZ} your request and get a clear quote today.\n\nMessage us your case 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'home-6', headline: '3 fixes you can do today',
+      subline: 'Small fixes, big calm.', cta: 'See the fixes',
+      caption: 'Small fixes, big calm 👇\n\n1. Tighten the loose handle. 2. Seal the dripping tap. 3. Test your breakers.\n\nSave this list 🔖' },
+    { kind: 'social', tag: 'REAL JOBS', photo: 'home-1', headline: 'A job we finished this week',
+      subline: 'Real work, real home.', cta: 'Book mine',
+      caption: "Finished this week 🔧\n\nReal work, real home, by {BIZ}.\n\nBook yours by DM 📩" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'home-4', headline: "This week's service slots",
+      subline: 'Booking now for this week.', cta: 'Reserve mine',
+      caption: "Service slots are open 📅\n\n{BIZ} is booking this week's jobs now.\n\nReserve yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'home-5', headline: 'Win a free service visit',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nA free service visit from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  viajes: [
+    { kind: 'novedad', tag: 'NEW', photo: 'lifestyle-2', headline: 'New destinations this season',
+      subline: 'Routes you asked for.', cta: 'See the list',
+      caption: "New destinations 🌍\n\nThis season {BIZ} adds routes you've been asking for.\n\nDM us for the list 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'lifestyle-6', headline: 'Flexible payment plans',
+      subline: 'Travel now, pay in parts.', cta: 'Ask for plans',
+      caption: "Travel now, pay in parts ✈️\n\n{BIZ} offers flexible payment plans on selected trips.\n\nMessage us your dates 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'lifestyle-3', headline: 'When to book the cheapest flights',
+      subline: 'Timing is the whole trick.', cta: 'See the timing',
+      caption: 'Cheaper flights, decoded 👇\n\nBook 6-8 weeks ahead, fly midweek, compare on Tuesday.\n\nSave this for your next trip 🔖' },
+    { kind: 'social', tag: 'TRAVELERS', photo: 'lifestyle-4', headline: 'Trips our clients loved',
+      subline: 'Real getaways, planned by us.', cta: 'Tag us',
+      caption: "Trips they loved 🧳\n\nReal getaways planned by {BIZ}.\n\nTag us on yours 📸" },
+    { kind: 'reserva', tag: 'PLAN IT', photo: 'lifestyle-1', headline: 'Your next trip, planned',
+      subline: 'You pick where, we build the rest.', cta: 'Book a call',
+      caption: "Your next trip, planned ✈️\n\nTell {BIZ} where, and we build the rest.\n\nBook a planning call by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'lifestyle', headline: 'Win a travel voucher',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nA travel voucher from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  arte: [
+    { kind: 'novedad', tag: 'NEW', photo: 'fashion-5', headline: 'New series just released',
+      subline: 'The latest works, out now.', cta: 'See the catalog',
+      caption: "New series released 🎨\n\nThe latest works by {BIZ} are out now.\n\nDM us to see the catalog 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'beauty-3', headline: 'How a piece is born',
+      subline: 'From sketch to wall.', cta: 'See the process',
+      caption: "From sketch to wall 👇\n\nEvery piece at {BIZ} starts as a pencil sketch.\n\nSave this process 🔖" },
+    { kind: 'social', tag: 'IN THE STUDIO', photo: 'fashion-2', headline: 'Studio days',
+      subline: 'Where the pieces come to life.', cta: 'Visit us',
+      caption: "Studio days 🎨\n\nWhere the pieces of {BIZ} come to life.\n\nVisit us at the studio this week 📍" },
+    { kind: 'promo', tag: 'DEAL', photo: 'fashion-3', headline: 'Original pieces, small formats',
+      subline: 'Originals in accessible sizes.', cta: 'Order mine',
+      caption: "Small formats, big walls 🖼️\n\nOriginal pieces by {BIZ} in accessible sizes.\n\nOrder yours by DM 📩" },
+    { kind: 'reserva', tag: 'COMMISSIONS', photo: 'beauty-5', headline: 'Commissions are open',
+      subline: 'A few custom pieces each month.', cta: 'Reserve mine',
+      caption: "Commissions are open 🖌️\n\n{BIZ} takes a few custom pieces each month.\n\nReserve yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'fashion-1', headline: 'Win an original print',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nAn original print from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+  otro: [
+    { kind: 'novedad', tag: 'NEW', photo: 'lifestyle-3', headline: 'Something new just arrived',
+      subline: 'Fresh arrivals this week.', cta: 'Get mine',
+      caption: "Something new is here ✨\n\nFresh arrivals at {BIZ} this week.\n\nDM us to get yours 📩" },
+    { kind: 'promo', tag: 'DEAL', photo: 'lifestyle-1', headline: "This week's deal",
+      subline: 'A special offer, only these days.', cta: 'Order mine',
+      caption: "Deal of the week 🛍️\n\nA special offer at {BIZ}, only these days.\n\nOrder yours by DM 📩" },
+    { kind: 'tip', tag: 'TIP', photo: 'office', headline: '3 things our customers ask most',
+      subline: 'You asked, we answer.', cta: 'See the answers',
+      caption: 'You asked, we answer 👇\n\nThe three questions we hear most at {BIZ}, answered clearly.\n\nSave this post 🔖' },
+    { kind: 'social', tag: 'COMMUNITY', photo: 'lifestyle-4', headline: 'Thanks for being here',
+      subline: 'Every visit counts.', cta: 'Stop by',
+      caption: "Thanks for being here ✨\n\n{BIZ} grows with every visit and every share.\n\nStop by this week 📍" },
+    { kind: 'reserva', tag: 'BOOK', photo: 'office-1', headline: "This week's openings",
+      subline: 'Room for new customers now.', cta: 'Book mine',
+      caption: "Openings this week 📅\n\n{BIZ} has room for new customers right now.\n\nBook yours by DM 📩" },
+    { kind: 'sorteo', tag: 'GIVEAWAY', photo: 'lifestyle-2', headline: 'Win a gift from us',
+      subline: 'Free to enter.', cta: 'Enter now',
+      caption: "Giveaway 🎁\n\nA gift from {BIZ} could be yours.\n\nComment I'M IN to enter 👇" },
+  ],
+};
+
 const TU_HEADLINES = {
   'VENÍ HOY': 'VEN HOY',
   'EMPEZÁ HOY': 'EMPIEZA HOY',
@@ -882,10 +1458,22 @@ const SAFE_FALLBACK_CAPTIONS = {
   reserva: 'Tu lugar de esta semana en {BIZ} 📩\n\nReservalo antes de que se ocupe.\n\nReservá por DM 📩',
 };
 
+// (v274 · MODO EN) Último recurso EN: mismas formas, en inglés.
+const SAFE_FALLBACK_CAPTIONS_EN = {
+  novedad: 'Something new at {BIZ} 👀\n\nWe added something this week you will want to see.\n\nStop by the store today 📍',
+  promo: "Deal of the week at {BIZ} 👇\n\nOnly these days, for our followers.\n\nComment INFO and we send everything 👇",
+  tip: 'A tip from {BIZ} for today 👇\n\nSimple, useful and worth saving.\n\nSave this post 🔖',
+  social: 'Thanks for being here ✨\n\n{BIZ} grows with every visit and every share.\n\nStop by the store today 📍',
+  sorteo: "Giveaway at {BIZ} 🎁\n\nIt is free to enter and takes one minute.\n\nComment I'M IN to enter 👇",
+  reserva: 'Your spot this week at {BIZ} 📩\n\nBook it before it fills up.\n\nBook by DM 📩',
+};
+
 // Resuelve el caption de un posteo de la prueba, gateado por captionPasses.
 // Si el tema elegido no pasa, reintenta con los demás temas del rubro (mismo
 // orden de kind que ya traen). Nunca devuelve un caption que el gate rechace.
-function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine }) {
+// (v274) Con lang 'en' la puerta es captionPassesEn y el fallback el EN.
+function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang }) {
+  const en = lang === 'en';
   const list = Array.isArray(topics) ? topics : [];
   const order = [];
   if (list[idx]) order.push(idx);
@@ -893,8 +1481,10 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   for (const i of order) {
     const t = list[i];
     const caption = buildFinalCaption(t, { business, tone, goalLine: i === 0 ? goalLine : '' });
-    const hashtags = demoHashtags(cat, country, tone);
-    const check = captionPasses(caption + '\n' + hashtags, { business, dna: topicDna(t) });
+    const hashtags = demoHashtags(cat, country, tone, lang);
+    const check = en
+      ? captionPassesEn(caption + '\n' + hashtags, { business, dna: topicDna(t) })
+      : captionPasses(caption + '\n' + hashtags, { business, dna: topicDna(t) });
     if (check.ok) return { caption, hashtags, topicIndex: i, ok: true };
     try {
       console.error(`[posta] demo caption gate: tema "${t.headline}" rechazado (${check.reason})`);
@@ -902,10 +1492,10 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
   }
   const kind = (list[idx] && list[idx].kind) || 'novedad';
   const caption = buildFinalCaption(
-    { caption: SAFE_FALLBACK_CAPTIONS[kind] || SAFE_FALLBACK_CAPTIONS.novedad },
+    { caption: (en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS)[kind] || (en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS).novedad },
     { business, tone, goalLine: '' }
   );
-  return { caption, hashtags: demoHashtags(cat, country, tone), topicIndex: idx, ok: true, fallback: true };
+  return { caption, hashtags: demoHashtags(cat, country, tone, lang), topicIndex: idx, ok: true, fallback: true };
 }
 
 // ---------- Reglas de pieza v209: helpers compartidos ----------
@@ -917,7 +1507,9 @@ function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLi
 // palabras descartando las colgadas del final (artículos, preposiciones,
 // conjunciones) para no dejar el titular trunco en una palabra débil.
 const HEADLINE_HANG_WORDS = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'en', 'a', 'y', 'o', 'con', 'sin', 'por', 'para', 'que', 'tu', 'su', 'al', 'más']);
-function capHeadlineWords(headline, max = 6) {
+const HEADLINE_HANG_WORDS_EN = new Set(['the', 'a', 'an', 'of', 'to', 'in', 'on', 'at', 'and', 'or', 'with', 'without', 'for', 'your', 'our', 'my', 'by', 'from']);
+function capHeadlineWords(headline, max = 6, lang) {
+  const HANG = lang === 'en' ? HEADLINE_HANG_WORDS_EN : HEADLINE_HANG_WORDS;
   const h = String(headline || '').replace(/\s+/g, ' ').trim();
   if (!h) return h;
   const words = h.split(' ');
@@ -930,7 +1522,7 @@ function capHeadlineWords(headline, max = 6) {
   }
   if (!out) {
     let kept = words.slice(0, max);
-    while (kept.length > 2 && HEADLINE_HANG_WORDS.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!¡?¿]+$/, ''))) kept.pop();
+    while (kept.length > 2 && HANG.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!¡?¿]+$/, ''))) kept.pop();
     out = kept.join(' ').replace(/[.,;:]+$/, '');
   }
   // PREGUNTA CORTADA = PUNTOS SUSPENSIVOS (regla de Valentino
@@ -970,10 +1562,11 @@ function assignTextModes(topics, videoIdx = -1, textCount = 2) {
 // plantillas del catálogo). Las piezas limpias lo exigen: sin titular ni
 // botón en la imagen, el caption es el que vende.
 const CAPTION_CTA_CLOSE_RE = /(por dm|coment[aá]|contanos|probaste|escribinos|escribime|reserv[aá]|ped[ií]lo|ped[ií] |pas[aá] |guard[aá]|ven[ií] |anotate|sumate|particip[aá]|aprovech|agend[aá]|seguinos|seguime|whatsapp|ya estás adentro|reservamos tu|te esperamos)/i;
-function captionEndsWithCta(caption) {
+const CAPTION_CTA_CLOSE_RE_EN = /(by dm|dm us|dm me|comment|message us|book|reserve|save (this|it|these|your)|stop by|come by|order|tag |link in bio|tap the link|get yours|grab yours|join us|visit us|sign up|try it|tell us)/i;
+function captionEndsWithCta(caption, lang) {
   const lines = String(caption || '').split('\n').map((s) => s.trim()).filter(Boolean);
   if (!lines.length) return false;
-  return CAPTION_CTA_CLOSE_RE.test(lines[lines.length - 1]);
+  return (lang === 'en' ? CAPTION_CTA_CLOSE_RE_EN : CAPTION_CTA_CLOSE_RE).test(lines[lines.length - 1]);
 }
 const CTA_CLOSE_BY_KIND = {
   reserva: 'Reservá tu lugar por DM 📩',
@@ -983,9 +1576,22 @@ const CTA_CLOSE_BY_KIND = {
   social: 'Pasá por el local hoy',
   sorteo: 'Comentá PARTICIPO y ya estás adentro 👇',
 };
-function ensureCaptionCtaClose(caption, kind, tone) {
+// (v274 · MODO EN) Cierres por kind e intención en inglés US.
+const CTA_CLOSE_BY_KIND_EN = {
+  reserva: 'Book your spot by DM 📩',
+  promo: 'Order yours by DM 📩',
+  novedad: 'Order yours by DM 📩',
+  tip: 'Save this post 🔖',
+  social: 'Stop by the store today 📍',
+  sorteo: "Comment I'M IN and you're in 👇",
+};
+function ensureCaptionCtaClose(caption, kind, tone, lang) {
   let out = String(caption || '');
-  if (captionEndsWithCta(out)) return out;
+  if (captionEndsWithCta(out, lang)) return out;
+  if (lang === 'en') {
+    const close = CTA_CLOSE_BY_KIND_EN[kind] || CTA_CLOSE_BY_KIND_EN.social;
+    return out.replace(/\s+$/, '') + '\n\n' + close;
+  }
   let close = CTA_CLOSE_BY_KIND[kind] || CTA_CLOSE_BY_KIND.social;
   if (tone === 'tu') close = toTu(close);
   out = out.replace(/\s+$/, '') + '\n\n' + close;
@@ -1005,9 +1611,20 @@ const CTA_CLOSE_BY_SALES_INTENT = {
   prueba: 'Vení a probarlo vos también 📍',
   autoridad: 'Guardá este posteo 🔖',
 };
-function ensureCaptionCloseForIntent(caption, intent, tone) {
+const CTA_CLOSE_BY_SALES_INTENT_EN = {
+  venta: 'Order yours today by DM 📩',
+  reserva: 'Book your spot by DM 📩',
+  consulta: 'DM us your case 📩',
+  prueba: 'Come try it yourself 📍',
+  autoridad: 'Save this post 🔖',
+};
+function ensureCaptionCloseForIntent(caption, intent, tone, lang) {
   let out = String(caption || '');
-  if (captionEndsWithCta(out)) return out;
+  if (captionEndsWithCta(out, lang)) return out;
+  if (lang === 'en') {
+    const close = CTA_CLOSE_BY_SALES_INTENT_EN[intent] || CTA_CLOSE_BY_KIND_EN.social;
+    return out.replace(/\s+$/, '') + '\n\n' + close;
+  }
   let close = CTA_CLOSE_BY_SALES_INTENT[intent] || CTA_CLOSE_BY_KIND.social;
   if (tone === 'tu') close = toTu(close);
   out = out.replace(/\s+$/, '') + '\n\n' + close;
@@ -1016,6 +1633,11 @@ function ensureCaptionCloseForIntent(caption, intent, tone) {
 
 module.exports = {
   DEMO_TOPICS,
+  DEMO_TOPICS_EN,
+  TAGS_US,
+  SAFE_FALLBACK_CAPTIONS_EN,
+  CTA_CLOSE_BY_KIND_EN,
+  CTA_CLOSE_BY_SALES_INTENT_EN,
   TU_MAP,
   toTu,
   TU_HEADLINES,

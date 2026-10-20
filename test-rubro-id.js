@@ -134,7 +134,7 @@ console.log('== (c) Flujo de prueba: la pregunta va ANTES de generar ==');
   // el server resuelve el rubro antes de armar el spec.
   const html = fs.readFileSync('public/prueba.html', 'utf8');
   ok(html.includes('id="rubroCard"'), '/prueba tiene la tarjeta de la pregunta');
-  ok(html.includes('const TRIAL_ENGINE_V = 24;'), 'TRIAL_ENGINE_V = 24');
+  ok(html.includes('const TRIAL_ENGINE_V = 25;'), 'TRIAL_ENGINE_V = 25');
   const segPrefill = html.slice(html.indexOf('function startTrialPrefill'), html.indexOf('function startTrialPrefill') + 900);
   ok(segPrefill.indexOf('PENDING_RUBRO') > -1 && segPrefill.indexOf('PENDING_RUBRO') < segPrefill.indexOf('runGeneration'), 'startTrialPrefill: la pregunta precede a runGeneration');
   const segWeb = html.slice(html.indexOf('function startTrialWeb'), html.indexOf('function startTrialWeb') + 900);
