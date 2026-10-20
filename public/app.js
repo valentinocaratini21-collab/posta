@@ -1174,6 +1174,207 @@ function lpAtencionHTML() {
     <div style="text-align:center"><a class="btn btn-primary" href="#planes" style="font-size:16px;padding:16px 36px">Ver el plan Total →</a></div>
   </div></div>`;
 }
+/* 🧩 Secciones por capacidad (2026-10-20): cada utilidad de Posty con su
+ * PROPIA sección completa — kicker, titular de beneficio, explicación,
+ * 3 ✓, MUESTRA real del producto y CTA — estilo Predis, con el sistema
+ * visual del sitio. Posteos y Análisis ya tienen su sección completa
+ * arriba (#analisis y la semana); acá van las que faltaban: Reels,
+ * Historias, Comentarios, Growth, Ideas y Tienda, más el detalle de
+ * pieza de Posteos. Solo se afirma lo que el producto hace hoy. */
+function lpCapSectionsHTML() {
+  return `
+  <div class="section" id="capacidades" style="padding-bottom:6px"><div class="wrap">
+    <h2>Todo lo que Posty hace, parte por parte</h2>
+    <p class="lede">Esto no es "una app para programar posteos". Es el trabajo completo de un community manager — y cada parte tiene su propia herramienta. Miralas una por una:</p>
+  </div></div>
+  <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Posteos de Instagram</div>
+      <h2>Tu semana entera, <span class="hl">publicada sola</span></h2>
+      <p class="cap-exp">Posty estudia tu negocio y arma tu semana completa: 7 posteos + 1 reel con tus productos, tus colores y tu protagonista. Se publica a tu mejor hora. Vos solo mirás — y frenás si algo no te cierra.</p>
+      <ul class="cap-list">
+        <li>De tu producto exacto, nunca genérico</li>
+        <li>La línea visual de TU feed, heredada</li>
+        <li>Aviso 30 minutos antes de cada posteo</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample">
+        <div class="cap-ig-head"><img src="ai-avatar.png" alt="Posty"><b>posty.hacetodo</b><span>•••</span></div>
+        <img class="cap-ig-img" loading="lazy" src="lp-pieza.jpg" alt="Pieza real hecha por Posty: el robot celeste saludando, con el titular SOY POSTY.">
+        <div class="cap-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><svg class="save" viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></div>
+        <p class="cap-ig-cap"><b>posty.hacetodo</b> ¡Hola! Soy Posty. 👋 Soy tu community manager: analizo tu Instagram a fondo — tu ritmo, tus mejores posteos, tu vidriera y hasta tu competencia — y con ese análisis armo tu plan…</p>
+      </div>
+      <p class="cap-note">Una pieza real de Posty. Las tuyas salen con TU producto, tus fotos y tus colores.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
+    <div class="cap-copy">
+      <div class="cap-kick">Reels</div>
+      <h2>Reels que muestran tu negocio <span class="hl">en movimiento</span></h2>
+      <p class="cap-exp">El video es lo que más gente nueva trae, y es lo que menos tiempo tenés de hacer. Posty arma tus reels con tu material y tu marca, con el gancho primero y el cierre que empuja a escribirte. Salen publicados solos.</p>
+      <ul class="cap-list">
+        <li>1 por semana en Esencial · 3 en Pro · 5 en Total</li>
+        <li>Con tus fotos y videos, o creados desde cero</li>
+        <li>Se publican solos, a tu mejor hora</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-phone">
+        <video src="posty-rubros.mp4" poster="posty-rubros-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Reel real armado por Posty para un café"></video>
+        <span class="cap-ph-chip">🎬 REEL</span>
+        <div class="cap-ph-bot"><b>@tu.negocio</b><span>El reel de tu semana, listo y publicado solo.</span><div class="cap-ph-bar"><i></i></div></div>
+      </div>
+      <p class="cap-note">Video real de Posty trabajando: así sale un reel tuyo.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Historias<span class="cap-plan">Plan Pro</span></div>
+      <h2>Tu negocio, presente <span class="hl">todos los días</span></h2>
+      <p class="cap-exp">Cada posteo sale también como historia, y Posty suma historias que hacen participar a tu audiencia: encuestas, preguntas y cuentas regresivas para tus fechas fuertes. Tu cuenta se mueve todos los días, aunque vos no abras la app.</p>
+      <ul class="cap-list">
+        <li>Cada posteo, también en historias</li>
+        <li>Encuestas y preguntas que hacen participar</li>
+        <li>3 por semana en Pro · todos los días en Total</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-phone">
+        <img loading="lazy" src="g-tazas.jpg" alt="Historia de Instagram de una cafetería hecha por Posty">
+        <div class="cap-ph-top"><i class="on"></i><i></i><i></i></div>
+        <div class="cap-ph-head"><img src="ai-avatar.png" alt="Posty"><span>tu.negocio</span><span style="opacity:.75;font-weight:600">2 h</span></div>
+        <div class="cap-ph-bot"><b>Mañana te esperamos desde temprano ☀️</b>
+          <div class="cap-poll"><b>📊 ¿A qué hora abrimos?</b><div class="cap-poll-row"><span>A las 8</span><span>68%</span></div><div class="cap-poll-row"><span>A las 9</span><span>32%</span></div></div>
+        </div>
+      </div>
+      <p class="cap-note">Una historia de las que arma Posty: tu posteo, con encuesta incluida.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
+    <div class="cap-copy">
+      <div class="cap-kick">Comentarios y respuestas<span class="cap-plan">Plan Total</span></div>
+      <h2>Ningún comentario queda <span class="hl">sin respuesta</span></h2>
+      <p class="cap-exp">Posty lee cada comentario y cada mensaje que te llega, prepara la respuesta en tu tono y te la deja lista. Vos la mandás con un toque. Tu bandeja queda en cero sin vivir pegado al teléfono — y si algo es delicado, te lo pasa a vos.</p>
+      <ul class="cap-list">
+        <li>Respuestas en tu tono, nunca robóticas</li>
+        <li>Nada sale sin tu OK en un toque</li>
+        <li>Quejas y temas sensibles, directo a vos</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample"><div class="cap-thread">
+        <div class="cap-msg"><div class="cap-ava" style="background:#B08968">M</div><div class="cap-bub"><span class="who">marina.g · comentario en tu posteo</span><br>¿Hacen envíos a Córdoba? ¿Cuánto tarda?</div></div>
+        <div class="cap-msg"><div class="cap-ava" style="background:#2793C8">P</div><div class="cap-bub reply"><span class="who">Respuesta de Posty · lista para enviar</span><br>¡Sí, Marina! Enviamos a todo el país 🚚 A Córdoba llega en 2 a 4 días hábiles. ¿Querés que te pase el link del producto?</div></div>
+        <div class="cap-sendrow"><span class="cap-send">Enviar ✓</span><span class="cap-alt">Editar</span><span class="cap-tag">Tu tono: amable y directo</span></div>
+      </div></div>
+      <p class="cap-note">Así te llega cada respuesta: lista, en tu tono, a un toque de salir.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec navy"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Growth<span class="cap-plan">Plan Pro</span></div>
+      <h2>Lo que funciona, <span class="hl">se potencia</span></h2>
+      <p class="cap-exp">Posty detecta el posteo que mejor te está andando y te propone potenciarlo con pauta. Vos fijás el tope de gasto y nada se mueve sin tu OK. Y cada mes elegís un foco de crecimiento: más consultas, más reservas o más ventas.</p>
+      <ul class="cap-list">
+        <li>Tu mejor posteo, detectado solo</li>
+        <li>Pauta con tu tope, siempre con tu OK</li>
+        <li>Tu página pública lista, con WhatsApp directo</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample"><div class="cap-grow">
+        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de una cafetería hecho por Posty"><div><h4>Tu posteo que más rindió</h4><div class="cap-grow-metric">▲ El doble de interacciones que tu promedio</div><div class="cap-grow-sub">Hace 3 días · Posteo de producto</div></div></div>
+        <div class="cap-prop">🚀 <b>Propuesta de Posty:</b> potenciarlo con <b>$15.000</b> por 5 días (tu tope: $20.000). Llega a gente de tu zona que todavía no te sigue.</div>
+        <div class="cap-sendrow"><span class="cap-send">Potenciar ✓</span><span class="cap-alt">Ahora no</span></div>
+      </div></div>
+      <p class="cap-note">La propuesta llega sola cuando un posteo la rompe. Vos decidís.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec"><div class="wrap"><div class="cap-grid cap-flip">
+    <div class="cap-copy">
+      <div class="cap-kick">Ideas semanales</div>
+      <h2>Nunca te quedás <span class="hl">sin qué publicar</span></h2>
+      <p class="cap-exp">Cada semana Posty mira tu competencia, el posteo que mejor te anduvo y las fechas que se vienen — y te propone ideas concretas para tu negocio. La que te gusta se convierte en posteo con un toque.</p>
+      <ul class="cap-list">
+        <li>Desde tu competencia, tus ganadores y el calendario</li>
+        <li>Un toque en "Hacelo" y la idea se vuelve posteo</li>
+        <li>Sin relleno: si no hay nada concreto, no te molesta</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample cap-idea-wrap">
+        <div class="idea-card">
+          <div class="idea-top"><span class="idea-fmt">📸 Posteo</span></div>
+          <div class="idea-title">El paso a paso de tu producto estrella</div>
+          <div class="idea-why">Tu competencia lo publicó el martes y le rindió el doble que su promedio. Tu versión sale con tu producto, tus fotos y tus colores.</div>
+          <div class="idea-actions">
+            <span class="btn btn-primary btn-sm">💪 Hacelo</span>
+            <span class="btn btn-ghost btn-sm">Ahora no</span>
+          </div>
+        </div>
+      </div>
+      <p class="cap-note">Así te llegan las ideas cada semana, listas para aprobar.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Posty conectado · Nuevo</div>
+      <h2>Tu tienda le habla <span class="hl">a tu Instagram</span></h2>
+      <p class="cap-exp">Conectás tu Tiendanube en un toque y Posty pasa a postear lo que tu negocio tiene de verdad: tu producto estrella deja de ser el de más likes y pasa a ser el que más vende. Y lo que está sin stock, no se promociona jamás.</p>
+      <ul class="cap-list">
+        <li>Estrella por ventas reales, no por likes</li>
+        <li>Sin stock = fuera de los posteos, automático</li>
+        <li>Los productos quietos se empujan a propósito</li>
+      </ul>
+      <a class="cap-cta" href="/prueba">Probá gratis 3 días →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample"><div class="cap-shop">
+        <div class="row"><span>🛍️</span><span><b>Tu tienda, conectada</b></span><span class="pill">Tiendanube ✓</span></div>
+        <div class="row"><span>⭐</span><span>Estrella por ventas: <b>Campera Urbana</b> (38 ventas en 30 días)</span></div>
+        <div class="row"><span>🚫</span><span>Remera Logo — sin stock</span><span class="pill out">Fuera de los posteos</span></div>
+        <div class="row"><span>💤</span><span>Buzo Oversize — quieto hace 26 días</span><span class="pill warn">Se empuja esta semana</span></div>
+      </div></div>
+      <p class="cap-note">Tu tienda real, conectada en un toque desde Ajustes.</p>
+    </div>
+  </div></div></div>`;
+}
+
+/* 📋 Grilla resumen (2026-10-20): las 12 cosas que Posty hace, como cierre
+ * del tour de capacidades, justo antes de planes. Espeja la grilla de
+ * /prueba ("Todo lo que Posty hace por vos"). */
+function lpRecapHTML() {
+  const items = [
+    ['🎨', 'Diseña tu semana', 'Posteos, reels e historias con tu marca: tus fotos, tus colores y tu producto exacto. Nada de plantillas iguales para todos.'],
+    ['✍️', 'Escribe para vender', 'Captions y hashtags en tu tono, pensados para que te compren, no para rellenar.'],
+    ['⏰', 'Publica solo', 'A la mejor hora, todos los días. Te avisa 30 minutos antes por si querés frenar algo.'],
+    ['🔍', 'Estudia tu negocio', 'Lee tu Instagram y tu rubro: qué vende, qué está funcionando y qué hace tu competencia.'],
+    ['📆', 'Caza las fechas que venden', 'Día de la Madre, Hot Sale, Navidad: tu semana se adapta sola, sin que te acuerdes vos.'],
+    ['💡', 'Te propone ideas', 'Cada semana, ideas nuevas para tu negocio, listas para aprobar con un toque.'],
+    ['💬', 'Responde tus comentarios', 'La respuesta lista en tu tono; la mandás con un toque. Nada sale sin tu OK.'],
+    ['📩', 'Responde tus mensajes', 'Tu bandeja de Instagram, en cero.'],
+    ['⭐', 'Cuida tus reseñas', 'Contesta tus reseñas de Google por vos.'],
+    ['🚀', 'Potencia lo que anda', 'Detecta el posteo que la rompe y te propone impulsarlo con pauta. Vos fijás el tope de gasto.'],
+    ['🌐', 'Tu página, lista para compartir', 'Una página pública de tu negocio con botón de WhatsApp directo a vos.'],
+    ['🤚', 'Vos mandás', 'Frenás cualquier posteo con un toque, pedís cambios en el chat como si hablaras con tu CM, o aprobás todo a mano si preferís.'],
+  ];
+  return `
+  <div class="section lp-recap"><div class="wrap">
+    <h2>Todo esto, en un solo Posty</h2>
+    <p class="lede">El trabajo completo de un community manager, en un solo lugar.</p>
+    <div class="lp-recap-grid">${items.map((it) => `<div class="lp-recap-item"><div class="he">${it[0]}</div><div><b>${it[1]}</b><p>${it[2]}</p></div></div>`).join('')}</div>
+    <p class="lp-recap-foot">Y cada semana te llega el resumen: qué funcionó, qué sigue y el foco del mes.</p>
+    <div style="text-align:center;margin-top:22px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
+  </div></div>`;
+}
+
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -1185,6 +1386,7 @@ function landingView(cfg) {
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#analisis">Análisis</a>
+      <a href="#capacidades">Todo lo que hace</a>
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
@@ -1198,6 +1400,7 @@ function landingView(cfg) {
   </div>
   <div class="mobile-menu" id="mobileMenu">
     <a href="#analisis">Análisis</a>
+    <a href="#capacidades">Todo lo que hace</a>
     <a href="#como-funciona">Cómo funciona</a>
     <a href="#ejemplos">Ejemplos</a>
     <a href="#planes">Planes</a>
@@ -1345,9 +1548,11 @@ function landingView(cfg) {
       <div class="lp-job"><div class="lp-job-i">🚀</div><h3>Potencia lo que mejor anda</h3><p>Cuando un posteo la rompe, Posty lo detecta y te propone potenciarlo con pauta. Vos fijás el tope de gasto.</p></div>
       <div class="lp-job"><div class="lp-job-i">💡</div><h3>Ideas nuevas cada semana</h3><p>Posty mira a tu competencia, las fechas que venden y tu posteo que mejor anduvo — y te propone ideas listas para aprobar con un toque.</p></div>
       <div class="lp-job"><div class="lp-job-i">📊</div><h3>Tu resumen, cada semana</h3><p>Qué posteos funcionaron, qué sigue y el foco del mes — te llega solo, sin que tengas que pedirlo.</p></div>
+      <div class="lp-job" style="padding:0;overflow:hidden"><video src="posty-working.mp4" poster="posty-working-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Posty trabajando en la computadora" style="width:100%;height:100%;object-fit:cover;object-position:center 32%;display:block"></video></div>
     </div>
     <div style="text-align:center;margin-top:30px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
   </div></div>
+  ${lpCapSectionsHTML()}
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
@@ -1450,6 +1655,7 @@ function landingView(cfg) {
     </div>
   </div></div>
   ${lpAtencionHTML()}
+  ${lpRecapHTML()}
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
