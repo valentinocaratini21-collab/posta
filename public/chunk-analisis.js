@@ -365,9 +365,6 @@ function anaKitHTML(a) {
     h += `<p class="ana-sec-t">✨ Lo que ya sé de tu negocio</p>${fs.map(anaFindingHTML).join('')}`;
   }
   const kit = a.profile_kit || {};
-  if (kit.bio) {
-    h += `<div class="ana-kit"><b>Tu bio, lista para pegar:</b>\n${esc(kit.bio)}</div>`;
-  }
   if (kit.highlights && kit.highlights.length) {
     h += `<p class="ana-t" style="margin-top:10px"><b>Destacadas:</b> ${esc(kit.highlights.join(' · '))}</p>`;
   }
