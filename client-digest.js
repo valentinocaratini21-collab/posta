@@ -178,9 +178,16 @@ function anchorsOf(digest) {
       for (const ap of (e.apodos || [])) push(ap, 'lexico');
     }
   }
+  // (Posty conectado) Un producto SIN STOCK en su Tiendanube no ancla
+  // piezas: promocionarlo es vender lo que no tiene. Solo se filtran
+  // anclas de producto cuyo nombre coincide con su out_of_stock.
+  const oosNames = tnOutOfStockNames(digest);
+  const usable = oosNames.length
+    ? anchors.filter((a) => !(a.kind === 'producto' && tnNameMatch(a.text, oosNames)))
+    : anchors;
   // Dedup por frase normalizada, conservando el orden de especificidad.
   const seen = new Set();
-  return anchors.filter((a) => {
+  return usable.filter((a) => {
     const k = a.phrase;
     if (seen.has(k)) return false;
     seen.add(k); return true;
@@ -203,6 +210,56 @@ function pieceAnchored(text, anchors) {
     }
   }
   return { ok: false, anchor: null, reason: 'sin_ancla' };
+}
+
+// ---------- (2026-10-20) POSTY CONECTADO: lectura del bloque Tiendanube ----------
+// digest.connections.tiendanube = { store_name, connected_at, synced_at,
+// products_total, star:{name, units_30d}|null, out_of_stock:[nombres],
+// quiet:[nombres], top_sellers:[{name, units}] } — lo escribe el sync de
+// server.js desde tiendanube.digestFromTiendanube (ventas/stock REALES).
+// Acá solo se lee, en los puntos de consumo del fundamento.
+function tnBlockOf(digest) {
+  const b = digest && digest.connections && digest.connections.tiendanube;
+  return (b && typeof b === 'object') ? b : null;
+}
+function tnNameMatch(name, list) {
+  const n = String(name || '');
+  if (!n || !Array.isArray(list)) return false;
+  return list.some((x) => sameItemName(n, String(x || '')));
+}
+function tnOutOfStockNames(digest) {
+  const tn = tnBlockOf(digest);
+  return (tn && Array.isArray(tn.out_of_stock)) ? tn.out_of_stock.map(String) : [];
+}
+function tnQuietNames(digest) {
+  const tn = tnBlockOf(digest);
+  return (tn && Array.isArray(tn.quiet)) ? tn.quiet.map(String) : [];
+}
+/* La estrella EFECTIVA del negocio, por fuerza de fuente: lo que el
+ * dueño confirmó en persona > las VENTAS reales de su tienda (Posty
+ * conectado) > la inferida del feed por likes. Devuelve
+ * {item, source:'dueno'|'sales'|'inferred', evidence[]} o null.
+ * star_source='sales' marca que la estrella es medición, no lectura. */
+function effectiveStarOf(digest) {
+  if (!digest || typeof digest !== 'object') return null;
+  const duenoStar = digest.dueno && digest.dueno.estrella;
+  if (duenoStar) return { item: String(duenoStar), source: 'dueno', evidence: [] };
+  const inf = digest.inferred_star;
+  if (inf && inf.item && inf.fuente === 'dueno') {
+    return { item: String(inf.item), source: 'dueno', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
+  }
+  const tn = tnBlockOf(digest);
+  if (tn && tn.star && tn.star.name && (tn.star.units_30d || 0) > 0) {
+    const u = tn.star.units_30d;
+    return {
+      item: String(tn.star.name), source: 'sales', units_30d: u,
+      evidence: [`vendió ${u} unidades en los últimos 30 días (ventas reales de su Tiendanube)`],
+    };
+  }
+  if (inf && inf.item && (inf.confidence || 0) >= 0.5) {
+    return { item: String(inf.item), source: 'inferred', evidence: (Array.isArray(inf.evidence) ? inf.evidence : []).map(String) };
+  }
+  return null;
 }
 
 // ---------- minería determinística de textos reales ----------
@@ -380,6 +437,11 @@ function emptyDigest() {
     // productos/servicios/promos/temas/protagonista/ciudad/diferencial).
     catalog: null, bio_link: null, lexicon: null, photo_map: null,
     inferred_star: null, contradictions: [], question_candidates: [],
+    // (2026-10-20) POSTY CONECTADO: bloques de conexiones externas de
+    // SOLO LECTURA (hoy: connections.tiendanube, que escribe el sync de
+    // server.js desde tiendanube.js). null = sin conexiones. El hash de
+    // anclas NO lo cubre (no es fundamento leído del feed/web).
+    connections: null,
     // (v235) Identificación de rubro versionada (rubro-id.js): fuente de
     // verdad de rubro+subrubro+confianza+fuente. null = aún no clasificado.
     rubro_id: null,
@@ -1018,9 +1080,13 @@ function deriveTopics(digest, opts) {
   const count = Math.min(Math.max(parseInt(o.count, 10) || 5, 1), 6);
   const category = o.category || digest.category || 'otro';
   if (!hasFoundation(digest)) return [];
-  const items = [...(digest.productos || []), ...(digest.servicios || [])]
+  let items = [...(digest.productos || []), ...(digest.servicios || [])]
     .filter((x) => x && (x.nombre || x));
   const name = (x) => String((x && (x.nombre || x)) || '').trim();
+  // (Posty conectado) Lo que su Tiendanube marca SIN STOCK no entra a la
+  // rotación de temas: ninguna pieza nace sobre un producto agotado.
+  const oosNames = tnOutOfStockNames(digest);
+  if (oosNames.length) items = items.filter((x) => !tnNameMatch(name(x), oosNames));
   // (v230) El producto estrella INFERIDO (con confianza ≥0,5) abre la
   // rotación: la novedad de la semana es él. La confirmación del dueño
   // llega por el loop de preguntas (question_candidates).
@@ -1033,6 +1099,32 @@ function deriveTopics(digest, opts) {
     const si = items.findIndex((x) => sameItemName(name(x), duenoStar));
     if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
     if (si >= 0) starName = name(items[0]);
+  }
+  // (Posty conectado) La estrella por VENTAS reales (Tiendanube) pisa a
+  // la inferida por likes: es medición, no lectura (star_source='sales'
+  // en effectiveStarOf). Solo manda si el dueño no confirmó la suya en
+  // persona (bloque de arriba). Si la estrella de ventas está sin stock,
+  // ya salió de `items` y esta rama no la encuentra: sigue la inferida.
+  if (!starName) {
+    const tn = tnBlockOf(digest);
+    if (tn && tn.star && tn.star.name && (tn.star.units_30d || 0) > 0) {
+      const si = items.findIndex((x) => sameItemName(name(x), tn.star.name));
+      if (si > 0) { const [sx] = items.splice(si, 1); items.unshift(sx); }
+      if (si >= 0) starName = name(items[0]);
+    }
+  }
+  // (Posty conectado) Los QUIETOS de la tienda (con stock y 0 ventas)
+  // suben en la rotación, justo detrás de la estrella: son los
+  // candidatos a empujar de esta semana.
+  const quietNames = tnQuietNames(digest);
+  if (quietNames.length && items.length > 1) {
+    const head = items.slice(0, 1);
+    const rest = items.slice(1);
+    const quietItems = rest.filter((x) => tnNameMatch(name(x), quietNames));
+    if (quietItems.length) {
+      const others = rest.filter((x) => !quietItems.includes(x));
+      items = [...head, ...quietItems, ...others];
+    }
   }
   if (!starName && digest.inferred_star && digest.inferred_star.item && (digest.inferred_star.confidence || 0) >= 0.5) {
     const si = items.findIndex((x) => sameItemName(name(x), digest.inferred_star.item));
@@ -1245,7 +1337,12 @@ function dnaFragmentFromDigest(digest) {
   // (v230) El estrella INFERIDO con confianza le gana al "primer ítem
   // de la lista": viene de su feed, su web y su rendimiento medidos.
   const starInf = (digest.inferred_star && (digest.inferred_star.confidence || 0) >= 0.5) ? digest.inferred_star.item : '';
-  if (starInf) frag.producto_estrella = starInf;
+  // (Posty conectado) La estrella por VENTAS reales (Tiendanube) pisa a
+  // la inferida al sembrar el ADN: viene de la caja, no de los likes.
+  const tnFrag = tnBlockOf(digest);
+  const starSales = (tnFrag && tnFrag.star && tnFrag.star.name && (tnFrag.star.units_30d || 0) > 0) ? String(tnFrag.star.name) : '';
+  if (starSales) frag.producto_estrella = starSales;
+  else if (starInf) frag.producto_estrella = starInf;
   else if (first) frag.producto_estrella = first.nombre || first;
   if (digest.diferencial) frag.diferencial = digest.diferencial;
   if (digest.ciudad) frag.ubicacion = digest.ciudad;
@@ -1261,6 +1358,8 @@ module.exports = {
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
   dnaFragmentFromDigest,
+  // (2026-10-20) Posty conectado (Tiendanube)
+  tnBlockOf, tnNameMatch, tnOutOfStockNames, tnQuietNames, effectiveStarOf,
   // (v231) Adopción de patrones: candado de números de promo
   numbersInText, digestNumbers, promoNumberGuard,
   // (v230) Lectura profunda

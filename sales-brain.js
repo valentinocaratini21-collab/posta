@@ -116,10 +116,44 @@ function digestSignals(digest, opts = {}) {
   const star = (d.inferred_star && d.inferred_star.item && (d.inferred_star.confidence || 0) >= 0.5)
     ? { item: String(d.inferred_star.item), evidence: (Array.isArray(d.inferred_star.evidence) ? d.inferred_star.evidence : []).map(String) }
     : null;
+  // (2026-10-20, Posty conectado) Con Tiendanube conectada, las señales
+  // nacen de las VENTAS reales: la estrella efectiva (ventas > inferida)
+  // manda, los productos SIN STOCK salen de los candidatos, y los
+  // quietos (stock sin ventas) quedan primeros como candidatos a
+  // empujar. Sin bloque TN, todo queda exactamente como siempre.
+  let effStar = star;
+  let signalProducts = products;
+  let quiet = [];
+  try {
+    if (cd().tnBlockOf && cd().tnBlockOf(d)) {
+      const es = cd().effectiveStarOf(d);
+      if (es && es.item && es.source !== 'inferred') {
+        effStar = { item: String(es.item), source: es.source, evidence: (es.evidence || []).map(String) };
+      }
+      const oos = cd().tnOutOfStockNames(d);
+      if (oos.length) {
+        signalProducts = products.filter((n) => !oos.some((x) => cd().sameItemName(n, x)));
+        // La estrella de ventas que HOY está agotada no empuja piezas de
+        // venta: su ancla también sale de anchorsOf (client-digest).
+        if (effStar && effStar.source === 'sales' && oos.some((x) => cd().sameItemName(effStar.item, x))) effStar = null;
+      }
+      quiet = cd().tnQuietNames(d).filter((n) => signalProducts.some((x) => cd().sameItemName(x, n)));
+      const head = [];
+      if (effStar && effStar.source === 'sales') {
+        const f = signalProducts.find((x) => cd().sameItemName(x, effStar.item));
+        if (f) head.push(f);
+      }
+      for (const qn of quiet) {
+        const f = signalProducts.find((x) => cd().sameItemName(x, qn));
+        if (f && !head.includes(f)) head.push(f);
+      }
+      if (head.length) signalProducts = [...head, ...signalProducts.filter((x) => !head.includes(x))];
+    }
+  } catch (e) { /* sin bloque TN utilizable, señales como siempre */ }
   // Evidencia disponible para piezas de PRUEBA: la de su estrella, sus
   // años (del diferencial) y su barrio/ciudad. Todo leído, nada inventado.
   const proofEvidence = [];
-  if (star) for (const e of star.evidence) proofEvidence.push(`${star.item}: ${e}`);
+  if (effStar) for (const e of effStar.evidence) proofEvidence.push(`${effStar.item}: ${e}`);
   const dif = String(d.diferencial || '').replace(/\s+/g, ' ').trim();
   const yearsM = dif.match(/desde\s+(?:el\s+)?(?:19|20)\d{2}/i) || dif.match(/\d+\s*a[ñn]os/i);
   if (yearsM) proofEvidence.push(yearsM[0]);
@@ -129,7 +163,7 @@ function digestSignals(digest, opts = {}) {
   return {
     hasBooking: !!d.has_booking,
     category: String(d.category || ''),
-    products, services, promos, star, priceByItem,
+    products: signalProducts, services, promos, star: effStar, quiet, priceByItem,
     diferencial: dif, ciudad: String(d.ciudad || ''),
     feedThemes: (d.temas_feed || []).map(String).filter(Boolean),
     proofEvidence,

@@ -8782,6 +8782,7 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
 // queda en privado (SELF_ONLY) — el módulo respeta lo que creator_info ofrece.
 const tiktok = require('./tiktok');
 const google = require('./google');
+const tiendanube = require('./tiendanube');
 
 app.get('/api/tiktok/status', requireAuth, (req, res) => {
   const acc = tiktok.getAccount(db, req.session.userId);
@@ -8944,6 +8945,141 @@ app.get('/api/google/callback', async (req, res) => {
 
 app.post('/api/google/disconnect', requireAuth, (req, res) => {
   google.deleteAccount(db, req.session.userId);
+  res.json({ ok: true });
+});
+
+// ---------- Tiendanube: conectar la tienda (SOLO LECTURA) ----------
+// (Posty conectado, primer corte 2026-10-20) OAuth oficial de Tiendanube:
+// jamás contraseñas, Posty solo LEE catálogo/stock/ventas. El sync guarda
+// el bloque en digest.connections.tiendanube y la generación lo consume en
+// client-digest/sales-brain (estrella por ventas, sin-stock fuera de las
+// piezas, quietos como candidatos). Sin TIENDANUBE_CLIENT_ID/SECRET en el
+// entorno, start responde 503 honesto y la tarjeta se muestra "Muy pronto".
+function tnStateFor(userId) {
+  const payload = `${userId}.${Date.now().toString(36)}`;
+  const sig = crypto.createHmac('sha256', SESSION_SECRET || 'posta-dev-secret-cambiar-en-prod')
+    .update(`tn:${payload}`).digest('hex').slice(0, 32);
+  return `${payload}.${sig}`;
+}
+function tnUserFromState(state) {
+  try {
+    const parts = String(state || '').split('.');
+    if (parts.length !== 3) return null;
+    const [uidRaw, tsRaw, sig] = parts;
+    const uid = parseInt(uidRaw, 10);
+    if (!uid) return null;
+    const ts = parseInt(tsRaw, 36);
+    if (!ts || ts > Date.now() + 60 * 1000 || Date.now() - ts > 30 * 60 * 1000) return null;
+    const expected = crypto.createHmac('sha256', SESSION_SECRET || 'posta-dev-secret-cambiar-en-prod')
+      .update(`tn:${uidRaw}.${tsRaw}`).digest('hex').slice(0, 32);
+    const a = Buffer.from(sig); const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    return uid;
+  } catch (e) { return null; }
+}
+
+/* Sync de Tiendanube: trae tienda/catálogo/ventas (30 días) y guarda el
+ * bloque en el digest del usuario sin pisar el resto del fundamento.
+ * Un 401 de TN = token revocado o app desinstalada: la conexión se marca
+ * 'broken' y el digest viejo queda como estaba. */
+async function syncTiendanubeForUser(userId) {
+  const conn = tiendanube.getConnection(db, userId);
+  if (!conn) { const e = new Error('sin conexión Tiendanube'); e.status = 404; throw e; }
+  try {
+    const [products, orders] = await Promise.all([
+      tiendanube.fetchProducts(conn),
+      tiendanube.fetchOrders(conn, 30),
+    ]);
+    let store = null;
+    try { store = await tiendanube.fetchStore(conn); }
+    catch (e) { if (e && e.status === 401) throw e; /* el nombre sale del guardado */ }
+    const block = tiendanube.digestFromTiendanube({ products, orders, store });
+    const digest = clientDigest.getDigest(db, userId) || clientDigest.emptyDigest();
+    const prev = digest.connections && digest.connections.tiendanube;
+    block.connected_at = (prev && prev.connected_at) || new Date().toISOString();
+    block.synced_at = new Date().toISOString();
+    if (!block.store_name && prev && prev.store_name) block.store_name = prev.store_name;
+    digest.connections = { ...(digest.connections || {}), tiendanube: block };
+    clientDigest.saveDigest(db, userId, digest);
+    tiendanube.touchConnection(db, userId, block.store_name);
+    return { ok: true, products_total: block.products_total, star: block.star, synced_at: block.synced_at };
+  } catch (e) {
+    if (e && e.status === 401) {
+      try { tiendanube.markConnectionBroken(db, userId); } catch (_) { /* no bloquea */ }
+    } else {
+      console.error('[tiendanube/sync]', userId, e.message);
+    }
+    throw e;
+  }
+}
+
+app.get('/api/connections/tiendanube/status', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const conn = tiendanube.getConnection(db, uid);
+  const stored = clientDigest.getStoredDigest(db, uid);
+  const block = (stored && stored.connections && stored.connections.tiendanube) || null;
+  res.json({
+    configured: tiendanube.tnConfigured(),
+    connected: !!conn,
+    broken: !!(conn && conn.status === 'broken'),
+    store_name: (conn && conn.store_name) || (block && block.store_name) || '',
+    synced_at: (block && block.synced_at) || (conn && conn.updated_at) || null,
+    products_total: block ? block.products_total : null,
+    star: block ? block.star : null,
+  });
+});
+
+app.get('/api/connections/tiendanube/start', requireAuth, (req, res) => {
+  if (!tiendanube.tnConfigured()) {
+    return res.status(503).json({ ok: false, error: 'tiendanube_no_configurada' });
+  }
+  res.redirect(tiendanube.authorizeUrl(tnStateFor(req.session.userId)));
+});
+
+app.get('/api/connections/tiendanube/callback', async (req, res) => {
+  const dest = '/#/app/ajustes';
+  const uid = tnUserFromState(req.query.state);
+  if (!uid || !req.query.code) return res.redirect(dest + '?tn=error');
+  try {
+    const tok = await tiendanube.exchangeCode(String(req.query.code));
+    if (!tok.user_id) throw new Error('Tiendanube no devolvió la tienda');
+    tiendanube.saveConnection(db, uid, {
+      store_id: String(tok.user_id), access_token: tok.access_token, scope: tok.scope || '',
+    });
+    try { await syncTiendanubeForUser(uid); }
+    catch (e) { console.error('[tiendanube/callback] sync inicial:', e.message); }
+    try { track(uid, 'tiendanube_connected'); } catch (e) {}
+    return res.redirect(dest + '?tn=ok');
+  } catch (e) {
+    console.error('[tiendanube/callback]', e.message);
+    return res.redirect(dest + '?tn=error');
+  }
+});
+
+app.post('/api/connections/tiendanube/sync', requireAuth, async (req, res) => {
+  try {
+    const r = await syncTiendanubeForUser(req.session.userId);
+    res.json(r);
+  } catch (e) {
+    const status = e && e.status === 401 ? 401 : (e && e.status === 404 ? 404 : 502);
+    res.status(status).json({
+      ok: false,
+      error: status === 401 ? 'tiendanube_desconectada' : (status === 404 ? 'sin_conexion' : 'sync_fallo'),
+    });
+  }
+});
+
+app.post('/api/connections/tiendanube/disconnect', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  tiendanube.deleteConnection(db, uid);
+  try {
+    const stored = clientDigest.getStoredDigest(db, uid);
+    if (stored && stored.connections && stored.connections.tiendanube) {
+      delete stored.connections.tiendanube;
+      if (!Object.keys(stored.connections).length) delete stored.connections;
+      clientDigest.saveDigest(db, uid, stored);
+    }
+  } catch (e) { /* sin digest guardado no hay bloque que limpiar */ }
   res.json({ ok: true });
 });
 
@@ -15075,7 +15211,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v268';
+const BUILD_ID = '20261020-v269';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
