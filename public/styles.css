@@ -2542,3 +2542,90 @@ textarea.in{resize:vertical;min-height:96px}
 .ana-fline{font-size:12.5px;color:var(--mut);margin:8px 0 0;line-height:1.5}
 .ana-refresh{text-align:center;margin-top:18px}
 .ana-prog{background:var(--cel-soft);border:1px solid var(--cel-line);border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.55;color:var(--txt);margin-top:14px}
+
+/* ============================================================
+   🏠 REDISEÑO MOBILE — Inicio + barra de pestañas (2026-10-20)
+   Mock aprobado por Valentino: "una pantalla, una respuesta".
+   Todo lo nuevo lleva prefijo mz-. La barra y la barra de chat
+   solo existen ≤820px; en desktop la app queda como siempre.
+   ============================================================ */
+.mz-tabs{display:none}
+.mz-wrap{max-width:640px;margin:0 auto}
+.mz-hd{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 10px}
+.mz-brand{display:flex;align-items:center;gap:9px;font-size:24px;font-weight:800;letter-spacing:-.5px;color:var(--txt)}
+.mz-brand img{width:36px;height:36px;border-radius:50%;border:2px solid var(--cel)}
+.mz-dot{color:var(--cel)}
+.mz-uchip{width:34px;height:34px;border-radius:50%;background:var(--txt);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;border:none;cursor:pointer;font-family:inherit;flex:none}
+.mz-igbar{display:flex;align-items:center;gap:8px;background:#FFF6DE;border:1.5px solid var(--yl);border-radius:14px;padding:10px 12px;font-size:13.5px;line-height:1.3;color:var(--txt)}
+.mz-igbar-go{margin-left:auto;color:var(--cel);font-weight:800;white-space:nowrap;font-size:13.5px}
+.mz-lbl{margin:18px 2px 8px;font-size:12.5px;font-weight:800;letter-spacing:1.2px;color:#5B7A90}
+.mz-hero{background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 6px 24px rgba(10,30,51,.08)}
+.mz-hero-img{width:100%;height:238px;object-fit:cover;object-position:center 22%;display:block;background:var(--bg2)}
+.mz-nomedia{display:flex;align-items:center;justify-content:center;font-size:34px}
+.mz-hero-b{padding:14px 16px 16px}
+.mz-chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mz-chip{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px}
+.mz-chip.sky{background:#E3F2FA;color:#1B6E9C}
+.mz-chip.ok{background:#E4F6EC;color:#177245}
+.mz-chip.dra{background:#FFF3D6;color:#9A6E00}
+.mz-hero h1{font-size:21px;font-weight:800;margin:10px 0 4px;letter-spacing:-.3px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mz-why{font-size:14px;color:#51758C;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mz-hero-f{display:flex;gap:10px;margin-top:14px}
+.mz-btn{flex:1;text-align:center;padding:12px 0;border-radius:999px;font-size:15px;font-weight:800;border:none;cursor:pointer;font-family:inherit}
+.mz-btn.pri{background:var(--cel);color:#fff}
+.mz-btn.gho{background:#EFF7FB;color:#1B6E9C;flex:0 0 110px}
+.mz-ana{margin-top:12px;background:#fff;border-radius:16px;padding:13px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 3px 14px rgba(10,30,51,.05);font-size:14.5px;font-weight:700;color:var(--txt)}
+.mz-ana-ic{font-size:18px}
+.mz-ana-go{margin-left:auto;color:var(--cel);font-weight:800;white-space:nowrap}
+.mz-week{margin-top:12px;background:#fff;border-radius:22px;padding:16px 16px 8px;box-shadow:0 6px 24px rgba(10,30,51,.08)}
+.mz-week-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mz-week-h h2{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.mz-accept{background:var(--yl);color:var(--txt);font-weight:800;font-size:13.5px;padding:8px 13px;border-radius:999px;border:none;cursor:pointer;font-family:inherit;white-space:nowrap}
+.mz-accept:disabled{opacity:.55;cursor:wait}
+.mz-prog{height:8px;background:#EAF1F5;border-radius:99px;margin:13px 0 6px;overflow:hidden}
+.mz-prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#2793C8,#35B57A)}
+.mz-prog-t{font-size:13px;color:#51758C;margin-bottom:6px}
+.mz-prog-t b{color:var(--txt)}
+.mz-row{border-top:1px solid #EFF5F8}
+.mz-row-tap{display:flex;align-items:center;gap:12px;padding:11px 0;cursor:pointer}
+.mz-day{width:40px;text-align:center;flex:0 0 40px}
+.mz-day-d{font-size:11px;font-weight:800;letter-spacing:.8px;color:#5B7A90}
+.mz-day-n{font-size:19px;font-weight:800;line-height:1.1}
+.mz-thumb{width:52px;height:52px;border-radius:13px;object-fit:cover;flex:0 0 52px;background:var(--bg2)}
+.mz-thumb.mz-nomedia{font-size:20px}
+.mz-row-mid{flex:1;min-width:0}
+.mz-row-t{font-size:14px;font-weight:700;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mz-row-s{font-size:12.5px;color:#7A97A9;margin-top:2px}
+.mz-st{font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.mz-st.pub{background:#E4F6EC;color:#177245}
+.mz-st.dra{background:#FFF3D6;color:#9A6E00}
+.mz-next{margin-top:12px;background:#fff;border-radius:16px;padding:13px 14px;display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700;box-shadow:0 3px 14px rgba(10,30,51,.05);color:var(--txt)}
+.mz-next-sub{color:#51758C;font-weight:600}
+.mz-next-go{margin-left:auto;color:var(--cel);font-weight:800;white-space:nowrap;flex:0 0 auto}
+.mz-idea{display:block;margin:16px 2px 0;font-size:13.5px;font-weight:700;color:#1B6E9C;background:none;border:none;cursor:pointer;font-family:inherit;padding:0;text-align:left}
+.mz-chatbar{display:none}
+.mz-sheet{position:fixed;inset:0;z-index:300;background:rgba(10,30,51,.45);display:flex;align-items:flex-end;justify-content:center}
+.mz-sheet[hidden]{display:none}
+.mz-sheet-card{background:var(--bg2);width:100%;max-width:640px;height:92dvh;border-radius:22px 22px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -12px 40px rgba(10,30,51,.25)}
+.mz-sheet-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;font-size:16px;color:var(--txt)}
+.mz-sheet-x{width:36px;height:36px;border-radius:50%;border:none;background:#fff;color:var(--txt);font-size:15px;cursor:pointer;font-family:inherit;box-shadow:0 2px 8px rgba(10,30,51,.10);flex:none}
+.mz-sheet-body{flex:1;overflow-y:auto;padding:2px 16px calc(14px + env(safe-area-inset-bottom))}
+.mz-sheet .chat-box{max-height:46dvh}
+body.mz-sheet-open{overflow:hidden}
+.mz-tab{flex:1;text-align:center;font-size:11px;font-weight:700;color:#7A97A9;background:none;border:none;cursor:pointer;font-family:inherit;padding:2px 0}
+.mz-tab-ic{font-size:20px;display:block;margin-bottom:2px}
+.mz-tab.on{color:var(--cel)}
+@media(max-width:820px){
+  /* Barra de pestañas fija inferior (solo teléfonos) */
+  .mz-tabs{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;background:#fff;border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  /* Donde están las pestañas, la hamburguesa se jubila */
+  #app:has(.mz-tabs) .mtop{display:none}
+  /* Nada queda tapado por la barra */
+  #app:has(.mz-tabs) .main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+  /* Inicio: aire extra para la barra de chat sobre las pestañas */
+  .mz-wrap{padding-bottom:148px}
+  .mz-chatbar{display:flex;align-items:center;gap:9px;position:fixed;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:59;background:#fff;border-radius:999px;padding:7px 8px 7px 7px;box-shadow:0 8px 26px rgba(10,30,51,.13)}
+  .mz-plus{width:38px;height:38px;border-radius:50%;background:var(--cel);color:#fff;font-size:22px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:0 0 38px;border:none;cursor:pointer;font-family:inherit;line-height:1}
+  .mz-ph{flex:1;color:#93AEC0;font-size:15px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;padding:6px 0}
+  .mz-mic{font-size:19px;background:none;border:none;cursor:pointer;padding:4px 6px;font-family:inherit}
+}

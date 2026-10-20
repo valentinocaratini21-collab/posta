@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261020-v264'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261020-v270'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1870,7 +1870,7 @@ function igConnectHere() {
   const cur = '/#' + ((location.hash.split('?')[0] || '#/app/schedule').replace(/^#/, ''));
   igConnect(cur);
 }
-function setupChecklistHtml(title) {
+function setupChecklistHtml(title, opts) {
   const rows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
     rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
@@ -1893,6 +1893,9 @@ function setupChecklistHtml(title) {
   // La detección de transición vive acá: cubre TODAS las rutas que pintan el checklist
   // (refreshSetupChecklist, appShell, chatView), porque todas pasan por esta función.
   setupChecklistCelebrate(rows.length);
+  // En Inicio, la línea fina de IG ya comunica la conexión: la fila de IG del
+  // checklist se omite ahí para no pedir lo mismo dos veces en una pantalla.
+  if (opts && opts.omitIg) rows = rows.filter((r) => !r.includes('setupIgRow'));
   if (!rows.length) return '';
   const n = rows.length;
   const t = title || `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`;
@@ -1948,6 +1951,24 @@ function refreshSetupChecklist() {
   bindSetupRows();
 }
 
+/* ---------- 🏠 Rediseño mobile (2026-10-20, mock aprobado por Valentino) ----------
+   En teléfonos (≤820px) la app gana barra de pestañas inferior y una home
+   nueva (Inicio); la hamburguesa se oculta SOLO donde las pestañas están
+   (el chat conserva su navegación de siempre). Desktop: todo como hoy. */
+function mzIsMobile() {
+  try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
+}
+function mzHomeHash() { return mzIsMobile() ? '#/app/inicio' : '#/app/schedule'; }
+function mzTabsHTML(tab) {
+  if (tab === 'chat') return ''; // el chat es pantalla completa con su input fijo: sin pestañas
+  const on = tab === 'inicio' ? 'inicio'
+    : (tab === 'schedule' || tab === 'post') ? 'semana'
+    : tab === 'analisis' ? 'analisis'
+    : tab === 'ajustes' ? 'ajustes' : '';
+  const t = (key, route, ico, label) => `<button type="button" class="mz-tab${on === key ? ' on' : ''}" data-tab="${route}"><span class="mz-tab-ic">${ico}</span>${label}</button>`;
+  return `<nav class="mz-tabs" aria-label="Navegación principal">${t('inicio', 'inicio', '🏠', 'Inicio')}${t('semana', 'schedule', '📅', 'Semana')}${t('analisis', 'analisis', '🧠', 'Análisis')}${t('ajustes', 'ajustes', '⚙️', 'Ajustes')}</nav>`;
+}
+
 function appShell(tab, content) {
   return `
   <div class="mtop">
@@ -1966,10 +1987,11 @@ function appShell(tab, content) {
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
   </aside>
-  ${tab === 'chat' ? '' : setupChecklistHtml()}
+  ${tab === 'chat' ? '' : setupChecklistHtml(undefined, tab === 'inicio' ? { omitIg: true } : undefined)}
   <div class="app-shell">
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
-  </div>`;
+  </div>
+  ${mzTabsHTML(tab)}`;
 }
 
 /* Drawer mobile: hamburguesa ≡ con todo lo demás (reemplaza la bottom nav) */
@@ -9799,7 +9821,7 @@ async function maybeAutoStartWeek() {
 function postAuthLanding() {
   // FASE 4 (autopilot): onboarding si falta el negocio; si no, directo a la
   // semana. El chat queda como escape hatch en la navegación secundaria.
-  const homeTab = '#/app/schedule';
+  const homeTab = mzHomeHash();
   const chosen = localStorage.getItem('posta_chosen_plan');
   if (PROFILE && PROFILE.business_name) {
     location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
@@ -10238,6 +10260,8 @@ const GOALS = [
 async function render() {
   // La app ya pintó: chau splash de carga (index.html).
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
+  // La hoja de chat de Inicio pudo quedar abierta en el body: cada render arranca limpio.
+  try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
   // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 60);
   // v223: enhanceIdeas ya NO se dispara desde render(): el bloque de
@@ -10386,11 +10410,11 @@ async function render() {
   if (path === '#/' || path === '') {
     // App instalada: se comporta como app, no como web. Va directo a la semana
     // (o al login si no hay sesión) en vez de la landing de marketing.
-    if (pwaIsStandalone()) { location.hash = '#/app/schedule'; return; }
+    if (pwaIsStandalone()) { location.hash = mzHomeHash(); return; }
     // Logueado en la web: la vista principal es la semana (Schedule, FASE 4).
     // Visitante no logueado: la landing pública no cambia.
     await refreshSession();
-    if (ME) { location.hash = '#/app/schedule'; return; }
+    if (ME) { location.hash = mzHomeHash(); return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
@@ -10409,9 +10433,10 @@ async function render() {
   const postId = decodeURIComponent(path.split('/')[3] || '').trim();
   // FASE 4 (autopilot): sin pestaña explícita se abre la semana (Schedule).
   // El chat sigue vivo en #/app/chat como escape hatch para retoques puntuales.
-  let tab = tabRaw || 'schedule';
+  let tab = tabRaw || (mzIsMobile() ? 'inicio' : 'schedule');
   let content = '';
   if (tab === 'chat') content = await chatView();
+  else if (tab === 'inicio') content = await inicioView(); // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') content = await scheduleView();
   else if (tab === 'analisis') { let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
@@ -10755,6 +10780,331 @@ async function scheduleView() {
     ${armBlock}
   </div>`;
 }
+/* ============================================================
+   🏠 INICIO — rediseño mobile (2026-10-20, mock aprobado por Valentino)
+   "Una pantalla, una respuesta": ¿está todo andando? ¿tengo que hacer
+   algo? HOY manda (tarjeta grande con su porqué), la semana es una
+   LISTA vertical (no 7 columnitas), UN solo contador y UNA barra, el
+   análisis y las ideas son UNA línea cada uno, y el chat vive como
+   barra fija que abre una hoja con EL chat de Schedule (mismo estado
+   CHAT, mismos handlers: bindChat + bindSchedUpload — nada duplicado).
+   Datos: SOLO los que la app ya carga (/api/posts, /api/quota,
+   /api/week/ensure, /api/analysis?peek=1, /api/ideas). La ubicación
+   por día sale de schedPlacements — la misma cuenta de la agenda.
+   ============================================================ */
+function mzKindLabel(p) {
+  const mt = String(p.media_type || '');
+  if (mt === 'video') return 'Reel';
+  if (mt === 'story') return 'Historia';
+  if (mt === 'carousel') return 'Carrusel';
+  return 'Posteo';
+}
+function mzTitleOf(p) {
+  const line = String(p.caption || '').split('\n').map(s => s.trim()).filter(Boolean)[0] || '';
+  return line || String(p.source_topic || '').trim() || 'Posteo';
+}
+// Hora visible de un posteo, la misma que muestra la agenda: publicado →
+// published_at; programado → scheduled_at; borrador → su scheduled_at o
+// la hora de su día propuesto (schedPlacements/computeProposedIsos).
+function mzTimeOf(p, proposals) {
+  const dt = pcParseDate(p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at);
+  if (dt) return pcFmtHour(dt, pcTz());
+  const iso = (proposals && proposals.get) ? (proposals.get(p.id) || {}).iso : null;
+  return iso ? iso.slice(11, 16) : '';
+}
+function mzDayHead(ymd, todayYmd) {
+  const d = schedYmdToDate(ymd);
+  if (!d) return '';
+  let wd = '';
+  try { wd = d.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); } catch (e) {}
+  const name = ((wd ? wd.charAt(0).toUpperCase() + wd.slice(1) : '') + ' ' + d.getUTCDate()).toUpperCase();
+  if (ymd === todayYmd) return 'HOY · ' + name;
+  if (ymd === schedAddDays(todayYmd, 1)) return 'MAÑANA · ' + name;
+  return name;
+}
+function mzDayShort(ymd) {
+  const d = schedYmdToDate(ymd);
+  if (!d) return { d: '', n: '' };
+  let wd = '';
+  try { wd = d.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }); } catch (e) {}
+  return { d: wd.replace(/\./g, '').toUpperCase(), n: d.getUTCDate() };
+}
+function mzRowChip(p) {
+  const st = schedPostState(p);
+  if (st === 'published') return '<span class="mz-st pub">Publicado</span>';
+  if (st === 'scheduled') return '<span class="mz-st pub">Programado</span>';
+  if (st === 'creating') return '<span class="mz-st dra">Creando…</span>';
+  return '<span class="mz-st dra">Borrador</span>';
+}
+function mzHeroChip(p) {
+  const st = schedPostState(p);
+  if (st === 'published') return '<span class="mz-chip ok">✓ Publicado</span>';
+  if (st === 'scheduled') return '<span class="mz-chip ok">✓ Programado</span>';
+  if (st === 'creating') return '<span class="mz-chip dra">⏳ Creando…</span>';
+  return '<span class="mz-chip dra">Borrador</span>';
+}
+function mzMediaHTML(p, cls) {
+  if (!p.image_path) return `<div class="${cls} mz-nomedia"><span>✨</span></div>`;
+  if (String(p.media_type || '') === 'video') return `<video class="${cls}" src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`;
+  return `<img class="${cls}" src="${esc(p.image_path)}" alt="" loading="lazy">`;
+}
+
+async function inicioView() {
+  const tz = pcTz();
+  let allPosts = [];
+  try { allPosts = await api.get('/api/posts'); } catch (e) { allPosts = []; }
+  if (!Array.isArray(allPosts)) allPosts = [];
+  const drafts = allPosts.filter(p => p.status === 'draft').sort((a, b) => a.id - b.id);
+  REVIEW_DRAFTS = drafts; // el chat de la hoja edita borradores, igual que en Schedule
+  const schedPosts = allPosts.filter(p => p.status === 'scheduled');
+  // El mismo auto-arranque de la semana que dispara Schedule al entrar:
+  // si no, entrando por Inicio la semana nunca se armaría sola.
+  let weekGenerating = false;
+  let weekNoDna = false;
+  try {
+    const er = await api.post('/api/week/ensure', {}).catch(() => null);
+    weekGenerating = !!(er && er.generating);
+    weekNoDna = !!(er && er.reason === 'no_dna' && !drafts.length && !schedPosts.length);
+    if ((er && er.generating) || allPosts.some(p => !p.image_path && p.status === 'draft')) {
+      setTimeout(() => { try { if ((location.hash || '').startsWith('#/app/inicio')) render(); } catch (e) {} }, 8000);
+    }
+  } catch (e) {}
+  let quota = null;
+  try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
+  // 🧠 La carta: peek (solo lectura) — el mismo dato que consume la
+  // vista Análisis. Sin análisis guardado, la línea no aparece.
+  let hasCarta = false;
+  try { const an = await api.get('/api/analysis?peek=1').catch(() => null); hasCarta = !!(an && an.analysis); } catch (e) {}
+
+  const todayYmd = schedTodayYmd(tz);
+  const monday = schedMondayOf(todayYmd);
+  const weekDays = [0, 1, 2, 3, 4, 5, 6].map(i => schedAddDays(monday, i));
+  const nextDays = [0, 1, 2, 3, 4, 5, 6].map(i => schedAddDays(monday, 7 + i));
+  const { byDay, proposals } = schedPlacements(allPosts, tz);
+  const flat = [];
+  for (const [ymd, arr] of byDay) for (const it of arr) flat.push({ p: it.p, ymd });
+  // HOY: el próximo a salir de hoy; si ya salieron todos, el último
+  // publicado; si hoy no hay nada, el próximo que viene (día real).
+  const nowMs = Date.now();
+  const todays = flat.filter(x => x.ymd === todayYmd);
+  let hero = null;
+  const upToday = todays.filter(x => x.p.status === 'scheduled' && (pcParseDate(x.p.scheduled_at) || new Date(0)).getTime() >= nowMs - 3600000);
+  if (upToday.length) hero = upToday[0];
+  if (!hero) { const pub = todays.filter(x => x.p.status === 'published'); if (pub.length) hero = pub[pub.length - 1]; }
+  if (!hero) { const dr = todays.filter(x => x.p.status === 'draft'); if (dr.length) hero = dr[0]; }
+  if (!hero) { const fut = flat.filter(x => x.ymd > todayYmd && x.p.status !== 'published'); if (fut.length) hero = fut[0]; }
+  if (!hero) { const past = flat.filter(x => x.p.status === 'published'); if (past.length) hero = past[past.length - 1]; }
+
+  const initial = (((ME && ME.email) || (PROFILE && PROFILE.business_name) || 'P').trim().charAt(0) || 'P').toUpperCase();
+  const igLine = (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
+    ? `<a class="mz-igbar" href="#/app/ajustes?ig=1">📸 <span><b>Instagram sin conectar</b> — tu semana no puede salir.</span><span class="mz-igbar-go">Conectar →</span></a>`
+    : '';
+
+  let heroHTML = '';
+  if (hero) {
+    const hp = hero.p;
+    const hm = mzTimeOf(hp, proposals);
+    const heroDt = pcParseDate(hp.status === 'published' ? (hp.published_at || hp.scheduled_at) : hp.scheduled_at);
+    let prompt = 'Quiero editar ese posteo';
+    if (heroDt) prompt = apvEditPrompt(heroDt, tz);
+    else {
+      const dd = schedYmdToDate(hero.ymd);
+      let wd = '';
+      try { if (dd) wd = dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); } catch (e) {}
+      if (dd) prompt = `Quiero editar el posteo del ${wd} ${dd.getUTCDate()}${hm ? ' a las ' + hm : ''}`;
+    }
+    heroHTML = `
+  <div class="mz-lbl">${esc(mzDayHead(hero.ymd, todayYmd))}</div>
+  <div class="mz-hero">
+    ${mzMediaHTML(hp, 'mz-hero-img')}
+    <div class="mz-hero-b">
+      <div class="mz-chips"><span class="mz-chip sky">${esc(mzKindLabel(hp))}${hm ? ' · ' + esc(hm) : ''}</span>${mzHeroChip(hp)}</div>
+      <h1>${esc(mzTitleOf(hp))}</h1>
+      ${hp.strategy_why ? `<p class="mz-why">💡 <b>Por qué:</b> ${esc(hp.strategy_why)}</p>` : ''}
+      <div class="mz-hero-f"><button type="button" class="mz-btn pri" id="mzHeroVer" data-mzpost="${esc(String(hp.id))}">Ver posteo</button><button type="button" class="mz-btn gho" id="mzHeroCambiar" data-mzprompt="${esc(prompt)}">Cambiar</button></div>
+    </div>
+  </div>`;
+  }
+
+  const cartaLine = hasCarta
+    ? `<a class="mz-ana" href="#/app/analisis"><span class="mz-ana-ic">🧠</span> Tu carta de esta semana está lista<span class="mz-ana-go">Ver →</span></a>`
+    : '';
+
+  // Tu semana: lista vertical lun→dom con UN contador y UNA barra.
+  const weekItems = [];
+  for (const ymd of weekDays) for (const it of (byDay.get(ymd) || [])) weekItems.push({ p: it.p, ymd });
+  let weekHTML = '';
+  if (weekItems.length) {
+    const wkDrafts = weekItems.filter(x => x.p.status === 'draft');
+    const wkMarcha = weekItems.filter(x => x.p.status === 'published' || x.p.status === 'scheduled').length;
+    const wkTotal = weekItems.length;
+    const pct = wkTotal ? Math.round((wkMarcha / wkTotal) * 100) : 0;
+    const rows = weekItems.map(({ p, ymd }) => {
+      const ds = mzDayShort(ymd);
+      const hm = mzTimeOf(p, proposals);
+      const propIso = p.status === 'draft' ? (proposals.get(p.id) || {}).iso : null;
+      return `<div class="mz-row" data-post-id="${esc(String(p.id))}"${p.status === 'draft' ? ` data-revaccept="${esc(String(p.id))}"${propIso ? ` data-proposed="${esc(propIso)}"` : ''}` : ''}>
+      <div class="mz-row-tap" data-pc-act="open" role="button" aria-label="Ver posteo">
+        <div class="mz-day"><div class="mz-day-d">${esc(ds.d)}</div><div class="mz-day-n">${esc(String(ds.n))}</div></div>
+        ${mzMediaHTML(p, 'mz-thumb')}
+        <div class="mz-row-mid"><div class="mz-row-t">${esc(mzTitleOf(p))}</div><div class="mz-row-s">${hm ? esc(hm) + ' · ' : ''}${esc(mzKindLabel(p))}</div></div>
+        ${mzRowChip(p)}
+      </div>
+    </div>`;
+    }).join('');
+    weekHTML = `
+  <div class="mz-week">
+    <div class="mz-week-h"><h2>Tu semana</h2>${wkDrafts.length ? `<button type="button" class="mz-accept" id="mzAcceptAll">✅ Aceptar todo (${wkDrafts.length})</button>` : ''}</div>
+    <div class="mz-prog"><i style="width:${pct}%"></i></div>
+    <div class="mz-prog-t"><b>${wkMarcha} de ${wkTotal}</b> en marcha · ${wkDrafts.length ? `te quedan <b>${wkDrafts.length}</b> borrador${wkDrafts.length > 1 ? 'es' : ''} por aceptar` : 'todo aceptado ✓'}</div>
+    <div id="revMsg"></div>
+    <div id="hsWeekList" class="mz-rows">${rows}</div>
+  </div>`;
+  } else {
+    // Semana vacía: los estados de siempre (armando / falta ADN /
+    // completa), con el MISMO bloque que pinta el home actual.
+    weekHTML = homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
+  }
+
+  // La que viene: UNA línea (la cuenta capeada al cupo, como en la agenda).
+  const nextCount = nextDays.reduce((n, ymd) => n + (byDay.get(ymd) || []).length, 0);
+  const qLim = quota && Number(quota.limit) > 0 ? Number(quota.limit) : 0;
+  const nextLine = nextCount
+    ? `<a class="mz-next" href="#/app/schedule">✨ <span>La que viene ya se está armando <span class="mz-next-sub">· ${qLim ? Math.min(nextCount, qLim) + ' de ' + qLim : nextCount + ' armados'}</span></span><span class="mz-next-go">Ver →</span></a>`
+    : '';
+
+  return `<div id="inicioView" class="mz-wrap">
+  <div class="mz-hd">
+    <div class="mz-brand"><img src="ai-avatar.png" alt="Posty"><span>Posty<span class="mz-dot">.</span></span></div>
+    <button type="button" class="mz-uchip" id="mzUserChip" aria-label="Ajustes">${esc(initial)}</button>
+  </div>
+  ${igLine}
+  ${heroHTML}
+  ${cartaLine}
+  ${weekHTML}
+  ${nextLine}
+  <div id="mzIdeasSlot"></div>
+  <div class="mz-chatbar" id="mzChatBar">
+    <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
+    <button type="button" class="mz-ph" id="mzChatOpen">Escribile a Posty…</button>
+    <button type="button" class="mz-mic" id="mzMic" aria-label="Pedir con nota de voz">🎙️</button>
+  </div>
+  <div class="mz-sheet" id="mzSheet" hidden>
+    <div class="mz-sheet-card">
+      <div class="mz-sheet-head"><b>💬 ¿Cambiamos algo?</b><button type="button" class="mz-sheet-x" id="mzSheetX" aria-label="Cerrar">✕</button></div>
+      <div class="mz-sheet-body">${chatCardHTML(true, true, true, true)}</div>
+    </div>
+  </div>
+</div>`;
+}
+
+function mzOpenSheet(focus) {
+  const sh = $('#mzSheet');
+  if (!sh) return;
+  sh.hidden = false;
+  try { document.body.classList.add('mz-sheet-open'); } catch (e) {}
+  // Prefill pendiente: el MISMO contrato que usa "Editar" de #/app/post/:id
+  // (sessionStorage 'posty-chat-prefill'), consumido al abrir el chat.
+  try {
+    const pre = sessionStorage.getItem('posty-chat-prefill');
+    if (pre) {
+      sessionStorage.removeItem('posty-chat-prefill');
+      const ci = document.getElementById('chatInput');
+      if (ci) ci.value = pre;
+    }
+  } catch (e) {}
+  try { chatUpdateSendBtn(); } catch (e) {}
+  try { chatScroll(); } catch (e) {}
+  if (focus) {
+    const ci = document.getElementById('chatInput');
+    if (ci) setTimeout(() => { try { ci.focus({ preventScroll: true }); } catch (e) { try { ci.focus(); } catch (e2) {} } }, 60);
+  }
+}
+function mzCloseSheet() {
+  const sh = $('#mzSheet');
+  if (sh) sh.hidden = true;
+  try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
+}
+
+function bindInicio() {
+  const uc = $('#mzUserChip');
+  if (uc) uc.onclick = () => { location.hash = '#/app/ajustes'; };
+  const hv = $('#mzHeroVer');
+  if (hv) hv.onclick = () => { location.hash = '#/app/post/' + encodeURIComponent(hv.dataset.mzpost || ''); };
+  const hc = $('#mzHeroCambiar');
+  if (hc) hc.onclick = () => {
+    try { sessionStorage.setItem('posty-chat-prefill', hc.dataset.mzprompt || 'Quiero editar ese posteo'); } catch (e) {}
+    mzOpenSheet(true);
+  };
+  // "Aceptar todo (N)": el handler de siempre (doAcceptAll lee los
+  // data-revaccept/data-proposed de #hsWeekList — acá, las filas de la
+  // semana; en el bloque de respaldo, sus tarjetas).
+  const aa = $('#mzAcceptAll');
+  if (aa) aa.onclick = () => doAcceptAll(aa);
+  const hsA = $('#hsAcceptAll');
+  if (hsA) hsA.onclick = () => doAcceptAll(hsA);
+  // Bloque de respaldo (semana vacía): flechas del carrusel + lightbox,
+  // el mismo cableado que hace bindSchedule en su vista.
+  const wl = document.querySelector('#inicioView #hsWeekList');
+  const hp = $('#hsPrev'), hn = $('#hsNext');
+  if (wl && (hp || hn)) {
+    const step = () => {
+      try {
+        const c = wl.querySelector('.igmock-fixed');
+        return c ? c.offsetWidth + 12 : wl.clientWidth * 0.8;
+      } catch (e) { return 300; }
+    };
+    if (hp) hp.onclick = () => wl.scrollBy({ left: -step(), behavior: 'smooth' });
+    if (hn) hn.onclick = () => wl.scrollBy({ left: step(), behavior: 'smooth' });
+  }
+  $$('#inicioView [data-lightbox]').forEach(el => el.onclick = () => {
+    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1');
+  });
+  // El chat de la hoja: EXACTAMENTE el cableado de Schedule (mismo
+  // historial, mismo envío, misma subida). Una sola implementación.
+  try { bindChat(); } catch (e) {}
+  try { bindSchedUpload(); } catch (e) {}
+  const clickUp = () => { const f = document.getElementById('albumFile'); if (f) f.click(); };
+  const agUp = $('#agUploadBtn');
+  if (agUp) agUp.onclick = clickUp;
+  // El chip de Ideas dentro de la hoja: el panel de ideas vive en la
+  // Semana — se abre allá (sin callejones sin salida).
+  const ic = $('#ideasChip');
+  if (ic) ic.onclick = () => { IDEAS_PANEL_OPEN = true; mzCloseSheet(); location.hash = '#/app/schedule'; };
+  // Barra de chat fija: + sube (mismo flujo), el campo abre la hoja,
+  // el micrófono abre la hoja y arranca la nota de voz de siempre.
+  const plus = $('#mzPlus');
+  if (plus) plus.onclick = clickUp;
+  const open = $('#mzChatOpen');
+  if (open) open.onclick = () => mzOpenSheet(true);
+  const mic = $('#mzMic');
+  if (mic) mic.onclick = () => { mzOpenSheet(false); setTimeout(() => { try { voiceToggle(); } catch (e) {} }, 80); };
+  const x = $('#mzSheetX');
+  if (x) x.onclick = mzCloseSheet;
+  const sh = $('#mzSheet');
+  if (sh) sh.addEventListener('click', (e) => { if (e.target === sh) mzCloseSheet(); });
+  // 💡 Ideas: UNA línea si hay pendientes (la misma fuente que el panel:
+  // GET /api/ideas → IDEAS_PENDING_COUNT). Lleva a la Semana con el
+  // panel abierto, que es donde vive el flujo de ideas.
+  const paintIdeasLine = () => {
+    const slot = $('#mzIdeasSlot');
+    if (!slot) return;
+    const n = (typeof IDEAS_PENDING_COUNT === 'number') ? IDEAS_PENDING_COUNT : 0;
+    slot.innerHTML = n > 0
+      ? `<button type="button" class="mz-idea" id="mzIdeasGo">💡 Tenés ${n} idea${n > 1 ? 's' : ''} nueva${n > 1 ? 's' : ''} de Posty →</button>`
+      : '';
+    const g = $('#mzIdeasGo');
+    if (g) g.onclick = () => { IDEAS_PANEL_OPEN = true; location.hash = '#/app/schedule'; };
+  };
+  if (typeof IDEAS_PENDING_COUNT === 'number') paintIdeasLine();
+  else {
+    api.get('/api/ideas').then(r => {
+      if (r && r.ok) IDEAS_PENDING_COUNT = (r.ideas || []).length;
+      paintIdeasLine();
+    }).catch(() => {});
+  }
+}
+
 /* ---------- 🧠 ANÁLISIS (2026-10-19): la casa del cerebro de Posty ---------- */
 // Arriba: la radiografía de SU cuenta (todos los planes). Abajo: "Tu mercado"
 // — completo solo en Growth (Pro/Total); en Esencial, la probada con upsell.
@@ -11117,6 +11467,7 @@ function bindApp(tab) {
   if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk
   if (tab === 'chat') bindChatView(); // chat como escape hatch (FASE 4: ya no es el home)
   if (tab === 'schedule') bindSchedule();
+  if (tab === 'inicio') bindInicio();
   if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)
   if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números

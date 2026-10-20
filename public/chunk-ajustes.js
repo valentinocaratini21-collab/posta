@@ -12,13 +12,15 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('auto') ? 'auto' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('pagina') ? 'pagina' : q.get('estilos') ? 'estilos' : 'marca';
+  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('auto') ? 'auto' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('tn') ? 'tn' : q.get('pagina') ? 'pagina' : q.get('estilos') ? 'estilos' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
     : q.get('tiktok') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar TikTok')}</div>` : '';
   const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">✅ ¡Google conectado! Ya podés responder tus reseñas ⭐</div>`
     : q.get('google') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
+  const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">✅ ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas 🛍️</div>`
+    : q.get('tn') === 'error' ? `<div class="err">❌ No pudimos conectar tu Tiendanube. Probá de nuevo desde Más conexiones.</div>` : '';
   const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
@@ -33,7 +35,7 @@ function ajustesView() {
   try { stBrand = `<span class="ajsec-st">${assetLogo() ? 'Logo cargado' : 'Sin logo'}</span>`; } catch (e) {}
   try { if (p.page_slug) stPage = `<span class="ajsec-st">${esc(p.page_slug)}</span>`; } catch (e) {}
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
-  ${igMsg}${ttMsg}${ggMsg}${planMsg}${tokenWarn}
+  ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="igBanner"></div>
     <div class="ig-checklist">
@@ -242,7 +244,7 @@ function ajustesView() {
     <div id="stBest"></div>
     <div id="stRate"></div>
   </div></div>
-  <div class="card ajsec${openSec==='tiktok'||openSec==='google' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Más conexiones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='tiktok'||openSec==='google'||openSec==='tn' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Más conexiones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">🎵 TikTok</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
@@ -251,6 +253,10 @@ function ajustesView() {
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
     <div id="ggZone"><p class="hint">Cargando…</p></div>
     <div id="ggMsg"></div>
+    <div style="font-weight:800;margin:18px 0 8px">🛍️ Tiendanube</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
+    <div id="tnZone"><p class="hint">Cargando…</p></div>
+    <div id="tnMsg"></div>
   </div></div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
@@ -338,6 +344,65 @@ async function ggZoneLoad() {
   };
 }
 
+// Zona Tiendanube: estado desde /api/connections/tiendanube/status
+// (configured / connected / broken + datos de la última sync).
+async function tnZoneLoad() {
+  const zone = $('#tnZone');
+  if (!zone) return;
+  let st = null;
+  try { st = await api.get('/api/connections/tiendanube/status'); } catch (e) { /* queda el fallback */ }
+  if (!st) { zone.innerHTML = '<p class="hint">No se pudo cargar el estado de Tiendanube.</p>'; return; }
+  if (!st.configured) {
+    zone.innerHTML = `<div class="set-row"><div><div class="t">🛍️ Tiendanube — Muy pronto</div>
+      <div class="d">Estamos terminando la conexión con Tiendanube. Cuando esté lista, vas a poder conectar tu tienda con un toque y Posty va a postear solo lo que tenés en stock.</div></div></div>`;
+    return;
+  }
+  if (!st.connected) {
+    zone.innerHTML = `<div class="set-row"><div><div class="t">Tu tienda de Tiendanube</div>
+      <div class="d">Conectá tu tienda y Posty postea solo lo que tenés en stock, con tu producto más vendido al frente.</div>
+      <div class="hint" style="margin-top:6px">🔒 Entrás con el login oficial de Tiendanube. Nunca vemos ni guardamos tu contraseña, y Posty solo lee: nunca toca precios ni stock.</div></div>
+      <button class="btn btn-primary btn-sm" id="btnTnConn" style="flex:none">Conectar Tiendanube</button></div>`;
+    const bc = $('#btnTnConn');
+    if (bc) bc.onclick = () => { location.href = '/api/connections/tiendanube/start'; };
+    return;
+  }
+  if (st.broken) {
+    zone.innerHTML = `<div class="set-row"><div><div class="t">🛍️ Tiendanube</div>
+      <div class="d">⚠️ La conexión con ${st.store_name ? esc(st.store_name) : 'tu tienda'} se cortó. Volvé a conectarla para que Posty siga leyendo tu stock y tus ventas.</div></div>
+      <button class="btn btn-primary btn-sm" id="btnTnConn" style="flex:none">Reconectar</button></div>`;
+    const bc = $('#btnTnConn');
+    if (bc) bc.onclick = () => { location.href = '/api/connections/tiendanube/start'; };
+    return;
+  }
+  const datos = [];
+  if (st.products_total != null) datos.push(`${st.products_total} productos`);
+  if (st.star && st.star.name) datos.push(`⭐ tu más vendido: <b>${esc(st.star.name)}</b> (${st.star.units_30d} ventas en 30 días)`);
+  let syncTxt = '';
+  if (st.synced_at) {
+    const d = new Date(String(st.synced_at).replace(' ', 'T'));
+    if (!isNaN(d)) syncTxt = ` · Actualizado ${d.toLocaleDateString('es-AR')} ${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  zone.innerHTML = `<div class="set-row"><div><div class="t">Tienda conectada</div>
+    <div class="d">✅ ${st.store_name ? esc(st.store_name) : 'Tu Tiendanube'} — Posty lee tu catálogo, tu stock y tus ventas 🛍️</div>
+    ${datos.length ? `<div class="hint" style="margin-top:6px">${datos.join(' · ')}${syncTxt}</div>` : ''}</div>
+    <div style="display:flex;gap:8px;flex:none">
+      <button class="btn btn-ghost btn-sm" id="btnTnSync">Actualizar ahora</button>
+      <button class="btn btn-danger btn-sm" id="btnTnDisc">Desconectar</button>
+    </div></div>`;
+  const bs = $('#btnTnSync');
+  if (bs) bs.onclick = async () => {
+    bs.disabled = true; bs.textContent = 'Actualizando…';
+    try { await api.post('/api/connections/tiendanube/sync'); } catch (e) {}
+    tnZoneLoad();
+  };
+  const bd = $('#btnTnDisc');
+  if (bd) bd.onclick = async () => {
+    if (!confirm('¿Desconectar tu Tiendanube de Posty? Posty deja de leer tu tienda.')) return;
+    try { await api.post('/api/connections/tiendanube/disconnect'); } catch (e) {}
+    tnZoneLoad();
+  };
+}
+
 // v186: galería "🎨 Estilos de tus posteos" — muestras fieles (mismo motor
 // de composición que los posteos) y hasta 3 favoritos persistidos. Todo
 // opcional: sin favoritos, Posty elige como siempre.
@@ -392,6 +457,7 @@ function bindSettings() {
   });
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
+  try { tnZoneLoad(); } catch (e) {}
   try { styleGalleryLoad(); } catch (e) {}
   // --- Página pública del negocio (v169) ---
   const btnCopyPage = $('#btnCopyPage');
