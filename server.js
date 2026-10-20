@@ -5746,6 +5746,13 @@ async function buildAccountAnalysis(uid, opts = {}) {
   const prior = analysisEngine.priorAnalysis(db, uid);
   const peers = await fetchPeersForAnalysis(peerHandlesFromText(prof.competitors));
   const ctx = { postsPerWeek: plan.postsPerWeek || 7, plan: plan.id, prior, peers, source: 'instagram' };
+  // (v251) ctx.insights.bestHour: el motor ya lo acepta; se puebla desde
+  // users.best_hour (la columna que carga insights.fetchBestHour), con el
+  // mismo rango válido 9–21 que usan los demás lectores de la columna.
+  try {
+    const bh = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
+    if (bh && bh.best_hour >= 9 && bh.best_hour <= 21) ctx.insights = { bestHour: bh.best_hour };
+  } catch (e) { /* sin dato: el análisis sigue con los datos públicos */ }
   let analysis = null;
   const ig = feedAudit.sanitizeHandle(prof.ig_username || '');
   if (ig) {
@@ -14737,7 +14744,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v250';
+const BUILD_ID = '20261019-v251';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

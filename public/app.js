@@ -5453,16 +5453,21 @@ function weekCardHTML(d, o) {
         ? `<span class="pcard-creating">⏳ Creando…</span>`
         : `<button type="button" data-revaccept="${esc(String(d.id))}"${prop.iso ? ` data-proposed="${esc(prop.iso)}"` : ''} class="pcard-accept pcard-accept-top">✅ Aceptar</button>`;
   const capHTML = capFull ? `<div class="igmock-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>` : '';
+  // (v251) El porqué TAMBIÉN en Día/Semana: mismo tratamiento que la tarjeta
+  // de revisión (reviewCardHTML) — ya venía en el payload de /api/posts.
+  const whyHTML = d.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(d.strategy_why)}</div>` : '';
   const foot = o.dia
     ? `<div class="igmock-foot">
         <div class="igmock-chrome">${igChrome}</div>
         ${capFull ? capHTML : '<div class="igmock-cap" aria-hidden="true"></div>'}
         ${acts}
+        ${whyHTML}
       </div>`
     : `<div class="igmock-foot">
         ${igChrome}
         ${capHTML}
         ${acts}
+        ${whyHTML}
       </div>`;
   return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>${o.count ? `
@@ -6954,6 +6959,7 @@ function postCardHTML(p, opts) {
     <div class="pcard-body">
       <div class="pcard-meta"><b>${esc(when)}</b>${pcBadge(p)}</div>
       <div class="pcard-cap" data-pc-act="edit-cap" data-full="${esc(capFull)}" title="Tocá para editar">${esc(capFull)}</div>
+      ${p.strategy_why ? `<div style="font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;overflow-wrap:anywhere">💡 <b>Por qué:</b> ${esc(p.strategy_why)}</div>` : ''}
       ${actions}${ttActs}
     </div>
   </div>`;
