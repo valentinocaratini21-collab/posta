@@ -1108,13 +1108,20 @@ function lpWeekToForm() {
  * inventado, y el porqué en cada posteo. */
 function lpAnalisisHTML() {
   return `
-  <div class="section" id="analisis"><div class="wrap">
+  <div class="section" id="analisis" style="background:var(--bg2)"><div class="wrap">
     <h2>Posty analiza tu Instagram y tu competencia <span class="hl">antes de escribir una palabra</span></h2>
     <p class="lede">Nada de publicar por publicar. Primero miro tu cuenta y tu mercado, dato por dato — y cada posteo de tu semana nace de algo que vi. En tu prueba ya lo ves: el diagnóstico de tu Instagram viene incluido.</p>
     <div class="lp-cm-cards">
       <div class="lp-cm-card"><div class="lp-cm-i">🔍</div><h3>Tu cuenta, medida</h3><p class="lp-cm-tag">Qué mejorar, qué subir, qué bajar</p><p>Tu ritmo, tus formatos, tus horarios y tus textos, leídos de tu perfil real. Sin humo: cada punto viene con tu número de hoy y con lo que Posty mueve esta semana.</p></div>
       <div class="lp-cm-card"><div class="lp-cm-i">🗺️</div><h3>Tu competencia, en un mapa</h3><p class="lp-cm-tag">Dónde estás parado en tu rubro</p><p>Las cuentas de tu rubro y tu zona: cuánto publican, qué formatos les funcionan y qué huecos dejan. Tu semana se arma para ese mapa, no en el vacío. El mapa completo es parte de Growth.</p></div>
       <div class="lp-cm-card"><div class="lp-cm-i">🌱</div><h3>¿Recién arrancás?</h3><p class="lp-cm-tag">Tu cuenta nace con plan</p><p>Sin historial no hay diagnóstico inventado: tu cuenta nace con posicionamiento, el kit de perfil completo y una primera vidriera de 9 piezas pensada desde tu mercado.</p></div>
+    </div>
+    <h3 style="text-align:center;margin:36px 0 4px">Así se ve tu análisis 👇</h3>
+    <p style="text-align:center;color:var(--mut,#5A7186);font-size:13.5px;margin:0 0 18px">Ejemplo con una cafetería de barrio — el tuyo sale de TU cuenta real.</p>
+    <div class="lp-cm-cards">
+      <div class="lp-cm-card"><div class="lp-cm-i">🔧</div><h3>A mejorar</h3><p>Publicás a cualquier hora. Tu audiencia mira a las 11 y a las 19: tu semana sale en esos horarios.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>A incrementar</h3><p>Venís con 2 posteos por semana y tu rubro publica 5. Posty te lleva a 7 posteos + 1 reel.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📉</div><h3>A reducir</h3><p>La mitad de tus piezas son flyers que nadie lee. Menos flyer, más tu producto real.</p></div>
     </div>
     <p class="lp-cm-close">💡 Y cada posteo te dice su <b>porqué</b>: qué vi, qué decidí y para qué sale. Así de simple.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Ver el análisis de mi cuenta →</a></div>
@@ -1130,6 +1137,7 @@ function landingView(cfg) {
   <div class="nav nav-landing"><div class="wrap">
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
+      <a href="#analisis">Análisis</a>
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
@@ -1140,6 +1148,7 @@ function landingView(cfg) {
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
+    <a href="#analisis">Análisis</a>
     <a href="#como-funciona">Cómo funciona</a>
     <a href="#ejemplos">Ejemplos</a>
     <a href="#planes">Planes</a>
@@ -1203,6 +1212,7 @@ function landingView(cfg) {
     </div>
     <div class="hero-co">Posty es un producto de <b>Posta</b> · Hecho en Argentina 🇦🇷 · Publicamos con la API oficial de Meta · Nunca te pedimos tu contraseña</div>
   </div></div>
+  ${lpAnalisisHTML()}
   <div class="section lp-week-sec"><div class="wrap">
     <div class="lp-week" aria-label="Ejemplo de una semana armada por Posty">
       <div class="lp-week-head"><span class="lp-week-title">📅 Tu semana de Instagram en Posty</span><span class="lp-week-badge">Se publica sola ✨</span></div>
@@ -1286,6 +1296,7 @@ function landingView(cfg) {
       <div class="lp-job"><div class="lp-job-i">💡</div><h3>Ideas nuevas cada semana</h3><p>Posty mira a tu competencia, las fechas que venden y tu posteo que mejor anduvo — y te propone ideas listas para aprobar con un toque.</p></div>
       <div class="lp-job"><div class="lp-job-i">📊</div><h3>Tu resumen, cada semana</h3><p>Qué posteos funcionaron, qué sigue y el foco del mes — te llega solo, sin que tengas que pedirlo.</p></div>
     </div>
+    <div style="text-align:center;margin-top:30px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
   </div></div>
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
@@ -1304,7 +1315,6 @@ function landingView(cfg) {
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
-  ${lpAnalisisHTML()}
   <div class="section" id="herramienta" style="background:var(--bg2)"><div class="wrap" style="max-width:920px">
     <h2>Una herramienta te da trabajo. Posty te lo saca.</h2>
     <p class="lede">Las apps de IA para redes son lindas… hasta que te sentás a usarlas: hay que pensar, escribir, diseñar, programar y publicar. Eso es un trabajo. Posty <b>es</b> el que lo hace.</p>
@@ -1352,6 +1362,7 @@ function landingView(cfg) {
       </div>
     </div>
     <p class="lp-foto-cta"><a href="/prueba">En la prueba gratuita podés subir una foto tuya y ver la diferencia →</a></p>
+    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Probá gratis 3 días</a></div>
   </div></div>
   <div class="section lp-calc" id="calculadora"><div class="wrap" style="max-width:820px">
     <h2>¿Cuánto te cuesta hoy tu Instagram?</h2>
