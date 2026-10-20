@@ -79,7 +79,7 @@ function sanitizeHandle(h) {
 
 // ---------------------------------------------------------------------------
 // Parseo de posteos desde el HTML del embed público.
-// Devuelve [{type, shortcode, taken_at, caption, comments, thumb}]
+// Devuelve [{type, shortcode, taken_at, caption, comments, likes, thumb}]
 // ---------------------------------------------------------------------------
 function decodeCaption(raw) {
   // El archivo trae el caption con doble escape: \" para comillas, \\uXXXX y
@@ -93,6 +93,29 @@ function decodeCaption(raw) {
   s = s.replace(/\\n|\\r|\\t/g, ' ');
   s = s.replace(/\s+/g, ' ').trim();
   return s.slice(0, 600);
+}
+
+// (D4) La captura del caption no puede distinguir el \" de cierre del \"
+// escapado dentro del texto: se come el terminador y sigue tragando el JSON
+// que sigue (edge_media_to_comment, display_url…) hasta el tope de captura.
+// Resultado medido en la práctica de 200 perfiles: 40% de los captions con
+// residuo JSON pegado, que envenena ganchos/CTA/temas del digest. Acá se
+// corta en el primer marcador de residuo — la misma lista validada sobre
+// 1.834 captions reales en esa práctica, sin falsos positivos.
+const CAPTION_RESIDUE_CUTS = ['"}},', '"}}]', 'edge_media_to_comment', 'edge_liked_by', '\\"edge_', '","edge_'];
+function cleanCaptionResidue(s) {
+  let out = String(s || '');
+  let cut = out.length;
+  for (const k of CAPTION_RESIDUE_CUTS) {
+    const i = out.indexOf(k);
+    if (i >= 0 && i < cut) cut = i;
+  }
+  return out.slice(0, cut)
+    .replace(/\\+\//g, '/') // restos de escape de '/': \/ \\/ → /
+    .replace(/\\u[0-9a-fA-F]{0,3}$/, '') // escape \uXXXX cortado por el tope de captura
+    .replace(/\\+$/, '')
+    .replace(/"$/, '')
+    .trim();
 }
 
 function parseEmbedPosts(html) {
@@ -118,8 +141,12 @@ function parseEmbedPosts(html) {
         type: m[1],
         shortcode: f(/"shortcode":"([A-Za-z0-9_-]+)"/),
         taken_at: f(/"taken_at_timestamp":(\d+)/) ? parseInt(f(/"taken_at_timestamp":(\d+)/), 10) : null,
-        caption: decodeCaption(capRaw || ''),
+        caption: cleanCaptionResidue(decodeCaption(capRaw || '')),
         comments: f(/"edge_media_to_comment":\{"count":(\d+)/) ? parseInt(f(/"edge_media_to_comment":\{"count":(\d+)/), 10) : null,
+        // (D3) Los likes están en el mismo objeto del embed y se descartaban:
+        // sin ellos, el 27% de las cuentas quedaba sin ranking mejor/peor
+        // posteo. analysis-engine.signalsFromPosts ya consume p.likes.
+        likes: f(/"edge_liked_by":\{"count":(\d+)/) ? parseInt(f(/"edge_liked_by":\{"count":(\d+)/), 10) : null,
         thumb: thumbRaw ? thumbRaw.replace(/\\\//g, '/') : null,
       });
     }
@@ -139,6 +166,15 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
   } catch (e) { html = null; }
   if (!html) return { ok: false, error: 'No encontramos ese Instagram (puede ser privado o no existir)' };
   const bio = demo.extractIgBiography(html) || '';
+  // (D1/D2) El HTML del embed NO trae biography ni external_url (verificado
+  // en vivo: 0 ocurrencias en 236 KB; la página de perfil sale como shell de
+  // login y web_profile_info devuelve 429 sin sesión). La extracción es
+  // correcta — el dato no está en esta fuente. Por eso bio/link vacíos acá
+  // significan NO LEÍDO, no "el cliente no tiene": se marca unread para que
+  // ningún consumidor lo puntúe como vacío (antes el eje vidriera castigaba
+  // la ceguera del sistema como si fuera falla del cliente: 195/195 bios en
+  // "" contra 49/49 reales en la validación de la práctica).
+  const bioUnread = !html.includes('\\"biography\\"');
   const seg = html.split(String.fromCharCode(92) + '"').join('"');
   const f = (rx) => { const m = rx.exec(seg); return m ? m[1] : null; };
   const posts = parseEmbedPosts(html);
@@ -167,7 +203,9 @@ async function fetchAuditData(handle, fetchOverride, profOverride) {
       handle: ig,
       name: fullName,
       bio,
+      bio_unread: bioUnread,
       link: /^https?:\/\//i.test(bioLink) ? bioLink : '',
+      link_unread: linkRaw == null,
       followers: f(/"followers_count":(\d+)/) ? parseInt(f(/"followers_count":(\d+)/), 10) : null,
       posts_count: f(/"posts_count":(\d+)/) ? parseInt(f(/"posts_count":(\d+)/), 10) : null,
       following: followingRaw ? parseInt(followingRaw, 10) : null,
@@ -193,9 +231,13 @@ function trialProfileFromAudit(data, fallbackPic) {
     handle: p.handle,
     name: p.name || '',
     bio: p.bio || '',
+    // (D2) La marca de "no leído" viaja con el perfil: bio '' + unread NO es
+    // una bio vacía — es una bio que el sistema no pudo ver.
+    bio_unread: !!p.bio_unread,
     // (v230) El link de su bio, tal cual lo publicó (la lectura profunda
     // lo sigue hasta su tienda/reserva: bloque bio_link del digest).
     link: p.link || '',
+    link_unread: !!p.link_unread,
     followers: num(p.followers),
     posts_count: num(p.posts_count),
     following: num(p.following),
@@ -557,8 +599,12 @@ function computeSignals(profile, posts) {
     videos: types.GraphVideo,
     images: types.GraphImage,
     carousels: types.GraphSidecar,
-    bio_length: (profile.bio || '').length,
-    bio_has_what: /(vendemos|vendo|hacemos|hago|servicio|productos|turnos|env[ií]os|delivery|tienda)/i.test(profile.bio || ''),
+    // (D2) Bio no leída ⇒ señales en null (sin datos), NUNCA 0/false: un eje
+    // sin lectura no se promedia como malo. Sin la marca (perfiles de otras
+    // fuentes) vale el comportamiento histórico.
+    bio_length: profile.bio_unread ? null : (profile.bio || '').length,
+    bio_has_what: profile.bio_unread ? null : /(vendemos|vendo|hacemos|hago|servicio|productos|turnos|env[ií]os|delivery|tienda)/i.test(profile.bio || ''),
+    bio_unread: !!profile.bio_unread,
     followers: profile.followers,
     total_posts: profile.posts_count,
     palette_hues: null, // se completa con análisis de thumbnails (best-effort)
@@ -652,7 +698,9 @@ function buildAuditPrompt(profile, signals, captions) {
     ].join('\n'),
     user: [
       `Perfil: @${profile.handle}${profile.name ? ` (${profile.name})` : ''}`,
-      `Bio (${signals.bio_length} caracteres): "${(profile.bio || '(vacía)').slice(0, 300)}"`,
+      signals.bio_unread
+        ? 'Bio: (no se pudo leer — el HTML público no la trae; NO la trates como vacía: dimensión bio con score null y line "Sin datos suficientes")'
+        : `Bio (${signals.bio_length} caracteres): "${(profile.bio || '(vacía)').slice(0, 300)}"`,
       `Seguidores: ${profile.followers ?? 'desconocido'} · Posteos totales: ${profile.total_posts ?? 'desconocido'}`,
       `Rubro detectado: ${profile.category || 'otro'}`,
       '',
@@ -662,7 +710,7 @@ function buildAuditPrompt(profile, signals, captions) {
       `- Captions con texto: ${signals.captions_with_text_pct}% · largo promedio: ${signals.avg_caption_words} palabras`,
       `- Con CTA concreto: ${signals.cta_pct}% · con hashtags: ${signals.hashtag_pct}% (promedio ${signals.avg_hashtags} por posteo) · con emojis: ${signals.emoji_pct}%`,
       `- Paletas de color distintas en el feed: ${signals.palette_hues ?? 'sin datos'}`,
-      `- La bio dice qué venden: ${signals.bio_has_what ? 'sí' : 'no'}`,
+      `- La bio dice qué venden: ${signals.bio_has_what == null ? 'sin datos (bio no leída)' : (signals.bio_has_what ? 'sí' : 'no')}`,
       '',
       'Últimos captions:',
       capLines || '(sin captions)',
@@ -823,6 +871,7 @@ module.exports = {
   containsCliche,
   CLICHES,
   parseEmbedPosts,
+  cleanCaptionResidue,
   fetchAuditData,
   trialProfileFromAudit,
   trialAuditFromData,
