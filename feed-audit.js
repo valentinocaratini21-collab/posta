@@ -268,7 +268,7 @@ function trialAuditFromData(data, opts = {}) {
       group: 'incrementar',
       text: 'Tu ritmo de publicación tiene mucho para crecer',
       now: fmtRate210(ritmo) + ' posteos por semana',
-      with_posty: '5 por semana: tu semana completa, armada y programada',
+      with_posty: '7 posteos + 1 reel por semana: tu semana completa, armada y programada',
     });
   }
 
@@ -361,7 +361,7 @@ function trialAuditFromData(data, opts = {}) {
         group: 'mejorar',
         text: 'La mayoría de tus captions no abren con un gancho que frene el scroll',
         now: 'solo ' + hooked + ' de ' + caps.length + ' abren con pregunta o llamado',
-        with_posty: 'todos: cada caption abre con gancho desde el primer día',
+        with_posty: 'Cada caption abre con gancho desde el primer día',
       });
     }
   }

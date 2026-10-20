@@ -444,6 +444,47 @@ html{scroll-behavior:smooth}
 .aud-now{display:inline-block;background:var(--bg2);border-radius:99px;padding:2px 10px;color:var(--navy)}
 .aud-arrow{color:var(--mut);margin:0 2px}
 .aud-wp{display:inline-block;background:#EAF6FD;border-radius:99px;padding:2px 10px;color:var(--cel);font-weight:700}
+/* LA CARTA (v259): el análisis como carta de Posty — diseño v3 aprobado por
+   Valentino (20/10): avatar arriba de todo, veredicto, tu foto de hoy, los
+   hallazgos con su acción, PLAN de ejecución navy en 3 fases con "El efecto:",
+   banner motivacional amarillo y firma. */
+.aud-letter{padding:22px 18px 18px}
+.aud-lhead{text-align:center}
+.aud-ava{width:96px;height:96px;margin:2px auto 0;border-radius:50%;background:#fff;border:3px solid #FEC14D;box-shadow:0 8px 24px rgba(39,147,200,.25);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.aud-ava img{width:88px;height:88px;object-fit:cover}
+.aud-title{font-size:26px;font-weight:900;color:var(--navy);letter-spacing:-.5px;margin:12px 0 0}
+.aud-biz{font-size:14px;font-weight:700;color:var(--cel);margin:3px 0 0}
+.aud-date{font-size:12px;font-weight:600;color:var(--mut);margin:2px 0 0}
+.aud-intro{font-size:14px;line-height:1.55;color:#33566B;margin:12px 4px 0}
+.aud-verdict{background:#2793C8;color:#fff;border-radius:18px;padding:16px 18px;margin-top:16px;box-shadow:0 6px 20px rgba(39,147,200,.3);text-align:left}
+.aud-vlabel{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;opacity:.85;margin:0 0 6px}
+.aud-vq{font-size:17px;font-weight:800;line-height:1.45;margin:0}
+.aud-sec-t{font-size:12px;font-weight:900;letter-spacing:.6px;color:var(--cel);text-transform:uppercase;margin:18px 0 8px}
+.aud-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aud-stat{background:#F2F9FD;border-radius:14px;padding:12px 10px;text-align:center}
+.aud-sn{font-size:24px;font-weight:900;color:var(--navy);margin:0;line-height:1.1}
+.aud-sl{font-size:11.5px;font-weight:700;color:var(--mut);margin:3px 0 0;line-height:1.35}
+.aud-fmeta{margin:7px 0 0}
+.aud-act{font-size:13px;color:var(--cel);font-weight:600;margin:5px 0 0;line-height:1.45}
+.aud-act b{font-weight:800}
+.aud-plan{background:#0A1E33;color:#fff;border-radius:18px;padding:18px;margin-top:18px;text-align:left;box-shadow:0 8px 24px rgba(10,30,51,.28)}
+.aud-plan-t{font-size:17px;font-weight:900;margin:0}
+.aud-plan-s{font-size:11px;font-weight:800;color:#FEC14D;text-transform:uppercase;letter-spacing:1px;margin:3px 0 0}
+.aud-phase{margin-top:15px}
+.aud-ph{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#FEC14D;margin:0}
+.aud-phase ul{list-style:none;margin:8px 0 0;padding:0}
+.aud-phase li{font-size:13.5px;line-height:1.5;color:#D7E6EF;padding-left:18px;position:relative;margin-top:7px}
+.aud-phase li::before{content:'▸';position:absolute;left:2px;color:#2793C8;font-weight:900}
+.aud-fx{display:block;font-size:12.5px;color:#9CC8E4;margin-top:2px}
+.aud-need{font-size:13.5px;line-height:1.5;color:#FEC14D;font-weight:700;margin:16px 0 0;border-top:1px solid rgba(255,255,255,.14);padding-top:13px}
+.aud-need b{color:#fff}
+.aud-banner{background:#FEC14D;color:#0A1E33;border-radius:14px;padding:14px 16px;font-size:14.5px;font-weight:800;line-height:1.5;text-align:center;margin-top:16px}
+.aud-sign{text-align:center;margin-top:20px;padding-top:16px;border-top:2px dashed #C9E2EF}
+.aud-sign img{width:48px;height:48px;border-radius:50%;border:2px solid #FEC14D;background:#fff}
+.aud-fname{font-size:30px;font-weight:900;font-style:italic;letter-spacing:-.5px;color:var(--navy);margin:4px 0 0}
+.aud-fname span{color:#FEC14D}
+.aud-frole{font-size:11px;font-weight:800;color:var(--cel);text-transform:uppercase;letter-spacing:1.2px;margin:2px 0 0}
+.aud-fline{font-size:12.5px;color:var(--mut);margin:8px 0 0;line-height:1.5}
 @media(max-width:420px){#projBox{margin-top:20px}#auditBox{margin-top:14px}.pfp-layer{padding:12px}.pfp-ava{width:54px;height:54px}}
 </style>
 </head>
@@ -1777,28 +1818,206 @@ const AUD_GROUPS = [
   ['incrementar', '📈 A incrementar'],
   ['reducir', '📉 A reducir'],
 ];
+// ---------- LA CARTA (v259): el análisis como carta de Posty ----------
+// Diseño v3 aprobado por Valentino (2026-10-20): avatar arriba de todo,
+// intro en primera persona, veredicto compuesto DESDE LOS DATOS (nunca un
+// molde: la práctica de 200 análisis detectó el esqueleto repetido y se
+// nota), tu foto de hoy, los hallazgos con su acción, el PLAN DE EJECUCIÓN
+// en 3 fases (tarjeta navy, "El efecto:" por paso), banner motivacional
+// amarillo y la firma de Posty. Solo se afirma lo que el payload trae:
+// sin score ni mejor posteo en este payload, la carta no los inventa.
+function fmtRateAud(x) {
+  const v = Math.round(Number(x) * 10) / 10;
+  return Number.isInteger(v) ? String(v) : String(v).replace('.', ',');
+}
+function auditCtx() {
+  const c = { handle: '', biz: '', cat: '' };
+  try {
+    if (typeof TRIAL !== 'undefined' && TRIAL) {
+      if (TRIAL.ig) c.handle = String(TRIAL.ig).replace(/^@/, '');
+      else if (TRIAL.profile && TRIAL.profile.handle) c.handle = String(TRIAL.profile.handle).replace(/^@/, '');
+      if (TRIAL.business) c.biz = String(TRIAL.business);
+      if (TRIAL.category) c.cat = String(TRIAL.category);
+    }
+    if (!c.handle) { const inp = $('#f_ig'); if (inp && inp.value) c.handle = inp.value.replace('@', '').trim().toLowerCase(); }
+    if (!c.biz && typeof TRIAL_BIZ !== 'undefined' && TRIAL_BIZ) c.biz = String(TRIAL_BIZ);
+  } catch (e) {}
+  return c;
+}
+function auditStage(a) {
+  if (!a) return 'viva';
+  if (a.starter) return 'starter';
+  const s = a.signals || {};
+  const r = s.posts_per_week;
+  if (r != null && r >= 4 && (s.days_since_last == null || s.days_since_last <= 3)) return 'fuerte';
+  if ((r != null && r < 2) || (s.days_since_last != null && s.days_since_last >= 14)) return 'floja';
+  return 'viva';
+}
+function auditStrong(s) {
+  if (!s) return '';
+  if (s.videos > 0) return 'ya usás reels, el formato que más empuja';
+  if (s.hook_pct != null && s.hook_pct >= 50) return 'tus textos ya abren con gancho';
+  if (s.carousels > 0) return 'ya probás con carruseles';
+  if (s.days_since_last != null && s.days_since_last <= 2) return 'venís activo estos días';
+  if (s.n_posts >= 8) return 'ya tenés material publicado para apoyarnos';
+  return '';
+}
+function auditVerdict(a, stage) {
+  const s = (a && a.signals) || {};
+  const rate = s.posts_per_week != null ? fmtRateAud(s.posts_per_week) : null;
+  if (stage === 'starter') {
+    return 'Tu cuenta está por nacer — y nacer con estrategia es una ventaja enorme: no hay nada que corregir, todo por construir. Yo pongo el plan y la constancia desde el primer posteo.';
+  }
+  const strong = auditStrong(s);
+  if (stage === 'fuerte') {
+    return 'Tu cuenta ya viene trabajando' + (rate ? ' a ' + rate + ' posteos por semana' : '') + (strong ? ' y ' + strong : '') + '. Lo que sigue no es rescatar nada: es afinar y sostener — y de eso me encargo yo.';
+  }
+  const parts = [];
+  if (strong) parts.push('Tenés con qué: ' + strong + '.');
+  if (rate) parts.push('Hoy tu ritmo es de ' + rate + ' posteos por semana — y la constancia no depende de tu tiempo: la pongo yo.');
+  else parts.push('Tu cuenta está viva — lo que sigue es darle constancia y dirección: de eso me encargo yo.');
+  parts.push('Abajo está el plan, en orden.');
+  return parts.join(' ');
+}
+function auditStatsHTML(a) {
+  const s = (a && a.signals) || {};
+  const tiles = [];
+  if (s.posts_per_week != null) tiles.push({ n: fmtRateAud(s.posts_per_week), l: 'posteos por semana' });
+  if (s.n_posts >= 3 && s.videos != null) tiles.push({ n: s.videos + ' de ' + s.n_posts, l: 'reels en tus últimos posteos' });
+  if (s.hook_pct != null) tiles.push({ n: s.hook_pct + '%', l: 'de tus captions abren con gancho' });
+  if (s.max_gap_days != null && s.max_gap_days >= 2) tiles.push({ n: s.max_gap_days + ' días', l: 'tu racha más larga sin publicar' });
+  else if (s.days_since_last != null) tiles.push({ n: s.days_since_last + ' días', l: 'desde tu último posteo' });
+  if (tiles.length < 2) return '';
+  return `<p class="aud-sec-t">📸 Tu foto de hoy</p><div class="aud-stats">${tiles.slice(0, 4).map((t) => `<div class="aud-stat"><p class="aud-sn">${esc(t.n)}</p><p class="aud-sl">${esc(t.l)}</p></div>`).join('')}</div>`;
+}
+// Cada hallazgo real se convierte en un paso del plan: la acción de Posty
+// y su efecto, atados al número de hoy y al número con Posty del payload.
+const AUD_STEP_MAP = [
+  { re: /ritmo de publicación/i, phase: 0,
+    step: () => 'Tu semana sale completa y pareja: 7 posteos + 1 reel, armada y programada por mí.',
+    fx: (f) => 'Pasás de ' + (f.now || 'tu ritmo de hoy') + ' a tu semana completa, todas las semanas.' },
+  { re: /reels/i, phase: 0,
+    step: () => 'Sumo 1 reel por semana a tu grilla, creado por mí, con tu marca.',
+    fx: () => 'El formato que más empuja Instagram entra a tu mix desde esta semana.' },
+  { re: /horarios muy repartidos/i, phase: 1,
+    step: () => 'Cada posteo sale programado en una franja fija, siempre la misma.',
+    fx: () => 'Nada sale a cualquier hora: tu cuenta gana regularidad también en el horario.' },
+  { re: /no abren con un gancho/i, phase: 1,
+    step: () => 'Reescribo tus captions: cada uno abre con un gancho que frena el scroll.',
+    fx: (f) => 'Hoy ' + (f.now || 'casi ninguno abre con gancho') + ' — conmigo, todos abren con gancho desde el primer día.' },
+  { re: /varias paletas/i, phase: 1,
+    step: () => 'Unifico tu línea visual: una sola paleta — la de tu marca — en cada pieza.',
+    fx: () => 'Tu feed se ve parejo y reconocible de un solo vistazo.' },
+  { re: /sin publicar|rachas largas/i, phase: 2,
+    step: () => 'Programo tu semana para que ningún día quede vacío.',
+    fx: (f) => 'De ' + (f.now || 'rachas en silencio') + ' a 0 días en silencio: tu semana se programa sola.' },
+];
+function audStepFor(f) {
+  const t = String((f && f.text) || '');
+  for (const m of AUD_STEP_MAP) {
+    if (m.re.test(t)) return { phase: m.phase, step: m.step(f), fx: m.fx ? m.fx(f) : '' };
+  }
+  const g = { incrementar: 0, mejorar: 1, reducir: 2 }[f && f.group];
+  if (g == null || !f.with_posty) return null;
+  const wp = String(f.with_posty);
+  return { phase: g, step: wp.charAt(0).toUpperCase() + wp.slice(1) + '.', fx: f.now ? 'Hoy: ' + f.now + '.' : '' };
+}
+function buildExecPlan(a) {
+  const phases = [[], [], []];
+  (a.findings || []).forEach((f) => {
+    if (!f) return;
+    const st = audStepFor(f);
+    if (st && phases[st.phase].length < 3) phases[st.phase].push(st);
+  });
+  // Fase sin hallazgos: solo pasos del propio proceso de Posty (siempre
+  // sostenibles: la semana del visitante existe y el loop semanal es real).
+  if (!phases[0].length) phases[0].push({ step: 'Tu semana sale completa y pareja, armada y programada por mí.', fx: 'La constancia queda instalada desde la primera semana.' });
+  if (!phases[1].length) phases[1].push({ step: 'Reviso tu vidriera — nombre, bio y destacadas — con tu cuenta ya andando.', fx: 'Tu perfil queda vendiendo solo, las 24 horas.' });
+  if (phases[2].length < 3) phases[2].push({ step: 'Cada semana te re-mido y ajusto la semana con lo nuevo que aprendo de tu cuenta.', fx: 'Lo que funciona se repite; lo que no, no vuelve.' });
+  return phases;
+}
+function buildStarterPlan() {
+  return [
+    [
+      { step: 'Tu perfil nace completo: nombre, bio, foto y destacadas — tu kit está listo acá abajo.', fx: 'Te ves profesional desde el primer posteo.' },
+      { step: 'Tu primera vidriera: 9 piezas pensadas como un todo, cada una con su rol.', fx: 'Quien entra a tu perfil entiende qué vendés en segundos.' },
+    ],
+    [
+      { step: 'El ritmo queda instalado: tu semana completa sale sola, cada semana.', fx: 'Nacés con la constancia que a la mayoría de las cuentas les falta.' },
+    ],
+    [
+      { step: 'Te mido desde el día uno: cada análisis nuevo compara contra el anterior y ajusta la semana.', fx: 'Tu cuenta mejora con datos, no con corazonadas.' },
+    ],
+  ];
+}
+function audPlanHTML(phases, title) {
+  const names = ['Esta semana', 'La que viene', 'De acá en más'];
+  const nums = ['①', '②', '③'];
+  const body = phases.map((steps, i) => {
+    if (!steps.length) return '';
+    const lis = steps.map((st) => `<li>${esc(st.step)}${st.fx ? `<span class="aud-fx">El efecto: ${esc(st.fx)}</span>` : ''}</li>`).join('');
+    return `<div class="aud-phase"><p class="aud-ph">${nums[i]} ${names[i]}</p><ul>${lis}</ul></div>`;
+  }).join('');
+  return `<div class="aud-plan"><p class="aud-plan-t">${title}</p><p class="aud-plan-s">En este orden — y ya arranca</p>${body}<p class="aud-need">De tu lado: <b>nada</b> — yo arranco. Tu semana ya está armada con este plan, acá abajo 👇</p></div>`;
+}
+function auditBanner(stage, ctx) {
+  const lines = {
+    starter: 'Nacer con plan es arrancar ganando: tu cuenta sale con estrategia desde el posteo uno.',
+    fuerte: 'Ya venís bien — y esto recién arranca. Yo sostengo el ritmo y afino todo lo que sigue.',
+    floja: 'Tenés el negocio. La constancia la pongo yo. Vos seguí haciendo lo que mejor sabés hacer.',
+    viva: 'Tenés el negocio. La constancia la pongo yo. Vos seguí haciendo lo que mejor sabés hacer.',
+  };
+  let line = lines[stage] || lines.viva;
+  if (ctx && ctx.handle) line = '@' + ctx.handle + ' — ' + line.charAt(0).toLowerCase() + line.slice(1);
+  return line;
+}
 function renderAudit() {
   const box = $('#auditBox');
   if (!box) return;
   const a = TRIAL_AUDIT;
   if (!a || !Array.isArray(a.findings)) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  const groups = AUD_GROUPS.map(([key, title]) => {
-    const fs = a.findings.filter((f) => f && f.group === key);
-    if (!fs.length) return '';
-    const items = fs.map((f) => {
-      const nums = f.with_posty
-        ? `<p class="aud-nums"><span class="aud-now">Hoy: ${esc(f.now || '')}</span> <span class="aud-arrow">→</span> <span class="aud-wp">Con Posty: ${esc(f.with_posty)}</span></p>`
-        : (f.now ? `<p class="aud-nums"><span class="aud-now">Hoy: ${esc(f.now)}</span></p>` : '');
-      return `<div class="aud-f"><p class="aud-t">${esc(f.text || '')}</p>${nums}</div>`;
+  const hasFindings = a.findings.some((f) => f && f.text);
+  if (!hasFindings && !a.starter) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const starter = !!a.starter;
+  const ctx = auditCtx();
+  const stage = auditStage(a);
+  const bizLine = [ctx.biz, ctx.handle ? '@' + ctx.handle : ''].filter(Boolean).join(' · ');
+  let dateLine = '';
+  try { dateLine = 'Análisis del ' + new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {}
+  const intro = starter
+    ? 'Tu cuenta está por nacer — y va a nacer con estrategia. Estudié tu rubro y tu zona, y esto es lo que armé para vos 👇'
+    : 'Estudié tu cuenta dato por dato — tu ritmo, tus formatos, tus textos — y armé el plan con el que lo mejoro. Esto es lo que vi 👇';
+  // Los 3 grupos de siempre, con la acción de Posty como línea propia
+  // (starter no muestra hallazgos: no hay historial que diagnosticar).
+  let groups = '';
+  if (!starter) {
+    groups = AUD_GROUPS.map(([key, title]) => {
+      const fs = a.findings.filter((f) => f && f.group === key);
+      if (!fs.length) return '';
+      const items = fs.map((f) => `<div class="aud-f"><p class="aud-t">${esc(f.text || '')}</p>${f.now ? `<p class="aud-fmeta"><span class="aud-now">Hoy: ${esc(f.now)}</span></p>` : ''}${f.with_posty ? `<p class="aud-act">→ Con Posty: <b>${esc(f.with_posty)}</b></p>` : ''}</div>`).join('');
+      return `<div class="aud-group"><p class="aud-gtitle">${title}</p>${items}</div>`;
     }).join('');
-    return `<div class="aud-group"><p class="aud-gtitle">${title}</p>${items}</div>`;
-  }).join('');
-  if (!groups && !a.starter) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="aud-card">
-    <div class="aud-head"><b>🔍 El análisis de tu Instagram</b></div>
-    <p class="aud-sub">Esto vemos en tu cuenta hoy — y cómo se mueve con Posty 👇</p>
-    ${a.starter ? '<div class="aud-starter">🚀 Tu perfil está arrancando y hay mucho por construir: con Posty tenés la constancia desde la semana 1 — tu semana completa, cada semana.</div>' : ''}
+  }
+  const plan = starter ? buildStarterPlan() : buildExecPlan(a);
+  box.innerHTML = `<div class="aud-card aud-letter">
+    <div class="aud-lhead">
+      <div class="aud-ava"><img src="ai-avatar.png" alt="Posty"></div>
+      <h3 class="aud-title">Tu análisis</h3>
+      ${bizLine ? `<p class="aud-biz">${esc(bizLine)}</p>` : ''}
+      ${dateLine ? `<p class="aud-date">${esc(dateLine)}</p>` : ''}
+      <p class="aud-intro">${intro}</p>
+    </div>
+    <div class="aud-verdict"><p class="aud-vlabel">Mi veredicto</p><p class="aud-vq">${esc(auditVerdict(a, stage))}</p></div>
+    ${starter ? '' : auditStatsHTML(a)}
     ${groups}
+    ${audPlanHTML(plan, starter ? '🚀 Mi plan para que nazcas con todo' : '🚀 Mi plan para mejorar todo esto')}
+    <div class="aud-banner">${esc(auditBanner(stage, ctx))}</div>
+    <div class="aud-sign">
+      <img src="ai-avatar.png" alt="Posty">
+      <p class="aud-fname">Posty<span>.</span></p>
+      <p class="aud-frole">Tu community manager</p>
+      <p class="aud-fline">El plan ya está en marcha: tu semana está armada con todo esto. Nos vemos en tu agenda 📅</p>
+    </div>
   </div>`;
   box.style.display = 'block';
 }
