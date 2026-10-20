@@ -2708,7 +2708,7 @@ app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
       // a borrador. Lo que el usuario aceptó a mano no se toca.
       db.prepare(`UPDATE users SET autopilot_enabled = 0, trust_level = 0 WHERE id = ?`).run(uid);
       try {
-        const r = db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending'
+        const r = db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending', user_stopped=1
           WHERE user_id = ? AND status = 'scheduled' AND COALESCE(auto_published, 0) = 1`).run(uid);
         if (r.changes) console.log(`[autopilot] usuario ${uid}: ${r.changes} posteos automáticos frenados al pasar a manual`);
       } catch (e) {}
@@ -3615,7 +3615,7 @@ app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, 
   const uid = Number((req.body || {}).user_id) || 0;
   if (!uid) return res.status(400).json({ error: 'falta user_id' });
   try {
-    const upd = db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL WHERE user_id = ? AND status = 'scheduled'`).run(uid);
+    const upd = db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, user_stopped = 1 WHERE user_id = ? AND status = 'scheduled'`).run(uid);
     db.prepare('UPDATE users SET autopilot_enabled = 0 WHERE id = ?').run(uid);
     console.log(`[admin] stop-publishing uid=${uid}: ${upd.changes} posteos desprogramados, autopilot off`);
     res.json({ ok: true, user_id: uid, unscheduled: upd.changes });
@@ -6047,7 +6047,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
     recordSignal(req.session.userId, post, 'rejected'); // lo canceló = no le gustó
   } else if (action === 'unschedule') {
     // Frenar el autopiloto (2026-10-02): vuelve a borrador, no se publica.
-    db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending' WHERE id=?`).run(post.id);
+    db.prepare(`UPDATE posts SET status='draft', scheduled_at=NULL, auto_published=0, approval='pending', user_stopped=1 WHERE id=?`).run(post.id);
     console.log(`[autopilot] usuario ${req.session.userId} frenó el post ${post.id}`);
   } else if (action === 'save-draft') {
     // Guarda cambios en un borrador SIN programarlo (flujo de revisión del autopilot).
@@ -6088,7 +6088,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       }
     }
     scheduledInfo = { scheduled_at: finalWhen, week_key: whenMonday };
-    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=? WHERE id=?`).run(
+    db.prepare(`UPDATE posts SET scheduled_at=?, caption=?, hashtags=?, status='scheduled', error='', notified=?, approval=?, user_stopped=0 WHERE id=?`).run(
       finalWhen, caption ?? post.caption, hashtags ?? post.hashtags,
       // "Posty te avisa": si cambió la hora programada, se re-arma el aviso de
       // aprobación (3h antes). Si el posteo estaba rechazado y el usuario lo
@@ -6508,7 +6508,7 @@ function acceptAllDrafts(uid, items, opts) {
     }
     return weekLeftCache.get(k);
   };
-  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='' WHERE id=?`);
+  const upd = db.prepare(`UPDATE posts SET approval='approved', approved_at=datetime('now'), status='scheduled', scheduled_at=?, needs_review=0, error='', user_stopped=0 WHERE id=?`);
   const acceptedItems = [];
   let blockedQuota = null; // primer bloqueo por cupo: { monday, poolKey }
   let n = 0;
@@ -8255,7 +8255,14 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
 }
 
 function scheduleAllDrafts(uid) {
-  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
+  // ⛔ user_stopped (fix 2026-10-20): un posteo que el dueño FRENÓ (o que un
+  // stop administrativo frenó) NUNCA se re-programa solo. Esta función es el
+  // embudo de TODOS los flujos automáticos (pipeline, sweep semanal, regla
+  // 24h, login/signup): la marca se respeta acá y en ningún otro lado hace
+  // falta. Sin la marca, la regla 24h resucitaba posteos frenados a la hora
+  // siguiente (visto 3 veces en producción el 2026-10-20, cuentas 12 y 3).
+  // La marca se limpia SOLO cuando el usuario mismo lo programa/acepta.
+  const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(user_stopped,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [], waiting: [] };
   // FASE 0 — qualityGate: solo lo bueno sale solo. El borrador que no pasa
   // el gate queda en 'draft' con needs_review=1 (cola de revisión humana) y
@@ -8362,7 +8369,7 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
   // (id + week_key + motivo), sin bloquear al resto. El 403 queda SOLO para
   // el tope verdadero —cuando NINGÚN borrador pudo programarse por cupo— y
   // trae los datos de la semana del posteo (mismo criterio que v215).
-  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='', notified=0 WHERE id=?`);
+  const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='', notified=0, user_stopped=0 WHERE id=?`);
   const { scheduled, waiting } = scheduleDraftsPerWeek(uid, drafts, (iso, d) => upd.run(iso, d.id));
   scheduleLintForPosts(uid, scheduled.map((s) => s.id)); // (v198-A) lint al programar
   if (!scheduled.length && waiting.length) {
@@ -15211,7 +15218,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v269';
+const BUILD_ID = '20261020-v272';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

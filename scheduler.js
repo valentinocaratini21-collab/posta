@@ -833,6 +833,7 @@ function startScheduler(db) {
         SELECT DISTINCT p.user_id AS id FROM posts p
         JOIN users u ON u.id = p.user_id
         WHERE p.status = 'draft' AND COALESCE(p.needs_review, 0) = 0
+          AND COALESCE(p.user_stopped, 0) = 0
           AND p.created_at < datetime('now', '-24 hours')
           AND COALESCE(u.auto_week, 1) = 1
       `).all();
@@ -846,6 +847,7 @@ function startScheduler(db) {
         // Solo si SIGUE habiendo borradores viejos sin tocar (no pisar edición reciente).
         const stale = db.prepare(`SELECT COUNT(*) AS n FROM posts
           WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review, 0) = 0
+            AND COALESCE(user_stopped, 0) = 0
             AND created_at < datetime('now', '-24 hours')`).get(u.id).n || 0;
         if (!stale) continue;
         const r = await srv.autoArmWeek(u.id, '24h');
