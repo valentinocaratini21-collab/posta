@@ -1,7 +1,9 @@
 /* posty-chat.js — Chat público "Hablá con Posty" (landing + /prueba).
    Vanilla, sin dependencias: inyecta sus estilos y su DOM. Se incluye con
-   <script src="/posty-chat.js?v=1" defer></script>. Dentro de la app
-   (#/app/...) se oculta solo: la app tiene su propio chat. */
+   <script src="/posty-chat.js?v=2" defer></script>. SIN botón flotante:
+   el panel se abre solo desde puertas [data-posty-chat] ("Ayuda",
+   "Soporte", "Necesito ayuda") o vía window.PostyChat.open(). Dentro de
+   la app (#/app/...) se oculta solo: la app tiene su propio chat. */
 (function () {
   if (window.__postyChatLoaded) return;
   window.__postyChatLoaded = true;
@@ -22,9 +24,6 @@
 
   var css = [
     '#posty-chat-root{font-family:Montserrat,system-ui,-apple-system,sans-serif;color:#0A1E33}',
-    '#pcBtn{position:fixed;right:20px;bottom:20px;z-index:90;display:flex;align-items:center;gap:9px;background:#2793C8;color:#fff;border:none;border-radius:999px;padding:9px 18px 9px 9px;font-family:inherit;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 10px 26px rgba(10,30,51,.28);transition:transform .15s ease,box-shadow .15s ease}',
-    '#pcBtn:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(10,30,51,.32)}',
-    '#pcBtn img{width:36px;height:36px;border-radius:50%;background:#fff;display:block}',
     '#pcPanel{position:fixed;right:20px;bottom:94px;z-index:250;width:380px;max-width:calc(100vw - 24px);height:min(560px,calc(100dvh - 124px));background:#fff;border:1px solid #E3EDF4;border-radius:22px;box-shadow:0 24px 60px rgba(10,30,51,.30);display:flex;flex-direction:column;overflow:hidden;animation:pcUp .22s ease}',
     '@keyframes pcUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}',
     '.pc-head{background:#2793C8;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}',
@@ -47,9 +46,6 @@
     '.pc-send:disabled{opacity:.55;cursor:default}',
     '.pc-hidden{display:none!important}',
     '@media(max-width:760px){',
-    '  #pcBtn{right:16px;bottom:calc(96px + env(safe-area-inset-bottom));width:58px;height:58px;padding:0;justify-content:center;border-radius:50%}',
-    '  #pcBtn span{display:none}',
-    '  #pcBtn img{width:42px;height:42px}',
     '  #pcPanel{left:10px;right:10px;width:auto;bottom:calc(96px + env(safe-area-inset-bottom));height:min(68dvh,560px);max-height:calc(100dvh - 190px)}',
     '}'
   ].join('\n');
@@ -61,9 +57,6 @@
   var root = document.createElement('div');
   root.id = 'posty-chat-root';
   root.innerHTML =
-    '<button id="pcBtn" type="button" aria-label="Hablá con Posty">' +
-      '<img src="/ai-avatar.png" alt="Posty"><span>Hablá con Posty</span>' +
-    '</button>' +
     '<div id="pcPanel" class="pc-hidden" role="dialog" aria-label="Chat con Posty">' +
       '<div class="pc-head">' +
         '<img src="/ai-avatar.png" alt="Posty">' +
@@ -84,7 +77,6 @@
     '</div>';
   document.body.appendChild(root);
 
-  var btn = root.querySelector('#pcBtn');
   var panel = root.querySelector('#pcPanel');
   var msgs = root.querySelector('#pcMsgs');
   var chips = root.querySelector('#pcChips');
@@ -96,7 +88,10 @@
   var busy = false;
 
   function inApp() { return location.hash.indexOf('#/app') === 0; }
-  function applyHash() { root.style.display = inApp() ? 'none' : ''; }
+  function applyHash() {
+    if (inApp()) { closePanel(); root.style.display = 'none'; }
+    else { root.style.display = ''; }
+  }
   window.addEventListener('hashchange', applyHash);
   applyHash();
 
@@ -111,8 +106,8 @@
   }
 
   function openPanel() {
+    if (inApp()) return;
     panel.classList.remove('pc-hidden');
-    btn.classList.add('pc-hidden');
     if (!greeted) {
       greeted = true;
       thread.push({ role: 'assistant', text: GREETING });
@@ -122,9 +117,7 @@
   }
   function closePanel() {
     panel.classList.add('pc-hidden');
-    btn.classList.remove('pc-hidden');
   }
-  btn.addEventListener('click', openPanel);
   root.querySelector('.pc-close').addEventListener('click', closePanel);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && !panel.classList.contains('pc-hidden')) closePanel();
@@ -196,4 +189,24 @@
     e.preventDefault();
     send(input.value);
   });
+
+  /* Puertas: cualquier elemento [data-posty-chat] (o un descendiente suyo)
+     abre el panel. Delegación pura sobre document: funciona con contenido
+     renderizado después (la landing la dibuja app.js) sin observers. */
+  function doorTarget(e) {
+    return (e.target && e.target.closest) ? e.target.closest('[data-posty-chat]') : null;
+  }
+  document.addEventListener('click', function (e) {
+    if (!doorTarget(e)) return;
+    e.preventDefault();
+    openPanel();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!doorTarget(e)) return;
+    e.preventDefault();
+    openPanel();
+  });
+
+  window.PostyChat = { open: openPanel, close: closePanel };
 })();

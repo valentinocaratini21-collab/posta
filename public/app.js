@@ -1174,6 +1174,7 @@ function landingView(cfg) {
       <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
       <a href="#faq">Preguntas</a>
+      <a data-posty-chat role="button" tabindex="0" style="cursor:pointer">Ayuda</a>
       <a href="#/login">Entrar</a>
       <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
@@ -1185,6 +1186,7 @@ function landingView(cfg) {
     <a href="#ejemplos">Ejemplos</a>
     <a href="#planes">Planes</a>
     <a href="#faq">Preguntas</a>
+    <a data-posty-chat role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Ayuda</a>
     <a href="#/login">Entrar</a>
     <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
@@ -1462,6 +1464,7 @@ function landingView(cfg) {
       <details><summary>¿Posty reemplaza a un community manager?</summary><p>Hace el trabajo completo de todos los días: publicar, responder, promocionar y cuidar tu perfil — con tu aprobación en un toque cuando hace falta criterio humano. Si tu marca necesita producción de fotos o video presencial, o campañas a medida, eso sigue siendo trabajo de un equipo humano.</p></details>
       <details><summary>¿Posty puede hacer publicidad de mis posteos?</summary><p>Sí. Cuando un posteo anda muy bien, Posty te lo marca y te propone potenciarlo con pauta. Cargás crédito en la app, fijás cuánto querés gastar y listo: tu mejor contenido llega a mucha más gente.</p></details>
     </div>
+    <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">¿Otra duda? <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);font-weight:700;cursor:pointer">Hablá con Posty →</a></p>
     <div style="text-align:center;margin-top:44px">
       <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     </div>
@@ -1486,7 +1489,7 @@ function landingView(cfg) {
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
     <span>Posty, tu community manager con IA · Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
-    <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
+    <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a> · <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);cursor:pointer">Soporte</a></span>
   </div></div>
   <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">Probá gratis 3 días</a></div></div>`;
 }
