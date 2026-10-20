@@ -308,6 +308,16 @@ html{scroll-behavior:smooth}
 .work3{margin:44px 0 6px}
 .work3 h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
 .work3 .lede{text-align:center;color:var(--mut);margin-bottom:4px;font-size:15px}
+.hace{margin:44px 0 6px}
+.hace h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.hace .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
+.hace-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.hace-item{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.hace-item .he{font-size:24px;line-height:1.25;flex:0 0 auto}
+.hace-item b{display:block;font-size:15px;color:var(--navy);margin-bottom:3px}
+.hace-item p{font-size:13px;color:var(--mut);line-height:1.5;margin:0}
+.hace-foot{text-align:center;color:var(--mut);font-size:14px;font-weight:600;margin-top:16px}
+@media(max-width:640px){.hace-grid{grid-template-columns:1fr}}
 .ejemplos{margin:44px 0 6px}
 .ejemplos h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
 .ejemplos .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
@@ -519,14 +529,34 @@ html{scroll-behavior:smooth}
     </div>
   </div>
 
+  <div class="hace">
+    <h3>Todo lo que Posty hace por vos</h3>
+    <p class="lede">No es solo postear: es el trabajo completo de un community manager, todos los días.</p>
+    <div class="hace-grid">
+      <div class="hace-item"><div class="he">🎨</div><div><b>Diseña tu semana</b><p>Posteos, reels e historias con tu marca: tus fotos, tus colores y tu producto exacto. Nada de plantillas iguales para todos.</p></div></div>
+      <div class="hace-item"><div class="he">✍️</div><div><b>Escribe para vender</b><p>Captions y hashtags en tu tono, pensados para que te compren, no para rellenar.</p></div></div>
+      <div class="hace-item"><div class="he">⏰</div><div><b>Publica solo</b><p>A la mejor hora, todos los días. Te avisa 30 minutos antes por si querés frenar algo.</p></div></div>
+      <div class="hace-item"><div class="he">🔍</div><div><b>Estudia tu negocio</b><p>Lee tu Instagram y tu rubro: qué vende, qué está funcionando y qué hace tu competencia.</p></div></div>
+      <div class="hace-item"><div class="he">📆</div><div><b>Caza las fechas que venden</b><p>Día de la Madre, Hot Sale, Navidad: tu semana se adapta sola, sin que te acuerdes vos.</p></div></div>
+      <div class="hace-item"><div class="he">💡</div><div><b>Te propone ideas</b><p>Cada semana, ideas nuevas para tu negocio, listas para aprobar con un toque.</p></div></div>
+      <div class="hace-item"><div class="he">💬</div><div><b>Responde tus comentarios</b><p>La respuesta lista en tu tono; la mandás con un toque. Nada sale sin tu OK.</p></div></div>
+      <div class="hace-item"><div class="he">📩</div><div><b>Responde tus mensajes</b><p>Tu bandeja de Instagram, en cero.</p></div></div>
+      <div class="hace-item"><div class="he">⭐</div><div><b>Cuida tus reseñas</b><p>Contesta tus reseñas de Google por vos.</p></div></div>
+      <div class="hace-item"><div class="he">🚀</div><div><b>Potencia lo que anda</b><p>Detecta el posteo que la rompe y te propone impulsarlo con pauta. Vos fijás el tope de gasto.</p></div></div>
+      <div class="hace-item"><div class="he">🌐</div><div><b>Tu página, lista para compartir</b><p>Una página pública de tu negocio con botón de WhatsApp directo a vos.</p></div></div>
+      <div class="hace-item"><div class="he">🤚</div><div><b>Vos mandás</b><p>Frenás cualquier posteo con un toque, pedís cambios en el chat como si hablaras con tu CM, o aprobás todo a mano si preferís.</p></div></div>
+    </div>
+    <p class="hace-foot">Y cada semana te llega el resumen: qué funcionó, qué sigue y el foco del mes.</p>
+  </div>
+
   <div class="ejemplos">
     <h3>Semanas reales, hechas por Posty</h3>
     <p class="lede">Posteos de verdad, de semanas que armé para negocios como el tuyo.</p>
     <div class="ej-grid">
-      <div class="ej-card"><img src="prueba-ej1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🌸 Florería — flores de estación</p></div>
-      <div class="ej-card"><img src="prueba-ej2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>☕ Cafetería — el blend de la casa</p></div>
-      <div class="ej-card"><img src="prueba-ej3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💄 Makeup — que dura toda la fiesta</p></div>
-      <div class="ej-card"><img src="prueba-ej4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💇 Peluquería — combo corte + color</p></div>
+      <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🌸 Florería — ramos frescos, hechos hoy</p></div>
+      <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>☕ Cafetería — el blend de la casa</p></div>
+      <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💄 Makeup — prolijo y que dura</p></div>
+      <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💈 Barbería — el ritual completo</p></div>
     </div>
     <p class="ej-foot">Diseño + caption + hashtags, con las fotos y los colores de cada negocio.</p>
   </div>
