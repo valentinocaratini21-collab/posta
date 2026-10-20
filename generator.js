@@ -1004,6 +1004,52 @@ function captionPasses(caption, input) {
       }
     }
   }
+  // CUERPO-57 (Parte 63, turno noche 2026-10-19 — auditoría de Juli sobre
+  // la semana real): dos huecos que el cuerpo de hoy dejó al desnudo.
+  // (d) TUTEO INEQUÍVOCO: el id 413 abrió «¿Te imaginas que tu
+  //     Instagram brille en Halloween?» y pasó TODAS las puertas — el
+  //     voseo vivía solo en el prompt. Gate angosto y sin falsos
+  //     positivos posibles: solo las formas de tuteo tras «te»
+  //     (imaginas/quieres/tienes/puedes, sin tilde); el voseo
+  //     (imaginás/querés/tenés/podés) y las citas («te quiero mostrar»)
+  //     no matchean.
+  // (e) DISPOSITIVO FUERA DE LA APERTURA: el id 418 escondió la familia
+  //     «¿cuántas veces te…?» como SEGUNDA línea/oración, con la familia
+  //     ya usada en su semana — el control intra-semana de M79 mira solo
+  //     la primera línea (verificado esta noche: pasaba con ok=true).
+  //     Si la familia ya abrió un caption anterior de la tanda, no
+  //     reaparece en NINGUNA oración de este.
+  {
+    // OJO: se corre sobre el caption CRUDO en minúsculas, no sobre `low`
+    // (que viene sin tildes): en crudo, «imaginás» (voseo) no matchea
+    // «imaginas» (tuteo) porque la á no es una a.
+    const tut = c.toLowerCase().match(/\bte\s+(imaginas|quieres|tienes|puedes)\b/);
+    if (tut) {
+      return { ok: false, reason: `tuteo (CUERPO-57): "te ${tut[1]}" es tuteo — Posty habla en voseo rioplatense siempre (imaginás, querés, tenés, podés); reescribí la frase en voseo` };
+    }
+    const prevs57 = [];
+    if (input && Array.isArray(input.prevCaptions)) prevs57.push(...input.prevCaptions);
+    if (input && input.prevCaption) prevs57.push(input.prevCaption);
+    if (prevs57.length) {
+      const famHead = (txt) => {
+        const t = String(txt || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^[¿¡\s]+/, '');
+        if (/^cuantas veces te\b/.test(t)) return 'cuantas-veces-te';
+        if (/^te preguntaste\b/.test(t)) return 'te-preguntaste';
+        if (/^te imagina/.test(t)) return 'te-imaginas';
+        return null;
+      };
+      const prevFams = new Set(prevs57.map(p => famHead(String(p || '').split('\n')[0])).filter(Boolean));
+      if (prevFams.size) {
+        const segments = c.split(/(?<=[.!?…])\s+|\n+/).slice(1);
+        for (const seg of segments) {
+          const fam = famHead(seg);
+          if (fam && prevFams.has(fam)) {
+            return { ok: false, reason: `dispositivo repetido fuera de la apertura (CUERPO-57): la fórmula "${fam}" ya abrió otro posteo de esta semana y reaparece en una oración posterior de este caption — un solo uso por semana, en cualquier posición; abrí esa oración con el dato o la escena` };
+          }
+        }
+      }
+    }
+  }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====
   // Precios del caption vs lista de precios del negocio: un precio desactualizado
   // o inventado se rechaza (se avisa y se corrige antes de publicar).

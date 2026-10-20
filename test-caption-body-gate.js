@@ -81,5 +81,44 @@ ok('control: caption limpio de referencia sigue pasando (sin regresión)', () =>
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+
+console.log('== (d) Tuteo inequívoco (CUERPO-57, M82 — id 413 real) ==');
+ok('id 413 original: "¿Te imaginas…?" se rechaza por tuteo', () => {
+  const cap = '¿Te imaginas que tu Instagram brille en Halloween? 🎃\n\nCon Posty tu semana sale armada hoy con tus fotos: escribinos por DM.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/tuteo/i.test(chk.reason), chk.reason);
+});
+ok('variantes: te quieres / te tienes / te puedes también se rechazan', () => {
+  for (const frag of ['te quieres quedar sin publicar otra semana', 'te tienes que encargar de todo el Instagram', 'te puedes perder la fecha que más vende']) {
+    const cap = `Si ${frag}, el problema no es tu negocio: es el tiempo.\n\nEscribinos por DM y armamos tu semana con tus fotos.`;
+    const chk = gen.captionPasses(cap, IN);
+    assert.strictEqual(chk.ok, false, frag);
+    assert.ok(/tuteo/i.test(chk.reason), chk.reason);
+  }
+});
+ok('control voseo: "¿Te imaginás…?" pasa', () => {
+  const cap = '¿Te imaginás que tu Instagram brille en Halloween? 🎃\n\nCon Posty tu semana sale armada hoy con tus fotos: escribinos por DM.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control cita: "te quiero / te puedo mostrar" NO es tuteo y pasa', () => {
+  const cap = 'Te quiero mostrar cómo queda tu semana armada con tus fotos y tus colores, y te puedo armar la primera hoy.\n\nEscribinos por DM y la ves.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
+console.log('== (e) Dispositivo repetido FUERA de la apertura (CUERPO-57 — id 418 real) ==');
+const CAP_418 = 'Nuestras mesas terminan siendo el centro de la casa. ¿Cuántas veces te pasó que entrás a una casa y ves una mesa que te enamora?\n\nPasá por el local hoy y mirá las mesas nuevas en persona.';
+ok('id 418: la familia ya usada en la semana no reaparece como segunda oración', () => {
+  const chk = gen.captionPasses(CAP_418, { business: 'De otro tiempo', dna: null, prevCaptions: [PREV_CUANTAS] });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/fuera de la apertura/i.test(chk.reason), chk.reason);
+});
+ok('control: la misma segunda oración SIN uso previo en la semana pasa', () => {
+  const chk = gen.captionPasses(CAP_418, { business: 'De otro tiempo', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
