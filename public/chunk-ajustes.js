@@ -12,7 +12,7 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('pagina') ? 'pagina' : q.get('estilos') ? 'estilos' : 'marca';
+  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('auto') ? 'auto' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('pagina') ? 'pagina' : q.get('estilos') ? 'estilos' : 'marca';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
@@ -24,61 +24,81 @@ function ajustesView() {
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
+  // Resúmenes de estado en el título de cada sección (v257): texto chico a la
+  // derecha del título. Todo con guardas: si el dato no está, no se muestra nada.
+  let stIg = '', stPlan = '', stBiz = '', stBrand = '', stPage = '';
+  try { stIg = `<span class="ajsec-st">${p.ig_connected ? (p.ig_username ? 'Conectada · @' + esc(p.ig_username) : 'Conectada') : 'Sin conectar'}</span>`; } catch (e) {}
+  try { if (typeof ME !== 'undefined' && ME && ME.plan) { const __pn = String(ME.plan); const __nm = __pn.charAt(0).toUpperCase() + __pn.slice(1); const __tl = (ME.is_trial && ME.trial_days_left) ? ` · quedan ${ME.trial_days_left} día${ME.trial_days_left === 1 ? '' : 's'}` : ''; stPlan = `<span class="ajsec-st">${esc(__nm)}${__tl}</span>`; } } catch (e) {}
+  try { if (p.business_name && String(p.business_name).trim()) stBiz = `<span class="ajsec-st">${esc(p.business_name)}</span>`; } catch (e) {}
+  try { stBrand = `<span class="ajsec-st">${assetLogo() ? 'Logo cargado' : 'Sin logo'}</span>`; } catch (e) {}
+  try { if (p.page_slug) stPage = `<span class="ajsec-st">${esc(p.page_slug)}</span>`; } catch (e) {}
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Mi marca</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
-    <div class="row2">
-      <div class="field"><label>Logo</label>
-        <div style="display:flex;gap:10px;align-items:center">
-          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
-          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
-          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
-        </div>
-        <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
-        <div class="hint" style="font-size:10.5px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
+  <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="igBanner"></div>
+    <div class="ig-checklist">
+      <div class="t">Tu Instagram está listo cuando:</div>
+      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
+      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
+      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
+    </div>
+    <div style="font-weight:800;margin-bottom:8px">Modo de publicación</div>
+    <div class="ig-modes">
+      <div class="ig-mode ${s.demo_mode ? 'sel' : ''}" id="igModeDemo" role="button" tabindex="0">
+        <div class="ig-mode-h">🧪 Demo ${s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
+        <span>Simulamos todo: probá el flujo completo sin conectar nada.</span>
+      </div>
+      <div class="ig-mode ${!s.demo_mode ? 'sel' : ''}" id="igModeReal" role="button" tabindex="0">
+        <div class="ig-mode-h">🚀 Real ${!s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
+        <span>Publicamos en tu Instagram de verdad.</span>
       </div>
     </div>
-    <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
-      <div style="font-size:10.5px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
-      <div style="display:flex;gap:10px">
-        ${[0, 1, 2].map(i => `
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
-          <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
-          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:88px;text-align:center;font-size:16px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
-          <div style="position:relative">
-            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:16px;font-weight:700;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:9px 30px 9px 14px;background:#F2F9FD;max-width:150px;cursor:pointer">
-              ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
-            </select>
-            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);pointer-events:none">⌄</span>
-          </div>
-        </div>`).join('')}
+    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
+    <div class="set-row"><div><div class="t">Cuenta conectada</div>
+      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
+      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
+      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+    </div>
+    <div id="igVerifyMsg" style="margin-top:10px"></div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button><button class="btn btn-soft btn-sm" id="btnClientBrief">🔄 Actualizar mi brief</button>
+      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span><span class="hint" id="clientBriefMsg"></span>
+    </div>
+    <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
+      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
+      <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
+        <li>Abrí Instagram y andá a tu perfil</li>
+        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
+        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
+        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
+      </ol>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">📲 Abrir Instagram</a>
+        <button class="btn btn-primary btn-sm" id="btnIgRetry">🔄 Ya la hice profesional — conectar</button>
       </div>
-      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
+      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
-    <div class="field"><label>Vista previa</label>
-      <div id="brandPrev"></div>
-      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
-    </div>
-    <div class="field"><label>Foto de perfil</label>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="brand-pf" id="brandPf"></div>
-        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
-      <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
-    </div>
-    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
+    <div id="igMsg"></div>
   </div></div>
-  <div class="card ajsec${openSec==='estilos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Estilos de tus posteos</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos ✨</p>
-    <p style="color:var(--dim);font-size:11.5px;margin-bottom:14px">Muestras de estilo: así se compone un posteo con cada uno — con una foto de tu rubro, tu nombre y tus colores. Marcá hasta 3 favoritos y tus posteos nuevos van a salir con esos looks primero.</p>
-    <div id="styleGallery"><div style="color:var(--mut);font-size:12.5px">Cargando estilos…</div></div>
-    <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
+  <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="font-weight:800;margin-bottom:8px">Publicación</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
+      <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
+    <div style="font-weight:800;margin:18px 0 8px">Tu semana</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
+      <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
   </div></div>
-  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div></div>
+  <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
     <div class="row2">
       <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
@@ -132,8 +152,8 @@ function ajustesView() {
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🧠 Lo que Posty sabe de tu negocio</h3><span class="lvl-pill" id="lvlPill" style="display:none"><span class="lvl-num" id="lvlPillNum">Nivel 1</span><span class="lvl-name" id="lvlPillName"></span></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;margin-bottom:10px">🧠 Lo que Posty sabe de tu negocio <span class="lvl-pill" id="lvlPill" style="display:none"><span class="lvl-num" id="lvlPillNum">Nivel 1</span><span class="lvl-name" id="lvlPillName"></span></span></div>
     <div class="lvl-block" id="lvlBlock"><p class="hint">Calculando tu nivel…</p></div>
     <p class="src-intro">Lo estudio solo para crear posteos que venden.</p>
     <div class="src-row" id="webZone"><p class="hint">Cargando…</p></div>
@@ -141,64 +161,62 @@ function ajustesView() {
     <div class="src-row" id="fbZone"><p class="hint">Cargando…</p></div>
     <div class="src-row" id="srcCommentsCard"><p class="hint">Cargando…</p></div>
     <div class="src-row" id="placesZone"><p class="hint">Cargando…</p></div>
-  </div></div>
-  <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="igBanner"></div>
-    <div class="ig-checklist">
-      <div class="t">Tu Instagram está listo cuando:</div>
-      <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
-      <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
-      <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
     </div>
-    <div style="font-weight:800;margin-bottom:8px">Modo de publicación</div>
-    <div class="ig-modes">
-      <div class="ig-mode ${s.demo_mode ? 'sel' : ''}" id="igModeDemo" role="button" tabindex="0">
-        <div class="ig-mode-h">🧪 Demo ${s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Simulamos todo: probá el flujo completo sin conectar nada.</span>
-      </div>
-      <div class="ig-mode ${!s.demo_mode ? 'sel' : ''}" id="igModeReal" role="button" tabindex="0">
-        <div class="ig-mode-h">🚀 Real ${!s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Publicamos en tu Instagram de verdad.</span>
+  </div></div>
+  <div class="card ajsec${openSec==='marca'||openSec==='estilos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
+    <div class="row2">
+      <div class="field"><label>Logo</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          ${assetLogo() ? `<img src="${assetLogo().file_path}" style="max-height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;padding:4px">` : '<span style="color:var(--dim);font-size:12.5px">Sin logo</span>'}
+          <button class="btn btn-ghost btn-sm" id="btnBrandLogo">📤 ${assetLogo() ? 'Cambiar' : 'Subir'}</button>
+          ${assetLogo() ? '<button class="btn btn-ghost btn-sm" id="btnBrandLogoDel">🗑️ Quitar</button>' : ''}
+        </div>
+        <input type="file" id="s_logofile" accept="image/*,.pdf,.docx" style="display:none">
+        <div class="hint" style="font-size:10.5px;color:var(--dim);margin-top:6px">Aceptamos imagen, PDF o Word.</div>
       </div>
     </div>
-    ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
-    <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
-      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
-      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
-    </div>
-    <div id="igVerifyMsg" style="margin-top:10px"></div>
-    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button><button class="btn btn-soft btn-sm" id="btnClientBrief">🔄 Actualizar mi brief</button>
-      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span><span class="hint" id="clientBriefMsg"></span>
-    </div>
-    <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
-      <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
-      <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
-        <li>Abrí Instagram y andá a tu perfil</li>
-        <li>Tocá <b>☰</b> → <b>Configuración y privacidad</b></li>
-        <li><b>Tipo de cuenta y herramientas</b> → <b>Cambiar a cuenta profesional</b></li>
-        <li>Elegí <b>Creator</b> o <b>Business</b> y completá los pasos</li>
-      </ol>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="btn btn-soft btn-sm" href="https://www.instagram.com/" target="_blank" rel="noopener">📲 Abrir Instagram</a>
-        <button class="btn btn-primary btn-sm" id="btnIgRetry">🔄 Ya la hice profesional — conectar</button>
+    <div class="field"><label>Colores de tu marca <span style="color:var(--dim);font-weight:400">(con 2 alcanza para activar "Mi marca")</span></label>
+      <div style="font-size:10.5px;color:var(--dim);margin:0 0 10px">Tocá el rol de cada color para reordenarlos ↕</div>
+      <div style="display:flex;gap:10px">
+        ${[0, 1, 2].map(i => `
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+          <input type="color" id="s_c${i}" value="${bc[i] || NEUTRAL_TRIO[i]}" style="width:56px;height:44px;border:1px solid var(--line);border-radius:12px;padding:4px;background:#fff;cursor:pointer">
+          <input type="text" id="s_h${i}" value="${(bc[i] || NEUTRAL_TRIO[i]).toUpperCase()}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="#000000" style="width:88px;text-align:center;font-size:16px;font-family:monospace;padding:6px 4px;border:1px solid var(--line);border-radius:8px;text-transform:uppercase">
+          <div style="position:relative">
+            <select id="s_r${i}" aria-label="Rol del color ${i + 1}: tocá para reordenar" style="appearance:none;-webkit-appearance:none;font-size:16px;font-weight:700;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:9px 30px 9px 14px;background:#F2F9FD;max-width:150px;cursor:pointer">
+              ${['Principal', 'Secundario', 'Acento'].map((r, ri) => `<option value="${ri}"${ri === i ? ' selected' : ''}>${r}</option>`).join('')}
+            </select>
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--dim);pointer-events:none">⌄</span>
+          </div>
+        </div>`).join('')}
       </div>
-      <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
+      <div class="hint">Subí tu logo y detectamos tus colores automáticamente, o elegilos a mano tocando el color o escribiendo su código. Con el menú de cada color elegís si es Principal, Secundario o Acento: se reordenan solos. El principal domina los diseños, el secundario lo acompaña y el acento va en botones y detalles.</div>
     </div>
-    <div id="igMsg"></div>
+    <div class="field"><label>Vista previa</label>
+      <div id="brandPrev"></div>
+      <div class="hint">Así se ve tu marca en tus posteos. Se actualiza sola cuando cambiás los colores.</div>
+    </div>
+    <div class="field"><label>Foto de perfil</label>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="brand-pf" id="brandPf"></div>
+        <div class="hint" style="margin:0">Así se ve tu logo recortado en círculo, como foto de perfil de Instagram.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnSaveBrand">Guardar marca</button> <span id="brandMsg"></span>
+      <span id="brandDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
+    </div>
+    <div style="margin-top:10px"><button class="linklike" id="btnResetBrand" style="font-size:11.5px;color:var(--mut);text-decoration:underline;background:none;border:0;cursor:pointer;padding:0">Reiniciar todo</button></div>
+    <div style="border-top:1px solid var(--line);margin-top:18px;padding-top:14px">
+      <div style="font-weight:800;font-size:15px;margin-bottom:10px">🎨 Estilos de tus posteos</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:6px">Elegí los que te gusten. Si no elegís, elijo yo por vos ✨</p>
+    <p style="color:var(--dim);font-size:11.5px;margin-bottom:14px">Muestras de estilo: así se compone un posteo con cada uno — con una foto de tu rubro, tu nombre y tus colores. Marcá hasta 3 favoritos y tus posteos nuevos van a salir con esos looks primero.</p>
+    <div id="styleGallery"><div style="color:var(--mut);font-size:12.5px">Cargando estilos…</div></div>
+    <div class="hint" id="styleFavMsg" style="margin-top:10px"></div>
+    </div>
   </div></div>
-  <div class="card ajsec${openSec==='tiktok' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎵 TikTok</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
-    <div id="ttZone"><p class="hint">Cargando…</p></div>
-    <div id="ttMsg"></div>
-  </div></div>
-  <div class="card ajsec${openSec==='google' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>⭐ Google · Reseñas</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
-    <div id="ggZone"><p class="hint">Cargando…</p></div>
-    <div id="ggMsg"></div>
-  </div></div>
-  <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 Tu página</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='pagina' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🌐 Tu página</h3>${stPage}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty 🐾</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -215,24 +233,6 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página →</a>
     </div>
   </div></div>
-  <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Publicación automática</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
-      <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-    <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
-  </div></div>
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>✨ Mi semana en automático</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
-      <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-  </div></div>
   ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
@@ -241,6 +241,16 @@ function ajustesView() {
     <div class="st-grid" id="stGrid">${['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores'].map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${l}</div>${i === 0 ? '<div id="stDelta"></div>' : ''}</div>`).join('')}</div>
     <div id="stBest"></div>
     <div id="stRate"></div>
+  </div></div>
+  <div class="card ajsec${openSec==='tiktok'||openSec==='google' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Más conexiones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="font-weight:800;margin-bottom:8px">🎵 TikTok</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
+    <div id="ttZone"><p class="hint">Cargando…</p></div>
+    <div id="ttMsg"></div>
+    <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
+    <div id="ggZone"><p class="hint">Cargando…</p></div>
+    <div id="ggMsg"></div>
   </div></div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
@@ -412,6 +422,10 @@ function bindSettings() {
   };
   // 2026-10-10: "Tus números" vive en Ajustes (pedido de Valentino)
   try { if (typeof bindStats === 'function' && document.getElementById('stGrid')) bindStats(); } catch (e) {}
+  // Resumen de estado en el título de "🚀 Posty en automático" (v257): se pinta
+  // recién cuando AMBOS toggles cargaron su estado real; si algo falla, no se muestra nada.
+  let __apOn = null, __awOn = null;
+  const paintAjStAuto = () => { try { const el = $('#ajStAuto'); if (!el || __apOn === null || __awOn === null) return; el.textContent = (__apOn && __awOn) ? 'Activado' : (!__apOn && !__awOn) ? 'Desactivado' : 'Parcial'; } catch (e) {} };
   // --- Autopiloto (4 puntos, 2026-10-02) ---
   const btnAp = $('#btnAutopilotToggle');
   if (btnAp) {
@@ -421,6 +435,7 @@ function bindSettings() {
         const on = !!(r && r.enabled);
         const unlocked = !!(r && r.unlocked);
         const prog = (r && r.progress) || 0;
+        __apOn = on; paintAjStAuto();
         if (false) {
         } else {
           btnAp.disabled = false;
@@ -457,6 +472,7 @@ function bindSettings() {
       try {
         const r = await api.get('/api/settings/auto-week');
         const on = !!(r && r.enabled);
+        __awOn = on; paintAjStAuto();
         btnAw.textContent = on ? '🟢 Activado' : '⚪ Activar';
         btnAw.classList.toggle('btn-primary', !on);
         $('#autoWeekStatus').textContent = on
