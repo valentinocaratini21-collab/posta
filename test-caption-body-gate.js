@@ -109,7 +109,7 @@ ok('control cita: "te quiero / te puedo mostrar" NO es tuteo y pasa', () => {
 });
 
 console.log('== (e) Dispositivo repetido FUERA de la apertura (CUERPO-57 — id 418 real) ==');
-const CAP_418 = 'Nuestras mesas terminan siendo el centro de la casa. ¿Cuántas veces te pasó que entrás a una casa y ves una mesa que te enamora?\n\nPasá por el local hoy y mirá las mesas nuevas en persona.';
+const CAP_418 = 'Nuestras mesas terminan siendo el centro de la casa 🏡\n\n¿Cuántas veces te pasó que entrás a una casa y ves una mesa que te enamora?\n\nPasá por el local hoy y mirá las mesas nuevas en persona.'; // formato REAL del id 418: la fórmula vive en su propio bloque (con las dos oraciones en una línea, el lint de empalmes la frena antes, por otra puerta)
 ok('id 418: la familia ya usada en la semana no reaparece como segunda oración', () => {
   const chk = gen.captionPasses(CAP_418, { business: 'De otro tiempo', dna: null, prevCaptions: [PREV_CUANTAS] });
   assert.strictEqual(chk.ok, false);
