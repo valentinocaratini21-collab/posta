@@ -1178,6 +1178,7 @@ function landingView(cfg) {
       <a href="#/login">Entrar</a>
       <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
+    <a class="lp-entrar" href="#/login">Entrar</a>
     <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Abrir menú"><span></span><span></span><span></span></button>
   </div>
   <div class="mobile-menu" id="mobileMenu">
@@ -10291,6 +10292,19 @@ async function render() {
   } catch (e) {}
   const hash = location.hash || '#/';
   const [path] = hash.split('?');
+
+  // 📱 App instalada (standalone): NUNCA landing — el redirect va ANTES de la
+  // rama de anclas porque iOS suele relanzar la web app en la última URL
+  // (ancla incluida) y la landing se comía el ingreso (reporte 2026-10-20:
+  // Valentino abría su app y caía en marketing, sin sesión y sin login a la
+  // vista). Va directo a la home de la app; sin sesión, la ruta /app rebota
+  // sola al login. Auth y reset quedan afuera: son destinos válidos.
+  try {
+    if (pwaIsStandalone() && !path.startsWith('#/app') && path !== '#/login' && path !== '#/registro' && !path.startsWith('#/reset')) {
+      location.hash = mzHomeHash();
+      return;
+    }
+  } catch (e) {}
 
   // Anclas dentro de la landing (#como-funciona, #incluye, #planes, #faq): no son rutas de la app
   if (!path.startsWith('#/')) {

@@ -34,6 +34,6 @@
  "orientation": "portrait",
  "scope": "/",
  "short_name": "Posty",
- "start_url": "/",
+ "start_url": "/#/app",
  "theme_color": "#2793C8"
 }

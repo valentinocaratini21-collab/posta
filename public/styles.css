@@ -528,6 +528,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 @media(max-width:640px){.pz-ba-arrow{transform:rotate(90deg)}}
 
 /* ===== Landing mobile (≤760px): nav hamburguesa + hero compacto ===== */
+.nav-landing .lp-entrar{display:none}
 .nav-landing .hamburger{display:none}
 .nav-landing .mobile-menu{display:none}
 @media(max-width:760px){
@@ -535,6 +536,7 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
   .nav .wrap{height:64px}
   .logo{font-size:20px}
   .nav-landing .nav-links{display:none}
+  .nav-landing .lp-entrar{display:inline-flex;align-items:center;margin-left:auto;font-weight:800;font-size:14.5px;color:#2793C8;padding:8px 16px;border:2px solid #2793C8;border-radius:999px}
   .nav-landing .hamburger{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;width:44px;height:44px;background:none;border:none;cursor:pointer;padding:11px}
   .nav-landing .hamburger span{display:block;width:22px;height:2.5px;border-radius:3px;background:var(--txt)}
   .nav-landing .mobile-menu{display:none;flex-direction:column;padding:8px 20px 20px;background:#FFFFFF;border-top:1px solid var(--line)}
