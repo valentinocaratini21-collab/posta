@@ -42,13 +42,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261020f">
+<link rel="stylesheet" href="/styles.css?v=20261020g">
 </head>
 <body>
 <div id="app"><div class="nav nav-landing"><div class="wrap">
     <a class="logo logo-posty" href="#/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#analisis">Análisis</a>
+      <a href="#capacidades">Todo lo que hace</a>
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#ejemplos">Ejemplos</a>
       <a href="#planes">Planes</a>
@@ -97,6 +98,34 @@
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
 <script src="/app.js?v=188"></script>
+<script>
+/* Oferta de idioma (frente EN, 2026-10-20): si el navegador está en inglés y
+   estamos en la landing, ofrecemos /en con un toque. La elección se recuerda
+   en localStorage 'posty-lang' ('en' → entra directo a /en; 'es' → nunca más).
+   Nada de geo-IP: solo idioma del navegador + elección del visitante. */
+(function () {
+  try {
+    var onLanding = (location.pathname === '/' || location.pathname === '/index.html') &&
+      (!location.hash || location.hash === '#/');
+    if (!onLanding) return;
+    var pref = localStorage.getItem('posty-lang');
+    if (pref === 'en') { location.replace('/en'); return; }
+    if (pref === 'es') return;
+    var lang = (navigator.language || '').toLowerCase();
+    if (lang.indexOf('en') !== 0) return;
+    if (sessionStorage.getItem('posty-lang-dismissed')) return;
+    var bar = document.createElement('div');
+    bar.setAttribute('style', 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#fff;border-bottom:2px solid #FEC14D;padding:10px 14px;display:flex;align-items:center;justify-content:center;gap:12px;font-family:system-ui,sans-serif;box-shadow:0 4px 18px rgba(10,30,51,.10)');
+    bar.innerHTML = '<span style="font-size:14px;color:#0A1E33">🇺🇸 You\'re seeing Posty in Spanish.</span>' +
+      '<a href="/en" id="posty-lang-go" style="background:#2793C8;color:#fff;font-weight:800;font-size:14px;padding:8px 16px;border-radius:999px;text-decoration:none">View in English</a>' +
+      '<button id="posty-lang-x" aria-label="Close" style="background:none;border:none;font-size:18px;color:#5A7186;cursor:pointer;line-height:1">✕</button>';
+    document.body.appendChild(bar);
+    document.body.style.paddingTop = '52px';
+    document.getElementById('posty-lang-go').addEventListener('click', function () { try { localStorage.setItem('posty-lang', 'en'); } catch (e) {} });
+    document.getElementById('posty-lang-x').addEventListener('click', function () { try { sessionStorage.setItem('posty-lang-dismissed', '1'); } catch (e) {} document.body.style.paddingTop = ''; bar.remove(); });
+  } catch (e) {}
+})();
+</script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
