@@ -104,7 +104,7 @@
   function addBubble(role, text) {
     var d = document.createElement('div');
     d.className = 'pc-b ' + (role === 'user' ? 'pc-u' : 'pc-a');
-    d.textContent = text;
+    d.textContent = String(text == null ? '' : text).replace(/\*\*|__/g, '');
     msgs.appendChild(d);
     scrollMsgs();
     return d;
