@@ -1159,6 +1159,21 @@ function lpAnalisisHTML() {
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Ver el análisis de mi cuenta →</a></div>
   </div></div>`;
 }
+function lpAtencionHTML() {
+  return `
+  <div class="section" id="atencion" style="background:var(--bg2)"><div class="wrap">
+    <p style="text-align:center;margin:0 0 6px"><span style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:12px;letter-spacing:.6px;text-transform:uppercase;padding:6px 14px;border-radius:999px">Exclusivo del plan Total</span></p>
+    <h2>Y con Total, Posty también <span class="hl">atiende y vende por vos</span></h2>
+    <p class="lede">El posteo trae la consulta. ¿Y después? Si nadie responde rápido, esa venta se enfría. Con Atención al cliente, yo respondo, agendo y sigo cada consulta hasta cerrarla — con tus precios reales y tu forma de atender.</p>
+    <div class="lp-cm-cards">
+      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Respondo al instante, 24/7</h3><p class="lp-cm-tag">Instagram y WhatsApp</p><p>Tus precios, tus servicios, tus horarios: respondo con los datos reales de tu negocio, en tu tono. Nada de respuestas genéricas ni precios inventados.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📅</div><h3>Agendo y confirmo tus turnos</h3><p class="lp-cm-tag">Tu agenda se llena sola</p><p>Ofrezco tus horarios libres, reservo, confirmo y reprogramo. Y si alguien cancela, ese lugar se vuelve a ofrecer.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🎯</div><h3>Sigo cada consulta hasta el cierre</h3><p class="lp-cm-tag">Ningún interesado se enfría</p><p>Si alguien preguntó y no cerró, le hago seguimiento a tiempo. Cuando está listo, cierro con link de pago o seña — y después de la venta, pido la reseña de Google.</p></div>
+    </div>
+    <p class="lp-cm-close">🤝 Vos ves todo: cada conversación queda en tu cuenta, y lo sensible — quejas, descuentos, plata — te lo derivo a vos. <b>Posty atiende; vos mandás.</b></p>
+    <div style="text-align:center"><a class="btn btn-primary" href="#planes" style="font-size:16px;padding:16px 36px">Ver el plan Total →</a></div>
+  </div></div>`;
+}
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -1434,6 +1449,7 @@ function landingView(cfg) {
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>
+  ${lpAtencionHTML()}
   <div class="section" id="planes"><div class="wrap">
     <h2>Elegí tu plan</h2>
     <p class="lede">Primero probá gratis 3 días. Si te gusta tu semana, elegís tu plan acá.</p>
@@ -1457,6 +1473,7 @@ function landingView(cfg) {
       <details><summary>¿Usás mis fotos y mi marca?</summary><p>Sí, eso es lo más importante: subís tus fotos y tu logo una vez, definimos tus colores, y todos los diseños salen con tu identidad. Nada genérico.</p></details>
       <details><summary>¿Puedo cancelar cuando quiera?</summary><p>Sí, sin preguntas ni trabas. Cancelás desde tu cuenta y listo.</p></details>
       <details><summary>¿Qué pasa si no me gusta un posteo?</summary><p>Lo frenás antes de que salga, en un toque. ¿No te gusta la imagen? La rehacés con otro estilo o volvés a la anterior, gratis. Y aprendo de lo que te gusta para que cada semana salga mejor.</p></details>
+      <details><summary>¿Posty también atiende a mis clientes?</summary><p>Con el plan Total, sí: respondo tus mensajes de Instagram y WhatsApp con tus precios y servicios reales, agendo tus turnos y reservas, hago seguimiento a quien preguntó y no cerró, y cierro con link de pago o seña. Cada conversación queda visible en tu cuenta y lo sensible te lo derivo a vos.</p></details>
       <details><summary>¿Tengo que darte mi contraseña de Instagram?</summary><p>No. Conectás tu cuenta con el login oficial de Meta, igual que cuando entrás con Google en otras apps. Nunca veo ni guardo tu contraseña.</p></details>
       <details><summary>¿Los posteos se publican solos?</summary><p>Sí, esa es la idea: tu semana sale sola en los mejores horarios, sin que toques nada. Antes de cada publicación te aviso, y si algo no te cierra lo frenás con un toque. ¿Preferís aprobar todo a mano? También podés: apagás la publicación automática en Ajustes y nada sale sin tu OK.</p></details>
       <details><summary>¿Y si no me funciona?</summary><p>Por eso la prueba es gratis y sin tarjeta: mirá tu semana armada en 1 minuto y decidí. Si no te sirve, no pagás nada.</p></details>
