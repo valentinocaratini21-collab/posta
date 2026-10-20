@@ -8,6 +8,21 @@ const autopilot = require('./autopilot');
 const { activationNudge } = require('./activation-nudge');
 const { firstPublishNudge } = require('./first-publish-nudge');
 
+// (v198-A) INSTRUMENTO post_failed: todo posteo que no sale queda registrado
+// como EVENTO persistente en la tabla events (la misma que usa evTrack en
+// server.js) con su causa real. La fila del posteo se reescribe o se borra
+// con el tiempo (reintentos, regeneración de la semana); el evento queda:
+// un fallo en un cliente real nunca más es inauditable. El instrumento
+// jamás bloquea ni rompe la publicación.
+function schedEvent(db, userId, name, props) {
+  try {
+    let p = '';
+    try { p = JSON.stringify(props || {}).slice(0, 2000); } catch (e) {}
+    db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)')
+      .run(userId || null, '', name, p);
+  } catch (e) { /* el instrumento nunca frena nada */ }
+}
+
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   const file = path.basename(imagePath);
   let base =
@@ -239,6 +254,11 @@ async function publishSinglePost(db, post, opts = {}) {
   } catch (e) {
     const msg = String(e.message).slice(0, 500);
     db.prepare(`UPDATE posts SET status = 'failed', error = ? WHERE id = ?`).run(msg, post.id);
+    // (v198-A) Evento persistente con la causa real (ver schedEvent arriba).
+    schedEvent(db, post.user_id, 'post_failed', {
+      post_id: post.id, kind: 'publish_error', cause: msg,
+      media_type: post.media_type || '', scheduled_at: post.scheduled_at || '',
+    });
     console.error(`[posta] Post #${post.id} falló:`, e.message);
     return { ok: false, error: msg };
   }
@@ -278,11 +298,17 @@ async function processDuePosts(db) {
     db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE status='publishing' AND scheduled_at < datetime('now', '-15 minutes')`).run();
   } catch (e) { /* tabla vieja sin scheduled_at: no bloquea */ }
   const now = new Date().toISOString();
+  // (v198-A) Un posteo marcado needs_review queda RETENIDO aunque esté
+  // programado: la marca (del lint al programar, de los gates de QA o de la
+  // revisión admin) significa "un humano lo tiene que mirar" — publicarlo
+  // igual era el hueco por el que salía stock marcado. Al liberarse la
+  // marca (revisión), el tick lo publica en el próximo minuto.
   const due = db
     .prepare(
       `SELECT p.*, u.id AS uid FROM posts p
        JOIN users u ON u.id = p.user_id
        WHERE p.status = 'scheduled' AND p.scheduled_at <= ?
+       AND COALESCE(p.needs_review, 0) = 0
        ORDER BY p.scheduled_at ASC LIMIT 5`
     )
     .all(now);
@@ -307,6 +333,11 @@ async function processDuePosts(db) {
       // + aviso); nivel ≥1 → sale solo y queda 'auto'.
       if (autopilot.trustLevel(db, post.user_id) < 1) {
         db.prepare(`UPDATE posts SET status='failed', error='sin aprobación' WHERE id = ?`).run(post.id);
+        // (v198-A) También es un posteo que no salió: queda en el registro.
+        schedEvent(db, post.user_id, 'post_failed', {
+          post_id: post.id, kind: 'gate_no_approval', cause: 'sin aprobación',
+          media_type: post.media_type || '', scheduled_at: post.scheduled_at || '',
+        });
         console.log(`[posta] Post #${post.id} no publicado: sin aprobación (trust_level 0)`);
         try { await approval.notifyMissed(db, post, 'trust_0'); } catch (e) { console.error('[notif] missed:', e.message); }
         continue;

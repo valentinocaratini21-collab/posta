@@ -31,7 +31,7 @@ try {
   const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
-const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses } = require('./generator');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
 const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
@@ -2906,6 +2906,7 @@ app.post('/api/creator/schedule', requireAuth, (req, res) => {
       if (cap && dupStmt.get(req.session.userId, cap)) continue; // ya existe hoy: no duplicar
       ids.push(stmt.run(req.session.userId, c.image, c.caption, c.hashtags, c.scheduled_at, 'scheduled', 'image').lastInsertRowid);
     }
+    scheduleLintForPosts(req.session.userId, ids); // (v198-A) lint al programar
     res.json({ ok: true, count: ids.length, ids });
   } catch (e) {
     console.error('[creator/schedule]', e.message);
@@ -3272,6 +3273,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
           const iso = zonedWallToUtc(ed.when.trim(), userTz(uid));
           if (iso && new Date(iso).getTime() > Date.now() + 5 * 60 * 1000) {
             db.prepare('UPDATE posts SET scheduled_at = ?, status = ? WHERE id = ?').run(iso, 'scheduled', post.id);
+            scheduleLintForPost(uid, post.id); // (v198-A) lint al programar
           }
         }
         recordSignal(uid, post, 'edited'); // lo retocó = señal de gusto
@@ -3465,9 +3467,18 @@ setInterval(() => { // limpieza cada 5 min
 // para liberar el cupo. Nunca se le puede cobrar cupo al usuario por algo que no salió.
 setInterval(() => {
   try {
-    const r = db.prepare(`UPDATE posts SET status='failed', error='Se trabó publicando — no salió a Instagram, el cupo se liberó.'
-      WHERE status='publishing' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) < datetime('now', '-60 minutes')`).run();
-    if (r.changes) console.log(`[quota-guard] ${r.changes} posteo(s) trabados liberados`);
+    // (v198-A) Antes esto era un UPDATE masivo sin registro: ahora cada
+    // trabado emite su evento post_failed (auditable) además de liberarse.
+    const stuckRows = db.prepare(`SELECT id, user_id, media_type, scheduled_at FROM posts
+      WHERE status='publishing' AND scheduled_at IS NOT NULL AND datetime(scheduled_at) < datetime('now', '-60 minutes')`).all();
+    if (stuckRows.length) {
+      const updStuck = db.prepare(`UPDATE posts SET status='failed', error='Se trabó publicando — no salió a Instagram, el cupo se liberó.' WHERE id = ?`);
+      for (const sp of stuckRows) {
+        updStuck.run(sp.id);
+        evTrack(sp.user_id, 'post_failed', { post_id: sp.id, kind: 'stuck_publishing', cause: 'Se trabó publicando (+60 min en publishing)', media_type: sp.media_type || '', scheduled_at: sp.scheduled_at || '' });
+      }
+      console.log(`[quota-guard] ${stuckRows.length} posteo(s) trabados liberados`);
+    }
   } catch (e) { console.error('[quota-guard]:', e.message); }
 }, 300000).unref();
 app.post('/api/track', (req, res) => {
@@ -3935,6 +3946,10 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
       const genDone = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'week_generate_done' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c;
       const failedPosts = db.prepare(`SELECT p.id, u.email, p.error, p.created_at FROM posts p LEFT JOIN users u ON u.id = p.user_id
         WHERE p.status = 'failed' AND datetime(p.created_at) >= datetime('now', '-30 days') ORDER BY p.created_at DESC LIMIT 10`).all();
+      // (v198-A) El evento post_failed sobrevive a la fila: historial de
+      // fallos aunque el posteo se haya reintentado, regenerado o borrado.
+      const failedEv = db.prepare(`SELECT user_id, props, created_at FROM events
+        WHERE name = 'post_failed' AND datetime(created_at) >= datetime('now', '-30 days') ORDER BY created_at DESC LIMIT 10`).all();
       const stuck = db.prepare(`SELECT p.id, u.email, p.scheduled_at FROM posts p LEFT JOIN users u ON u.id = p.user_id
         WHERE p.status = 'publishing' AND p.scheduled_at IS NOT NULL AND datetime(p.scheduled_at) < datetime('now', '-60 minutes') ORDER BY p.scheduled_at DESC LIMIT 10`).all();
       out.health = {
@@ -3942,6 +3957,8 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
         gen_rate: genStart ? Math.round(genDone / genStart * 1000) / 10 : 100,
         failed_posts_30d: db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE status = 'failed' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c,
         failed_recent: (failedPosts || []).map(p => ({ id: p.id, email: p.email || '?', error: (p.error || '').slice(0, 90), at: p.created_at })),
+        post_failed_30d: db.prepare(`SELECT COUNT(*) AS c FROM events WHERE name = 'post_failed' AND datetime(created_at) >= datetime('now', '-30 days')`).get().c,
+        post_failed_recent: (failedEv || []).map(ev => { let pr = {}; try { pr = JSON.parse(ev.props || '{}'); } catch (e) {} return { post_id: pr.post_id || null, user_id: ev.user_id, kind: pr.kind || '', cause: String(pr.cause || '').slice(0, 120), at: ev.created_at }; }),
         stuck_count: (stuck || []).length,
         stuck_recent: (stuck || []).map(p => ({ id: p.id, email: p.email || '?', at: p.scheduled_at })),
       };
@@ -5815,6 +5832,29 @@ app.post('/api/analysis/refresh', requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: 'analysis_failed' });
   }
 });
+// (Cartas anteriores) Carta anterior ENTERA: el payload completo ya vive guardado en
+// account_analysis (saveAnalysis); este endpoint lo sirve SOLO al dueño de
+// la carta (id de otro usuario ⇒ 404, sin filtrar existencia). La vista de
+// Análisis lo usa para abrir las cartas viejas completas, no solo el
+// resumen del historial. Payload corrupto ⇒ error amable, nunca un 500.
+app.get('/api/analysis/:id', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const id = Number(req.params.id) || 0;
+  if (!id) return res.status(404).json({ ok: false, error: 'not_found' });
+  let row = null;
+  try {
+    row = db.prepare('SELECT id, payload FROM account_analysis WHERE id = ? AND user_id = ?').get(id, uid);
+  } catch (e) { row = null; }
+  if (!row) return res.status(404).json({ ok: false, error: 'not_found' });
+  let analysis = null;
+  try { analysis = JSON.parse(row.payload); } catch (e) { analysis = null; }
+  if (!analysis || typeof analysis !== 'object') {
+    return res.json({ ok: false, error: 'carta_ilegible', message: 'Esta carta quedó guardada con un problema y no se puede leer 😅 La de esta semana está completa, acá arriba.' });
+  }
+  analysis.id = row.id;
+  const plan = planForUid(uid);
+  res.json({ ok: true, plan: plan.id, past: true, analysis: analysisEngine.gateForPlan(analysis, plan.id) });
+});
 
 app.get('/api/posts', requireAuth, (req, res) => {
   const { status } = req.query;
@@ -5936,10 +5976,65 @@ app.post('/api/posts', requireAuth, requireTrialValid, (req, res) => {
       console.error('[autopilot] no pude auto-programar:', e.message);
     }
   }
+  // (v198-A) Lint al programar: nació 'scheduled' (directo o por autopiloto).
+  if (status === 'scheduled' || autopiloted) scheduleLintForPost(req.session.userId, newId);
 
   ensureImageBaseUrl(db, req.session.userId, req);
   res.json({ ok: true, id: newId, autopiloted });
 });
+
+// ---------- (v198-A) LINT AL PROGRAMAR ----------
+// El gate de captions (captionPasses: frases quemadas, empalmes en cualquier
+// bloque, cuerpo, claims sin dato, topes de largo/bloques/emojis) y el lint
+// de tono corrían SOLO al generar. El stock ya programado y los captions
+// editados a mano podían quedar 'scheduled' con defectos que la generación
+// nueva ya no deja pasar (la brecha M82: el post 112 salió con empalme).
+// Desde v198-A, toda transición a 'scheduled' pasa por acá: si el caption
+// no pasa, el posteo queda programado PERO marcado needs_review=1 (la marca
+// del sistema: invisible para el cliente, primero en la cola de revisión) y
+// el tick de publicación lo retiene hasta que la marca se libera. Evento
+// schedule_lint_failed con el motivo real. Fundador: exento, como en el
+// resto del sistema (week/ensure libera sus marcas). Nunca rompe el flujo
+// que lo llama: ante cualquier error interno, el posteo sigue como estaba.
+function scheduleLintForPost(uid, postId) {
+  try {
+    if (!uid || !postId || typeof captionPasses !== 'function') return null;
+    const post = db.prepare('SELECT id, caption, week_key FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
+    if (!post) return null;
+    const caption = String(post.caption || '');
+    if (!caption.trim()) return { ok: true }; // sin caption no hay copy que lintear
+    let founder = false;
+    try { founder = !!(costs.isFounderEmail && costs.isFounderEmail(uid)); } catch (e) {}
+    if (founder) return { ok: true, founder: true };
+    const prof = getProfile(uid) || {};
+    const dna = digestForUser(uid);
+    let prevCaptions = [];
+    try {
+      prevCaptions = db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND id != ? AND COALESCE(caption, '') != ''
+        AND status IN ('draft', 'scheduled') AND COALESCE(week_key, '') = COALESCE(?, '')
+        ORDER BY id DESC LIMIT 12`).all(uid, postId, post.week_key || '').map((r) => r.caption);
+    } catch (e) {}
+    let failReason = '';
+    const chk = captionPasses(caption, { business: prof.business_name || '', dna, ig_username: prof.ig_username || '', prevCaptions });
+    if (chk && !chk.ok) failReason = String(chk.reason || 'caption no pasa el gate');
+    if (!failReason) {
+      try {
+        const lt = analysisEngine.lintTone(caption);
+        if (lt && !lt.ok) failReason = 'tono: contiene vocabulario de reto (' + (lt.hits || []).join(', ') + ')';
+      } catch (e) {}
+    }
+    if (failReason) {
+      db.prepare('UPDATE posts SET needs_review = 1 WHERE id = ?').run(postId);
+      evTrack(uid, 'schedule_lint_failed', { post_id: postId, reason: failReason.slice(0, 300) });
+      console.log(`[schedule-lint] post ${postId} (user ${uid}): NO pasa el lint al programar — queda marcado para revisión. Motivo: ${failReason}`);
+      return { ok: false, reason: failReason };
+    }
+    return { ok: true };
+  } catch (e) { console.error('[schedule-lint]', e.message); return null; }
+}
+function scheduleLintForPosts(uid, ids) {
+  for (const id of ids || []) scheduleLintForPost(uid, id);
+}
 
 app.patch('/api/posts/:id', requireAuth, (req, res) => {
   const { scheduled_at, caption, hashtags, image_path, action } = req.body || {};
@@ -6002,6 +6097,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       post.approval === 'rejected' ? 'pending' : (post.approval || 'pending'),
       post.id
     );
+    scheduleLintForPost(req.session.userId, post.id); // (v198-A) lint al programar
     // 🎓 Autopiloto graduado (2026-10-02): si programó SIN editar, es un voto
     // de confianza. A los 10, Posty ofrece el autopiloto.
     if (!edited && post.status === 'draft') {
@@ -8192,6 +8288,7 @@ function scheduleAllDrafts(uid) {
   // freno de emergencia en nivel 1, y el conteo de semanas limpias lo ve.
   const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', approval='approved', approved_at=datetime('now'), error='', notified=0, auto_published=1 WHERE id=?`);
   const { scheduled, waiting } = scheduleDraftsPerWeek(uid, ready, (iso, d) => upd.run(iso, d.id));
+  scheduleLintForPosts(uid, scheduled.map((s) => s.id)); // (v198-A) lint al programar
   if (!scheduled.length) {
     const reason = waiting.some((w) => w.reason === 'plan_limit') ? 'plan_limit' : 'no_slots';
     return { ok: false, reason, scheduled: [], waiting, gateFailed };
@@ -8267,6 +8364,7 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
   // trae los datos de la semana del posteo (mismo criterio que v215).
   const upd = db.prepare(`UPDATE posts SET scheduled_at=?, status='scheduled', error='', notified=0 WHERE id=?`);
   const { scheduled, waiting } = scheduleDraftsPerWeek(uid, drafts, (iso, d) => upd.run(iso, d.id));
+  scheduleLintForPosts(uid, scheduled.map((s) => s.id)); // (v198-A) lint al programar
   if (!scheduled.length && waiting.length) {
     const w0 = waiting.find((w) => w.reason === 'plan_limit') || waiting[0];
     if (w0.reason === 'plan_limit') {
@@ -9095,8 +9193,12 @@ app.get('/api/billing/plans', (req, res) => {
 // se resetea el aviso, por si el usuario vuelve a vencer alguna vez.
 function reactivatePausedPosts(uid) {
   try {
+    // (v198-A) Los que vuelven a 'scheduled' también pasan el lint actual:
+    // el stock viejo no resucita sin pasar por la puerta de hoy.
+    const backIds = db.prepare(`SELECT id FROM posts WHERE user_id=? AND status='paused'`).all(uid).map((r) => r.id);
     db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE user_id=? AND status='paused'`).run(uid);
     db.prepare(`UPDATE users SET trial_pause_notified=0 WHERE id=?`).run(uid);
+    scheduleLintForPosts(uid, backIds);
   } catch (e) { console.error('[posta] reactivatePausedPosts:', e.message); }
 }
 
@@ -10038,6 +10140,71 @@ function saveImageB64(b64) {
   } catch (e) { /* sin variantes: fallback a la maestra */ }
   return name;
 }
+// ── (v198-A) Retención de media RECHAZADA por QA ───────────────────────
+// Cuando un gate de QA rechaza una imagen (auditoría dura, fidelidad,
+// personaje), el material se perdía: el b64 quedaba en memoria o el
+// archivo quedaba huérfano hasta que el janitor lo borraba — diagnosticar
+// un rechazo era imposible (precedente: media 454). Ahora cada rechazo
+// guarda una COPIA en media/qa-failed/ (subdirectorio: el janitor no lo
+// barre y ningún flujo del cliente lo referencia) + una fila en
+// qa_failed_media con gate y motivo reales. Poda: las 80 más recientes
+// (el disco manda; lo diagnosticable es el fallo reciente). Nada de esto
+// bloquea la generación: todo va en try/catch.
+const QA_FAILED_DIR = path.join(MEDIA_DIR, 'qa-failed');
+const QA_FAILED_MAX_FILES = 80;
+function ensureQaFailedStore() {
+  try { fs.mkdirSync(QA_FAILED_DIR, { recursive: true }); } catch (e) {}
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS qa_failed_media (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')),
+      user_id INTEGER, post_id INTEGER, gate TEXT, reason TEXT, file_name TEXT, size INTEGER)`);
+  } catch (e) {}
+}
+function pruneQaFailedStore() {
+  try {
+    const files = fs.readdirSync(QA_FAILED_DIR)
+      .filter((f) => /\.(jpe?g|png|webp)$/i.test(f))
+      .map((f) => { let mt = 0; try { mt = fs.statSync(path.join(QA_FAILED_DIR, f)).mtimeMs; } catch (e) {} return { f, mt }; })
+      .sort((a, b) => b.mt - a.mt);
+    for (const x of files.slice(QA_FAILED_MAX_FILES)) { try { fs.unlinkSync(path.join(QA_FAILED_DIR, x.f)); } catch (e) {} }
+  } catch (e) {}
+}
+function recordQaFailedMedia(row) {
+  try {
+    db.prepare('INSERT INTO qa_failed_media (user_id, post_id, gate, reason, file_name, size) VALUES (?,?,?,?,?,?)')
+      .run(row.uid || null, row.postId || null, String(row.gate || '').slice(0, 40), String(row.reason || '').slice(0, 500), row.fileName || '', row.size || 0);
+  } catch (e) {}
+  pruneQaFailedStore();
+}
+// Retiene el b64 rechazado por un gate en memoria (fidelidad/personaje).
+function retainQaFailedB64({ uid, postId, gate, reason, b64 }) {
+  try {
+    if (!b64) return;
+    ensureQaFailedStore();
+    const buf = Buffer.from(String(b64), 'base64');
+    if (!buf.length) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = `${stamp}-u${uid || 0}-p${postId || 0}-${String(gate || 'qa').replace(/[^a-z0-9-]/gi, '')}.jpg`;
+    fs.writeFileSync(path.join(QA_FAILED_DIR, name), buf);
+    recordQaFailedMedia({ uid, postId, gate, reason, fileName: name, size: buf.length });
+    console.log(`[qa-retain] media rechazada retenida (${gate}): ${name}`);
+  } catch (e) { console.error('[qa-retain]', e.message); }
+}
+// Retiene (COPIA: el original sigue vivo para qa_audit) el archivo que la
+// auditoría rechazó y el pipeline está por reemplazar en el borrador.
+function retainQaFailedFile({ uid, postId, gate, reason, absPath }) {
+  try {
+    if (!absPath || !fs.existsSync(absPath)) return;
+    ensureQaFailedStore();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const name = `${stamp}-u${uid || 0}-p${postId || 0}-${path.basename(absPath)}`;
+    const dest = path.join(QA_FAILED_DIR, name);
+    fs.copyFileSync(absPath, dest);
+    let size = 0; try { size = fs.statSync(dest).size; } catch (e) {}
+    recordQaFailedMedia({ uid, postId, gate, reason, fileName: name, size });
+    console.log(`[qa-retain] media rechazada retenida (${gate}): ${name}`);
+  } catch (e) { console.error('[qa-retain]', e.message); }
+}
 // ── Limpieza de media (2026-10-15) ─────────────────────────────────────
 // NUNCA hubo retención: cada imagen/reel generado quedaba en el volumen
 // para siempre y el disco se llenó (ENOSPC → img_fail 5/5). El janitor
@@ -10547,6 +10714,7 @@ async function fidelityGate({ uid, key, baseAbs, resultB64, regen }) {
   if (!v1) return { status: 'unverified', detalle: 'QA de fidelidad sin veredicto' };
   if (v1.ok) return { status: 'passed', detalle: v1.detalle };
   console.log(`[qa-fidelidad] uid ${uid}: resultado INFIEL (${v1.detalle || 'sin detalle'}) — reintento con cláusula reforzada`);
+  retainQaFailedB64({ uid, gate: 'fidelidad', reason: v1.detalle || 'resultado infiel', b64: resultB64 }); // (v198-A)
   let b64b = null;
   try { b64b = await regen(true); } catch (e) { console.error('[qa-fidelidad] regeneración falló:', e.message); }
   if (!b64b) return { status: 'fallback', detalle: v1.detalle };
@@ -10554,6 +10722,7 @@ async function fidelityGate({ uid, key, baseAbs, resultB64, regen }) {
   if (!v2) return { status: 'unverified', b64: b64b, detalle: 'QA sin veredicto en el reintento' };
   if (v2.ok) return { status: 'passed', b64: b64b, detalle: v2.detalle, retried: true };
   console.log(`[qa-fidelidad] uid ${uid}: el reintento también es infiel (${v2.detalle || 'sin detalle'}) — fallback a la foto original del cliente`);
+  retainQaFailedB64({ uid, gate: 'fidelidad', reason: v2.detalle || 'reintento infiel', b64: b64b }); // (v198-A)
   return { status: 'fallback', detalle: v2.detalle || v1.detalle };
 }
 
@@ -10633,6 +10802,7 @@ async function characterGate({ uid, key, refAbs, resultB64, regen, kind }) {
   if (!v1) return { status: 'unverified', detalle: 'QA de personaje sin veredicto' };
   if (v1.ok) return { status: 'passed', detalle: v1.detalle };
   console.log(`[qa-personaje] uid ${uid}: protagonista DISTINTO (${v1.detalle || 'sin detalle'}) — reintento con cláusula reforzada`);
+  retainQaFailedB64({ uid, gate: 'personaje', reason: v1.detalle || 'protagonista distinto', b64: resultB64 }); // (v198-A)
   let b64b = null;
   try { b64b = await regen(); } catch (e) { console.error('[qa-personaje] regeneración falló:', e.message); }
   if (!b64b) return { status: 'failed', detalle: v1.detalle };
@@ -10640,6 +10810,7 @@ async function characterGate({ uid, key, refAbs, resultB64, regen, kind }) {
   if (!v2) return { status: 'unverified', b64: b64b, detalle: 'QA sin veredicto en el reintento' };
   if (v2.ok) return { status: 'passed', b64: b64b, detalle: v2.detalle, retried: true };
   console.log(`[qa-personaje] uid ${uid}: el reintento también cambió al protagonista (${v2.detalle || 'sin detalle'}) — la pieza queda para revisión`);
+  retainQaFailedB64({ uid, gate: 'personaje', reason: v2.detalle || 'reintento con protagonista distinto', b64: b64b }); // (v198-A)
   return { status: 'failed', b64: b64b, detalle: v2.detalle || v1.detalle };
 }
 
@@ -11355,6 +11526,10 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
               const upd = db.prepare("UPDATE posts SET image_path = ?, image_prompt = ? WHERE id = ? AND status = 'draft'").run(`/media/${nName}`, corrPrompt.slice(0, 4000), post.id);
               if (upd.changes) {
                 rememberPrompt(`/media/${nName}`, corrPrompt);
+                // (v198-A) La imagen que la auditoría rechazó queda retenida
+                // (copia en media/qa-failed/ + fila con el motivo) en vez de
+                // perderse como huérfana: el rechazo se puede diagnosticar.
+                retainQaFailedFile({ uid, postId: post.id, gate: 'auditoria', reason: qa.detalle || 'falla dura de auditoría QA', absPath: path.join(MEDIA_DIR, imgName) });
                 console.log(`[qa-correct] post ${post.id}: imagen corregida tras QA duro (${fixes.length} correcciones)`);
                 // (v229) FUNDAMENTO — claims_ok BLOQUEANTE: si la imagen
                 // CORREGIDA también inventa datos comerciales, no se
@@ -11379,6 +11554,8 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
                       } catch (e) {}
                       const prof2 = getProfile(uid) || {};
                       const cardAbs = brandCardPng({ headline: cleanHeadline || '', bgHex: (hexes && hexes[0]) || '#0A1E33', textHex: '#FFFFFF', business: prof2.business_name || '', logoAbs: null, photoAbs, outDir: MEDIA_DIR });
+                      // (v198-A) La corregida también falló claims: también se retiene.
+                      retainQaFailedFile({ uid, postId: post.id, gate: 'auditoria-claims', reason: (qa2 && qa2.detalle) || 'claims_ok=false tras la corrección', absPath: path.join(MEDIA_DIR, nName) });
                       db.prepare("UPDATE posts SET image_path = ?, needs_review = 1 WHERE id = ? AND status = 'draft'").run(`/media/${path.basename(cardAbs)}`, post.id);
                       console.log(`[qa-claims-block] post ${post.id}: claims_ok=false tras la corrección — degradado a ${photoAbs ? 'foto propia del cliente' : 'brand card'} con titular por código + revisión humana`);
                     }
@@ -14744,7 +14921,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v262';
+const BUILD_ID = '20261020-v264';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

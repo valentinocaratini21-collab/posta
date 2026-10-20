@@ -22,11 +22,13 @@
  * CARTA SEMANAL: esta es la carta de ESTA semana; abajo, "Cartas anteriores"
  * lista las previas con el resumen honesto que trae history (n, fecha,
  * hallazgos, medición del plan) y la línea de progreso sale del loop medido.
+ * Cada carta anterior se abre ENTERA (anaOpenPast → GET /api/analysis/:id).
  * La serie la mantiene el sweep de los lunes (refreshAnalysesSweep, server.js).
  * Tono: líder motivacional — fortalezas primero, nada de retos ni números en rojo.
  */
 
 var anaLastPayload = null;
+var anaPastMode = false;
 
 function analisisView() {
   return `<div class="ana-wrap"><div id="anaRoot">
@@ -43,6 +45,7 @@ async function bindAnalisis() { await anaLoad(false); }
 async function anaLoad(useRefresh) {
   const rootEl = document.getElementById('anaRoot');
   if (!rootEl) return;
+  anaPastMode = false;
   let d = null;
   try {
     d = useRefresh ? await api.post('/api/analysis/refresh', {}) : await api.get('/api/analysis');
@@ -329,9 +332,10 @@ function anaProgressHTML(a) {
   return `<p class="ana-prog">📈 <b>Desde tu carta anterior:</b> ${esc(txt)}</p>`;
 }
 
-/* Cartas anteriores: el historial del payload es un RESUMEN (n, fecha,
- * cantidad de hallazgos y la medición del plan de esa semana) — las cartas
- * viejas se listan honestas así; la que se lee entera es la actual. */
+/* Cartas anteriores: el historial del payload trae el RESUMEN (n, fecha,
+ * cantidad de hallazgos y la medición del plan de esa semana); cada fila es
+ * TOCABLE y abre la carta COMPLETA de esa semana (GET /api/analysis/:id,
+ * solo las del propio usuario) con el mismo renderer de la carta actual. */
 function anaHistoryHTML(d, a) {
   const hist = (d && Array.isArray(d.history)) ? d.history : [];
   // La entrada actual es la primera (la serie viene de nueva a vieja):
@@ -351,9 +355,53 @@ function anaHistoryHTML(d, a) {
     }
     const kindTxt = h.kind === 'nacimiento' ? ' · plan de nacimiento' : '';
     const right = fecha + ' · ' + (h.findings != null ? h.findings : '') + ' hallazgos' + loopTxt;
-    return `<div class="ana-peer"><span>📩 Carta #${esc(String(h.n || ''))}${esc(kindTxt)}</span><span>${esc(right)}</span></div>`;
+    const open = h.id ? ` onclick="anaOpenPast(${Number(h.id)})" style="cursor:pointer" title="Leer esta carta completa"` : '';
+    const read = h.id ? ' · <u>leer completa</u>' : '';
+    return `<div class="ana-peer"${open}><span>📩 Carta #${esc(String(h.n || ''))}${esc(kindTxt)}${read}</span><span>${esc(right)}</span></div>`;
   }).join('');
   return `<div class="ana-block"><p class="ana-sec-t" style="margin-top:0">📩 Cartas anteriores</p>${rows}<p class="ana-traj">Una carta nueva cada semana: cada una se apoya en la anterior — diagnóstico → plan → medición → ajuste. Por eso tu carta #10 va a ser mucho mejor que la #1.</p></div>`;
+}
+
+/* ---------- Carta anterior completa: abrir → leer → volver ---------- */
+
+async function anaOpenPast(id) {
+  const rootEl = document.getElementById('anaRoot');
+  if (!rootEl || !id) return;
+  rootEl.innerHTML = `<div class="ana-card ana-letter"><div class="ana-loading">
+    <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
+    <p class="ana-load-t">Abro tu carta anterior…</p>
+    <p class="ana-load-s">Es la carta tal como te la escribí esa semana.</p>
+  </div></div>`;
+  let d = null;
+  try { d = await api.get('/api/analysis/' + Number(id)); } catch (e) { d = null; }
+  if (!document.getElementById('anaRoot')) return; // ya navegó a otra vista
+  if (!d || d.ok === false || !d.analysis) {
+    const msg = (d && d.message) ? String(d.message) : 'Esta carta no se pudo abrir ahora 😅 Probamos de nuevo en un ratito.';
+    rootEl.innerHTML = `<div class="ana-card ana-letter"><div class="ana-loading">
+      <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
+      <p class="ana-load-t">No pude abrir esa carta</p>
+      <p class="ana-load-s">${esc(msg)}</p>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="anaBackCurrent()">← Volver a tu carta actual</button>
+    </div></div>`;
+    return;
+  }
+  anaPastMode = true;
+  const bar = `<div style="margin-bottom:10px"><button class="btn btn-ghost btn-sm" onclick="anaBackCurrent()">← Volver a tu carta actual</button>
+    <span style="margin-left:8px;font-size:12.5px;color:var(--mut);font-weight:600">Carta anterior — así se veía tu análisis esa semana</span></div>`;
+  rootEl.innerHTML = bar + anaCartaHTML({ ok: true, plan: d.plan, analysis: d.analysis, history: [] });
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
+
+function anaBackCurrent() {
+  const rootEl = document.getElementById('anaRoot');
+  if (!rootEl) return;
+  anaPastMode = false;
+  if (anaLastPayload) {
+    rootEl.innerHTML = anaCartaHTML(anaLastPayload);
+    try { window.scrollTo(0, 0); } catch (e) {}
+  } else {
+    anaLoad(false);
+  }
 }
 
 /* ---------- Nacimiento: lo que Posty ya sabe + kit + vidriera ---------- */
@@ -442,7 +490,7 @@ function anaCartaHTML(d) {
   }
   h += `<div class="ana-banner">${esc(anaBanner(stage, ctx))}</div>`;
   h += anaSignHTML(birth);
-  h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">↻ Actualizar análisis</button></div>`;
+  if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">↻ Actualizar análisis</button></div>`;
   h += `</div>`;
   return h;
 }
