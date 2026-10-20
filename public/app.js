@@ -1223,7 +1223,7 @@ function lpCapSectionsHTML() {
     </div>
     <div class="cap-side">
       <div class="cap-phone">
-        <video src="posty-rubros.mp4" poster="posty-rubros-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Reel real armado por Posty para un café"></video>
+        <video src="posty-rubros.mp4?v=2" poster="posty-rubros-poster.jpg?v=2" autoplay muted loop playsinline preload="metadata" aria-label="Reel real armado por Posty para un café"></video>
         <span class="cap-ph-chip">🎬 REEL</span>
         <div class="cap-ph-bot"><b>@tu.negocio</b><span>El reel de tu semana, listo y publicado solo.</span><div class="cap-ph-bar"><i></i></div></div>
       </div>
@@ -1525,7 +1525,7 @@ function landingView(cfg) {
     <h2>Así trabaja Posty, todos los días</h2>
     <p class="lede">Esto pasa en tu cuenta mientras vos atendés tu negocio.</p>
     <div class="lp-work-flex">
-      <div class="lp-work-vid"><video src="posty-rubros.mp4" poster="posty-rubros-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Video real de Posty trabajando: arma un posteo y un reel para un café"></video></div>
+      <div class="lp-work-vid"><video src="posty-rubros.mp4?v=2" poster="posty-rubros-poster.jpg?v=2" autoplay muted loop playsinline preload="metadata" aria-label="Video real de Posty trabajando: arma un posteo y un reel para un café"></video></div>
       <ul class="lp-work-list">
         <li>🎨 <b>Arma tus posteos</b> con tus fotos, tus colores y tu tono.</li>
         <li>🎬 <b>Crea tus reels</b> y los deja listos para publicarse solos.</li>

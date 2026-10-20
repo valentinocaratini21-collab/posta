@@ -2631,3 +2631,111 @@ body.mz-sheet-open{overflow:hidden}
   .mz-ph{flex:1;color:#93AEC0;font-size:15px;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left;padding:6px 0}
   .mz-mic{font-size:19px;background:none;border:none;cursor:pointer;padding:4px 6px;font-family:inherit}
 }
+
+/* ===== Secciones por capacidad (2026-10-20, estilo Predis: cada utilidad
+   con su sección completa — kicker, titular, explicación, 3 ✓, muestra
+   real y CTA) + grilla resumen de 12 + banner de idioma EN ===== */
+.cap-sec{padding:84px 0}
+.cap-sec.tint{background:var(--bg2)}
+.cap-sec.navy{background:#0A1E33;color:#fff}
+.cap-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:48px;align-items:center}
+.cap-kick{font-size:12px;font-weight:800;letter-spacing:1.6px;color:var(--cel);text-transform:uppercase}
+.cap-sec.navy .cap-kick{color:var(--yl)}
+.cap-sec h2{text-align:left;margin:10px 0 12px}
+.cap-sec.navy h2 .hl{color:var(--yl)}
+.cap-exp{font-size:15.5px;line-height:1.62;color:var(--mut);max-width:520px}
+.cap-sec.navy .cap-exp{color:#C7DCEA}
+.cap-list{list-style:none;margin:18px 0 6px;padding:0}
+.cap-list li{font-size:14.5px;font-weight:600;line-height:1.45;padding:6px 0 6px 30px;position:relative;color:var(--txt)}
+.cap-sec.navy .cap-list li{color:#fff}
+.cap-list li::before{content:"✓";position:absolute;left:0;top:6px;width:20px;height:20px;border-radius:50%;background:var(--cel);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.cap-sec.navy .cap-list li::before{background:var(--yl);color:#0A1E33}
+.cap-plan{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.6px;background:#0A1E33;color:#fff;padding:4px 10px;border-radius:999px;vertical-align:3px;margin-left:8px}
+.cap-sec.navy .cap-plan{background:var(--yl);color:#0A1E33}
+.cap-cta{display:inline-block;margin-top:20px;font-size:15.5px;font-weight:800;color:var(--cel)}
+.cap-sec.navy .cap-cta{color:var(--yl)}
+.cap-sample{border-radius:20px;overflow:hidden;box-shadow:0 14px 34px rgba(10,30,51,.16);background:#fff;color:var(--txt)}
+.cap-sec.navy .cap-sample{box-shadow:0 14px 34px rgba(0,0,0,.4)}
+.cap-note{font-size:12.5px;color:var(--dim);text-align:center;margin-top:12px;font-weight:600}
+.cap-sec.navy .cap-note{color:#8CA3B8}
+/* Muestra: posteo de IG con marco real */
+.cap-ig-head{display:flex;align-items:center;gap:9px;padding:11px 13px}
+.cap-ig-head img{width:32px;height:32px;border-radius:50%;object-fit:cover}
+.cap-ig-head b{font-size:13.5px}
+.cap-ig-head span{margin-left:auto;color:var(--dim);font-weight:800;letter-spacing:1px}
+.cap-ig-img{display:block;width:100%}
+.cap-ig-act{display:flex;gap:14px;padding:11px 13px 4px;align-items:center}
+.cap-ig-act svg{width:23px;height:23px;fill:none;stroke:#0A1E33;stroke-width:1.8}
+.cap-ig-act .save{margin-left:auto}
+.cap-ig-cap{padding:5px 13px 14px;font-size:13.5px;line-height:1.5;color:var(--txt)}
+/* Muestra: teléfono 9:16 (reel / historia) */
+.cap-phone{width:min(236px,68vw);aspect-ratio:9/16;border-radius:26px;overflow:hidden;position:relative;margin:0 auto;box-shadow:0 16px 38px rgba(10,30,51,.3);background:#000}
+.cap-phone img,.cap-phone video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cap-phone::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,30,51,.28),transparent 26%,transparent 62%,rgba(10,30,51,.55))}
+.cap-ph-top{position:absolute;top:10px;left:10px;right:10px;z-index:2;display:flex;gap:5px}
+.cap-ph-top i{flex:1;height:3px;border-radius:99px;background:rgba(255,255,255,.45)}
+.cap-ph-top i.on{background:#fff}
+.cap-ph-head{position:absolute;top:22px;left:12px;right:12px;z-index:2;display:flex;align-items:center;gap:8px;color:#fff;font-size:12px;font-weight:700}
+.cap-ph-head img{position:static;width:26px;height:26px;border-radius:50%;border:1.5px solid #fff;object-fit:cover}
+.cap-ph-chip{position:absolute;top:58px;left:12px;z-index:2;background:rgba(10,30,51,.72);color:#fff;font-size:11px;font-weight:800;letter-spacing:.6px;padding:5px 10px;border-radius:999px}
+.cap-ph-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;width:58px;height:58px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;font-size:21px;color:#0A1E33;padding-left:4px}
+.cap-ph-bot{position:absolute;left:12px;right:12px;bottom:12px;z-index:2;color:#fff}
+.cap-ph-bot b{font-size:13px;display:block}
+.cap-ph-bot span{font-size:12px;opacity:.88;line-height:1.4;display:block;margin-top:2px}
+.cap-ph-bar{height:3.5px;border-radius:99px;background:rgba(255,255,255,.35);margin-top:9px;overflow:hidden}
+.cap-ph-bar i{display:block;height:100%;width:62%;background:var(--yl);border-radius:99px}
+.cap-poll{background:#fff;color:var(--txt);border-radius:14px;padding:11px 12px;margin-top:9px}
+.cap-poll b{font-size:12.5px;color:var(--txt)}
+.cap-poll-row{display:flex;justify-content:space-between;font-size:12px;font-weight:700;background:var(--bg2);border-radius:9px;padding:6px 10px;margin-top:7px;color:#33566B}
+/* Muestra: hilo de comentarios */
+.cap-thread{padding:16px}
+.cap-msg{display:flex;gap:9px;margin-bottom:12px}
+.cap-ava{width:32px;height:32px;border-radius:50%;flex:0 0 32px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;font-weight:800}
+.cap-bub{background:#F1F7FA;border-radius:14px;padding:9px 12px;font-size:13.5px;line-height:1.45;flex:1}
+.cap-bub .who{color:#7A97A9;font-size:11.5px;font-weight:700}
+.cap-bub.reply{background:#E3F2FA;border:1.5px solid var(--cel)}
+.cap-sendrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.cap-send{background:var(--cel);color:#fff;font-weight:800;font-size:13px;padding:8px 14px;border-radius:999px}
+.cap-alt{font-size:12.5px;color:#7A97A9;font-weight:700}
+.cap-tag{font-size:11px;font-weight:800;color:#1B6E9C;background:#fff;border:1px solid #BFE3F2;padding:3px 8px;border-radius:999px}
+/* Muestra: growth */
+.cap-grow{padding:16px}
+.cap-grow-best{display:flex;gap:11px;align-items:center}
+.cap-grow-best img{width:56px;height:56px;border-radius:13px;object-fit:cover}
+.cap-grow h4{font-size:15px;font-weight:800}
+.cap-grow-metric{font-size:12.5px;color:#177245;font-weight:800;margin-top:2px}
+.cap-grow-sub{font-size:12.5px;color:#7A97A9;margin-top:2px}
+.cap-prop{background:#F4FAFD;border:1.5px dashed #BFE3F2;border-radius:14px;padding:11px 12px;font-size:13.5px;line-height:1.5;margin-top:12px}
+.cap-prop b{color:#1B6E9C}
+.cap-grow .cap-sendrow{margin-top:12px}
+/* Muestra: tienda */
+.cap-shop{padding:16px}
+.cap-shop .row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #EFF5F8;font-size:13.5px}
+.cap-shop .row:first-child{border-top:none}
+.cap-shop .pill{margin-left:auto;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;background:#E4F6EC;color:#177245;white-space:nowrap}
+.cap-shop .pill.warn{background:#FFF3D6;color:#9A6E00}
+.cap-shop .pill.out{background:#FDECEC;color:#B03A3A}
+/* Muestra: idea (usa las clases reales .idea-card de la app) */
+.cap-idea-wrap{padding:16px;background:var(--bg2)}
+.cap-idea-wrap .idea-card{margin-top:0}
+/* Grilla resumen de 12 */
+.lp-recap{background:var(--bg)}
+.lp-recap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:8px}
+.lp-recap-item{display:flex;gap:12px;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px}
+.lp-recap-item .he{font-size:24px;line-height:1.1}
+.lp-recap-item b{font-size:14.5px;display:block;margin-bottom:3px}
+.lp-recap-item p{font-size:13px;line-height:1.5;color:var(--mut)}
+.lp-recap-foot{text-align:center;color:var(--mut);font-size:14.5px;margin-top:26px}
+/* Banner de idioma (detección por navegador, un toque a /en) */
+.lp-lang{background:#0A1E33;color:#fff;text-align:center;padding:11px 16px;font-size:14px;font-weight:600}
+.lp-lang-btn{background:var(--yl);color:#0A1E33;border:none;font:inherit;font-weight:800;padding:7px 14px;border-radius:999px;cursor:pointer;margin:0 6px}
+.lp-lang-x{background:none;border:none;color:#C7DCEA;font:inherit;font-weight:700;cursor:pointer;text-decoration:underline}
+@media(max-width:860px){
+  .cap-sec{padding:56px 0}
+  .cap-grid{grid-template-columns:1fr;gap:28px}
+  .cap-sec h2{text-align:left}
+}
+@media(min-width:861px){
+  .cap-flip .cap-copy{order:2}
+  .cap-flip .cap-side{order:1}
+}
