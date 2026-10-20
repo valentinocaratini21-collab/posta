@@ -14744,7 +14744,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v260';
+const BUILD_ID = '20261020-v261';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -15135,4 +15135,34 @@ async function refreshDigestsSweep() {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep };
+// 🧠 CARTA SEMANAL (2026-10-20): la pantalla "Tu análisis" es una carta NUEVA
+// por semana — el loop (diagnóstico → plan → medición → ajuste) necesita la
+// serie. Este sweep reconstruye el análisis de las cuentas activas y lo
+// persiste (buildAccountAnalysis guarda con saveAnalysis). Liviano: tope de
+// cuentas por corrida, una falla no frena a las demás, y GET /api/analysis no
+// cambia. Lo dispara scheduler.js los lunes 06:45 (Buenos Aires), después
+// del refresco del fundamento (06:30) y antes del loop de ideas (07:00).
+let __analysisSweepRunning = false;
+async function refreshAnalysesSweep() {
+  if (__analysisSweepRunning) return { skipped: 'running' };
+  __analysisSweepRunning = true;
+  const summary = { users: 0, built: 0, errors: 0 };
+  try {
+    const rows = db.prepare(`SELECT user_id FROM client_digest
+      UNION SELECT user_id FROM profiles WHERE ig_connected = 1
+      UNION SELECT user_id FROM posts WHERE created_at >= datetime('now', '-14 days')`).all().slice(0, 40);
+    for (const row of rows) {
+      const uid = row.user_id;
+      try {
+        summary.users++;
+        const fresh = await buildAccountAnalysis(uid);
+        if (fresh) summary.built++;
+      } catch (e) { summary.errors++; console.error('[analysis-sweep] usuario ' + uid + ':', e.message); }
+    }
+  } catch (e) { console.error('[analysis-sweep] sweep:', e.message); }
+  __analysisSweepRunning = false;
+  console.log(`[analysis-sweep] cartas semanales: ${summary.built}/${summary.users} cuentas, errores: ${summary.errors}`);
+  return summary;
+}
+
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep };

@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261020-v258'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261020-v261'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -10411,7 +10411,7 @@ async function render() {
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') content = await scheduleView();
-  else if (tab === 'analisis') content = await analysisView(); // 🧠 Análisis: radiografía + mercado + loop
+  else if (tab === 'analisis') { let __okAn = true; try { await loadChunk('analisis'); } catch (e) { __okAn = false; } content = __okAn ? analisisView() : chunkFailHTML(); } // 🧠 Análisis: LA CARTA v3 (chunk-analisis.js)
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
@@ -11111,6 +11111,7 @@ function bindSchedule() {
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
+  if (tab === 'analisis' && typeof bindAnalisis === 'function') bindAnalisis(); // 🧠 la carta se pinta al cargar el chunk
   if (tab === 'chat') bindChatView(); // chat como escape hatch (FASE 4: ya no es el home)
   if (tab === 'schedule') bindSchedule();
   if (tab === 'onboarding') bindOnboarding(); // FASE 4: cablea form directo o entrevista (antes dead code: nunca se llamaba)

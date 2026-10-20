@@ -2475,3 +2475,70 @@ textarea.in{resize:vertical;min-height:96px}
 
 /* v257: resumen de estado en el título de las secciones de Ajustes (texto chico, muted) */
 .ajsec-st{display:inline-block;font-size:12px;font-weight:600;color:var(--mut);white-space:nowrap;margin-left:10px;vertical-align:middle}
+
+/* ---------- 🧠 Tu análisis: LA CARTA v3 en la app (chunk-analisis.js) ---------- */
+/* Misma forma que la carta de /prueba (v260), con prefijo ana-: avatar → veredicto
+   → foto de hoy → hallazgos → plan navy → banner amarillo → firma. */
+.ana-wrap{max-width:680px;margin:0 auto}
+.ana-card{background:#fff;border:1.5px solid var(--line);border-radius:20px;box-shadow:0 12px 40px rgba(10,30,51,.07);overflow:hidden;text-align:left;padding:16px}
+.ana-letter{padding:22px 18px 18px}
+.ana-lhead{text-align:center}
+.ana-ava{width:96px;height:96px;margin:2px auto 0;border-radius:50%;background:#fff;border:3px solid #FEC14D;box-shadow:0 8px 24px rgba(39,147,200,.25);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.ana-ava img{width:88px;height:88px;object-fit:cover}
+.ana-title{font-size:26px;font-weight:900;color:var(--txt);letter-spacing:-.5px;margin:12px 0 0}
+.ana-biz{font-size:14px;font-weight:700;color:var(--cel);margin:3px 0 0}
+.ana-date{font-size:12px;font-weight:600;color:var(--mut);margin:2px 0 0}
+.ana-intro{font-size:14px;line-height:1.55;color:#33566B;margin:12px 4px 0}
+.ana-loading{text-align:center;padding:18px 6px 8px}
+.ana-load-t{font-size:16px;font-weight:800;color:var(--txt);margin:14px 0 0}
+.ana-load-s{font-size:13px;color:var(--mut);line-height:1.55;margin:5px 0 0}
+.ana-verdict{background:#2793C8;color:#fff;border-radius:18px;padding:16px 18px;margin-top:16px;box-shadow:0 6px 20px rgba(39,147,200,.3);text-align:left}
+.ana-vlabel{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;opacity:.85;margin:0 0 6px}
+.ana-vq{font-size:17px;font-weight:800;line-height:1.45;margin:0}
+.ana-sec-t{font-size:12px;font-weight:900;letter-spacing:.6px;color:var(--cel);text-transform:uppercase;margin:18px 0 8px}
+.ana-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ana-stat{background:#F2F9FD;border-radius:14px;padding:12px 10px;text-align:center}
+.ana-sn{font-size:24px;font-weight:900;color:var(--txt);margin:0;line-height:1.1}
+.ana-sl{font-size:11.5px;font-weight:700;color:var(--mut);margin:3px 0 0;line-height:1.35}
+.ana-traj{font-size:12.5px;color:var(--mut);margin-top:10px;line-height:1.55}
+.ana-group{margin-top:14px}
+.ana-gtitle{font-size:12px;font-weight:900;letter-spacing:.6px;color:var(--cel);text-transform:uppercase;margin:0 0 6px}
+.ana-f{border-top:1px solid var(--line);padding:10px 0}
+.ana-group .ana-f:first-of-type{border-top:none;padding-top:2px}
+.ana-t{font-size:14px;color:var(--txt);line-height:1.45;margin:0}
+.ana-fmeta{margin:7px 0 0}
+.ana-now{display:inline-block;background:var(--bg2);border-radius:99px;padding:2px 10px;color:var(--txt);font-size:12.5px}
+.ana-act{font-size:13px;color:var(--cel);font-weight:600;margin:5px 0 0;line-height:1.45}
+.ana-act b{font-weight:800}
+.ana-plan{background:#0A1E33;color:#fff;border-radius:18px;padding:18px;margin-top:18px;text-align:left;box-shadow:0 8px 24px rgba(10,30,51,.28)}
+.ana-plan-t{font-size:17px;font-weight:900;margin:0}
+.ana-plan-s{font-size:11px;font-weight:800;color:#FEC14D;text-transform:uppercase;letter-spacing:1px;margin:3px 0 0}
+.ana-phase{margin-top:15px}
+.ana-ph{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#FEC14D;margin:0}
+.ana-phase ul{list-style:none;margin:8px 0 0;padding:0}
+.ana-phase li{font-size:13.5px;line-height:1.5;color:#D7E6EF;padding-left:18px;position:relative;margin-top:7px}
+.ana-phase li::before{content:'▸';position:absolute;left:2px;color:#2793C8;font-weight:900}
+.ana-fx{display:block;font-size:12.5px;color:#9CC8E4;margin-top:2px}
+.ana-need{font-size:13.5px;line-height:1.5;color:#FEC14D;font-weight:700;margin:16px 0 0;border-top:1px solid rgba(255,255,255,.14);padding-top:13px}
+.ana-need b{color:#fff}
+.ana-banner{background:#FEC14D;color:#0A1E33;border-radius:14px;padding:14px 16px;font-size:14.5px;font-weight:800;line-height:1.5;text-align:center;margin-top:16px}
+.ana-block{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.ana-peer{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.ana-peer span:last-child{color:var(--mut);text-align:right}
+.ana-pos{font-size:13.5px;line-height:1.6;margin-top:10px}
+.ana-badge{font-size:11px;color:var(--cel);font-weight:800;letter-spacing:.4px}
+.ana-upsell{font-size:13px;color:var(--mut);line-height:1.6;margin-top:8px}
+.ana-check{padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.6}
+.ana-kit{background:var(--bg2);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.7;margin-top:12px;white-space:pre-line}
+.ana-role{padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.ana-role-f{color:var(--mut);font-size:12px}
+.ana-role-w{font-size:12.5px;color:var(--mut);line-height:1.5;margin-top:2px}
+.ana-note{color:var(--dim);font-size:12px;margin-top:10px;line-height:1.5}
+.ana-sign{text-align:center;margin-top:20px;padding-top:16px;border-top:2px dashed #C9E2EF}
+.ana-sign img{width:48px;height:48px;border-radius:50%;border:2px solid #FEC14D;background:#fff}
+.ana-fname{font-size:30px;font-weight:900;font-style:italic;letter-spacing:-.5px;color:var(--txt);margin:4px 0 0}
+.ana-fname span{color:#FEC14D}
+.ana-frole{font-size:11px;font-weight:800;color:var(--cel);text-transform:uppercase;letter-spacing:1.2px;margin:2px 0 0}
+.ana-fline{font-size:12.5px;color:var(--mut);margin:8px 0 0;line-height:1.5}
+.ana-refresh{text-align:center;margin-top:18px}
+.ana-prog{background:var(--cel-soft);border:1px solid var(--cel-line);border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.55;color:var(--txt);margin-top:14px}

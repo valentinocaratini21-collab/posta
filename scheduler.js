@@ -638,6 +638,22 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[digest-refresh] no se pudo programar:', e.message);
   }
+  // 🧠 Cartas de análisis semanales: lunes 06:45 (Buenos Aires) — después del
+  // fundamento (06:30) y antes del loop de ideas (07:00): cada cuenta activa
+  // amanece con su carta nueva y el loop mide el plan de la carta anterior.
+  try {
+    cron.schedule('45 6 * * 1', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.runWeeklyAnalysisRefresh === 'function') {
+          srv.runWeeklyAnalysisRefresh().catch((e) => console.error('[analysis-sweep]', e.message));
+        }
+      } catch (e) { console.error('[analysis-sweep] no se pudo cargar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Cartas de análisis semanales: lunes 06:45 (Buenos Aires)');
+  } catch (e) {
+    console.error('[analysis-sweep] no se pudo programar:', e.message);
+  }
   // 💡 Loop de ideas semanal: lunes 07:00 (Buenos Aires) — antes del digest de
   // las 09:00 y del WOW de las 09:30, para que las ideas ya estén en Schedule
   // y en el reporte cuando el cliente mira su semana. Sin notificaciones
