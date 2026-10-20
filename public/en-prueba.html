@@ -1,0 +1,2755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Posty — Your Instagram week, built for free</title>
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://postyhacetodo.com/prueba">
+<meta property="og:title" content="Posty builds your week of posts — free">
+<meta property="og:description" content="Tell us about your business in 1 minute and we show you your ideas, designs, copy and hashtags, as if you were already a customer. Try it free, no card.">
+<meta property="og:image" content="https://postyhacetodo.com/og-prueba.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--cel:#2793C8;--yl:#FEC14D;--navy:#0A1E33;--bg:#fff;--bg2:#F2F9FD;--mut:#47617A;--line:#E2EDF5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(--navy);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+.logo{font-weight:900;font-size:24px;color:var(--navy);text-decoration:none}
+.logo .dot{color:var(--cel)}
+.pill{display:inline-block;background:var(--yl);color:var(--navy);font-weight:800;font-size:12px;letter-spacing:1px;padding:8px 16px;border-radius:999px}
+.hero{text-align:center;padding:44px 0 8px}
+.hero h1{font-size:clamp(28px,5vw,46px);font-weight:900;line-height:1.15;margin:18px 0 12px}
+.hero h1 .hl{color:var(--cel)}
+.hero .sub{color:var(--mut);font-size:17px;max-width:640px;margin:0 auto;line-height:1.6}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.form-card{max-width:640px;margin:28px auto 60px}
+.field{margin-bottom:18px}
+.hero-lockup{display:flex;align-items:center;justify-content:center;gap:12px}
+.hero-ava{width:54px;height:54px;border-radius:50%;box-shadow:0 6px 18px rgba(39,147,200,.4)}
+.audit-hook{text-align:center;font-size:16px;font-weight:700;color:var(--navy);max-width:560px;margin:26px auto 0;line-height:1.5}
+.audit-hook .hl2{color:var(--cel)}
+.form-or{display:flex;align-items:center;gap:12px;margin:20px 0 16px;color:var(--mut);font-weight:800;font-size:13px;letter-spacing:2px}
+.form-or:before,.form-or:after{content:"";flex:1;height:2px;background:var(--line);border-radius:2px}
+.price-contrast{text-align:center;font-size:16.5px;color:var(--mut);max-width:600px;margin:-34px auto 0;line-height:1.55}
+.price-contrast b{color:var(--navy)}
+.minifaq{max-width:640px;margin:44px auto 6px}
+.minifaq h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:14px}
+.faq-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 20px;margin-bottom:10px;box-shadow:0 6px 20px rgba(10,30,51,.04)}
+.faq-item summary{font-weight:800;font-size:15.5px;cursor:pointer;list-style:none;color:var(--navy)}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary:after{content:"+";float:right;color:var(--cel);font-weight:900}
+.faq-item[open] summary:after{content:"–"}
+.faq-item p{margin:10px 0 0;color:var(--mut);font-size:15px;line-height:1.55}
+.field label{display:block;font-weight:700;font-size:14px;margin-bottom:8px}
+.field input[type=text],.field select,.field textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:13px 15px;font-family:inherit;font-size:16px;color:var(--navy);background:#fff;outline:none;transition:border .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--cel)}
+.field textarea{resize:vertical;min-height:74px}
+.field .hint{font-size:13px;color:var(--mut);margin-top:6px}
+.tone-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tone-card{border:2px solid var(--line);border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;background:#fff}
+.tone-card .e{font-size:30px}
+.tone-card b{display:block;margin-top:6px;font-size:15px}
+.tone-card small{color:var(--mut);font-size:12px}
+.tone-card.on{border-color:var(--cel);background:var(--bg2);box-shadow:0 6px 18px rgba(39,147,200,.15)}
+.color-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.color-row input[type=color]{width:100%;height:52px;border:2px solid var(--line);border-radius:12px;padding:6px;background:#fff;cursor:pointer}
+.cdet{display:none;align-items:center;gap:8px;margin-top:10px;font-size:13px;font-weight:700;color:var(--navy)}
+.cdet i{width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(10,30,51,.25)}
+.filebtn{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:26px 16px;border:2px dashed #b9d4e6;border-radius:16px;background:#f8fcfe;cursor:pointer;text-align:center;box-sizing:border-box}
+.filebtn .fe{font-size:32px}
+.filebtn b{color:var(--navy);font-size:16px}
+.filebtn small{color:var(--mut);font-size:13px}
+.filebtn.has{border-style:solid;border-color:var(--cel);background:#f2f9fd}
+.filewrap{position:relative}
+.filewrap input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0}
+.cchips{display:none}
+.country-row{display:flex;gap:10px}
+.country-btn{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:12px;font-family:inherit;font-weight:700;font-size:15px;color:var(--navy);cursor:pointer}
+.country-btn.on{border-color:var(--cel);background:var(--bg2)}
+.btn{display:inline-block;border:none;cursor:pointer;font-family:inherit;font-weight:800;border-radius:14px;padding:16px 34px;font-size:17px;text-decoration:none;transition:transform .12s,box-shadow .12s}
+.btn-primary{background:var(--yl);color:var(--navy);box-shadow:0 8px 24px rgba(254,193,77,.45)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(254,193,77,.55)}
+.btn-block{width:100%}
+.btn-ghost{background:#fff;color:var(--cel);border:2px solid var(--cel)}
+.btn-sm{padding:10px 20px;font-size:14px}
+.err{background:#FDE8E8;color:#B42323;border-radius:12px;padding:13px 16px;font-weight:600;font-size:14px;margin-bottom:16px;display:none}
+.tiny{font-size:13px;color:var(--mut);text-align:center;margin-top:14px}
+.bcard p{margin:0;color:var(--mut);font-size:13px;line-height:1.45}
+@media(min-width:640px){
+  .bgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .bcard{display:block;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px}
+  .bcard + .bcard{border-top:none}
+  .bcard .bi{width:auto;height:auto;background:none;display:block;font-size:24px;margin-bottom:6px}
+  .bcard b{font-size:14px;margin-bottom:4px}
+}
+/* Antes: tarjeta con el perfil real del visitante */
+.igb{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px;text-align:left}
+.igb-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.igb-head img{width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid var(--line)}
+.igb-id b{display:block;color:var(--navy);font-size:15px}
+.igb-id span{color:var(--mut);font-size:13px}
+.igb-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px}
+.igb-grid i{display:block;aspect-ratio:1;background:#E8EDF2;border-radius:6px}
+.igb-note{margin:0;color:var(--mut);font-size:13px;line-height:1.5;text-align:center}
+/* TRACKER */
+.tracker{max-width:560px;margin:40px auto 80px;text-align:center}
+.tracker h2{font-size:clamp(24px,4vw,34px);font-weight:900;margin-bottom:8px}
+.tracker .sub{color:var(--mut);margin-bottom:30px}
+.tk-head{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:8px}
+.tk-head h2{margin:0;text-align:left;min-width:0}
+.tk-avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 4px 14px rgba(39,147,200,.25)}
+/* (v212) Posty malabareando ELIMINADO del tracker (orden de Valentino
+   2026-10-18: "sacar el posty haciendo malabares"): el tracker muestra
+   el avatar estatico, sin pelotas ni animacion. */
+
+.tstep{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px 18px;margin-bottom:10px;text-align:left;opacity:.45;transition:all .3s}
+.tstep.act{opacity:1;border-color:var(--cel);box-shadow:0 6px 18px rgba(39,147,200,.12)}
+.tstep.done{opacity:1;border-color:#cde9d6}
+.tstep .ic{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--bg2);flex-shrink:0}
+.tstep.act .ic{background:var(--cel);color:#fff;animation:pulse 1.1s infinite}
+.tstep.done .ic{background:#22c55e;color:#fff;animation:none}
+.tstep b{font-size:15px}
+.tstep small{display:block;color:var(--mut);font-weight:400;font-size:12px}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.pbar{height:10px;background:var(--bg2);border-radius:99px;overflow:hidden;margin:26px 0 8px}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cel),var(--yl));border-radius:99px;transition:width .5s}
+/* RESULTS */
+.res-hero{text-align:center;padding:40px 0 10px}
+.res-hero h2{font-size:clamp(26px,4.6vw,42px);font-weight:900;margin:16px 0 8px}
+.res-hero h2 .hl{color:var(--cel)}
+.res-hero .sub{color:var(--mut);font-size:16px}
+.sec{margin:44px 0}
+.sec h3{font-size:22px;font-weight:800;margin-bottom:6px}
+#v-results{padding-bottom:90px}
+.sec .lede{color:var(--mut);margin-bottom:20px;font-size:15px}
+.ideas{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.idea{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.idea .fmt{display:inline-block;background:var(--bg2);color:var(--cel);font-weight:800;font-size:11px;letter-spacing:1px;padding:5px 12px;border-radius:99px;margin-bottom:10px}
+.idea b{display:block;font-size:16px;margin-bottom:8px}
+.idea p{font-size:14px;color:var(--mut);line-height:1.55}
+.ba{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch;margin-top:8px}
+.ba-panel{border-radius:18px;overflow:hidden;border:1px solid var(--line);position:relative;background:var(--bg2)}
+.ba-panel img{width:100%;height:100%;object-fit:cover;display:block;aspect-ratio:4/5}
+.ba-tag{position:absolute;top:12px;left:12px;background:var(--navy);color:#fff;font-weight:800;font-size:12px;padding:7px 14px;border-radius:99px}
+.ba-panel.after .ba-tag{background:var(--yl);color:var(--navy)}
+.ba-arrow{display:flex;align-items:center;font-size:34px;color:var(--cel);font-weight:900}
+.ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px}
+.ba-grid img,.ba-grid video{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:#000}
+.ba-mock{padding:26px;text-align:center;color:#9db2c5}
+.ba-mock .grid{filter:grayscale(1);opacity:.5}
+.week{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.day{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.day:focus-visible{outline:2px solid var(--cel);outline-offset:2px}
+.day:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(10,30,51,.12)}
+.day .dh{background:var(--navy);color:#fff;padding:10px;text-align:center}
+.day .dh b{display:block;font-size:14px}
+.day .dh small{font-size:11px;opacity:.75}
+.day .db{position:relative;aspect-ratio:4/5;background:var(--bg2)}
+.day .db img,.day .db video{width:100%;height:100%;object-fit:cover;display:block}
+.day .vbadge{position:absolute;bottom:8px;right:8px;background:rgba(10,30,51,.8);color:#fff;font-size:11px;font-weight:800;padding:5px 10px;border-radius:99px}
+.day .dcap{padding:10px 12px;font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:44px}
+.day .dwhy{padding:0 12px 10px;font-size:11.5px;color:var(--cel,#2793C8);line-height:1.45}
+#analysisBox{max-width:480px;margin:14px auto 0}
+.an-card{background:#fff;border:1px solid #D7E5EE;border-radius:16px;padding:16px 18px;text-align:left}
+.an-head{font-size:16px;font-weight:800;color:var(--navy)}
+.an-sub{font-size:13px;color:#5A7186;margin:4px 0 10px;line-height:1.5}
+.an-item{font-size:13.5px;color:var(--navy);line-height:1.5;margin:8px 0}
+.an-item .an-now{color:#5A7186;font-weight:600}
+.an-kit{background:#F2F9FD;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.6;color:var(--navy);white-space:pre-line;margin:10px 0}
+.an-grid-roles{font-size:12.5px;color:#5A7186;line-height:1.6}
+.an-lock{font-size:12px;color:#8CA3B5;margin-top:8px}
+.day .igrow{display:flex;align-items:center;gap:14px;padding:9px 12px 0}
+.day .igrow svg{display:block}
+.day .igrow .igsave{margin-left:auto}
+.photocard{background:linear-gradient(135deg,#EAF5FB,#FFF6E0);border:1.5px solid #BFE0F2;border-radius:18px;padding:20px;margin-top:22px;text-align:center}
+.photocard h4{margin:0 0 6px;font-size:19px;color:var(--navy)}
+.photocard p{margin:0 0 14px;font-size:15px;color:#47617A;line-height:1.5}
+/* Reel protagonista */
+.day.feat{grid-column:1/-1;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;border:2px solid var(--yl);box-shadow:0 12px 32px rgba(254,193,77,.25);max-width:620px;width:100%;margin:0 auto}
+.day.feat .dh{grid-column:1/-1;background:linear-gradient(135deg,#0A1E33,#2793C8);text-align:left;padding:10px 14px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.day.feat .db{aspect-ratio:4/5;height:190px;width:auto;margin:12px 0 12px 12px;border-radius:12px}
+.day.feat .dcap{-webkit-line-clamp:4;font-size:14px;font-weight:700;color:var(--navy);align-self:center;padding:8px 16px 12px 4px;min-height:0}
+/* Tira "every week" */
+.wkstrip{display:flex;gap:8px;align-items:stretch;overflow-x:auto;padding:6px 2px 12px;margin-top:14px}
+.wk{flex:1;min-width:118px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 10px;text-align:center}
+.wk b{display:block;font-size:13px;color:var(--navy);margin-bottom:4px}
+.wk span{font-size:12px;color:var(--mut)}
+.wk.now{border-color:var(--cel);background:var(--bg2)}
+.wk.now span{color:var(--cel);font-weight:800}
+.wk.future{border-style:dashed}
+.wk-arrow{align-self:center;color:var(--cel);font-weight:800;flex-shrink:0}
+/* Compartir */
+.share-row{text-align:center;margin:14px 0 4px}
+.share-btn{border:2px solid var(--cel);background:#fff;color:var(--cel);border-radius:999px;padding:11px 26px;font-size:15px;font-weight:800;cursor:pointer}
+/* Chat de la prueba */
+.chat{background:#fff;border:1.5px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.chat-msgs{padding:20px;display:flex;flex-direction:column;gap:12px;max-height:340px;overflow-y:auto;background:var(--bg2)}
+.msg{max-width:85%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.55;animation:pop .2s ease}
+.msg.bot{background:#fff;border:1px solid var(--line);color:var(--navy);border-bottom-left-radius:6px;align-self:flex-start;box-shadow:0 2px 8px rgba(10,30,51,.05)}
+.msg.user{background:var(--cel);color:#fff;border-bottom-right-radius:6px;align-self:flex-end}
+.msg.typing{color:var(--mut)}
+.chat-chips{display:flex;gap:8px;padding:12px 16px;flex-wrap:wrap;background:#fff;border-top:1px solid var(--line)}
+.chat-chips button{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:700;color:var(--navy);cursor:pointer;transition:all .15s}
+.chat-chips button:hover{border-color:var(--cel);background:var(--bg2)}
+#chipColors{background:var(--yl);border-color:var(--yl);color:var(--navy)}
+.chat-input{display:flex;gap:8px;padding:12px 16px;background:#fff;border-top:1px solid var(--line)}
+.chat-input input{flex:1;border:2px solid var(--line);border-radius:12px;padding:12px 14px;font-family:inherit;font-size:16px;color:var(--navy);outline:none}
+.chat-input input:focus{border-color:var(--cel)}
+.chat-input button{border:none;background:var(--yl);color:var(--navy);font-weight:900;font-size:18px;width:48px;border-radius:12px;cursor:pointer;flex-shrink:0}
+.chat-input button:disabled{opacity:.5}
+.msg .mini-cta{display:block;margin-top:10px;background:var(--yl);color:var(--navy);font-weight:800;text-align:center;padding:10px;border-radius:10px;cursor:pointer;font-size:13px}
+/* Panel de colores */
+.colorpanel{background:#fff;border-top:1px solid var(--line);padding:16px;display:none}
+.colorpanel.open{display:block;animation:pop .2s ease}
+.cp-title{font-weight:800;color:var(--navy);margin:0 0 12px;font-size:15px}
+.cp-row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.cp-row input[type=color]{width:52px;height:52px;border:2px solid var(--line);border-radius:12px;padding:2px;background:#fff;cursor:pointer;flex-shrink:0}
+.cp-row>div{flex:1}
+.cp-row b{display:block;font-size:13px;color:var(--navy);margin-bottom:4px}
+.cp-row input[type=text]{width:100%;border:2px solid var(--line);border-radius:10px;padding:10px 12px;font-family:ui-monospace,monospace;font-size:16px;color:var(--navy);outline:none;text-transform:uppercase}
+.cp-row input[type=text]:focus{border-color:var(--cel)}
+.cp-logo{display:block;width:100%;border:2px dashed var(--cel);background:var(--bg2);border-radius:12px;padding:13px;font-size:15px;font-weight:700;color:var(--navy);cursor:pointer;margin-bottom:8px}
+.cp-logo:disabled{opacity:.5;cursor:wait}
+/* Sheet de fotos */
+.sheet{background:#fff;border-radius:20px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;padding:22px;position:relative;animation:pop .2s ease}
+.sheet h4{margin:0 0 14px;color:var(--navy);font-size:17px}
+.ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.ph-grid button{border:2px solid var(--line);border-radius:12px;overflow:hidden;padding:0;cursor:pointer;background:#fff;aspect-ratio:4/5}
+.ph-grid button.sel{border-color:var(--cel);box-shadow:0 0 0 2px var(--cel)}
+.ph-grid img{width:100%;height:100%;object-fit:cover;display:block}
+.ph-loading{text-align:center;padding:30px 10px;color:var(--mut);font-size:14px}
+.stat-band{background:var(--navy);color:#fff;border-radius:20px;padding:30px;display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:40px 0}
+.stat-band .st{text-align:center}
+.stat-band .st .n{font-size:clamp(28px,4vw,44px);font-weight:900;color:var(--yl)}
+.stat-band .st .t{font-size:14px;opacity:.85;margin-top:6px;line-height:1.5}
+.sticky-cta{position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(255,255,255,.96);border-top:1px solid var(--line);padding:12px 20px;backdrop-filter:blur(8px);display:none}
+.sticky-cta .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sticky-cta b{font-size:15px}
+/* Preguntas previas a generar (v-questions): conversacional, una a la vez */
+.qcard{background:#fff;border:1px solid var(--line);border-radius:22px;padding:34px 30px;max-width:560px;margin:40px auto;box-shadow:var(--shadow);text-align:center}
+.qcard h2{font-size:24px}
+.q-opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px}
+.q-opt{display:flex;align-items:center;gap:10px;background:#F7FAFD;border:2px solid var(--line);border-radius:16px;padding:15px 14px;font-size:15.5px;font-weight:700;color:var(--txt);cursor:pointer;font-family:inherit;text-align:left;transition:border-color .15s,transform .15s}
+.q-opt:hover{border-color:var(--cel)}
+.q-opt:active{transform:scale(.97);border-color:var(--cel)}
+.q-opt .qe{font-size:22px}
+.q-field{width:100%;background:#FBFDFF;border:1.5px solid var(--line);border-radius:16px;color:var(--txt);font-size:16px;padding:15px 18px;font-family:inherit;outline:none;line-height:1.5;margin:6px 0 12px}
+.q-field:focus{border-color:var(--cel);box-shadow:0 0 0 3px rgba(39,147,200,.15)}
+.linklike{background:none;border:none;color:var(--mut);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:480px){.qcard{padding:26px 18px;margin:24px auto}.qcard h2{font-size:21px}.q-opts{grid-template-columns:1fr}.q-opt{padding:13px 14px;font-size:15px}}
+.steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+.step3{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:18px;display:flex;gap:14px;align-items:flex-start;text-align:left}
+.step3 .n{flex:0 0 36px;width:36px;height:36px;border-radius:50%;background:var(--yl);color:var(--navy);font-weight:900;display:flex;align-items:center;justify-content:center;font-size:17px}
+.step3 b{display:block;font-size:15px;margin-bottom:4px}
+.step3 p{font-size:13px;color:var(--mut);line-height:1.5;margin:0}
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(10,30,51,.6);z-index:100;display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:24px;max-width:880px;width:100%;max-height:92vh;overflow-y:auto;padding:34px;position:relative;animation:pop .25s ease}
+@keyframes pop{from{transform:scale(.96) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.modal .x{position:absolute;top:16px;right:18px;border:none;background:var(--bg2);width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer;color:var(--navy)}
+.modal h2{font-size:clamp(24px,4vw,34px);font-weight:900;text-align:center}
+.modal h2 .hl{color:var(--cel)}
+.modal .msub{text-align:center;color:var(--mut);margin:10px 0 24px;font-size:15px}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.plan{border:2px solid var(--line);border-radius:18px;padding:24px 20px;text-align:center;position:relative;background:#fff}
+.plan.hot{border-color:var(--yl);box-shadow:0 14px 40px rgba(254,193,77,.3);transform:scale(1.03)}
+.plan .ptag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--yl);color:var(--navy);font-weight:800;font-size:11px;padding:5px 14px;border-radius:99px;white-space:nowrap}
+.plan h4{font-size:18px;margin-bottom:8px}
+.plan .pr{font-size:30px;font-weight:900}
+.plan .pr small{font-size:14px;font-weight:600;color:var(--mut)}
+.plan .pd{font-size:13px;color:var(--cel);font-weight:700;margin:4px 0 12px}
+.plan ul{list-style:none;text-align:left;font-size:13px;color:var(--mut);margin-bottom:18px;line-height:1.9}
+.plan ul li:before{content:"✓ ";color:var(--cel);font-weight:800}
+.mline{display:flex;gap:10px;align-items:flex-start;background:var(--bg2);border-radius:12px;padding:12px 16px;font-size:14px;margin-bottom:10px;line-height:1.5}
+.mline b{color:var(--navy)}
+.ref-tease{text-align:center;font-size:14px;color:var(--mut);margin:16px 0 4px}
+.ref-tease b{color:var(--cel)}
+/* LIGHTBOX */
+.lb{position:fixed;inset:0;background:rgba(10,30,51,.85);z-index:120;display:none;align-items:center;justify-content:center;padding:20px}
+.lb.open{display:flex}
+.lb-box{background:#fff;border-radius:20px;max-width:480px;width:100%;max-height:92vh;overflow-y:auto;position:relative}
+.lb-box img,.lb-box video{width:100%;display:block;aspect-ratio:4/5;object-fit:cover;border-radius:20px 20px 0 0;background:#000}
+.lb-cap{padding:20px}
+.lb-cap h3{margin:0 0 8px;font-size:18px;color:var(--navy);line-height:1.3}
+.lb-nav{position:absolute;top:34%;width:44px;height:44px;border-radius:50%;border:none;background:rgba(10,30,51,.55);color:#fff;font-size:26px;font-weight:800;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;padding:0 0 3px}
+.lb-nav.prev{left:12px}
+.lb-nav.next{right:12px}
+.lb-nav:active{background:rgba(10,30,51,.8)}
+.lb-cap p{font-size:14px;line-height:1.65;white-space:pre-line}
+.lb-cap .tags{color:var(--cel);font-size:13px;margin-top:10px;line-height:1.6}
+.lb .x{position:absolute;top:12px;right:12px;border:none;background:rgba(255,255,255,.9);width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;z-index:2}
+.lb-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.lb-btn{flex:1;min-width:150px;border:none;border-radius:12px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff}
+.lb-btn.ghost{background:var(--bg2);color:var(--navy)}
+/* Sheet cambiar foto */
+.sheet{position:fixed;inset:0;background:rgba(10,30,51,.55);display:none;align-items:flex-end;justify-content:center;z-index:60}
+.sheet.open{display:flex}
+.sheet-box{background:#fff;width:100%;max-width:520px;max-height:88vh;border-radius:20px 20px 0 0;overflow:hidden;display:flex;flex-direction:column}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #e6eef5;font-size:17px}
+.sheet-head .x{border:none;background:var(--bg2);width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--navy)}
+.sheet-body{padding:18px;overflow-y:auto}
+.ph-opt{width:100%;border:2px dashed var(--blue);background:var(--bg2);border-radius:14px;padding:16px;font-size:16px;font-weight:700;color:var(--navy);cursor:pointer}
+.ph-sep{text-align:center;color:var(--mut);font-size:13px;margin:14px 0 10px}
+.ph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.ph-grid img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:10px;cursor:pointer;border:3px solid transparent}
+.ph-grid img.sel{border-color:var(--yel)}
+.ph-loading{grid-column:1/-1;text-align:center;color:var(--mut);padding:18px;font-size:14px}
+#phApply{width:100%;opacity:.5}
+#phApply:not([disabled]){opacity:1}
+.done-view{max-width:560px;margin:60px auto;text-align:center;padding:0 20px}
+.done-view h2{font-size:30px;font-weight:900;margin:18px 0 10px}
+.done-view p{color:var(--mut);line-height:1.7;margin-bottom:24px}
+.footer{text-align:center;padding:40px 20px 110px;color:var(--mut);font-size:13px}
+@media(max-width:760px){.ba{grid-template-columns:1fr}.ba-arrow{transform:rotate(90deg);justify-content:center}.week{grid-template-columns:repeat(2,1fr)}.plans{grid-template-columns:1fr}.plan.hot{transform:none}.stat-band{grid-template-columns:1fr}.sticky-cta b{font-size:13px}.modal{padding:24px 18px}.steps3{grid-template-columns:1fr}.ph-grid{grid-template-columns:repeat(3,1fr)}.wk{min-width:100px}.day.feat .db{height:150px;margin:10px 0 10px 10px}.day.feat .dcap{padding:8px 12px 10px 2px}.chat-chips{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:14px}.chat-chips button{flex-shrink:0}}
+/* POSTY protagonista */
+html{scroll-behavior:smooth}
+.logo-posty{display:inline-flex;align-items:center;gap:9px;font-weight:900;font-size:22px;color:var(--navy);text-decoration:none}
+.logo-posty .pdot{color:#FEC14D}
+.logo-posty img{width:34px;height:34px;border-radius:50%;box-shadow:0 3px 10px rgba(39,147,200,.35)}
+#formCard{scroll-margin-top:76px}
+.hero .cta-row{margin-top:22px}
+.work3{margin:44px 0 6px}
+.work3 h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.work3 .lede{text-align:center;color:var(--mut);margin-bottom:4px;font-size:15px}
+.hace{margin:44px 0 6px}
+.hace h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.hace .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
+.hace-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.hace-item{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px 18px;display:flex;gap:12px;align-items:flex-start;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.hace-item .he{font-size:24px;line-height:1.25;flex:0 0 auto}
+.hace-item b{display:block;font-size:15px;color:var(--navy);margin-bottom:3px}
+.hace-item p{font-size:13px;color:var(--mut);line-height:1.5;margin:0}
+.hace-foot{text-align:center;color:var(--mut);font-size:14px;font-weight:600;margin-top:16px}
+@media(max-width:640px){.hace-grid{grid-template-columns:1fr}}
+.ejemplos{margin:44px 0 6px}
+.ejemplos h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
+.ejemplos .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
+.ej-viewport{overflow:hidden}
+.ej-track{display:flex;transition:transform .3s ease}
+.ej-page{flex:0 0 100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:2px 2px 10px}
+.ej-wrap{position:relative}
+.ej-nav{position:absolute;top:44%;transform:translateY(-50%);z-index:6;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--navy);font-size:26px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(10,30,51,.18);display:flex;align-items:center;justify-content:center;padding:0 0 3px;transition:opacity .2s}
+.ej-nav.prev{left:6px}
+.ej-nav.next{right:6px}
+.ej-nav.off{opacity:.35;pointer-events:none}
+.ej-card{border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fff;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.ej-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
+.ej-card p{padding:10px 12px;font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4}
+.ej-foot{text-align:center;color:var(--mut);font-size:13px;margin-top:14px;font-weight:700}
+.footer-posty{display:inline-flex;align-items:center;gap:8px;font-weight:800;color:var(--navy)}
+.footer-posty img{width:26px;height:26px;border-radius:50%}
+@media(max-width:760px){.ej-page{grid-template-columns:repeat(2,1fr)}.ej-card img{aspect-ratio:4/3}}
+/* PRUEBA EN 1 CAMPO: tarjeta compacta del prefill */
+.pf-row{display:flex;gap:14px;align-items:flex-start}
+.pf-row img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--line);flex-shrink:0;background:var(--bg2)}
+.pf-fields{flex:1;min-width:0}
+@media(max-width:420px){.pf-row{flex-direction:column;align-items:center}.pf-fields{width:100%}}
+/* SNEAK PEEKS: barra de progreso del stream en resultados */
+#rStreamBar{max-width:560px;margin:20px auto 0;text-align:center}
+#rStreamText{font-weight:700;font-size:15px;margin-top:10px;color:var(--navy)}
+/* ASÍ SE VE EN TU FEED: mockup de teléfono */
+.phone{max-width:400px;margin:8px auto 0;background:#fff;border:9px solid var(--navy);border-radius:42px;overflow:hidden;box-shadow:0 24px 60px rgba(10,30,51,.18);position:relative}
+.phone-notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:110px;height:24px;background:var(--navy);border-radius:99px;z-index:2}
+.phone-head{display:flex;align-items:center;gap:12px;padding:46px 16px 12px;background:#fff;border-bottom:1px solid var(--line)}
+.phone-head img{width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid var(--line);flex-shrink:0;background:var(--bg2)}
+.phone-head b{display:block;font-size:15px;color:var(--navy)}
+.phone-head small{color:var(--mut);font-size:12px}
+.phone-feed{max-height:600px;overflow-y:auto;background:var(--bg2);padding:12px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
+.phone-feed .day{flex-shrink:0}
+.phone-feed .day.feat{display:block;grid-column:auto;width:auto;max-width:none;margin:0}
+.phone-feed .day.feat .dh{display:block;text-align:center;background:linear-gradient(135deg,#0A1E33,#2793C8);padding:10px}
+.phone-feed .day.feat .db{height:auto;width:auto;aspect-ratio:4/5;margin:0;border-radius:0}
+.phone-feed .day.feat .dcap{padding:10px 12px;-webkit-line-clamp:2;font-size:12.5px;min-height:44px;align-self:auto}
+@media(max-width:420px){.phone{border:none;border-radius:0;box-shadow:none;max-width:none;margin-left:-20px;margin-right:-20px}.phone-notch{display:none}.phone-head{padding-top:14px}}
+/* BRIEF LARGO: tarjeta colapsable después del wow */
+.brief-card{background:#fff;border:1.5px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(10,30,51,.07)}
+.brief-toggle{width:100%;background:var(--bg2);border:none;padding:18px 20px;font-family:inherit;font-size:16px;font-weight:800;color:var(--navy);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left}
+.brief-toggle .bt-arrow{transition:transform .2s;color:var(--cel);flex-shrink:0}
+.brief-toggle[aria-expanded="true"] .bt-arrow{transform:rotate(180deg)}
+.brief-body{padding:20px;border-top:1px solid var(--line)}
+/* PROJECTION DE PERFIL (v184): su perfil HOY vs CON Posty — mismo recurso
+   de contraste arrastrable de la landing (pz-drag), en versión compacta. */
+#projBox{max-width:480px;margin:26px auto 0}
+.pfp-card{background:#fff;border:1.5px solid var(--line);border-radius:20px;box-shadow:0 12px 40px rgba(10,30,51,.07);overflow:hidden;text-align:left}
+.pfp-head{display:flex;align-items:center;gap:8px;padding:14px 16px 8px}
+.pfp-head b{font-size:16px;color:var(--navy)}
+.pfp-tag{margin-left:auto;background:var(--bg2);color:var(--cel);font-weight:800;font-size:11px;letter-spacing:.4px;padding:5px 11px;border-radius:99px;white-space:nowrap}
+.pfp-btn{border:none;background:var(--bg2);width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;color:var(--navy);flex-shrink:0;font-family:inherit}
+.pfp-label{padding:0 16px 12px;color:var(--mut);font-size:13px;line-height:1.5;margin:0}
+.pfp-stage{--pos:50%;position:relative;margin:0 16px;border:1px solid var(--line);border-radius:16px;overflow:hidden;touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;background:#fff}
+.pfp-stage:focus-within{outline:2px solid var(--cel);outline-offset:3px}
+.pfp-layer{padding:14px}
+.pfp-layer-hoy{position:absolute;inset:0;background:#FBFCFD;clip-path:inset(0 calc(100% - var(--pos)) 0 0);z-index:1}
+.pfp-stage img{-webkit-user-drag:none}
+.pfp-prof{display:flex;align-items:center;gap:12px}
+.pfp-ava{position:relative;width:62px;height:62px;border-radius:50%;background:linear-gradient(45deg,#FEDA75,#FA7E1E,#D62976,#962FBF,#4F5BD5);flex-shrink:0}
+.pfp-ava i{position:absolute;inset:3px;border-radius:50%;font-style:normal;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;color:var(--navy);background:#E8EDF2}
+.pfp-ava img{position:absolute;inset:3px;width:calc(100% - 6px);height:calc(100% - 6px);border-radius:50%;object-fit:cover;display:block;border:2px solid #fff;background:#E8EDF2;z-index:1;box-sizing:border-box}
+.pfp-layer-hoy .pfp-ava{background:#C9D6DF}
+.pfp-who{min-width:0}
+.pfp-who b{display:block;font-size:15px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfp-who span{font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.pfp-stats{display:flex;gap:8px;margin:12px 0 0;text-align:center}
+.pfp-stat{flex:1}
+.pfp-stat b{display:block;font-size:15px;color:var(--navy)}
+.pfp-stat span{font-size:12px;color:var(--mut)}
+.pfp-bio{font-size:13px;line-height:1.45;color:var(--navy);margin:10px 0 0;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pfp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-top:12px}
+.pfp-cell{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#EDF2F6}
+.pfp-cell img,.pfp-cell video{width:100%;height:100%;object-fit:cover;display:block}
+.pfp-cell .pfp-vb{position:absolute;top:5px;right:5px;background:rgba(10,30,51,.75);color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:99px}
+.pfp-cell-wait{position:absolute;inset:0;background:linear-gradient(120deg,#EDF2F6 30%,#F8FCFE 50%,#EDF2F6 70%);background-size:200% 100%;animation:pfpShine 1.4s infinite}
+@keyframes pfpShine{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.pfp-ptag{position:absolute;top:10px;font-size:11px;font-weight:900;letter-spacing:.6px;padding:5px 11px;border-radius:99px;z-index:4;pointer-events:none}
+.pfp-ptag.hoy{left:10px;background:var(--navy);color:#fff}
+.pfp-ptag.posty{right:10px;background:var(--yl);color:var(--navy)}
+.pfp-bar{position:absolute;top:0;bottom:0;left:var(--pos);width:3px;margin-left:-1.5px;background:#fff;box-shadow:0 0 0 1px rgba(10,30,51,.18),0 0 14px rgba(10,30,51,.25);z-index:3;pointer-events:none}
+.pfp-knob{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:#fff;border:2px solid var(--cel);color:var(--cel);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;box-shadow:0 4px 14px rgba(10,30,51,.28)}
+.pfp-stage:not(.touched) .pfp-knob{animation:pfpKnob 2.2s ease-in-out infinite}
+@keyframes pfpKnob{0%,100%{margin-left:0}50%{margin-left:10px}}
+.pfp-range{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:140px;height:22px;opacity:0;z-index:5;cursor:ew-resize;margin:0}
+.pfp-hint{text-align:center;color:var(--mut);font-size:12.5px;margin:10px 16px 0}
+.pfp-extra{padding:12px 16px 16px}
+.pfp-hls{display:flex;gap:14px;overflow-x:auto;padding:2px 0 4px}
+.pfp-hl{text-align:center;flex-shrink:0;width:62px}
+.pfp-hlring{width:56px;height:56px;border-radius:50%;padding:2px;background:linear-gradient(45deg,#FEDA75,#D62976,#962FBF);margin:0 auto}
+.pfp-hlring img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;border:2px solid #fff;background:#E8EDF2;box-sizing:border-box}
+.pfp-hl span{display:block;font-size:11px;color:var(--navy);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfp-act{display:flex;align-items:center;gap:9px;background:var(--bg2);border-radius:12px;padding:11px 13px;font-size:13px;color:var(--navy);margin-top:10px;line-height:1.45}
+.pfp-act .dot{width:9px;height:9px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:pulse 1.6s infinite}
+.pfp-styles{font-size:12.5px;color:var(--mut);margin:10px 0 0;line-height:1.5}
+.pfp-styles b{color:var(--navy)}
+.pfp-card.min .pfp-body{display:none}
+/* AUDITORÍA EN VIVO (v210): análisis positivo del Instagram real del
+   visitante — A mejorar / A incrementar / A reducir, con números reales
+   de su cuenta y el número con Posty cuando la palanca es de Posty. */
+#auditBox{max-width:480px;margin:18px auto 0}
+.aud-card{background:#fff;border:1.5px solid var(--line);border-radius:20px;box-shadow:0 12px 40px rgba(10,30,51,.07);overflow:hidden;text-align:left;padding:16px}
+.aud-head b{font-size:16px;color:var(--navy)}
+.aud-sub{color:var(--mut);font-size:13px;line-height:1.5;margin:6px 0 0}
+.aud-starter{background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:11px 13px;font-size:13.5px;color:var(--navy);line-height:1.5;margin-top:12px}
+.aud-group{margin-top:14px}
+.aud-gtitle{font-size:12px;font-weight:900;letter-spacing:.6px;color:var(--cel);text-transform:uppercase;margin:0 0 6px}
+.aud-f{border-top:1px solid var(--line);padding:10px 0}
+.aud-group .aud-f:first-of-type{border-top:none;padding-top:2px}
+.aud-t{font-size:14px;color:var(--navy);line-height:1.45;margin:0}
+.aud-nums{font-size:12.5px;line-height:1.9;margin:5px 0 0}
+.aud-now{display:inline-block;background:var(--bg2);border-radius:99px;padding:2px 10px;color:var(--navy)}
+.aud-arrow{color:var(--mut);margin:0 2px}
+.aud-wp{display:inline-block;background:#EAF6FD;border-radius:99px;padding:2px 10px;color:var(--cel);font-weight:700}
+/* LA CARTA (v259): el análisis como carta de Posty — diseño v3 aprobado por
+   Valentino (20/10): avatar arriba de todo, veredicto, tu foto de hoy, los
+   hallazgos con su acción, PLAN de ejecución navy en 3 fases con "El efecto:",
+   banner motivacional amarillo y firma. */
+.aud-letter{padding:22px 18px 18px}
+.aud-lhead{text-align:center}
+.aud-ava{width:96px;height:96px;margin:2px auto 0;border-radius:50%;background:#fff;border:3px solid #FEC14D;box-shadow:0 8px 24px rgba(39,147,200,.25);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.aud-ava img{width:88px;height:88px;object-fit:cover}
+.aud-title{font-size:26px;font-weight:900;color:var(--navy);letter-spacing:-.5px;margin:12px 0 0}
+.aud-biz{font-size:14px;font-weight:700;color:var(--cel);margin:3px 0 0}
+.aud-date{font-size:12px;font-weight:600;color:var(--mut);margin:2px 0 0}
+.aud-intro{font-size:14px;line-height:1.55;color:#33566B;margin:12px 4px 0}
+.aud-verdict{background:#2793C8;color:#fff;border-radius:18px;padding:16px 18px;margin-top:16px;box-shadow:0 6px 20px rgba(39,147,200,.3);text-align:left}
+.aud-vlabel{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;opacity:.85;margin:0 0 6px}
+.aud-vq{font-size:17px;font-weight:800;line-height:1.45;margin:0}
+.aud-sec-t{font-size:12px;font-weight:900;letter-spacing:.6px;color:var(--cel);text-transform:uppercase;margin:18px 0 8px}
+.aud-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aud-stat{background:#F2F9FD;border-radius:14px;padding:12px 10px;text-align:center}
+.aud-sn{font-size:24px;font-weight:900;color:var(--navy);margin:0;line-height:1.1}
+.aud-sl{font-size:11.5px;font-weight:700;color:var(--mut);margin:3px 0 0;line-height:1.35}
+.aud-fmeta{margin:7px 0 0}
+.aud-act{font-size:13px;color:var(--cel);font-weight:600;margin:5px 0 0;line-height:1.45}
+.aud-act b{font-weight:800}
+.aud-plan{background:#0A1E33;color:#fff;border-radius:18px;padding:18px;margin-top:18px;text-align:left;box-shadow:0 8px 24px rgba(10,30,51,.28)}
+.aud-plan-t{font-size:17px;font-weight:900;margin:0}
+.aud-plan-s{font-size:11px;font-weight:800;color:#FEC14D;text-transform:uppercase;letter-spacing:1px;margin:3px 0 0}
+.aud-phase{margin-top:15px}
+.aud-ph{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#FEC14D;margin:0}
+.aud-phase ul{list-style:none;margin:8px 0 0;padding:0}
+.aud-phase li{font-size:13.5px;line-height:1.5;color:#D7E6EF;padding-left:18px;position:relative;margin-top:7px}
+.aud-phase li::before{content:'▸';position:absolute;left:2px;color:#2793C8;font-weight:900}
+.aud-fx{display:block;font-size:12.5px;color:#9CC8E4;margin-top:2px}
+.aud-need{font-size:13.5px;line-height:1.5;color:#FEC14D;font-weight:700;margin:16px 0 0;border-top:1px solid rgba(255,255,255,.14);padding-top:13px}
+.aud-need b{color:#fff}
+.aud-banner{background:#FEC14D;color:#0A1E33;border-radius:14px;padding:14px 16px;font-size:14.5px;font-weight:800;line-height:1.5;text-align:center;margin-top:16px}
+.aud-sign{text-align:center;margin-top:20px;padding-top:16px;border-top:2px dashed #C9E2EF}
+.aud-sign img{width:48px;height:48px;border-radius:50%;border:2px solid #FEC14D;background:#fff}
+.aud-fname{font-size:30px;font-weight:900;font-style:italic;letter-spacing:-.5px;color:var(--navy);margin:4px 0 0}
+.aud-fname span{color:#FEC14D}
+.aud-frole{font-size:11px;font-weight:800;color:var(--cel);text-transform:uppercase;letter-spacing:1.2px;margin:2px 0 0}
+.aud-fline{font-size:12.5px;color:var(--mut);margin:8px 0 0;line-height:1.5}
+@media(max-width:420px){#projBox{margin-top:20px}#auditBox{margin-top:14px}.pfp-layer{padding:12px}.pfp-ava{width:54px;height:54px}}
+</style>
+</head>
+<body>
+<div class="nav"><div class="wrap">
+  <a class="logo-posty" href="/en"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+  <span class="pill">TRY IT FREE</span>
+</div></div>
+
+<!-- VISTA: onboarding -->
+<div id="v-onboarding">
+  <div class="wrap">
+    <div class="hero">
+      <div class="hero-lockup"><img src="ai-avatar.png" alt="Posty" class="hero-ava"><span class="pill">YOUR COMMUNITY MANAGER</span></div>
+      <h1>Hi! I'm Posty</h1>
+      <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Your complete community manager: I build your week of posts, publish it for you, answer your comments and messages, and look after your reviews.</p>
+      <p class="sub">All with your business's vibe and your exact product. You just approve — drop your @ and see your week as if you were already a customer. No card.</p>
+      <div class="cta-row"><a class="btn btn-primary" href="#formCard">Build my week 👇</a></div>
+    </div>
+    <p class="audit-hook">And as a bonus, the <span class="hl2">diagnosis of your Instagram</span>: what to improve, what to do more of and what to cut back.</p>
+    <div class="card form-card" id="formCard">
+      <div class="err" id="obErr"></div>
+      <!-- Paso 1: el @ de Instagram y, pegada abajo, la web del negocio -->
+      <div id="stepIg">
+        <div class="field"><label>Your Instagram</label><input type="text" id="f_ig" placeholder="@your_business" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty pulls your name, your industry and your profile photo.</div></div>
+        <button class="btn btn-primary btn-block" id="btnGo">See my week 👀</button>
+        <div class="form-or"><span>or</span></div>
+        <div id="webOptBox">
+          <div class="field" style="margin-bottom:10px"><label>Your business website</label><input type="text" id="f_web" placeholder="www.yourbusiness.com" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty reads your website: name, services, colors and photos.</div></div>
+          <button class="btn btn-primary btn-block" id="btnWebGo">Read my website 🌐</button>
+        </div>
+        <p class="tiny" style="margin-top:16px">Your week, ready in ~1 minute.</p>
+        <p class="tiny">No sign-up · No card · Your week stays saved for 3 days</p>
+        <p class="tiny" style="margin-top:6px">Just your public @ — no password, no permissions</p>
+        <p style="text-align:center;margin-top:14px"><button type="button" class="linklike" id="photoOptLink">📷 Upload a photo of my business (optional)</button></p>
+        <div id="photoOptBox" style="display:none;margin-top:10px;text-align:center">
+          <input type="file" id="optPhoto" accept="image/jpeg,image/png,image/webp" style="font-size:14px;max-width:100%">
+          <p class="tiny" id="optPhotoName" style="margin-top:6px;min-height:18px"></p>
+        </div>
+      </div>
+      <!-- Prefill OK: Posty encontró tu negocio -->
+      <div id="prefillCard" style="display:none">
+        <div style="text-align:center;margin-bottom:14px"><span class="pill">POSTY FOUND YOUR BUSINESS 🎯</span></div>
+        <div class="pf-row">
+          <img id="pfPhoto" src="ai-avatar.png" alt="Profile photo" onerror="this.onerror=null;this.src='ai-avatar.png'">
+          <div class="pf-fields">
+            <div class="field" style="margin-bottom:10px"><label>Name</label><input type="text" id="pf_name" maxlength="60" autocomplete="off"></div>
+            <div class="field" style="margin-bottom:0"><label>Industry</label><select id="pf_cat"></select></div>
+          </div>
+        </div>
+        <p class="tiny" style="margin:10px 0 14px">Fix it if needed — I use it to build your week.</p>
+        <button class="btn btn-primary btn-block" id="btnPrefillGo">Build my week 👀</button>
+        <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="pfBack">← Not my business / use another @</button></p>
+      </div>
+      <!-- Web OK: Posty leyó tu sitio (v212) -->
+      <div id="webCard" style="display:none">
+        <div style="text-align:center;margin-bottom:14px"><span class="pill">POSTY READ YOUR WEBSITE 🌐</span></div>
+        <div class="pf-row">
+          <img id="wfPhoto" src="ai-avatar.png" alt="Photo of your business" onerror="this.onerror=null;this.src='ai-avatar.png'">
+          <div class="pf-fields">
+            <div class="field" style="margin-bottom:10px"><label>Name</label><input type="text" id="wf_name" maxlength="60" autocomplete="off"></div>
+            <div class="field" style="margin-bottom:0"><label>Industry</label><select id="wf_cat"></select></div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;margin-bottom:0"><label>Description (from your website, editable)</label><textarea id="wf_desc" rows="3" maxlength="400"></textarea></div>
+        <div id="wfMeta" style="margin-top:10px"></div>
+        <p class="tiny" style="margin:10px 0 14px">Fix it if needed — I use it to build your week.</p>
+        <button class="btn btn-primary btn-block" id="btnWebTrialGo">Build my week 👀</button>
+        <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="wfBack">← Back</button></p>
+      </div>
+      <!-- (v235) La pregunta de rubro: SOLO aparece si Posty no está 100%
+           seguro del rubro — antes de generar, con un toque. -->
+      <div id="rubroCard" style="display:none">
+        <div style="text-align:center;margin-bottom:14px"><span class="pill">ONE QUICK QUESTION 🎯</span></div>
+        <h3 style="text-align:center;margin:0 0 6px">To build your exact week:</h3>
+        <p class="tiny" style="text-align:center;margin:0 0 14px">Is your business more like…?</p>
+        <div id="rubroOpts" style="display:grid;gap:10px"></div>
+        <p style="text-align:center;margin-top:14px"><button type="button" class="linklike" id="rubroOther">Another industry →</button></p>
+        <p style="text-align:center;margin-top:4px"><button type="button" class="linklike" id="rubroSkip">Skip for now</button></p>
+      </div>
+      <!-- Fallback: formulario detallado actual (si el prefill falla) -->
+      <div id="detailForm" style="display:none">
+        <p class="tiny" style="margin:0 0 14px">We couldn't pull your Instagram profile — fill it in here 👇</p>
+        <div class="field"><label>Your business name *</label><input type="text" id="f_biz" placeholder="Ex: Café Martínez" maxlength="60" autocomplete="off"></div>
+        <div class="field"><label>Industry *</label><select id="f_cat"></select></div>
+        <button class="btn btn-primary btn-block" id="btnGo2">See my week 👀</button>
+        <p class="tiny" style="margin-top:10px">Your week, ready in ~1 minute.</p>
+        <p class="tiny">No sign-up · No card · Your week stays saved for 3 days</p>
+      </div>
+    </div>
+    <p class="price-contrast">A community manager charges ~$2,000 a month. <b>Posty, from $49.</b></p>
+
+  <div class="work3">
+    <h3>This is how I work 👇</h3>
+    <p class="lede">Three steps and your Instagram runs itself.</p>
+    <div class="steps3">
+      <div class="step3"><div class="n">1</div><div><b>Give me your @ or your website</b><p>10 seconds: your Instagram or your site's link, nothing else.</p></div></div>
+      <div class="step3"><div class="n">2</div><div><b>I build your week</b><p>5 posts + 1 reel: design, caption and hashtags with your vibe and your colors.</p></div></div>
+      <div class="step3"><div class="n">3</div><div><b>You approve, I post</b><p>Nothing goes out without your OK.</p></div></div>
+    </div>
+  </div>
+
+  <div class="ejemplos">
+    <h3>Real weeks, made by Posty</h3>
+    <p class="lede">Real posts, from weeks I built for businesses like yours.</p>
+    <div class="ej-wrap">
+    <button type="button" class="ej-nav prev off" id="ejPrev" aria-label="Previous">‹</button>
+    <div class="ej-viewport" id="ejViewport">
+    <div class="ej-track" id="ejTrack">
+      <div class="ej-page">
+      <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Post made by Posty" loading="lazy"><p>🌸 Flower shop — fresh bouquets, made today</p></div>
+      <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Post made by Posty" loading="lazy"><p>☕ Coffee shop — the house blend</p></div>
+      <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Post made by Posty" loading="lazy"><p>💄 Makeup — flawless and long-lasting</p></div>
+      <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Post made by Posty" loading="lazy"><p>💈 Barbershop — the full ritual</p></div>
+      </div>
+      <div class="ej-page">
+      <div class="ej-card"><img src="prueba-ej-n5.jpg" alt="Post made by Posty" loading="lazy"><p>🥐 Bakery café — fresh out of the oven</p></div>
+      <div class="ej-card"><img src="prueba-ej-n6.jpg" alt="Post made by Posty" loading="lazy"><p>🍣 Sushi — nikkei, at the counter</p></div>
+      <div class="ej-card"><img src="prueba-ej-n7.jpg" alt="Post made by Posty" loading="lazy"><p>🏋️ Gym — your trainer, your plan</p></div>
+      <div class="ej-card"><img src="prueba-ej-n8.jpg" alt="Post made by Posty" loading="lazy"><p>📦 Your product — the star, in 3D</p></div>
+      </div>
+    </div>
+    </div>
+    <button type="button" class="ej-nav next" id="ejNext" aria-label="The one after">›</button>
+    </div>
+    <p class="ej-foot">Design + caption + hashtags, with each business's photos and colors.</p>
+  </div>
+<script>
+(function(){
+  var track=document.getElementById('ejTrack'),vp=document.getElementById('ejViewport'),prev=document.getElementById('ejPrev'),next=document.getElementById('ejNext');
+  if(!track||!prev||!next)return;
+  var page=0,pages=track.children.length;
+  function upd(){
+    track.style.transform='translateX('+(-page*100)+'%)';
+    prev.classList.toggle('off',page<=0);
+    next.classList.toggle('off',page>=pages-1);
+  }
+  function go(d){var np=Math.max(0,Math.min(pages-1,page+d));if(np!==page){page=np;upd();}}
+  prev.addEventListener('click',function(){go(-1);});
+  next.addEventListener('click',function(){go(1);});
+  if(vp){
+    var tx=null;
+    vp.addEventListener('touchstart',function(e){tx=e.changedTouches[0].clientX;},{passive:true});
+    vp.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>=40)go(dx<0?1:-1);},{passive:true});
+  }
+  upd();
+})();
+</script>
+
+  <div class="hace">
+    <h3>Everything Posty does for you</h3>
+    <p class="lede">It's not just posting: it's the complete job of a community manager, every day.</p>
+    <div class="hace-grid">
+      <div class="hace-item"><div class="he">🎨</div><div><b>Designs your week</b><p>Posts, reels and stories with your brand: your photos, your colors and your exact product. No cookie-cutter templates.</p></div></div>
+      <div class="hace-item"><div class="he">✍️</div><div><b>Writes to sell</b><p>Captions and hashtags in your tone, designed to make people buy, not to fill space.</p></div></div>
+      <div class="hace-item"><div class="he">⏰</div><div><b>Posts on its own</b><p>At the best time, every day. It gives you a heads-up 30 minutes before, in case you want to pause anything.</p></div></div>
+      <div class="hace-item"><div class="he">🔍</div><div><b>Studies your business</b><p>It reads your Instagram and your industry: what sells, what's working and what your competition is doing.</p></div></div>
+      <div class="hace-item"><div class="he">📆</div><div><b>Hunts the dates that sell</b><p>Mother's Day, Black Friday, Christmas: your week adapts on its own — you don't have to remember a thing.</p></div></div>
+      <div class="hace-item"><div class="he">💡</div><div><b>Proposes ideas</b><p>Every week, new ideas for your business, ready to approve in one tap.</p></div></div>
+      <div class="hace-item"><div class="he">💬</div><div><b>Answers your comments</b><p>The reply, ready in your tone; you send it in one tap. Nothing goes out without your OK.</p></div></div>
+      <div class="hace-item"><div class="he">📩</div><div><b>Answers your messages</b><p>Your Instagram inbox, at zero.</p></div></div>
+      <div class="hace-item"><div class="he">⭐</div><div><b>Looks after your reviews</b><p>Answers your Google reviews for you.</p></div></div>
+      <div class="hace-item"><div class="he">🚀</div><div><b>Boosts what works</b><p>It spots the post that's taking off and offers to boost it with ads. You set the spending cap.</p></div></div>
+      <div class="hace-item"><div class="he">🌐</div><div><b>Your page, ready to share</b><p>A public page for your business with a WhatsApp button straight to you.</p></div></div>
+      <div class="hace-item"><div class="he">🤚</div><div><b>You're in charge</b><p>Pause any post in one tap, ask for changes in the chat as if you were talking to your CM, or approve everything by hand if you prefer.</p></div></div>
+    </div>
+    <p class="hace-foot">And every week you get the summary: what worked, what's next and the month's focus.</p>
+  </div>
+
+  <div class="minifaq">
+    <h3>Quick questions</h3>
+    <details class="faq-item"><summary>Do I have to give my password?</summary><p>No: you connect with Meta, no password sharing.</p></details>
+    <details class="faq-item"><summary>How long does my week take?</summary><p>It's ready in ~1 minute.</p></details>
+    <details class="faq-item"><summary>Can I cancel anytime?</summary><p>Yes, anytime.</p></details>
+    <div style="text-align:center;margin-top:20px"><button type="button" class="btn btn-ghost" data-posty-chat style="padding:12px 26px;font-size:15.5px;border-radius:999px">Need help? Talk to Posty</button></div>
+  </div>
+
+  </div>
+  </div>
+</div>
+
+<!-- VISTA: 3 preguntas rápidas antes de generar (para que los posteos salgan a medida) -->
+<div id="v-questions" style="display:none">
+  <div class="wrap">
+    <div class="qcard">
+      <span class="pill" id="qPill">LAST 3 QUESTIONS 🤏</span>
+      <p class="tiny" id="qStep" style="margin:10px 0 0">1 of 3</p>
+      <h2 id="qTitle" style="margin:6px 0 4px"></h2>
+      <p class="sub" id="qSub" style="margin:0 0 18px"></p>
+      <div id="qBody"></div>
+      <button class="linklike" id="qSkip" style="margin-top:14px">Skip →</button>
+    </div>
+  </div>
+</div>
+
+<!-- VISTA: tracker -->
+<div id="v-loading" style="display:none">
+  <div class="wrap">
+    <div class="tracker">
+      <span class="pill">WORKING FOR YOU ⚙️</span>
+      <div class="tk-head">
+        <img src="ai-avatar.png" alt="Posty" class="tk-avatar">
+        <h2 id="tkTitle">Building your week…</h2>
+      </div>
+      <p class="sub">This is what we would do for you every week, automatically.</p>
+      <div id="tkSteps"></div>
+      <div class="pbar"><i id="tkBar"></i></div>
+      <p class="tiny" id="tkPct">0%</p>
+      <p class="tiny" id="tkTip" style="margin-top:8px;min-height:18px"></p>
+    </div>
+  </div>
+</div>
+
+<!-- VISTA: resultados -->
+<div id="v-results" style="display:none">
+  <div class="wrap">
+    <div id="shareBanner" style="display:none;background:#EAF6FD;border:1.5px solid #2793C8;border-radius:14px;padding:12px 16px;margin-bottom:14px;text-align:center">
+      <p style="margin:0 0 8px;font-size:14.5px">You are seeing the week Posty built for <b id="shareBannerBiz">@business</b> 💛</p>
+      <button class="btn btn-primary btn-sm" id="btnMakeMine">I want my free week</button>
+    </div>
+    <div class="res-hero">
+      <img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)">
+      <h2 id="rTitle">Your week is ready, <span class="hl" id="rBiz">your business</span>! 🎉</h2>
+      <p class="sub" id="rSub"></p>
+      <div id="rCached" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px"></div>
+      <p class="tiny" id="rTime" style="display:none;margin-top:8px"></p>
+      <div id="rStreamBar" style="display:none">
+        <div class="pbar"><i id="rStreamFill" style="width:0%"></i></div>
+        <p id="rStreamText">I'm looking up your Instagram…</p>
+        <div id="rStreamErr" style="display:none;margin-top:12px">
+          <p class="err" id="rStreamErrMsg" style="display:block"></p>
+          <button class="btn btn-primary btn-sm" id="btnRetryStream" style="margin-top:10px">Try again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proyección de perfil (v184): se llena por JS si el perfil real llegó -->
+    <div id="projBox" style="display:none"></div>
+
+    <!-- Auditoría en vivo (v210): se llena por JS si el análisis del @ llegó -->
+    <div id="auditBox" style="display:none"></div>
+
+    <!-- Análisis completo (2026-10-19): probada de mercado o plan de nacimiento -->
+    <div id="analysisBox" style="display:none"></div>
+
+    <div class="sec">
+      <h3>This is how it looks in your feed 📱</h3>
+      <p class="lede">Your 5 posts + 1 reel, already created: design + caption + hashtags. Tap each one to see it in full.</p>
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-head">
+          <img id="phPic" src="ai-avatar.png" alt="Profile photo" onerror="this.onerror=null;this.src='ai-avatar.png'">
+          <div><b id="phIg">@yourinstagram</b><small>Your week · 5 posts + 1 reel</small></div>
+        </div>
+        <div class="phone-feed" id="rWeek"></div>
+      </div>
+      <div id="weekDone" style="display:none">
+        <div style="text-align:center;margin-top:22px">
+          <button class="btn btn-primary" id="btnSave" style="font-size:19px;padding:18px 46px;max-width:100%">Save your week 👇</button>
+          <p class="tiny">Try it free · No card · Your week stays saved for 72 hours 🙂</p>
+        </div>
+        <div class="share-row"><button class="share-btn" id="btnShare">📤 Share my week</button></div>
+        <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">Something off? Ask in the chat 👇</a></p>
+      <div class="photocard">
+        <h4>📷 With YOUR photos, it comes out even better</h4>
+        <p>I built these posts with catalog photos. When you share photos and videos of your business, your posts sell much more — and the more you share, the better they come out. No photos? No problem: I create them.</p>
+        <button class="btn btn-primary" id="btnPhotosCard" style="font-size:17px;padding:15px 34px">I want my week with my photos</button>
+        <p class="tiny" style="margin-top:10px">When you create your account you upload your photos once and I use them every week.</p>
+      </div>
+      <!-- Email del lead (abandono de trial): solo visitantes no logueados.
+           Una línea sutil: si deja su email y no se registra, en ~24h recibe
+           UN aviso de que su semana sigue guardada. -->
+      <div id="leadEmailRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
+        <p style="font-size:14px;color:#47617A;margin:0 0 8px">📧 Want me to email it to you so you can look at it calmly?</p>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="leadEmail" placeholder="tu@email.com" autocomplete="email" inputmode="email"
+            style="flex:1;min-width:0;font-size:16px;padding:12px 14px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33">
+          <button id="leadEmailGo" class="btn btn-primary" style="white-space:nowrap;padding:12px 20px">Send it</button>
+        </div>
+        <p class="tiny" id="leadEmailMsg" style="margin:8px 0 0;min-height:18px"></p>
+      </div>
+      </div>
+    </div>
+
+    <div id="rRest" style="display:none">
+    <div class="sec">
+      <div class="brief-card">
+        <button class="brief-toggle" id="briefToggle" aria-expanded="false">
+          <span>Want me to fine-tune it? Tell me more about your business ✍️</span><span class="bt-arrow">▾</span>
+        </button>
+        <div class="brief-body" id="briefBody" style="display:none">
+          <div class="field"><label>What do you want from your Instagram?</label>
+            <select id="b_goal_key">
+              <option value="">Pick one option</option>
+              <option value="vender">🛒 Sell more</option>
+              <option value="seguidores">📣 More followers</option>
+              <option value="lanzamiento">🚀 Launch something new</option>
+              <option value="fidelizar">💛 Build loyal customers</option>
+            </select>
+          </div>
+          <div class="field"><label>What's the main thing you sell or offer?</label><input type="text" id="b_producto" placeholder="Ex: smash burgers, haircuts…" maxlength="120" autocomplete="off"></div>
+          <div class="field"><label>What do your customers say about you?</label><input type="text" id="b_diferencial" placeholder="Ex: that the portions are huge…" maxlength="200" autocomplete="off"></div>
+          <div class="err" id="briefErr"></div>
+          <button class="btn btn-primary btn-block" id="btnBriefGo">Fine-tune my week ✨</button>
+          <p class="tiny">I'll rebuild it with your detail.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Want to change something? 💬</h3>
+      <p class="lede">Ask in the chat, like you'd talk to your community manager. Changes apply instantly.</p>
+      <div class="chat" id="trialChat">
+        <div class="chat-msgs" id="chatMsgs"></div>
+        <div class="chat-chips" id="chatChips">
+          <button data-m="Make the captions bolder">🔥 Bolder</button>
+          <button data-m="Make the captions funnier">😂 Funnier</button>
+          <button data-m="Make the captions more professional">💼 More professional</button>
+          <button data-m="Shorten the captions, make them more direct">✂️ More direct</button>
+          <button data-m="Add a call to action to all the posts">📣 With a call to action</button>
+          <button data-m="Make the captions warmer and closer">🤝 Warmer</button>
+          <button id="chipColors">🎨 Colors</button>
+        </div>
+        <div class="colorpanel" id="colorPanel">
+          <p class="cp-title">🎨 Your brand colors, exact</p>
+          <button class="cp-logo" id="cpLogoBtn">📷 Use my logo's colors<input type="file" id="cpLogoFile" accept="image/jpeg,image/png,image/webp" hidden></button>
+          <p class="tiny" style="margin:0 0 12px">Upload a photo of your logo and we detect your exact colors.</p>
+          <div class="cp-row">
+            <input type="color" id="cpAccent" value="#2793C8">
+            <div><b>Main</b><input type="text" id="cpAccentHex" maxlength="7" placeholder="#2793C8" autocomplete="off" spellcheck="false"></div>
+          </div>
+          <div class="cp-row">
+            <input type="color" id="cpBtn" value="#FEC14D">
+            <div><b>Accent</b><input type="text" id="cpBtnHex" maxlength="7" placeholder="#FEC14D" autocomplete="off" spellcheck="false"></div>
+          </div>
+          <button class="btn btn-primary btn-block" id="cpApply">Apply colors</button>
+          <p class="tiny" style="margin:8px 0 0">Your posts get regenerated with these exact colors.</p>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="chatIn" placeholder="Ex: the Wednesday one, make it funnier" maxlength="300" autocomplete="off">
+          <button id="chatSend" title="Send">➤</button>
+        </div>
+      </div>
+      <p class="tiny" id="chatLeft" style="margin-top:8px;display:none"></p>
+      <p class="tiny" style="margin-top:10px">💡 The more you use it, the better we understand your vision, your product and your account: the content keeps getting better and more useful.</p>
+    </div>
+
+    <div class="sec">
+      <h3>What happens next? 👇</h3>
+      <p class="lede">This was a sample. Now picture this <b>every week</b> — you just watch and approve.</p>
+        <p class="lede" style="font-weight:800;color:var(--navy)">Plans from $49/mo — less than $2 a day. And your first 3 days are free.</p>
+      <div class="wkstrip">
+        <div class="wk now"><b>This week</b><span>✓ Ready</span></div>
+        <div class="wk-arrow">→</div>
+        <div class="wk future"><b>Next</b><span>Posty builds it 🤖</span></div>
+        <div class="wk-arrow">→</div>
+        <div class="wk future"><b>The one after</b><span>Posty builds it 🤖</span></div>
+        <div class="wk-arrow">→</div>
+        <div class="wk future"><b>Always</b><span>you just approve ♾️</span></div>
+      </div>
+      <div class="steps3">
+        <div class="step3"><div class="n">1</div><div><b>Create your free account</b><p>30 seconds, no card.</p></div></div>
+        <div class="step3"><div class="n">2</div><div><b>Every week, ready to review</b><p>We build it, you look at it.</p></div></div>
+        <div class="step3"><div class="n">3</div><div><b>You approve, we post</b><p>Nothing goes out without your OK.</p></div></div>
+      </div>
+      <div style="text-align:center;margin-top:26px">
+        <div><span id="capLine" style="display:none;font-size:15px;font-weight:800;color:#9A5B00;background:#FFF6E0;border:1.5px solid #FEC14D;border-radius:99px;padding:9px 22px;margin-bottom:16px"></span></div>
+        <p class="tiny">Try it free · No card · Cancel anytime<br>Your week stays saved for 72 hours — you won't lose it 🙂</p>
+      </div>
+    </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: registro sin salir de /prueba -->
+<div class="overlay" id="ovReg"><div class="modal">
+  <button class="x" id="xReg">✕</button>
+  <span class="pill">SAVE YOUR WEEK 💾</span>
+  <h2>Create your free account</h2>
+  <p class="msub" id="rgSub"></p>
+  <div class="field"><label>Email</label><input type="email" id="rg_email" placeholder="tu@email.com" autocomplete="email"></div>
+  <div class="err" id="rgErr"></div>
+  <button class="btn btn-primary btn-block" id="btnReg">Send me my access link 📧</button>
+  <p class="tiny">No card · From $49/mo when it ends · Cancel anytime</p>
+  <p class="tiny" style="margin-top:6px">🔒 Your Instagram connects with Meta — no password sharing</p>
+  <p class="tiny" style="margin-top:8px">Already have an account? <a href="/#/login" style="color:var(--cel);font-weight:700">Log in</a></p>
+</div></div>
+
+<!-- LIGHTBOX -->
+<div class="lb" id="lb"><div class="lb-box">
+  <button class="x" id="xLb">✕</button>
+  <button class="lb-nav prev" id="lbPrev" aria-label="Previous post">‹</button>
+  <button class="lb-nav next" id="lbNext" aria-label="Next post">›</button>
+  <div id="lbMedia"></div>
+  <div class="lb-cap"><h3 id="lbHeadline" style="display:none"></h3><p id="lbCap"></p><div class="tags" id="lbTags"></div>
+    <div class="lb-actions">
+      <button class="lb-btn" id="lbPhoto">📷 Change photo</button>
+      <button class="lb-btn ghost" id="lbImprove">💬 Improve this post</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- Sheet: cambiar foto -->
+<div class="sheet" id="photoSheet" aria-hidden="true"><div class="sheet-box">
+  <div class="sheet-head"><b id="photoSheetTitle">Change photo</b><button class="x" id="xPhoto">✕</button></div>
+  <div class="sheet-body">
+    <button class="ph-opt" id="phUploadBtn">📤 Upload my own photo<input type="file" id="phFile" accept="image/jpeg,image/png,image/webp" hidden></button>
+    <div class="ph-sep">or pick one from the library</div>
+    <div class="ph-grid" id="phGrid"><div class="ph-loading">Looking for photos…</div></div>
+    <button class="cta-main" id="phApply" disabled>Use this photo</button>
+  </div>
+</div></div>
+
+<div class="footer"><span class="footer-posty"><img src="ai-avatar.png" alt="Posty">Posty 🤖</span> · A Posta product</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Analytics propio: mide el uso para mejorar el producto. Fire-and-forget: jamás frena la página.
+const _TQ = [];
+function _tsid() { try { let s = localStorage.getItem('posta_sid'); if (!s) { s = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('posta_sid', s); } return s; } catch (e) { return 'nosid'; } }
+function trk(name, props) { try { if (!/^[a-z0-9_]{2,40}$/.test(name)) return; _TQ.push({ name, props: props || {}, sid: _tsid() }); if (_TQ.length > 200) _TQ.splice(0, _TQ.length - 200); } catch (e) {} }
+async function _tflush() { if (!_TQ.length) return; const b = _TQ.splice(0, 60); try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: b }), keepalive: true }); } catch (e) {} }
+setInterval(_tflush, 10000);
+try { window.addEventListener('pagehide', () => { try { if (_TQ.length && navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([JSON.stringify({ events: _TQ.splice(0, 60) })], { type: 'application/json' })); } catch (e) {} }); } catch (e) {}
+
+const CATS = {"moda":"Fashion / Clothing store","gastronomia":"Food / Restaurant","cafeteria":"Coffee shop","bar":"Bar / Brewery","belleza":"Beauty / Aesthetics","barberia":"Barbershop / Hair salon","fitness":"Fitness / Gym","mascotas":"Pets / Veterinary","salud":"Health / Dentistry","hogar":"Home services","deco":"Furniture / Decor","inmobiliaria":"Real estate","autos":"Cars / Auto shop","educacion":"Education / Courses","tecnologia":"Technology / Phones","turismo":"Tourism / Hospitality","viajes":"Travel agency","eventos":"Events / Parties","fotografia":"Photography","arte":"Art / Design","joyeria":"Jewelry / Accessories","flores":"Florist / Nursery","profesionales":"Professional services","servicios":"Services","otro":"Other"};
+
+let TRIAL = null;      // respuesta del backend
+// Motor de la prueba (sincronizado con DEMO_ENGINE_V en demo.js): una
+// semana guardada por un motor viejo NO se restaura — se genera de nuevo.
+const TRIAL_ENGINE_V = 24;
+let COUNTRY = 'AR';
+let TONE = 'vos';
+// Persistencia local (IndexedDB): si recargás por accidente, tu semana sigue ahí.
+// El límite de 1 prueba por IP lo sigue controlando el servidor.
+const idb = {
+  db: null,
+  open() {
+    return new Promise((resolve) => {
+      try {
+        const rq = indexedDB.open('posta-trial', 1);
+        rq.onupgradeneeded = () => rq.result.createObjectStore('k');
+        rq.onsuccess = () => { idb.db = rq.result; resolve(true); };
+        rq.onerror = () => resolve(false);
+      } catch (e) { resolve(false); }
+    });
+  },
+  async set(v) {
+    if (!idb.db && !(await idb.open())) return false;
+    return new Promise((resolve) => {
+      try {
+        const tx = idb.db.transaction('k', 'readwrite');
+        tx.objectStore('k').put(v, 'trial');
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) { resolve(false); }
+    });
+  },
+  async get() {
+    if (!idb.db && !(await idb.open())) return null;
+    return new Promise((resolve) => {
+      try {
+        const rq = idb.db.transaction('k').objectStore('k').get('trial');
+        rq.onsuccess = () => resolve(rq.result || null);
+        rq.onerror = () => resolve(null);
+      } catch (e) { resolve(null); }
+    });
+  },
+};
+// La llave de prueba del dueño viaja en la URL (?test_key=...) y se reenvía a la API
+const TEST_KEY_QS = (() => {
+  const k = new URLSearchParams(location.search).get('test_key');
+  return k ? '?test_key=' + encodeURIComponent(k) : '';
+})();
+// Link del email "tu semana te está esperando": ?ig=... carga la semana
+// guardada directo en la pantalla de resultados (viene del cron de abandono).
+const DEEP_IG = (() => {
+  const v = new URLSearchParams(location.search).get('ig');
+  return v && /^[a-z0-9._]{1,30}$/i.test(v.trim()) ? v.trim().replace(/^@/, '').toLowerCase() : '';
+})();
+// Link de la landing "pegá la web de tu negocio": ?web=... lee el sitio y
+// muestra la tarjeta web con todo precargado y editable (v212).
+const DEEP_WEB = (() => {
+  const v = new URLSearchParams(location.search).get('web');
+  return v ? v.trim().slice(0, 300) : '';
+})();
+function saveTrial() { try { if (!TEST_KEY_QS) idb.set(TRIAL); } catch (e) {} }
+let _toastT = null;
+function toast(msg) {
+  let el = $('#toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.style.cssText = 'position:fixed;left:50%;bottom:88px;transform:translateX(-50%) translateY(20px);background:#0A1E33;color:#fff;padding:12px 18px;border-radius:14px;font-size:15px;font-weight:600;z-index:99;opacity:0;transition:all .25s ease;max-width:92vw;text-align:center;box-shadow:0 8px 24px rgba(10,30,51,.3)';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  el.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(-50%) translateY(20px)'; }, 2800);
+}
+
+function show(id) {
+  ['v-onboarding','v-questions','v-loading','v-results'].forEach((v) => { $('#' + v).style.display = v === id ? 'block' : 'none'; });
+  window.scrollTo({ top: 0 });
+}
+
+// ---------- init ----------
+(async function init() {
+  trk('prueba_view');
+ try {
+  const catOpts = `<option value="" selected disabled>Pick your industry 👇</option>` + Object.entries(CATS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  $('#f_cat').innerHTML = catOpts;
+  $('#pf_cat').innerHTML = catOpts;
+  $('#wf_cat').innerHTML = catOpts;
+  // Prueba en 1 campo: el primer paso es solo el @
+  $('#btnGo').onclick = onIgSubmit;
+  $('#btnWebGo').onclick = onWebSubmit;
+  $('#btnWebTrialGo').onclick = startTrialWeb;
+  $('#f_web').addEventListener('keydown', (e) => { if (e.key === 'Enter') onWebSubmit(); });
+  $('#wfBack').onclick = () => { WEB = null; GEN_WEB = false; $('#webCard').style.display = 'none'; $('#stepIg').style.display = 'block'; };
+  $('#btnGo2').onclick = startTrialFallback;
+  $('#btnPrefillGo').onclick = startTrialPrefill;
+  $('#btnSave').onclick = openRegTrial;
+  const bmm = $('#btnMakeMine'); if (bmm) bmm.onclick = () => { trk('prueba_step', { step: 'share_banner_cta' }); location.href = '/prueba'; };
+  const bpc = $('#btnPhotosCard');
+  if (bpc) bpc.onclick = () => { trk('prueba_step', { step: 'photos_card' }); openRegTrial(); };
+  $('#btnRetryStream').onclick = () => { $('#rStreamErr').style.display = 'none'; STREAM_ERRORED = false; runGeneration(); };
+  $('#f_ig').addEventListener('keydown', (e) => { if (e.key === 'Enter') onIgSubmit(); });
+  $('#pf_name').addEventListener('keydown', (e) => { if (e.key === 'Enter') startTrialPrefill(); });
+  $('#pfBack').onclick = () => { PREFILL = null; GEN_PREFILL = false; $('#prefillCard').style.display = 'none'; $('#stepIg').style.display = 'block'; };
+  // Foto opcional: link discreto que revela el input
+  $('#photoOptLink').onclick = () => { const b = $('#photoOptBox'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; };
+  $('#optPhoto').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    OPT_PHOTO = null;
+    $('#optPhotoName').textContent = '';
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { $('#optPhotoName').textContent = 'The photo cannot exceed 5MB 😅'; e.target.value = ''; return; }
+    OPT_PHOTO = f;
+    $('#optPhotoName').textContent = '✓ ' + f.name;
+    trk('prueba_step', { step: 'foto_opcional' });
+  });
+  // Brief largo (después del wow): tarjeta colapsable
+  $('#briefToggle').onclick = () => {
+    const body = $('#briefBody'), open = body.style.display === 'none';
+    body.style.display = open ? 'block' : 'none';
+    $('#briefToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  $('#btnBriefGo').onclick = submitBrief;
+  $('#xLb').onclick = () => $('#lb').classList.remove('open');
+  $('#lbPrev').onclick = (e) => { e.stopPropagation(); lbNav(-1); };
+  $('#lbNext').onclick = (e) => { e.stopPropagation(); lbNav(1); };
+  $('#lb').addEventListener('click', (e) => { if (e.target.id === 'lb') $('#lb').classList.remove('open'); });
+
+  // ¿Llegó por el link del email "tu semana te está esperando"? (?ig=...)
+  // Carga la semana guardada directo en resultados, sin pasar por el form.
+  if (DEEP_IG && !TEST_KEY_QS) {
+    try {
+      const r = await fetch('/api/trial/week?ig=' + encodeURIComponent(DEEP_IG));
+      if (r.ok) {
+        const data = await r.json();
+        if (data && data.posts && data.posts.length) {
+          TRIAL = data;
+          resetTrialChat();
+          renderResults();
+          // ¿Es un visitante (llegó por un link compartido) y no el dueño
+          // en su propio navegador? Si este navegador no tiene guardada
+          // una semana de ESTE @, mostramos la franja "armá la tuya".
+          try {
+            const sv = await idb.get();
+            if (!sv || !sv.ig || String(sv.ig).replace(/^@/, '').toLowerCase() !== DEEP_IG.toLowerCase()) {
+              const sb = $('#shareBanner');
+              if (sb) { $('#shareBannerBiz').textContent = '@' + DEEP_IG; sb.style.display = 'block'; }
+            }
+          } catch (e) {}
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+  if (DEEP_IG) { try { const fi = $('#f_ig'); if (fi && !fi.value) fi.value = '@' + DEEP_IG; } catch (e) {} }
+  // ¿Ya generaste tu semana en este navegador? Mostrala directo.
+  // (En otro navegador o dispositivo: completás el form con el mismo @
+  // y el servidor te devuelve tu semana cacheada al instante.)
+  if (!TEST_KEY_QS) {
+    try {
+      const saved = await idb.get();
+      if (saved && saved.ok && saved.engine === TRIAL_ENGINE_V) { TRIAL = saved; renderResults(); return; }
+    } catch (e) {}
+  }
+  show('v-onboarding');
+  // ¿Llegó desde la landing con el link de su web? (?web=...) La leemos y
+  // le mostramos la tarjeta con todo precargado y editable.
+  if (DEEP_WEB) {
+    try {
+      const fw = $('#f_web');
+      if (fw) fw.value = DEEP_WEB;
+      const wb = $('#webOptBox'); if (wb) wb.style.display = 'block';
+      onWebSubmit();
+    } catch (e) {}
+  }
+ } catch (e) { try { show('v-onboarding'); } catch (e2) {} }
+})();
+
+// ---------- generar ----------
+// Posty pensando en voz alta: cada paso en primera persona, como si te contara
+// lo que está haciendo por vos ahora mismo.
+const TK_STEPS = [
+  ['🔍', 'I am looking up your Instagram…', 'I pull your profile and your brand colors.'],
+  ['📸', 'I am picking your best photo…', 'The photo that sells the most is the one that stars.'],
+  ['✍️', 'Writing in your tone…', 'No generic templates: it sounds like you.'],
+  ['🎨', 'Designing your posts…', 'With your colors and your name.'],
+  ['✨', 'Almost done…', 'Just a moment more before I show you your week.'],
+];
+let tkTimer = null;
+let tkTipTimer = null;
+// Tips que rotan mientras se arma la semana (entretienen la espera)
+const TK_TIPS = [
+  '💡 Tip: posts with your face or your shop sell more than stock ones.',
+  '🎨 Your designs use your brand colors.',
+  '✍️ Every caption is written for your industry — no generic templates.',
+  '📱 Picture this every week: you just watch and approve.',
+  '🔒 Your account connects with Meta, no password sharing.',
+];
+
+// ---------- Prueba en 1 campo: el primer paso visible es solo el @ ----------
+let PREFILL = null;      // respuesta de /api/trial/prefill
+let GEN_PREFILL = false; // la generación actual viene del prefill (saltea las preguntas)
+let WEB = null;          // respuesta de /api/trial/web-prefill (v212)
+let GEN_WEB = false;     // la generación actual viene de la web del negocio
+let OPT_PHOTO = null;    // foto opcional subida por el visitante (campo 'photo' del multipart)
+// (v235) IDENTIFICACIÓN DE RUBRO: si el estudio del @/web no cerró el
+// rubro con certeza total, el server devuelve rubro_check y la pregunta
+// se hace ACÁ, antes de generar (orden de Valentino). RUBRO_ANS guarda
+// la respuesta {rubro, subcat, src: 'pregunta'|'form'|'skip'}.
+let PENDING_RUBRO = null; // rubro_check vigente {needed, options, detected}
+let RUBRO_FROM = null;    // tarjeta de origen: 'prefill' | 'web'
+let RUBRO_ANS = null;     // respuesta del visitante (null = sin responder)
+const cleanIg = (v) => String(v || '').trim().replace(/^@+/, '');
+
+async function onIgSubmit() {
+  const ig = cleanIg($('#f_ig').value);
+  const err = $('#obErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  if (!ig) return fail('Tell us your Instagram @ 🙂');
+  err.style.display = 'none';
+  trk('prueba_step', { step: 'ig_submit' });
+  const btn = $('#btnGo');
+  btn.disabled = true; btn.textContent = 'Looking up your Instagram…';
+  try {
+    const r = await fetch('/api/trial/prefill', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ig }),
+    });
+    const j = await r.json().catch(() => ({}));
+    // ok:true → tarjeta compacta. ok:false o cualquier error → formulario detallado.
+    if (r.ok && j && j.ok) { showPrefillCard(j); return; }
+  } catch (e) { /* cae al formulario detallado */ }
+  btn.disabled = false; btn.textContent = 'See my week 👀';
+  showDetailForm();
+}
+function showPrefillCard(j) {
+  PREFILL = j;
+  PENDING_RUBRO = (j.rubro_check && j.rubro_check.needed) ? j.rubro_check : null;
+  RUBRO_FROM = 'prefill';
+  RUBRO_ANS = null;
+  $('#stepIg').style.display = 'none';
+  $('#detailForm').style.display = 'none';
+  const wc = $('#webCard'); if (wc) wc.style.display = 'none';
+  const rc = $('#rubroCard'); if (rc) rc.style.display = 'none';
+  const img = $('#pfPhoto');
+  img.src = j.photo || 'ai-avatar.png';
+  $('#pf_name').value = j.name || '';
+  $('#pf_cat').value = CATS[j.category] ? j.category : 'otro';
+  $('#prefillCard').style.display = 'block';
+  trk('prueba_step', { step: 'prefill_ok' });
+  setTimeout(() => { try { $('#pf_name').focus({ preventScroll: true }); } catch (e) {} }, 300);
+}
+function showDetailForm() {
+  PREFILL = null; GEN_PREFILL = false; GEN_WEB = false;
+  PENDING_RUBRO = null; RUBRO_ANS = null;
+  $('#stepIg').style.display = 'none';
+  $('#prefillCard').style.display = 'none';
+  const wc = $('#webCard'); if (wc) wc.style.display = 'none';
+  $('#detailForm').style.display = 'block';
+  trk('prueba_step', { step: 'prefill_fallback' });
+  setTimeout(() => { try { $('#f_biz').focus({ preventScroll: true }); } catch (e) {} }, 300);
+}
+// ---------- Prueba con la WEB del negocio (v212) ----------
+async function onWebSubmit() {
+  const web = ($('#f_web').value || '').trim();
+  const err = $('#obErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  if (!web) return fail('Paste your business website link 🙂');
+  err.style.display = 'none';
+  trk('prueba_step', { step: 'web_submit' });
+  const btn = $('#btnWebGo');
+  btn.disabled = true; btn.textContent = 'Reading your website…';
+  try {
+    const r = await fetch('/api/trial/web-prefill', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ web }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j && j.ok) { showWebCard(j); return; }
+    fail((j && j.error) || 'We could not read that website. Try with your @ 👆');
+  } catch (e) { fail('We could not read that website. Try with your @ 👆'); }
+  btn.disabled = false; btn.textContent = 'Read my website 🌐';
+}
+function showWebCard(j) {
+  WEB = j;
+  PENDING_RUBRO = (j.rubro_check && j.rubro_check.needed) ? j.rubro_check : null;
+  RUBRO_FROM = 'web';
+  RUBRO_ANS = null;
+  $('#stepIg').style.display = 'none';
+  $('#prefillCard').style.display = 'none';
+  $('#detailForm').style.display = 'none';
+  const rc2 = $('#rubroCard'); if (rc2) rc2.style.display = 'none';
+  $('#wfPhoto').src = (j.photos && j.photos[0]) || 'ai-avatar.png';
+  $('#wf_name').value = j.name || '';
+  $('#wf_desc').value = j.description || '';
+  $('#wf_cat').value = CATS[j.category] ? j.category : 'otro';
+  const bits = [];
+  if (j.services && j.services.length) bits.push('📋 <b>Services:</b> ' + j.services.map(esc).join(' · '));
+  if (j.city) bits.push('📍 ' + esc(j.city));
+  if (j.photoCount) bits.push('📸 ' + j.photoCount + ' photo' + (j.photoCount === 1 ? '' : 's') + ' from your website');
+  if (j.palette && j.palette.length) bits.push('🎨 Your colors: ' + j.palette.map((c) => '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' + c + ';border:1px solid rgba(10,30,51,.15);vertical-align:-2px;margin-right:3px"></span>').join(''));
+  $('#wfMeta').innerHTML = bits.length ? '<p class="tiny" style="margin:0;line-height:1.7">' + bits.join('<br>') + '</p>' : '';
+  $('#webCard').style.display = 'block';
+  trk('prueba_step', { step: 'web_prefill_ok' });
+  setTimeout(() => { try { $('#wf_name').focus({ preventScroll: true }); } catch (e) {} }, 300);
+}
+// Web OK: directo a generar, sin preguntas (la descripción ya viene de su web).
+function startTrialWeb() {
+  const name = $('#wf_name').value.trim();
+  if (!name) { toast('Tell us your business name 🙂'); try { $('#wf_name').focus(); } catch (e) {} return; }
+  if (!$('#wf_cat').value) { toast('Pick your industry so the posts come out tailored 👇'); try { $('#wf_cat').focus(); } catch (e) {} return; }
+  // (v235) LA PREGUNTA DE RUBRO VA ANTES DE GENERAR: si Posty no está
+  // 100% seguro y todavía no respondiste, primero la tarjeta de un toque.
+  if (PENDING_RUBRO && !RUBRO_ANS) { showIndustryCard(); return; }
+  GEN_PREFILL = false;
+  GEN_WEB = true;
+  TRIAL_BIZ = name;
+  TRIAL_DESC = $('#wf_desc').value.trim();
+  for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
+  trk('prueba_step', { step: 'web_go' });
+  runGeneration();
+}
+
+// Fallback: el flujo detallado actual, intacto (form + 3 preguntas).
+function startTrialFallback() {
+  const biz = $('#f_biz').value.trim();
+  const err = $('#obErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  if (!biz) return fail('Tell us your business name 🙂');
+  if (!$('#f_cat').value) return fail('Pick your industry so the posts come out tailored 👇');
+  err.style.display = 'none';
+  GEN_PREFILL = false;
+  GEN_WEB = false;
+  TRIAL_BIZ = biz;
+  TRIAL_DESC = '';
+  trk('prueba_step', { step: 'formulario' });
+  showQuestions();
+}
+// Prefill OK: directo a generar, sin preguntas (el brief vive después del wow).
+function startTrialPrefill() {
+  const name = $('#pf_name').value.trim();
+  if (!name) { toast('Tell us your business name 🙂'); try { $('#pf_name').focus(); } catch (e) {} return; }
+  if (!$('#pf_cat').value) { toast('Pick your industry so the posts come out tailored 👇'); try { $('#pf_cat').focus(); } catch (e) {} return; }
+  // (v235) LA PREGUNTA DE RUBRO VA ANTES DE GENERAR (ver startTrialWeb).
+  if (PENDING_RUBRO && !RUBRO_ANS) { showIndustryCard(); return; }
+  GEN_PREFILL = true;
+  GEN_WEB = false;
+  TRIAL_BIZ = name;
+  TRIAL_DESC = '';
+  for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
+  trk('prueba_step', { step: 'prefill_go' });
+  runGeneration();
+}
+
+// ---------- (v235) La tarjeta de la pregunta de rubro ----------
+// Un toque y genera: tocar una opción confirma rubro+subrubro y sigue
+// el flujo de la tarjeta de origen en el mismo toque. "Otro rubro"
+// vuelve a la tarjeta origen con el select clásico enfocado (lo que
+// quede elegido ahí cuenta como respuesta 'form'). "Saltar" genera con
+// el rubro padre seguro y queda registrado como sin confirmar.
+function rubroOriginCard() { return RUBRO_FROM === 'web' ? '#webCard' : '#prefillCard'; }
+function rubroOriginSelect() { return RUBRO_FROM === 'web' ? '#wf_cat' : '#pf_cat'; }
+function rubroProceed() {
+  $('#rubroCard').style.display = 'none';
+  if (RUBRO_FROM === 'web') startTrialWeb(); else startTrialPrefill();
+}
+function showIndustryCard() {
+  const opts = (PENDING_RUBRO && PENDING_RUBRO.options) || [];
+  $('#prefillCard').style.display = 'none';
+  const wc = $('#webCard'); if (wc) wc.style.display = 'none';
+  const box = $('#rubroOpts');
+  box.innerHTML = opts.map((o, i) => `<button type="button" class="btn btn-primary btn-block" data-rubro-i="${i}">${esc(o.label)}</button>`).join('');
+  box.querySelectorAll('[data-rubro-i]').forEach((b) => {
+    b.onclick = () => {
+      const o = opts[parseInt(b.dataset.rubroI, 10)];
+      if (!o) return;
+      const sel = $(rubroOriginSelect());
+      if (sel && CATS[o.rubro]) sel.value = o.rubro;
+      RUBRO_ANS = { rubro: o.rubro, subcat: o.subrubro || '', src: 'pregunta' };
+      trk('prueba_step', { step: 'rubro_answer', rubro: o.rubro, subcat: o.subrubro || '' });
+      rubroProceed();
+    };
+  });
+  $('#rubroCard').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  trk('prueba_step', { step: 'rubro_question' });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const other = $('#rubroOther'), skip = $('#rubroSkip');
+  if (other) other.onclick = () => {
+    // Toma el control con el select clásico: lo que quede elegido ahí
+    // es su respuesta (fuente 'form'); si lo cambia, el listener de
+    // change lo actualiza.
+    const sel = $(rubroOriginSelect());
+    RUBRO_ANS = { rubro: sel ? sel.value : '', subcat: '', src: 'form' };
+    $('#rubroCard').style.display = 'none';
+    $(rubroOriginCard()).style.display = 'block';
+    if (sel) { try { sel.focus(); } catch (e) {} }
+    trk('prueba_step', { step: 'rubro_other' });
+  };
+  if (skip) skip.onclick = () => {
+    RUBRO_ANS = { rubro: '', subcat: '', src: 'skip' };
+    trk('prueba_step', { step: 'rubro_skip' });
+    rubroProceed();
+  };
+  // Si toca el select de rubro a mano, su elección manda (fuente 'form').
+  for (const id of ['#pf_cat', '#wf_cat', '#f_cat']) {
+    const el = $(id);
+    if (el) el.addEventListener('change', () => { RUBRO_ANS = { rubro: el.value, subcat: '', src: 'form' }; });
+  }
+});
+
+// ---------- 3 preguntas rápidas antes de generar ----------
+// La conclusión: mejor esperar un poquito y preguntar qué quiere,
+// que mostrar posteos flojos que frustran. Una a la vez, todas omisibles.
+const TRIAL_QS = [
+  { key: 'goal_key', type: 'options', title: 'What do you want from your Instagram?', sub: 'So every post aims straight at that 🎯',
+    options: [['vender', '🛒', 'Sell more'], ['seguidores', '📣', 'More followers'], ['lanzamiento', '🚀', 'Launch something new'], ['fidelizar', '💛', 'Build loyal customers']] },
+  { key: 'producto', type: 'text', title: 'What is the main thing you sell or offer?', sub: 'In your words, short and sweet ✍️',
+    ph: 'Ex: smash burgers, haircuts…', cta: 'Continue →', max: 120 },
+  { key: 'diferencial', type: 'text', title: 'What do your customers say about you?', sub: 'What your repeat customers keep telling you 💬',
+    ph: 'Ex: that the portions are huge…', cta: 'See my posts ✨', max: 200 },
+];
+let qIdx = 0;
+let TRIAL_BIZ = '';
+let TRIAL_DESC = '';
+let ACTIVE_QS = TRIAL_QS;
+const TRIAL_ANS = {};
+function showQuestions() {
+  qIdx = 0;
+  // Si la descripción ya es rica (100+ caracteres), el producto y el diferencial
+  // suelen estar ahí: solo preguntamos el objetivo (1 toque, el dato de más valor).
+  ACTIVE_QS = TRIAL_DESC.length >= 100 ? TRIAL_QS.filter((q) => q.key === 'goal_key') : TRIAL_QS;
+  for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
+  show('v-questions');
+  renderQ();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function renderQ() {
+  const q = ACTIVE_QS[qIdx];
+  $('#qPill').textContent = ACTIVE_QS.length > 1 ? 'LAST ' + ACTIVE_QS.length + ' QUESTIONS 🤏' : 'ONE LAST QUESTION 🤏';
+  $('#qStep').textContent = ACTIVE_QS.length > 1 ? ((qIdx + 1) + ' of ' + ACTIVE_QS.length) : 'Last question 🤏';
+  $('#qTitle').textContent = q.title;
+  $('#qSub').textContent = q.sub;
+  const body = $('#qBody');
+  if (q.type === 'options') {
+    body.innerHTML = `<div class="q-opts">${q.options.map((o) => `<button type="button" class="q-opt" data-v="${o[0]}"><span class="qe">${o[1]}</span>${esc(o[2])}</button>`).join('')}</div>`;
+    body.querySelectorAll('.q-opt').forEach((b) => { b.onclick = () => qAnswer(b.dataset.v); });
+  } else {
+    body.innerHTML = `<input type="text" class="q-field" id="qInput" placeholder="${esc(q.ph)}" maxlength="${q.max}" autocomplete="off"><button class="btn btn-primary btn-block" id="qGo">${esc(q.cta)}</button>`;
+    const inp = $('#qInput'), go = $('#qGo');
+    const send = () => qAnswer(inp.value.trim());
+    go.onclick = send;
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+    setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
+  }
+  $('#qSkip').onclick = () => qAnswer('');
+}
+function qAnswer(value) {
+  trk('prueba_step', { step: 'pregunta_' + (qIdx + 1), key: ACTIVE_QS[qIdx].key });
+  TRIAL_ANS[ACTIVE_QS[qIdx].key] = value;
+  qIdx++;
+  if (qIdx >= ACTIVE_QS.length) runGeneration();
+  else { renderQ(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+
+// ---------- tracker en primera persona (Posty pensando en voz alta) ----------
+function trackerStart(title) {
+  show('v-loading');
+  $('#tkTitle').textContent = title;
+  const box = $('#tkSteps');
+  box.innerHTML = TK_STEPS.map((s, i) => `<div class="tstep" id="tk${i}"><div class="ic">${s[0]}</div><div><b>${s[1]}</b><small>${s[2]}</small></div></div>`).join('');
+  const bar = $('#tkBar'), pct = $('#tkPct');
+  let p = 0;
+  const mark = (i, cls) => { const el = $('#tk' + i); if (el) { el.classList.remove('act'); if (cls) el.classList.add(cls); } };
+  tkTimer = setInterval(() => {
+    p = Math.min(p + 1, 5);
+    for (let i = 0; i < 5; i++) {
+      if (i < p) { mark(i, 'done'); $('#tk' + i + ' .ic').textContent = '✓'; }
+      else if (i === p && p < 5) { $('#tk' + i).classList.add('act'); }
+    }
+    bar.style.width = (p / 5 * 100) + '%';
+    pct.textContent = Math.round(p / 5 * 100) + '%';
+    if (p >= 5) clearInterval(tkTimer);
+  }, 5200);
+  $('#tk0').classList.add('act');
+  // Tips rotativos mientras espera (se apaga solo al salir del tracker)
+  let tipI = 0;
+  const tipEl = $('#tkTip');
+  if (tipEl) {
+    tipEl.textContent = TK_TIPS[0];
+    tkTipTimer = setInterval(() => {
+      if ($('#v-loading').style.display !== 'block' || !tipEl.isConnected) { clearInterval(tkTipTimer); return; }
+      tipI = (tipI + 1) % TK_TIPS.length;
+      tipEl.textContent = TK_TIPS[tipI];
+    }, 4200);
+  }
+}
+
+function trackerStop() {
+  try { clearInterval(tkTimer); } catch (e) {}
+  try { clearInterval(tkTipTimer); } catch (e) {}
+  tkTimer = null; tkTipTimer = null;
+}
+
+function buildGenFormData() {
+  const fd = new FormData();
+  fd.append('business', TRIAL_BIZ);
+  fd.append('ig', cleanIg($('#f_ig').value));
+  fd.append('category', GEN_WEB ? $('#wf_cat').value : (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value));
+  // (v235) La respuesta a la pregunta de rubro viaja con su fuente:
+  // 'pregunta' (un toque), 'form' (select tocado a mano) o 'skip'
+  // (saltó: el server genera con el rubro padre seguro, sin inventar).
+  if (RUBRO_ANS) {
+    fd.append('subcat', RUBRO_ANS.subcat || '');
+    fd.append('rubro_src', RUBRO_ANS.src || '');
+  }
+  // (v212) La web del negocio: el server la lee y enriquece la semana
+  // (servicios, paleta y fotos). La descripción viaja TAL como quedó
+  // editada en la tarjeta.
+  if (GEN_WEB && WEB) {
+    fd.append('web', WEB.web);
+    fd.append('web_desc', $('#wf_desc').value.trim());
+  }
+  fd.append('country', COUNTRY);
+  fd.append('tone', TONE);
+  fd.append('goal', '');
+  fd.append('competitors', '');
+  // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
+  fd.append('goal_key', TRIAL_ANS.goal_key || '');
+  fd.append('producto', TRIAL_ANS.producto || '');
+  fd.append('diferencial', TRIAL_ANS.diferencial || '');
+  // Foto opcional del negocio (campo 'photo' del multipart)
+  if (OPT_PHOTO) fd.append('photo', OPT_PHOTO, OPT_PHOTO.name || 'foto.jpg');
+  return fd;
+}
+
+// ---------- generación: stream primero (sneak peeks), clásico como fallback ----------
+let GEN_T0 = 0;
+async function runGeneration() {
+  const fd = buildGenFormData();
+  trackerStart('Building your week for ' + TRIAL_BIZ + '…');
+  GEN_T0 = Date.now();
+  let streamed = false;
+  try { streamed = await generateWithStream(fd); } catch (e) { streamed = false; }
+  if (streamed) return; // el stream maneja el final o el error con reintento
+  try {
+    const t0 = GEN_T0;
+    const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'We could not build your trial');
+    // Que el tracker se vea completo aunque el backend haya sido rápido
+    const wait = Math.max(0, 9000 - (Date.now() - t0));
+    await new Promise((r) => setTimeout(r, wait));
+    finishGeneration(data, Math.max(1, Math.round((Date.now() - t0 - wait) / 1000)));
+  } catch (e) {
+    trackerStop();
+    show('v-onboarding');
+    const err = $('#obErr');
+    err.textContent = e.message || 'We could not build your trial. Try again.';
+    err.style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+// Sneak peeks: POST multipart a /api/trial/generate-stream y lectura manual
+// del text/event-stream (event: post/status/done/error).
+// Si el stream no existe o falla al conectar → false → fallback clásico.
+let STREAM_DONE = false;
+let STREAM_ERRORED = false;
+let STREAM_N = 0;
+async function generateWithStream(fd) {
+  let res;
+  try {
+    res = await fetch('/api/trial/generate-stream' + TEST_KEY_QS, { method: 'POST', body: fd });
+  } catch (e) { return false; }
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (!res.ok || !ct.includes('text/event-stream') || !res.body || typeof res.body.getReader !== 'function') return false;
+  STREAM_DONE = false; STREAM_ERRORED = false; STREAM_N = 0;
+  enterStreamingMode();
+  try {
+    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, done: onStreamDone, error: onStreamError });
+  } catch (e) { /* cae al chequeo de abajo */ }
+  if (!STREAM_DONE && !STREAM_ERRORED) onStreamError({ error: 'The connection dropped.' });
+  return true;
+}
+// Parser SSE mínimo sobre ReadableStream: dispara handlers por cada event:.
+async function readSSE(body, handlers) {
+  const reader = body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', ev = '', data = '';
+  const dispatch = () => {
+    const h = handlers[ev];
+    ev = ''; const raw = data; data = '';
+    if (!h || !raw) return;
+    let d = raw;
+    try { d = JSON.parse(raw); } catch (e) {}
+    h(d);
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      let line = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (line === '') dispatch();
+      else if (line.startsWith('event:')) ev = line.slice(6).trim();
+      else if (line.startsWith('data:')) { let v = line.slice(5); if (v.startsWith(' ')) v = v.slice(1); data += (data ? '\n' : '') + v; }
+    }
+  }
+  if (ev || data) dispatch();
+}
+function enterStreamingMode() {
+  trackerStop();
+  // Proyección de perfil (v184): estado limpio; aparece solo si llega el
+  // evento 'profile' del stream.
+  PROJ = projFresh('live');
+  const pb = $('#projBox');
+  if (pb) { pb.style.display = 'none'; pb.innerHTML = ''; }
+  // Auditoría en vivo (v210): estado limpio; aparece solo si llega el
+  // evento 'audit' del stream.
+  TRIAL_AUDIT = null;
+  const ab = $('#auditBox');
+  if (ab) { ab.style.display = 'none'; ab.innerHTML = ''; }
+  const ig = cleanIg($('#f_ig').value);
+  $('#rTitle').textContent = 'Building your week… ⚙️';
+  $('#rSub').textContent = 'Watch me build it live 👇';
+  $('#rCached').style.display = 'none';
+  $('#rTime').style.display = 'none';
+  document.title = 'Building your week… | Posty';
+  $('#phIg').textContent = ig ? '@' + ig : (GEN_WEB && WEB ? (WEB.name || 'your business') : '@yourinstagram');
+  $('#phPic').src = (PREFILL && PREFILL.photo) || (GEN_WEB && WEB && WEB.photos && WEB.photos[0]) || 'ai-avatar.png';
+  $('#rWeek').innerHTML = '';
+  $('#weekDone').style.display = 'none';
+  $('#rRest').style.display = 'none';
+  $('#rStreamBar').style.display = 'block';
+  $('#rStreamErr').style.display = 'none';
+  $('#rStreamFill').style.width = '0%';
+  $('#rStreamText').textContent = TK_STEPS[0][1];
+  show('v-results');
+  window.scrollTo({ top: 0 });
+}
+function onStreamStatus(d) {
+  if (d && d.text) $('#rStreamText').textContent = d.text;
+  else if (d && typeof d.step === 'number' && TK_STEPS[d.step - 1]) $('#rStreamText').textContent = TK_STEPS[d.step - 1][1];
+  if (d && typeof d.step === 'number') $('#rStreamFill').style.width = Math.min(40, d.step * 8) + '%';
+}
+function onStreamPost(d) {
+  d = d || {};
+  const p = d.post || {};
+  const idx = Number.isInteger(d.index) ? d.index : STREAM_N;
+  STREAM_N++;
+  const isV = p.type === 'video';
+  const day = d.day || ('Post ' + (idx + 1));
+  const media = isV && p.video
+    ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
+    : (p.image ? `<img src="${p.image}" alt="${esc(day)}" loading="lazy">` : `<div style="aspect-ratio:4/5;background:#E8EDF2"></div>`);
+  const el = document.createElement('div');
+  el.className = 'day' + (isV ? ' feat' : '');
+  el.innerHTML = `<div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(day)}</b><small>${esc(d.date || '')}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0] || '…')}</div>`;
+  const feed = $('#rWeek');
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
+  projAddPiece(idx, p);
+  $('#rStreamFill').style.width = Math.min(95, Math.round((STREAM_N / 6) * 100)) + '%';
+  const ti = Math.min(TK_STEPS.length - 1, STREAM_N);
+  $('#rStreamText').textContent = TK_STEPS[ti][1];
+  trk('prueba_stream_post', { n: STREAM_N });
+}
+function onStreamDone(d) {
+  const out = (d && d.out) || d;
+  if (!out || typeof out !== 'object' || !out.posts) { onStreamError({ error: 'The response came back incomplete.' }); return; }
+  STREAM_DONE = true;
+  $('#rStreamFill').style.width = '100%';
+  finishGeneration(out, Math.max(1, Math.round((Date.now() - GEN_T0) / 1000)));
+}
+function onStreamError(d) {
+  if (STREAM_ERRORED) return;
+  STREAM_ERRORED = true;
+  trackerStop();
+  $('#rStreamText').textContent = 'Something went wrong 😅';
+  $('#rStreamErrMsg').textContent = ((d && d.error) || 'We could not build your week.') + ' Try again 🙂';
+  $('#rStreamErr').style.display = 'block';
+}
+// ---------- PROJECTION DE PERFIL (v184): su perfil HOY vs CON Posty ----------
+// El servidor manda el perfil REAL del visitante (evento 'profile' del
+// stream, o el campo profile del payload final): identidad, bio y conteos
+// tal cual vinieron de Instagram + sus fotos recientes. La proyección NO
+// inventa números: el lado CON Posty repite los mismos conteos reales y
+// solo cambia el CONTENIDO (su semana nueva en la grilla). Si el perfil no
+// llega (privado, IG lento), el bloque nunca aparece y el flujo es el de
+// siempre.
+let PROJ = null; // { profile, piecesArr, mode:'live'|'card', closed, min, pos, scrolled }
+function projFresh(mode) {
+  return { profile: null, piecesArr: [], extras: [], mode, closed: false, min: false, pos: 50, scrolled: false };
+}
+function projCategory() {
+  if (TRIAL && TRIAL.category) return TRIAL.category;
+  try { return (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value) || 'otro'; } catch (e) { return 'otro'; }
+}
+function fmtCount(n) {
+  if (n == null || isNaN(n)) return '';
+  n = Number(n);
+  if (n < 1000) return String(n);
+  if (n < 10000) return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (n < 1000000) { const v = n / 1000; return (v >= 100 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toString()) + 'K'; }
+  const v = n / 1000000;
+  return (Math.round(v * 10) / 10).toString() + 'M';
+}
+const PROJ_HL = {
+  gastronomia: ['Menu', 'Promos', 'The space', 'Customers'],
+  cafeteria: ['Menu', 'Promos', 'The space', 'Customers'],
+  bar: ['The menu', 'Promos', 'The space', 'Customers'],
+  belleza: ['Work', 'Promos', 'The space', 'Customers'],
+  barberia: ['Work', 'Promos', 'The space', 'Customers'],
+  moda: ['New', 'Promos', 'The store', 'Customers'],
+  mascotas: ['Customers', 'Promos', 'The space', 'Services'],
+  fitness: ['Routines', 'Promos', 'The gym', 'Students'],
+};
+const PROJ_HL_IMG = ['hl-menu.jpg', 'hl-promos.jpg', 'hl-local.jpg', 'hl-clientes.jpg'];
+const PROJ_CROPS = ['50% 20%', '50% 80%', '20% 50%', '80% 50%'];
+
+function projAvaHTML(p) {
+  const initial = esc(((p.name || p.handle || 'P').trim().charAt(0) || 'P').toUpperCase());
+  const pic = p.pic || (TRIAL && TRIAL.ig_pic) || '';
+  return `<span class="pfp-ava"><i>${initial}</i>${pic ? `<img src="${pic}" alt="" onerror="this.remove()">` : ''}</span>`;
+}
+function projStatsHTML(p) {
+  const items = [];
+  if (p.posts_count != null) items.push([fmtCount(p.posts_count), 'posts']);
+  if (p.followers != null) items.push([fmtCount(p.followers), 'followers']);
+  if (p.following != null) items.push([fmtCount(p.following), 'following']);
+  if (!items.length) return '';
+  return `<div class="pfp-stats">${items.map(([n, l]) => `<div class="pfp-stat"><b>${n}</b><span>${l}</span></div>`).join('')}</div>`;
+}
+function projHoyCellHTML(url) {
+  // Sin foto (o si la foto dejó de cargar): celda neutra, NUNCA una foto ajena.
+  if (!url) return `<div class="pfp-cell"></div>`;
+  return `<div class="pfp-cell"><img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()"></div>`;
+}
+function projPieceMediaHTML(post, crop) {
+  if (!post) return '';
+  const st = crop ? ` style="object-position:${crop}"` : '';
+  if (post.type === 'video' && post.video) return `<video src="${post.video}" muted loop autoplay playsinline${st}></video><span class="pfp-vb">▶ REEL</span>`;
+  if (post.image) return `<img src="${post.image}" alt="" loading="lazy"${st}>`;
+  if (post.video) return `<video src="${post.video}" muted loop autoplay playsinline${st}></video><span class="pfp-vb">▶ REEL</span>`;
+  return '';
+}
+function projPieceVisualKey(p) {
+  // Identidad del visual que una pieza muestra en su propia celda.
+  if (!p) return '';
+  return p.video || p.image || '';
+}
+function projAfterVisuals() {
+  // Visuales ÚNICOS de la grilla CON Posty. Orden de llenado (fix v191):
+  // (a) las 5 piezas de la semana — el posteo video se muestra COMO VIDEO
+  // en su celda; (b) los diseños extra del server (grid_extra: temas/fotos
+  // que la semana no usó); (c) la tapa del reel SOLO si el posteo video no
+  // mostró ningún visual utilizable (payloads viejos/cacheados sin video ni
+  // imagen): en ese caso la tapa ocupa SU celda, nunca una extra — con el
+  // video visible, la tapa es el mismo diseño y se leía como repetido.
+  // Garantía por identidad: ningún visual (misma URL/data) aparece dos
+  // veces; si no hay 9 únicos la grilla muestra 6, y si hay menos de 5,
+  // los que haya — jamás se rellena repitiendo.
+  const arr = (PROJ && PROJ.piecesArr) || [];
+  const seen = new Set();
+  const claim = (k) => { if (!k || seen.has(k)) return false; seen.add(k); return true; };
+  const cells = [];
+  for (let i = 0; i < 5; i++) {
+    const p = arr[i];
+    if (!p) { cells.push(null); continue; }
+    const key = projPieceVisualKey(p);
+    if (key && claim(key)) { cells.push({ post: p }); continue; }
+    if (!key && p.cover && claim(p.cover)) { cells.push({ cover: p.cover }); continue; }
+    cells.push(null);
+  }
+  const ex = (PROJ && PROJ.extras) || [];
+  for (const u of ex) { if (cells.length < 9 && claim(u)) cells.push({ img: u }); }
+  return cells;
+}
+function projAfterCellHTML(i) {
+  const c = projAfterVisuals()[i];
+  if (!c) return '<div class="pfp-cell-wait"></div>';
+  if (c.post) return projPieceMediaHTML(c.post) || '<div class="pfp-cell-wait"></div>';
+  if (c.cover) return `<img src="${c.cover}" alt="" loading="lazy"><span class="pfp-vb">▶ REEL</span>`;
+  return `<img src="${c.img}" alt="" loading="lazy">`;
+}
+function projLayerHTML(side) {
+  const p = PROJ.profile;
+  const grid = side === 'hoy'
+    ? Array.from({ length: 9 }, (_, i) => projHoyCellHTML((p.photos || [])[i])).join('')
+    : (() => {
+        // Semana completa: se renderizan SOLO las celdas con visual (sin
+        // huecos) — 9 únicos → 9 celdas; 7–8 → 6; 5–6 → esas; menos de 5 →
+        // los que haya. Jamás se rellena reciclando un diseño ya mostrado.
+        const ready = (PROJ.piecesArr || []).filter(Boolean).length >= 5;
+        let idxs = null;
+        let count = 9;
+        if (ready) {
+          idxs = projAfterVisuals().map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+          count = idxs.length;
+          if (count > 6 && count < 9) count = 6;
+        }
+        return Array.from({ length: count }, (_, i) => `<div class="pfp-cell">${projAfterCellHTML(idxs ? idxs[i] : i)}</div>`).join('');
+      })();
+  return `<div class="pfp-prof">${projAvaHTML(p)}<div class="pfp-who"><b>${esc(p.name || p.handle || '')}</b><span>@${esc(p.handle || '')}</span></div></div>`
+    + projStatsHTML(p)
+    + (p.bio ? `<p class="pfp-bio">${esc(p.bio)}</p>` : '')
+    + `<div class="pfp-grid${side === 'hoy' ? '' : ' pfp-grid-after'}">${grid}</div>`;
+}
+function renderProj() {
+  const box = $('#projBox');
+  if (!box) return;
+  if (!PROJ || !PROJ.profile || PROJ.closed) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const p = PROJ.profile;
+  const hls = PROJ_HL[projCategory()] || ['Highlights', 'Promos', 'The space', 'Customers'];
+  const firstPiece = (PROJ.piecesArr || []).filter(Boolean)[0];
+  const hlThumbs = hls.map((label, i) => {
+    const src = (i === 0 && firstPiece && firstPiece.image) ? firstPiece.image : PROJ_HL_IMG[i];
+    return `<div class="pfp-hl"><div class="pfp-hlring"><img src="${src}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></div><span>${esc(label)}</span></div>`;
+  }).join('');
+  const styles = [...new Set((PROJ.piecesArr || []).map((x) => x && x.style_name).filter(Boolean))];
+  const actLine = PROJ.mode === 'card'
+    ? '🐾 Posty built your week and left it scheduled — you just approve'
+    : '🐾 Posty is building your week…';
+  const btns = PROJ.mode === 'card'
+    ? `<button type="button" class="pfp-btn" id="pfpMin" title="Minimizar">${PROJ.min ? '＋' : '－'}</button><button type="button" class="pfp-btn" id="pfpClose" title="Cerrar">✕</button>`
+    : '';
+  box.innerHTML = `<div class="pfp-card${PROJ.min ? ' min' : ''}">
+    <div class="pfp-head"><b>✨ Your profile, with Posty</b><span class="pfp-tag">PROJECTION</span>${btns}</div>
+    <p class="pfp-label">Projection: this is what your profile would look like with Posty — your same account, with new content every week.</p>
+    <div class="pfp-body">
+      <div class="pfp-stage" id="pfpStage" style="--pos:${PROJ.pos}%">
+        <div class="pfp-layer">${projLayerHTML('posty')}</div>
+        <div class="pfp-layer pfp-layer-hoy">${projLayerHTML('hoy')}</div>
+        <span class="pfp-ptag hoy">TODAY</span><span class="pfp-ptag posty">CON POSTY</span>
+        <div class="pfp-bar"><span class="pfp-knob">⇄</span></div>
+        <input class="pfp-range" id="pfpRange" type="range" min="4" max="96" step="1" value="${Math.round(PROJ.pos)}" aria-label="Compare your profile: drag to see your Instagram today on the left, and with Posty on the right">
+      </div>
+      <p class="pfp-hint">👆 Drag the line to compare</p>
+      <div class="pfp-extra">
+        <div class="pfp-hls">${hlThumbs}</div>
+        <div class="pfp-act"><span class="dot"></span><span>${actLine}</span></div>
+        ${styles.length ? `<p class="pfp-styles">🎨 <b>Estilos de tu semana:</b> ${styles.map(esc).join(' · ')}</p>` : ''}
+      </div>
+    </div>
+  </div>`;
+  box.style.display = 'block';
+  bindProjDrag();
+  const c = $('#pfpClose'); if (c) c.onclick = () => { PROJ.closed = true; renderProj(); };
+  const m = $('#pfpMin'); if (m) m.onclick = () => { PROJ.min = !PROJ.min; renderProj(); };
+}
+function bindProjDrag() {
+  const stage = $('#pfpStage');
+  if (!stage || stage.dataset.bound || !PROJ) return;
+  stage.dataset.bound = '1';
+  const range = $('#pfpRange');
+  const setPos = (p) => {
+    p = Math.max(4, Math.min(96, p));
+    PROJ.pos = p;
+    stage.style.setProperty('--pos', p + '%');
+    if (range) range.value = Math.round(p);
+  };
+  let on = false;
+  const fromEvent = (e) => { const r = stage.getBoundingClientRect(); if (r.width) setPos(((e.clientX - r.left) / r.width) * 100); };
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.target === range) return;
+    on = true; stage.classList.add('touched');
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    fromEvent(e);
+  });
+  stage.addEventListener('pointermove', (e) => { if (on) fromEvent(e); });
+  ['pointerup', 'pointercancel'].forEach((ev) => stage.addEventListener(ev, () => { on = false; }));
+  if (range) range.addEventListener('input', () => { stage.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
+}
+function onStreamProfile(d) {
+  if (!d || !d.profile || !d.profile.handle) return;
+  if (!PROJ) PROJ = projFresh('live');
+  if (PROJ.closed) return;
+  PROJ.profile = d.profile;
+  trk('prueba_profile', {});
+  renderProj();
+  const box = $('#projBox');
+  if (box && !PROJ.scrolled) {
+    PROJ.scrolled = true;
+    setTimeout(() => { try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }, 250);
+  }
+}
+// ---------- AUDITORÍA EN VIVO (v210): el análisis de su Instagram ----------
+// El servidor analiza los posteos públicos reales del visitante (evento
+// 'audit' del stream, o el campo audit del payload final) y lo presenta
+// en positivo: A mejorar / A incrementar / A reducir, cada punto con su
+// número de hoy y — cuando la palanca es de Posty — el número con Posty.
+// Sin datos del perfil, el panel nunca aparece y el flujo es el de siempre.
+let TRIAL_AUDIT = null;
+const AUD_GROUPS = [
+  ['mejorar', '🛠️ A mejorar'],
+  ['incrementar', '📈 A incrementar'],
+  ['reducir', '📉 A reducir'],
+];
+// ---------- LA CARTA (v259): el análisis como carta de Posty ----------
+// Diseño v3 aprobado por Valentino (2026-10-20): avatar arriba de todo,
+// intro en primera persona, veredicto compuesto DESDE LOS DATOS (nunca un
+// molde: la práctica de 200 análisis detectó el esqueleto repetido y se
+// nota), tu foto de hoy, los hallazgos con su acción, el PLAN DE EJECUCIÓN
+// en 3 fases (tarjeta navy, "El efecto:" por paso), banner motivacional
+// amarillo y la firma de Posty. Solo se afirma lo que el payload trae:
+// sin score ni mejor posteo en este payload, la carta no los inventa.
+function fmtRateAud(x) {
+  const v = Math.round(Number(x) * 10) / 10;
+  return Number.isInteger(v) ? String(v) : String(v);
+}
+function auditCtx() {
+  const c = { handle: '', biz: '', cat: '' };
+  try {
+    if (typeof TRIAL !== 'undefined' && TRIAL) {
+      if (TRIAL.ig) c.handle = String(TRIAL.ig).replace(/^@/, '');
+      else if (TRIAL.profile && TRIAL.profile.handle) c.handle = String(TRIAL.profile.handle).replace(/^@/, '');
+      if (TRIAL.business) c.biz = String(TRIAL.business);
+      if (TRIAL.category) c.cat = String(TRIAL.category);
+    }
+    if (!c.handle) { const inp = $('#f_ig'); if (inp && inp.value) c.handle = inp.value.replace('@', '').trim().toLowerCase(); }
+    if (!c.biz && typeof TRIAL_BIZ !== 'undefined' && TRIAL_BIZ) c.biz = String(TRIAL_BIZ);
+  } catch (e) {}
+  return c;
+}
+function auditStage(a) {
+  if (!a) return 'viva';
+  if (a.starter) return 'starter';
+  const s = a.signals || {};
+  const r = s.posts_per_week;
+  if (r != null && r >= 4 && (s.days_since_last == null || s.days_since_last <= 3)) return 'fuerte';
+  if ((r != null && r < 2) || (s.days_since_last != null && s.days_since_last >= 14)) return 'floja';
+  return 'viva';
+}
+function auditStrong(s) {
+  if (!s) return '';
+  if (s.videos > 0) return 'you already use reels, the format that pushes the hardest';
+  if (s.hook_pct != null && s.hook_pct >= 50) return 'your copy already opens with a hook';
+  if (s.carousels > 0) return 'you already try carousels';
+  if (s.days_since_last != null && s.days_since_last <= 2) return 'you have been active these days';
+  if (s.n_posts >= 8) return 'you already have published material to build on';
+  return '';
+}
+function auditVerdict(a, stage) {
+  const s = (a && a.signals) || {};
+  const rate = s.posts_per_week != null ? fmtRateAud(s.posts_per_week) : null;
+  if (stage === 'starter') {
+    return 'Your account is about to be born — and being born with a strategy is a huge advantage: nothing to fix, everything to build. I bring the plan and the consistency from the very first post.';
+  }
+  const strong = auditStrong(s);
+  if (stage === 'fuerte') {
+    return 'Your account is already working' + (rate ? ' at ' + rate + ' posts per week' : '') + (strong ? ' and ' + strong : '') + '. What comes next is not about rescuing anything: it is about refining and sustaining — and I take care of that.';
+  }
+  const parts = [];
+  if (strong) parts.push('You have what it takes: ' + strong + '.');
+  if (rate) parts.push('Today your pace is ' + rate + ' posts per week — and consistency does not depend on your time: I bring it.');
+  else parts.push('Your account is alive — what comes next is giving it consistency and direction: I take care of that.');
+  parts.push('The plan is below, in order.');
+  return parts.join(' ');
+}
+function auditStatsHTML(a) {
+  const s = (a && a.signals) || {};
+  const tiles = [];
+  if (s.posts_per_week != null) tiles.push({ n: fmtRateAud(s.posts_per_week), l: 'posts per week' });
+  if (s.n_posts >= 3 && s.videos != null) tiles.push({ n: s.videos + ' of ' + s.n_posts, l: 'reels in your latest posts' });
+  if (s.hook_pct != null) tiles.push({ n: s.hook_pct + '%', l: 'of your captions open with a hook' });
+  if (s.max_gap_days != null && s.max_gap_days >= 2) tiles.push({ n: s.max_gap_days + ' days', l: 'your longest streak without posting' });
+  else if (s.days_since_last != null) tiles.push({ n: s.days_since_last + ' days', l: 'since your last post' });
+  if (tiles.length < 2) return '';
+  return `<p class="aud-sec-t">📸 Your snapshot today</p><div class="aud-stats">${tiles.slice(0, 4).map((t) => `<div class="aud-stat"><p class="aud-sn">${esc(t.n)}</p><p class="aud-sl">${esc(t.l)}</p></div>`).join('')}</div>`;
+}
+// Cada hallazgo real se convierte en un paso del plan: la acción de Posty
+// y su efecto, atados al número de hoy y al número con Posty del payload.
+const AUD_STEP_MAP = [
+  { re: /ritmo de publicación/i, phase: 0,
+    step: () => 'Your week goes out complete and even: 7 posts + 1 reel, built and scheduled by me.',
+    fx: (f) => 'You go from ' + (f.now || 'your pace today') + ' to your complete week, every week.' },
+  { re: /reels/i, phase: 0,
+    step: () => 'I add 1 reel per week to your grid, created by me, with your brand.',
+    fx: () => 'The format Instagram pushes the most joins your mix this week.' },
+  { re: /horarios muy repartidos/i, phase: 1,
+    step: () => 'Every post goes out scheduled in a fixed slot, always the same.',
+    fx: () => 'Nothing goes out at random times: your account gains regularity in timing too.' },
+  { re: /no abren con un gancho/i, phase: 1,
+    step: () => 'I rewrite your captions: every one opens with a hook that stops the scroll.',
+    fx: (f) => 'Today ' + (f.now || 'almost none opens with a hook') + ' — with me, every one opens with a hook from day one.' },
+  { re: /varias paletas/i, phase: 1,
+    step: () => 'I unify your visual line: one single palette — your brand palette — in every piece.',
+    fx: () => 'Your feed looks even and recognizable at a single glance.' },
+  { re: /sin publicar|rachas largas/i, phase: 2,
+    step: () => 'I schedule your week so no day is left empty.',
+    fx: (f) => 'From ' + (f.now || 'long silent streaks') + ' to 0 silent days: your week schedules itself.' },
+];
+function audStepFor(f) {
+  const t = String((f && f.text) || '');
+  for (const m of AUD_STEP_MAP) {
+    if (m.re.test(t)) return { phase: m.phase, step: m.step(f), fx: m.fx ? m.fx(f) : '' };
+  }
+  const g = { incrementar: 0, mejorar: 1, reducir: 2 }[f && f.group];
+  if (g == null || !f.with_posty) return null;
+  const wp = String(f.with_posty);
+  return { phase: g, step: wp.charAt(0).toUpperCase() + wp.slice(1) + '.', fx: f.now ? 'Today: ' + f.now + '.' : '' };
+}
+function buildExecPlan(a) {
+  const phases = [[], [], []];
+  (a.findings || []).forEach((f) => {
+    if (!f) return;
+    const st = audStepFor(f);
+    if (st && phases[st.phase].length < 3) phases[st.phase].push(st);
+  });
+  // Fase sin hallazgos: solo pasos del propio proceso de Posty (siempre
+  // sostenibles: la semana del visitante existe y el loop semanal es real).
+  if (!phases[0].length) phases[0].push({ step: 'Your week goes out complete and even, built and scheduled by me.', fx: 'Consistency is installed from the first week.' });
+  if (!phases[1].length) phases[1].push({ step: 'I review your storefront — name, bio and highlights — with your account already running.', fx: 'Your profile keeps selling on its own, 24 hours a day.' });
+  if (phases[2].length < 3) phases[2].push({ step: 'Every week I re-measure you and adjust the week with what I newly learn from your account.', fx: 'What works gets repeated; what does not, never comes back.' });
+  return phases;
+}
+function buildStarterPlan() {
+  return [
+    [
+      { step: 'Your profile is born complete: name, bio, photo and highlights — your kit is ready right below.', fx: 'You look professional from the very first post.' },
+      { step: 'Your first storefront: 9 pieces designed as a whole, each with its role.', fx: 'Anyone who lands on your profile understands what you sell in seconds.' },
+    ],
+    [
+      { step: 'The rhythm is installed: your complete week goes out on its own, every week.', fx: 'You are born with the consistency most accounts lack.' },
+    ],
+    [
+      { step: 'I measure you from day one: every new analysis compares against the previous one and adjusts the week.', fx: 'Your account improves with data, not hunches.' },
+    ],
+  ];
+}
+function audPlanHTML(phases, title) {
+  const names = ['This week', 'Next week', 'From here on'];
+  const nums = ['①', '②', '③'];
+  const body = phases.map((steps, i) => {
+    if (!steps.length) return '';
+    const lis = steps.map((st) => `<li>${esc(st.step)}${st.fx ? `<span class="aud-fx">The effect: ${esc(st.fx)}</span>` : ''}</li>`).join('');
+    return `<div class="aud-phase"><p class="aud-ph">${nums[i]} ${names[i]}</p><ul>${lis}</ul></div>`;
+  }).join('');
+  return `<div class="aud-plan"><p class="aud-plan-t">${title}</p><p class="aud-plan-s">In this order — and it starts now</p>${body}<p class="aud-need">On your side: <b>nothing</b> — I get going. Your week is already built with this plan, right below 👇</p></div>`;
+}
+function auditBanner(stage, ctx) {
+  const lines = {
+    starter: 'Being born with a plan is starting ahead: your account goes out with a strategy from post one.',
+    fuerte: 'You are already doing well — and this is just the start. I keep the pace and refine everything that follows.',
+    floja: 'You have the business. I bring the consistency. You keep doing what you do best.',
+    viva: 'You have the business. I bring the consistency. You keep doing what you do best.',
+  };
+  let line = lines[stage] || lines.viva;
+  if (ctx && ctx.handle) line = '@' + ctx.handle + ' — ' + line.charAt(0).toLowerCase() + line.slice(1);
+  return line;
+}
+function renderAudit() {
+  const box = $('#auditBox');
+  if (!box) return;
+  const a = TRIAL_AUDIT;
+  if (!a || !Array.isArray(a.findings)) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const hasFindings = a.findings.some((f) => f && f.text);
+  if (!hasFindings && !a.starter) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const starter = !!a.starter;
+  const ctx = auditCtx();
+  const stage = auditStage(a);
+  const bizLine = [ctx.biz, ctx.handle ? '@' + ctx.handle : ''].filter(Boolean).join(' · ');
+  let dateLine = '';
+  try { dateLine = 'Analysis · ' + new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) {}
+  const intro = starter
+    ? 'Your account is about to be born — and it will be born with a strategy. I studied your industry and your area, and this is what I built for you 👇'
+    : 'I studied your account data point by data point — your pace, your formats, your copy — and built the plan to improve it. This is what I saw 👇';
+  // Los 3 grupos de siempre, con la acción de Posty como línea propia
+  // (starter no muestra hallazgos: no hay historial que diagnosticar).
+  let groups = '';
+  if (!starter) {
+    groups = AUD_GROUPS.map(([key, title]) => {
+      const fs = a.findings.filter((f) => f && f.group === key);
+      if (!fs.length) return '';
+      const items = fs.map((f) => `<div class="aud-f"><p class="aud-t">${esc(f.text || '')}</p>${f.now ? `<p class="aud-fmeta"><span class="aud-now">Hoy: ${esc(f.now)}</span></p>` : ''}${f.with_posty ? `<p class="aud-act">→ Con Posty: <b>${esc(f.with_posty)}</b></p>` : ''}</div>`).join('');
+      return `<div class="aud-group"><p class="aud-gtitle">${title}</p>${items}</div>`;
+    }).join('');
+  }
+  const plan = starter ? buildStarterPlan() : buildExecPlan(a);
+  box.innerHTML = `<div class="aud-card aud-letter">
+    <div class="aud-lhead">
+      <div class="aud-ava"><img src="ai-avatar.png" alt="Posty"></div>
+      <h3 class="aud-title">Your analysis</h3>
+      ${bizLine ? `<p class="aud-biz">${esc(bizLine)}</p>` : ''}
+      ${dateLine ? `<p class="aud-date">${esc(dateLine)}</p>` : ''}
+      <p class="aud-intro">${intro}</p>
+    </div>
+    <div class="aud-verdict"><p class="aud-vlabel">My verdict</p><p class="aud-vq">${esc(auditVerdict(a, stage))}</p></div>
+    ${starter ? '' : auditStatsHTML(a)}
+    ${groups}
+    ${audPlanHTML(plan, starter ? '🚀 My plan so you are born with everything' : '🚀 My plan to improve all of this')}
+    <div class="aud-banner">${esc(auditBanner(stage, ctx))}</div>
+    <div class="aud-sign">
+      <img src="ai-avatar.png" alt="Posty">
+      <p class="aud-fname">Posty<span>.</span></p>
+      <p class="aud-frole">Your community manager</p>
+      <p class="aud-fline">The plan is already in motion: your week is built with all of this. See you in your schedule 📅</p>
+    </div>
+  </div>`;
+  box.style.display = 'block';
+}
+function onStreamAudit(d) {
+  if (!d || !d.audit) return;
+  TRIAL_AUDIT = d.audit;
+  trk('prueba_audit', {});
+  renderAudit();
+}
+// Resultados: el panel se arma desde el payload final (sirve también para
+// la semana restaurada de IndexedDB o el hit de caché del stream).
+function auditFromTrial() {
+  const t = TRIAL;
+  if (t && t.audit) TRIAL_AUDIT = t.audit;
+  if (t && t.analysis) TRIAL_ANALYSIS = t.analysis;
+  renderAudit();
+  renderAnalysis();
+}
+// ---------- ANÁLISIS COMPLETO (2026-10-19): mercado o nacimiento ----------
+// Cuenta existente → la probada de su mercado (el mapa completo vive en la
+// vista Análisis de la cuenta). Cuenta nueva → su plan de nacimiento: kit de
+// perfil + los roles de su primera vidriera de 9 piezas. Sin análisis, el
+// panel no aparece y el flujo es el de siempre.
+let TRIAL_ANALYSIS = null;
+function renderAnalysis() {
+  const box = $('#analysisBox');
+  if (!box) return;
+  const a = TRIAL_ANALYSIS;
+  if (!a) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (a.kind === 'nacimiento') {
+    const kit = a.profile_kit || {};
+    const roles = (a.starter_grid || []).map((s) => s.role).filter(Boolean);
+    box.innerHTML = `<div class="an-card">
+      <div class="an-head">🌱 Your launch plan</div>
+      <p class="an-sub">Your account is just starting: it is born with a strategy from the first post — positioning from your industry and your area, not from zero.</p>
+      ${kit.bio ? `<div class="an-kit"><b>Your bio, ready:</b>\n${esc(kit.bio)}</div>` : ''}
+      ${roles.length ? `<p class="an-grid-roles"><b>Your first storefront (9 pieces):</b> ${esc(roles.join(' · '))}</p>` : ''}
+      ${(kit.highlights && kit.highlights.length) ? `<p class="an-grid-roles"><b>Highlights:</b> ${esc(kit.highlights.join(' · '))}</p>` : ''}
+    </div>`;
+    box.style.display = 'block';
+    return;
+  }
+  const teaser = a.market_teaser;
+  if (!teaser || !teaser.items || !teaser.items.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const items = teaser.items.map((it) => `<p class="an-item">📌 ${esc(it.text || '')}${it.now ? ` — <span class="an-now">${esc(it.now)}</span>` : ''}</p>`).join('');
+  box.innerHTML = `<div class="an-card">
+    <div class="an-head">🗺️ A taste of your market</div>
+    <p class="an-sub">This is what we measured from accounts in your industry and your area 👇</p>
+    ${items}
+    <p class="an-lock">🔒 The full map — your competition one by one, your position and the decisions we make with it — lives in your <b>Analysis</b> view.</p>
+  </div>`;
+  box.style.display = 'block';
+}
+// Cada pieza que llega por el stream llena su celda de la grilla CON Posty
+// (y refresca la tapa del reel si es el posteo video), sin re-renderizar
+// toda la tarjeta.
+function projAddPiece(idx, post) {
+  if (!PROJ || !PROJ.profile || PROJ.closed || !post) return;
+  PROJ.piecesArr = PROJ.piecesArr || [];
+  PROJ.piecesArr[idx] = post;
+  const grid = document.querySelector('.pfp-grid-after');
+  if (!grid) { renderProj(); return; }
+  const cells = grid.children;
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i]; if (c) c.innerHTML = projAfterCellHTML(i);
+  }
+  // Línea de estilos de la semana (aparece con el primer estilo nombrado)
+  const styles = [...new Set(PROJ.piecesArr.map((x) => x && x.style_name).filter(Boolean))];
+  const extra = document.querySelector('.pfp-extra');
+  if (extra && styles.length) {
+    let line = extra.querySelector('.pfp-styles');
+    if (!line) {
+      line = document.createElement('p');
+      line.className = 'pfp-styles';
+      extra.appendChild(line);
+    }
+    line.innerHTML = `🎨 <b>Estilos de tu semana:</b> ${styles.map(esc).join(' · ')}`;
+  }
+}
+// Resultados: la tarjeta compacta se arma desde el payload final (sirve
+// también para la semana restaurada de IndexedDB o del link del email).
+function projFromTrial() {
+  const t = TRIAL;
+  if (t && t.profile && t.profile.handle) {
+    const wasClosed = !!(PROJ && PROJ.closed);
+    PROJ = projFresh('card');
+    PROJ.closed = wasClosed;
+    PROJ.profile = t.profile;
+    PROJ.piecesArr = (t.posts || []).slice(0, 5);
+    PROJ.extras = Array.isArray(t.grid_extra) ? t.grid_extra.slice(0, 3) : [];
+  }
+  renderProj();
+}
+
+// Final común del clásico y del stream: guarda en idb y muestra resultados.
+function finishGeneration(data, genSecs) {
+  trackerStop();
+  // Tiempo real de generación: lo mostramos y nos sirve de medición
+  if (genSecs) data.genSecs = genSecs;
+  TRIAL = data;
+  resetTrialChat();
+  // Puente a la cuenta: guardamos los datos del negocio para pre-cargar el perfil al registrarse
+  // saved_at: la prueba es una sesión anónima fugaz; si el registro llega mucho después,
+  // esos datos viejos NO deben convertirse en la marca permanente de la cuenta.
+  try {
+    localStorage.setItem('posta_trial_profile', JSON.stringify({
+      saved_at: Date.now(),
+      business_name: TRIAL_BIZ,
+      category: (TRIAL && TRIAL.category) || (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value),
+      subcat: (TRIAL && TRIAL.subcat) || (RUBRO_ANS && RUBRO_ANS.subcat) || '',
+      description: '',
+      competitors: '',
+      ig_username: cleanIg($('#f_ig').value),
+      tone: TONE,
+      country: COUNTRY,
+      brand_colors: [data.accent || '#2793C8', data.btn || '#FEC14D'],
+    }));
+  } catch (e) {}
+  if (!TEST_KEY_QS) { try { idb.set(data); } catch (e) {} }
+  renderResults();
+}
+
+// ---------- resultados ----------
+function renderResults() {
+  const t = TRIAL;
+  trk('prueba_complete', { cached: !!(t && t.cached) });
+  const rb = $('#rBiz');
+  if (rb) rb.textContent = t.business;
+  if (t.cached) {
+    $('#rTitle').textContent = 'Your week was waiting for you! 🔥';
+    const rc = $('#rCached');
+    rc.style.display = 'block';
+    rc.innerHTML = t.ig
+      ? `🔄 We built it for <b>@${esc(t.ig)}</b> — it is still saved. Create your account and it is yours.`
+      : `🔄 This is the week we had already built for you — it is still saved.`;
+  } else {
+    $('#rTitle').innerHTML = `Your week is ready, <span class="hl">${esc(t.business)}</span>! 🎉`;
+    $('#rCached').style.display = 'none';
+  }
+  const rt = $('#rTime');
+  if (t.genSecs) {
+    rt.style.display = 'block';
+    const timeStr = t.genSecs < 60 ? `${t.genSecs} seconds` : `${Math.floor(t.genSecs / 60)} min ${t.genSecs % 60} s`;
+    rt.innerHTML = `⏱ Built in ${timeStr}<br>💪 Doing this by hand takes you <b>about 6 hours</b> a week`;
+  } else rt.style.display = 'none';
+  const firstDay = t.week[0], lastDay = t.week[t.week.length - 1];
+  const colBadge = t.color_source === 'instagram' ? ' · 🎨 <b>with the colors of your profile</b>' : '';
+  $('#rSub').innerHTML = (t.ig ? `<a href="https://www.instagram.com/${encodeURIComponent(t.ig)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700;text-decoration:none">@${esc(t.ig)}</a> · ` : '') + 'Week of ' + esc(firstDay.date) + ' to ' + esc(lastDay.date) + ' · 5 posts + 1 reel: design, copy and hashtags, ready to post' + colBadge;
+  document.title = 'Your week is ready 🎉 | Posty';
+
+  // Semana (extraída a función para re-renderizar cuando el chat edita textos)
+  renderWeek();
+
+  // Proyección de perfil (v184): tarjeta compacta arriba de la semana,
+  // solo si el payload trae el perfil real del visitante.
+  projFromTrial();
+
+  // Auditoría en vivo (v210): panel del análisis debajo de la proyección,
+  // solo si el payload trae el análisis del @.
+  auditFromTrial();
+
+  // Header del mockup de teléfono: foto de perfil + @
+  try {
+    $('#phPic').src = t.ig_pic || (t.web_info && t.web_info.pic) || 'ai-avatar.png';
+    $('#phIg').textContent = t.ig ? '@' + t.ig : (t.web_info ? (t.business || 'your business') : '@yourinstagram');
+  } catch (e) {}
+  // Urgencia real: lugares restantes del mes
+  try {
+    fetch('/api/capacity').then((r) => r.json()).then((j) => {
+      if (j && j.ok && typeof j.spots_left === 'number') {
+        const el = $('#capLine');
+        if (el) {
+          el.style.display = 'inline-block';
+          el.innerHTML = `🔥 <b>Only ${j.spots_left} spots left</b> of ${j.spots_total} this month`;
+        }
+      }
+    }).catch(() => {});
+  } catch (e) {}
+
+  $('#rStreamBar').style.display = 'none';
+  $('#weekDone').style.display = 'block';
+  $('#rRest').style.display = 'block';
+  // La tarjeta del brief arranca colapsada en cada resultado nuevo
+  try {
+    $('#briefBody').style.display = 'none';
+    $('#briefToggle').setAttribute('aria-expanded', 'false');
+    const be = $('#briefErr');
+    if (be) { be.textContent = ''; be.style.display = 'none'; }
+  } catch (e) {}
+  show('v-results');
+  initTrialChat();
+  maybeShowLeadEmail();
+}
+
+// Email del lead (abandono de trial): línea sutil bajo los resultados, SOLO
+// si el visitante no está logueado. Si llegó por el link del email (?ig=...),
+// ya tenemos su email: no se muestra.
+let _meP = null, _leadWired = false;
+function meCached() {
+  if (!_meP) _meP = fetch('/api/auth/me').then((r) => r.json()).then((j) => (j && j.user) || null).catch(() => null);
+  return _meP;
+}
+async function maybeShowLeadEmail() {
+  const row = $('#leadEmailRow');
+  if (!row) return;
+  if (DEEP_IG) return; // vino del email: ya tenemos su email
+  if (_leadWired) { row.style.display = 'block'; return; }
+  const me = await meCached();
+  if (me) return; // logueado: el email ya está en su cuenta
+  row.style.display = 'block';
+  _leadWired = true;
+  const em = $('#leadEmail'), go = $('#leadEmailGo'), msg = $('#leadEmailMsg');
+  const send = async () => {
+    const v = em.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { msg.textContent = 'Check the email, it does not look valid 😅'; return; }
+    if (!(TRIAL && TRIAL.ig)) { msg.textContent = 'We could not find your week 😅'; return; }
+    go.disabled = true; msg.textContent = 'Saving…';
+    try {
+      const r = await fetch('/api/trial/lead-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ig: TRIAL.ig, email: v }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'We could not save it');
+      em.disabled = true; go.disabled = true;
+      msg.textContent = 'Done! We will email you before it gets deleted 📧';
+      trk('prueba_lead_email');
+    } catch (e) {
+      go.disabled = false;
+      msg.textContent = e.message || 'We could not save it. Try again.';
+    }
+  };
+  go.onclick = send;
+  em.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+}
+
+function trialWeekOrdered() {
+  const wk = (TRIAL && TRIAL.week) || [];
+  return [...wk].sort((a, b) => {
+    const pa = TRIAL.posts[a.post], pb = TRIAL.posts[b.post];
+    return (((pb && pb.type) === 'video') ? 1 : 0) - (((pa && pa.type) === 'video') ? 1 : 0);
+  });
+}
+function renderWeek() {
+  const t = TRIAL;
+  if (!t || !t.week) return;
+  $('#rWeek').innerHTML = trialWeekOrdered().map((w) => {
+    const p = t.posts[w.post];
+    const isV = p.type === 'video';
+    const igrow = `<div class="igrow"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.4 8.6 8.6 0 0 1-3.8-.9L3 20l1.1-5.4a8.3 8.3 0 0 1-1-4A8.4 8.4 0 0 1 12.5 3h.5a8.4 8.4 0 0 1 8 8.5z"/></svg><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><svg class="igsave" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0A1E33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></div>`;
+    const media = isV
+      ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
+      : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · ready to post' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Why:</b> ${esc(p.why)}</div>` : ''}</div>`;
+  }).join('');
+  $$('#rWeek .day').forEach((d) => {
+    const open = () => openLb(parseInt(d.dataset.i, 10));
+    d.onclick = open;
+    d.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+  });
+}
+
+// ---------- Brief largo: después del wow, re-genera con el detalle ----------
+// POST normal a /api/trial/generate (cuenta en el límite de 5/día).
+async function submitBrief() {
+  const t = TRIAL;
+  if (!t) return;
+  const goalKey = $('#b_goal_key').value;
+  const producto = $('#b_producto').value.trim();
+  const diferencial = $('#b_diferencial').value.trim();
+  const err = $('#briefErr');
+  if (!goalKey && !producto && !diferencial) {
+    err.textContent = 'Tell me at least one little thing to fine-tune it 🙂';
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+  const b = $('#btnBriefGo');
+  b.disabled = true; b.textContent = 'Fine-tuning your week…';
+  trackerStart('Fine-tuning your week…');
+  try {
+    const fd = new FormData();
+    fd.append('business', t.business || TRIAL_BIZ || '');
+    fd.append('ig', t.ig || cleanIg($('#f_ig').value));
+    fd.append('category', t.category || (GEN_PREFILL ? $('#pf_cat').value : $('#f_cat').value) || 'otro');
+    fd.append('country', COUNTRY);
+    fd.append('tone', TONE);
+    fd.append('goal', '');
+    fd.append('competitors', '');
+    fd.append('goal_key', goalKey);
+    fd.append('producto', producto);
+    fd.append('diferencial', diferencial);
+    const t0 = Date.now();
+    const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'We could not regenerate your week');
+    trk('prueba_step', { step: 'brief_refine' });
+    finishGeneration(data, Math.max(1, Math.round((Date.now() - t0) / 1000)));
+    toast('Your week, fine-tuned with your detail ✨');
+  } catch (e) {
+    trackerStop();
+    show('v-results');
+    err.textContent = e.message || 'We could not regenerate it. Try again.';
+    err.style.display = 'block';
+  }
+  b.disabled = false; b.textContent = 'Fine-tune my week ✨';
+}
+
+let lbPost = -1, lbWeekPos = 0;
+function lbRender() {
+  const wk = trialWeekOrdered();
+  const w = wk[lbWeekPos];
+  if (!w) return;
+  lbPost = w.post;
+  const p = TRIAL.posts[lbPost];
+  $('#lbMedia').innerHTML = p.type === 'video'
+    ? `<video src="${p.video}" controls playsinline></video>`
+    : `<img src="${p.image}" alt="Posteo">`;
+  const hl = $('#lbHeadline');
+  if (p.headline) { hl.textContent = p.headline; hl.style.display = 'block'; }
+  else { hl.textContent = ''; hl.style.display = 'none'; }
+  $('#lbCap').textContent = p.caption || '';
+  $('#lbTags').textContent = p.hashtags || '';
+}
+function openLb(i) {
+  const wk = trialWeekOrdered();
+  const pos = wk.findIndex((x) => x.post === i);
+  lbWeekPos = pos >= 0 ? pos : 0;
+  lbRender();
+  $('#lb').classList.add('open');
+}
+function lbNav(d) {
+  const n = trialWeekOrdered().length;
+  if (!n) return;
+  lbWeekPos = (lbWeekPos + d + n) % n;
+  lbRender();
+}
+function lbDayName() {
+  const w = (TRIAL.week || []).find((x) => x.post === lbPost);
+  return w ? w.day : 'this post';
+}
+$('#lbPhoto').onclick = () => { $('#lb').classList.remove('open'); openPhotoSheet(lbPost); };
+$('#btnShare').onclick = () => shareWeek();
+$('#lbImprove').onclick = () => {
+  $('#lb').classList.remove('open');
+  const inp = $('#chatIn');
+  inp.value = `About the ${lbDayName()} post: `;
+  const sec = $('#trialChat');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { try { inp.focus(); } catch (e) {} }, 500);
+};
+
+// ---------- Chat de la prueba: pedir cambios con palabras simples ----------
+// Sin vueltas: el visitante escribe qué quiere mejorar ("el del miércoles,
+// más divertido") y la IA edita los textos al instante.
+let chatHist = [];
+let chatInit = false;
+let chatBusy = false;
+function chatAddMsg(text, who, html) {
+  const box = $('#chatMsgs');
+  if (!box) return null;
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  if (html) d.innerHTML = html; else d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+  return d;
+}
+function initTrialChat() {
+  const cl = $('#chatLink');
+  if (cl && !cl.dataset.bound) {
+    cl.dataset.bound = '1';
+    cl.onclick = (e) => {
+      e.preventDefault();
+      const sec = $('#trialChat');
+      if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => { try { $('#chatIn').focus(); } catch (err) {} }, 600);
+    };
+  }
+  if (chatInit || !TRIAL) return;
+  chatInit = true;
+  chatAddMsg('Hi! I am your editor 👋 Your 5 posts + 1 reel are already created. If something does not convince you, tell me what to change — for example: "the Wednesday one, but funnier".', 'bot');
+  const send = () => {
+    const inp = $('#chatIn');
+    const v = inp.value.trim();
+    if (!v || chatBusy) return;
+    sendTrialChat(v);
+  };
+  $('#chatSend').onclick = send;
+  $('#chatIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+  document.querySelectorAll('#chatChips button[data-m]').forEach((b) => {
+    b.onclick = () => { if (!chatBusy) sendTrialChat(b.dataset.m); };
+  });
+  $('#chipColors').onclick = () => {
+    const p = $('#colorPanel');
+    const open = p.classList.toggle('open');
+    if (open) {
+      $('#cpAccent').value = TRIAL.accent || '#2793C8';
+      $('#cpAccentHex').value = TRIAL.accent || '#2793C8';
+      $('#cpBtn').value = TRIAL.btn || '#FEC14D';
+      $('#cpBtnHex').value = TRIAL.btn || '#FEC14D';
+      p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+  // sincronizar selector <-> hex (con o sin #)
+  const normHex = (v) => {
+    v = String(v || '').trim();
+    if (v && v[0] !== '#') v = '#' + v;
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : null;
+  };
+  [['cpAccent', 'cpAccentHex'], ['cpBtn', 'cpBtnHex']].forEach(([c, h]) => {
+    $('#' + c).addEventListener('input', (e) => { $('#' + h).value = e.target.value.toUpperCase(); });
+    $('#' + h).addEventListener('input', (e) => {
+      const v = normHex(e.target.value);
+      if (v) $('#' + c).value = v;
+    });
+  });
+  $('#cpLogoBtn').onclick = () => $('#cpLogoFile').click();
+  $('#cpLogoFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const b = $('#cpLogoBtn');
+    b.disabled = true; b.textContent = 'Detecting your colors…';
+    try {
+      const dataUrl = await fileToDataUrl(f, 800);
+      const r = await fetch('/api/trial/logo-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || 'We could not read your logo');
+      const cols = j.colors || [];
+      if (cols[0]) { $('#cpAccent').value = cols[0]; $('#cpAccentHex').value = cols[0]; }
+      if (cols[1]) { $('#cpBtn').value = cols[1]; $('#cpBtnHex').value = cols[1]; }
+      toast(cols.length > 1 ? 'Colors detected from your logo ✓' : 'Color detected from your logo ✓');
+    } catch (err) { toast(err.message || 'We could not read your logo'); }
+    b.disabled = false; b.innerHTML = '📷 Use the colors of my logo';
+  });
+  $('#cpApply').onclick = async () => {
+    const accent = normHex($('#cpAccentHex').value);
+    const btn = normHex($('#cpBtnHex').value);
+    if (!accent || !btn) { toast('Check the colors: use the #2793C8 format'); return; }
+    const b = $('#cpApply');
+    b.disabled = true; b.textContent = 'Applying exact colors…';
+    try {
+      await trialRedesign({ colors: { accent, btn } });
+      toast('Colors updated on your 5 posts ✓');
+      $('#colorPanel').classList.remove('open');
+    } catch (e) { toast(e.message || 'It could not be applied'); }
+    b.disabled = false; b.textContent = 'Apply colors';
+  };
+  // --- sheet de fotos ---
+  $('#xPhoto').onclick = () => $('#photoSheet').classList.remove('open');
+  $('#photoSheet').addEventListener('click', (e) => { if (e.target.id === 'photoSheet') $('#photoSheet').classList.remove('open'); });
+  $('#phUploadBtn').onclick = () => $('#phFile').click();
+  $('#phFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const dataUrl = await fileToDataUrl(f, 1080);
+      await applyPhoto(photoSheetIdx, dataUrl);
+    } catch (err) { toast(err.message || 'The photo could not be read'); }
+  });
+  $('#phApply').onclick = async () => {
+    if (photoSel == null) return;
+    $('#phApply').disabled = true; $('#phApply').textContent = 'Applying your photo…';
+    try { await applyPhoto(photoSheetIdx, photoSel); }
+    catch (e) { toast(e.message || 'It could not be applied'); }
+    $('#phApply').disabled = false; $('#phApply').textContent = 'Use this photo';
+  };
+}
+
+/* ---------- Rediseño (colores / fotos) ---------- */
+let redesignBusy = false;
+async function trialRedesign(patch) {
+  if (redesignBusy) return;
+  redesignBusy = true;
+  try {
+    const r = await fetch('/api/trial/redesign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ ig: TRIAL.ig }, patch)),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || 'The change could not be applied');
+    if (j.accent) TRIAL.accent = j.accent;
+    if (j.btn) TRIAL.btn = j.btn;
+    if (j.design) TRIAL.design = j.design;
+    TRIAL.posts = j.posts;
+    TRIAL.video_ok = j.video_ok;
+    TRIAL.gen_ms = j.gen_ms;
+    TRIAL.genSecs = j.gen_ms ? Math.round(j.gen_ms / 1000) : TRIAL.genSecs;
+    saveTrial();
+    renderResults();
+    return j;
+  } finally { redesignBusy = false; }
+}
+
+/* ---------- Compartir la semana ---------- */
+async function shareWeek() {
+  const t = TRIAL;
+  if (!t || !t.posts) return;
+  const url = location.origin + '/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) : '');
+  const text = `Check out the week of posts Posty built for me for ${t.business} 🚀 Try it free:`;
+  try {
+    const files = [];
+    for (let i = 0; i < t.posts.length; i++) {
+      const p = t.posts[i];
+      const src = p.type === 'video' ? p.video : p.image;
+      if (!src) continue;
+      const blob = await (await fetch(src)).blob();
+      const ext = p.type === 'video' ? 'mp4' : 'png';
+      files.push(new File([blob], `posta-${t.business || 'semana'}-${i + 1}.${ext}`, { type: blob.type || (p.type === 'video' ? 'video/mp4' : 'image/png') }));
+    }
+    if (files.length && navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ title: 'My week with Posty', text, url, files });
+      return;
+    }
+    throw new Error('no-share');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // el usuario canceló
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      toast('Link copied — share it wherever you want 📤');
+    } catch (_) {
+      toast('Copy the link of this page to share it');
+    }
+  }
+}
+/* ---------- Sheet de fotos ---------- */
+let photoSheetIdx = -1;
+let photoSel = null;
+function openPhotoSheet(i) {
+  photoSheetIdx = i; photoSel = null;
+  $('#phApply').disabled = true;
+  $('#photoSheetTitle').textContent = 'Change photo — ' + lbDayName();
+  $('#phGrid').innerHTML = '<div class="ph-loading">Looking for photos…</div>';
+  $('#photoSheet').classList.add('open');
+  fetch('/api/trial/photo-options?ig=' + encodeURIComponent(TRIAL.ig))
+    .then((r) => r.json())
+    .then((j) => {
+      const opts = (j && j.ok && j.options) || [];
+      if (!opts.length) { $('#phGrid').innerHTML = '<div class="ph-loading">No more photos for this industry.</div>'; return; }
+      $('#phGrid').innerHTML = opts.map((o) => `<img src="${esc(o.url)}" data-u="${esc(o.url)}" loading="lazy" alt="Photo option">`).join('');
+      $$('#phGrid img').forEach((im) => {
+        im.onclick = () => {
+          $$('#phGrid img').forEach((x) => x.classList.remove('sel'));
+          im.classList.add('sel');
+          photoSel = im.dataset.u;
+          $('#phApply').disabled = false;
+        };
+      });
+    })
+    .catch(() => { $('#phGrid').innerHTML = '<div class="ph-loading">The photos could not be loaded.</div>'; });
+}
+function fileToDataUrl(file, maxDim) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const sc = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * sc), h = Math.round(img.height * sc);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Unsupported format')); };
+    img.src = url;
+  });
+}
+async function applyPhoto(idx, photo) {
+  const btn = $('#phApply');
+  const origSheet = $('#photoSheetTitle').textContent;
+  $('#photoSheetTitle').textContent = 'Applying your photo…';
+  try {
+    await trialRedesign({ photos: [{ index: idx, photo }] });
+    $('#photoSheet').classList.remove('open');
+    openLb(idx);
+    const w = (TRIAL.week || []).find((x) => x.post === idx);
+    toast('Photo updated on the ' + (w ? w.day : 'day') + ' post ✓');
+  } finally {
+    $('#photoSheetTitle').textContent = origSheet;
+  }
+}
+function resetTrialChat() {
+  chatInit = false; chatHist = []; chatBusy = false;
+  const box = $('#chatMsgs');
+  if (box) box.innerHTML = '';
+}
+async function sendTrialChat(text) {
+  const inp = $('#chatIn');
+  chatBusy = true;
+  $('#chatSend').disabled = true;
+  chatAddMsg(text, 'user');
+  chatHist.push({ role: 'user', text });
+  inp.value = '';
+  const typing = chatAddMsg('Typing…', 'bot typing');
+  try {
+    const r = await fetch('/api/trial/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ig: TRIAL.ig, message: text, history: chatHist.slice(-6) }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (typing) typing.remove();
+    if (!r.ok) throw new Error(d.error || 'error');
+    chatHist.push({ role: 'bot', text: d.reply });
+    chatAddMsg(d.reply, 'bot');
+    if (typeof d.chat_remaining === 'number') {
+      const cl2 = $('#chatLeft');
+      cl2.style.display = 'block';
+      cl2.textContent = d.chat_remaining > 0
+        ? `💬 You have ${d.chat_remaining} messages left today in the trial`
+        : '💬 You are out of messages for today — we continue tomorrow 🙂';
+    }
+    if (d.edits && d.edits.length) {
+      for (const e of d.edits) {
+        if (TRIAL.posts[e.post]) {
+          if (e.caption) TRIAL.posts[e.post].caption = e.caption;
+          if (e.hashtags) TRIAL.posts[e.post].hashtags = e.hashtags;
+        }
+      }
+      renderWeek();
+      try { idb.set(TRIAL); } catch (err) {}
+      const w = (TRIAL.week || []).find((x) => x.post === d.edits[0].post);
+      chatAddMsg(`✨ Updated — check out ${d.edits.length > 1 ? 'how they came out' : 'how the one from ' + (w ? w.day : 'post')} 👆`, 'bot');
+    }
+  } catch (e) {
+    if (typing) typing.remove();
+    if (String(e.message) === 'chat_limit') {
+      chatAddMsg('You hit the trial message limit. Create your free account and we keep improving them inside 🚀<span class="mini-cta" id="chatGoReg">Create my free account</span>', 'bot', true);
+      const g = $('#chatGoReg');
+      if (g) g.onclick = openRegTrial;
+    } else {
+      chatAddMsg('I could not process your request, try again 🙂', 'bot');
+    }
+  }
+  chatBusy = false;
+  $('#chatSend').disabled = false;
+}
+
+// ---------- registro con trial: nadie paga antes de probar ----------
+let regSeen = false; // el modal ya se mostró (abierto por CTA o por auto-apertura)
+function openRegTrial() {
+  regSeen = true;
+  trk('prueba_register');
+  $('#rgSub').innerHTML = `Your 5 posts stay saved in your account, ready to review.`;
+  $('#rgErr').style.display = 'none';
+  $('#ovReg').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => { try { $('#rg_email').focus(); } catch (e) {} }, 350);
+}
+
+// ---------- registro embebido: nadie sale de /prueba ----------
+async function pj(url, body, method) {
+  let r;
+  try {
+    r = await fetch(url, {
+      method: method || (body === undefined ? 'GET' : 'POST'),
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new Error('The server is not responding. Check your connection and try again.');
+  }
+  let d = {};
+  try { d = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(d.error || 'Something went wrong. Try again.');
+  return d;
+}
+function closeReg() {
+  $('#ovReg').classList.remove('open');
+  document.body.style.overflow = '';
+}async function doRegister() {
+  const email = $('#rg_email').value.trim();
+  const err = $('#rgErr');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) return fail('Enter a valid email 🙂');
+  err.style.display = 'none';
+  const b = $('#btnReg');
+  b.disabled = true; b.textContent = 'Sending your link…';
+  try {
+    const body = { email };
+    if (TRIAL && TRIAL.ig) body.trial_ig = TRIAL.ig;
+    try { const rf = localStorage.getItem('posta_ref'); if (rf) body.ref = rf; } catch (e) {}
+    // Puente /prueba → cuenta: el servidor importa el perfil al canjear el magic link.
+    try {
+      const tp = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+      if (tp && typeof tp === 'object') {
+        const pf = {};
+        ['business_name', 'category', 'subcat', 'description', 'competitors', 'ig_username', 'tone', 'brand_colors']
+          .forEach((k) => { if (tp[k] !== undefined) pf[k] = tp[k]; });
+        if (Object.keys(pf).length) body.trial_profile = pf;
+      }
+    } catch (e) {}
+    const resp = await pj('/api/auth/magic-request', body);
+    try { localStorage.removeItem('posta_ref'); } catch (e) {}
+    const m = document.querySelector('#ovReg .modal');
+    if (resp && resp.session) {
+      // Sesión inmediata: la cuenta ya quedó abierta en este navegador.
+      m.innerHTML = `<button class="x" id="xReg">✕</button>
+      <h2 style="margin-top:18px">You are in! 🎉</h2>
+      <p class="msub">Your week is saved in your account and <b>posts by itself</b>. We also sent a link to your email so you can sign in from other devices.</p>
+      <a class="btn btn-primary btn-block" href="/en" style="margin-top:14px">Go to my account →</a>
+      <p class="tiny">No card · From $49/mo when it ends · Cancel anytime</p>`;
+      $('#xReg').onclick = closeReg;
+      return;
+    }
+    m.innerHTML = `<button class="x" id="xReg">✕</button>
+      <h2 style="margin-top:18px">Check your email 👀</h2>
+      <p class="msub">📧 <b>We sent a link to your email</b><br>Tap it and you are in, no password. It is valid for 15 minutes.</p>
+      <p class="tiny">No card · From $49/mo when it ends · Cancel anytime</p>`;
+    $('#xReg').onclick = closeReg;
+  } catch (e) {
+    fail(e.message);
+    b.disabled = false; b.textContent = 'Send me my access link 📧';
+  }
+}
+$('#xReg').onclick = closeReg;
+$('#btnReg').onclick = doRegister;
+$('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') closeReg(); });
+['rg_email'].forEach((id) => {
+  document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+});
+</script>
+<script src="/posty-chat.js?v=2" defer></script>
+</body>
+</html>

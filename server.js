@@ -13054,6 +13054,18 @@ app.get('/prueba', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
 });
 
+// ---------- Frente EN: landing y prueba en inglés (mismo motor) ----------
+app.get('/en/prueba', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'en-prueba.html'));
+});
+// Las páginas /en referencian assets con rutas relativas ("ig-cafe.jpg",
+// "posty-rubros.mp4"): esta ruta acotada por extensión los resuelve contra
+// public/ sin exponer nada más.
+app.get('/en/:file', (req, res, next) => {
+  if (!/^[A-Za-z0-9._-]+\.(?:png|jpe?g|gif|webp|svg|mp4|css|js|ico)$/i.test(req.params.file)) return next();
+  res.sendFile(path.join(__dirname, 'public', req.params.file), (err) => { if (err && !res.headersSent) next(); });
+});
+
 // ---------- Panel de control standalone (solo equipo) ----------
 // El admin vive en chunk-admin.js y se monta con public/panel.js (shim de
 // los helpers de app.js) SIN pasar por la cuenta del cliente. La puerta es
@@ -15218,7 +15230,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v272';
+const BUILD_ID = '20261020-v273';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
