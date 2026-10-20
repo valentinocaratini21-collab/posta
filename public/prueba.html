@@ -331,20 +331,21 @@ html{scroll-behavior:smooth}
 .ejemplos{margin:44px 0 6px}
 .ejemplos h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
 .ejemplos .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
-.ej-grid{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.ej-grid::-webkit-scrollbar{display:none}
+.ej-viewport{overflow:hidden}
+.ej-track{display:flex;transition:transform .3s ease}
+.ej-page{flex:0 0 100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:2px 2px 10px}
 .ej-wrap{position:relative}
 .ej-nav{position:absolute;top:44%;transform:translateY(-50%);z-index:6;width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line);background:#fff;color:var(--navy);font-size:26px;font-weight:800;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(10,30,51,.18);display:flex;align-items:center;justify-content:center;padding:0 0 3px;transition:opacity .2s}
 .ej-nav.prev{left:6px}
 .ej-nav.next{right:6px}
 .ej-nav.off{opacity:.35;pointer-events:none}
-.ej-card{flex:0 0 calc((100% - 36px)/4);scroll-snap-align:start;border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fff;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.ej-card{border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fff;box-shadow:0 6px 20px rgba(10,30,51,.05)}
 .ej-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
 .ej-card p{padding:10px 12px;font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4}
 .ej-foot{text-align:center;color:var(--mut);font-size:13px;margin-top:14px;font-weight:700}
 .footer-posty{display:inline-flex;align-items:center;gap:8px;font-weight:800;color:var(--navy)}
 .footer-posty img{width:26px;height:26px;border-radius:50%}
-@media(max-width:760px){.ej-card{flex:0 0 74%}}
+@media(max-width:760px){.ej-page{grid-template-columns:repeat(2,1fr)}}
 /* PRUEBA EN 1 CAMPO: tarjeta compacta del prefill */
 .pf-row{display:flex;gap:14px;align-items:flex-start}
 .pf-row img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--line);flex-shrink:0;background:var(--bg2)}
@@ -550,15 +551,21 @@ html{scroll-behavior:smooth}
     <p class="lede">Posteos de verdad, de semanas que armé para negocios como el tuyo.</p>
     <div class="ej-wrap">
     <button type="button" class="ej-nav prev off" id="ejPrev" aria-label="Anterior">‹</button>
-    <div class="ej-grid" id="ejGrid">
+    <div class="ej-viewport" id="ejViewport">
+    <div class="ej-track" id="ejTrack">
+      <div class="ej-page">
       <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🌸 Florería — ramos frescos, hechos hoy</p></div>
       <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>☕ Cafetería — el blend de la casa</p></div>
       <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💄 Makeup — prolijo y que dura</p></div>
       <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💈 Barbería — el ritual completo</p></div>
+      </div>
+      <div class="ej-page">
       <div class="ej-card"><img src="prueba-ej-n5.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🥐 Cafetería — recién salidas del horno</p></div>
       <div class="ej-card"><img src="prueba-ej-n6.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🍣 Sushi — nikkei, en la barra</p></div>
       <div class="ej-card"><img src="prueba-ej-n7.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🏋️ Gym — tu entrenador, tu plan</p></div>
       <div class="ej-card"><img src="prueba-ej-n8.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>📦 Tu producto — protagonista en 3D</p></div>
+      </div>
+    </div>
     </div>
     <button type="button" class="ej-nav next" id="ejNext" aria-label="Siguiente">›</button>
     </div>
@@ -566,17 +573,22 @@ html{scroll-behavior:smooth}
   </div>
 <script>
 (function(){
-  var grid=document.getElementById('ejGrid'),prev=document.getElementById('ejPrev'),next=document.getElementById('ejNext');
-  if(!grid||!prev||!next)return;
-  function step(){var c=grid.querySelector('.ej-card');return c?c.getBoundingClientRect().width+12:grid.clientWidth;}
+  var track=document.getElementById('ejTrack'),vp=document.getElementById('ejViewport'),prev=document.getElementById('ejPrev'),next=document.getElementById('ejNext');
+  if(!track||!prev||!next)return;
+  var page=0,pages=track.children.length;
   function upd(){
-    prev.classList.toggle('off',grid.scrollLeft<=4);
-    next.classList.toggle('off',grid.scrollLeft>=grid.scrollWidth-grid.clientWidth-4);
+    track.style.transform='translateX('+(-page*100)+'%)';
+    prev.classList.toggle('off',page<=0);
+    next.classList.toggle('off',page>=pages-1);
   }
-  prev.addEventListener('click',function(){grid.scrollBy({left:-step(),behavior:'smooth'});});
-  next.addEventListener('click',function(){grid.scrollBy({left:step(),behavior:'smooth'});});
-  grid.addEventListener('scroll',function(){window.requestAnimationFrame(upd);},{passive:true});
-  window.addEventListener('resize',upd);
+  function go(d){var np=Math.max(0,Math.min(pages-1,page+d));if(np!==page){page=np;upd();}}
+  prev.addEventListener('click',function(){go(-1);});
+  next.addEventListener('click',function(){go(1);});
+  if(vp){
+    var tx=null;
+    vp.addEventListener('touchstart',function(e){tx=e.changedTouches[0].clientX;},{passive:true});
+    vp.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>=40)go(dx<0?1:-1);},{passive:true});
+  }
   upd();
 })();
 </script>
