@@ -3,76 +3,330 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Posty — Your community manager 🤖</title>
-<meta name="description" content="Posty is your complete community manager: it analyzes your Instagram, creates and posts your week, replies to comments and messages, and — with the Total plan — serves your customers and sells for you, 24/7. Try it free for 3 days, no card. Launching January 1, 2027.">
+<script>
+/* 📱 App instalada: arranca como app, NUNCA como landing. Este script corre
+   antes que todo (incluso con app.js cacheado): si el dispositivo está en
+   modo standalone y la URL no es ya la app o el login, salta directo a la
+   home de la app (que rebota sola al login si no hay sesión). */
+(function () {
+  try {
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || !!navigator.standalone;
+    if (!standalone) return;
+    var h = location.hash || '';
+    if (h.indexOf('#/app') === 0 || h === '#/login' || h === '#/registro' || h.indexOf('#/reset') === 0) return;
+    var w = Math.min(window.innerWidth || 999, (window.screen && screen.width) || 999);
+    location.replace('/' + (w <= 820 ? '#/app/inicio' : '#/app/schedule'));
+  } catch (e) {}
+})();
+</script>
+<title>Posty — Your community manager on autopilot</title>
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://postyhacetodo.com/en">
-<meta property="og:title" content="Your Instagram working every day, with a single click · Posty">
-<meta property="og:description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts what sells. Try it free for 3 days, no card.">
+<meta property="og:url" content="https://postyhacetodo.com/">
+<meta property="og:title" content="Tu Instagram trabajando todos los días, con un solo clic · Posty">
+<meta property="og:description" content="Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia lo que vende. Probalo 3 días gratis, sin tarjeta.">
 <meta property="og:image" content="https://postyhacetodo.com/og-cover.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tu Instagram trabajando todos los días, con un solo clic · Posty">
+<meta name="twitter:description" content="Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia lo que vende. Probalo 3 días gratis, sin tarjeta.">
+<meta name="twitter:image" content="https://postyhacetodo.com/og-cover.jpg">
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2793C8">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="stylesheet" href="/styles.css">
-<style>
-  .en-langbar{background:#0A1E33;color:#fff;text-align:center;padding:9px 14px;font-size:13.5px}
-  .en-langbar a{color:#FEC14D;font-weight:800;text-decoration:none}
-  .en-langbar a:hover{text-decoration:underline}
-  .en-launch{display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:12.5px;letter-spacing:.4px;padding:7px 16px;border-radius:999px;margin-bottom:16px}
-  .en-role{display:inline-block;background:#E4F0FA;color:#2793C8;font-weight:800;font-size:12px;letter-spacing:.5px;text-transform:uppercase;padding:5px 12px;border-radius:999px;margin-bottom:10px}
-  .price-card .price small{font-size:15px;color:var(--mut,#5A7186);font-weight:700}
-  .en-examples-note{max-width:640px;margin:0 auto;text-align:center;color:var(--mut,#5A7186);font-size:15px;line-height:1.6}
-</style>
-<script>
-  /* 🌎 Language choice: this page is the English version — remember it.
-     (The Spanish landing's language banner reads 'posty-lang'; 'posty_lang' kept in sync.) */
-  try {
-    localStorage.setItem('posty-lang', 'en');
-    localStorage.setItem('posty_lang', 'en');
-  } catch (e) {}
-  function postyGoEs() {
-    try {
-      localStorage.setItem('posty-lang', 'es');
-      localStorage.setItem('posty_lang', 'es');
-    } catch (e) {}
-  }
-</script>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Posty">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css?v=20261020h">
 </head>
 <body>
-  <div class="en-langbar">¿Preferís español? <a href="/" onclick="postyGoEs()">Ver en español →</a></div>
+<div id="app">
+  
   <div class="nav nav-landing"><div class="wrap">
-    <a class="logo logo-posty" href="/en"><img src="/ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
+    <a class="logo logo-posty" href="/en"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
     <div class="nav-links">
       <a href="#analisis">Analysis</a>
+      <a href="#capacidades">Everything it does</a>
       <a href="#como-funciona">How it works</a>
       <a href="#ejemplos">Examples</a>
-      <a href="#planes">Pricing</a>
+      <a href="#planes">Plans</a>
       <a href="#faq">FAQ</a>
-      <a href="/" onclick="postyGoEs()">Español</a>
-      <a href="/#login">Log in</a>
-      <a class="btn btn-primary btn-sm" href="/prueba">Try free</a>
+      <a data-posty-chat="" role="button" tabindex="0" style="cursor:pointer">Help</a>
+      <a href="/" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Español</a>
+      <a href="/#/login">Log in</a>
+      <a class="btn btn-primary btn-sm" href="/en/prueba">Try it free</a>
     </div>
+    <a class="lp-entrar" href="/#/login">Log in</a>
+    <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Open menu"><span></span><span></span><span></span></button>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#analisis">Analysis</a>
+    <a href="#capacidades">Everything it does</a>
+    <a href="#como-funciona">How it works</a>
+    <a href="#ejemplos">Examples</a>
+    <a href="#planes">Plans</a>
+    <a href="#faq">FAQ</a>
+    <a data-posty-chat="" role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Help</a>
+      <a href="/" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Español</a>
+    <a href="/#/login">Log in</a>
+    <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
   </div></div>
   <div class="hero"><div class="wrap">
-    <img class="hero-posty" src="/ai-avatar.png" alt="Posty, your community manager">
+    <img class="hero-posty" src="ai-avatar.png" alt="Posty, your community manager">
     <div class="pill">🤖 Your community manager</div>
-    <h1>Your Instagram working<br><span class="hl">every day, with a single click</span></h1>
-    <p class="sub">Posty creates the ideas, the designs and the copy with <b>your brand</b> — and posts them on its own. Posts, reels, stories, comments, messages and ads — your whole Instagram, done by Posty. You do nothing: you only pause anything that doesn't feel right.</p>
-    <p><span class="en-launch">🚀 Launching January 1, 2027</span></p>
-    <div><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">See your free week →</a></div>
-    <div class="hero-note">✓ 3-day free trial · ✓ No card · ✓ Cancel anytime</div>
-    <div class="hero-co">Posty is a product of <b>Posta</b> · Made in Argentina 🇦🇷 · We post with Meta's official API · We never ask for your password</div>
+    <h1>Your Instagram, working<br><span class="hl">every day, with a single click</span></h1>
+    <p class="sub">Posty creates the ideas, the designs and the copy with <b>your brand</b> — and posts them by itself. Posts, reels, stories, comments, messages and ads — your whole Instagram, done by Posty. You do nothing: you only step in if something doesn't feel right.</p>
+    <form class="lp-igform" onsubmit="return lpGoTrial(event)">
+      <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Tu Instagram">
+      <button class="btn btn-primary" type="submit">See my week →</button>
+    </form>
+    <p class="lp-igform-note">Drop your Instagram handle and see <b>your</b> real week, with your brand 👆</p>
+    <div class="hero-note">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
+    <p class="lp-spots" data-spots="">🔥 Only <b>50 of 50 spots left</b> this month</p>
+    <div class="lp-show" id="ejemplos">
+      <p class="lp-show-eyebrow">✨ This is what your Instagram looks like with Posty</p>
+      <div class="lp-wall" id="lpWall">
+        <button type="button" class="lp-wall-nav prev off" id="lpWallPrev" aria-label="Previous profiles" onclick="lpWallStep(-1)">‹</button>
+        <div class="lp-wall-viewport" id="lpWallViewport">
+          <div class="lp-wall-track" id="lpWallTrack"><div class="lp-wall-page"><div class="lp-wall-card">
+    <div class="igp-top"><b>cafe.aurora</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="ig-cafe.jpg" alt="Profile photo of Café Aurora"></span>
+      <div class="igp-stats"><div><b>128</b><span>posts</span></div><div><b>4,812</b><span>followers</span></div><div><b>96</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Café Aurora ☕</b> <span class="igp-cat">Coffee shop · Palermo</span><br><span class="igp-link">postyhacetodo.com/p/cafe-aurora</span></div>
+    <div class="igp-grid"><img loading="lazy" src="ig-cafe.jpg" alt="Instagram post of Café Aurora ☕"><img loading="lazy" src="g-tazas.jpg" alt="Instagram post of Café Aurora ☕"><img loading="lazy" src="g-pasta.jpg" alt="Instagram post of Café Aurora ☕"><img loading="lazy" src="g-latte.jpg" alt="Instagram post of Café Aurora ☕"><span class="igp-cell-reel"><video src="showcase-reel-natural.mp4" autoplay="" muted="" loop="" playsinline="" preload="metadata" aria-label="Instagram reel of Café Aurora ☕: a barista making latte art"></video><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="g-platos.jpg" alt="Instagram post of Café Aurora ☕"><img loading="lazy" src="g-vaso.jpg" alt="Instagram post of Café Aurora ☕"><img loading="lazy" src="g-tres.jpg" alt="Instagram post of Café Aurora ☕"><img loading="lazy" src="g-gourmet.jpg" alt="Instagram post of Café Aurora ☕"></div>
+    <div class="lp-wall-foot">Coffee shop</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>elcorte.barberia</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-elcorte-1.jpg" alt="Profile photo of elcorte.barberia"></span>
+      <div class="igp-stats"><div><b>96</b><span>posts</span></div><div><b>3,214</b><span>followers</span></div><div><b>88</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>El Corte Barbería 💈</b> <span class="igp-cat">Barbershop · Caballito</span><br><span class="igp-link">postyhacetodo.com/p/elcorte</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-elcorte-1.jpg" alt="Instagram post of El Corte Barbería 💈"><img loading="lazy" src="gt-elcorte-2.jpg" alt="Instagram post of El Corte Barbería 💈"><img loading="lazy" src="gt-elcorte-3.jpg" alt="Instagram post of El Corte Barbería 💈"><img loading="lazy" src="gt-elcorte-4.jpg" alt="Instagram post of El Corte Barbería 💈"><span class="igp-cell-reel"><img loading="lazy" src="gt-elcorte-5.jpg" alt="Instagram post of El Corte Barbería 💈"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-elcorte-6.jpg" alt="Instagram post of El Corte Barbería 💈"><img loading="lazy" src="gt-elcorte-7.jpg" alt="Instagram post of El Corte Barbería 💈"><img loading="lazy" src="gt-elcorte-8.jpg" alt="Instagram post of El Corte Barbería 💈"><img loading="lazy" src="gt-elcorte-9.jpg" alt="Instagram post of El Corte Barbería 💈"></div>
+    <div class="lp-wall-foot">Barbershop</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>tiendacora</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-tiendacora-1.jpg" alt="Profile photo of tiendacora"></span>
+      <div class="igp-stats"><div><b>210</b><span>posts</span></div><div><b>6,540</b><span>followers</span></div><div><b>132</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Tienda Cora 👕</b> <span class="igp-cat">Clothing store · Recoleta</span><br><span class="igp-link">postyhacetodo.com/p/tiendacora</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-tiendacora-1.jpg" alt="Instagram post of Tienda Cora 👕"><img loading="lazy" src="gt-tiendacora-2.jpg" alt="Instagram post of Tienda Cora 👕"><img loading="lazy" src="gt-tiendacora-3.jpg" alt="Instagram post of Tienda Cora 👕"><img loading="lazy" src="gt-tiendacora-4.jpg" alt="Instagram post of Tienda Cora 👕"><span class="igp-cell-reel"><img loading="lazy" src="gt-tiendacora-5.jpg" alt="Instagram post of Tienda Cora 👕"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-tiendacora-6.jpg" alt="Instagram post of Tienda Cora 👕"><img loading="lazy" src="gt-tiendacora-7.jpg" alt="Instagram post of Tienda Cora 👕"><img loading="lazy" src="gt-tiendacora-8.jpg" alt="Instagram post of Tienda Cora 👕"><img loading="lazy" src="gt-tiendacora-9.jpg" alt="Instagram post of Tienda Cora 👕"></div>
+    <div class="lp-wall-foot">Fashion</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>estetica.alma</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-esteticaalma-1.jpg" alt="Profile photo of estetica.alma"></span>
+      <div class="igp-stats"><div><b>154</b><span>posts</span></div><div><b>5,103</b><span>followers</span></div><div><b>117</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Estética Alma 💅</b> <span class="igp-cat">Beauty studio · Belgrano</span><br><span class="igp-link">postyhacetodo.com/p/estetica-alma</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-esteticaalma-1.jpg" alt="Instagram post of Estética Alma 💅"><img loading="lazy" src="gt-esteticaalma-2.jpg" alt="Instagram post of Estética Alma 💅"><img loading="lazy" src="gt-esteticaalma-3.jpg" alt="Instagram post of Estética Alma 💅"><img loading="lazy" src="gt-esteticaalma-4.jpg" alt="Instagram post of Estética Alma 💅"><span class="igp-cell-reel"><img loading="lazy" src="gt-esteticaalma-5.jpg" alt="Instagram post of Estética Alma 💅"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-esteticaalma-6.jpg" alt="Instagram post of Estética Alma 💅"><img loading="lazy" src="gt-esteticaalma-7.jpg" alt="Instagram post of Estética Alma 💅"><img loading="lazy" src="gt-esteticaalma-8.jpg" alt="Instagram post of Estética Alma 💅"><img loading="lazy" src="gt-esteticaalma-9.jpg" alt="Instagram post of Estética Alma 💅"></div>
+    <div class="lp-wall-foot">Beauty</div>
+  </div></div><div class="lp-wall-page"><div class="lp-wall-card">
+    <div class="igp-top"><b>laesquina.resto</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-laesquina-1.jpg" alt="Profile photo of laesquina.resto"></span>
+      <div class="igp-stats"><div><b>187</b><span>posts</span></div><div><b>4,376</b><span>followers</span></div><div><b>95</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Parrilla La Esquina 🔥</b> <span class="igp-cat">Steakhouse · San Telmo</span><br><span class="igp-link">postyhacetodo.com/p/laesquina</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-laesquina-1.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><img loading="lazy" src="gt-laesquina-2.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><img loading="lazy" src="gt-laesquina-3.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><img loading="lazy" src="gt-laesquina-4.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><span class="igp-cell-reel"><img loading="lazy" src="gt-laesquina-5.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-laesquina-6.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><img loading="lazy" src="gt-laesquina-7.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><img loading="lazy" src="gt-laesquina-8.jpg" alt="Instagram post of Parrilla La Esquina 🔥"><img loading="lazy" src="gt-laesquina-9.jpg" alt="Instagram post of Parrilla La Esquina 🔥"></div>
+    <div class="lp-wall-foot">Food</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>eltrigodorado</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-eltrigodorado-1.jpg" alt="Profile photo of eltrigodorado"></span>
+      <div class="igp-stats"><div><b>88</b><span>posts</span></div><div><b>2,845</b><span>followers</span></div><div><b>64</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>El Trigo Dorado 🥐</b> <span class="igp-cat">Bakery · Villa Crespo</span><br><span class="igp-link">postyhacetodo.com/p/eltrigodorado</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-eltrigodorado-1.jpg" alt="Instagram post of El Trigo Dorado 🥐"><img loading="lazy" src="gt-eltrigodorado-2.jpg" alt="Instagram post of El Trigo Dorado 🥐"><img loading="lazy" src="gt-eltrigodorado-3.jpg" alt="Instagram post of El Trigo Dorado 🥐"><img loading="lazy" src="gt-eltrigodorado-4.jpg" alt="Instagram post of El Trigo Dorado 🥐"><span class="igp-cell-reel"><img loading="lazy" src="gt-eltrigodorado-5.jpg" alt="Instagram post of El Trigo Dorado 🥐"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-eltrigodorado-6.jpg" alt="Instagram post of El Trigo Dorado 🥐"><img loading="lazy" src="gt-eltrigodorado-7.jpg" alt="Instagram post of El Trigo Dorado 🥐"><img loading="lazy" src="gt-eltrigodorado-8.jpg" alt="Instagram post of El Trigo Dorado 🥐"><img loading="lazy" src="gt-eltrigodorado-9.jpg" alt="Instagram post of El Trigo Dorado 🥐"></div>
+    <div class="lp-wall-foot">Bakery</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>donroquepizza</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-donroque-1.jpg" alt="Profile photo of donroquepizza"></span>
+      <div class="igp-stats"><div><b>143</b><span>posts</span></div><div><b>3,730</b><span>followers</span></div><div><b>71</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Pizzería Don Roque 🍕</b> <span class="igp-cat">Pizza place · Almagro</span><br><span class="igp-link">postyhacetodo.com/p/donroque</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-donroque-1.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><img loading="lazy" src="gt-donroque-2.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><img loading="lazy" src="gt-donroque-3.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><img loading="lazy" src="gt-donroque-4.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><span class="igp-cell-reel"><img loading="lazy" src="gt-donroque-5.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-donroque-6.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><img loading="lazy" src="gt-donroque-7.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><img loading="lazy" src="gt-donroque-8.jpg" alt="Instagram post of Pizzería Don Roque 🍕"><img loading="lazy" src="gt-donroque-9.jpg" alt="Instagram post of Pizzería Don Roque 🍕"></div>
+    <div class="lp-wall-foot">Pizza</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>miogelato</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-miogelato-1.jpg" alt="Profile photo of miogelato"></span>
+      <div class="igp-stats"><div><b>76</b><span>posts</span></div><div><b>1,932</b><span>followers</span></div><div><b>58</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Mío Gelato 🍦</b> <span class="igp-cat">Ice cream shop · Núñez</span><br><span class="igp-link">postyhacetodo.com/p/miogelato</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-miogelato-1.jpg" alt="Instagram post of Mío Gelato 🍦"><img loading="lazy" src="gt-miogelato-2.jpg" alt="Instagram post of Mío Gelato 🍦"><img loading="lazy" src="gt-miogelato-3.jpg" alt="Instagram post of Mío Gelato 🍦"><img loading="lazy" src="gt-miogelato-4.jpg" alt="Instagram post of Mío Gelato 🍦"><span class="igp-cell-reel"><img loading="lazy" src="gt-miogelato-5.jpg" alt="Instagram post of Mío Gelato 🍦"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-miogelato-6.jpg" alt="Instagram post of Mío Gelato 🍦"><img loading="lazy" src="gt-miogelato-7.jpg" alt="Instagram post of Mío Gelato 🍦"><img loading="lazy" src="gt-miogelato-8.jpg" alt="Instagram post of Mío Gelato 🍦"><img loading="lazy" src="gt-miogelato-9.jpg" alt="Instagram post of Mío Gelato 🍦"></div>
+    <div class="lp-wall-foot">Ice cream</div>
+  </div></div><div class="lp-wall-page"><div class="lp-wall-card">
+    <div class="igp-top"><b>gymnorte</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-gymnorte-1.jpg" alt="Profile photo of gymnorte"></span>
+      <div class="igp-stats"><div><b>167</b><span>posts</span></div><div><b>4,508</b><span>followers</span></div><div><b>143</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Gym Norte 💪</b> <span class="igp-cat">Gym · Belgrano</span><br><span class="igp-link">postyhacetodo.com/p/gymnorte</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-gymnorte-1.jpg" alt="Instagram post of Gym Norte 💪"><img loading="lazy" src="gt-gymnorte-2.jpg" alt="Instagram post of Gym Norte 💪"><img loading="lazy" src="gt-gymnorte-3.jpg" alt="Instagram post of Gym Norte 💪"><img loading="lazy" src="gt-gymnorte-4.jpg" alt="Instagram post of Gym Norte 💪"><span class="igp-cell-reel"><img loading="lazy" src="gt-gymnorte-5.jpg" alt="Instagram post of Gym Norte 💪"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-gymnorte-6.jpg" alt="Instagram post of Gym Norte 💪"><img loading="lazy" src="gt-gymnorte-7.jpg" alt="Instagram post of Gym Norte 💪"><img loading="lazy" src="gt-gymnorte-8.jpg" alt="Instagram post of Gym Norte 💪"><img loading="lazy" src="gt-gymnorte-9.jpg" alt="Instagram post of Gym Norte 💪"></div>
+    <div class="lp-wall-foot">Fitness</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>petshop.huella</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-petshop-1.jpg" alt="Profile photo of petshop.huella"></span>
+      <div class="igp-stats"><div><b>129</b><span>posts</span></div><div><b>3,366</b><span>followers</span></div><div><b>89</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Pet Shop Huella 🐶</b> <span class="igp-cat">Pet store · Villa Crespo</span><br><span class="igp-link">postyhacetodo.com/p/petshop-huella</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-petshop-1.jpg" alt="Instagram post of Pet Shop Huella 🐶"><img loading="lazy" src="gt-petshop-2.jpg" alt="Instagram post of Pet Shop Huella 🐶"><img loading="lazy" src="gt-petshop-3.jpg" alt="Instagram post of Pet Shop Huella 🐶"><img loading="lazy" src="gt-petshop-4.jpg" alt="Instagram post of Pet Shop Huella 🐶"><span class="igp-cell-reel"><img loading="lazy" src="gt-petshop-5.jpg" alt="Instagram post of Pet Shop Huella 🐶"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-petshop-6.jpg" alt="Instagram post of Pet Shop Huella 🐶"><img loading="lazy" src="gt-petshop-7.jpg" alt="Instagram post of Pet Shop Huella 🐶"><img loading="lazy" src="gt-petshop-8.jpg" alt="Instagram post of Pet Shop Huella 🐶"><img loading="lazy" src="gt-petshop-9.jpg" alt="Instagram post of Pet Shop Huella 🐶"></div>
+    <div class="lp-wall-foot">Pets</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>casalinda.deco</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-casalinda-1.jpg" alt="Profile photo of casalinda.deco"></span>
+      <div class="igp-stats"><div><b>203</b><span>posts</span></div><div><b>7,214</b><span>followers</span></div><div><b>156</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Casa Linda 🛋️</b> <span class="igp-cat">Home &amp; decor · Palermo</span><br><span class="igp-link">postyhacetodo.com/p/casalinda</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-casalinda-1.jpg" alt="Instagram post of Casa Linda 🛋️"><img loading="lazy" src="gt-casalinda-2.jpg" alt="Instagram post of Casa Linda 🛋️"><img loading="lazy" src="gt-casalinda-3.jpg" alt="Instagram post of Casa Linda 🛋️"><img loading="lazy" src="gt-casalinda-4.jpg" alt="Instagram post of Casa Linda 🛋️"><span class="igp-cell-reel"><img loading="lazy" src="gt-casalinda-5.jpg" alt="Instagram post of Casa Linda 🛋️"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-casalinda-6.jpg" alt="Instagram post of Casa Linda 🛋️"><img loading="lazy" src="gt-casalinda-7.jpg" alt="Instagram post of Casa Linda 🛋️"><img loading="lazy" src="gt-casalinda-8.jpg" alt="Instagram post of Casa Linda 🛋️"><img loading="lazy" src="gt-casalinda-9.jpg" alt="Instagram post of Casa Linda 🛋️"></div>
+    <div class="lp-wall-foot">Decor</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>elrosedal.flores</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-elrosedal-1.jpg" alt="Profile photo of elrosedal.flores"></span>
+      <div class="igp-stats"><div><b>92</b><span>posts</span></div><div><b>2,410</b><span>followers</span></div><div><b>66</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>El Rosedal 💐</b> <span class="igp-cat">Flower shop · Recoleta</span><br><span class="igp-link">postyhacetodo.com/p/elrosedal</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-elrosedal-1.jpg" alt="Instagram post of El Rosedal 💐"><img loading="lazy" src="gt-elrosedal-2.jpg" alt="Instagram post of El Rosedal 💐"><img loading="lazy" src="gt-elrosedal-3.jpg" alt="Instagram post of El Rosedal 💐"><img loading="lazy" src="gt-elrosedal-4.jpg" alt="Instagram post of El Rosedal 💐"><span class="igp-cell-reel"><img loading="lazy" src="gt-elrosedal-5.jpg" alt="Instagram post of El Rosedal 💐"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-elrosedal-6.jpg" alt="Instagram post of El Rosedal 💐"><img loading="lazy" src="gt-elrosedal-7.jpg" alt="Instagram post of El Rosedal 💐"><img loading="lazy" src="gt-elrosedal-8.jpg" alt="Instagram post of El Rosedal 💐"><img loading="lazy" src="gt-elrosedal-9.jpg" alt="Instagram post of El Rosedal 💐"></div>
+    <div class="lp-wall-foot">Flowers</div>
+  </div></div><div class="lp-wall-page"><div class="lp-wall-card">
+    <div class="igp-top"><b>cafe.martinez</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt="Profile photo of cafe.martinez"></span>
+      <div class="igp-stats"><div><b>231</b><span>posts</span></div><div><b>8,930</b><span>followers</span></div><div><b>210</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Café Martínez ☕</b> <span class="igp-cat">Coffee shop · Downtown</span><br><span class="igp-link">postyhacetodo.com/p/cafe-martinez</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-cafemartinez-1.jpg" alt="Instagram post of Café Martínez ☕"><img loading="lazy" src="gt-cafemartinez-2.jpg" alt="Instagram post of Café Martínez ☕"><img loading="lazy" src="gt-cafemartinez-3.jpg" alt="Instagram post of Café Martínez ☕"><img loading="lazy" src="gt-cafemartinez-4.jpg" alt="Instagram post of Café Martínez ☕"><span class="igp-cell-reel"><img loading="lazy" src="gt-cafemartinez-5.jpg" alt="Instagram post of Café Martínez ☕"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-cafemartinez-6.jpg" alt="Instagram post of Café Martínez ☕"><img loading="lazy" src="gt-cafemartinez-7.jpg" alt="Instagram post of Café Martínez ☕"><img loading="lazy" src="gt-cafemartinez-8.jpg" alt="Instagram post of Café Martínez ☕"><img loading="lazy" src="gt-cafemartinez-9.jpg" alt="Instagram post of Café Martínez ☕"></div>
+    <div class="lp-wall-foot">Coffee shop</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>nonnarosa.cocina</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-nonnarosa-1.jpg" alt="Profile photo of nonnarosa.cocina"></span>
+      <div class="igp-stats"><div><b>118</b><span>posts</span></div><div><b>3,054</b><span>followers</span></div><div><b>77</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Nonna Rosa 🍝</b> <span class="igp-cat">Italian kitchen · Caballito</span><br><span class="igp-link">postyhacetodo.com/p/nonnarosa</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-nonnarosa-1.jpg" alt="Instagram post of Nonna Rosa 🍝"><img loading="lazy" src="gt-nonnarosa-2.jpg" alt="Instagram post of Nonna Rosa 🍝"><img loading="lazy" src="gt-nonnarosa-3.jpg" alt="Instagram post of Nonna Rosa 🍝"><img loading="lazy" src="gt-nonnarosa-4.jpg" alt="Instagram post of Nonna Rosa 🍝"><span class="igp-cell-reel"><img loading="lazy" src="gt-nonnarosa-5.jpg" alt="Instagram post of Nonna Rosa 🍝"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-nonnarosa-6.jpg" alt="Instagram post of Nonna Rosa 🍝"><img loading="lazy" src="gt-nonnarosa-7.jpg" alt="Instagram post of Nonna Rosa 🍝"><img loading="lazy" src="gt-nonnarosa-8.jpg" alt="Instagram post of Nonna Rosa 🍝"><img loading="lazy" src="gt-nonnarosa-9.jpg" alt="Instagram post of Nonna Rosa 🍝"></div>
+    <div class="lp-wall-foot">Food</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>brillo.peluqueria</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-brillo-1.jpg" alt="Profile photo of brillo.peluqueria"></span>
+      <div class="igp-stats"><div><b>176</b><span>posts</span></div><div><b>5,672</b><span>followers</span></div><div><b>121</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Brillo Peluquería ✂️</b> <span class="igp-cat">Hair salon · Belgrano</span><br><span class="igp-link">postyhacetodo.com/p/brillo</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-brillo-1.jpg" alt="Instagram post of Brillo Peluquería ✂️"><img loading="lazy" src="gt-brillo-2.jpg" alt="Instagram post of Brillo Peluquería ✂️"><img loading="lazy" src="gt-brillo-3.jpg" alt="Instagram post of Brillo Peluquería ✂️"><img loading="lazy" src="gt-brillo-4.jpg" alt="Instagram post of Brillo Peluquería ✂️"><span class="igp-cell-reel"><img loading="lazy" src="gt-brillo-5.jpg" alt="Instagram post of Brillo Peluquería ✂️"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-brillo-6.jpg" alt="Instagram post of Brillo Peluquería ✂️"><img loading="lazy" src="gt-brillo-7.jpg" alt="Instagram post of Brillo Peluquería ✂️"><img loading="lazy" src="gt-brillo-8.jpg" alt="Instagram post of Brillo Peluquería ✂️"><img loading="lazy" src="gt-brillo-9.jpg" alt="Instagram post of Brillo Peluquería ✂️"></div>
+    <div class="lp-wall-foot">Beauty</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>navajaclub</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-navajaclub-1.jpg" alt="Profile photo of navajaclub"></span>
+      <div class="igp-stats"><div><b>84</b><span>posts</span></div><div><b>2,208</b><span>followers</span></div><div><b>52</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Navaja Club 🪒</b> <span class="igp-cat">Barbershop · Palermo</span><br><span class="igp-link">postyhacetodo.com/p/navajaclub</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-navajaclub-1.jpg" alt="Instagram post of Navaja Club 🪒"><img loading="lazy" src="gt-navajaclub-2.jpg" alt="Instagram post of Navaja Club 🪒"><img loading="lazy" src="gt-navajaclub-3.jpg" alt="Instagram post of Navaja Club 🪒"><img loading="lazy" src="gt-navajaclub-4.jpg" alt="Instagram post of Navaja Club 🪒"><span class="igp-cell-reel"><img loading="lazy" src="gt-navajaclub-5.jpg" alt="Instagram post of Navaja Club 🪒"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-navajaclub-6.jpg" alt="Instagram post of Navaja Club 🪒"><img loading="lazy" src="gt-navajaclub-7.jpg" alt="Instagram post of Navaja Club 🪒"><img loading="lazy" src="gt-navajaclub-8.jpg" alt="Instagram post of Navaja Club 🪒"><img loading="lazy" src="gt-navajaclub-9.jpg" alt="Instagram post of Navaja Club 🪒"></div>
+    <div class="lp-wall-foot">Barbershop</div>
+  </div></div><div class="lp-wall-page"><div class="lp-wall-card">
+    <div class="igp-top"><b>elvestidor.moda</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-elvestidor-1.jpg" alt="Profile photo of elvestidor.moda"></span>
+      <div class="igp-stats"><div><b>158</b><span>posts</span></div><div><b>4,940</b><span>followers</span></div><div><b>98</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>El Vestidor 👗</b> <span class="igp-cat">Boutique · Palermo Soho</span><br><span class="igp-link">postyhacetodo.com/p/elvestidor</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-elvestidor-1.jpg" alt="Instagram post of El Vestidor 👗"><img loading="lazy" src="gt-elvestidor-2.jpg" alt="Instagram post of El Vestidor 👗"><img loading="lazy" src="gt-elvestidor-3.jpg" alt="Instagram post of El Vestidor 👗"><img loading="lazy" src="gt-elvestidor-4.jpg" alt="Instagram post of El Vestidor 👗"><span class="igp-cell-reel"><img loading="lazy" src="gt-elvestidor-5.jpg" alt="Instagram post of El Vestidor 👗"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-elvestidor-6.jpg" alt="Instagram post of El Vestidor 👗"><img loading="lazy" src="gt-elvestidor-7.jpg" alt="Instagram post of El Vestidor 👗"><img loading="lazy" src="gt-elvestidor-8.jpg" alt="Instagram post of El Vestidor 👗"><img loading="lazy" src="gt-elvestidor-9.jpg" alt="Instagram post of El Vestidor 👗"></div>
+    <div class="lp-wall-foot">Fashion</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>box360</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-box360-1.jpg" alt="Profile photo of box360"></span>
+      <div class="igp-stats"><div><b>97</b><span>posts</span></div><div><b>2,765</b><span>followers</span></div><div><b>83</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Box 360 🏋️</b> <span class="igp-cat">Functional training · Núñez</span><br><span class="igp-link">postyhacetodo.com/p/box360</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-box360-1.jpg" alt="Instagram post of Box 360 🏋️"><img loading="lazy" src="gt-box360-2.jpg" alt="Instagram post of Box 360 🏋️"><img loading="lazy" src="gt-box360-3.jpg" alt="Instagram post of Box 360 🏋️"><img loading="lazy" src="gt-box360-4.jpg" alt="Instagram post of Box 360 🏋️"><span class="igp-cell-reel"><img loading="lazy" src="gt-box360-5.jpg" alt="Instagram post of Box 360 🏋️"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-box360-6.jpg" alt="Instagram post of Box 360 🏋️"><img loading="lazy" src="gt-box360-7.jpg" alt="Instagram post of Box 360 🏋️"><img loading="lazy" src="gt-box360-8.jpg" alt="Instagram post of Box 360 🏋️"><img loading="lazy" src="gt-box360-9.jpg" alt="Instagram post of Box 360 🏋️"></div>
+    <div class="lp-wall-foot">Fitness</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>patitas.peluqueria</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-patitas-1.jpg" alt="Profile photo of patitas.peluqueria"></span>
+      <div class="igp-stats"><div><b>111</b><span>posts</span></div><div><b>3,502</b><span>followers</span></div><div><b>74</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>Patitas 🐾</b> <span class="igp-cat">Dog grooming · Caballito</span><br><span class="igp-link">postyhacetodo.com/p/patitas</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-patitas-1.jpg" alt="Instagram post of Patitas 🐾"><img loading="lazy" src="gt-patitas-2.jpg" alt="Instagram post of Patitas 🐾"><img loading="lazy" src="gt-patitas-3.jpg" alt="Instagram post of Patitas 🐾"><img loading="lazy" src="gt-patitas-4.jpg" alt="Instagram post of Patitas 🐾"><span class="igp-cell-reel"><img loading="lazy" src="gt-patitas-5.jpg" alt="Instagram post of Patitas 🐾"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-patitas-6.jpg" alt="Instagram post of Patitas 🐾"><img loading="lazy" src="gt-patitas-7.jpg" alt="Instagram post of Patitas 🐾"><img loading="lazy" src="gt-patitas-8.jpg" alt="Instagram post of Patitas 🐾"><img loading="lazy" src="gt-patitas-9.jpg" alt="Instagram post of Patitas 🐾"></div>
+    <div class="lp-wall-foot">Pets</div>
+  </div><div class="lp-wall-card">
+    <div class="igp-top"><b>laespiga.pasteleria</b><span class="igp-top-ics"><svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 1 1 12 0v5l1.2 3H4.8L6 16zM10 21a2.2 2.2 0 0 0 4 0"></path></svg><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect><path d="M12 8v8M8 12h8"></path></svg><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></span></div>
+    <div class="igp-head">
+      <span class="ig-ava ig-ava-lg"><img loading="lazy" src="gt-laespiga-1.jpg" alt="Profile photo of laespiga.pasteleria"></span>
+      <div class="igp-stats"><div><b>139</b><span>posts</span></div><div><b>4,127</b><span>followers</span></div><div><b>69</b><span>following</span></div></div>
+    </div>
+    <div class="igp-bio"><b>La Espiga 🎂</b> <span class="igp-cat">Bakery &amp; cakes · Villa Crespo</span><br><span class="igp-link">postyhacetodo.com/p/laespiga</span></div>
+    <div class="igp-grid"><img loading="lazy" src="gt-laespiga-1.jpg" alt="Instagram post of La Espiga 🎂"><img loading="lazy" src="gt-laespiga-2.jpg" alt="Instagram post of La Espiga 🎂"><img loading="lazy" src="gt-laespiga-3.jpg" alt="Instagram post of La Espiga 🎂"><img loading="lazy" src="gt-laespiga-4.jpg" alt="Instagram post of La Espiga 🎂"><span class="igp-cell-reel"><img loading="lazy" src="gt-laespiga-5.jpg" alt="Instagram post of La Espiga 🎂"><span class="igp-reel-badge">▶</span></span><img loading="lazy" src="gt-laespiga-6.jpg" alt="Instagram post of La Espiga 🎂"><img loading="lazy" src="gt-laespiga-7.jpg" alt="Instagram post of La Espiga 🎂"><img loading="lazy" src="gt-laespiga-8.jpg" alt="Instagram post of La Espiga 🎂"><img loading="lazy" src="gt-laespiga-9.jpg" alt="Instagram post of La Espiga 🎂"></div>
+    <div class="lp-wall-foot">Bakery</div>
+  </div></div></div>
+        </div>
+        <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Next profiles" onclick="lpWallStep(1)">›</button>
+      </div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">20 industries · profiles built by Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 5</span></div>
+      <div class="lp-show-cta">
+        <p class="lp-show-bridge">This is an example. <b>Yours</b> is ready in 1 minute 👇</p>
+        <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
+          <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Tu Instagram">
+          <button class="btn btn-primary" type="submit">I want my profile like this →</button>
+        </form>
+        <p class="lp-show-cert">3 days free · no card · cancel anytime</p>
+        <p class="lp-spots" data-spots="">🔥 Only <b>50 of 50 spots left</b> this month</p>
+      </div>
+      <div class="lp-live" id="lpLive">
+        <div class="lp-live-head"><span class="lp-live-dot"></span><b>Posty at work</b><span>this is how it works for this business, every day</span></div>
+        <div class="lp-live-line" id="lpLiveLine">🐾 <b>Posty</b> posted Tuesday's post <span>· 2 h ago</span></div>
+      </div>
+    </div>
+    <div class="pz-beforeafter">
+      <h3>The difference shows in a week</h3>
+      <div class="pz-drag" id="pzDrag" data-bound="1" style="--pos: 50%;">
+        <div class="pz-drag-layer">
+          <div class="pz-ba-prof"><span class="pz-ba-ava"><img src="ig-cafe.jpg" alt=""></span><span class="pz-ba-who"><b>cafe.aurora</b><small>Coffee shop · Palermo</small></span></div>
+          <p class="pz-ba-bio">☕ Specialty coffee and brunch<br>📍 Gorriti 4380 · 8 am – 8 pm</p>
+          <div class="pz-ba-grid pz-ba-grid-live"><img src="ig-cafe.jpg" alt=""><img loading="lazy" src="g-tazas.jpg" alt=""><img loading="lazy" src="g-pasta.jpg" alt=""><img loading="lazy" src="g-latte.jpg" alt=""><img loading="lazy" src="g-cappu.jpg" alt=""><img loading="lazy" src="g-platos.jpg" alt=""><img loading="lazy" src="g-vaso.jpg" alt=""><img loading="lazy" src="g-tres.jpg" alt=""><img loading="lazy" src="g-gourmet.jpg" alt=""></div>
+          <p class="pz-ba-last pz-ba-last-on">🔥 Posting this week</p>
+        </div>
+        <div class="pz-drag-layer pz-drag-hoy pz-ba-dead" aria-hidden="true">
+          <div class="pz-ba-prof"><span class="pz-ba-ava">C</span><span class="pz-ba-who"><b>cafe.aurora</b><small>Coffee shop · Palermo</small></span></div>
+          <p class="pz-ba-bio">Café ☕</p>
+          <div class="pz-ba-grid"><span class="pz-ba-dull"><img src="ig-cafe.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-vaso.jpg" alt=""></span><span></span><span></span><span></span><span class="pz-ba-dull"><img loading="lazy" src="g-tres.jpg" alt=""></span></div>
+          <p class="pz-ba-last">⏸ Last post: 6 weeks ago</p>
+        </div>
+        <span class="pz-tag pz-tag-hoy">TODAY</span>
+        <span class="pz-tag pz-tag-on">WITH POSTY</span>
+        <div class="pz-drag-bar"><span class="pz-drag-knob">⇄</span></div>
+        <input class="pz-drag-range" id="pzDragRange" type="range" min="4" max="96" step="1" value="50" aria-label="Compare the profile: drag to see your Instagram today on the left, and with Posty on the right">
+      </div>
+      <p class="pz-drag-hint">👆 Drag the line: this is how a profile changes when Posty gets to work</p>
+    </div>
+    <div class="hero-co">Posty is a product by <b>Posta</b> · We publish through Meta's official API · We never ask for your password</div>
   </div></div>
+  
   <div class="section" id="analisis" style="background:var(--bg2)"><div class="wrap">
     <h2>Posty analyzes your Instagram and your competition <span class="hl">before writing a single word</span></h2>
-    <p class="lede">No posting just to post. First I look at your account and your market, data point by data point — and every post in your week is born from something I saw. You already see it in your trial: your Instagram diagnosis is included.</p>
+    <p class="lede">No posting just to post. First I look at your account and your market, data point by data point — and every post in your week is born from something I saw. You see it right in your trial: a diagnosis of your Instagram is included.</p>
     <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">🔍</div><h3>Your account, measured</h3><p class="lp-cm-tag">What to improve, what to turn up, what to turn down</p><p>Your pace, your formats, your posting times and your copy, read from your real profile. No fluff: every point comes with your number today and with what Posty changes this week.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🗺️</div><h3>Your competition, on a map</h3><p class="lp-cm-tag">Where you stand in your niche</p><p>The accounts in your niche and your area: how much they post, which formats work for them and what gaps they leave. Your week is built for that map, not in a vacuum. The full map is part of Growth.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🌱</div><h3>Just getting started?</h3><p class="lp-cm-tag">Your account is born with a plan</p><p>With no history, there's no made-up diagnosis: your account is born with positioning, the complete profile kit and a first 9-piece showcase designed from your market.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🔍</div><h3>Your account, measured</h3><p class="lp-cm-tag">What to fix, what to do more of, what to cut</p><p>Your pace, your formats, your times and your copy, read from your real profile. No fluff: every point comes with your number today and with what Posty moves this week.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🗺️</div><h3>Your competition, mapped</h3><p class="lp-cm-tag">Where you stand in your industry</p><p>The accounts in your industry and your area: how much they post, which formats work for them and what gaps they leave. Your week is built for that map, not in a vacuum. The full map is part of Growth.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🌱</div><h3>Just starting out?</h3><p class="lp-cm-tag">Your account starts with a plan</p><p>No history? No made-up diagnosis: your account starts with positioning, the full profile kit and a first 9-piece storefront designed from your market.</p></div>
     </div>
-    <h3 style="text-align:center;margin:36px 0 4px">Here's what your analysis looks like 👇</h3>
-    <p style="text-align:center;color:var(--mut,#5A7186);font-size:13.5px;margin:0 0 18px">Example with a neighborhood coffee shop — yours comes from YOUR real account, and it arrives as a letter from Posty.</p>
+    <h3 style="text-align:center;margin:36px 0 4px">This is what your analysis looks like 👇</h3>
+    <p style="text-align:center;color:var(--mut,#5A7186);font-size:13.5px;margin:0 0 18px">An example with a neighborhood coffee shop — yours comes from YOUR real account, and it reaches you as a letter from Posty.</p>
     <style>
     .lp-letter{max-width:520px;margin:0 auto;background:#fff;border:1.5px solid #E3EDF4;border-radius:22px;box-shadow:0 12px 40px rgba(10,30,51,.08);padding:22px 20px 18px;text-align:left}
     .lp-letter-head{display:flex;align-items:center;gap:12px}
@@ -98,170 +352,704 @@
     .lp-letter-sign span{display:block;font-size:10px;font-weight:800;color:#2793C8;text-transform:uppercase;letter-spacing:1.1px;margin-top:1px}
     </style>
     <div class="lp-letter">
-      <div class="lp-letter-head"><img src="/ai-avatar.png" alt="Posty"><div><b>Your analysis</b><span>Neighborhood coffee shop · example</span></div></div>
-      <div class="lp-letter-verdict"><span>My verdict</span><p>“You have good coffee and good people. Today your pace is 2 posts a week — and consistency doesn't depend on your time: I bring it.”</p></div>
-      <p class="lp-letter-f">📈 <b>Your posting pace has a lot of room to grow</b> — today: 2 posts a week.<br><span>→ With Posty: your full week, built and scheduled.</span></p>
+      <div class="lp-letter-head"><img src="ai-avatar.png" alt="Posty"><div><b>Your analysis</b><span>Neighborhood coffee shop · example</span></div></div>
+      <div class="lp-letter-verdict"><span>My verdict</span><p>“You have great coffee and great people. Right now you post twice a week — and consistency doesn't depend on your time: I bring it.”</p></div>
+      <p class="lp-letter-f">📈 <b>Your posting pace has a lot of room to grow</b> — today: 2 posts per week.<br><span>→ With Posty: your full week, built and scheduled.</span></p>
       <div class="lp-letter-plan">
         <p class="lp-lp-t">🚀 My plan to improve all of this</p>
-        <p><b>① This week:</b> your full week, with no gaps — every post scheduled in your slot.</p>
-        <p><b>② Next week:</b> your showcase starts selling on its own — a searchable name, a bio that sells and complete highlights.</p>
-        <p><b>③ From here on:</b> I re-measure you every week and adjust: what works gets repeated.</p>
+        <p><b>① This week:</b> your full week, with no gaps — every post scheduled in your best time slots.</p>
+        <p><b>② Next week:</b> your storefront starts selling on its own — searchable name, a bio that sells and complete highlights.</p>
+        <p><b>③ From here on:</b> I re-measure you every week and adjust: what works, gets repeated.</p>
       </div>
       <p class="lp-letter-banner">You have the business. I bring the consistency.</p>
-      <div class="lp-letter-sign"><img src="/ai-avatar.png" alt="Posty"><p><i>Posty<b>.</b></i><span>Your community manager</span></p></div>
+      <div class="lp-letter-sign"><img src="ai-avatar.png" alt="Posty"><p><i>Posty<b>.</b></i><span>Your community manager</span></p></div>
     </div>
     <p class="lp-cm-close">💡 And every post tells you its <b>why</b>: what I saw, what I decided and what it's for. That simple.</p>
-    <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">See my account's analysis →</a></div>
+    <div style="text-align:center"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">See my account's analysis →</a></div>
+  </div></div>
+  <div class="section lp-week-sec"><div class="wrap">
+    <div class="lp-week" aria-label="Example of a week built by Posty">
+      <div class="lp-week-head"><span class="lp-week-title">📅 Your Instagram week in Posty</span><span class="lp-week-badge">It posts itself ✨</span></div>
+      <div class="lp-wchips" role="group" aria-label="See one industry's week">
+        <button type="button" class="lp-wchip on" onclick="lpWeekSet('mixto', this)">⭐ Mixed example</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('cafeteria', this)">☕ Coffee shop</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('barberia', this)">💈 Barbershop</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('moda', this)">👕 Fashion</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('belleza', this)">💅 Beauty</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('mascotas', this)">🐶 Pets</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('fitness', this)">🏋️ Fitness</button>
+      </div>
+      <div class="lp-week-grid" id="lpWeekGrid">
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FDEBD2">C</i></span><b>cafe.aurora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Instagram post of a coffee shop made by Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></span></div><div class="lp-day-meta"><b>Mon</b><span>Post</span></div><div class="lp-day-ok">✓ Posted · Mon 10:32 am</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E4F0FA">T</i></span><b>tiendacora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-moda.jpg" alt="Instagram post of a clothing store made by Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></span></div><div class="lp-day-meta"><b>Tue</b><span>Post</span></div><div class="lp-day-ok">✓ Posted · Tue 11:06 am</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E9E4DC">E</i></span><b>elcorte.barberia</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-barber.jpg" alt="Instagram post of a barbershop made by Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></span></div><div class="lp-day-meta"><b>Wed</b><span>Post</span></div><div class="lp-day-sched">📮 Scheduled · Wed 6:30 pm</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FBE4EC">A</i></span><b>estetica.alma</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-belleza.jpg" alt="Instagram post of a beauty studio made by Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></span></div><div class="lp-day-meta"><b>Thu</b><span>Post</span></div><div class="lp-day-sched">📮 Scheduled · Thu 11:00 am</div></div>
+        <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Instagram post of a pet store made by Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></span></div><div class="lp-day-meta"><b>Fri</b><span>Post</span></div><div class="lp-day-sched">📮 Scheduled · Fri 12:15 pm</div></div>
+      </div>
+      <p class="lp-week-note">This is what your week looks like: ideas, designs and copy with your brand, posted automatically at the best times.</p>
+      <p class="lp-week-bridge" id="lpWeekBridge">This is an example with businesses from several industries. <a href="#" onclick="return lpWeekToForm()">The week of <b>YOUR</b> business is ready in 1 minute →</a></p>
+    </div>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
-    <h2>Here's how I work 👇</h2>
+    <h2>This is how I work 👇</h2>
     <p class="lede">You keep running your business. I take care of the rest.</p>
     <div class="steps">
       <div class="step"><div class="num">1</div><h3>You tell me about your business once</h3><p>What you sell, your style, your photos. It takes 2 minutes and I won't ask you for anything else.</p></div>
       <div class="step"><div class="num">2</div><h3>I create everything for you</h3><p>I come up with the ideas, design with your photos and your brand, and write the captions and hashtags that sell.</p></div>
-      <div class="step"><div class="num">3</div><h3>It posts itself</h3><p>Your week goes out at the best times without you touching anything. Something doesn't feel right? You pause it in one tap.</p></div>
+      <div class="step"><div class="num">3</div><h3>It posts itself</h3><p>Your week goes out at the best times without you touching a thing. Something doesn't feel right? You pause it in one tap.</p></div>
     </div>
     <p class="lp-steptotal">⏱️ Your total time: <b>2 minutes</b> to tell us about your business. Posting: 0 minutes — it goes out on its own.</p>
-    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Start my free trial</a></div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/en/prueba">Start my free trial</a></div>
   </div></div>
-  <div class="section" id="ejemplos" style="background:var(--bg2)"><div class="wrap">
-    <p class="lp-show-eyebrow" style="text-align:center">✨ This is what your Instagram looks like with Posty</p>
-    <h2>Real weeks, built for real businesses</h2>
-    <p class="en-examples-note">Profiles across 20 niches, built by Posty: posts, reels and stories designed from each business's exact products, photos and colors — never generic templates. Every week is different, because every business is.</p>
-    <p class="en-examples-note" style="margin-top:18px">This is an example. <b>Yours</b> is built in 1 minute 👇</p>
-    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">I want my profile like this →</a></div>
-    <p style="text-align:center;margin-top:14px;font-size:13.5px;color:var(--mut,#5A7186)">3 days free · no card · cancel anytime</p>
+  <div class="section" id="cm"><div class="wrap">
+    <h2>A community manager does much more than post</h2>
+    <p class="lede">An Instagram that sells doesn't run itself: you have to post often, talk with people, answer everything and promote what works. That's what a community manager does. And they charge <b>$2,000 or more per month</b>. <b>Posty does that same job, every day.</b></p>
+    <div class="lp-cm-cards">
+      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Community</h3><p class="lp-cm-tag">Nobody is left unanswered</p><p>It answers comments and messages (with your OK in one tap), replies to your Google reviews, and creates stories that get your audience involved: polls, questions and countdowns. A community is built by talking, not just posting.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📈</div><h3>Growth</h3><p class="lp-cm-tag">New people discover you</p><p>It spots your best-performing posts and boosts them with ads (you set the cap), gives you a public page ready to share with a WhatsApp button, and every month works on a growth focus you choose.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🛒</div><h3>Sales</h3><p class="lp-cm-tag">Followers become customers</p><p>Posts designed to sell: your product, your promos. It warns you BEFORE every big sales date (Mother's Day, Black Friday, Christmas…) so you're ready, and every profile ends one tap away: WhatsApp, straight to your business.</p></div>
+    </div>
+    <div class="lp-cm-cmp" role="table" aria-label="Comparison between a traditional community manager and Posty">
+      <div class="lp-cm-row lp-cm-head" role="row"><div>The work</div><div>Community manager</div><div class="win">Posty</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Posts posts, reels and stories</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Answers comments and messages</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Looks after your reviews</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Boosts what works with ads</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Plans each month's focus</div><div>✓</div><div class="win">✓</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Is available</div><div>On their schedule</div><div class="win">Every day, around the clock</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Costs</div><div>$2,000+ per month</div><div class="win">From $1.63 per day</div></div>
+    </div>
+    <p class="lp-cm-close">The same job. No salary, no payroll taxes, no vacations.</p>
+    <div style="text-align:center"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">I want my community manager →</a></div>
+  </div></div>
+  <div class="section lp-work" id="trabajando"><div class="wrap">
+    <h2>This is how Posty works, every day</h2>
+    <p class="lede">This happens in your account while you run your business.</p>
+    <div class="lp-work-flex">
+      <div class="lp-work-vid"><video src="posty-rubros.mp4" poster="posty-rubros-poster.jpg" autoplay="" muted="" loop="" playsinline="" preload="metadata" aria-label="Real video of Posty at work: building a post and a reel for a coffee shop"></video></div>
+      <ul class="lp-work-list">
+        <li>🎨 <b>Builds your posts</b> with your photos, your colors and your tone.</li>
+        <li>🎬 <b>Creates your reels</b> and leaves them ready to post on their own.</li>
+        <li>📮 <b>Posts at the best time</b> — and gives you a heads-up first, in case you want to pause anything.</li>
+      </ul>
+    </div>
+  </div></div>
+  <div class="section" id="trabajo"><div class="wrap">
+    <h2>This is how Posty works for you</h2>
+    <p class="lede">Community, growth and sales don't happen by magic: they happen by doing these 9 things every week. Posty does them.</p>
+    <div class="lp-jobs">
+      <div class="lp-job"><div class="lp-job-i">🔍</div><h3>Studies your industry</h3><p>Looks at what works for businesses like yours and builds ideas to sell, not filler.</p></div>
+      <div class="lp-job"><div class="lp-job-i">📅</div><h3>Hunts the dates that sell</h3><p>Mother's Day, Christmas, your industry's big day: your week adapts on its own to what people are buying.</p></div>
+      <div class="lp-job"><div class="lp-job-i">🎨</div><h3>Designs with your brand</h3><p>Your photos, your colors and your logo in every piece. No cookie-cutter templates.</p></div>
+      <div class="lp-job"><div class="lp-job-i">✍️</div><h3>Writes like your business</h3><p>Copy in your voice and your tone, with zero typos. As if you had written it yourself.</p></div>
+      <div class="lp-job"><div class="lp-job-i">⏰</div><h3>Posts at the best time</h3><p>Every post goes out when your audience is watching. And it gives you a heads-up first, in case you want to pause it. And every post also goes out as a story.</p></div>
+      <div class="lp-job"><div class="lp-job-i">🧠</div><h3>Learns your taste</h3><p>What you love gets repeated; what you don't, never comes back. Every week looks more like you. And once a week it asks just enough to know your business like an employee would: your star product, your promos and what never to post.</p></div>
+      <div class="lp-job"><div class="lp-job-i">💬</div><h3>Answers your comments</h3><p>Posty reads every comment you get, prepares the reply in your tone and you send it with one tap. Nothing goes out without your OK.</p></div>
+      <div class="lp-job"><div class="lp-job-i">📩</div><h3>Answers your messages</h3><p>Instagram messages, same thing: the reply arrives ready and you send it with one tap. Your inbox, at zero.</p></div>
+      <div class="lp-job"><div class="lp-job-i">🚀</div><h3>Boosts what works best</h3><p>When a post takes off, Posty spots it and offers to boost it with ads. You set the spending cap.</p></div>
+      <div class="lp-job"><div class="lp-job-i">💡</div><h3>New ideas every week</h3><p>Posty looks at your competition, the dates that sell and your best-performing post — and proposes ideas ready to approve with one tap.</p></div>
+      <div class="lp-job"><div class="lp-job-i">📊</div><h3>Your summary, every week</h3><p>Which posts worked, what's next and the month's focus — it arrives on its own, no asking needed.</p></div>
+    </div>
+    <div style="text-align:center;margin-top:30px"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">Try it free for 3 days</a></div>
+  </div></div>
+  
+  <div class="section" id="capacidades" style="padding-bottom:6px"><div class="wrap">
+    <h2>Everything Posty does, part by part</h2>
+    <p class="lede">This isn't "an app to schedule posts". It's the complete job of a community manager — and every part has its own tool. Take a look, one by one:</p>
+  </div></div>
+  <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Instagram posts</div>
+      <h2>Your entire week, <span class="hl">posted by itself</span></h2>
+      <p class="cap-exp">Posty studies your business and builds your full week: 7 posts + 1 reel with your products, your colors and your star. It posts at your best time. You just watch — and step in if something doesn't feel right.</p>
+      <ul class="cap-list">
+        <li>About your exact product, never generic</li>
+        <li>Your feed's visual line, inherited</li>
+        <li>A heads-up 30 minutes before every post</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample">
+        <div class="cap-ig-head"><img src="ai-avatar.png" alt="Posty"><b>posty.doeseverything</b><span>•••</span></div>
+        <img class="cap-ig-img" loading="lazy" src="lp-pieza.jpg" alt="Real piece made by Posty: the light-blue robot waving, with the headline I'M POSTY.">
+        <div class="cap-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><svg class="save" viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></div>
+        <p class="cap-ig-cap"><b>posty.doeseverything</b> Hi! I'm Posty. 👋 I'm your community manager: I analyze your Instagram in depth — your pace, your best posts, your storefront and even your competition — and I build your plan from that analysis…</p>
+      </div>
+      <p class="cap-note">A real Posty piece. Yours come out with YOUR product, your photos and your colors.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
+    <div class="cap-copy">
+      <div class="cap-kick">Reels</div>
+      <h2>Reels that show your business <span class="hl">in motion</span></h2>
+      <p class="cap-exp">Video is what brings in the most new people, and it's what you have the least time to make. Posty builds your reels with your material and your brand, hook first and a closing that gets people to message you. They post on their own.</p>
+      <ul class="cap-list">
+        <li>1 per week on Essential · 3 on Pro · 5 on Total</li>
+        <li>With your photos and videos, or created from scratch</li>
+        <li>They post on their own, at your best time</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-phone">
+        <video src="posty-rubros.mp4" poster="posty-rubros-poster.jpg" autoplay="" muted="" loop="" playsinline="" preload="metadata" aria-label="Real reel built by Posty for a coffee shop"></video>
+        <span class="cap-ph-chip">🎬 REEL</span>
+        <div class="cap-ph-bot"><b>@your.business</b><span>Your weekly reel, ready and posted by itself.</span><div class="cap-ph-bar"><i></i></div></div>
+      </div>
+      <p class="cap-note">A real video of Posty at work: this is how your reel comes out.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Stories<span class="cap-plan">Pro plan</span></div>
+      <h2>Your business, present <span class="hl">every day</span></h2>
+      <p class="cap-exp">Every post also goes out as a story, and Posty adds stories that get your audience involved: polls, questions and countdowns for your big dates. Your account moves every day, even if you never open the app.</p>
+      <ul class="cap-list">
+        <li>Every post, also as a story</li>
+        <li>Polls and questions that get people involved</li>
+        <li>3 per week on Pro · every day on Total</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-phone">
+        <img loading="lazy" src="g-tazas.jpg" alt="Instagram story of a coffee shop made by Posty">
+        <div class="cap-ph-top"><i class="on"></i><i></i><i></i></div>
+        <div class="cap-ph-head"><img src="ai-avatar.png" alt="Posty"><span>your.business</span><span style="opacity:.75;font-weight:600">2 h</span></div>
+        <div class="cap-ph-bot"><b>See you tomorrow, bright and early ☀️</b>
+          <div class="cap-poll"><b>📊 What time do we open?</b><div class="cap-poll-row"><span>At 8</span><span>68%</span></div><div class="cap-poll-row"><span>At 9</span><span>32%</span></div></div>
+        </div>
+      </div>
+      <p class="cap-note">A story like the ones Posty makes: your post, poll included.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid cap-flip">
+    <div class="cap-copy">
+      <div class="cap-kick">Comments and replies<span class="cap-plan">Total plan</span></div>
+      <h2>No comment goes <span class="hl">unanswered</span></h2>
+      <p class="cap-exp">Posty reads every comment and message you get, prepares the reply in your tone and leaves it ready. You send it with one tap. Your inbox stays at zero without living glued to your phone — and if something is sensitive, it passes it to you.</p>
+      <ul class="cap-list">
+        <li>Replies in your tone, never robotic</li>
+        <li>Nothing goes out without your one-tap OK</li>
+        <li>Complaints and sensitive topics, straight to you</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample"><div class="cap-thread">
+        <div class="cap-msg"><div class="cap-ava" style="background:#B08968">M</div><div class="cap-bub"><span class="who">marina.g · comment on your post</span><br>Do you ship to Atlanta? How long does it take?</div></div>
+        <div class="cap-msg"><div class="cap-ava" style="background:#2793C8">P</div><div class="cap-bub reply"><span class="who">Posty's reply · ready to send</span><br>Yes, Marina! We ship nationwide 🚚 Atlanta takes 2 to 4 business days. Want me to send you the product link?</div></div>
+        <div class="cap-sendrow"><span class="cap-send">Send ✓</span><span class="cap-alt">Edit</span><span class="cap-tag">Your tone: friendly and direct</span></div>
+      </div></div>
+      <p class="cap-note">This is how every reply reaches you: ready, in your tone, one tap from going out.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec navy"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Growth<span class="cap-plan">Pro plan</span></div>
+      <h2>What works, <span class="hl">gets boosted</span></h2>
+      <p class="cap-exp">Posty spots the post that's performing best for you and offers to boost it with ads. You set the spending cap and nothing moves without your OK. And every month you pick a growth focus: more inquiries, more bookings or more sales.</p>
+      <ul class="cap-list">
+        <li>Your best post, spotted automatically</li>
+        <li>Ads with your cap, always with your OK</li>
+        <li>Your public page, ready, with direct WhatsApp</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample"><div class="cap-grow">
+        <div class="cap-grow-best"><img loading="lazy" src="ig-cafe.jpg" alt="Post of a coffee shop made by Posty"><div><h4>Your top-performing post</h4><div class="cap-grow-metric">▲ Twice the engagement of your average</div><div class="cap-grow-sub">3 days ago · Product post</div></div></div>
+        <div class="cap-prop">🚀 <b>Posty's proposal:</b> boost it with <b>$45</b> for 5 days (your cap: $60). It reaches people in your area who don't follow you yet.</div>
+        <div class="cap-sendrow"><span class="cap-send">Boost ✓</span><span class="cap-alt">Not now</span></div>
+      </div></div>
+      <p class="cap-note">The proposal shows up on its own when a post takes off. You decide.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec"><div class="wrap"><div class="cap-grid cap-flip">
+    <div class="cap-copy">
+      <div class="cap-kick">Weekly ideas</div>
+      <h2>You never run out of <span class="hl">things to post</span></h2>
+      <p class="cap-exp">Every week Posty looks at your competition, your best-performing post and the dates coming up — and proposes concrete ideas for your business. The one you like becomes a post in one tap.</p>
+      <ul class="cap-list">
+        <li>From your competition, your winners and the calendar</li>
+        <li>One tap on "Do it" and the idea becomes a post</li>
+        <li>No filler: if there's nothing concrete, it won't bother you</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample cap-idea-wrap">
+        <div class="idea-card">
+          <div class="idea-top"><span class="idea-fmt">📸 Post</span></div>
+          <div class="idea-title">The step-by-step of your star product</div>
+          <div class="idea-why">A competitor posted it on Tuesday and it did twice their average. Your version comes out with your product, your photos and your colors.</div>
+          <div class="idea-actions">
+            <span class="btn btn-primary btn-sm">💪 Do it</span>
+            <span class="btn btn-ghost btn-sm">Not now</span>
+          </div>
+        </div>
+      </div>
+      <p class="cap-note">This is how ideas reach you every week, ready to approve.</p>
+    </div>
+  </div></div></div>
+  <div class="section cap-sec tint"><div class="wrap"><div class="cap-grid">
+    <div class="cap-copy">
+      <div class="cap-kick">Posty connected · New</div>
+      <h2>Your store talks <span class="hl">to your Instagram</span></h2>
+      <p class="cap-exp">Connect your Tiendanube store in one tap and Posty starts posting what your business actually has: your star product stops being the one with the most likes and becomes the one that sells the most. And anything out of stock is never promoted. Ever.</p>
+      <ul class="cap-list">
+        <li>Star by real sales, not likes</li>
+        <li>Out of stock = out of the posts, automatically</li>
+        <li>Slow movers get pushed on purpose</li>
+      </ul>
+      <a class="cap-cta" href="/en/prueba">Try it free for 3 days →</a>
+    </div>
+    <div class="cap-side">
+      <div class="cap-sample"><div class="cap-shop">
+        <div class="row"><span>🛍️</span><span><b>Your store, connected</b></span><span class="pill">Tiendanube ✓</span></div>
+        <div class="row"><span>⭐</span><span>Star by sales: <b>Urban Jacket</b> (38 sales in 30 days)</span></div>
+        <div class="row"><span>🚫</span><span>Logo Tee — out of stock</span><span class="pill out">Out of the posts</span></div>
+        <div class="row"><span>💤</span><span>Oversize Hoodie — quiet for 26 days</span><span class="pill warn">Getting pushed this week</span></div>
+      </div></div>
+      <p class="cap-note">Your real store, connected in one tap from Settings.</p>
+    </div>
+  </div></div></div>
+  <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
+    <h2>The only one that does it all for you</h2>
+    <p class="lede">Scheduling apps give you more work. Community managers run $2,000+ a month. Agencies sell you meetings. I hand you the finished week.</p>
+    <div class="cmp-table" role="table" aria-label="Posty vs agency comparison">
+      <div class="cmp-row cmp-head" role="row"><div></div><div>Traditional agency</div><div class="win">Posty</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>From $2,000</div><div class="win">From $49</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Your week ready in</div><div>2 weeks</div><div class="win">1 minute</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Meetings</div><div>Several per month</div><div class="win">Zero</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Try before you pay</div><div>Doesn't exist</div><div class="win">Try it free, no card</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Contract</div><div>Locked in for 3 to 6 months</div><div class="win">Monthly, cancel anytime</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Answers comments and messages</div><div>If it's in the contract</div><div class="win">Included — one tap away</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Ad spend</div><div>Extra fees</div><div class="win">Boosts your best post from the app</div></div>
+    </div>
+    <p class="unico-line">A community manager costs <b>$2,000+/mo</b>. Posty starts at <b>$49</b>.</p>
+    <p class="lp-trust">🔒 We publish through Meta's official API · You sign in with the official login, without giving us your password · You can pause any post before it goes out</p>
+    <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/en/prueba">Try it free</a></div>
+  </div></div>
+  <div class="section" id="herramienta" style="background:var(--bg2)"><div class="wrap" style="max-width:920px">
+    <h2>A tool gives you work. Posty takes it off your plate.</h2>
+    <p class="lede">AI social apps look great… until you sit down to use them: you have to think, write, design, schedule and publish. That's a job. Posty <b>is</b> the one who does it.</p>
+    <div class="lp-vs">
+      <div class="lp-vs-col lp-vs-tool">
+        <h3>With an AI tool, you…</h3>
+        <ul>
+          <li>✗ Figure out what to post every week</li>
+          <li>✗ Write the prompts and the copy</li>
+          <li>✗ Edit the designs until they look right</li>
+          <li>✗ Schedule and publish one by one</li>
+          <li>✗ Learn a new, complicated dashboard</li>
+          <li>✗ Remember the important dates on your own</li>
+        </ul>
+      </div>
+      <div class="lp-vs-col lp-vs-posty">
+        <h3>With Posty, you…</h3>
+        <ul>
+          <li>✓ <b>Nothing.</b> The week arrives ready and posts itself</li>
+          <li>✓ <b>Nothing.</b> It writes in your tone, with your brand</li>
+          <li>✓ <b>Nothing.</b> It comes out ready — and if you don't like something, you pause it in one tap</li>
+          <li>✓ <b>Nothing.</b> It goes out at the best time, always</li>
+          <li>✓ <b>Nothing.</b> No dashboard to learn: it's having the community manager</li>
+          <li>✓ <b>Nothing.</b> Posty hunts the dates that sell, for you</li>
+        </ul>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/en/prueba">I want to do nothing 😎</a></div>
+  </div></div>
+  <div class="section" id="fotos"><div class="wrap">
+    <h2>With your photos, it's your real business. Without photos, Posty creates it anyway.</h2>
+    <p class="lede">The posts you see above come from two paths — and both work:</p>
+    <div class="lp-foto-grid">
+      <div class="lp-foto-card">
+        <div class="lp-foto-i">📸</div>
+        <h3>You share photos and videos of your business</h3>
+        <p>Your products, your space, your team: nothing sells like the real thing. Posty uses <b>your</b> your material in the posts — and the more you share, the better and more yours they come out.</p>
+        <div class="lp-foto-check">✅ Your real business comes out, not a lookalike</div>
+      </div>
+      <div class="lp-foto-card">
+        <div class="lp-foto-i">🤖</div>
+        <h3>No material? We create it</h3>
+        <p>Posty designs the images from scratch with your brand, your colors and your style. You never miss a post for lack of photos.</p>
+        <div class="lp-foto-check">✅ Your week goes out anyway, always</div>
+      </div>
+    </div>
+    <p class="lp-foto-cta"><a href="/en/prueba">In the free trial you can upload your own photo and see the difference →</a></p>
+    <div style="text-align:center;margin-top:26px"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">Try it free for 3 days</a></div>
+  </div></div>
+  <div class="section lp-calc" id="calculadora"><div class="wrap" style="max-width:820px">
+    <h2>What does your Instagram cost you today?</h2>
+    <p class="lede">Move the slider and do the math with your real numbers.</p>
+    <div class="lp-calc-box">
+      <label class="lp-calc-lab" for="lpCalcH">Hours you spend on it per week: <b id="lpCalcHVal">6 h</b></label>
+      <input type="range" id="lpCalcH" min="1" max="20" step="1" value="6" oninput="lpCalcUpdate()" aria-label="Hours per week you spend on your Instagram">
+      <label class="lp-calc-lab" style="margin-top:16px">What's your hour worth?</label>
+      <div class="lp-calc-rates">
+        <button type="button" class="lp-crate" data-rate="15" onclick="lpCalcRate(this)">$15</button>
+        <button type="button" class="lp-crate on" data-rate="25" onclick="lpCalcRate(this)">$25</button>
+        <button type="button" class="lp-crate" data-rate="40" onclick="lpCalcRate(this)">$40</button>
+      </div>
+      <div class="lp-calc-out" id="lpCalcOut">Your Instagram costs you today ≈ <b>$650</b> per month (<b>26 hours</b> of your time).<br>With Posty: from <b>$1.63 per day</b> and <b>0 hours of your time</b> — you get back <b>26 hours a month</b> for your business.</div>
+    </div>
+    <p class="lp-calc-cm">And if you outsource it: a community manager to do it for you costs <b>$2,000+ per month</b>.</p>
   </div></div>
   <div class="section lp-ctl" id="control"><div class="wrap" style="max-width:920px">
-    <h2>Relax: you always have the handbrake</h2>
-    <p class="lede">Posty works on its own, but nothing goes out without you being able to stop it. That simple:</p>
+    <h2>Relax: you always hold the handbrake</h2>
+    <p class="lede">Posty works on its own, but nothing goes out that you can't stop. It's that simple:</p>
     <div class="lp-ctl-grid">
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">🔔</div><b>You get a heads-up first</b><p>30 minutes before each post goes out, you get the notice. You always see it coming.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">⏸</div><b>Pause in one tap</b><p>The Pause button turns it back into a draft instantly. No explanations, no hassle.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">🎨</div><b>Image not quite right?</b><p>You get 1 free redo with another style per post. Posty builds it again.</p></div>
-      <div class="lp-ctl-card"><div class="lp-ctl-ico">↩️</div><b>Go back to the previous one</b><p>If you don't like the redo, you can go back to the previous image whenever you want.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">🔔</div><b>It gives you a heads-up</b><p>30 minutes before each post goes out, you get the notice. You always see it coming.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">⏸</div><b>You pause it in one tap</b><p>The Pause button turns it back into a draft instantly. No explanations, no hoops.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">🎨</div><b>Don't love the image?</b><p>You get 1 free redo per post, in a different style. Posty builds it again.</p></div>
+      <div class="lp-ctl-card"><div class="lp-ctl-ico">↩️</div><b>Go back to the previous one</b><p>If you don't like the redo, go back to the previous image anytime.</p></div>
     </div>
     <p class="lp-ctl-close">Posty works on its own. <b>You're in charge.</b></p>
   </div></div>
   <div class="lp-stats"><div class="wrap">
     <div class="lp-stats-grid">
-      <div class="lp-stat"><div class="lp-stat-n">1 minute</div><div class="lp-stat-t">to see your week built</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">7 posts + 1 reel</div><div class="lp-stat-t">per week · 0 minutes of yours posting</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$1.63<span class="lp-stat-per">/day</span></div><div class="lp-stat-t">and up — a fraction of what a community manager costs</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">3 days</div><div class="lp-stat-t">free trial, no card</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">1 minute</div><div class="lp-stat-t">to see your week, ready</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">7 posts + 1 reel</div><div class="lp-stat-t">per week · 0 minutes of your time posting</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$1.63<span class="lp-stat-per">/day</span></div><div class="lp-stat-t">from — a community manager costs $2,000+ per month</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">3 days</div><div class="lp-stat-t">free trial, no card required</div></div>
     </div>
   </div></div>
+  
   <div class="section" id="atencion" style="background:var(--bg2)"><div class="wrap">
     <p style="text-align:center;margin:0 0 6px"><span style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:12px;letter-spacing:.6px;text-transform:uppercase;padding:6px 14px;border-radius:999px">Exclusive to the Total plan</span></p>
-    <h2>And with Total, Posty also <span class="hl">serves your customers and sells for you</span></h2>
-    <p class="lede">The post brings the inquiry. And then? If nobody replies fast, that sale goes cold. With Customer Care, I reply, I book, and I follow every inquiry through to closing — with your real prices and your way of serving people.</p>
+    <h2>And with Total, Posty also <span class="hl">serves and sells for you</span></h2>
+    <p class="lede">The post brings the inquiry. Then what? If nobody answers fast, that sale goes cold. With Customer care, Posty is on watch 24/7: every reply is prepared instantly — with your real prices and your way of serving — and you approve it in one tap before it goes out. Nothing is sent without your OK.</p>
     <div class="lp-cm-cards">
-      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>I reply instantly, 24/7</h3><p class="lp-cm-tag">Instagram and WhatsApp</p><p>Your prices, your services, your hours: I reply with your business's real data, in your tone. No generic replies, no made-up prices.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">📅</div><h3>I book and confirm your appointments</h3><p class="lp-cm-tag">Your calendar fills itself</p><p>I offer your open times, book, confirm and reschedule. And if someone cancels, that slot gets offered again.</p></div>
-      <div class="lp-cm-card"><div class="lp-cm-i">🎯</div><h3>I follow every inquiry to closing</h3><p class="lp-cm-tag">No lead goes cold</p><p>If someone asked and didn't close, I follow up in time. When they're ready, I close with a payment link or a deposit — and after the sale, I ask for the Google review.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">💬</div><h3>Replies ready instantly, 24/7</h3><p class="lp-cm-tag">Instagram messages and comments</p><p>Your prices, your services, your hours: every reply is prepared with your business's real data, in your tone, ready for your one-tap approval. No generic replies or made-up prices — and nothing goes out without your OK.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">📅</div><h3>I book and confirm your appointments</h3><p class="lp-cm-tag">Always with your OK</p><p>I offer your open slots and get the booking and the confirmation ready — you approve in one tap. And if someone cancels, that slot gets offered again.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🎯</div><h3>I follow every inquiry to the close</h3><p class="lp-cm-tag">No lead goes cold</p><p>If someone asked and didn't close, the follow-up is prepared in time for you to send it in one tap. When they're ready, the close goes out with a payment or deposit link — and after the sale, the Google review request is also ready for your approval.</p></div>
     </div>
-    <p class="lp-cm-close">🤝 You see everything: every conversation stays in your account, and anything sensitive — complaints, discounts, money — I hand over to you. <b>Posty serves; you stay in charge.</b></p>
+    <p class="lp-cm-close">🤝 You see everything: every conversation stays in your account, nothing goes out without your OK, and anything sensitive — complaints, discounts, money — I pass to you. <b>Posty serves; you're in charge.</b></p>
     <div style="text-align:center"><a class="btn btn-primary" href="#planes" style="font-size:16px;padding:16px 36px">See the Total plan →</a></div>
   </div></div>
+  
+  <div class="section lp-recap"><div class="wrap">
+    <h2>All of this, in one Posty</h2>
+    <p class="lede">The complete job of a community manager, in one place.</p>
+    <div class="lp-recap-grid"><div class="lp-recap-item"><div class="he">🎨</div><div><b>Designs your week</b><p>Posts, reels and stories with your brand: your photos, your colors and your exact product. No cookie-cutter templates.</p></div></div><div class="lp-recap-item"><div class="he">✍️</div><div><b>Writes to sell</b><p>Captions and hashtags in your tone, designed to make people buy, not to fill space.</p></div></div><div class="lp-recap-item"><div class="he">⏰</div><div><b>Posts on its own</b><p>At the best time, every day. It gives you a heads-up 30 minutes before, in case you want to pause anything.</p></div></div><div class="lp-recap-item"><div class="he">🔍</div><div><b>Studies your business</b><p>It reads your Instagram and your industry: what sells, what's working and what your competition is doing.</p></div></div><div class="lp-recap-item"><div class="he">📆</div><div><b>Hunts the dates that sell</b><p>Mother's Day, Black Friday, Christmas: your week adapts on its own — you don't have to remember a thing.</p></div></div><div class="lp-recap-item"><div class="he">💡</div><div><b>Proposes ideas</b><p>Every week, new ideas for your business, ready to approve in one tap.</p></div></div><div class="lp-recap-item"><div class="he">💬</div><div><b>Answers your comments</b><p>The reply, ready in your tone; you send it in one tap. Nothing goes out without your OK.</p></div></div><div class="lp-recap-item"><div class="he">📩</div><div><b>Answers your messages</b><p>Your Instagram inbox, at zero.</p></div></div><div class="lp-recap-item"><div class="he">⭐</div><div><b>Looks after your reviews</b><p>Answers your Google reviews for you.</p></div></div><div class="lp-recap-item"><div class="he">🚀</div><div><b>Boosts what works</b><p>It spots the post that's taking off and offers to boost it with ads. You set the spending cap.</p></div></div><div class="lp-recap-item"><div class="he">🌐</div><div><b>Your page, ready to share</b><p>A public page for your business with a WhatsApp button straight to you.</p></div></div><div class="lp-recap-item"><div class="he">🤚</div><div><b>You're in charge</b><p>Pause any post in one tap, ask for changes in the chat as if you were talking to your CM, or approve everything by hand if you prefer.</p></div></div></div>
+    <p class="lp-recap-foot">And every week you get the summary: what worked, what's next and the month's focus.</p>
+    <div style="text-align:center;margin-top:22px"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">Try it free for 3 days</a></div>
+  </div></div>
   <div class="section" id="planes"><div class="wrap">
-    <h2>Choose your plan</h2>
-    <p class="lede">First try it free for 3 days. If you like your week, pick your plan here.</p>
-    <div class="lp-offer"><b>The offer is simple:</b> try 3 days free, see your week built before you pay a cent, and if you don't love it, you pay nothing. No card, no contract, no fine print.</div>
-    <div class="plans-row">
-      <div class="price-card">
-        <span class="en-role">Community Manager</span>
-        <h3>Plan Essential</h3>
-        <div class="price">$49<small>/mo</small></div>
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">To be present all week</p>
-        <ul>
-          <li>7 posts a week, automatic</li>
-          <li>1 reel a week</li>
-          <li>Strategic ideas for your business</li>
-          <li>Designs + captions + hashtags</li>
-          <li>Scheduled automatic posting</li>
-        </ul>
-        <a class="btn btn-soft btn-block" href="/prueba">Start free</a>
-      </div>
-      <div class="price-card hot">
-        <div class="tag">MOST POPULAR</div>
-        <span class="en-role">+ Growth</span>
-        <h3>Plan Pro</h3>
-        <div class="price">$99<small>/mo</small></div>
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">To really grow</p>
-        <ul>
-          <li>7 posts a week, automatic</li>
-          <li>3 reels a week</li>
-          <li>3 stories a week</li>
-          <li>Strategic ideas for your business</li>
-          <li>Designs + captions + hashtags</li>
-          <li>Scheduled automatic posting</li>
-          <li>Strategy to stand out from your competition</li>
-          <li>Managed ads (10% fee)</li>
-          <li>Weekly results report</li>
-        </ul>
-        <a class="btn btn-primary btn-block" href="/prueba">Start free</a>
-      </div>
-      <div class="price-card">
-        <span class="en-role">+ Customer Care</span>
-        <h3>Plan Total</h3>
-        <div class="price">$149<small>/mo</small></div>
-        <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Your business served and selling, 24/7</p>
-        <ul>
-          <li>7 posts a week, automatic</li>
-          <li>5 reels a week</li>
-          <li>Stories every day</li>
-          <li>Strategic ideas for your business</li>
-          <li>Designs + captions + hashtags</li>
-          <li>Scheduled automatic posting</li>
-          <li>Strategy to stand out from your competition</li>
-          <li>Managed ads (10% fee)</li>
-          <li>Weekly results report</li>
-          <li>24/7 customer care on Instagram &amp; WhatsApp</li>
-          <li>Replies with your real prices and services</li>
-          <li>Books and confirms your appointments</li>
-          <li>Follow-up on anyone who asked and didn't close</li>
-          <li>Closes with a payment link or deposit</li>
-          <li>Comments answered (you approve the sensitive ones in one tap)</li>
-          <li>Google reviews managed</li>
-        </ul>
-        <a class="btn btn-soft btn-block" href="/prueba">Start free</a>
-      </div>
+    <h2>Pick your plan</h2>
+    <p class="lede">Try it free for 3 days first. If you like your week, pick your plan here.</p>
+    <div class="lp-offer"><b>The offer is simple:</b> you try 3 days free, you see your week ready before paying a cent and, if you don't love it, you pay nothing. No card, no contract, no fine print.</div>
+    <div class="country-toggle"><button class="on" type="button">🇺🇸 United States · USD</button></div>
+    <div class="anchor-line" id="anchorLine">A community manager costs <b>$2,000+/mo</b>. Posty starts at <b>$49</b>.</div>
+    <div class="scarcity" id="scarcityLine">🔥 Only <b>50 spots</b> — we personally onboard every business that joins.</div>
+    <div class="plans-row" id="plansRow">
+    <div class="price-card">
+      <h3>Essential</h3>
+      <div class="price">$49<small>/mo</small></div>
+      <div class="pz-perday">≈ $1.63 per day</div>
+      <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Stay present all week long</p>
+      <ul><li>7 posts per week, automatic</li><li>1 reel per week</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Scheduled automatic posting</li></ul>
+      <a class="btn btn-soft btn-block" href="/en/prueba">Try it free</a>
     </div>
-    <p class="lp-plans-note">Prices in USD · No lock-in contract · Cancel anytime from your account</p>
+    <div class="price-card hot">
+      <div class="tag">MOST POPULAR</div>
+      <h3>Pro</h3>
+      <div class="price">$99<small>/mo</small></div>
+      <div class="pz-perday">≈ $3.30 per day</div>
+      <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Built to actually grow</p>
+      <ul><li>7 posts per week, automatic</li><li>3 reels per week</li><li>3 stories per week</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Scheduled automatic posting</li><li>A strategy to stand out from your competition</li><li>Managed ads (10% fee)</li><li>Weekly results report</li></ul>
+      <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
+    </div>
+    <div class="price-card">
+      <h3>Total</h3>
+      <div class="price">$149<small>/mo</small></div>
+      <div class="pz-perday">≈ $4.97 per day</div>
+      <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Your business looked after and selling — with your one-tap OK</p>
+      <ul><li>7 posts per week, automatic</li><li>5 reels per week</li><li>Stories every day</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Scheduled automatic posting</li><li>A strategy to stand out from your competition</li><li>Managed ads (10% fee)</li><li>Weekly results report</li><li>Customer care on Instagram: Posty prepares every reply, you approve in one tap</li><li>Replies with your real prices and services</li><li>Books and confirms your appointments and reservations</li><li>Follows up with anyone who asked but didn't buy</li><li>Closes with a payment or deposit link</li><li>Comments answered (you approve each one in one tap)</li><li>Google reviews managed</li></ul>
+      <a class="btn btn-soft btn-block" href="/en/prueba">Try it free</a>
+    </div>
+    </div>
+    <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
+    <p class="lp-plans-note">Prices in USD · No long-term contract · Cancel anytime from your account</p>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Frequently asked questions</h2>
     <p class="lede">What everyone asks before starting.</p>
     <div class="faq">
-      <details><summary>Do I need to do anything?</summary><p>No. You tell me about your business once and that's it. I create the ideas, the designs and the copy, and I post. If you want, you can review everything before it goes out.</p></details>
-      <details><summary>Does Posty post to my real Instagram account?</summary><p>Yes. You connect your Business account once and I post directly to your profile with Meta's official API. And in the free trial you already see your week built before signing up.</p></details>
-      <details><summary>Do you use my photos and my brand?</summary><p>Yes — that's the most important part: you upload your photos and your logo once, we define your colors, and every design goes out with your identity. Nothing generic.</p></details>
-      <details><summary>Can I cancel anytime?</summary><p>Yes, no questions and no hassle. You cancel from your account and that's it.</p></details>
-      <details><summary>What if I don't like a post?</summary><p>You pause it before it goes out, in one tap. Don't like the image? Redo it with another style or go back to the previous one, free. And I learn from what you like, so every week turns out better.</p></details>
-      <details><summary>Does Posty also serve my customers?</summary><p>With the Total plan, yes: I reply to your Instagram and WhatsApp messages with your real prices and services, I book your appointments and reservations, I follow up with anyone who asked and didn't close, and I close with a payment link or a deposit. Every conversation stays visible in your account, and anything sensitive I hand over to you.</p></details>
+      <details><summary>Do I have to do anything?</summary><p>No. You tell me about your business once and that's it. I create the ideas, the designs, the copy and I post. If you want, you can review everything before it goes out.</p></details>
+      <details><summary>Does Posty post to my real Instagram account?</summary><p>Yes. You connect your Business account once and I post directly to your profile through Meta's official API. And in the free trial you already see your week ready before signing up.</p></details>
+      <details><summary>Do you use my photos and my brand?</summary><p>Yes — that's the most important part: you upload your photos and your logo once, we set your colors, and every design comes out with your identity. Nothing generic.</p></details>
+      <details><summary>Can I cancel anytime?</summary><p>Yes, no questions and no hoops. Cancel from your account and you're done.</p></details>
+      <details><summary>What if I don't like a post?</summary><p>You pause it in one tap, before it goes out. Don't like the image? Redo it in another style or go back to the previous one, free. And I learn from what you like so every week comes out better.</p></details>
+      <details><summary>Does Posty also serve my customers?</summary><p>With the Total plan, yes: Posty watches your Instagram messages 24/7 and prepares every reply instantly, with your real prices and services. Bookings and confirmations, follow-ups for anyone who asked but didn't close, and closings with a payment or deposit link are also prepared for you. You approve every message in one tap before it goes out — nothing is sent without your OK — and anything sensitive I pass to you.</p></details>
       <details><summary>Do I have to give you my Instagram password?</summary><p>No. You connect your account with Meta's official login, just like signing in with Google on other apps. I never see or store your password.</p></details>
-      <details><summary>Do posts go out on their own?</summary><p>Yes, that's the idea: your week goes out on its own at the best times, without you touching anything. Before each post I give you a heads-up, and if something doesn't feel right you pause it in one tap. Prefer to approve everything by hand? You can too: turn off automatic posting in Settings and nothing goes out without your OK.</p></details>
-      <details><summary>What if it doesn't work for me?</summary><p>That's why the trial is free and needs no card: see your week built in 1 minute and decide. If it's not for you, you pay nothing.</p></details>
-      <details><summary>When do I see my first week?</summary><p>Right now: in the free trial you see it built in 1 minute, and when you create your account it starts posting on its own (with a heads-up first, in case you want to pause anything).</p></details>
-      <details><summary>Does Posty reply to my Instagram comments and messages?</summary><p>Yes. For every comment or message that comes in, Posty prepares the reply in your business's tone: you send it in one tap, edit it or discard it. Nothing gets answered without your approval.</p></details>
-      <details><summary>Does Posty replace a community manager?</summary><p>It does the complete day-to-day job: posting, replying, promoting and looking after your profile — with your one-tap approval when human judgment is needed. If your brand needs on-site photo or video production, or bespoke campaigns, that's still a human team's work.</p></details>
-      <details><summary>Can Posty advertise my posts?</summary><p>Yes. When a post performs really well, Posty flags it and suggests boosting it with ads. You load credit in the app, set how much you want to spend, and that's it: your best content reaches many more people.</p></details>
+      <details><summary>Do the posts really go out on their own?</summary><p>Yes, that's the idea: your week goes out on its own at the best times, without you touching a thing. Before every post I give you a heads-up, and if something doesn't feel right you pause it in one tap. Prefer to approve everything by hand? You can: turn off auto-posting in Settings and nothing goes out without your OK.</p></details>
+      <details><summary>What if it doesn't work for me?</summary><p>That's why the trial is free and card-less: see your week ready in 1 minute and decide. If it's not for you, you pay nothing.</p></details>
+      <details><summary>When do I see my first week?</summary><p>Right away: in the free trial you see it ready in 1 minute, and when you create your account it's already posting on its own (with a heads-up first, in case you want to pause anything).</p></details>
+      <details><summary>Does Posty answer my Instagram comments and messages?</summary><p>Yes. For every comment or message that comes in, Posty prepares the reply in your business's tone: send it in one tap, edit it, or discard it. Nothing gets answered without your approval.</p></details>
+      <details><summary>Does Posty replace a community manager?</summary><p>It does the complete everyday job: posting, replying, promoting and looking after your profile — with your one-tap approval when human judgment is needed. If your brand needs in-person photo or video production, or bespoke campaigns, that's still a human team's work.</p></details>
+      <details><summary>Can Posty advertise my posts?</summary><p>Yes. When a post does really well, Posty flags it and offers to boost it with ads. You load credit in the app, set how much you want to spend, and you're done: your best content reaches far more people.</p></details>
     </div>
+    <p style="text-align:center;margin-top:28px;font-size:15.5px;color:var(--dim)">Another question? <a href="/en/prueba" style="color:var(--sky);font-weight:700;cursor:pointer">Talk to Posty →</a></p>
     <div style="text-align:center;margin-top:44px">
-      <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">See my free week 👀</a>
+      <a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:18px 44px">See my week, free 👀</a>
     </div>
+  </div></div>
+  <div class="section lp-audit" id="auditoria"><div class="wrap" style="max-width:760px">
+    <h2>Is your Instagram selling?</h2>
+    <p class="lede">Posty analyzes your profile <b>for free</b> and tells you what's holding your sales back: what to post, what to answer, what to improve.</p>
+    <form class="lp-igform lp-audit-form" onsubmit="return lpGoAudit(event)">
+      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Tu Instagram">
+      <button class="btn btn-primary" type="submit">Audit my Instagram for free</button>
+    </form>
+    <p class="lp-audit-note">No sign-up · Your result arrives in under a minute</p>
   </div></div>
   <div class="lp-final"><div class="wrap">
-    <img class="hero-posty lp-final-ava" src="/ai-avatar.png" alt="Posty, your community manager">
-    <h2>Your first week could already be built</h2>
+    <img class="hero-posty lp-final-ava" src="ai-avatar.png" alt="Posty, your community manager">
+    <h2>Your first week could already be ready</h2>
     <p>Tell us about your business and see it in 1 minute. Free, no card.</p>
-    <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">See my free week 👀</a>
-    <div class="hero-note" style="margin-top:18px">✓ No card · ✓ 3 days free · ✓ Cancel anytime</div>
+    <a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:18px 44px">See my week, free 👀</a>
+    <div class="hero-note" style="margin-top:18px">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
+    <p class="lp-spots" data-spots="">🔥 Only <b>50 of 50 spots left</b> this month</p>
   </div></div>
   <div class="footer"><div class="wrap">
-    <span class="logo logo-posty" style="font-size:17.5px"><img src="/ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
-    <span>Posty, your AI community manager · A Posta product · Made in Argentina 🇦🇷 · © 2026</span>
-    <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacy</a> · <a href="/terminos.html" style="color:var(--sky)">Terms</a> · <a href="/" onclick="postyGoEs()" style="color:var(--sky)">Ver en español</a></span>
+    <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
+    <span>Posty, your AI community manager · A Posta product · © 2026</span>
+    <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacy</a> · <a href="/terminos.html" style="color:var(--sky)">Terms</a> · <a data-posty-chat="" role="button" tabindex="0" style="color:var(--sky);cursor:pointer">Support</a></span>
   </div></div>
+  <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/en/prueba">Try it free for 3 days</a></div></div></div>
+<script>
+/* EN mirror: ports of the landing's interactive widgets (same ids/classes
+   as the Spanish app.js, with English copy and USD numbers). */
+function toggleMobileMenu() {
+  const m = document.getElementById('mobileMenu');
+  if (m) m.classList.toggle('open');
+}
+function lpGoPrueba(e) {
+  if (e) e.preventDefault();
+  const inp = document.getElementById('lpIg');
+  const v = inp && inp.value ? inp.value.trim().replace(/^@/, '') : '';
+  location.href = '/en/prueba' + (v ? '?ig=' + encodeURIComponent(v) : '');
+  return false;
+}
+/* — Profile wall: ONE row of 4 with ‹ › arrows (same mechanics as the
+   Spanish landing, v211): pages of 4, track sliding −100% per page,
+   arrows .off at the ends, touch swipe. On ≤1023px the pages flatten
+   (display:contents in styles.css) and the track becomes the horizontal
+   scroll-snap strip: there the arrows move one card at a time. — */
+let LP_WALL_PAGE = 0;
+function lpWallMobile() { return window.matchMedia('(max-width:1023px)').matches; }
+function lpWallSyncArrows() {
+  const track = document.getElementById('lpWallTrack');
+  const prev = document.getElementById('lpWallPrev');
+  const next = document.getElementById('lpWallNext');
+  if (!track || !prev || !next) return;
+  if (lpWallMobile()) {
+    const max = track.scrollWidth - track.clientWidth;
+    prev.classList.toggle('off', track.scrollLeft <= 2);
+    next.classList.toggle('off', track.scrollLeft >= max - 2);
+    return;
+  }
+  const pages = track.children.length;
+  prev.classList.toggle('off', LP_WALL_PAGE <= 0);
+  next.classList.toggle('off', LP_WALL_PAGE >= pages - 1);
+  const c = document.getElementById('lpWallCount');
+  if (c) c.textContent = (LP_WALL_PAGE + 1) + ' / ' + pages;
+}
+function lpWallSync() {
+  const track = document.getElementById('lpWallTrack');
+  if (!track) return;
+  if (lpWallMobile()) { track.style.transform = ''; lpWallSyncArrows(); return; }
+  const pages = track.children.length;
+  LP_WALL_PAGE = Math.max(0, Math.min(pages - 1, LP_WALL_PAGE));
+  track.style.transform = 'translateX(' + (-LP_WALL_PAGE * 100) + '%)';
+  lpWallSyncArrows();
+}
+function lpWallStep(d) {
+  const track = document.getElementById('lpWallTrack');
+  if (!track) return;
+  if (lpWallMobile()) {
+    const card = track.querySelector('.lp-wall-card');
+    const w = card ? card.offsetWidth + 10 : track.clientWidth;
+    track.scrollBy({ left: d * w, behavior: 'smooth' });
+    return;
+  }
+  LP_WALL_PAGE += d;
+  lpWallSync();
+}
+function lpInitWall() {
+  const track = document.getElementById('lpWallTrack');
+  if (!track || track.dataset.bound) return;
+  track.dataset.bound = '1';
+  let tx = null;
+  track.addEventListener('touchstart', (e) => { tx = e.changedTouches[0].clientX; }, { passive: true });
+  track.addEventListener('touchend', (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    tx = null;
+    if (Math.abs(dx) >= 40 && !lpWallMobile()) lpWallStep(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  let raf = false;
+  track.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = true;
+    requestAnimationFrame(() => { raf = false; lpWallSyncArrows(); });
+  }, { passive: true });
+  window.addEventListener('resize', lpWallSync);
+  lpWallSync();
+}
+lpInitWall();
+/* — Weekly demo switcher (data ported from the Spanish landing) — */
+const LP_WEEK_DAYS = [
+  { d: 'Mon', cls: 'lp-day-ok', t: '✓ Posted · Mon 10:32 am' },
+  { d: 'Tue', cls: 'lp-day-ok', t: '✓ Posted · Tue 11:06 am' },
+  { d: 'Wed', cls: 'lp-day-sched', t: '📮 Scheduled · Wed 6:30 pm' },
+  { d: 'Thu', cls: 'lp-day-sched', t: '📮 Scheduled · Thu 11:00 am' },
+  { d: 'Fri', cls: 'lp-day-sched', t: '📮 Scheduled · Fri 12:15 pm' }
+];
+const LP_WEEK = {
+  mixto: { ejemplo: 'with businesses from several industries', cards: [
+    { u: 'cafe.aurora', l: 'C', c: '#FDEBD2', img: 'ig-cafe.jpg', alt: 'Instagram post of a coffee shop made by Posty' },
+    { u: 'tiendacora', l: 'T', c: '#E4F0FA', img: 'ig-moda.jpg', alt: 'Instagram post of a clothing store made by Posty' },
+    { u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', img: 'ig-barber.jpg', alt: 'Instagram post of a barbershop made by Posty' },
+    { u: 'estetica.alma', l: 'A', c: '#FBE4EC', img: 'ig-belleza.jpg', alt: 'Instagram post of a beauty studio made by Posty' },
+    { u: 'petshop.huella', l: 'H', c: '#E2F2E4', img: 'ig-mascotas.jpg', alt: 'Instagram post of a pet store made by Posty' }
+  ] },
+  cafeteria: { ejemplo: 'of a coffee shop', u: 'cafe.aurora', l: 'C', c: '#FDEBD2', alt: 'Instagram post of Café Aurora made by Posty', imgs: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg'] },
+  barberia: { ejemplo: 'of a barbershop', u: 'elcorte.barberia', l: 'E', c: '#E9E4DC', alt: 'Instagram post of El Corte Barbería made by Posty', imgs: ['ig-barber.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-8.jpg'] },
+  moda: { ejemplo: 'of a clothing store', u: 'tiendacora', l: 'T', c: '#E4F0FA', alt: 'Instagram post of Tienda Cora made by Posty', imgs: ['ig-moda.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-8.jpg'] },
+  belleza: { ejemplo: 'of a beauty studio', u: 'estetica.alma', l: 'A', c: '#FBE4EC', alt: 'Instagram post of Estética Alma made by Posty', imgs: ['ig-belleza.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-8.jpg'] },
+  mascotas: { ejemplo: 'of a pet store', u: 'petshop.huella', l: 'H', c: '#E2F2E4', alt: 'Instagram post of Pet Shop Huella made by Posty', imgs: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-4.jpg', 'gt-petshop-6.jpg', 'gt-petshop-8.jpg'] },
+  fitness: { ejemplo: 'of a gym', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Instagram post of Gym Norte made by Posty', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] }
+};
+const LP_WEEK_POOLS = {
+  cafeteria: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-latte.jpg', 'g-pasta.jpg', 'g-vaso.jpg', 'g-cappu.jpg', 'g-gourmet.jpg', 'g-platos.jpg', 'g-tres.jpg'],
+  barberia: ['ig-barber.jpg', 'gt-elcorte-1.jpg', 'gt-elcorte-2.jpg', 'gt-elcorte-3.jpg', 'gt-elcorte-4.jpg', 'gt-elcorte-5.jpg', 'gt-elcorte-6.jpg', 'gt-elcorte-7.jpg', 'gt-elcorte-8.jpg', 'gt-elcorte-9.jpg'],
+  moda: ['ig-moda.jpg', 'gt-tiendacora-1.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-3.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-5.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-7.jpg', 'gt-tiendacora-8.jpg', 'gt-tiendacora-9.jpg'],
+  belleza: ['ig-belleza.jpg', 'gt-esteticaalma-1.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-3.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-5.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-7.jpg', 'gt-esteticaalma-8.jpg', 'gt-esteticaalma-9.jpg'],
+  mascotas: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-2.jpg', 'gt-petshop-3.jpg', 'gt-petshop-4.jpg', 'gt-petshop-5.jpg', 'gt-petshop-6.jpg', 'gt-petshop-7.jpg', 'gt-petshop-8.jpg', 'gt-petshop-9.jpg'],
+  fitness: ['ig-fitness.jpg', 'gt-gymnorte-1.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-3.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-5.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-7.jpg', 'gt-gymnorte-8.jpg', 'gt-gymnorte-9.jpg']
+};
+const LP_WEEK_ALIAS = {
+  'gt-petshop-2.jpg': 'ig-mascotas.jpg',
+  'gt-tiendacora-3.jpg': 'ig-moda.jpg',
+  'gt-elcorte-1.jpg': 'ig-barber.jpg',
+  'gt-esteticaalma-3.jpg': 'ig-belleza.jpg',
+  'gt-gymnorte-5.jpg': 'ig-fitness.jpg'
+};
+const LP_WEEK_EXTRA = [
+  { u: 'gymnorte', l: 'G', c: '#E6E0F5', img: 'ig-fitness.jpg', alt: 'Instagram post of a gym made by Posty' },
+  { u: 'laesquina.resto', l: 'R', c: '#FDE8D8', img: 'ig-gastro.jpg', alt: 'Instagram post of a restaurant made by Posty' }
+];
+const LP_WEEK_ICONS = '<svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span>';
+function lpWeekCards(key) {
+  const data = LP_WEEK[key] || LP_WEEK.mixto;
+  const canon = (src) => LP_WEEK_ALIAS[src] || src;
+  const used = new Set();
+  const take = (img, pool) => {
+    if (!used.has(canon(img))) { used.add(canon(img)); return img; }
+    for (const cand of pool || []) {
+      if (!used.has(canon(cand))) { used.add(canon(cand)); return cand; }
+    }
+    return img;
+  };
+  if (data.cards) {
+    return data.cards.map((card) => {
+      if (!used.has(canon(card.img))) { used.add(canon(card.img)); return card; }
+      const alt = LP_WEEK_EXTRA.find((c) => !used.has(canon(c.img)));
+      if (alt) { used.add(canon(alt.img)); return alt; }
+      return card;
+    });
+  }
+  const pool = LP_WEEK_POOLS[key] || data.imgs;
+  return data.imgs.map((img) => ({ u: data.u, l: data.l, c: data.c, img: take(img, pool), alt: data.alt }));
+}
+function lpWeekCardHTML(card, day) {
+  return `<div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Post</span></div><div class="${day.cls}">${day.t}</div></div>`;
+}
+function lpWeekToForm() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => { const i = document.getElementById('lpIg'); if (i) i.focus({ preventScroll: true }); }, 500);
+  return false;
+}
+function lpWeekSet(key, btn) {
+  const data = LP_WEEK[key] || LP_WEEK.mixto;
+  document.querySelectorAll('.lp-wchip').forEach((b) => b.classList.toggle('on', b === btn));
+  const grid = document.getElementById('lpWeekGrid');
+  const bridge = document.getElementById('lpWeekBridge');
+  const apply = () => {
+    if (grid) {
+      const cards = lpWeekCards(key).map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i]));
+      grid.innerHTML = cards.join('');
+      grid.classList.remove('lp-week-swap');
+    }
+    if (bridge) bridge.innerHTML = `This is an example ${data.ejemplo}. <a href="#" onclick="return lpWeekToForm()">The week of <b>YOUR</b> business is ready in 1 minute →</a>`;
+  };
+  if (grid) { grid.classList.add('lp-week-swap'); setTimeout(apply, 170); } else apply();
+}
+/* — Cost calculator (USD) — */
+let LP_CALC_RATE = 25;
+function lpCalcUpdate() {
+  const inp = document.getElementById('lpCalcH');
+  const out = document.getElementById('lpCalcOut');
+  if (!inp || !out) return;
+  const h = parseInt(inp.value, 10) || 6;
+  const hv = document.getElementById('lpCalcHVal');
+  if (hv) hv.textContent = h + ' h';
+  const fmt = (n) => Math.round(n).toLocaleString('en-US');
+  const horasMes = Math.round(h * 4.33);
+  const costo = h * 4.33 * LP_CALC_RATE;
+  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: from <b>$1.63 per day</b> and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
+}
+function lpCalcRate(btn) {
+  LP_CALC_RATE = parseInt(btn.getAttribute('data-rate'), 10) || 25;
+  document.querySelectorAll('.lp-crate').forEach((b) => b.classList.toggle('on', b === btn));
+  lpCalcUpdate();
+}
+/* — Before/after drag (HOY / CON POSTY) + live activity line — */
+(function () {
+  const drag = document.getElementById('pzDrag');
+  if (drag && !drag.dataset.bound) {
+    drag.dataset.bound = '1';
+    const range = document.getElementById('pzDragRange');
+    const setPos = (p) => {
+      p = Math.max(4, Math.min(96, p));
+      drag.style.setProperty('--pos', p + '%');
+      if (range) range.value = Math.round(p);
+    };
+    setPos(50);
+    let on = false;
+    const fromEvent = (e) => { const r = drag.getBoundingClientRect(); if (r.width) setPos(((e.clientX - r.left) / r.width) * 100); };
+    drag.addEventListener('pointerdown', (e) => {
+      if (e.target === range) return;
+      on = true; drag.classList.add('touched');
+      try { drag.setPointerCapture(e.pointerId); } catch (err) {}
+      fromEvent(e);
+    });
+    drag.addEventListener('pointermove', (e) => { if (on) fromEvent(e); });
+    ['pointerup', 'pointercancel'].forEach((ev) => drag.addEventListener(ev, () => { on = false; }));
+    if (range) range.addEventListener('input', () => { drag.classList.add('touched'); setPos(parseFloat(range.value) || 50); });
+  }
+  const line = document.getElementById('lpLiveLine');
+  if (line) {
+    const items = [
+      '🐾 <b>Posty</b> posted Tuesday\'s post <span>· 2 h ago</span>',
+      '💬 <b>Posty</b> left 3 comment replies ready <span>· 5 h ago</span>',
+      '🎬 This week\'s reel is ready <span>· yesterday</span>',
+      '📸 Promo story scheduled <span>· today 9:00 am</span>',
+      '📊 Your weekly report is ready <span>· Monday</span>'
+    ];
+    let i = 0;
+    line.innerHTML = items[0];
+    setInterval(() => {
+      line.classList.add('swap');
+      setTimeout(() => { i = (i + 1) % items.length; line.innerHTML = items[i]; line.classList.remove('swap'); }, 320);
+    }, 3500);
+  }
+})();
+
+</script>
 </body>
 </html>
