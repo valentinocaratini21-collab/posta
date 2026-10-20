@@ -1456,7 +1456,7 @@ function landingView(cfg) {
     <span>Posty, tu community manager con IA · Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a></span>
   </div></div>
-  <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">✨ Probar gratis</a></div></div>`;
+  <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">Probá gratis 3 días</a></div></div>`;
 }
 
 /* ---------- AUTH ---------- */
