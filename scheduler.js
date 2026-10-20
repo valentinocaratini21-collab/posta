@@ -295,7 +295,7 @@ function pausePostTrialExpired(db, post) {
 async function processDuePosts(db) {
   // Recuperar posteos trabados en 'publishing' (ej: reinicio del servidor a mitad de publicación)
   try {
-    db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE status='publishing' AND scheduled_at < datetime('now', '-15 minutes')`).run();
+    db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE status='publishing' AND scheduled_at < datetime('now', '-15 minutes') AND user_id NOT IN (SELECT id FROM users WHERE COALESCE(publishing_stopped, 0) = 1)`).run();
   } catch (e) { /* tabla vieja sin scheduled_at: no bloquea */ }
   const now = new Date().toISOString();
   // (v198-A) Un posteo marcado needs_review queda RETENIDO aunque esté
@@ -836,6 +836,7 @@ function startScheduler(db) {
           AND COALESCE(p.user_stopped, 0) = 0
           AND p.created_at < datetime('now', '-24 hours')
           AND COALESCE(u.auto_week, 1) = 1
+          AND COALESCE(u.publishing_stopped, 0) = 0
       `).all();
     } catch (e) { console.error('[auto-arm 24h] query:', e.message); return; }
     if (!users.length) return;
@@ -848,7 +849,8 @@ function startScheduler(db) {
         const stale = db.prepare(`SELECT COUNT(*) AS n FROM posts
           WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review, 0) = 0
             AND COALESCE(user_stopped, 0) = 0
-            AND created_at < datetime('now', '-24 hours')`).get(u.id).n || 0;
+            AND created_at < datetime('now', '-24 hours')
+            AND COALESCE((SELECT publishing_stopped FROM users WHERE users.id = posts.user_id), 0) = 0`).get(u.id).n || 0;
         if (!stale) continue;
         const r = await srv.autoArmWeek(u.id, '24h');
         if (r && r.ok) console.log(`[auto-arm 24h] usuario ${u.id}: ${r.scheduled.length} programados solos 🚀`);

@@ -876,6 +876,11 @@ db.exec(`CREATE TABLE IF NOT EXISTS idea_bank (
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_idea_bank_user ON idea_bank(user_id, used)`); } catch (e) {}
 // 5. Test A/B: dos captions por posteo, se trackea el ganador.
 try { db.exec(`ALTER TABLE posts ADD COLUMN user_stopped INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Freno a nivel CUENTA (fix v275, 2026-10-20): el stop administrativo marca
+// users.publishing_stopped=1 y NINGÚN flujo automático programa posteos de
+// esa cuenta (aunque un posteo puntual no tenga la marca user_stopped)
+// hasta que el dueño mismo reanude programando/aceptando.
+try { db.exec(`ALTER TABLE users ADD COLUMN publishing_stopped INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN caption_b TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 

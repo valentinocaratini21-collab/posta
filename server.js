@@ -2723,6 +2723,7 @@ app.post('/api/autopilot', requireAuth, express.json(), (req, res) => {
       // Publicación automática (2026-10-16): nivel 1 — sale solo y el
       // aviso previo de 30 min actúa de freno de emergencia en cada posteo.
       db.prepare(`UPDATE users SET autopilot_enabled = 1, trust_level = CASE WHEN COALESCE(trust_level, 0) < 1 THEN 1 ELSE trust_level END WHERE id = ?`).run(uid);
+      clearPublishingStopped(uid); // (v275) encender el autopiloto es reanudar la publicación (las marcas por posteo quedan: esos posteos los reactiva el dueño uno a uno)
     } else {
       // Modo manual REAL: nivel 0 (nada sale sin aprobación) y todo lo que
       // el sistema había programado solo y aún no salió se frena — vuelve
@@ -3637,9 +3638,18 @@ app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, 
   if (!uid) return res.status(400).json({ error: 'falta user_id' });
   try {
     const upd = db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, user_stopped = 1 WHERE user_id = ? AND status = 'scheduled'`).run(uid);
-    db.prepare('UPDATE users SET autopilot_enabled = 0 WHERE id = ?').run(uid);
-    console.log(`[admin] stop-publishing uid=${uid}: ${upd.changes} posteos desprogramados, autopilot off`);
-    res.json({ ok: true, user_id: uid, unscheduled: upd.changes });
+    // FIX v275 (2026-10-20): la v272 solo marcaba los posteos que el UPDATE
+    // de arriba desprogramaba. Los que YA eran borradores quedaban sin marca
+    // y la regla 24h los resucitó (cuenta 12, barrida 19:17 ART: 5 posteos
+    // reprogramados tras el re-freno de las 17:51 EDT). Ahora la marca va
+    // sobre TODO el stock frenable (borrador/pausado/en publicación) y la
+    // cuenta queda frenada a nivel usuario (publishing_stopped): ningún
+    // flujo automático programa nada de esta cuenta hasta que el dueño
+    // mismo reanude (programar/aceptar/schedule-all/encender autopiloto).
+    const marked = db.prepare(`UPDATE posts SET user_stopped = 1 WHERE user_id = ? AND status IN ('draft', 'paused', 'publishing') AND COALESCE(user_stopped, 0) = 0`).run(uid);
+    db.prepare('UPDATE users SET autopilot_enabled = 0, publishing_stopped = 1 WHERE id = ?').run(uid);
+    console.log(`[admin] stop-publishing uid=${uid}: ${upd.changes} posteos desprogramados, ${marked.changes} marcados, autopilot off, cuenta frenada`);
+    res.json({ ok: true, user_id: uid, unscheduled: upd.changes, marked: marked.changes });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // 🔧 Palanca de regeneración por posteo (v227, aprobada por Valentino):
@@ -6118,6 +6128,7 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
       post.approval === 'rejected' ? 'pending' : (post.approval || 'pending'),
       post.id
     );
+    clearPublishingStopped(req.session.userId); // (v275) programar a mano es reanudar la cuenta
     scheduleLintForPost(req.session.userId, post.id); // (v198-A) lint al programar
     // 🎓 Autopiloto graduado (2026-10-02): si programó SIN editar, es un voto
     // de confianza. A los 10, Posty ofrece el autopiloto.
@@ -6561,6 +6572,7 @@ function acceptAllDrafts(uid, items, opts) {
     }
     return { ok: false, reason: 'no_pending' };
   }
+  clearPublishingStopped(uid); // (v275) aceptar la semana es reanudar la cuenta
   try { track(uid, 'accept_all', String(n)); } catch (e) {}
   let nextWeek = 0;
   try {
@@ -8275,6 +8287,25 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
   return { scheduled, waiting };
 }
 
+// ⛔ Freno a nivel CUENTA (fix v275, 2026-10-20): users.publishing_stopped.
+// Lo setea SOLO el stop administrativo (POST /api/admin/stop-publishing) y
+// bloquea TODO lo automático de la cuenta, aunque un posteo puntual no
+// tenga la marca user_stopped (borradores que ya eran borradores cuando se
+// frenó — la v272 no los marcaba y la regla 24h resucitó 5 de la cuenta 12 —
+// o borradores generados DESPUÉS del freno). Se limpia solo cuando el dueño
+// mismo reanuda: programar (PATCH), aceptar (acceptAllDrafts), schedule-all
+// o encender el autopiloto. No hay endpoint admin de reanudación: el freno
+// administrativo lo levanta el dueño desde su propia cuenta.
+function publishingStopped(uid) {
+  try {
+    const r = db.prepare('SELECT publishing_stopped FROM users WHERE id = ?').get(uid);
+    return !!(r && r.publishing_stopped);
+  } catch (e) { return false; }
+}
+function clearPublishingStopped(uid) {
+  try { db.prepare('UPDATE users SET publishing_stopped = 0 WHERE id = ?').run(uid); } catch (e) {}
+}
+
 function scheduleAllDrafts(uid) {
   // ⛔ user_stopped (fix 2026-10-20): un posteo que el dueño FRENÓ (o que un
   // stop administrativo frenó) NUNCA se re-programa solo. Esta función es el
@@ -8283,6 +8314,10 @@ function scheduleAllDrafts(uid) {
   // falta. Sin la marca, la regla 24h resucitaba posteos frenados a la hora
   // siguiente (visto 3 veces en producción el 2026-10-20, cuentas 12 y 3).
   // La marca se limpia SOLO cuando el usuario mismo lo programa/acepta.
+  // ⛔ publishing_stopped (fix v275): capa a nivel CUENTA sobre la marca —
+  // si la cuenta está frenada administrativamente, el embudo no programa
+  // NADA (ni siquiera posteos sin marca o creados después del freno).
+  if (publishingStopped(uid)) return { ok: false, reason: 'publishing_stopped', scheduled: [], waiting: [] };
   const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(user_stopped,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) return { ok: false, reason: 'no_drafts', scheduled: [], waiting: [] };
   // FASE 0 — qualityGate: solo lo bueno sale solo. El borrador que no pasa
@@ -8403,6 +8438,7 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     }
     return res.status(400).json({ error: 'no_slots', waiting, message: 'No encontramos días libres en la semana de tus posteos para programarlos.' });
   }
+  if (scheduled.length) clearPublishingStopped(uid); // (v275) programar todo a mano es reanudar la cuenta
   res.json({ ok: true, scheduled, waiting });
   // ===== Track 4 "Pipeline perpetuo" =====
   // Al programar la semana N, la N+1 se empieza a armar SOLA en segundo plano.
@@ -9359,8 +9395,8 @@ function reactivatePausedPosts(uid) {
   try {
     // (v198-A) Los que vuelven a 'scheduled' también pasan el lint actual:
     // el stock viejo no resucita sin pasar por la puerta de hoy.
-    const backIds = db.prepare(`SELECT id FROM posts WHERE user_id=? AND status='paused'`).all(uid).map((r) => r.id);
-    db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE user_id=? AND status='paused'`).run(uid);
+    const backIds = db.prepare(`SELECT id FROM posts WHERE user_id=? AND status='paused' AND COALESCE(user_stopped,0)=0`).all(uid).map((r) => r.id);
+    db.prepare(`UPDATE posts SET status='scheduled', error='' WHERE user_id=? AND status='paused' AND COALESCE(user_stopped,0)=0`).run(uid);
     db.prepare(`UPDATE users SET trial_pause_notified=0 WHERE id=?`).run(uid);
     scheduleLintForPosts(uid, backIds);
   } catch (e) { console.error('[posta] reactivatePausedPosts:', e.message); }
@@ -15316,7 +15352,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v274';
+const BUILD_ID = '20261020-v275';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
