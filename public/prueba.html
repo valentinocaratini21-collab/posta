@@ -321,14 +321,16 @@ html{scroll-behavior:smooth}
 .ejemplos{margin:44px 0 6px}
 .ejemplos h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
 .ejemplos .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
-.ej-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.ej-card{border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fff;box-shadow:0 6px 20px rgba(10,30,51,.05)}
+.ej-grid{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ej-grid::-webkit-scrollbar{display:none}
+.ej-hint{text-align:right;font-size:13px;font-weight:700;color:var(--mut);margin:-10px 2px 10px}
+.ej-card{flex:0 0 calc((100% - 36px)/4);scroll-snap-align:start;border-radius:16px;overflow:hidden;border:1.5px solid var(--line);background:#fff;box-shadow:0 6px 20px rgba(10,30,51,.05)}
 .ej-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
 .ej-card p{padding:10px 12px;font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4}
 .ej-foot{text-align:center;color:var(--mut);font-size:13px;margin-top:14px;font-weight:700}
 .footer-posty{display:inline-flex;align-items:center;gap:8px;font-weight:800;color:var(--navy)}
 .footer-posty img{width:26px;height:26px;border-radius:50%}
-@media(max-width:760px){.ej-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.ej-card{flex:0 0 74%}}
 /* PRUEBA EN 1 CAMPO: tarjeta compacta del prefill */
 .pf-row{display:flex;gap:14px;align-items:flex-start}
 .pf-row img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--line);flex-shrink:0;background:var(--bg2)}
@@ -442,8 +444,8 @@ html{scroll-behavior:smooth}
     <div class="hero">
       <div class="hero-lockup"><img src="ai-avatar.png" alt="Posty" class="hero-ava"><span class="pill">TU COMMUNITY MANAGER</span></div>
       <h1>¡Hola! Soy Posty</h1>
-      <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Te armo tu semana de Instagram — diseños, textos y hashtags con la onda de tu negocio.</p>
-      <p class="sub">Vos solo aprobás, yo me ocupo de todo. Poné tu @ y mirá tu semana como si ya fueras cliente. Sin tarjeta.</p>
+      <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Tu community manager completo: armo tu semana, la publico por vos, respondo tus comentarios y mensajes, y cuido tus reseñas.</p>
+      <p class="sub">Todo con la onda de tu negocio y tu producto exacto. Vos solo aprobás — poné tu @ y mirá tu semana como si ya fueras cliente. Sin tarjeta.</p>
       <div class="cta-row"><a class="btn btn-primary" href="#formCard">Armar mi semana 👇</a></div>
     </div>
     <p class="audit-hook">Y de regalo, el <span class="hl2">diagnóstico de tu Instagram</span>: qué mejorar, qué subir y qué bajar.</p>
@@ -552,11 +554,16 @@ html{scroll-behavior:smooth}
   <div class="ejemplos">
     <h3>Semanas reales, hechas por Posty</h3>
     <p class="lede">Posteos de verdad, de semanas que armé para negocios como el tuyo.</p>
+    <p class="ej-hint">Deslizá para ver más →</p>
     <div class="ej-grid">
       <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🌸 Florería — ramos frescos, hechos hoy</p></div>
       <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>☕ Cafetería — el blend de la casa</p></div>
       <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💄 Makeup — prolijo y que dura</p></div>
       <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💈 Barbería — el ritual completo</p></div>
+      <div class="ej-card"><img src="prueba-ej-n5.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🥐 Cafetería — recién salidas del horno</p></div>
+      <div class="ej-card"><img src="prueba-ej-n6.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🍣 Sushi — nikkei, en la barra</p></div>
+      <div class="ej-card"><img src="prueba-ej-n7.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🏋️ Gym — tu entrenador, tu plan</p></div>
+      <div class="ej-card"><img src="prueba-ej-n8.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>📦 Tu producto — protagonista en 3D</p></div>
     </div>
     <p class="ej-foot">Diseño + caption + hashtags, con las fotos y los colores de cada negocio.</p>
   </div>
