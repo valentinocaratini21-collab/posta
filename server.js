@@ -196,6 +196,7 @@ const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
+const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
 const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE RUBRO: voto multi-señal + confianza
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
@@ -5692,6 +5693,122 @@ app.post('/api/videos', requireAuth, async (req, res) => {
 });
 
 // ---------- Posts ----------
+// ---------- 🧠 Análisis (2026-10-19): el cerebro con casa propia ----------
+// La radiografía de SU cuenta es de todos los planes; el mercado completo
+// (competencia + posición + decisiones) es la capa Growth — el gateo vive en
+// analysis-engine.gateForPlan y se aplica SIEMPRE acá, en la salida.
+function peerHandlesFromText(text, max = 3) {
+  const out = [];
+  const raw = String(text || '');
+  const re = /@?([a-zA-Z0-9._]{3,40})/g;
+  let m;
+  while ((m = re.exec(raw)) && out.length < max) {
+    const h = feedAudit.sanitizeHandle(m[1]);
+    if (!h || h.length < 3) continue;
+    if (/^(www|com|ar|http|https)$/i.test(h)) continue;
+    if (!out.includes(h)) out.push(h);
+  }
+  return out;
+}
+async function fetchPeersForAnalysis(handles) {
+  const one = async (h) => {
+    try {
+      const data = await Promise.race([
+        feedAudit.fetchAuditData(h),
+        new Promise((r) => setTimeout(() => r(null), 3500)),
+      ]);
+      if (data && data.ok) return { handle: h, followers: data.profile ? data.profile.followers : null, posts: data.posts || [] };
+    } catch (e) { /* un par sin datos no frena el análisis */ }
+    return null;
+  };
+  const all = await Promise.all((handles || []).slice(0, 3).map(one));
+  return all.filter(Boolean);
+}
+async function coldReviewsFor(businessName, city) {
+  try {
+    const gp = require('./google-places');
+    const q = [businessName, city].filter(Boolean).join(' ');
+    if (!q) return null;
+    const place = await Promise.race([gp.findPlace(q), new Promise((r) => setTimeout(() => r(null), 3000))]);
+    if (!place || !place.place_id) return null;
+    const rv = await Promise.race([gp.getPlaceReviews(place.place_id), new Promise((r) => setTimeout(() => r(null), 3000))]);
+    if (!rv || !rv.rating) return null;
+    return { rating: rv.rating, total: rv.total_ratings || 0 };
+  } catch (e) { return null; }
+}
+/* Construye (y persiste) el análisis de una cuenta. Reusa TODO lo auditado:
+ * feed-audit para los datos públicos, client-digest para el fundamento,
+ * google-places para las reseñas del plan de nacimiento. Nunca lanza. */
+async function buildAccountAnalysis(uid, opts = {}) {
+  const prof = db.prepare('SELECT business_name, category, description, ig_username, competitors FROM profiles WHERE user_id = ?').get(uid) || {};
+  const digest = clientDigest.getDigest(db, uid);
+  const plan = planForUid(uid);
+  const prior = analysisEngine.priorAnalysis(db, uid);
+  const peers = await fetchPeersForAnalysis(peerHandlesFromText(prof.competitors));
+  const ctx = { postsPerWeek: plan.postsPerWeek || 7, plan: plan.id, prior, peers, source: 'instagram' };
+  let analysis = null;
+  const ig = feedAudit.sanitizeHandle(prof.ig_username || '');
+  if (ig) {
+    let data = null;
+    try {
+      data = await Promise.race([feedAudit.fetchAuditData(ig), new Promise((r) => setTimeout(() => r(null), 4500))]);
+    } catch (e) { data = null; }
+    if (data && data.ok && !analysisEngine.isColdStart({ hasIg: true, profile: data.profile, posts: data.posts })) {
+      let paletteHues = null;
+      try {
+        paletteHues = await Promise.race([feedAudit.analyzePalette(data.posts || []), new Promise((r) => setTimeout(() => r(null), 1500))]);
+      } catch (e) { /* sin paleta: el hallazgo no se afirma */ }
+      analysis = analysisEngine.analyzeExisting({ profile: data.profile, posts: data.posts, ctx: Object.assign({}, ctx, { paletteHues }) });
+    }
+  }
+  if (!analysis) {
+    const reviews = await coldReviewsFor(prof.business_name, digest.ciudad || '');
+    analysis = analysisEngine.analyzeColdStart({
+      business: { name: prof.business_name || '', category: prof.category || '', city: digest.ciudad || '', ig_username: ig },
+      digest, peers, reviews, ctx,
+    });
+  }
+  if (opts.save !== false) {
+    const saved = analysisEngine.saveAnalysis(db, uid, analysis);
+    if (saved && saved.analysis) analysis = saved.analysis;
+  }
+  return analysis;
+}
+function analysisPayload(uid, analysis) {
+  const plan = planForUid(uid);
+  const view = analysisEngine.gateForPlan(analysis, plan.id);
+  return {
+    ok: true,
+    plan: plan.id,
+    analysis: view,
+    week_summary: analysisEngine.weekSummary(analysis),
+    history: analysisEngine.analysisHistory(db, uid, 6),
+  };
+}
+app.get('/api/analysis', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    let latest = analysisEngine.latestAnalysis(db, uid);
+    if (!latest) {
+      // peek=1: solo lectura (Schedule no dispara construcciones pesadas).
+      if (String(req.query.peek || '') === '1') return res.json({ ok: true, plan: planForUid(uid).id, analysis: null, week_summary: null, history: [] });
+      latest = await buildAccountAnalysis(uid);
+    }
+    res.json(analysisPayload(uid, latest));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'analysis_failed' });
+  }
+});
+app.post('/api/analysis/refresh', requireAuth, async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const fresh = await buildAccountAnalysis(uid);
+    res.json(analysisPayload(uid, fresh));
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'analysis_failed' });
+  }
+});
+
 app.get('/api/posts', requireAuth, (req, res) => {
   const { status } = req.query;
   const join = 'LEFT JOIN post_signals s ON s.user_id = p.user_id AND s.post_id = p.id';
@@ -5702,6 +5819,26 @@ app.get('/api/posts', requireAuth, (req, res) => {
   } else {
     rows = db.prepare(`SELECT p.*, s.client_signal AS signal FROM posts p ${join} WHERE p.user_id = ? ${vis} ORDER BY p.created_at DESC LIMIT 100`).all(req.session.userId);
   }
+  // 🧠 Porqué (2026-10-19): todo posteo visible lleva su porqué. Los caminos
+  // de creación que no cargan strategy_why lo reciben acá, una sola vez,
+  // desde el análisis persistido + el fundamento (analysis-engine.whyForPost).
+  try {
+    const missing = rows.filter((r) => r && !String(r.strategy_why || '').trim() && (r.status === 'draft' || r.status === 'scheduled'));
+    if (missing.length) {
+      const uid = req.session.userId;
+      const analysis = analysisEngine.latestAnalysis(db, uid);
+      const digest = clientDigest.getDigest(db, uid);
+      const upd = db.prepare('UPDATE posts SET strategy_why = ? WHERE id = ? AND user_id = ?');
+      for (const r of missing.slice(0, 30)) {
+        const why = analysisEngine.whyForPost({
+          tipo: r.tipo || '', formato: r.media_type || '',
+          salesIntent: r.sales_intent || '', intent: r.intent || '',
+          porque: '', topic: r.source_topic || '',
+        }, analysis, digest);
+        if (why) { upd.run(why, r.id, uid); r.strategy_why = why; }
+      }
+    }
+  } catch (e) { /* el porqué nunca frena la agenda */ }
   res.json(rows);
 });
 
@@ -12848,6 +12985,35 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // de la semana se derivan de ÉL (web + formulario en esta ruta).
     const trialDigest = buildTrialDigest({ business, category, webData, feed: null, formText: richGoal, deep, rubro: rubroRes });
     const { posts, spec } = await demo.generateDemo({ business, category: effCategory, country, tone, photoPath, goal: richGoal, goal_key, accent, btn, count: 5, profilePicPath, bioText: webData ? (webData.description || '') : '', extraPhotos: webExtraPhotos, digest: trialDigest });
+    // 🧠 Análisis (2026-10-19): misma radiografía que la ruta stream. Si los
+    // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
+    // nacimiento sobre una cuenta que no se pudo leer.
+    let trialAnalysisJson = null;
+    try {
+      let dataJson = null;
+      if (ig) {
+        dataJson = await Promise.race([feedAudit.fetchAuditData(ig), new Promise((r) => setTimeout(() => r(null), 3000))]).catch(() => null);
+      }
+      if (dataJson && dataJson.ok) {
+        const peersJ = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
+        const coldJ = analysisEngine.isColdStart({ hasIg: true, profile: dataJson.profile, posts: dataJson.posts || [] });
+        trialAnalysisJson = analysisEngine.gateForPlan(coldJ
+          ? analysisEngine.analyzeColdStart({ business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: ig }, digest: trialDigest, peers: peersJ, reviews: null, ctx: { postsPerWeek: 7, plan: 'trial' } })
+          : analysisEngine.analyzeExisting({ profile: dataJson.profile, posts: dataJson.posts, ctx: { postsPerWeek: 7, plan: 'trial', peers: peersJ, source: 'instagram' } }), 'trial');
+      } else if (!ig) {
+        trialAnalysisJson = analysisEngine.gateForPlan(analysisEngine.analyzeColdStart({
+          business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: '' },
+          digest: trialDigest, peers: [], reviews: null, ctx: { postsPerWeek: 7, plan: 'trial' },
+        }), 'trial');
+      }
+      if (trialAnalysisJson && Array.isArray(posts)) {
+        for (const p of posts) {
+          if (!p || p.why) continue;
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysisJson, trialDigest);
+          if (w) p.why = w;
+        }
+      }
+    } catch (e) { /* el análisis nunca frena la prueba */ }
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
 
@@ -12867,6 +13033,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       web_info: trialWebInfo(webData, trialWebPhotosUsed(spec.photos)),
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       ig_pic: igPic, ig_name: igName,
+      analysis: trialAnalysisJson,
       ideas: (await ideasPromise).slice(0, 6),
       posts,
       design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
@@ -13156,11 +13323,13 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // el payload final y en el evento 'audit' del stream.
   let trialAudit = null;
   let trialAuditPalette = null;
+  let trialData = null; // (2026-10-19) datos crudos del @: alimentan el análisis completo
   if (ig) {
     trialProfilePromise = (async () => {
       try {
         const known = await Promise.race([igProfPromise, new Promise((r) => setTimeout(() => r(null), 4500))]);
         const data = await feedAudit.fetchAuditData(ig, null, known || undefined);
+        trialData = data;
         // (v210) Señales determinísticas desde los posteos públicos; la
         // paleta (única señal que descarga miniaturas) refina en segundo
         // plano y reemite el evento si suma el hallazgo de línea visual.
@@ -13234,6 +13403,25 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
           if (!cachedOut.audit && trialProfilePromise) {
             await Promise.race([trialProfilePromise, new Promise((r) => setTimeout(() => r(null), 2500))]).catch(() => null);
             if (trialAudit) cachedOut.audit = trialAudit;
+            // (2026-10-19) Semanas cacheadas sin análisis: si los datos del @
+            // llegaron en la ventana, el análisis viaja también en este payload.
+            if (!cachedOut.analysis && trialData) {
+              try {
+                const coldC = !trialData.ok || analysisEngine.isColdStart({ hasIg: true, profile: trialData.profile, posts: trialData.posts || [] });
+                cachedOut.analysis = analysisEngine.gateForPlan(coldC
+                  ? analysisEngine.analyzeColdStart({ business: { name: business, category, ig_username: ig }, digest: cachedOut.digest || null, peers: [], reviews: null, ctx: { plan: 'trial' } })
+                  : analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: { plan: 'trial' } }), 'trial');
+              } catch (e) { /* best-effort */ }
+            }
+            if (cachedOut.analysis && Array.isArray(cachedOut.posts)) {
+              try {
+                for (const p of cachedOut.posts) {
+                  if (!p || p.why) continue;
+                  const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, cachedOut.analysis, cachedOut.digest || null);
+                  if (w) p.why = w;
+                }
+              } catch (e) { /* best-effort */ }
+            }
           }
           cachedOut.cached = true;
           cachedOut.spots_left = spotsLeft();
@@ -13793,6 +13981,31 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     if (trialAuditPalette) {
       try { await Promise.race([trialAuditPalette, new Promise((r) => setTimeout(() => r(null), 1200))]); } catch (e) { /* sigue sin paleta */ }
     }
+    // 🧠 Análisis completo (2026-10-19): radiografía de la cuenta + probada de
+    // mercado, o plan de nacimiento si la cuenta recién arranca — y el porqué
+    // de cada posteo de la prueba, atado a los hallazgos. Nunca frena la prueba.
+    let trialAnalysis = null;
+    try {
+      const peers = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
+      const ctxA = { postsPerWeek: 7, plan: 'trial', peers, source: 'instagram' };
+      const cold = !ig || !trialData || !trialData.ok || analysisEngine.isColdStart({ hasIg: !!ig, profile: trialData && trialData.profile, posts: (trialData && trialData.posts) || [] });
+      if (cold) {
+        trialAnalysis = analysisEngine.analyzeColdStart({
+          business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: ig },
+          digest: trialDigest, peers, reviews: null, ctx: ctxA,
+        });
+      } else {
+        trialAnalysis = analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: ctxA });
+      }
+      trialAnalysis = analysisEngine.gateForPlan(trialAnalysis, 'trial');
+      if (Array.isArray(posts)) {
+        for (const p of posts) {
+          if (!p || p.why) continue;
+          const w = analysisEngine.whyForPost({ tipo: p.tipo || p.kind || '', formato: p.type || '', salesIntent: p.sales_intent || '', porque: p.porque || '' }, trialAnalysis, trialDigest);
+          if (w) p.why = w;
+        }
+      }
+    } catch (e) { /* el análisis nunca frena la prueba */ }
     // Payload IDÉNTICO al de /api/trial/generate (el frontend lo guarda en idb igual)
     const out = {
       ok: true,
@@ -13811,6 +14024,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       ig_pic: igPic, ig_name: igName,
       profile: trialProfile,
       audit: trialAudit,
+      analysis: trialAnalysis,
       grid_extra: gridExtra,
       ideas: ideas.slice(0, 6),
       posts,
@@ -14523,7 +14737,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261019-v249';
+const BUILD_ID = '20261019-v250';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

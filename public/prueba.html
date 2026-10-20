@@ -154,6 +154,16 @@ body{font-family:Montserrat,system-ui,sans-serif;background:var(--bg);color:var(
 .day .db img,.day .db video{width:100%;height:100%;object-fit:cover;display:block}
 .day .vbadge{position:absolute;bottom:8px;right:8px;background:rgba(10,30,51,.8);color:#fff;font-size:11px;font-weight:800;padding:5px 10px;border-radius:99px}
 .day .dcap{padding:10px 12px;font-size:12.5px;font-weight:700;color:var(--navy);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:44px}
+.day .dwhy{padding:0 12px 10px;font-size:11.5px;color:var(--cel,#2793C8);line-height:1.45}
+#analysisBox{max-width:480px;margin:14px auto 0}
+.an-card{background:#fff;border:1px solid #D7E5EE;border-radius:16px;padding:16px 18px;text-align:left}
+.an-head{font-size:16px;font-weight:800;color:var(--navy)}
+.an-sub{font-size:13px;color:#5A7186;margin:4px 0 10px;line-height:1.5}
+.an-item{font-size:13.5px;color:var(--navy);line-height:1.5;margin:8px 0}
+.an-item .an-now{color:#5A7186;font-weight:600}
+.an-kit{background:#F2F9FD;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.6;color:var(--navy);white-space:pre-line;margin:10px 0}
+.an-grid-roles{font-size:12.5px;color:#5A7186;line-height:1.6}
+.an-lock{font-size:12px;color:#8CA3B5;margin-top:8px}
 .day .igrow{display:flex;align-items:center;gap:14px;padding:9px 12px 0}
 .day .igrow svg{display:block}
 .day .igrow .igsave{margin-left:auto}
@@ -662,6 +672,9 @@ html{scroll-behavior:smooth}
 
     <!-- Auditoría en vivo (v210): se llena por JS si el análisis del @ llegó -->
     <div id="auditBox" style="display:none"></div>
+
+    <!-- Análisis completo (2026-10-19): probada de mercado o plan de nacimiento -->
+    <div id="analysisBox" style="display:none"></div>
 
     <div class="sec">
       <h3>Así se ve en tu feed 📱</h3>
@@ -1788,7 +1801,44 @@ function onStreamAudit(d) {
 function auditFromTrial() {
   const t = TRIAL;
   if (t && t.audit) TRIAL_AUDIT = t.audit;
+  if (t && t.analysis) TRIAL_ANALYSIS = t.analysis;
   renderAudit();
+  renderAnalysis();
+}
+// ---------- ANÁLISIS COMPLETO (2026-10-19): mercado o nacimiento ----------
+// Cuenta existente → la probada de su mercado (el mapa completo vive en la
+// vista Análisis de la cuenta). Cuenta nueva → su plan de nacimiento: kit de
+// perfil + los roles de su primera vidriera de 9 piezas. Sin análisis, el
+// panel no aparece y el flujo es el de siempre.
+let TRIAL_ANALYSIS = null;
+function renderAnalysis() {
+  const box = $('#analysisBox');
+  if (!box) return;
+  const a = TRIAL_ANALYSIS;
+  if (!a) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  if (a.kind === 'nacimiento') {
+    const kit = a.profile_kit || {};
+    const roles = (a.starter_grid || []).map((s) => s.role).filter(Boolean);
+    box.innerHTML = `<div class="an-card">
+      <div class="an-head">🌱 Tu plan de nacimiento</div>
+      <p class="an-sub">Tu cuenta recién arranca: nace con estrategia desde el primer posteo — posicionamiento de tu rubro y tu zona, no desde cero.</p>
+      ${kit.bio ? `<div class="an-kit"><b>Tu bio, lista:</b>\n${esc(kit.bio)}</div>` : ''}
+      ${roles.length ? `<p class="an-grid-roles"><b>Tu primera vidriera (9 piezas):</b> ${esc(roles.join(' · '))}</p>` : ''}
+      ${(kit.highlights && kit.highlights.length) ? `<p class="an-grid-roles"><b>Destacadas:</b> ${esc(kit.highlights.join(' · '))}</p>` : ''}
+    </div>`;
+    box.style.display = 'block';
+    return;
+  }
+  const teaser = a.market_teaser;
+  if (!teaser || !teaser.items || !teaser.items.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const items = teaser.items.map((it) => `<p class="an-item">📌 ${esc(it.text || '')}${it.now ? ` — <span class="an-now">${esc(it.now)}</span>` : ''}</p>`).join('');
+  box.innerHTML = `<div class="an-card">
+    <div class="an-head">🗺️ Una probada de tu mercado</div>
+    <p class="an-sub">Esto ya medimos de las cuentas de tu rubro y tu zona 👇</p>
+    ${items}
+    <p class="an-lock">🔒 El mapa completo — tu competencia una por una, tu posición y las decisiones que tomamos con eso — vive en tu vista <b>Análisis</b>.</p>
+  </div>`;
+  box.style.display = 'block';
 }
 // Cada pieza que llega por el stream llena su celda de la grilla CON Posty
 // (y refresca la tapa del reel si es el posteo video), sin re-renderizar
@@ -1990,7 +2040,7 @@ function renderWeek() {
     const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
-    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div></div>`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Por qué:</b> ${esc(p.why)}</div>` : ''}</div>`;
   }).join('');
   $$('#rWeek .day').forEach((d) => {
     const open = () => openLb(parseInt(d.dataset.i, 10));

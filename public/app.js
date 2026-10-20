@@ -1102,6 +1102,24 @@ function lpWeekToForm() {
   return false;
 }
 
+/* 🧠 Análisis (2026-10-19): la sección que vende el cerebro. SOLO afirma lo
+ * que el sistema construido hace: radiografía con datos reales de su perfil,
+ * competencia pública de su rubro/zona, plan de nacimiento sin diagnóstico
+ * inventado, y el porqué en cada posteo. */
+function lpAnalisisHTML() {
+  return `
+  <div class="section" id="analisis"><div class="wrap">
+    <h2>Posty analiza tu Instagram y tu competencia <span class="hl">antes de escribir una palabra</span></h2>
+    <p class="lede">Nada de publicar por publicar. Primero miro tu cuenta y tu mercado, dato por dato — y cada posteo de tu semana nace de algo que vi. En tu prueba ya lo ves: el diagnóstico de tu Instagram viene incluido.</p>
+    <div class="lp-cm-cards">
+      <div class="lp-cm-card"><div class="lp-cm-i">🔍</div><h3>Tu cuenta, medida</h3><p class="lp-cm-tag">Qué mejorar, qué subir, qué bajar</p><p>Tu ritmo, tus formatos, tus horarios y tus textos, leídos de tu perfil real. Sin humo: cada punto viene con tu número de hoy y con lo que Posty mueve esta semana.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🗺️</div><h3>Tu competencia, en un mapa</h3><p class="lp-cm-tag">Dónde estás parado en tu rubro</p><p>Las cuentas de tu rubro y tu zona: cuánto publican, qué formatos les funcionan y qué huecos dejan. Tu semana se arma para ese mapa, no en el vacío. El mapa completo es parte de Growth.</p></div>
+      <div class="lp-cm-card"><div class="lp-cm-i">🌱</div><h3>¿Recién arrancás?</h3><p class="lp-cm-tag">Tu cuenta nace con plan</p><p>Sin historial no hay diagnóstico inventado: tu cuenta nace con posicionamiento, el kit de perfil completo y una primera vidriera de 9 piezas pensada desde tu mercado.</p></div>
+    </div>
+    <p class="lp-cm-close">💡 Y cada posteo te dice su <b>porqué</b>: qué vi, qué decidí y para qué sale. Así de simple.</p>
+    <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Ver el análisis de mi cuenta →</a></div>
+  </div></div>`;
+}
 function landingView(cfg) {
   const plans = (cfg && cfg.plans) || [];
   const country = (cfg && cfg.country) || 'AR';
@@ -1284,6 +1302,7 @@ function landingView(cfg) {
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
+  ${lpAnalisisHTML()}
   <div class="section" id="herramienta" style="background:var(--bg2)"><div class="wrap" style="max-width:920px">
     <h2>Una herramienta te da trabajo. Posty te lo saca.</h2>
     <p class="lede">Las apps de IA para redes son lindas… hasta que te sentás a usarlas: hay que pensar, escribir, diseñar, programar y publicar. Eso es un trabajo. Posty <b>es</b> el que lo hace.</p>
@@ -1892,6 +1911,7 @@ function appShell(tab, content) {
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
     <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">📊</span>Análisis</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
@@ -10338,6 +10358,7 @@ async function render() {
   if (tab === 'chat') content = await chatView();
   else if (tab === 'semana') { location.hash = '#/app/schedule'; return; } // Mi semana se fusionó en Schedule
   else if (tab === 'schedule') content = await scheduleView();
+  else if (tab === 'analisis') content = await analysisView(); // 🧠 Análisis: radiografía + mercado + loop
   else if (tab === 'numeros') content = statsView(); // 📊 Tus números (stats de IG)
   else if (tab === 'crear') { location.hash = '#/app/schedule'; return; } // Creador manual fusionado en Schedule
   else if (tab === 'ideas') { location.hash = '#/app/schedule'; return; } // Ideas se fusionó en Schedule
@@ -10550,6 +10571,19 @@ async function scheduleView() {
   let dogfoodPost = null;
   try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
   const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
+  // 🧠 Análisis (2026-10-19): la semana abre con "lo que vi → por qué tu
+  // semana es así" (solo lectura: peek no dispara construcciones).
+  let analysisSummaryBlock = '';
+  try {
+    const an = await api.get('/api/analysis?peek=1').catch(() => null);
+    if (an && an.week_summary) {
+      analysisSummaryBlock = `<div class="card" style="margin:0 0 12px;padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:14px">
+        <div style="font-weight:800;font-size:14px;margin-bottom:6px">🧠 Lo que vi de tu cuenta</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--mut)">${esc(an.week_summary).replace(/\n/g, '<br>')}</div>
+        <a href="#/app/analisis" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:700;color:var(--cel)">Ver mi análisis completo →</a>
+      </div>`;
+    }
+  } catch (e) {}
   const reviewBlock = drafts.length ? reviewCardHTML(drafts, slots, '📋 Revisá tu semana') : '';
   // Fast-track "Tu primer posteo": solo cuentas que NUNCA publicaron, con borradores con foto.
   const ftCandidates = drafts.filter(d => d.image_path).slice(0, 3);
@@ -10642,6 +10676,7 @@ async function scheduleView() {
     </div>
     ${trialBanner}
     ${dogfoodBlock}
+    ${analysisSummaryBlock}
     ${expBanner}
     ${fpBlock}
     ${ftBlock}
@@ -10653,6 +10688,85 @@ async function scheduleView() {
     ${armBlock}
   </div>`;
 }
+/* ---------- 🧠 ANÁLISIS (2026-10-19): la casa del cerebro de Posty ---------- */
+// Arriba: la radiografía de SU cuenta (todos los planes). Abajo: "Tu mercado"
+// — completo solo en Growth (Pro/Total); en Esencial, la probada con upsell.
+// Cuenta nueva: el plan de nacimiento (kit de perfil + vidriera de 9).
+async function pzAnalysisRefresh(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Analizando…'; }
+  try { await api.post('/api/analysis/refresh', {}); } catch (e) {}
+  try { await render(); } catch (e) { location.reload(); }
+}
+function pzFindingHTML(f) {
+  const nums = f.with_posty
+    ? `<div style="font-size:12.5px;margin-top:4px"><span style="color:var(--mut)">Hoy: ${esc(f.now || '')}</span> <span style="color:var(--cel);font-weight:700">→ Con Posty: ${esc(f.with_posty)}</span></div>`
+    : (f.now ? `<div style="font-size:12.5px;margin-top:4px;color:var(--mut)">Hoy: ${esc(f.now)}</div>` : '');
+  return `<div style="padding:10px 0;border-bottom:1px solid var(--line)"><div style="font-size:14px;font-weight:600;line-height:1.5">${esc(f.text || '')}</div>${nums}</div>`;
+}
+async function analysisView() {
+  let d = null;
+  try { d = await api.get('/api/analysis'); } catch (e) {}
+  const head = `<div class="card" style="padding:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="font-size:20px;font-weight:800">🧠 Tu análisis</div>
+      <button class="btn btn-ghost btn-sm" onclick="pzAnalysisRefresh(this)">↻ Actualizar</button>
+    </div>
+    <p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Esto es lo que Posty ve de tu cuenta y de tu mercado — y las decisiones que toma con eso. Cada posteo de tu semana nace de acá.</p>
+  </div>`;
+  if (!d || !d.analysis) {
+    return `${head}<div class="card" style="padding:18px;margin-top:12px"><p style="font-size:14px;line-height:1.6">Todavía no armé tu primer análisis. Lo armo ahora con los datos reales de tu cuenta y tu rubro 👇</p><button class="btn btn-primary" style="margin-top:10px" onclick="pzAnalysisRefresh(this)">Armar mi análisis</button></div>`;
+  }
+  const a = d.analysis;
+  const groups = [['mejorar', '🛠️ A mejorar'], ['incrementar', '📈 A incrementar'], ['reducir', '📉 A reducir']];
+  let body = '';
+  if (a.kind === 'nacimiento') {
+    const kit = a.profile_kit || {};
+    const roles = (a.starter_grid || []).map((s) => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b style="font-size:13.5px">${esc(String(s.slot))}. ${esc(s.role || '')}</b> <span style="color:var(--mut);font-size:12px">${esc(s.format || '')}</span><div style="font-size:12.5px;color:var(--mut);line-height:1.5">${esc(s.why || '')}</div></div>`).join('');
+    body += `<div class="card" style="padding:18px;margin-top:12px">
+      <div style="font-size:16px;font-weight:800">🌱 Tu plan de nacimiento</div>
+      <p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:4px">Tu cuenta recién arranca: nace con estrategia — posicionamiento desde tu rubro y tu zona, kit de perfil completo y tu primera vidriera de 9 piezas.</p>
+      ${(a.findings || []).map(pzFindingHTML).join('')}
+      ${kit.bio ? `<div style="background:var(--bg2);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.7;margin-top:12px;white-space:pre-line"><b>Tu bio, lista para pegar:</b>\n${esc(kit.bio)}</div>` : ''}
+      ${(kit.highlights && kit.highlights.length) ? `<p style="font-size:13px;margin-top:10px"><b>Destacadas:</b> ${esc(kit.highlights.join(' · '))}</p>` : ''}
+      ${roles ? `<div style="margin-top:12px"><div style="font-weight:800;font-size:14px;margin-bottom:4px">Tu primera vidriera</div>${roles}</div>` : ''}
+    </div>`;
+  } else {
+    const ghtml = groups.map(([k, t]) => {
+      const fs = (a.findings || []).filter((f) => f && f.group === k);
+      return fs.length ? `<div style="margin-top:14px"><div style="font-weight:800;font-size:14px">${t}</div>${fs.map(pzFindingHTML).join('')}</div>` : '';
+    }).join('');
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🔍 Tu cuenta</div>${ghtml || '<p style="color:var(--mut);font-size:13.5px;margin-top:8px">Tu cuenta viene prolija: la semana sostiene lo que ya funciona y empuja los formatos que más rinden.</p>'}</div>`;
+  }
+  // --- Tu mercado: completo (Growth) o probada (Esencial) ---
+  if (a.market_full && a.market) {
+    const peers = (a.market.peers || []).map((p) => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px"><span>@${esc(p.handle)}</span><span style="color:var(--mut)">${p.posts_per_week != null ? esc(String(p.posts_per_week)) + ' posteos/sem' : 'sin datos'}${p.followers != null ? ' · ' + esc(String(p.followers)) + ' seguidores' : ''}</span></div>`).join('');
+    const mf = (a.market.findings || []).map(pzFindingHTML).join('');
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🗺️ Tu mercado</div>
+      ${a.market.available ? `${peers}${mf}${a.market.position ? `<p style="font-size:13.5px;line-height:1.6;margin-top:10px">📍 ${esc(a.market.position.text)}</p>` : ''}` : `<p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Todavía no hay datos públicos suficientes de cuentas de tu rubro y tu zona. Apenas aparezcan, este mapa se completa solo — no estimamos nada.</p>`}
+    </div>`;
+  } else {
+    const teaser = a.market_teaser;
+    const items = teaser && teaser.items ? teaser.items.map((it) => `<p style="font-size:13.5px;line-height:1.6;margin:6px 0">📌 ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('') : '';
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🗺️ Tu mercado <span style="font-size:12px;color:var(--cel);font-weight:700">PROBADA</span></div>
+      ${items || '<p style="color:var(--mut);font-size:13.5px;line-height:1.6;margin-top:6px">Posty ya está mirando las cuentas de tu rubro y tu zona.</p>'}
+      <p style="font-size:13px;color:var(--mut);line-height:1.6;margin-top:8px">El mapa completo — tu competencia una por una, tu posición en el rubro y las decisiones que tomamos con eso — es parte de <b>Growth</b> (planes Pro y Total).</p>
+      <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">Ver planes →</a>
+    </div>`;
+  }
+  // --- El loop: predicciones anteriores vs resultados ---
+  if (a.loop && Array.isArray(a.loop.checks) && a.loop.checks.length) {
+    const ico = { 'cumplida': '✅', 'en-curso': '🔄', 'sin-datos': '⏳' };
+    const checks = a.loop.checks.map((c) => `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;line-height:1.6">${ico[c.status] || '•'} ${esc(c.text || '')}</div>`).join('');
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🔁 Así viene el plan</div><p style="color:var(--mut);font-size:12.5px;margin-top:2px">Lo que el análisis anterior se propuso, medido contra tu cuenta hoy.</p>${checks}</div>`;
+  }
+  if (Array.isArray(d.history) && d.history.length > 1) {
+    const hist = d.history.map((h) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>Análisis #${esc(String(h.n || ''))}</span><span style="color:var(--mut)">${esc(String(h.created_at || '').slice(0, 10))} · ${esc(String(h.findings))} hallazgos</span></div>`).join('');
+    body += `<div class="card" style="padding:18px;margin-top:12px"><div style="font-size:16px;font-weight:800">🗂️ Historial</div>${hist}<p style="color:var(--mut);font-size:12.5px;line-height:1.6;margin-top:8px">Cada análisis aprende del anterior: el #10 de tu cuenta es mucho mejor que el #1.</p></div>`;
+  }
+  const notes = (a.data_notes || []).map((n) => `<p style="color:var(--dim);font-size:12px;margin-top:10px">${esc(n)}</p>`).join('');
+  return `${head}${body}${notes}`;
+}
+
 /* ---------- 📊 TUS NÚMEROS: stats reales de Instagram ---------- */
 // Números honestos: lo que trae la API de IG (o caché local). Si no hay datos,
 // el empty state lo dice de frente, sin inventar nada.
