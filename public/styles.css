@@ -1768,23 +1768,19 @@ textarea.in{resize:vertical;min-height:96px}
 #nextStepCta{margin:2px 0 16px;text-align:center}
 #nextStepCta .btn{width:100%}
 
-/* ---------- postyCelebrate(): malabares DE VERDAD (v256) ---------- */
+/* ---------- postyCelebrate(): Posty + una pelotita picando (v257) ---------- */
 /* Overlay temporal fixed: pointer-events:none (no bloquea scroll ni toques), z-index alto,
-   no rompe el layout mobile. Escenario SVG centrado: Posty con BRAZOS y MANOS que
-   agarran, transportan y lanzan 3 pelotas amarillas #FEC14D en cascada física
-   (vuelo parabólico + agarre en la palma, contacto exacto). La física la corre el
-   rAF de postyCelebrate() en app.js; acá solo va la presentación. El JS remueve
-   el overlay del DOM al terminar (~3.3s, con fade desde los 3s). */
+   no rompe el layout mobile. Posty en su forma de siempre (avatar redondo, estático) y
+   UNA pelotita amarilla #FEC14D picando al lado con su sombrita. Nada más (orden de
+   Valentino: los malabares de v256 quedaron horribles y se fueron). El JS remueve
+   el overlay del DOM al terminar (~3.3s). */
 .posty-celebrate{position:fixed;inset:0;pointer-events:none;z-index:10003;overflow:hidden;touch-action:manipulation;display:flex;align-items:center;justify-content:center}
-.posty-celebrate .pc-stage{width:min(82vw,340px);animation:pc-bob .68s ease-in-out infinite;transition:opacity .3s ease}
-.posty-celebrate.pc-out .pc-stage{opacity:0}
-.posty-celebrate .pc-svg{width:100%;height:auto;display:block;overflow:visible;filter:drop-shadow(0 14px 24px rgba(10,30,51,.18))}
-.posty-celebrate .pc-armO{stroke:#0A1E33;stroke-width:21;stroke-linecap:round}
-.posty-celebrate .pc-armI{stroke:#2793C8;stroke-width:15;stroke-linecap:round}
-.posty-celebrate .pc-hand{fill:#2793C8;stroke:#0A1E33;stroke-width:3}
-.posty-celebrate .pc-b{fill:#FEC14D;stroke:#0A1E33;stroke-width:2.5}
-.posty-celebrate .pc-sh{fill:#fff;opacity:.65}
-@keyframes pc-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.posty-celebrate .pc-wrap{position:relative;width:120px;height:120px}
+.posty-celebrate .pc-ava{width:120px;height:120px;border-radius:50%;object-fit:cover;display:block;box-shadow:0 10px 30px rgba(10,30,51,.3)}
+.posty-celebrate .pc-one{position:absolute;right:-14px;bottom:2px;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#FFE29A,#FEC14D 65%);box-shadow:inset 0 -3px 6px rgba(10,30,51,.18);animation:pc-pic .56s cubic-bezier(.36,0,.64,1) infinite alternate}
+.posty-celebrate .pc-one-sh{position:absolute;right:-12px;bottom:-3px;width:26px;height:7px;border-radius:50%;background:rgba(10,30,51,.20);animation:pc-picsh .56s cubic-bezier(.36,0,.64,1) infinite alternate}
+@keyframes pc-pic{0%{transform:translateY(-44px) scale(1,1)}82%{transform:translateY(0) scale(1,1)}100%{transform:translateY(1px) scale(1.18,.78)}}
+@keyframes pc-picsh{0%{transform:scale(.55);opacity:.45}82%{transform:scale(1);opacity:.9}100%{transform:scale(1.08);opacity:1}}
 /* "Posty está escribiendo": puntitos animados en la burbuja del chat */
 .typing-dots{display:inline-flex;gap:5px;padding:8px 4px;align-items:center}
 .typing-dots span{width:8px;height:8px;border-radius:50%;background:var(--dim);opacity:.35;animation:tdot 1.2s infinite}
@@ -2476,3 +2472,6 @@ textarea.in{resize:vertical;min-height:96px}
 .fp-line{font-size:11.5px;color:var(--mut);text-align:center;margin-top:9px}
 .fp-more{display:block;margin:8px auto 0;border:none;background:none;color:var(--cel);font-size:13px;font-weight:700;padding:6px 10px;cursor:pointer;font-family:inherit;touch-action:manipulation}
 .fp-more:hover{text-decoration:underline}
+
+/* v257: resumen de estado en el título de las secciones de Ajustes (texto chico, muted) */
+.ajsec-st{display:inline-block;font-size:12px;font-weight:600;color:var(--mut);white-space:nowrap;margin-left:10px;vertical-align:middle}
