@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v306'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v308'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -11166,7 +11166,7 @@ async function scheduleView() {
       analysisSummaryBlock = `<div class="card" style="margin:0 0 12px;padding:14px 16px;background:var(--bg2);border:1px solid var(--line);border-radius:14px">
         <div style="font-weight:800;font-size:14px;margin-bottom:6px">🧠 Lo que vi de tu cuenta</div>
         <div style="font-size:13px;line-height:1.6;color:var(--mut)">${esc(an.week_summary).replace(/\n/g, '<br>')}</div>
-        <a href="#/app/analisis" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:700;color:var(--cel)">Ver mi análisis completo →</a>
+        <a href="#/app/analisis" onclick="try{sessionStorage.setItem('posty_ana_full','1')}catch(e){}" style="display:inline-block;margin-top:8px;font-size:13px;font-weight:700;color:var(--cel)">Ver mi análisis completo →</a>
       </div>`;
     }
   } catch (e) {}

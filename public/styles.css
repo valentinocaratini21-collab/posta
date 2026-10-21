@@ -2565,6 +2565,16 @@ textarea.in{resize:vertical;min-height:96px}
 .ana-block{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
 .ana-peer{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .ana-peer span:last-child{color:var(--mut);text-align:right}
+.ana-bars{margin:6px 0 4px}
+.ana-bar-row{padding:7px 0;border-bottom:1px solid var(--line-soft)}
+.ana-bar-head{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;margin-bottom:5px}
+.ana-bar-name{font-weight:600;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ana-bar-val{color:var(--mut);text-align:right;white-space:nowrap}
+.ana-bar-track{height:10px;border-radius:99px;background:var(--line-soft);overflow:hidden}
+.ana-bar-fill{height:100%;border-radius:99px;background:#B9CFE0}
+.ana-bar-own .ana-bar-name{font-weight:800}
+.ana-bar-own .ana-bar-val{color:var(--txt);font-weight:700}
+.ana-bar-own .ana-bar-fill{background:var(--cel)}
 .ana-pos{font-size:13.5px;line-height:1.6;margin-top:10px}
 .ana-badge{font-size:11px;color:var(--cel);font-weight:800;letter-spacing:.4px}
 .ana-upsell{font-size:13px;color:var(--mut);line-height:1.6;margin-top:8px}
