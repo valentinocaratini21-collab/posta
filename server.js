@@ -584,7 +584,7 @@ app.post('/api/billing/stripe/webhook', express.raw({ type: 'application/json', 
   }
 });
 
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '15mb', verify: (req, res, buf) => { try { req.rawBody = buf; } catch (e) {} } }));
 
 // Mudanza de dominio: postahacetodo.com -> postyhacetodo.com (301).
 // No toca /api/* (webhooks de MP, OAuth) ni /.well-known/* (assetlinks).
@@ -9343,6 +9343,8 @@ app.post('/api/ig/disconnect', requireAuth, (req, res) => {
 const tiktok = require('./tiktok');
 const google = require('./google');
 const tiendanube = require('./tiendanube');
+const tnWebhooks = require('./tiendanube-webhooks');
+const tnInstall = require('./tn-install');
 
 app.get('/api/tiktok/status', requireAuth, (req, res) => {
   const acc = tiktok.getAccount(db, req.session.userId);
@@ -9624,7 +9626,36 @@ app.get('/api/connections/tiendanube/start', requireAuth, (req, res) => {
 app.get('/api/connections/tiendanube/callback', async (req, res) => {
   const dest = '/#/app/ajustes';
   const uid = tnUserFromState(req.query.state);
-  if (!uid || !req.query.code) return res.redirect(dest + '?tn=error');
+  if (!uid) {
+    // (2026-10-21, homologación Tiendanube) Instalación DESDE la tienda:
+    // el comerciante llega de tiendanube.com/apps/47715/authorize sin
+    // sesión ni state nuestro. El code se canjea igual que siempre y el
+    // token queda como INSTALACIÓN PENDIENTE (tn-install.js); la landing
+    // pública crea la cuenta o hace login y el claim empareja la tienda
+    // con su usuario. Sin code (canceló en Tiendanube) → error de siempre.
+    const code = String(req.query.code || '').trim();
+    if (code && tiendanube.tnConfigured()) {
+      try {
+        const tok = await tiendanube.exchangeCode(code);
+        if (!tok.user_id) throw new Error('Tiendanube no devolvió la tienda');
+        const conn = { store_id: String(tok.user_id), access_token: tok.access_token };
+        let storeName = '';
+        try {
+          const st = await tiendanube.fetchStore(conn);
+          if (st) storeName = tiendanube.localizedName(st.name);
+        } catch (e) { /* el nombre se completa en el primer sync */ }
+        const t = tnInstall.createPendingInstall(db, {
+          store_id: conn.store_id, store_name: storeName,
+          access_token: tok.access_token, scope: tok.scope || '',
+        }, SESSION_SECRET);
+        return res.redirect('/tiendanube-instalar.html?t=' + encodeURIComponent(t));
+      } catch (e) {
+        console.error('[tiendanube/install]', e.message);
+      }
+    }
+    return res.redirect(dest + '?tn=error');
+  }
+  if (!req.query.code) return res.redirect(dest + '?tn=error');
   try {
     const tok = await tiendanube.exchangeCode(String(req.query.code));
     if (!tok.user_id) throw new Error('Tiendanube no devolvió la tienda');
@@ -9666,6 +9697,82 @@ app.post('/api/connections/tiendanube/disconnect', requireAuth, (req, res) => {
     }
   } catch (e) { /* sin digest guardado no hay bloque que limpiar */ }
   res.json({ ok: true });
+});
+
+// ---------- Tiendanube: instalación SIN sesión + webhooks (homologación 2026-10-21) ----------
+// Info pública de la instalación pendiente: SOLO el nombre de la tienda,
+// para que la landing lo muestre antes del login. El token jamás sale
+// de la base; el state firmado vence a los 30 minutos.
+app.get('/api/connections/tiendanube/install/info', (req, res) => {
+  const info = tnInstall.pendingStoreInfo(db, String(req.query.t || ''), SESSION_SECRET);
+  if (!info) return res.status(410).json({ ok: false, error: 'instalacion_vencida' });
+  res.json({ ok: true, store_name: info.store_name });
+});
+
+// Claim de la instalación: crea la cuenta Posty (sin verificación de
+// email, entra directo — espejo de /api/auth/register) o hace login,
+// empareja la tienda con el usuario y corre el PRIMER SYNC: el
+// fundamento nace del catálogo y las ventas reales de la tienda.
+app.post('/api/connections/tiendanube/install/claim', async (req, res) => {
+  const v = tnInstall.validateClaimBody(req.body || {});
+  if (!v.ok) return res.status(400).json({ ok: false, mensaje: v.error });
+  const state = String((req.body || {}).t || '');
+  if (!tnInstall.pendingStoreInfo(db, state, SESSION_SECRET)) {
+    return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: 'El link de instalación venció (dura 30 min). Volvé a tocar «Instalar» en Tiendanube 🙏' });
+  }
+  let userId = null;
+  if (v.mode === 'login') {
+    const rlKey = 'login|' + v.email + '|' + (req.ip || '');
+    if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
+      return res.status(429).json({ ok: false, mensaje: 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
+    const u = db.prepare('SELECT id, password_hash FROM users WHERE email = ?').get(v.email);
+    if (!u || !u.password_hash || !bcrypt.compareSync(v.password, u.password_hash)) {
+      authHitRecord(rlKey);
+      return res.status(401).json({ ok: false, mensaje: 'Email o contraseña incorrectos. ¿Probás de nuevo? Si no tenés cuenta, tocá «Crear mi cuenta» 🙏' });
+    }
+    authHitClear(rlKey);
+    userId = u.id;
+  } else {
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(v.email);
+    if (existing) {
+      return res.status(409).json({ ok: false, mensaje: 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
+    }
+    try {
+      const hash = bcrypt.hashSync(v.password, 10);
+      const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
+      const result = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, NULL, ?, ?, ?, 1, 1)')
+        .run(v.email, hash, newReferralCode(), trialEnds, 'tiendanube', '');
+      userId = result.lastInsertRowid;
+    } catch (e) {
+      if (/UNIQUE constraint failed/i.test((e && e.message) || ''))
+        return res.status(409).json({ ok: false, mensaje: 'Ese email ya tiene cuenta en Posty. Tocá «Ya tengo cuenta» y entrá con tu contraseña 👆' });
+      console.error('[tiendanube/install] alta:', e.message);
+      return res.status(500).json({ ok: false, mensaje: 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
+    }
+    track(userId, 'registered', 'via_tiendanube');
+    try { evTrack(userId, 'account_created', { via: 'tiendanube' }); } catch (e) {}
+  }
+  const claimed = tnInstall.claimPendingInstall(db, state, SESSION_SECRET, userId);
+  if (!claimed) return res.status(410).json({ ok: false, error: 'instalacion_vencida', mensaje: 'El link de instalación venció. Volvé a tocar «Instalar» en Tiendanube 🙏' });
+  track(userId, 'tiendanube_connected', 'via_store_install');
+  // Sesión regenerada al autenticar (anti fijación; mismo patrón que
+  // /api/auth/register y /api/auth/login). La respuesta viaja adentro.
+  req.session.regenerate(async () => {
+    req.session.userId = userId;
+    let synced = false;
+    try { await syncTiendanubeForUser(userId); synced = true; }
+    catch (e) { console.error('[tiendanube/install] primer sync:', e.message); }
+    res.json({ ok: true, dest: '/#/app/ajustes?tn=ok', synced });
+  });
+});
+
+// Webhooks de Tiendanube: los 3 de PRIVACIDAD obligatorios + app/
+// uninstalled. SIN sesión: la autenticidad es la firma HMAC del cuerpo
+// crudo (header x-linkedstore-hmac-sha256; rawBody lo captura el P0).
+// Sin firma válida el despachador responde 401 y no toca ningún dato.
+app.post('/api/webhooks/tiendanube/:topic', (req, res) => {
+  const out = tnWebhooks.processWebhook(db, req.params.topic, req.body, req.rawBody, req.get('x-linkedstore-hmac-sha256'));
+  res.status(out.status).json(out.body);
 });
 
 // ---------- Reseñas de Google: responder en un toque ----------
@@ -16249,7 +16356,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v313';
+const BUILD_ID = '20261021-v314';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

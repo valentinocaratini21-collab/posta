@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conectá tu Tiendanube · Posty</title>
+<meta name="description" content="Instalaste Posty en tu Tiendanube. Creá tu cuenta en un minuto y tu tienda queda conectada: Posty arma tu semana de Instagram con tus productos y tus ventas reales.">
+<style>
+  :root{ --celeste:#2793C8; --amarillo:#FEC14D; --navy:#0A1E33; --gris:#5B7186; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:#fff; color:var(--navy); -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:430px; margin:0 auto; padding:28px 20px 48px; }
+  .avatar{ width:92px; height:92px; border-radius:50%; display:block; margin:6px auto 14px;
+    border:3px solid var(--amarillo); object-fit:cover; background:#fff; }
+  h1{ font-size:26px; line-height:1.2; text-align:center; margin:0 0 8px; font-weight:800; }
+  .store{ text-align:center; color:var(--celeste); font-weight:700; font-size:17px; margin:0 0 10px; min-height:22px; }
+  .sub{ text-align:center; color:var(--gris); font-size:15.5px; line-height:1.5; margin:0 0 22px; }
+  .tabs{ display:flex; background:#EEF6FB; border-radius:12px; padding:4px; margin-bottom:18px; }
+  .tabs button{ flex:1; border:0; background:transparent; padding:10px 6px; border-radius:9px;
+    font-size:15px; font-weight:700; color:var(--gris); cursor:pointer; }
+  .tabs button.on{ background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(10,30,51,.12); }
+  label{ display:block; font-size:13.5px; font-weight:700; margin:14px 0 6px; }
+  input{ width:100%; padding:13px 14px; font-size:16px; border:1.5px solid #D7E5EE; border-radius:11px; outline:none; }
+  input:focus{ border-color:var(--celeste); }
+  .cta{ width:100%; margin-top:22px; padding:15px; border:0; border-radius:12px; cursor:pointer;
+    background:var(--celeste); color:#fff; font-size:16.5px; font-weight:800; }
+  .cta:disabled{ opacity:.55; cursor:default; }
+  .fine{ text-align:center; color:var(--gris); font-size:13px; line-height:1.55; margin-top:14px; }
+  .err{ display:none; background:#FDECEC; color:#8C2B2B; border-radius:10px; padding:11px 13px;
+    font-size:14.5px; line-height:1.45; margin-top:16px; }
+  .okbox{ display:none; text-align:center; padding:26px 6px; }
+  .okbox .big{ font-size:44px; }
+  .secure{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:20px; }
+  .secure span{ background:#F4FAFD; border:1px solid #E1EEF6; color:var(--gris);
+    font-size:12.5px; font-weight:600; border-radius:999px; padding:6px 11px; }
+  a{ color:var(--celeste); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="avatar" src="/ai-avatar.png" alt="Posty">
+  <h1>¡Tu tienda ya casi<br>está conectada! 🎉</h1>
+  <p class="store" id="storeName"></p>
+  <p class="sub">Instalaste <strong>Posty</strong> en tu Tiendanube. Creá tu cuenta
+    (o entrá si ya tenés una) y la conexión queda hecha: armo tu fundamento con
+    tu catálogo y tus ventas reales, y tu semana de Instagram nace de tus productos.</p>
+
+  <div id="formBox">
+    <div class="tabs">
+      <button type="button" id="tabNew" class="on">Crear mi cuenta</button>
+      <button type="button" id="tabOld">Ya tengo cuenta</button>
+    </div>
+    <form id="claimForm" autocomplete="on">
+      <label for="email">Tu email</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="vos@tutienda.com" required>
+      <label for="password">Contraseña</label>
+      <input id="password" type="password" autocomplete="new-password" placeholder="6 caracteres como mínimo" required>
+      <button class="cta" id="submitBtn" type="submit">Crear cuenta y conectar mi tienda →</button>
+    </form>
+    <div class="err" id="errBox"></div>
+    <p class="fine">Sin verificación de email ni pasos extra: creás la cuenta y entrás directo.<br>
+      ¿El link venció? <a href="https://www.tiendanube.com/apps/47715/authorize">Volvé a instalar desde Tiendanube</a>.</p>
+    <div class="secure">
+      <span>🔒 Conexión oficial OAuth</span><span>👀 Posty solo LEE tu tienda</span><span>🚫 Sin datos de tus compradores</span>
+    </div>
+  </div>
+
+  <div class="okbox" id="okBox">
+    <div class="big">✅</div>
+    <h1>¡Listo! Tu tienda quedó conectada</h1>
+    <p class="sub">Estoy leyendo tu catálogo y tus ventas para armar tu fundamento.<br>Te llevo a tu cuenta…</p>
+  </div>
+
+  <div class="okbox" id="expiredBox">
+    <div class="big">⏰</div>
+    <h1>Este link de instalación venció</h1>
+    <p class="sub">Por seguridad dura 30 minutos. Volvé a tocar <strong>Instalar</strong> en la
+      Tienda de Aplicaciones y te traigo de vuelta acá.</p>
+    <a class="cta" style="display:block;text-decoration:none;text-align:center"
+       href="https://www.tiendanube.com/apps/47715/authorize">Ir a instalar Posty →</a>
+  </div>
+</div>
+
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var t = params.get('t') || '';
+  var mode = 'register';
+  var $ = function(id){ return document.getElementById(id); };
+  var errBox = $('errBox');
+
+  function showErr(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
+  function hideErr(){ errBox.style.display = 'none'; }
+  function showExpired(){
+    $('formBox').style.display = 'none';
+    $('okBox').style.display = 'none';
+    $('expiredBox').style.display = 'block';
+  }
+
+  if (params.get('error')) { showExpired(); return; }
+  if (!t) { showExpired(); return; }
+
+  // Nombre de la tienda (solo lectura, para que el dueño vea QUÉ está conectando)
+  fetch('/api/connections/tiendanube/install/info?t=' + encodeURIComponent(t))
+    .then(function(r){ return r.json().then(function(j){ return { okHttp: r.ok, j: j }; }); })
+    .then(function(x){
+      if (!x.okHttp || !x.j || !x.j.ok) { showExpired(); return; }
+      if (x.j.store_name) $('storeName').textContent = '🛍️ ' + x.j.store_name;
+    })
+    .catch(function(){ /* sin nombre igual se puede seguir */ });
+
+  function setMode(m){
+    mode = m;
+    $('tabNew').classList.toggle('on', m === 'register');
+    $('tabOld').classList.toggle('on', m === 'login');
+    $('password').setAttribute('autocomplete', m === 'register' ? 'new-password' : 'current-password');
+    $('password').setAttribute('placeholder', m === 'register' ? '6 caracteres como mínimo' : 'Tu contraseña de Posty');
+    $('submitBtn').textContent = m === 'register' ? 'Crear cuenta y conectar mi tienda →' : 'Entrar y conectar mi tienda →';
+    hideErr();
+  }
+  $('tabNew').addEventListener('click', function(){ setMode('register'); });
+  $('tabOld').addEventListener('click', function(){ setMode('login'); });
+
+  $('claimForm').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    hideErr();
+    var btn = $('submitBtn');
+    btn.disabled = true; btn.textContent = 'Conectando tu tienda…';
+    fetch('/api/connections/tiendanube/install/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t: t, mode: mode, email: $('email').value, password: $('password').value })
+    })
+    .then(function(r){ return r.json().then(function(j){ return { okHttp: r.ok, j: j }; }); })
+    .then(function(x){
+      if (x.okHttp && x.j && x.j.ok) {
+        $('formBox').style.display = 'none';
+        $('okBox').style.display = 'block';
+        setTimeout(function(){ location.href = x.j.dest || '/#/app/ajustes?tn=ok'; }, 1200);
+        return;
+      }
+      btn.disabled = false; setMode(mode);
+      var code = x.j && x.j.error;
+      if (code === 'instalacion_vencida') { showExpired(); return; }
+      showErr((x.j && x.j.mensaje) || code || 'Algo no salió bien. Probá de nuevo.');
+    })
+    .catch(function(){
+      btn.disabled = false; setMode(mode);
+      showErr('No me pude comunicar con Posty. Revisá tu conexión y probá de nuevo.');
+    });
+  });
+})();
+</script>
+</body>
+</html>
