@@ -567,7 +567,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     rolling: true, // cada request renueva la expiración: mientras uses Posta, nunca se cierra
-    cookie: { maxAge: 365 * 24 * 3600 * 1000, httpOnly: true, secure: process.env.COOKIE_SECURE === '1' },
+    cookie: { sameSite: 'lax', maxAge: 365 * 24 * 3600 * 1000, httpOnly: true, secure: ['1', 'true'].includes(String(process.env.COOKIE_SECURE || '').toLowerCase())  },
   })
 );
 app.use('/media', express.static(MEDIA_DIR, {
@@ -1479,52 +1479,70 @@ app.post('/api/auth/register', (req, res) => {
     const utmS = String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
     const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
-    req.session.userId = r.lastInsertRowid;
+    const newUserId = newUserId;
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
-      const nImp = importTrialWeek(r.lastInsertRowid, trial_ig);
-      applyTrialLang(r.lastInsertRowid, trial_ig); // (v274) cuenta EN si la prueba fue EN
-      if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${r.lastInsertRowid}`);
-      seedFromTrialDigest(r.lastInsertRowid, trial_ig); // (v229) FUNDAMENTO: la cuenta nace con el digest de la prueba sembrado
-      recordTrialImport(r.lastInsertRowid, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
-      streakFromTrialImport(r.lastInsertRowid, nImp);
+      const nImp = importTrialWeek(newUserId, trial_ig);
+      applyTrialLang(newUserId, trial_ig); // (v274) cuenta EN si la prueba fue EN
+      if (nImp) console.log(`[posta] semana de prueba importada: ${nImp} borradores → usuario ${newUserId}`);
+      seedFromTrialDigest(newUserId, trial_ig); // (v229) FUNDAMENTO: la cuenta nace con el digest de la prueba sembrado
+      recordTrialImport(newUserId, trial_ig, nImp, false); // fix #2: usuario nuevo, sin posteos previos
+      streakFromTrialImport(newUserId, nImp);
       // 🚀 Abrir y listo: la semana se arma SOLA (historias + programación + aviso).
       // Fire-and-forget: la respuesta ya casi sale, esto no la bloquea.
-      if (nImp && autoWeekEnabled(r.lastInsertRowid)) {
-        const uidNew = r.lastInsertRowid;
+      if (nImp && autoWeekEnabled(newUserId)) {
+        const uidNew = newUserId;
         setTimeout(() => { autoArmWeek(uidNew, 'signup').catch(() => {}); }, 5000);
       }
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
-    track(r.lastInsertRowid, 'registered');
-    evTrack(r.lastInsertRowid, 'account_created', {});
-    res.json({ ok: true });
+    track(newUserId, 'registered');
+    evTrack(newUserId, 'account_created', {});
+    // Sesión regenerada al crear la cuenta (anti fijación de sesión).
+    req.session.regenerate(() => { req.session.userId = newUserId; res.json({ ok: true }); });
   } catch (e) {
-    res.status(400).json({ error: 'Ese email ya tiene cuenta 😄 Probá entrando directamente' });
+    // Solo el duplicado real es "ya tiene cuenta": disfrazar cualquier error
+    // de DB con ese mensaje dejaba al usuario entrando a una cuenta que
+    // nunca se creó. El resto es un 500 honesto.
+    if (/UNIQUE constraint failed/i.test((e && e.message) || ''))
+      return res.status(400).json({ error: 'Ese email ya tiene cuenta 😄 Probá entrando directamente' });
+    console.error('[posta] register:', e.message);
+    res.status(500).json({ error: 'Algo falló de nuestro lado 😅 Probá de nuevo en un rato' });
   }
 });
 
 app.post('/api/auth/login', (req, res) => {
   const { email, password, trial_ig } = req.body || {};
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get((email || '').trim().toLowerCase());
-  if (!user || !user.password_hash || !bcrypt.compareSync(password || '', user.password_hash))
+  const emL = (email || '').trim().toLowerCase();
+  const rlKey = 'login|' + emL + '|' + (req.ip || '');
+  if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
+    return res.status(429).json({ error: 'Demasiados intentos 😅 Esperá 15 minutos y probá de nuevo.' });
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(emL);
+  if (!user || !user.password_hash || !bcrypt.compareSync(password || '', user.password_hash)) {
+    authHitRecord(rlKey);
     return res.status(401).json({ error: 'Mmm, ese email o contraseña no me cierran 🤔 Probá de nuevo' });
-  req.session.userId = user.id;
-  // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
-  try {
-    const uidL = user.id;
-    const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uidL).c || 0) > 0;
-    const nImp = importTrialWeek(uidL, trial_ig);
-    applyTrialLang(uidL, trial_ig); // (v274) cuenta EN si la prueba fue EN
-    if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${uidL}`);
-    seedFromTrialDigest(uidL, trial_ig); // (v229) FUNDAMENTO: siembra del digest también en la puerta de login
-    recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
-    streakFromTrialImport(uidL, nImp);
-    // 🚀 Abrir y listo (login con semana importada): también se arma sola.
-    if (nImp && !hadPosts && autoWeekEnabled(uidL)) {
-      setTimeout(() => { autoArmWeek(uidL, 'login').catch(() => {}); }, 5000);
-    }
-  } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
-  res.json({ ok: true });
+  }
+  authHitClear(rlKey);
+  // Sesión regenerada al autenticar (anti fijación): la respuesta viaja en
+  // el callback, cuando la sesión nueva ya existe.
+  req.session.regenerate(() => {
+    req.session.userId = user.id;
+    // Si viene de /prueba y ya tenía cuenta, su semana también lo espera adentro
+    try {
+      const uidL = user.id;
+      const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(uidL).c || 0) > 0;
+      const nImp = importTrialWeek(uidL, trial_ig);
+      applyTrialLang(uidL, trial_ig); // (v274) cuenta EN si la prueba fue EN
+      if (nImp) console.log(`[posta] semana de prueba importada (login): ${nImp} borradores → usuario ${user.id}`);
+      seedFromTrialDigest(uidL, trial_ig); // (v229) FUNDAMENTO: siembra del digest también en la puerta de login
+      recordTrialImport(uidL, trial_ig, nImp, hadPosts); // fix #2: no pisar con un 0 si el import no se intentó
+      streakFromTrialImport(uidL, nImp);
+      // 🚀 Abrir y listo (login con semana importada): también se arma sola.
+      if (nImp && !hadPosts && autoWeekEnabled(uidL)) {
+        setTimeout(() => { autoArmWeek(uidL, 'login').catch(() => {}); }, 5000);
+      }
+    } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
+    res.json({ ok: true });
+  });
 });
 
 // ---------- Reporte semanal + oportunidad (tarjeta en Schedule, 2026-10-17) ----------
@@ -2196,6 +2214,35 @@ function applyTrialProfile(userId, tp) {
   } catch (e) { console.error('[magic] trial_profile:', e.message); }
 }
 
+// ---------- Auth: rate-limit en memoria + página de error con salida ----------
+// Ventanas cortas anti abuso y anti doble-click (login/reset/forgot): el
+// proceso es único; alcanza para frenar fuerza bruta sin infraestructura.
+const AUTH_HITS = new Map();
+function authHitCount(key, windowMs) {
+  const now = Date.now();
+  const arr = (AUTH_HITS.get(key) || []).filter((t) => now - t < windowMs);
+  AUTH_HITS.set(key, arr);
+  return arr.length;
+}
+function authHitRecord(key) {
+  const arr = AUTH_HITS.get(key) || [];
+  arr.push(Date.now());
+  AUTH_HITS.set(key, arr);
+}
+function authHitClear(key) { AUTH_HITS.delete(key); }
+// Página mínima de marca para callbacks/links abiertos desde un email o una
+// app externa: nada de texto plano sin salida (auditoría 2026-10-21).
+function htmlLinkPage(title, msg) {
+  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Posty</title></head>'
+    + '<body style="margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#F2F9FD;color:#0A1E33;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;box-sizing:border-box">'
+    + '<div style="max-width:420px;width:100%;background:#fff;border-radius:18px;padding:32px 28px;text-align:center;box-shadow:0 10px 40px rgba(10,30,51,.10)">'
+    + '<img src="/ai-avatar.png" alt="Posty" width="72" height="72" style="border-radius:50%">'
+    + '<h1 style="font-size:21px;margin:16px 0 8px">' + title + '</h1>'
+    + '<p style="font-size:15px;line-height:1.55;color:#47617A;margin:0 0 22px">' + msg + '</p>'
+    + '<a href="/#/login" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:15px;padding:13px 30px;border-radius:999px;text-decoration:none">Volver a Posty</a>'
+    + '</div></body></html>';
+}
+
 // Siempre responde {ok:true} para no revelar si el email existe.
 app.post('/api/auth/magic-request', async (req, res) => {
   const { email, trial_ig, ref, utm, trial_profile } = req.body || {};
@@ -2217,10 +2264,11 @@ app.post('/api/auth/magic-request', async (req, res) => {
     });
     db.prepare('INSERT INTO magic_tokens (token_hash, email, payload, created_at, expires_at, used) VALUES (?,?,?,?,?,0)')
       .run(tokenHash, em, payload, Date.now(), Date.now() + 15 * 60 * 1000);
+    let emailSent = false;
     if (process.env.RESEND_API_KEY) {
       const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
       const link = `${base}/api/auth/magic?token=${token}`;
-      try { await magicLinkEmail(em, link); }
+      try { const mr = await magicLinkEmail(em, link); if (mr && mr.ok) emailSent = true; }
       catch (e) { console.error('[magic] email:', e.message); }
     }
     // Sesión inmediata (2026-10-16, auditoría #3): si el email NO tiene
@@ -2256,11 +2304,17 @@ app.post('/api/auth/magic-request', async (req, res) => {
         seedFromTrialDigest(userId, trial_ig); // (v229) FUNDAMENTO: transferencia total también por magic-link
         track(userId, 'registered');
         evTrack(userId, 'account_created', {});
-        req.session.userId = userId;
+        await new Promise((resolve) => req.session.regenerate(() => { req.session.userId = userId; resolve(); }));
         sessionNow = true;
       }
     } catch (e) { console.error('[magic] sesión inmediata:', e.message); }
   } catch (e) { console.error('[magic] request:', e.message); }
+  if (!sessionNow && !emailSent) {
+    // El acceso de este email DEPENDE del correo (cuenta existente, o alta
+    // sin prueba en curso) y el correo no salió: éxito falso jamás.
+    console.error('[magic] request sin salida: el email no se envió (¿RESEND_API_KEY?) para', em);
+    return res.status(503).json({ ok: false, error: 'No pudimos enviar el email de acceso 😅 Probá de nuevo en un rato.' });
+  }
   res.json({ ok: true, session: sessionNow });
 });
 
@@ -2274,12 +2328,13 @@ app.get('/api/auth/magic', (req, res) => {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const row = db.prepare('SELECT * FROM magic_tokens WHERE token_hash = ? AND used = 0').get(tokenHash);
     if (!row || row.expires_at < Date.now())
-      return res.status(400).send('Ese link venció o ya se usó 😅 Pedí uno nuevo desde la app');
+      return res.status(400).send(htmlLinkPage('Ese link venció o ya se usó 😅', 'Pedí uno nuevo desde la app: dura 15 minutos y entrás directo.'));
     db.prepare('UPDATE magic_tokens SET used = 1 WHERE token_hash = ?').run(tokenHash);
     let payload = {};
     try { payload = JSON.parse(row.payload || '{}'); } catch (e) {}
     const email = row.email;
     const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    let sessUserId = null;
     if (!user) {
       const code = newReferralCode();
       let referredBy = null;
@@ -2309,9 +2364,9 @@ app.get('/api/auth/magic', (req, res) => {
       seedFromTrialDigest(userId, payload.trial_ig); // (v229) FUNDAMENTO: transferencia total también en el canje magic
       track(userId, 'registered');
       evTrack(userId, 'account_created', {});
-      req.session.userId = userId;
+      sessUserId = userId;
     } else {
-      req.session.userId = user.id;
+      sessUserId = user.id;
       try {
         const hadPosts = (db.prepare('SELECT COUNT(*) AS c FROM posts WHERE user_id = ?').get(user.id).c || 0) > 0;
         const expBiz = (payload.trial_profile && payload.trial_profile.business_name) || null;
@@ -2321,10 +2376,10 @@ app.get('/api/auth/magic', (req, res) => {
         streakFromTrialImport(user.id, nImp);
       } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
     }
-    return res.redirect('/#/app/semana');
+    return req.session.regenerate(() => { req.session.userId = sessUserId; res.redirect('/#/'); });
   } catch (e) {
     console.error('[magic] redeem:', e.message);
-    return res.status(400).send('Ese link no me cierra 😅 Pedí uno nuevo desde la app');
+    return res.status(400).send(htmlLinkPage('Ese link no me cierra 😅', 'Pedí uno nuevo desde la app y probá de nuevo.'));
   }
 });
 
@@ -2340,17 +2395,30 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
 // Siempre responde OK para no revelar si el email existe.
 app.post('/api/auth/forgot', async (req, res) => {
   const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  // Sin proveedor de email configurado el link JAMÁS sale: responder ok era
+  // el éxito falso del incidente 2026-10-21. Error honesto y visible.
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[posta] forgot: RESEND_API_KEY ausente — el email de reset no puede salir');
+    return res.status(503).json({ error: 'El envío de emails está en mantenimiento 😅 Probá de nuevo en un rato.' });
+  }
+  // Rate-limit: máx 5 pedidos por hora por email+IP (espejo del magic-request).
+  const rlKey = 'forgot|' + email + '|' + (req.ip || '');
+  if (authHitCount(rlKey, 3600 * 1000) >= 5)
+    return res.status(429).json({ error: 'Ya pediste varios links 😅 Esperá una hora y probá de nuevo.' });
+  authHitRecord(rlKey);
   try {
     const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
-    if (user && process.env.RESEND_API_KEY) {
+    if (user) {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(user.id);
       db.prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?,?,?)')
         .run(user.id, tokenHash, Date.now() + 3600 * 1000);
-      const host = (req.get('host') || 'postyhacetodo.com').split(':')[0];
-      const link = `https://${host}/#/reset?token=${token}`;
-      await sendEmail({
+      // BASE_URL canónica (antes: header Host — un proxy o un request armado
+      // podía mandar el link a otro dominio; magic ya usaba BASE_URL).
+      const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+      const link = `${base}/#/reset?token=${token}`;
+      const r = await sendEmail({
         to: user.email,
         subject: 'Recuperá tu contraseña 🔑',
         html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
@@ -2363,26 +2431,54 @@ app.post('/api/auth/forgot', async (req, res) => {
             <p style="font-size:13px;line-height:1.6;color:#47617A">El link vence en 1 hora. Si no fuiste vos, ignorá este mail 😊</p>
           </div></div>`,
       });
+      if (!r || !r.ok) {
+        console.error('[posta] forgot: sendEmail no entregó:', r && (r.error || r.skipped ? 'omitido' : 'sin detalle'));
+        return res.status(502).json({ error: 'No pude enviar el email 😅 Probá de nuevo en un rato.' });
+      }
     }
-  } catch (e) { console.error('[posta] forgot:', e.message); }
+  } catch (e) {
+    console.error('[posta] forgot:', e.message);
+    return res.status(500).json({ error: 'Algo falló de nuestro lado 😅 Probá de nuevo' });
+  }
   res.json({ ok: true });
 });
 
 app.post('/api/auth/reset', (req, res) => {
   const token = String((req.body && req.body.token) || '');
   const password = String((req.body && req.body.password) || '');
-  if (!token || password.length < 6)
+  const rlKey = 'reset|' + (req.ip || '');
+  if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
+    return res.status(429).json({ error: 'Demasiados intentos 😅 Esperá 15 minutos y pedí un link nuevo.' });
+  if (!token || password.length < 6) {
+    authHitRecord(rlKey);
     return res.status(400).json({ error: 'Necesito el link válido y una contraseña de 6 caracteres como mínimo 🔑' });
+  }
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const row = db.prepare('SELECT * FROM password_resets WHERE token_hash = ? AND used = 0').get(tokenHash);
-    if (!row || row.expires_at < Date.now())
+    if (!row || row.expires_at < Date.now()) {
+      authHitRecord(rlKey);
       return res.status(400).json({ error: 'Ese link venció o ya se usó 😅 Pedí uno nuevo' });
+    }
     const hash = bcrypt.hashSync(password, 10);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, row.user_id);
     db.prepare('UPDATE password_resets SET used = 1 WHERE id = ?').run(row.id);
-    req.session.userId = row.user_id;
-    res.json({ ok: true });
+    // Un reset exitoso cierra TODAS las demás sesiones de la cuenta: si el
+    // cambio fue por una cuenta comprometida, nadie queda adentro con la
+    // clave vieja (las sesiones duran hasta 365 días).
+    try {
+      const rows = db.prepare('SELECT sid, sess FROM sessions').all();
+      for (const r2 of rows) {
+        try {
+          const sd = JSON.parse(r2.sess);
+          if (sd && sd.userId === row.user_id && r2.sid !== req.sessionID)
+            db.prepare('DELETE FROM sessions WHERE sid = ?').run(r2.sid);
+        } catch (e) {}
+      }
+    } catch (e) { console.error('[posta] reset: no pude revocar sesiones:', e.message); }
+    authHitClear(rlKey);
+    // Sesión regenerada tras autenticar (anti fijación de sesión).
+    req.session.regenerate(() => { req.session.userId = row.user_id; res.json({ ok: true }); });
   } catch (e) {
     res.status(400).json({ error: 'No pude cambiarla 😅 Probá de nuevo' });
   }
@@ -8939,7 +9035,7 @@ app.get('/api/ig/callback', async (req, res) => {
       : (error_description || error);
     return res.redirect(withQs(igDest(), 'ig=error&msg=' + encodeURIComponent(msg)));
   }
-  if (!req.session.userId || state !== req.session.igState) return res.status(400).send('Estado inválido');
+  if (!req.session.userId || state !== req.session.igState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
   try {
     const s = getSettings(req.session.userId);
     const appId = s.meta_app_id || process.env.IG_APP_ID || process.env.META_APP_ID;
@@ -9116,7 +9212,7 @@ app.get('/api/tiktok/callback', async (req, res) => {
       : (error_description || 'TikTok no autorizó la conexión. Probá de nuevo.');
     return res.redirect(dest + '?tiktok=error&msg=' + encodeURIComponent(msg));
   }
-  if (!req.session.userId || !state || state !== req.session.ttState) return res.status(400).send('Estado inválido');
+  if (!req.session.userId || !state || state !== req.session.ttState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
   try {
     const tok = await tiktok.exchangeCode(code, req.session.ttRedirect);
     let username = '';
@@ -9218,7 +9314,7 @@ app.get('/api/google/callback', async (req, res) => {
       : 'Google no autorizó la conexión. Probá de nuevo.';
     return res.redirect(dest + '?google=error&msg=' + encodeURIComponent(msg));
   }
-  if (!req.session.userId || !state || state !== req.session.gState) return res.status(400).send('Estado inválido');
+  if (!req.session.userId || !state || state !== req.session.gState) return res.status(400).send(htmlLinkPage('La conexión venció 😅', 'Volvé a Posty y conectá tu cuenta de nuevo desde Ajustes → Conexiones.'));
   try {
     const tok = await google.exchangeCode(code, req.session.gRedirect);
     let info = {};
@@ -15682,7 +15778,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v294';
+const BUILD_ID = '20261021-v295';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -15702,6 +15798,14 @@ app.get('/api/version', (req, res) => res.json({ ok: true, build: BUILD_ID,
   gemini: Boolean(process.env.GEMINI_API_KEY),
   // Disco libre del volumen de datos (MB): vigila la causa del ENOSPC 2026-10-15.
   diskFreeMB: (() => { const f = diskFreeBytes(); return f != null ? Math.round(f / 1048576) : null; })(),
+  // Canales configurados (sin exponer secretos): un canal caído por config
+  // se ve acá en una línea — el email invisible del 2026-10-21 no se repite.
+  channels: {
+    email: Boolean(process.env.RESEND_API_KEY),
+    stripe: Boolean(process.env.STRIPE_SECRET_KEY),
+    mp: Boolean(process.env.MP_ACCESS_TOKEN),
+    push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+  },
 }));
 // Diagnóstico admin: últimos errores de generación (requiere login).
 app.get('/api/diag', requireAuth, (req, res) => res.json({ ok: true, build: BUILD_ID, errors: LAST_ERRORS }));
