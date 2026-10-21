@@ -4926,9 +4926,38 @@ app.post('/api/ads/webhook', async (req, res) => {
   }
 });
 
+// COMPUERTA DE ELEGIBILIDAD DE PAUTA (mejora aprobada por Valentino el 2026-10-21):
+// la recomendación de potenciar SOLO aparece si el posteo se puede pautar de verdad,
+// y el boost NUNCA debita la billetera antes de comprobarlo. Antes el flujo debitaba
+// primero y descubría después si Meta/la Página lo permitían (boost 'pending' con la
+// plata ya retenida). Requisitos: (1) Ads configurado, (2) Instagram conectado,
+// (3) la Página de Facebook vinculada resuelve con nuestro token (autorización lista).
+// Falla cerrado: ante cualquier error de chequeo, no se ofrece la pauta.
+const ADS_GATE_MSG = {
+  ads_not_configured: 'Estamos terminando de habilitar la pauta para tu cuenta. Te avisamos en cuanto esté lista.',
+  ig_not_connected: 'Conectá tu Instagram para poder potenciar tus posteos.',
+  page_not_authorized: 'Estamos terminando de conectar tu cuenta para la pauta. Te avisamos en cuanto esté lista.',
+};
+async function adsReadiness(userId) {
+  if (!metaAds.adsConfigured()) return { ready: false, code: 'ads_not_configured' };
+  const user = db.prepare('SELECT ig_user_id FROM users WHERE id = ?').get(userId) || {};
+  if (!user.ig_user_id) return { ready: false, code: 'ig_not_connected' };
+  try {
+    const pageId = await metaAds.resolvePageId(user.ig_user_id);
+    return { ready: true, pageId, igUserId: user.ig_user_id };
+  } catch (e) {
+    return { ready: false, code: 'page_not_authorized' };
+  }
+}
+
 // Recomendaciones: posteos publicados (30d) con engagement rate arriba del promedio.
 // Solo ganadores probados — nunca se pauta un posteo nuevo sin datos.
-app.get('/api/ads/recommendations', requireAuth, (req, res) => {
+// Con la compuerta: sin elegibilidad completa, la lista va vacía (no se ofrece).
+app.get('/api/ads/recommendations', requireAuth, async (req, res) => {
+  const gate = await adsReadiness(req.session.userId).catch(() => ({ ready: false, code: 'page_not_authorized' }));
+  if (!gate.ready) {
+    return res.json({ ok: true, recommendations: [], has_data: false, ads_ready: false });
+  }
   let rows = [];
   try {
     rows = db.prepare(`
@@ -4952,9 +4981,17 @@ app.get('/api/ads/recommendations', requireAuth, (req, res) => {
       return { ...r, eng, er: r.reach > 0 ? eng / r.reach : 0 };
     });
   const avg = scored.length ? scored.reduce((a, r) => a + r.er, 0) / scored.length : 0;
-  const top = scored.filter(r => r.er >= avg * 1.2 && r.er > 0).sort((a, b) => b.er - a.er).slice(0, 3);
+  const candidates = scored.filter(r => r.er >= avg * 1.2 && r.er > 0).sort((a, b) => b.er - a.er);
+  // Compuerta por posteo: solo se recomiendan los que Meta confirma potenciables.
+  const top = [];
+  for (const r of candidates) {
+    if (top.length >= 3) break;
+    const elig = await metaAds.checkEligibility(r.ig_media_id).catch(() => ({ ok: false }));
+    if (elig.ok) top.push(r);
+  }
   res.json({
     ok: true,
+    ads_ready: true,
     recommendations: top.map(r => ({
       post_id: r.id, image_path: r.image_path, caption: (r.caption || '').slice(0, 90),
       ig_media_id: r.ig_media_id, reach: r.reach, likes: r.likes, comments: r.comments,
@@ -4978,6 +5015,17 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
   if (!post || !post.ig_media_id) {
     return res.status(400).json({ error: 'Primero publiquemos ese posteo en Instagram, después lo potenciamos 🚀' });
   }
+  // COMPUERTA (2026-10-21): pre-flight ANTES de tocar la billetera. Si el posteo no
+  // se puede pautar (sin IG, sin Página autorizada o no elegible en Meta), se rechaza
+  // acá: sin débito, sin boost creado, sin plata retenida.
+  const gate = await adsReadiness(req.session.userId).catch(() => ({ ready: false, code: 'page_not_authorized' }));
+  if (!gate.ready) {
+    return res.status(409).json({ error: ADS_GATE_MSG[gate.code] || ADS_GATE_MSG.page_not_authorized });
+  }
+  const elig = await metaAds.checkEligibility(post.ig_media_id).catch(() => ({ ok: true }));
+  if (!elig.ok) {
+    return res.status(409).json({ error: 'Este posteo no se puede promocionar (a veces pasa por la música o el formato). Probemos con otro de tus posteos ganadores.' });
+  }
   const { fee_cents, spend_cents } = adSplit(budgetCents);
   const w = getAdWallet(req.session.userId);
   if (w.balance_cents < budgetCents) {
@@ -4995,12 +5043,9 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
   let launched = false, launchError = '';
   if (metaAds.adsConfigured()) {
     try {
-      const user = db.prepare('SELECT ig_user_id FROM users WHERE id = ?').get(req.session.userId) || {};
-      if (!user.ig_user_id) throw new Error('Conectá tu Instagram primero');
-      const pageId = await metaAds.resolvePageId(user.ig_user_id);
       const r = await metaAds.createBoost({
         name: `Posty · Boost #${boostId} · u${req.session.userId}`,
-        pageId, igUserId: user.ig_user_id, igMediaId: post.ig_media_id,
+        pageId: gate.pageId, igUserId: gate.igUserId, igMediaId: post.ig_media_id,
         spendCents, days: AD_DEFAULT_DAYS, country: adCountry(req.session.userId),
       });
       db.prepare(`UPDATE ad_boosts SET status='active', meta_campaign_id=?, meta_adset_id=?, meta_ad_id=?, started_at=datetime('now'), error='' WHERE id=?`)
@@ -16429,7 +16474,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v318';
+const BUILD_ID = '20261021-v319';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
