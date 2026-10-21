@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261020-v286'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261020-v287'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -9762,7 +9762,7 @@ async function handlePendingBoost() {
     if (p) { try { localStorage.removeItem('posta_pending_boost'); } catch (e) {} }
     cleanUrl(); return;
   }
-  const say = (html) => { const el = document.getElementById('adsBoostMsg'); if (el) el.innerHTML = html; };
+  const say = (html) => { const el = document.getElementById('adsBoostMsg'); if (el) { el.innerHTML = html; return; } try { toast(String(html).replace(/<[^>]+>/g, '')); } catch (e) {} };
   const tryBoost = async () => {
     try {
       const r = await api.post('/api/ads/boost', { post_id: Number(p.post_id), budget_cents: Number(p.budget_cents) });
@@ -9812,6 +9812,31 @@ async function handlePendingBoost() {
   }
 }
 
+// 🚀 Pauta pendiente (vuelta de MercadoPago) y tarjeta de recomendados en la
+// Agenda: ciclo propio post-render, como Ideas — la Agenda no espera estas
+// llamadas. Si hay una pauta por activar, handlePendingBoost la activa sola.
+async function enhanceAdsBoost() {
+  const slot = document.getElementById('adsBoostSlot');
+  if (!slot || slot.dataset.done) return;
+  slot.dataset.done = '1';
+  let pending = null;
+  try { pending = JSON.parse(localStorage.getItem('posta_pending_boost') || 'null'); } catch (e) {}
+  const hasTopup = /\?topup=/.test(location.hash || '');
+  try {
+    const cfg = await api.get('/api/ads/config');
+    const recs = await api.get('/api/ads/recommendations');
+    if (!document.getElementById('adsBoostSlot')) return; // ya navegó a otra vista
+    const html = adsBoostCardHTML(cfg, recs);
+    if (html) {
+      slot.innerHTML = html;
+      bindAdsRecCards(slot, { balance: (cfg && cfg.balance_cents) || 0, minTopup: (cfg && cfg.min_topup_cents) || 1000000, returnTo: 'schedule' });
+    } else if (pending || hasTopup) {
+      slot.innerHTML = `<div class="card" id="adsBoostCard"><div id="adsBoostMsg"></div></div>`;
+    }
+  } catch (e) {}
+  if (pending || hasTopup) { try { await handlePendingBoost(); } catch (e) {} }
+}
+
 async function adsView() {
   const q = new URLSearchParams((location.hash.split('?')[1] || ''));
   const topupState = q.get('topup'); // ok | pending | error (vuelta de MercadoPago)
@@ -9836,7 +9861,9 @@ async function adsView() {
 
   const list = (recs && recs.recommendations) || [];
   const budgets = (cfg && cfg.budget_options) || [];
-  const recCards = list.length && budgets.length
+  const recCards = recs === null
+    ? `<div class="st-empty"><div class="st-empty-ico">⭐</div><b>No pude cargar tus recomendaciones ahora 😅</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
+    : list.length && budgets.length
     ? `<div id="adsRecsCard">${list.map(r => adsRecCardHTML(r, budgets)).join('')}</div>`
     : `<div class="st-empty">
          <div class="st-empty-ico">⭐</div>
@@ -9848,7 +9875,9 @@ async function adsView() {
   const bl = (boosts && boosts.boosts) || [];
   const statusTxt = (b) => b.status === 'active' ? '🟢 Activa'
     : b.status === 'pending' ? '⏳ Activándose' : b.status === 'finished' ? '✅ Finalizada' : esc(b.status || '');
-  const boostRows = bl.length ? bl.map(b => `
+  const boostRows = boosts === null
+    ? `<div class="st-empty"><div class="st-empty-ico">📣</div><b>No pude cargar tus pautas ahora 😅</b><p>Probá de nuevo en un ratito.</p><button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="render()">Reintentar</button></div>`
+    : bl.length ? bl.map(b => `
     <div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #EDF1F5">
       <div style="flex:1;min-width:0;font-size:11.5px">
         <div style="font-weight:700">${statusTxt(b)} · ${fmtARSc(b.budget_cents)}</div>
@@ -9868,7 +9897,11 @@ async function adsView() {
     <p class="d" style="margin:0">Llevá tus mejores posteos a más gente, sin tocar el administrador de anuncios. Nosotros nos ocupamos.</p>
   </div>
   ${topupBanner}
-  <div class="card" style="border:2px solid var(--yel)">
+  ${!cfg ? `<div class="card" style="border:2px solid var(--yel)">
+    <h3 style="margin:0 0 4px">💰 Tu crédito</h3>
+    <p class="d" style="margin:0 0 10px">No pude cargar tu crédito ahora 😅 No es tu cuenta: es un tropiezo de conexión de mi lado.</p>
+    <button class="btn btn-primary btn-sm" onclick="render()">Reintentar</button>
+  </div>` : `<div class="card" style="border:2px solid var(--yel)">
     <h3 style="margin:0 0 4px">💰 Tu crédito</h3>
     <div style="font-size:30px;font-weight:800;margin:2px 0 6px">${fmtARSc(bal)}</div>
     <p class="d" style="margin:0 0 10px">Un solo precio por potenciar tu posteo durante 7 días en Instagram y Facebook. Sin letra chica.</p>
@@ -9876,8 +9909,8 @@ async function adsView() {
       <p style="font-weight:700;font-size:12.5px;margin:0 0 8px">Cargar crédito</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${topupBtns}</div>
       <div id="adsMsg"></div>
-    ` : `<p class="d">La carga de crédito se habilita en estos días. Escribinos y la activamos para tu cuenta.</p>`}
-  </div>
+    ` : `<p class="d">La carga de crédito se habilita en estos días. <a href="#/app/chat" style="color:var(--cel);font-weight:700">Escribile a Posty</a> y la activamos para tu cuenta.</p>`}
+  </div>`}
   <div class="card" id="adsRecsSec">
     <h3 style="margin:0 0 4px">⭐ Te recomendamos potenciar</h3>
     <p class="d" style="margin:0 0 10px">Elegidos por rendimiento real, no por corazonada.</p>
@@ -11176,6 +11209,7 @@ async function scheduleView() {
     ${ftBlock}
     ${failedBlock}
     ${homeWeekBlock}
+    <div id="adsBoostSlot"></div>
     <div id="hs-ideas"${IDEAS_PANEL_OPEN ? '' : ' class="ideas-closed"'}></div>
     <div id="hs-question"></div>
     ${homeChatBlock}
@@ -11605,6 +11639,7 @@ function statsView() {
   </div>`;
 }
 function bindStats() {
+  let pubCount = 0;
   const paint = async () => {
     try {
       const d = await api.get('/api/stats/ig');
@@ -11612,6 +11647,7 @@ function bindStats() {
       try {
         const posts = await api.get('/api/posts');
         const pub = (Array.isArray(posts) ? posts : []).filter(p => p.status === 'published');
+        pubCount = pub.length;
         const rateBox = document.getElementById('stRate');
         if (rateBox) rateBox.innerHTML = salioCardHTML(pub);
         bindSignalBtns();
@@ -11627,13 +11663,17 @@ function bindStats() {
         if (grid) grid.style.display = 'none';
         if (box) box.innerHTML = `<div class="card st-empty">
           <div class="st-empty-ico">📊</div>
-          <b>Todavía no hay posteos para analizar</b>
-          <p>Cuando publiquemos tu primera semana, vas a ver acá tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>
+          ${pubCount > 0 ? '<b>Tus posteos ya salieron 🎉</b>' : '<b>Todavía no hay posteos para analizar</b>'}
+          ${pubCount > 0 ? '<p>Todavía no tengo las métricas de tu Instagram (alcance e interacciones) para mostrarte. Cuando estén, aparecen acá solitas.</p>' : '<p>Cuando publiquemos tu primera semana, vas a ver acá tu alcance, tus interacciones y tu mejor posteo, todo juntito.</p>'}
           <div class="st-empty-tags">
             <span>Personas alcanzadas</span>
             <span>Interacciones</span>
             <span>Mejor posteo</span>
             <span>Seguidores</span>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <a class="btn btn-primary btn-sm" href="#/app/schedule">📅 Ir a mi semana</a>
+            ${(typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected) ? '<a class="btn btn-soft btn-sm" href="#/app/ajustes?ig=1">📸 Conectar Instagram</a>' : ''}
           </div>
         </div>`;
         return;
@@ -11641,7 +11681,7 @@ function bindStats() {
       if (grid) grid.style.display = '';
       vals.forEach((v, i) => {
         const el = document.getElementById('stNum' + i);
-        if (el) { el.textContent = fmt(v); el.closest('.st-card').classList.remove('st-loading'); }
+        if (el) { el.textContent = (v == null ? '—' : fmt(v)); el.closest('.st-card').classList.remove('st-loading'); }
       });
       // Delta honesto del alcance semanal: solo si ambas cohortes tienen ≥3 posteos
       // con datos. Con pocos datos el % es puro ruido (swings absurdos) y mezcla
@@ -11670,6 +11710,8 @@ function bindStats() {
         : `<div class="card st-empty"><b>Todavía no hay suficientes datos para elegir un mejor posteo 🙂</b>
            <p>Publicá un poco más y aparece acá solito.</p></div>`;
     } catch (e) {
+      const gridEl = document.getElementById('stGrid');
+      if (gridEl) gridEl.style.display = 'none';
       const box = document.getElementById('stBest');
       if (box) box.innerHTML = `<div class="card st-empty">
         <b>Ups, no pude traer tus números ahora 😅</b>
@@ -11783,6 +11825,7 @@ function bindSchedule() {
   // ampliación hover/toque de la vista Semana).
   try { bindSchedFilter(); } catch (e) {}
   try { enhanceIdeas(); } catch (e) {} // 💡 v223: ideas con ciclo propio (caché de sesión; su slot vive fuera de la agenda)
+  try { enhanceAdsBoost(); } catch (e) {} // 🚀 pauta pendiente/recomendados: ciclo propio, no bloquea la agenda
   try { enhanceQuestion(); } catch (e) {} // 🤔 v238: Posty pregunta — tarjeta propia sobre el chat, mismo ciclo anti-flash
   // (v236) Chip de ideas: el cableado sigue el patrón de la casa (se
   // recablea en cada pintado) y el estado visible se re-aplica
