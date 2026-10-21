@@ -12,7 +12,16 @@
 function ajustesView() {
   const p = PROFILE, s = SETTINGS;
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
-  const openSec = q.get('plan') ? 'plan' : q.get('ig') ? 'ig' : q.get('auto') ? 'auto' : q.get('tiktok') ? 'tiktok' : q.get('google') ? 'google' : q.get('tn') ? 'tn' : q.get('pagina') ? 'pagina' : q.get('estilos') ? 'estilos' : 'marca';
+  // Orden nuevo (v282): Tu negocio primero y abierto por defecto; Instagram +
+  // TikTok + Google + Tiendanube viven juntos en "Conexiones" (deep-links
+  // ?ig/?tiktok/?google/?tn abren esa tarjeta).
+  const openSec = q.get('plan') ? 'plan'
+    : (q.get('ig') || q.get('tiktok') || q.get('google') || q.get('tn')) ? 'conex'
+    : q.get('auto') ? 'auto'
+    : q.get('pagina') ? 'pagina'
+    : (q.get('estilos') || q.get('marca')) ? 'marca'
+    : q.get('referidos') ? 'referidos'
+    : 'negocio';
   const igMsg = q.get('ig') === 'ok' ? `<div class="okmsg">✅ Instagram conectado: @${esc(p.ig_username)}</div>`
     : q.get('ig') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar')}</div>` : '';
   const ttMsg = q.get('tiktok') === 'ok' ? `<div class="okmsg">✅ ¡TikTok conectado! Ya podés compartir tus posteos 🎵</div>`
@@ -20,7 +29,7 @@ function ajustesView() {
   const ggMsg = q.get('google') === 'ok' ? `<div class="okmsg">✅ ¡Google conectado! Ya podés responder tus reseñas ⭐</div>`
     : q.get('google') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
   const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">✅ ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas 🛍️</div>`
-    : q.get('tn') === 'error' ? `<div class="err">❌ No pudimos conectar tu Tiendanube. Probá de nuevo desde Más conexiones.</div>` : '';
+    : q.get('tn') === 'error' ? `<div class="err">❌ No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
   const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
     : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
@@ -34,38 +43,48 @@ function ajustesView() {
   try { if (p.business_name && String(p.business_name).trim()) stBiz = `<span class="ajsec-st">${esc(p.business_name)}</span>`; } catch (e) {}
   try { stBrand = `<span class="ajsec-st">${assetLogo() ? 'Logo cargado' : 'Sin logo'}</span>`; } catch (e) {}
   try { if (p.page_slug) stPage = `<span class="ajsec-st">${esc(p.page_slug)}</span>`; } catch (e) {}
-  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu marca, tu negocio, tu Instagram y tu plan.</p></div></div>
-  ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
-  <div class="card ajsec${openSec==='ig' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>📸 Instagram</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="igBanner"></div>
+  // --- Bloque Instagram (vive dentro de "🔌 Conexiones") ---
+  // Conectado y sano (con @ y sin aviso de token): colapsa a la fila de estado
+  // + el botón de re-análisis. Con cualquier problema (o sin conectar) vuelve
+  // el bloque completo: checklist, modo Demo/Real y guía profesional.
+  const igHealthy = !!(p.ig_connected && p.ig_username && !s.ig_token_warning);
+  const igCuentaRow = `
+    <div class="set-row"><div><div class="t">Cuenta conectada</div>
+      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
+      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
+      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
+    </div>
+    <div id="igVerifyMsg" style="margin-top:10px"></div>`;
+  const igKnowRow = `
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-soft btn-sm" id="btnKnowUpdate">🔄 Actualizar lo que Posty sabe de mí</button>
+      <span class="hint" id="knowMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">Relee tu Instagram completo: tu estilo visual, cómo escribís y tu brief — en ese orden.</div>`;
+  const igBody = igHealthy ? `${igCuentaRow}${igKnowRow}
+    <div id="igMsg"></div>` : `
     <div class="ig-checklist">
       <div class="t">Tu Instagram está listo cuando:</div>
       <div class="ig-check ${(p.ig_connected && p.ig_username) ? 'ok' : ''}">${(p.ig_connected && p.ig_username) ? '✅' : '⬜'} Cuenta profesional conectada</div>
       <div class="ig-check ${!s.demo_mode ? 'ok' : ''}">${!s.demo_mode ? '✅' : '⬜'} Modo demo apagado</div>
       <div class="ig-check ${IG_VERIFIED_AT ? 'ok' : ''}">${IG_VERIFIED_AT ? '✅' : '⬜'} Conexión verificada${IG_VERIFIED_AT ? ` <span style="color:var(--dim);font-weight:400">(${IG_VERIFIED_AT})</span>` : ''}</div>
     </div>
-    <div style="font-weight:800;margin-bottom:8px">Modo de publicación</div>
-    <div class="ig-modes">
-      <div class="ig-mode ${s.demo_mode ? 'sel' : ''}" id="igModeDemo" role="button" tabindex="0">
-        <div class="ig-mode-h">🧪 Demo ${s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Simulamos todo: probá el flujo completo sin conectar nada.</span>
-      </div>
-      <div class="ig-mode ${!s.demo_mode ? 'sel' : ''}" id="igModeReal" role="button" tabindex="0">
-        <div class="ig-mode-h">🚀 Real ${!s.demo_mode ? '<span class="ig-mode-on">● Activo</span>' : ''}</div>
-        <span>Publicamos en tu Instagram de verdad.</span>
-      </div>
+    <div class="set-row"><div><div class="t">${s.demo_mode ? '🧪 Modo Demo' : '🚀 Modo Real'}</div>
+      <div class="d">${s.demo_mode ? 'Posty <b>simula</b> las publicaciones: probás el flujo completo sin que salga nada real.' : 'Al conectar tu Instagram, Posty publica <b>de verdad</b>.'}</div></div>
+      <button class="btn btn-soft btn-sm" id="${s.demo_mode ? 'igModeToReal' : 'igModeToDemo'}" style="flex:none">${s.demo_mode ? 'Pasar a Real 🚀' : 'Volver a Demo 🧪'}</button>
     </div>
     ${IG_MODE_WARN ? `<div class="ig-warn" style="margin-bottom:14px">⚠️ Elegiste el modo <b>Real</b> pero todavía no conectaste tu Instagram. Conectalo abajo para publicar de verdad.</div>` : ''}
-    <div class="set-row"><div><div class="t">Cuenta conectada</div>
-      <div class="d">${p.ig_connected ? `✅ @${esc(p.ig_username)} — lista para publicar${igSince(s) ? ` · conectada el ${igSince(s)}` : ''} · <a href="https://www.instagram.com/${esc(p.ig_username)}/" target="_blank" rel="noopener" style="color:var(--cel);font-weight:700">ver perfil</a>` : 'Todavía no conectaste tu Instagram. Necesitás una <b>cuenta profesional</b> (Business o Creator). <a href="#" id="igProLink" style="color:var(--cel);font-weight:700">¿Cómo la hago profesional?</a>'}</div>
-      <div class="hint" style="margin-top:6px">🔒 Posty puede publicar fotos y videos, y leer tu perfil. Nunca vemos ni guardamos tu contraseña.${p.ig_connected ? '<br>🔑 Si cambiás tu contraseña de Instagram, reconectá tu cuenta acá para que los posteos sigan saliendo.' : ''}</div></div>
-      ${p.ig_connected ? `<div style="display:flex;gap:8px;flex-wrap:wrap;flex:none"><button class="btn btn-soft btn-sm" id="btnIgVerify">🔍 Verificar conexión</button><button class="btn btn-danger btn-sm" id="btnIgDisc">Desconectar</button></div>` : `<button class="btn btn-primary btn-sm" id="btnIgConn">Conectar Instagram</button>`}
-    </div>
-    <div id="igVerifyMsg" style="margin-top:10px"></div>
-    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-soft btn-sm" id="btnStyleVisual">🎨 Analizar mi estilo</button><button class="btn btn-soft btn-sm" id="btnCaptionStyle">✍️ Analizar cómo escribo</button><button class="btn btn-soft btn-sm" id="btnClientBrief">🔄 Actualizar mi brief</button>
-      <span class="hint" id="styleVisualMsg"></span><span class="hint" id="captionStyleMsg"></span><span class="hint" id="clientBriefMsg"></span>
-    </div>
+    ${igCuentaRow}
+    ${p.ig_connected ? '' : `<div style="margin-top:14px">
+      <div style="font-weight:700;font-size:13px">¿Todavía no conectás?</div>
+      <p style="color:var(--mut);font-size:12.5px;margin:4px 0 10px">Escribí tu @ y te analizo igual — tu estilo, tus horarios y tu competencia — sin conectar nada.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="field" style="flex:1;min-width:170px;margin:0"><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+        <button class="btn btn-soft btn-sm" id="btnIgUserSave" style="flex:none">Guardar @</button>
+        <span id="igUserMsg"></span>
+      </div>
+    </div>`}
+    ${igKnowRow}
     <div id="igProGuide" style="display:none;margin-top:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#F2F9FD">
       <div style="font-weight:800;margin-bottom:10px">📲 Hacé tu cuenta profesional <span style="font-weight:400;color:var(--dim);font-size:11.5px">(gratis, 30 segundos)</span></div>
       <ol style="margin:0 0 12px 20px;padding:0;font-size:12.5px;color:var(--mut);line-height:1.8">
@@ -80,32 +99,12 @@ function ajustesView() {
       </div>
       <div class="hint" style="margin-top:8px">Instagram no permite hacer este cambio desde otra app: se hace dentro de Instagram, por eso te llevamos hasta ahí.</div>
     </div>
-    <div id="igMsg"></div>
-  </div></div>
-  <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div style="font-weight:800;margin-bottom:8px">Publicación</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
-      <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-    <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
-    <div style="font-weight:800;margin:18px 0 8px">Tu semana</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
-      <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
-    </div>
-  </div></div>
-  <div class="card card-hi-yl ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
-  </div></div>
+    <div id="igMsg"></div>`;
+  return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
+  ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
   <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
-    <div class="row2">
-      <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
-      <div class="field"><label>Usuario de Instagram</label><input id="s_iguser" value="${esc(p.ig_username)}" placeholder="tu_usuario" ${p.ig_connected ? 'disabled' : ''}>${p.ig_connected ? '<div class="hint">✓ Cuenta conectada — se actualiza sola</div>' : ''}</div>
-    </div>
+    <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
       <div class="field"><label>Rubro</label><select id="s_cat">
         ${CATS.map(([v, ico, t]) => `<option ${catSel(p.category) === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
@@ -142,15 +141,14 @@ function ajustesView() {
         <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
         <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
       </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-soft" id="btnSaveDna">💾 Guardar datos del negocio</button> <span id="dnaMsg"></span>
-      </div>
+      <div class="hint">Estos datos se guardan con el botón <b>Guardar</b> de acá abajo, junto con todo tu negocio — un solo guardado para todo.</div>
       <div id="webDnaZone"></div>
       <div id="dnaFuentesZone"></div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div style="position:sticky;bottom:10px;z-index:6;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:0 6px 20px rgba(10,30,51,.10);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnSaveProfile">Guardar</button> <span id="profMsg"></span>
       <span id="profDirty" style="display:none;color:var(--yel);font-size:11.5px;font-weight:700">● Tenemos cambios sin guardar</span>
+      <span style="flex:1"></span>
       <button class="btn btn-ghost btn-sm" id="btnOnb">🧭 Retomar guía inicial</button>
       <button class="btn btn-ghost btn-sm" id="btnPreview">👁 Vista previa</button>
     </div>
@@ -165,7 +163,47 @@ function ajustesView() {
     <div class="src-row" id="placesZone"><p class="hint">Cargando…</p></div>
     </div>
   </div></div>
-  <div class="card ajsec${openSec==='marca'||openSec==='estilos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
+    ${igBody}
+    <div style="font-weight:800;margin:18px 0 8px">🎵 TikTok</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
+    <div id="ttZone"><p class="hint">Cargando…</p></div>
+    <div id="ttMsg"></div>
+    <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
+    <div id="ggZone"><p class="hint">Cargando…</p></div>
+    <div id="ggMsg"></div>
+    <div style="font-weight:800;margin:18px 0 8px">🛍️ Tiendanube</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
+    <div id="tnZone"><p class="hint">Cargando…</p></div>
+    <div id="tnMsg"></div>
+  </div></div>
+  <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="font-weight:800;margin-bottom:8px">Publicación</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutopilotToggle">Cargando...</button>
+      <span id="autopilotStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div id="autopilotInfo" style="font-size:11.5px;color:var(--dim);margin-top:8px"></div>
+    <div style="font-weight:800;margin:18px 0 8px">Tu semana</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty arma tu semana solo y la deja programada. Si no tocás nada en 24 horas, sale sola. Vos solo mirás y disfrutás.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
+      <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div style="font-weight:800;margin:18px 0 8px">Aviso antes de publicar</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
+      <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+  </div></div>
+  <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+  </div></div>
+  <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
     <div class="row2">
       <div class="field"><label>Logo</label>
@@ -235,29 +273,9 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página →</a>
     </div>
   </div></div>
-  ${IS_NATIVE ? '' : `<div class="card card-hi-cel ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+  ${IS_NATIVE ? '' : `<div class="card ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
-  <div class="card ajsec"><div class="ajsec-h" role="button" tabindex="0"><h3>📊 Tus números</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Cómo viene rindiendo tu Instagram.</p>
-    <div class="st-grid" id="stGrid">${['Personas alcanzadas (7 días)', 'Personas alcanzadas (30 días)', 'Interacciones (30 días)', 'Seguidores'].map((l, i) => `<div class="st-card st-loading"><div class="st-num" id="stNum${i}">…</div><div class="st-label">${l}</div>${i === 0 ? '<div id="stDelta"></div>' : ''}</div>`).join('')}</div>
-    <div id="stBest"></div>
-    <div id="stRate"></div>
-  </div></div>
-  <div class="card ajsec${openSec==='tiktok'||openSec==='google'||openSec==='tn' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Más conexiones</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-    <div style="font-weight:800;margin-bottom:8px">🎵 TikTok</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
-    <div id="ttZone"><p class="hint">Cargando…</p></div>
-    <div id="ttMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">⭐ Google · Reseñas</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Respondé las reseñas de tu ficha de Google sin salir de Posty: escribí <b>reseñas</b> en el chat y Posty te deja cada respuesta lista para mandar con un toque.</p>
-    <div id="ggZone"><p class="hint">Cargando…</p></div>
-    <div id="ggMsg"></div>
-    <div style="font-weight:800;margin:18px 0 8px">🛍️ Tiendanube</div>
-    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu tienda, conectada: Posty lee tu catálogo, tu stock y tus ventas para postear solo lo que tenés, con tu producto más vendido al frente. Solo lee: nunca toca precios ni stock.</p>
-    <div id="tnZone"><p class="hint">Cargando…</p></div>
-    <div id="tnMsg"></div>
-  </div></div>
   <details class="card int-advanced"><summary>⚙️ Configuración avanzada</summary>
     <p class="hint" style="margin:12px 0">Solo si necesitás conectar tu propia app de Meta. La mayoría no tiene que tocar nada acá.</p>
     <div class="int-block"><h4>📸 App de Meta</h4>
@@ -486,8 +504,8 @@ function bindSettings() {
     }
     btnSavePage.disabled = false;
   };
-  // 2026-10-10: "Tus números" vive en Ajustes (pedido de Valentino)
-  try { if (typeof bindStats === 'function' && document.getElementById('stGrid')) bindStats(); } catch (e) {}
+  // v282: "Tus números" salió de Ajustes — vive en su pantalla propia (tab
+  // numeros → statsView/bindStats en app.js). Acá ya no se bindea stats.
   // Resumen de estado en el título de "🚀 Posty en automático" (v257): se pinta
   // recién cuando AMBOS toggles cargaron su estado real; si algo falla, no se muestra nada.
   let __apOn = null, __awOn = null;
@@ -499,20 +517,45 @@ function bindSettings() {
       try {
         const r = await api.get('/api/autopilot');
         const on = !!(r && r.enabled);
-        const unlocked = !!(r && r.unlocked);
-        const prog = (r && r.progress) || 0;
         __apOn = on; paintAjStAuto();
-        if (false) {
-        } else {
-          btnAp.disabled = false;
-          btnAp.textContent = on ? '🟢 Activado' : '⚪ Activar';
-          btnAp.classList.toggle('btn-primary', !on);
-          $('#autopilotStatus').textContent = on
-            ? 'Tus posteos salen solos. Te aviso 30 min antes de cada uno, por si querés frenarlo.'
-            : 'Modo manual: nada se publica sin tu aprobación.';
-          $('#autopilotInfo').textContent = on
-            ? 'El filtro de calidad chequea cada posteo antes de programarlo: imagen válida, caption con contenido, hashtags y que no sea duplicado.'
-            : 'Al activarla, las semanas nuevas se programan solas. Lo ya programado a mano no se toca.';
+        btnAp.disabled = false;
+        btnAp.textContent = on ? '🟢 Activado' : '⚪ Activar';
+        btnAp.classList.toggle('btn-primary', !on);
+        const demoOn = !!((typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.demo_mode));
+        $('#autopilotStatus').textContent = on
+          ? (demoOn
+            ? 'Tus posteos salen solos — pero estás en 🧪 modo Demo: por ahora se simulan, no sale nada real hasta que conectes tu Instagram.'
+            : 'Tus posteos salen solos. Te aviso 30 min antes de cada uno, por si querés frenarlo.')
+          : 'Modo manual: nada se publica sin tu aprobación.';
+        $('#autopilotInfo').textContent = on
+          ? 'El filtro de calidad chequea cada posteo antes de programarlo: imagen válida, caption con contenido, hashtags y que no sea duplicado.'
+          : 'Al activarla, las semanas nuevas se programan solas. Lo ya programado a mano no se toca.';
+        // Aviso pre-publicación (30 min): el server lo soporta desde siempre
+        // (POST /api/autopilot/pre-notify) pero la UI no lo exponía. En nivel 1
+        // es obligatorio (el server lo reporta siempre en true): se muestra
+        // activado y bloqueado, con la explicación.
+        const btnPn = $('#btnPreNotifyToggle');
+        if (btnPn) {
+          const pnOn = !!(r && r.pre_notify);
+          const pnSt = $('#preNotifyStatus');
+          if (((r && r.trust_level) || 0) >= 2) {
+            btnPn.disabled = false;
+            btnPn.textContent = pnOn ? '🟢 Activado' : '⚪ Activar';
+            btnPn.classList.toggle('btn-primary', !pnOn);
+            if (pnSt) pnSt.textContent = pnOn ? 'Te aviso 30 min antes de cada publicación automática.' : 'Sin aviso: los posteos automáticos salen directo.';
+            btnPn.onclick = async () => {
+              btnPn.disabled = true;
+              try {
+                const rr = await api.post('/api/autopilot/pre-notify', { enabled: !pnOn });
+                if (rr && rr.ok) await loadAp(); else alert('No pude cambiarlo 😅');
+              } catch (e) { alert('No pude cambiarlo 😅'); }
+              btnPn.disabled = false;
+            };
+          } else {
+            btnPn.disabled = true;
+            btnPn.textContent = '🟢 Activado';
+            if (pnSt) pnSt.textContent = 'En tu nivel el aviso es obligatorio: es tu freno de emergencia antes de cada publicación.';
+          }
         }
       } catch (e) {
         btnAp.textContent = 'Error';
@@ -605,26 +648,38 @@ function bindSettings() {
   let profDirty = false;
   const dirtyEl = $('#profDirty');
   function markDirty() { if (!profDirty) { profDirty = true; if (dirtyEl) dirtyEl.style.display = ''; } }
-  ['s_biz', 's_iguser', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_mgoal', 's_desc'].forEach(id => {
+  // s_iguser ya no está en esta tarjeta (v282): vive en Conexiones con su
+  // propio guardado, por eso no marca "cambios sin guardar" acá.
+  ['s_biz', 's_cat', 's_catother', 's_tone', 's_tz', 's_goal', 's_mgoal', 's_desc'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', markDirty);
     if (el) el.addEventListener('change', markDirty);
   });
   $('#btnSaveProfile').onclick = async () => {
+    const btnSave = $('#btnSaveProfile');
     if (!$('#s_biz').value.trim()) { $('#profMsg').innerHTML = '<div class="err">Poné el nombre de tu negocio</div>'; return; }
     const catOther = $('#s_catother').value.trim();
-    await api.put('/api/profile', {
-      business_name: $('#s_biz').value, ig_username: $('#s_iguser').value.replace('@', ''),
-      category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
-      tone: $('#s_tone').value, description: $('#s_desc').value,
-      competitors: compChips.join(', '), goal: $('#s_goal').value,
-      monthly_goal: $('#s_mgoal') ? $('#s_mgoal').value : '',
-    });
-    await api.put('/api/settings', { timezone: $('#s_tz').value });
-    $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-    profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
-    PROFILE = await api.get('/api/profile');
-    SETTINGS = await api.get('/api/settings');
+    btnSave.disabled = true;
+    try {
+      await api.put('/api/profile', {
+        business_name: $('#s_biz').value, ig_username: ($('#s_iguser') ? $('#s_iguser').value.replace('@', '') : ((PROFILE && PROFILE.ig_username) || '')),
+        category: ($('#s_cat').value === 'otro' && catOther) ? catOther.toLowerCase() : $('#s_cat').value,
+        tone: $('#s_tone').value, description: $('#s_desc').value,
+        competitors: compChips.join(', '), goal: $('#s_goal').value,
+        monthly_goal: $('#s_mgoal') ? $('#s_mgoal').value : '',
+      });
+      await api.put('/api/settings', { timezone: $('#s_tz').value });
+      // Guardado único (v282): el ADN se guarda en la misma pasada — ya no
+      // hay un segundo botón "Guardar datos del negocio".
+      await saveDnaNow();
+      $('#profMsg').innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado — negocio y datos de la IA</span>';
+      profDirty = false; if (dirtyEl) dirtyEl.style.display = 'none';
+      PROFILE = await api.get('/api/profile');
+      SETTINGS = await api.get('/api/settings');
+    } catch (e) {
+      $('#profMsg').innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
+    }
+    btnSave.disabled = false;
   };
   // --- ADN del negocio (GET/PUT /api/dna): listas simples, sin fricción ---
   const dnaEls = { productos: $('#s_dna_productos'), promos: $('#s_dna_promos'), horarios: $('#s_dna_horarios'), ubicacion: $('#s_dna_ubicacion') };
@@ -751,25 +806,25 @@ function bindSettings() {
         <div class="hint">La IA usa estos datos para crear posteos que venden de verdad.</div>
       </div>`;
   };
+  // Guardado del ADN (v282): lo invoca el botón Guardar único de la tarjeta
+  // (btnSaveProfile) — el ADN ya no tiene botón propio.
+  async function saveDnaNow() {
+    if (!dnaEls.productos) return;
+    const productos = dnaEls.productos.value.split('\n').map(splitNamePrice).filter(p => p.nombre).map(p => ({ nombre: p.nombre, precio: p.precio }));
+    const promos_activas = dnaEls.promos.value.split('\n').map(l => { const s = splitNamePrice(l); return s.nombre ? { titulo: s.nombre, detalle: s.precio } : null; }).filter(Boolean);
+    const r = await api.put('/api/dna', {
+      productos, promos_activas,
+      horarios: dnaEls.horarios.value.trim(),
+      ubicacion: dnaEls.ubicacion.value.trim(),
+    });
+    paintDna(r && r.dna);
+  }
   if (dnaEls.productos) {
     api.get('/api/dna').then(r => { paintDna(r && r.dna); paintWebDna(r && r.dna); paintFuentesDna(r && r.dna); }).catch(() => {});
-    const bDna = $('#btnSaveDna');
-    if (bDna) bDna.onclick = async () => {
-      const msg = $('#dnaMsg');
-      try {
-        const productos = dnaEls.productos.value.split('\n').map(splitNamePrice).filter(p => p.nombre).map(p => ({ nombre: p.nombre, precio: p.precio }));
-        const promos_activas = dnaEls.promos.value.split('\n').map(l => { const s = splitNamePrice(l); return s.nombre ? { titulo: s.nombre, detalle: s.precio } : null; }).filter(Boolean);
-        const r = await api.put('/api/dna', {
-          productos, promos_activas,
-          horarios: dnaEls.horarios.value.trim(),
-          ubicacion: dnaEls.ubicacion.value.trim(),
-        });
-        paintDna(r && r.dna);
-        if (msg) msg.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado</span>';
-      } catch (e) {
-        if (msg) msg.innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
-      }
-    };
+    // Los campos del ADN marcan "cambios sin guardar" como el resto del form.
+    [dnaEls.productos, dnaEls.promos, dnaEls.horarios, dnaEls.ubicacion].forEach(el => {
+      if (el) { el.addEventListener('input', markDirty); el.addEventListener('change', markDirty); }
+    });
   }
   // --- 🌐 La web de tu negocio (GET /api/website/status · POST /api/website/analyze) ---
   let webStatus = null;
@@ -1101,7 +1156,7 @@ function bindSettings() {
     const goalE = GOALS.find(g => g[0] === $('#s_goal').value) || ['', '🎯', '—', ''];
     const tzE = TIMEZONES.find(z => z[0] === $('#s_tz').value) || [];
     const biz = $('#s_biz').value.trim();
-    const igu = $('#s_iguser').value.trim().replace(/^@+/, '');
+    const igu = (((($('#s_iguser') || {}).value) || (PROFILE && PROFILE.ig_username) || '')).trim().replace(/^@+/, '');
     const desc = $('#s_desc').value.trim();
     const row = (ico, lbl, val) => `<div class="pv-row"><span class="pv-ico">${ico}</span><div><div class="pv-lbl">${lbl}</div><div class="pv-val">${val}</div></div></div>`;
     const chips = compChips.length
@@ -1276,17 +1331,34 @@ function bindSettings() {
         });
       };
       if (!hasActive) {
+        // Compacto (v282): las tarjetas ya no salen abiertas de entrada — un
+        // botón "Ver planes" las despliega. El flujo ?plan_sel= las
+        // auto-despliega más abajo, antes de su click programático.
         z.innerHTML = `
         <div style="margin-bottom:16px">
           <div style="font-size:11.5px;color:var(--dim)">Plan actual</div>
           <div style="font-size:17.5px;font-weight:800">${esc(curPlan.name)} ${statusTag}</div>
         </div>
         ${trialBanner}
-        <div style="font-size:14px;font-weight:800;margin-bottom:12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
-        <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
-        <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>`;
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btnShowPlans">Ver planes</button>
+          <span style="font-size:12.5px;color:var(--dim)">${(ME && ME.trial_expired) ? 'Elegí tu plan y seguimos publicando juntos.' : 'Mirá los planes cuando quieras suscribirte.'}</span>
+        </div>
+        <div id="planAll" style="display:none">
+          <div style="font-size:14px;font-weight:800;margin:14px 0 12px">Elegí tu plan para ${ME && ME.trial_expired ? 'seguir' : 'empezar'} 🚀</div>
+          <div id="planList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">${plans.map(planCard).join('')}</div>
+          <p style="font-size:11.5px;color:var(--dim);margin-top:12px">Se renueva automáticamente cada mes. Podés cancelar cuando quieras.</p>
+        </div>
+        <div id="planMsg" style="margin-top:10px"></div>`;
         bindSub();
+        const bsp = $('#btnShowPlans');
+        if (bsp) bsp.onclick = () => {
+          const pa = $('#planAll');
+          if (!pa) return;
+          const show = pa.style.display === 'none';
+          pa.style.display = show ? '' : 'none';
+          bsp.textContent = show ? 'Ocultar planes' : 'Ver planes';
+        };
       } else if (ME && ME.plan === 'free') {
         z.innerHTML = `
         <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
@@ -1340,6 +1412,12 @@ function bindSettings() {
           PZ_AUTO_PLAN = true;
           try { history.replaceState(null, '', location.pathname + '#/app/ajustes'); } catch (e) {}
           localStorage.removeItem('posta_chosen_plan');
+          // Con el plan compacto (v282) las tarjetas nacen plegadas: desplegar
+          // antes del click programático para que el paso de pago se vea.
+          const paAuto = document.getElementById('planAll');
+          if (paAuto) paAuto.style.display = '';
+          const bspAuto = document.getElementById('btnShowPlans');
+          if (bspAuto) bspAuto.textContent = 'Ocultar planes';
           const btn = document.querySelector(`#planList [data-sub="${sel}"]`);
           if (btn && !btn.disabled) btn.click();
         }
@@ -1628,11 +1706,14 @@ function bindSettings() {
   };
   const setDemoMode = async (v) => {
     await api.put('/api/settings', { demo_mode: v });
+    if (typeof SETTINGS !== 'undefined' && SETTINGS) SETTINGS.demo_mode = v;
     IG_MODE_WARN = (!v && !(PROFILE && PROFILE.ig_connected));
+    // Quedarse en Conexiones tras el re-render (el control vive ahí, v282).
+    try { history.replaceState(null, '', location.pathname + '#/app/ajustes?ig=1'); } catch (e) {}
     render();
   };
-  const md = $('#igModeDemo'); if (md) { md.onclick = () => setDemoMode(true); md.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(true); } }; }
-  const mr = $('#igModeReal'); if (mr) { mr.onclick = () => setDemoMode(false); mr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDemoMode(false); } }; }
+  const mtr = $('#igModeToReal'); if (mtr) mtr.onclick = () => setDemoMode(false);
+  const mtd = $('#igModeToDemo'); if (mtd) mtd.onclick = () => setDemoMode(true);
   const bc = $('#btnIgConn');
   if (bc) bc.onclick = igConnect;
   const bd = $('#btnIgDisc');
@@ -1665,32 +1746,65 @@ function bindSettings() {
   };
   const igProLink = $('#igProLink');
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
-  // Style Lock visual: re-analizar la estética del feed del cliente.
-  const bsv = $('#btnStyleVisual');
-  if (bsv) bsv.onclick = async () => {
-    const m = $('#styleVisualMsg');
-    bsv.disabled = true; if (m) m.textContent = 'Analizando tu Instagram…';
-    try { const r = await api.post('/api/style-visual/analyze'); if (m) m.textContent = r.ok ? 'Listo ✅ Tus próximos posteos van a seguir tu línea.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
-    catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
-    bsv.disabled = false;
+  // Actualizar lo que Posty sabe de mí (v282): UN solo botón que corre los
+  // tres re-análisis EN ORDEN — estilo visual → cómo escribo → brief (el
+  // brief se compone de los otros dos: NEGOCIO + VOZ + VISUAL + MARCA, por
+  // eso va último). Si un paso falla, se dice cuál y no se finge éxito.
+  const bKnow = $('#btnKnowUpdate');
+  if (bKnow) bKnow.onclick = async () => {
+    const m = $('#knowMsg');
+    const steps = [
+      ['tu estilo visual', '/api/style-visual/analyze'],
+      ['cómo escribís', '/api/caption-style/analyze'],
+      ['tu brief', '/api/client-brief/refresh'],
+    ];
+    bKnow.disabled = true;
+    for (let i = 0; i < steps.length; i++) {
+      if (m) m.textContent = `Actualizando ${steps[i][0]}… (${i + 1} de ${steps.length})`;
+      try {
+        const r = await api.post(steps[i][1]);
+        if (!r || !r.ok) {
+          if (m) m.textContent = `Se cortó en ${steps[i][0]}: ${(r && r.error) || 'probá de nuevo'}.`;
+          bKnow.disabled = false;
+          return;
+        }
+      } catch (e) {
+        if (m) m.textContent = `Se cortó en ${steps[i][0]}: probá de nuevo.`;
+        bKnow.disabled = false;
+        return;
+      }
+    }
+    if (m) m.textContent = 'Listo ✅ Posty ya sabe quién sos: qué vendés, cómo hablás y cómo te ves.';
+    bKnow.disabled = false;
   };
-  // Caption Style Lock: re-analizar cómo escribe el cliente en su Instagram.
-  const bcs = $('#btnCaptionStyle');
-  if (bcs) bcs.onclick = async () => {
-    const m = $('#captionStyleMsg');
-    bcs.disabled = true; if (m) m.textContent = 'Analizando cómo escribís en Instagram…';
-    try { const r = await api.post('/api/caption-style/analyze'); if (m) m.textContent = r.ok ? 'Listo ✅ Tus próximos captions van a sonar como vos.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
-    catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
-    bcs.disabled = false;
-  };
-  // Brief Unificado: re-mina la bio y reconstruye NEGOCIO + VOZ + VISUAL + MARCA.
-  const bcb = $('#btnClientBrief');
-  if (bcb) bcb.onclick = async () => {
-    const m = $('#clientBriefMsg');
-    bcb.disabled = true; if (m) m.textContent = 'Armando tu brief…';
-    try { const r = await api.post('/api/client-brief/refresh'); if (m) m.textContent = r.ok ? 'Listo ✅ Posty ya sabe quién sos: qué vendés, cómo hablás y cómo te ves.' : ('No se pudo: ' + (r.error || 'probá de nuevo')); }
-    catch (e) { if (m) m.textContent = 'No se pudo, probá de nuevo.'; }
-    bcb.disabled = false;
+  // Carga manual del @ sin conectar (v282): el campo vive en Conexiones y
+  // guarda solo. PUT /api/profile NO es parcial-safe (sin business_name
+  // devuelve 400; con él, pisa todos los campos), así que se manda el perfil
+  // vigente completo con el @ nuevo — las ediciones sin guardar de Tu
+  // negocio no se tocan (siguen en su formulario, con su propio Guardar).
+  const bIgU = $('#btnIgUserSave');
+  if (bIgU) bIgU.onclick = async () => {
+    const inp = $('#s_iguser');
+    const m = $('#igUserMsg');
+    const v = ((inp && inp.value) || '').trim().replace(/^@+/, '');
+    bIgU.disabled = true;
+    try {
+      await api.put('/api/profile', {
+        business_name: (PROFILE && PROFILE.business_name) || '',
+        ig_username: v,
+        category: (PROFILE && PROFILE.category) || 'otro',
+        tone: (PROFILE && PROFILE.tone) || '',
+        description: (PROFILE && PROFILE.description) || '',
+        competitors: (PROFILE && PROFILE.competitors) || '',
+        goal: (PROFILE && PROFILE.goal) || '',
+        monthly_goal: (PROFILE && PROFILE.monthly_goal) || '',
+      });
+      PROFILE = await api.get('/api/profile');
+      if (m) m.innerHTML = '<span style="color:var(--cel);font-size:12.5px">✅ Guardado — Posty te analiza con ese @.</span>';
+    } catch (e) {
+      if (m) m.innerHTML = `<span style="color:#B3402E;font-size:12.5px">${esc((e && e.message) || 'No se pudo guardar')}</span>`;
+    }
+    bIgU.disabled = false;
   };
   const igRetry = $('#btnIgRetry');
   if (igRetry) igRetry.onclick = () => igConnect();
