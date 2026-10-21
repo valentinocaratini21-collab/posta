@@ -9306,6 +9306,31 @@ app.post('/api/tiktok/publish/:postId', requireAuth, async (req, res) => {
       out = await tiktok.publishPhoto({ accessToken, imageUrls: paths.map(abs), title: firstLine, description: fullText });
     }
     db.prepare('UPDATE posts SET tiktok_publish_id = ? WHERE id = ?').run(out.publishId, post.id);
+    // Verificación diferida del estado real: TikTok procesa asincrónico y
+    // publishStatus no tenía NINGÚN consumidor — un posteo rechazado del
+    // lado de TikTok quedaba "compartido" para siempre y el reintento daba
+    // 409. Si falló: se limpia el id (reintento posible) y se avisa al dueño.
+    {
+      const uidTk = req.session.userId, pidTk = post.id, pubTk = out.publishId;
+      const checkTk = (delay, triesLeft) => {
+        setTimeout(async () => {
+          try {
+            const tok = await tiktok.getValidToken(db, uidTk);
+            if (!tok) return;
+            const st = await tiktok.publishStatus(tok, pubTk);
+            const status = String((st && st.status) || '');
+            if (/FAIL|ERROR/i.test(status)) {
+              try { db.prepare('UPDATE posts SET tiktok_publish_id = NULL WHERE id = ? AND tiktok_publish_id = ?').run(pidTk, pubTk); } catch (e) {}
+              try { db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`).run(uidTk, `🎵 Uy — TikTok no pudo publicar ese posteo${st.failReason ? ' (' + String(st.failReason).slice(0, 120) + ')' : ''}. Ya lo destrabé: podés compartirlo de nuevo desde el posteo.`); } catch (e) {}
+              console.error('[tiktok/publish] verificación: post', pidTk, 'falló en TikTok:', status, (st && st.failReason) || '');
+            } else if (!/COMPLETE|PUBLISHED/i.test(status) && triesLeft > 0) {
+              checkTk(120000, triesLeft - 1);
+            }
+          } catch (e) { console.error('[tiktok/publish] verificación:', e.message); }
+        }, delay);
+      };
+      checkTk(60000, 3);
+    }
     try { track(req.session.userId, 'tiktok_publish'); } catch (e) {}
     res.json({
       ok: true, publish_id: out.publishId, privacy_level: out.privacyLevel,
@@ -15880,7 +15905,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v299';
+const BUILD_ID = '20261021-v300';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
