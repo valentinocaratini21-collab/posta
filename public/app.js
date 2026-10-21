@@ -79,6 +79,17 @@ const api = {
     }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
+      if (r.status === 401 && !url.includes('/api/auth/')) {
+        // Sesión muerta a mitad de uso (logout en otra pestaña, sesión purgada):
+        // nada de error crudo "No autenticado" — guardamos el destino y
+        // rebotamos a login; postAuthLanding devuelve al usuario a su pantalla.
+        if (typeof ME !== 'undefined') ME = null;
+        try { if ((location.hash || '').startsWith('#/app')) sessionStorage.setItem('posta_return_to', location.hash); } catch (e) {}
+        try { location.hash = '#/login'; } catch (e) {}
+        const err401 = new Error('Tu sesión se cerró, entrá de nuevo 🔑');
+        err401.status = 401;
+        throw err401;
+      }
       if (r.status === 402 && data.error === 'trial_expired') {
         if (typeof ME !== 'undefined' && ME) ME.trial_expired = true;
         try { location.hash = '#/app/ajustes'; } catch (e) {}
@@ -714,10 +725,17 @@ function wireQuestionCard(slot) {
     questionSwap('<div class="hs-question"><div class="hs-question-text">👌 Dale — la semana que viene te pregunto otra cosa.</div></div>');
   };
 }
+function cleanIgHandle(v) {
+  let s = String(v || '').trim().toLowerCase();
+  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  if (s.indexOf('instagram.com/') === 0) s = s.slice('instagram.com/'.length);
+  s = s.split(/[\/?#\s]/)[0].replace(/^@+/, '');
+  return s;
+}
 function lpGoTrial(e) {
   if (e) e.preventDefault();
   const inp = document.getElementById('lpIg');
-  const ig = String((inp && inp.value) || '').replace(/^@/, '').trim().toLowerCase();
+  const ig = cleanIgHandle(inp && inp.value);
   location.href = ig ? '/prueba?ig=' + encodeURIComponent(ig) : '/prueba';
   return false;
 }
@@ -1458,6 +1476,7 @@ function landingView(cfg) {
       <a href="#faq">Preguntas</a>
       <a data-posty-chat role="button" tabindex="0" style="cursor:pointer">Ayuda</a>
       <a href="#/login">Entrar</a>
+      <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
       <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
     <a class="lp-entrar" href="#/login">Entrar</a>
@@ -1472,6 +1491,7 @@ function landingView(cfg) {
     <a href="#faq">Preguntas</a>
     <a data-posty-chat role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Ayuda</a>
     <a href="#/login">Entrar</a>
+    <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
     <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
@@ -1484,6 +1504,13 @@ function landingView(cfg) {
       <button class="btn btn-primary" type="submit">Ver mi semana →</button>
     </form>
     <p class="lp-igform-note">Pegá tu Instagram y mirá <b>tu</b> semana real, con tu marca 👆</p>
+    <form class="lp-webform" onsubmit="var v=this.querySelector('input').value.trim();location.href=v?'/prueba?web='+encodeURIComponent(v):'/prueba';return false">
+      <label for="lpWebInput">¿Preferís? Pegá la web de tu negocio</label>
+      <div class="lp-webform-row">
+        <input id="lpWebInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="www.tunegocio.com.ar" aria-label="La web de tu negocio">
+        <button class="btn btn-ghost" type="submit">Usar mi web →</button>
+      </div>
+    </form>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
     <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show" id="ejemplos">
@@ -1498,7 +1525,7 @@ function landingView(cfg) {
       <div class="lp-wall-meta"><span class="lp-wall-note">20 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 5</span></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
-        <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
+        <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
           <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
           <button class="btn btn-primary" type="submit">Quiero mi perfil así →</button>
         </form>
@@ -1837,6 +1864,9 @@ function resetView() {
     <div id="resetMsg"></div>
     <div class="field"><label>Nueva contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" style="font-size:16px"></div>
     <button class="btn btn-primary btn-block" id="btnReset">Guardar y entrar</button>
+    <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
+      <a href="#/forgot" style="color:var(--cel)">¿El link venció? Pedí uno nuevo</a> · <a href="#/login" style="color:var(--cel)">Volver a entrar</a>
+    </p>
   </div></div>`;
 }
 
@@ -2879,7 +2909,7 @@ function bindMediaCard() {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         msg.innerHTML = `<div class="hint">⏳ Subiendo ${i + 1} de ${files.length}…</div>`;
-        const r = await fetch('/api/assets?kind=' + (f.type.startsWith('video/') ? 'video' : 'photo'), {
+        const r = await fetch('/api/assets?kind=' + (f.type.startsWith('video/') ? 'video' : 'photo'), { signal: AbortSignal.timeout(120000),
           method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: f });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
@@ -3909,7 +3939,7 @@ function togglePhotoPicker(id, btn) {
     const f = up.files[0]; if (!f) return;
     if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
     try {
-      const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const r = await fetch('/api/assets?kind=photo', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
@@ -3944,7 +3974,7 @@ function toggleDraftPhotoPicker(id) {
     const f = up.files[0]; if (!f) return;
     if (!f.type.startsWith('image/')) { alert('Elegí un archivo de imagen'); return; }
     try {
-      const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const r = await fetch('/api/media', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'No pude subirla 😅 Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS); // /api/media ya la dejó en la librería
@@ -4015,7 +4045,7 @@ function toggleVideoPicker(id, btn) {
     const f = up.files[0]; if (!f) return;
     if (!f.type.startsWith('video/')) { alert('Elegí un archivo de video'); return; }
     try {
-      const r = await fetch('/api/assets?kind=video', { method: 'POST', headers: { 'Content-Type': f.type }, body: f });
+      const r = await fetch('/api/assets?kind=video', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type }, body: f });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
       ASSETS = await api.get('/api/assets').catch(() => ASSETS);
@@ -4655,7 +4685,7 @@ async function draftFromPreview(idea, prev) {
   } else {
     const cv = prev && prev.cv ? prev.cv : prev;
     const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-    const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+    const res = await fetch('/api/media', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
     imagePath = data.path;
@@ -4881,7 +4911,7 @@ async function chatUploadPhotos(files) {
     for (const f of items) {
       const isVid = f.type.startsWith('video/');
       const url = isVid ? '/api/assets?kind=video' : '/api/media';
-      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': f.type || (isVid ? 'video/mp4' : 'image/jpeg') }, body: f });
+      const res = await fetch(url, { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || (isVid ? 'video/mp4' : 'image/jpeg') }, body: f });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo subir el archivo');
       const aiUrl = isVid ? await fileToVideoThumb(f) : await fileToThumb(f);
@@ -7077,7 +7107,7 @@ async function maybePostyNudge(forceKind) {
       btn.disabled = true;
       if (msg) msg.innerHTML = `<div class="hint">⏳ ${k.inspo ? 'Mirando el estilo…' : 'Subiendo…'}</div>`;
       try {
-        const r = await fetch(k.upload, { method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
+        const r = await fetch(k.upload, { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/jpeg' }, body: f });
         const j = await r.json().catch(() => ({}));
         if (!r.ok || j.ok === false) throw new Error(j.error || 'No se pudo subir');
         await done();
@@ -7644,7 +7674,7 @@ async function pcUploadPhoto(id, file) {
   pcCloseSheet();
   pcSetLoading(id, true, '⏳ Subiendo foto…');
   try {
-    const r = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': file.type || 'image/png' }, body: file });
+    const r = await fetch('/api/media', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': file.type || 'image/png' }, body: file });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'No pude subirla');
     await api.patch('/api/posts/' + encodeURIComponent(id), { action: 'save-draft', image_path: data.path });
@@ -8086,7 +8116,7 @@ async function renderDesignImage(o) {
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
   // FIX-FANTASMA: el diseño generado se registra como kind='design' (no 'photo')
   // para que el próximo "✨ Otro diseño" no lo tome como foto de fondo.
-  const res = await fetch('/api/media?kind=design', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  const res = await fetch('/api/media?kind=design', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No pude subir la imagen 😅 Probá de nuevo');
   return data.path;
@@ -8131,7 +8161,7 @@ async function renderStoryImage(o) {
   const cv = document.createElement('canvas');
   drawStory(cv, o);
   const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
-  const res = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  const res = await fetch('/api/media', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'No se pudo subir la historia');
   return data.path;
@@ -9012,7 +9042,7 @@ function bindFastTrack() {
     if (photoSkip) photoSkip.style.display = 'none';
     try {
       setSt('⏳ Subiendo…');
-      const r = await fetch('/api/assets?kind=photo', { method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
+      const r = await fetch('/api/assets?kind=photo', { signal: AbortSignal.timeout(120000), method: 'POST', headers: { 'Content-Type': f.type || 'image/png' }, body: f });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || 'No pude subirlo 😅 Probá de nuevo');
       const newPath = data.path;
@@ -9497,131 +9527,6 @@ function isoWeekKey(d) {
 }
 /* ---------- Republicar: un posteo que voló, con diseño fresco ---------- */
 let _recycleDismissed = false;
-async function loadRecycleSuggest() {
-  const el = document.getElementById('recycleCard');
-  if (!el || _recycleDismissed) return;
-  let r;
-  try { r = await api.get('/api/recycle-suggest'); } catch (e) { el.innerHTML = ''; return; }
-  const s = r && r.suggestion;
-  if (!s) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-  <div class="card" style="border:1.5px solid #FEC14D;background:#FFFDF6;margin-bottom:14px">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-      <h3 style="margin:0 0 8px">♻️ Republicar</h3>
-      <button id="recycleX" aria-label="Ocultar" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">✕</button>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center">
-      ${s.thumb ? `<img src="${esc(s.thumb)}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:10px;flex:none">` : ''}
-      <div style="min-width:0">
-        <div style="font-weight:700;font-size:13px;line-height:1.35">Este posteo voló hace ${esc(s.days_ago)} días (${esc(s.reach)} alcance)</div>
-        <div class="d" style="font-size:11.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(s.caption)}</div>
-      </div>
-    </div>
-    <button class="btn btn-primary btn-block" id="recycleGo" style="margin-top:10px">♻️ Republicar con diseño fresco</button>
-  </div>`;
-  const x = document.getElementById('recycleX');
-  if (x) x.onclick = () => { _recycleDismissed = true; el.innerHTML = ''; };
-  const go = document.getElementById('recycleGo');
-  if (go) go.onclick = async () => {
-    go.disabled = true;
-    go.textContent = '⏳ Preparando…';
-    try {
-      await api.post('/api/recycle', { post_id: s.post_id });
-      chatSay('Listo, lo dejé en revisión 👇');
-      render();
-    } catch (e) {
-      go.disabled = false;
-      go.textContent = '♻️ Republicar con diseño fresco';
-    }
-  };
-}
-/* ---------- Loop visible: por qué armé tu semana así ---------- */
-/* ---------- Alerta honesta de rendimiento ---------- */
-let _perfAlertDismissed = false;
-async function loadPerformanceAlert() {
-  const el = document.getElementById('perfAlert');
-  if (!el || _perfAlertDismissed) return;
-  let r;
-  try { r = await api.get('/api/performance-alert'); } catch (e) { return; }
-  if (!r || !r.alert) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-  <div class="card" style="border:1.5px solid #E0A32E;background:#FFFDF6;margin-bottom:14px">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-      <h3 style="margin:0 0 8px">⚠️ Tu alcance bajó ${esc(String(r.dropPct))}%</h3>
-      <button id="perfAlertX" aria-label="Ocultar alerta" style="background:none;border:0;font-size:14px;cursor:pointer;color:var(--mut);padding:0">✕</button>
-    </div>
-    <p class="d" style="margin:0 0 6px">${esc(r.diagnostico || '')}</p>
-    <p style="margin:0;font-weight:700;font-size:13px">💪 ${esc(r.plan || '')}</p>
-  </div>`;
-  const x = document.getElementById('perfAlertX');
-  if (x) x.onclick = () => { _perfAlertDismissed = true; const c = el.firstElementChild; if (c) c.remove(); };
-}
-/* ---------- Pilares del mes ---------- */
-async function loadPillars() {
-  const el = document.getElementById('pillarsCard');
-  if (!el) return;
-  el.innerHTML = `<div class="card"><h3 style="margin:0 0 4px">📅 Pilares del mes</h3><p class="d" style="margin:0">Armando tus focos de contenido…</p></div>`;
-  let r;
-  try { r = await api.get('/api/pillars'); } catch (e) { el.innerHTML = ''; return; }
-  const paint = (list) => {
-    if (!list || !list.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `
-    <div class="card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-        <h3 style="margin:0 0 8px">📅 Pilares del mes</h3>
-        <button id="pillarsRegen" class="rev-redo" style="margin:0" title="Regenerar pilares">↻ regenerar</button>
-      </div>
-      ${list.map(p => `<div class="pillar"><b>${esc(p.titulo || '')}</b><span>${esc(p.enfoque || '')}</span></div>`).join('')}
-    </div>`;
-    const rb = document.getElementById('pillarsRegen');
-    if (rb) rb.onclick = async () => {
-      rb.disabled = true; rb.textContent = '↻ generando…';
-      try { const rr = await api.post('/api/pillars/refresh', {}); if (rr && rr.pillars) paint(rr.pillars); }
-      catch (e) { rb.disabled = false; rb.textContent = '↻ regenerar'; }
-    };
-  };
-  paint((r && r.pillars) || []);
-}
-/* ---------- Reporte semanal: tu semana en números ---------- */
-async function loadReportCard() {
-  const el = document.getElementById('reportCard');
-  if (!el) return;
-  let r;
-  try { r = await api.get('/api/weekly-report'); } catch (e) { el.innerHTML = ''; return; }
-  const posts = (r && r.posts) || [];
-  if (!posts.length) { el.innerHTML = ''; return; }
-  const t = (r && r.totals) || { reach: 0, likes: 0, comments: 0 };
-  const fmt = n => Number(n || 0).toLocaleString('es-AR');
-  // Sin datos todavía: mensaje amable en vez de un tablero de ceros.
-  if (!(t.reach > 0 || t.likes > 0 || t.comments > 0)) {
-    el.innerHTML = `
-    <div class="card" style="border:2px solid var(--cel)">
-      <h3 style="margin:0 0 4px">📊 Tu semana en números</h3>
-      <p class="d" style="margin:0">Tus números de Instagram aparecen acá cuando tus posteos empiecen a juntar alcance.</p>
-    </div>`;
-    return;
-  }
-  const best = posts.slice().sort((a, b) => (b.reach || 0) - (a.reach || 0))[0];
-  const bestId = best ? best.id : null;
-  el.innerHTML = `
-  <div class="card" style="border:2px solid var(--cel)">
-    <h3 style="margin:0 0 4px">📊 Tu semana en números</h3>
-    <p class="hint" style="margin:0 0 12px">Así rindieron tus posteos en los últimos 7 días.</p>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:17.5px;font-weight:800">${fmt(t.reach)}</div><div style="font-size:10px;opacity:.8">alcance</div></div>
-      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:17.5px;font-weight:800">${fmt(t.likes)}</div><div style="font-size:10px;opacity:.8">likes</div></div>
-      <div style="flex:1;background:#0A1E33;color:#fff;border-radius:12px;padding:10px 6px;text-align:center"><div style="font-size:17.5px;font-weight:800">${fmt(t.comments)}</div><div style="font-size:10px;opacity:.8">comentarios</div></div>
-    </div>
-    ${posts.slice(0, 5).map(p => `
-      <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #EDF1F5">
-        <img src="${esc(p.image_path)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0" alt="">
-        <div style="flex:1;min-width:0;font-size:11.5px"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.id === bestId ? '🏆 ' : ''}${esc(String(p.caption || '').split('\n')[0] || (p.media_type === 'story' ? 'Historia' : 'Posteo'))}</div>
-        <div style="color:var(--mut);font-size:10.5px">👁️ ${fmt(p.reach)} · ❤️ ${fmt(p.likes)} · 💬 ${fmt(p.comments)}</div></div>
-      </div>`).join('')}
-  </div>`;
-}
-
-/* ---------- PUBLICIDAD: billetera + potenciar posteos ganadores ---------- */
 function fmtARSc(cents) { return '$' + Math.round((cents || 0) / 100).toLocaleString('es-AR'); }
 let ADS_CTX = null; // { balance, minTopup } — lo llena adsView para pintar los botones sin parpadeo
 
@@ -10674,7 +10579,9 @@ const GOALS = [
 function bootSplashOff() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
 }
+let RENDER_SEQ = 0;
 async function render() {
+  const mySeq = ++RENDER_SEQ;
   // Splash de carga (index.html): en rutas #/app/* NO se saca al entrar.
   // Debajo del splash vive el shell publico y la app todavia esta resolviendo
   // sesion/vista: sacarlo antes de pintar era el flash a la landing en
@@ -10731,7 +10638,8 @@ async function render() {
   if (!path.startsWith('#/')) {
     if (!LANDING_ON) {
       PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
-      root.innerHTML = landingView(PLANS_CACHE);
+      if (mySeq !== RENDER_SEQ) return;
+    root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
       lpInitHero();
       // Lugares reales: bajan solos con cada cliente nuevo
@@ -10755,13 +10663,27 @@ async function render() {
 
   if (path === '#/login' || path === '#/registro') {
     LANDING_ON = false;
+    await refreshSession();
+    if (ME) { postAuthLanding(); return; }
+    if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = authView(path.slice(2));
-    $('#btnAuth').onclick = async () => {
+    const btnAuthEl = $('#btnAuth');
+    ['#f_email', '#f_pass'].forEach((sel) => { const inp = $(sel); if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnAuthEl.click(); } }); });
+    btnAuthEl.onclick = async () => {
+      if (btnAuthEl.disabled) return;
+      btnAuthEl.disabled = true;
       const email = $('#f_email').value, password = $('#f_pass').value;
       try {
         const isReg = path !== '#/login';
         const body = { email, password };
         if (isReg) {
+          // Registro viniendo de /prueba: pasamos el @ TAMBIÉN en registro
+          // (el server importa la semana y siembra el fundamento al crear la
+          // cuenta; sin esto, quien elegía contraseña perdía su semana).
+          try {
+            const tpR = JSON.parse(localStorage.getItem('posta_trial_profile') || 'null');
+            if (tpR && tpR.ig_username) body.trial_ig = tpR.ig_username;
+          } catch (e) {}
           const rf = localStorage.getItem('posta_ref');
           if (rf) body.ref = rf;
           try { const u = JSON.parse(localStorage.getItem('posta_utm') || 'null'); if (u) body.utm = u; } catch (e) {}
@@ -10807,21 +10729,28 @@ async function render() {
       } catch (e) {
         const dup = /ya está registrado/i.test(e.message || '');
         $('#formErr').innerHTML = `<div class="err">${dup ? `Ese email ya tiene cuenta. ¿Eras vos? <a href="#/login" style="color:var(--cel);font-weight:700">Entrá</a>` : esc(e.message)}</div>`;
+        btnAuthEl.disabled = false;
       }
     };
     return;
   }
   if (path === '#/forgot') {
     LANDING_ON = false;
+    if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = forgotView();
-    $('#btnForgot').onclick = async () => {
+    const btnForgotEl = $('#btnForgot');
+    { const inpF = $('#f_email'); if (inpF) inpF.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnForgotEl.click(); } }); }
+    btnForgotEl.onclick = async () => {
+      if (btnForgotEl.disabled) return;
+      btnForgotEl.disabled = true;
       const email = ($('#f_email').value || '').trim();
-      if (!email) { $('#forgotMsg').innerHTML = `<div class="err">Escribí tu email 📧</div>`; return; }
+      if (!email) { $('#forgotMsg').innerHTML = `<div class="err">Escribí tu email 📧</div>`; btnForgotEl.disabled = false; return; }
       try {
         await api.post('/api/auth/forgot', { email });
         $('#forgotMsg').innerHTML = `<div class="ok-msg">¡Listo! 📬 Si ese email tiene cuenta, ya te mandé el link para cambiar tu contraseña. Revisá tu casilla (y el spam).</div>`;
       } catch (e) {
         $('#forgotMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+        btnForgotEl.disabled = false;
       }
     };
     return;
@@ -10829,15 +10758,22 @@ async function render() {
   if (path.startsWith('#/reset')) {
     const token = new URLSearchParams((location.hash.split('?')[1] || '')).get('token') || '';
     LANDING_ON = false;
+    if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = resetView();
-    $('#btnReset').onclick = async () => {
+    if (!token) $('#resetMsg').innerHTML = `<div class="err">Este link no sirve 😅 <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí uno nuevo</a></div>`;
+    const btnResetEl = $('#btnReset');
+    { const inpR = $('#f_pass'); if (inpR) inpR.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnResetEl.click(); } }); }
+    btnResetEl.onclick = async () => {
+      if (btnResetEl.disabled) return;
+      btnResetEl.disabled = true;
       const password = $('#f_pass').value || '';
       try {
         await api.post('/api/auth/reset', { token, password });
         await refreshSession();
         postAuthLanding();
       } catch (e) {
-        $('#resetMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+        $('#resetMsg').innerHTML = `<div class="err">${esc(e.message)} <a href="#/forgot" style="color:var(--cel);font-weight:700">Pedí un link nuevo</a></div>`;
+        btnResetEl.disabled = false;
       }
     };
     return;
@@ -10858,6 +10794,7 @@ async function render() {
     await refreshSession();
     if (ME) { postAuthLanding(); return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
+    if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
     lpInitHero();
@@ -10899,8 +10836,10 @@ async function render() {
   else if (tab === 'admin') { let __okA = true; try { await loadChunk('admin'); } catch (e) { __okA = false; } content = __okA ? await adminView() : chunkFailHTML(); } // 📊 Analytics (solo equipo)
   else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') content = await dogfoodView(postId); // 🤖 Posty dogfood: propuesta del día
-  else { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
+  else if (tab === 'ajustes') { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
+  else { location.hash = mzHomeHash(); return; } // tab desconocida: a la home (antes caía en Ajustes sin avisar)
   bootSplashOff();
+  if (mySeq !== RENDER_SEQ) return;
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
   // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
@@ -11936,6 +11875,18 @@ function bindSchedule() {
   api.post('/api/proactive-comments-ask', {}).then(r => { if (r && r.asked) chatLoadHistory(); }).catch(() => {});
 }
 
+async function doLogout() {
+  // Salir DE VERDAD: limpiamos el estado en memoria y repintamos nosotros.
+  // Antes el handler solo cambiaba el hash a '#/' y confiaba en el evento
+  // hashchange: la vista de la app (con los datos del negocio) quedaba
+  // pintada hasta la próxima navegación.
+  try { ME = null; } catch (e) {}
+  try { PROFILE = null; } catch (e) {}
+  try { await api.post('/api/auth/logout'); } catch (e) {}
+  try { sessionStorage.removeItem('posta_return_to'); } catch (e) {}
+  location.hash = '#/login';
+  render();
+}
 function bindApp(tab) {
   if (tab === 'ajustes') trackOnce('settings', 'settings_open');
   if (tab === 'admin' && typeof bindAdmin === 'function') bindAdmin(); // el chunk ya lo cargó render()
@@ -11947,6 +11898,7 @@ function bindApp(tab) {
   if (tab === 'dogfood') { try { if (typeof bindDogfood === 'function') bindDogfood(); } catch (e) {} }
   if (tab === 'numeros') bindStats(); // 📊 Tus números
   if (tab === 'post') bindApprovalPost(); // 🔔 Posty te avisa
+  if (tab === 'ads') bindAds(); // 🚀 Potenciar: cablea Cargar crédito y CTAs (sin esto los botones no hacían nada)
   pwaWire();
   // Caption expandible (revisión, opciones del chat, historial): "ver más" o tap directo sobre el texto
   if (!window.__revMoreWired) {
@@ -11970,7 +11922,7 @@ function bindApp(tab) {
   $$('[data-ig-connect]').forEach(b => b.onclick = igConnect);
   bindSetupRows();
   const loA = $('#btnLogoutAj');
-  if (loA) loA.onclick = async () => { await api.post('/api/auth/logout'); location.hash = '#/'; };
+  if (loA) loA.onclick = () => { doLogout(); };
   const bg = $('#mtopBurger');
   if (bg) bg.onclick = openDrawer;
   const dov = $('#drawerOv');
@@ -11978,7 +11930,7 @@ function bindApp(tab) {
   try { paintDrawerIdent(); } catch (e) {}
   try { paintSidePosty(); } catch (e) {}
   const dlo = $('#drawerLogout');
-  if (dlo) dlo.onclick = async () => { closeDrawer(); await api.post('/api/auth/logout'); location.hash = '#/'; };
+  if (dlo) dlo.onclick = () => { closeDrawer(); doLogout(); };
 
   if (tab === 'ajustes' && typeof bindSettings === 'function') bindSettings(); // el chunk ya lo cargó render()
 }
@@ -12060,7 +12012,7 @@ function apvPill(p, d, dOk) {
     const link = p.permalink || p.ig_permalink || p.url || '';
     return `<span class="apv-pill apv-pill-ok">✅ Publicado</span>${link ? ` <a class="apv-link" href="${esc(link)}" target="_blank" rel="noopener">Ver en Instagram ↗</a>` : ''}`;
   }
-  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">⚠️ No salió: sin aprobación a tiempo</span>';
+  if (st === 'failed') return '<span class="apv-pill apv-pill-warn">⚠️ No salió: ' + esc(humanError(p.error) || 'sin aprobación a tiempo') + '</span>';
   if (ap === 'rejected' || st === 'cancelled') return '<span class="apv-pill apv-pill-bad">❌ Rechazado — no se publica</span>';
   if (ap === 'auto') return '<span class="apv-pill apv-pill-auto">🤖 Salió solo (no lo viste a tiempo)</span>';
   if (ap === 'approved' && st === 'scheduled') return `<span class="apv-pill apv-pill-ok">✅ Aprobado — sale a las ${esc(dOk ? apvHM(d, tz) : '')}</span>`;
