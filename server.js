@@ -5793,7 +5793,10 @@ async function buildAccountAnalysis(uid, opts = {}) {
   const plan = planForUid(uid);
   const prior = analysisEngine.priorAnalysis(db, uid);
   const peers = await fetchPeersForAnalysis(peerHandlesFromText(prof.competitors));
-  const ctx = { postsPerWeek: plan.postsPerWeek || 7, plan: plan.id, prior, peers, source: 'instagram' };
+  // (Carta dominical) El nombre del negocio y el @ alimentan el saludo y la
+  // narración de la carta (buildLetter, analysis-engine): sin nombre no se
+  // inventa — la carta saluda genérico.
+  const ctx = { postsPerWeek: plan.postsPerWeek || 7, plan: plan.id, prior, peers, source: 'instagram', businessName: prof.business_name || '', handle: (prof.ig_username || '').replace(/^@/, ''), hasIg: !!(prof.ig_username || '').trim() };
   // (v251) ctx.insights.bestHour: el motor ya lo acepta; se puebla desde
   // users.best_hour (la columna que carga insights.fetchBestHour), con el
   // mismo rango válido 9–21 que usan los demás lectores de la columna.
@@ -15383,7 +15386,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v276';
+const BUILD_ID = '20261020-v277';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -15774,18 +15777,45 @@ async function refreshDigestsSweep() {
   return summary;
 }
 
-// 🧠 CARTA SEMANAL (2026-10-20): la pantalla "Tu análisis" es una carta NUEVA
-// por semana — el loop (diagnóstico → plan → medición → ajuste) necesita la
-// serie. Este sweep reconstruye el análisis de las cuentas activas y lo
-// persiste (buildAccountAnalysis guarda con saveAnalysis). Liviano: tope de
-// cuentas por corrida, una falla no frena a las demás, y GET /api/analysis no
-// cambia. Lo dispara scheduler.js los lunes 06:45 (Buenos Aires), después
-// del refresco del fundamento (06:30) y antes del loop de ideas (07:00).
+// 🧠 CARTA SEMANAL: la pantalla "Tu análisis" es una carta NUEVA por semana —
+// el loop (diagnóstico → plan → medición → ajuste) necesita la serie. Este
+// sweep reconstruye el análisis de las cuentas activas y lo persiste
+// (buildAccountAnalysis guarda con saveAnalysis). Liviano: tope de cuentas
+// por corrida, una falla no frena a las demás, y GET /api/analysis no cambia.
+//
+// 📮 ENTREGA (decisión de Valentino, 2026-10-20): la carta llega los DOMINGOS
+// A LA NOCHE — cierra la semana que pasó y presenta la que viene. Antes era
+// el lunes 06:45 BA; el sweep ahora corre en modo ventana dominical: lo
+// dispara scheduler.js cada hora en la franja en que algún huso puede estar
+// en su domingo a la noche, y acá cada cuenta se genera SOLO si en SU zona
+// (userTz; default Buenos Aires) es domingo entre las 20:00 y las 22:59.
+// La carta de las 21:00 del cliente, en la práctica. Sin opts (llamadas
+// internas/manuales) el comportamiento es el histórico: genera para todas.
+// Anti-duplicado en modo ventana: si la cuenta ya tiene una carta creada en
+// los últimos 3 días, no se genera otra — el lunes a la mañana la carta del
+// domingo ya está en "Tu análisis" y la serie no se duplica jamás.
+function sundayLetterWindow(tzName, now) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tzName || 'America/Argentina/Buenos_Aires',
+      weekday: 'short', hour: '2-digit', hour12: false,
+    }).formatToParts(now instanceof Date ? now : new Date(now || Date.now()));
+    const wd = (parts.find((p) => p.type === 'weekday') || {}).value;
+    let hh = Number((parts.find((p) => p.type === 'hour') || {}).value);
+    if (hh === 24) hh = 0;
+    return wd === 'Sun' && hh >= 20 && hh <= 22;
+  } catch (e) {
+    return sundayLetterWindow('America/Argentina/Buenos_Aires', now);
+  }
+}
+
 let __analysisSweepRunning = false;
-async function refreshAnalysesSweep() {
+async function refreshAnalysesSweep(opts = {}) {
   if (__analysisSweepRunning) return { skipped: 'running' };
   __analysisSweepRunning = true;
-  const summary = { users: 0, built: 0, errors: 0 };
+  const sundayWindow = !!(opts && opts.sundayWindow);
+  if (sundayWindow) { try { analysisEngine.ensureAnalysisTable(db); } catch (e) {} }
+  const summary = { users: 0, built: 0, errors: 0, skippedWindow: 0, skippedDup: 0 };
   try {
     const rows = db.prepare(`SELECT user_id FROM client_digest
       UNION SELECT user_id FROM profiles WHERE ig_connected = 1
@@ -15793,6 +15823,11 @@ async function refreshAnalysesSweep() {
     for (const row of rows) {
       const uid = row.user_id;
       try {
+        if (sundayWindow) {
+          if (!sundayLetterWindow(userTz(uid), new Date())) { summary.skippedWindow++; continue; }
+          const recent = db.prepare(`SELECT COUNT(*) AS c FROM account_analysis WHERE user_id = ? AND created_at >= datetime('now', '-3 days')`).get(uid);
+          if (recent && recent.c > 0) { summary.skippedDup++; continue; }
+        }
         summary.users++;
         const fresh = await buildAccountAnalysis(uid);
         if (fresh) summary.built++;
@@ -15800,7 +15835,7 @@ async function refreshAnalysesSweep() {
     }
   } catch (e) { console.error('[analysis-sweep] sweep:', e.message); }
   __analysisSweepRunning = false;
-  console.log(`[analysis-sweep] cartas semanales: ${summary.built}/${summary.users} cuentas, errores: ${summary.errors}`);
+  console.log(`[analysis-sweep] cartas semanales: ${summary.built}/${summary.users} cuentas, errores: ${summary.errors}` + (sundayWindow ? `, fuera de ventana: ${summary.skippedWindow}, ya con carta: ${summary.skippedDup}` : ''));
   return summary;
 }
 

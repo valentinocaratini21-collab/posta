@@ -669,19 +669,36 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[digest-refresh] no se pudo programar:', e.message);
   }
-  // 🧠 Cartas de análisis semanales: lunes 06:45 (Buenos Aires) — después del
-  // fundamento (06:30) y antes del loop de ideas (07:00): cada cuenta activa
-  // amanece con su carta nueva y el loop mide el plan de la carta anterior.
+  // 📮 Cartas de análisis semanales: DOMINGO A LA NOCHE (decisión de
+  // Valentino, 2026-10-20) — la carta cierra la semana que pasó y presenta
+  // la que viene. Antes salía el lunes 06:45 BA. Ahora: a las 20:30 BA del
+  // domingo se refresca el fundamento (para que la carta nazca fresca; el
+  // disparo del lunes 06:30 sigue para el loop de ideas) y el sweep de
+  // cartas corre cada hora en la franja UTC en que algún huso del sistema
+  // puede estar en su domingo 20:00–22:59 (domingo 18:00–23:00 UTC y lunes
+  // 00:00–04:00 UTC). El filtrado fino por cuenta — domingo ~21:00 en SU
+  // zona (userTz; default Buenos Aires) + anti-duplicado — vive en el sweep
+  // (refreshAnalysesSweep con { sundayWindow: true }, server.js).
   try {
-    cron.schedule('45 6 * * 1', () => {
+    cron.schedule('30 20 * * 0', () => {
+      try {
+        const srv = require('./server');
+        if (srv && typeof srv.runWeeklyDigestRefresh === 'function') {
+          srv.runWeeklyDigestRefresh().catch((e) => console.error('[digest-refresh-dom]', e.message));
+        }
+      } catch (e) { console.error('[digest-refresh-dom] no se pudo cargar:', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    const cartaDomingo = () => {
       try {
         const srv = require('./server');
         if (srv && typeof srv.runWeeklyAnalysisRefresh === 'function') {
-          srv.runWeeklyAnalysisRefresh().catch((e) => console.error('[analysis-sweep]', e.message));
+          srv.runWeeklyAnalysisRefresh({ sundayWindow: true }).catch((e) => console.error('[analysis-sweep]', e.message));
         }
       } catch (e) { console.error('[analysis-sweep] no se pudo cargar:', e.message); }
-    }, { timezone: 'America/Argentina/Buenos_Aires' });
-    console.log('[posta] Cartas de análisis semanales: lunes 06:45 (Buenos Aires)');
+    };
+    cron.schedule('0 18,19,20,21,22,23 * * 0', cartaDomingo, { timezone: 'UTC' });
+    cron.schedule('0 0,1,2,3,4 * * 1', cartaDomingo, { timezone: 'UTC' });
+    console.log('[posta] Cartas de análisis semanales: domingo a la noche (~21:00 hora del cliente)');
   } catch (e) {
     console.error('[analysis-sweep] no se pudo programar:', e.message);
   }

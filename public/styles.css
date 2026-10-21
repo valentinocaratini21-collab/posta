@@ -2541,6 +2541,11 @@ textarea.in{resize:vertical;min-height:96px}
 .ana-f{border-top:1px solid var(--line);padding:10px 0}
 .ana-group .ana-f:first-of-type{border-top:none;padding-top:2px}
 .ana-t{font-size:14px;color:var(--txt);line-height:1.45;margin:0}
+.ana-ltr-p{font-size:15px;color:var(--txt);line-height:1.62;margin:13px 0 0}
+.ana-ltr-greet{font-weight:800;font-size:16px;margin-top:16px}
+.ana-ltr-plan{background:#F2F9FD;border-radius:12px;padding:11px 13px;margin:10px 0 0}
+.ana-ltr-plan p{font-size:14px;line-height:1.55;color:var(--txt);margin:0}
+.ana-ltr-plan .ana-fx{color:#47617A}
 .ana-fmeta{margin:7px 0 0}
 .ana-now{display:inline-block;background:var(--bg2);border-radius:99px;padding:2px 10px;color:var(--txt);font-size:12.5px}
 .ana-act{font-size:13px;color:var(--cel);font-weight:600;margin:5px 0 0;line-height:1.45}

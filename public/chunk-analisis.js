@@ -9,13 +9,17 @@
  * analisisView() devuelve la cáscara con un loading amable; bindAnalisis() pide
  * GET /api/analysis y pinta la carta; anaRefresh() hace POST /api/analysis/refresh.
  *
- * LA FORMA es la carta aprobada (diseño v3, viva en /prueba desde v260): avatar de
- * Posty arriba → intro en primera persona → veredicto (tarjeta celeste) compuesto
- * desde los datos reales, nunca molde → "Tu foto de hoy" → hallazgos agrupados
- * (A mejorar / A incrementar / A reducir) con su chip "Hoy: …" y su decisión
- * ("→ Con Posty: …") → 🚀 PLAN DE EJECUCIÓN (navy, 3 fases, "El efecto:" por paso)
- * → competencia SOLO si el payload gateado la trae → banner motivacional amarillo
- * → FIRMA de Posty → botón discreto de actualizar.
+ * LA FORMA (decisión de Valentino, 2026-10-20): la carta en el estilo de la
+ * CARTA NOCTURNA — cuando el payload trae `letter` (compuesta por el motor
+ * desde los datos reales), se lee como carta personal: avatar de Posty →
+ * título evocativo → saludo al negocio → narración en primera persona de SU
+ * semana (fortalezas primero, marcador honesto con su lectura, hallazgos con
+ * el arreglo ya en marcha) → plan integrado en la narración (3 fases, "El
+ * efecto:" por paso) → competencia SOLO si el payload gateado la trae →
+ * cierre motivacional amarillo → FIRMA de Posty → botón discreto de
+ * actualizar. Las cartas SIN `letter` (las anteriores a este cambio) se
+ * siguen rindiendo con la forma de bloques v3 (veredicto → foto de hoy →
+ * hallazgos agrupados → plan navy), intacta más abajo.
  * REGLA DE VERDAD: solo se afirma lo que el payload trae (este payload NO trae
  * puntaje de salud ni ejes: la carta no los inventa). Cuenta sin análisis o sin
  * datos → carta de NACIMIENTO honesta, jamás una radiografía fingida.
@@ -23,7 +27,8 @@
  * lista las previas con el resumen honesto que trae history (n, fecha,
  * hallazgos, medición del plan) y la línea de progreso sale del loop medido.
  * Cada carta anterior se abre ENTERA (anaOpenPast → GET /api/analysis/:id).
- * La serie la mantiene el sweep de los lunes (refreshAnalysesSweep, server.js).
+ * La serie la mantiene el sweep del DOMINGO A LA NOCHE (refreshAnalysesSweep
+ * en modo ventana, server.js): la carta cierra la semana que pasó.
  * Tono: líder motivacional — fortalezas primero, nada de retos ni números en rojo.
  */
 
@@ -451,6 +456,42 @@ function anaSignHTML(birth) {
   </div>`;
 }
 
+/* ---------- La carta narrativa (estilo carta nocturna, 2026-10-20) ----------
+ * Si el payload trae `letter` (la compone el motor desde los datos reales),
+ * la carta se lee como CARTA: saludo personal → narración en primera persona
+ * de SU semana → la banda de números con su lectura ya integrada → el plan
+ * dentro de la narración (fase en negrita, efecto en línea) → cierre de
+ * líder motivacional → firma. Las cartas viejas (sin letter) se siguen
+ * leyendo con la forma de bloques v3 de abajo: nada se rompe hacia atrás. */
+
+function anaLetterBodyHTML(a) {
+  const L = a.letter;
+  const items = Array.isArray(L.body) ? L.body : [];
+  const phaseNums = ['①', '②', '③'];
+  let h = '';
+  if (L.greeting) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+  let lastPhase = -1;
+  items.forEach((it, idx) => {
+    if (!it) return;
+    if (it.t === 'plan') {
+      const head = it.phase !== lastPhase ? `<b>${phaseNums[it.phase] || ''} ${esc(it.phase_name || '')} —</b> ` : '';
+      lastPhase = it.phase;
+      h += `<div class="ana-ltr-plan"><p>${head}${esc(it.step || '')}${it.fx ? `<span class="ana-fx">El efecto: ${esc(it.fx)}</span>` : ''}</p></div>`;
+    } else {
+      h += `<p class="ana-ltr-p">${esc(it.text || '')}</p>`;
+    }
+    // La banda de números ("Tu foto de hoy") va tras el primer párrafo,
+    // como la banda de la matemática honesta en la carta nocturna.
+    if (idx === 0) h += anaStatsHTML(a, null);
+  });
+  if (!items.length) h += anaStatsHTML(a, null);
+  return h;
+}
+
+function anaHasLetter(a) {
+  return !!(a && a.letter && Array.isArray(a.letter.body) && a.letter.body.length);
+}
+
 /* ---------- La carta completa ---------- */
 
 function anaCartaHTML(d) {
@@ -460,6 +501,8 @@ function anaCartaHTML(d) {
   const stage = birth ? 'starter' : anaStage(a);
   const bizLine = [ctx.biz, ctx.handle ? '@' + ctx.handle : ''].filter(Boolean).join(' · ');
   const dateLine = anaDateLine(a);
+  const carta = anaHasLetter(a);
+  const title = carta && a.letter.title ? a.letter.title : 'Tu análisis';
   const intro = !a
     ? 'Todavía no tengo tu radiografía — y no te voy a inventar una. Esto es lo que armo para tu cuenta desde tu rubro, tu zona y tu negocio 👇'
     : (birth
@@ -468,12 +511,27 @@ function anaCartaHTML(d) {
   let h = `<div class="ana-card ana-letter">
     <div class="ana-lhead">
       <div class="ana-ava"><img src="ai-avatar.png" alt="Posty"></div>
-      <h3 class="ana-title">Tu análisis</h3>
+      <h3 class="ana-title">${esc(title)}</h3>
       ${bizLine ? `<p class="ana-biz">${esc(bizLine)}</p>` : ''}
       ${dateLine ? `<p class="ana-date">${esc(dateLine)}</p>` : ''}
-      <p class="ana-intro">${intro}</p>
-    </div>
-    <div class="ana-verdict"><p class="ana-vlabel">Mi veredicto</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
+      ${carta ? '' : `<p class="ana-intro">${intro}</p>`}
+    </div>`;
+  if (carta) {
+    // FORMA CARTA (domingo a la noche): narración primero, datos como apoyo.
+    h += anaLetterBodyHTML(a);
+    if (birth) h += anaKitHTML(a);
+    if (!birth) h += anaMarketHTML(a);
+    h += anaHistoryHTML(d, a);
+    if (Array.isArray(a.data_notes) && a.data_notes.length) {
+      h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
+    }
+    h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
+    h += anaSignHTML(birth);
+    if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">↻ Actualizar análisis</button></div>`;
+    h += `</div>`;
+    return h;
+  }
+  h += `<div class="ana-verdict"><p class="ana-vlabel">Mi veredicto</p><p class="ana-vq">${esc(anaVerdict(a, stage, birth))}</p></div>`;
   if (!a) {
     h += `<div style="text-align:center;margin-top:16px"><button class="btn btn-primary" onclick="anaRefresh(this)">Armar mi análisis</button></div>`;
   }

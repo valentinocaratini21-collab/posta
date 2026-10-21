@@ -152,6 +152,49 @@ const badTone = visibleLines.filter((l) => l && !ae.lintTone(l).ok);
 ok(badTone.length === 0, 'T: ' + visibleLines.length + ' líneas visibles, cero vocabulario de reto' + (badTone.length ? ' — ofensas: ' + JSON.stringify(badTone.slice(0, 2)) : ''));
 ok(ae.lintTone('tu cuenta es un desastre total').ok === false, 'T: el lint sí caza el reto (control positivo)');
 
+// ---------- LA CARTA (estilo carta nocturna, entrega domingo a la noche) ----------
+const letterTexts = (a) => {
+  const L = a && a.letter;
+  if (!L) return [];
+  const out = [L.title, L.greeting, L.closing];
+  (L.body || []).forEach((it) => { if (it.t === 'plan') out.push(it.step, it.fx); else out.push(it.text); });
+  return out.filter(Boolean);
+};
+const letterDigitsOk = (a) => {
+  // Normalización: coma decimal → punto, y un '.' final de oración pegado al
+  // dígito (en los textos del payload) no forma parte del número.
+  const norm = (x) => x.replace(',', '.').replace(/\.$/, '');
+  const rest = JSON.parse(JSON.stringify(a)); delete rest.letter;
+  const universe = new Set((JSON.stringify(rest).match(/\d+[.,]?\d*/g) || []).map(norm));
+  const toks = (letterTexts(a).join(' ').match(/\d+[.,]?\d*/g) || []).map(norm);
+  return toks.every((t) => universe.has(t));
+};
+ok(a1.letter && a1.letter.style === 'carta-nocturna', 'C: la carta viene en el payload (estilo carta nocturna)');
+ok(a1.letter.title && a1.letter.title.length > 0, 'C: título evocativo presente ("' + (a1.letter && a1.letter.title) + '")');
+ok(a1.letter.delivery === 'domingo-noche', 'C: la carta declara su entrega (domingo a la noche)');
+const a1b = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, businessName: 'Café Aroma', handle: 'cafearoma' } });
+ok(a1b.letter.greeting === 'Hola, Café Aroma:', 'C: el saludo nombra al negocio (sin nombre, genérico — nunca inventado)');
+const idxPlan = a1.letter.body.findIndex((it) => it.t === 'plan');
+const idxMarcador = a1.letter.body.findIndex((it) => it.t === 'p' && /marcador de hoy/i.test(it.text || ''));
+ok(idxPlan > 0, 'C: el plan está integrado en la narración (no es el primer bloque)');
+ok(idxMarcador === -1 || idxMarcador < idxPlan, 'C: el marcador honesto se lee ANTES del plan');
+const phasesInLetter = [...new Set(a1.letter.body.filter((it) => it.t === 'plan').map((it) => it.phase))].sort();
+ok(JSON.stringify(phasesInLetter) === '[0,1,2]', 'C: el plan narrado cubre las 3 fases (esta semana / la que viene / de acá en más)');
+ok(a1.letter.body.filter((it) => it.t === 'plan').every((it) => it.step && it.fx), 'C: cada paso del plan trae su efecto');
+ok(/domingo/i.test(letterTexts(a1).join(' ')), 'C: la carta nombra su cita del domingo (apertura o cierre)');
+ok(/constancia la pongo yo/i.test(letterTexts(a1).join(' ')), 'C: cierre de líder motivacional con la firma de la casa');
+ok(letterDigitsOk(a1), 'C: cero números en la carta que no vengan del análisis (regla de verdad)');
+ok(letterDigitsOk(aNext), 'C: la carta con loop medido tampoco afirma números sin respaldo');
+ok(aNext.letter && /carta anterior/i.test(letterTexts(aNext).join(' ')), 'C: la segunda carta narra el plan anterior medido (loop en prosa)');
+ok(letterTexts(a1).every((t) => ae.lintTone(t).ok), 'C: toda la carta pasa el lint de tono');
+ok(a2.letter && a2.letter.title === 'Nacer con plan', 'C: nacimiento = carta de nacimiento, no radiografía fingida');
+ok(a2.letter.greeting === 'Hola, Panadería Sol:', 'C: la carta de nacimiento saluda al negocio por su nombre');
+ok(!/marcador de hoy/i.test(letterTexts(a2).join(' ')), 'C: nacimiento sin señales de feed → ningún marcador inventado');
+ok(a2.letter.body.some((it) => it.t === 'p' && /Pan de masa madre/.test(it.text || '')), 'C: la carta de nacimiento nace del fundamento (su estrella, test de pertenencia)');
+const aEn = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, lang: 'en', businessName: 'Glow Studio' } });
+ok(aEn.letter && aEn.letter.greeting === 'Hi, Glow Studio:' && aEn.letter.title === 'Your first letter', 'C: la carta EN sale en inglés (saludo y título)');
+ok(letterTexts(aEn).every((t) => ae.lintTone(t, 'en').ok), 'C: la carta EN pasa el lint de tono EN');
+
 // ---------- Persistencia + historial (DB temporal, sin red) ----------
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-analysis-'));
 const db = new DatabaseSync(path.join(TMP, 't.db'));
