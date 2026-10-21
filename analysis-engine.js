@@ -618,7 +618,9 @@ function weekSummary(analysis) {
 // CARTA CORTA + TONO AMIGO (correcciones de Valentino, 2026-10-20 22:43 y
 // 22:45): la carta es un RESUMEN que se lee en menos de un minuto, con la
 // voz de un amigo que además es su CM — cercano, cálido, coloquial, de su
-// lado; nada de distancia de agencia ni lenguaje de reporte. Topes duros:
+// lado; celebra los logros del cliente como propios y le cuenta lo flojo
+// como un amigo: la verdad, sin hacerlo sentir mal y con la solución ya en
+// marcha; nada de distancia de agencia ni lenguaje de reporte. Topes duros:
 // apertura ≤2 líneas · el loop medido en UN movimiento · fortalezas ≤2 ·
 // marcador ≤3 números (cada uno con su lectura) · hallazgos ≤2 (los de
 // mayor impacto, en el orden del análisis) · plan con UN paso por fase (el
@@ -774,9 +776,9 @@ function buildLetter(analysis, ctx = {}) {
     if (strong && !strengths.includes(strong)) strengths.push(strong);
     if (strengths.length) {
       const tail = stage === 'fuerte'
-        ? T('. Sostenerlo y afinarlo es mi trabajo.', '. Keeping it up and sharpening it is my job.')
+        ? T('. Sostenerlo y afinarlo es mi trabajo — para eso estoy.', '. Keeping it up and sharpening it is my job — that is what I am here for.')
         : T('. Sobre eso construimos — no partimos de cero.', '. We build on that — we are not starting from zero.');
-      P(T('Miremos primero lo bueno, que lo hay: ', 'First, the good stuff — because it is real: ') + strengths.slice(0, 2).join(T('; y ', '; and ')) + tail);
+      P(T('Primero festejemos lo bueno, que es mérito tuyo: ', 'First, let us celebrate the good stuff — you earned it: ') + strengths.slice(0, 2).join(T('; y ', '; and ')) + tail);
     }
     // El marcador honesto: máx. 3 números reales, cada uno con su lectura.
     const bits = [];
@@ -815,8 +817,8 @@ function buildLetter(analysis, ctx = {}) {
     P(T('De tu lado, cuando puedas: ' + asks.join('; ') + '. Con eso, tu cuenta nace completa.',
       'On your side, whenever you can: ' + asks.join('; ') + '. With that, your account is born complete.'));
   } else {
-    P(T('De tu lado, esta semana: nada. El plan lo ejecuto yo — vos seguí haciendo lo que mejor sabés hacer: tu negocio.',
-      'On your side this week: nothing. I run the plan — you keep doing what you do best: your business.'));
+    P(T('De tu lado, esta semana: nada, de verdad. El plan lo corro yo — vos seguí haciendo lo que mejor sabés hacer: tu negocio.',
+      'On your side this week: nothing, really. I have the plan — you keep doing what you do best: your business.'));
   }
 
   let closing;

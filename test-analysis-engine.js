@@ -211,6 +211,10 @@ ok(totalCarta <= 2300, 'C-corta: la carta entera se lee en menos de un minuto ('
 ok(a2.letter.body.filter((it) => it.t === 'plan').length <= 3, 'C-corta: la carta de nacimiento también resume el plan (≤3 pasos)');
 ok(a2.letter.body.filter((it) => it.t === 'p').length <= 6, 'C-corta: nacimiento resumido — apertura + intro + ≤2 datos + plan + pedido (' + a2.letter.body.filter((it) => it.t === 'p').length + ' párrafos)');
 ok(aEn.letter.body.filter((it) => it.t === 'plan').length <= 3, 'C-corta: la carta EN respeta los mismos topes');
+// TONO AMIGO (22:45): Posty es el amigo del cliente, no una agencia que reporta.
+ok(/festejemos lo bueno, que es mérito tuyo/.test(letterTexts(a1).join(' ')), 'C-amigo: las fortalezas se festejan como mérito del cliente, no se reportan');
+ok(/celebrate the good stuff/.test(letterTexts(aEn).join(' ')), 'C-amigo: la carta EN también festeja antes de contar');
+ok(!/sinergia|performance|engagement/i.test(letterTexts(a1).join(' ') + ' ' + letterTexts(aEn).join(' ')), 'C-amigo: cero jerga de agencia en la carta (ES/EN)');
 
 // ---------- Persistencia + historial (DB temporal, sin red) ----------
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-analysis-'));
