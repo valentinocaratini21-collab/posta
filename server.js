@@ -518,7 +518,7 @@ app.use(express.json({ limit: '15mb' }));
 // No toca /api/* (webhooks de MP, OAuth) ni /.well-known/* (assetlinks).
 app.use((req, res, next) => {
   const host = (req.get('host') || '').split(':')[0].toLowerCase();
-  if ((host === 'postahacetodo.com' || host === 'www.postahacetodo.com') &&
+  if ((host === 'postahacetodo.com' || host === 'www.postahacetodo.com' || host === 'www.postyhacetodo.com') &&
       !req.path.startsWith('/api/') && !req.path.startsWith('/.well-known/')) {
     return res.redirect(301, 'https://postyhacetodo.com' + req.originalUrl);
   }
@@ -15682,7 +15682,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v289';
+const BUILD_ID = '20261020-v290';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
