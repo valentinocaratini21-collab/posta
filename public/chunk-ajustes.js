@@ -173,6 +173,7 @@ function ajustesView() {
   <div class="card ajsec${openSec==='conex' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔌 Conexiones</h3>${stIg}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div style="font-weight:800;margin-bottom:8px">📸 Instagram</div>
     ${igBody}
+    <div id="pzBioSealSlot"></div>
     <div style="font-weight:800;margin:18px 0 8px">🎵 TikTok</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Compartí tus posteos también en TikTok: con tu cuenta conectada, cada posteo publicado suma el botón <b>🎵 Compartir en TikTok</b>. Posty nunca publica ahí sin que lo pidas.</p>
     <div id="ttZone"><p class="hint">Cargando…</p></div>
@@ -1927,6 +1928,7 @@ function bindSettings() {
   };
   const igProLink = $('#igProLink');
   if (igProLink) igProLink.onclick = (e) => { e.preventDefault(); const g = $('#igProGuide'); if (g) g.style.display = g.style.display === 'none' ? '' : 'none'; };
+  try { pzFillBioSeal(); } catch (e) {}
   // Actualizar lo que Posty sabe de mí (v282): UN solo botón que corre los
   // tres re-análisis EN ORDEN — estilo visual → cómo escribo → brief (el
   // brief se compone de los otros dos: NEGOCIO + VOZ + VISUAL + MARCA, por
@@ -2022,4 +2024,54 @@ function bindSettings() {
       } catch (e) { /* queda sin verificar; el botón manual sigue disponible */ }
     })();
   }
+}
+
+/* ---------- Sello de bio opt-in (capa de visibilidad, mecanismo 5) ----------
+ * Tarjeta UNA sola vez en Conexiones: si el dueño quiere, copia el sello y
+ * lo pega ÉL en su bio (su perfil, su mano — jamás se escribe automático).
+ * La decisión queda registrada (profiles.bio_seal) para medir adopción y
+ * para no volver a ofrecerla. */
+async function pzFillBioSeal() {
+  const slot = document.getElementById('pzBioSealSlot');
+  if (!slot) return;
+  try {
+    if (typeof pzVisibility !== 'function') return;
+    const st = await pzVisibility();
+    if (!st || !st.ok || !st.bio_seal || st.bio_seal.state !== '') return;
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const seals = en
+      ? ['📲 Content: @posty.doeseverything', '✨ My content is made by @posty.doeseverything']
+      : ['📲 Contenido: @posty.hacetodo', '✨ Mi contenido lo hace @posty.hacetodo'];
+    slot.innerHTML = `<div style="border:1px dashed var(--line);border-radius:14px;padding:14px;background:#F8FBFD;margin-top:18px">
+      <div style="font-weight:800;margin-bottom:4px">${en ? '🏷️ Your Posty seal (optional)' : '🏷️ Tu sello Posty (opcional)'}</div>
+      <p style="color:var(--mut);font-size:12.5px;margin:0 0 10px">${en ? 'Some businesses add a line like this to their Instagram bio so followers know their content is cared for. It is your profile: you paste it by hand, only if you like it.' : 'Algunos negocios suman una línea así a su bio de Instagram para que sus seguidores sepan que su contenido está cuidado. Es tu perfil: la pegás vos a mano, solo si te gusta.'}</p>
+      ${seals.map((s, i) => `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><code style="flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px">${esc(s)}</code><button class="btn btn-soft btn-sm" data-seal-copy="${i}">${en ? 'Copy' : 'Copiar'}</button></div>`).join('')}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;align-items:center">
+        <button class="btn btn-primary btn-sm" id="pzSealOk">${en ? 'I added it 💙' : 'Ya lo sumé 💙'}</button>
+        <button class="btn btn-ghost btn-sm" id="pzSealNo">${en ? 'Not now' : 'Ahora no'}</button>
+        <span id="pzSealMsg" style="font-size:12px"></span>
+      </div></div>`;
+    slot.querySelectorAll('[data-seal-copy]').forEach((b) => {
+      b.onclick = async () => {
+        const t = seals[Number(b.dataset.sealCopy)];
+        let copied = false;
+        try { await navigator.clipboard.writeText(t); copied = true; } catch (e) {
+          const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+          try { copied = document.execCommand('copy'); } catch (e2) {}
+          ta.remove();
+        }
+        const m = document.getElementById('pzSealMsg');
+        if (m) m.textContent = copied ? (en ? '✅ Copied — paste it in your bio' : '✅ Copiado — pegalo en tu bio') : t;
+      };
+    });
+    const done = async (state, msg) => {
+      try { await api.post('/api/visibility/bio-seal', { state }); } catch (e) {}
+      if (typeof PZ_VIS_PROMISE !== 'undefined') PZ_VIS_PROMISE = null;
+      slot.innerHTML = msg ? `<p class="hint" style="margin-top:14px">${msg}</p>` : '';
+    };
+    const okB = document.getElementById('pzSealOk');
+    if (okB) okB.onclick = () => done('accepted', en ? '💙 Seal on — thanks for showing it!' : '💙 ¡Sello puesto! Gracias por mostrarlo.');
+    const noB = document.getElementById('pzSealNo');
+    if (noB) noB.onclick = () => done('dismissed', '');
+  } catch (e) {}
 }

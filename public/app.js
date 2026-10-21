@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261020-v292'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v302'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -239,6 +239,42 @@ let PZ_AUTO_PLAN = false;
 async function pzReferral() {
   if (!PZ_REF_PROMISE) PZ_REF_PROMISE = api.get('/api/referrals/mine').catch(() => null);
   return PZ_REF_PROMISE;
+}
+
+// ---------- Capa de visibilidad (2026-10-21): referidos en el pico de emoción ----------
+// Estado de superficies del servidor (caps: máx. 1 vez/semana por superficie,
+// nunca dos superficies el mismo día; con 2 referidos la línea agradece).
+let PZ_VIS_PROMISE = null;
+function pzVisibility() {
+  if (!PZ_VIS_PROMISE) PZ_VIS_PROMISE = api.get('/api/visibility/state').catch(() => null);
+  return PZ_VIS_PROMISE;
+}
+function pzRefThanksHTML(en) {
+  return `<div class="celeb-ref">
+    <p class="celeb-ref-t">${en ? '💙 You already brought 2 businesses to Posty' : '💙 Ya trajiste a 2 negocios a Posty'}</p>
+    <p class="d">${en ? 'Your 50% off is active — thank you for sharing!' : 'Tu 50% off está activo — ¡gracias por compartir!'}</p>
+  </div>`;
+}
+// Rellena el slot .pz-refpeak-slot dentro de root (modal de festejo) SOLO si
+// el servidor dice que esta superficie puede mostrarse hoy. Marca la
+// impresión en el acto: el cap es real, no cosmético.
+async function pzFillRefPeak(surface, root) {
+  try {
+    if (!root) return;
+    const slot = root.querySelector('.pz-refpeak-slot');
+    if (!slot) return;
+    const st = await pzVisibility();
+    if (!st || !st.ok || !st.prompts || !st.prompts[surface] || !st.prompts[surface].show) { slot.remove(); return; }
+    const en = ME && ME.lang === 'en';
+    if (st.referral && st.referral.thanks) {
+      slot.innerHTML = pzRefThanksHTML(en);
+    } else {
+      slot.innerHTML = (typeof celebRefHTML === 'function') ? celebRefHTML() : '';
+      if (typeof wireCelebRef === 'function') wireCelebRef(slot);
+    }
+    api.post('/api/visibility/shown', { surface }).catch(() => {});
+    PZ_VIS_PROMISE = null;
+  } catch (e) {}
 }
 
 // true cuando el último refreshSession falló por red (no por sesión cerrada).
@@ -3514,10 +3550,10 @@ function pickRejectReason() {
           <p style="font-size:14px;margin:0 0 6px">Todos tus posteos quedaron programados ✅</p>
           ${whenTxt ? `<p style="font-size:14px;margin:0 0 6px">📮 ${whenNextWeek ? 'Este queda para la semana que viene: sale el ' : 'Este sale el '}${esc(whenTxt)}</p>` : ''}
           <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
-          ${celebRefHTML()}
+          <div class="pz-refpeak-slot"></div>
           <button class="btn btn-primary btn-block" id="celebGo" style="margin-top:10px">Ver mi semana →</button>`);
         const cmo = document.getElementById('streakModal');
-        if (cmo) wireCelebRef(cmo);
+        if (cmo) pzFillRefPeak('ref_schedule', cmo);
         const cg = $('#celebGo');
         if (cg) cg.onclick = () => { closeStreakModal(); render(); };
         else render();
@@ -3570,10 +3606,10 @@ async function doScheduleAll(btn) {
         <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
         ${w ? `<p style="font-size:14px;margin:0 0 6px">⏳ ${w} ${w === 1 ? 'quedó' : 'quedaron'} en espera: la semana a la que ${w === 1 ? 'pertenece' : 'pertenecen'} ya completó su cupo — ${w === 1 ? 'sigue' : 'siguen'} como borrador${w === 1 ? '' : 'es'} para la próxima.</p>` : ''}
         <p class="d">Te avisamos por email cuando salga cada uno. 📬</p>
-        ${celebRefHTML()}
+        <div class="pz-refpeak-slot"></div>
         <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
       const cmo = document.getElementById('streakModal');
-      if (cmo) wireCelebRef(cmo);
+      if (cmo) pzFillRefPeak('ref_schedule', cmo);
       const cg = $('#celebGoSa');
       if (cg) cg.onclick = () => {
         closeStreakModal();
@@ -3640,10 +3676,10 @@ async function doActivateWeek(btn) {
       <h3 style="margin:12px 0 4px">Tu semana está activa</h3>
       <p style="font-size:14px;margin:0 0 6px">${n} ${n === 1 ? 'posteo sale solo' : 'posteos salen solos'} en su horario 🎉</p>
       <p class="d">Vos a lo tuyo — Posty se ocupa del resto 💪</p>
-      ${typeof celebRefHTML === 'function' ? celebRefHTML() : ''}
+      <div class="pz-refpeak-slot"></div>
       <button class="btn btn-primary btn-block" id="celebGoSa" style="margin-top:10px">Ver mi semana →</button>`);
     const cmo = document.getElementById('streakModal');
-    if (cmo && typeof wireCelebRef === 'function') wireCelebRef(cmo);
+    if (cmo) pzFillRefPeak('ref_schedule', cmo);
     const cg = $('#celebGoSa');
     if (cg) cg.onclick = () => {
       closeStreakModal();
@@ -9373,13 +9409,14 @@ function wireStreakModalBtns(sk) {
 // Celebración al completar la semana (festejo especial si subió de nivel)
 // Bloque de referidos para los picos emocionales (festejos): compacto, un toque para compartir.
 function celebRefHTML() {
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
   return `
   <div class="celeb-ref">
-    <p class="celeb-ref-t">🎁 ¿A quién más le vendría bien esto?</p>
-    <p class="d">Compartí tu link: ellos ahorran 20% todos los meses, y con 2 referidos vos pagás la mitad.</p>
+    <p class="celeb-ref-t">${en ? '🎁 Who else could use this?' : '🎁 ¿A quién más le vendría bien esto?'}</p>
+    <p class="d">${en ? 'Share your link: they save 20% every month, and with 2 referrals you pay half.' : 'Compartí tu link: ellos ahorran 20% todos los meses, y con 2 referidos vos pagás la mitad.'}</p>
     <div class="celeb-ref-btns">
       <button class="btn btn-wa btn-sm" data-cref="wa">WhatsApp</button>
-      <button class="btn btn-ghost btn-sm" data-cref="copy">Copiar link</button>
+      <button class="btn btn-ghost btn-sm" data-cref="copy">${en ? 'Copy link' : 'Copiar link'}</button>
     </div>
     <p class="d celeb-ref-msg"></p>
   </div>`;
@@ -9388,14 +9425,17 @@ async function wireCelebRef(root) {
   let link = '';
   try { const info = await pzReferral(); if (info && info.ok) link = info.link; } catch (e) {}
   const msg = root.querySelector('.celeb-ref-msg');
-  const shareMsg = `Mirá lo que hace Posty con el Instagram de mi negocio: arma la semana y la publica sola. Probalo gratis con mi link: ${link}`;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const shareMsg = en
+    ? `Look what Posty does with my business's Instagram: it builds the week and posts it on its own. Try it free with my link: ${link}`
+    : `Mirá lo que hace Posty con el Instagram de mi negocio: arma la semana y la publica sola. Probalo gratis con mi link: ${link}`;
   root.querySelectorAll('[data-cref]').forEach(b => {
     b.onclick = async () => {
-      if (!link) { if (msg) msg.textContent = 'No se pudo cargar tu link todavía.'; return; }
+      if (!link) { if (msg) msg.textContent = en ? 'Your link could not load yet.' : 'No se pudo cargar tu link todavía.'; return; }
       if (b.dataset.cref === 'wa') {
         location.href = 'https://wa.me/?text=' + encodeURIComponent(shareMsg);
       } else {
-        try { await navigator.clipboard.writeText(link); if (msg) msg.textContent = '✅ Link copiado'; }
+        try { await navigator.clipboard.writeText(link); if (msg) msg.textContent = en ? '✅ Link copied' : '✅ Link copiado'; }
         catch (e) { if (msg) msg.textContent = link; }
       }
     };

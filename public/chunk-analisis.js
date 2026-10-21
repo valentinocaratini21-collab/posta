@@ -547,6 +547,155 @@ function anaHasLetter(a) {
   return !!(a && a.letter && Array.isArray(a.letter.body) && a.letter.body.length);
 }
 
+/* ---------- Carta compartible + referidos (capa de visibilidad, 2026-10-21) ----------
+ * DEBAJO de la carta (el formato de la carta es cerrado: nada entra en su
+ * texto). Botón "Compartir mi semana": tarjeta vertical 1080×1920 con la
+ * foto de su mejor posteo (o placa con los colores de SU marca), su @ y el
+ * festejo REAL de su carta; la atribución a Posty va como firma chica,
+ * nunca como marca de agua sobre su foto. Fail-closed: sin carta mínima,
+ * sin festejo o sin @, el bloque no existe. La línea de referidos respeta
+ * los caps del servidor (superficie 'ref_letter'). */
+function anaShareBlockHTML(a) {
+  const L = a && a.letter;
+  if (!L || !(L.v >= 2 || L.minimal)) return '';
+  const items = Array.isArray(L.body) ? L.body : [];
+  const pride = items.find((it) => it && it.t === 'p' && it.text);
+  const handle = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) ? String(PROFILE.ig_username).replace(/^@/, '') : '';
+  if (!pride || !handle) return '';
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  setTimeout(() => { try { anaWireShareBlock(); } catch (e) {} }, 40);
+  return `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+    <button class="btn btn-primary btn-block" onclick="anaShareWeek(this)">${en ? '📤 Share my week' : '📤 Compartir mi semana'}</button>
+    <p class="d" style="text-align:center;margin-top:6px">${en ? 'A card with your best post of the week — ready for your stories.' : 'Una tarjeta con tu mejor posteo de la semana, lista para tus historias.'}</p>
+    <div id="anaRefLine"></div>
+  </div>`;
+}
+
+async function anaWireShareBlock() {
+  const slot = document.getElementById('anaRefLine');
+  if (!slot || typeof pzVisibility !== 'function') return;
+  try {
+    const st = await pzVisibility();
+    if (!st || !st.ok || !st.prompts || !st.prompts.ref_letter || !st.prompts.ref_letter.show) return;
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    if (st.referral && st.referral.thanks) {
+      slot.innerHTML = (typeof pzRefThanksHTML === 'function') ? pzRefThanksHTML(en) : '';
+    } else {
+      slot.innerHTML = (typeof celebRefHTML === 'function') ? celebRefHTML() : '';
+      if (typeof wireCelebRef === 'function') wireCelebRef(slot);
+    }
+    api.post('/api/visibility/shown', { surface: 'ref_letter' }).catch(() => {});
+    if (typeof PZ_VIS_PROMISE !== 'undefined') PZ_VIS_PROMISE = null;
+  } catch (e) {}
+}
+
+function anaLoadImg(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+function anaDrawCover(x, img, dx, dy, dw, dh) {
+  const s = Math.max(dw / img.naturalWidth, dh / img.naturalHeight);
+  const sw = dw / s, sh = dh / s;
+  x.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, dx, dy, dw, dh);
+}
+function anaWrap(x, text, maxW, maxLines) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    const t = cur ? cur + ' ' + w : w;
+    if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; if (lines.length === maxLines) break; }
+    else cur = t;
+  }
+  if (cur && lines.length < maxLines) lines.push(cur);
+  const total = words.join(' ').length;
+  const used = lines.join(' ').length;
+  if (used < total && lines.length) lines[lines.length - 1] = lines[lines.length - 1].replace(/[.…]*$/, '') + '…';
+  return lines;
+}
+function anaLum(hex) {
+  const n = parseInt(String(hex || '').slice(1), 16);
+  if (isNaN(n)) return 0.3;
+  return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+}
+
+async function anaShareWeek(btn) {
+  const a = anaLastPayload && anaLastPayload.analysis;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  if (!a || !a.letter) return;
+  const items = Array.isArray(a.letter.body) ? a.letter.body : [];
+  const prideIt = items.find((it) => it && it.t === 'p' && it.text);
+  const photoIt = items.find((it) => it && it.t === 'photo' && it.src);
+  const handle = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) ? String(PROFILE.ig_username).replace(/^@/, '') : '';
+  if (!prideIt || !handle) { if (typeof toast === 'function') toast(en ? 'There is no week to share yet 😅' : 'Todavía no hay una semana para compartir 😅'); return; }
+  if (btn) btn.disabled = true;
+  try {
+    const W = 1080, H = 1920;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    let cols = [];
+    try { cols = JSON.parse((typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.brand_colors) || '[]'); } catch (e) {}
+    cols = (Array.isArray(cols) ? cols : []).filter((c) => /^#[0-9a-fA-F]{6}$/.test(c));
+    const primary = cols[0] || '#2793C8';
+    const accent = cols[1] || '#FEC14D';
+    const inkOnPrimary = anaLum(primary) > 0.62 ? '#0A1E33' : '#FFFFFF';
+    const subOnPrimary = inkOnPrimary === '#FFFFFF' ? 'rgba(255,255,255,.85)' : 'rgba(10,30,51,.72)';
+    let photo = null;
+    if (photoIt) { try { photo = await anaLoadImg(photoIt.src); } catch (e) { photo = null; } }
+    let baseY;
+    if (photo) {
+      anaDrawCover(x, photo, 0, 0, W, 1300);
+      x.fillStyle = primary; x.fillRect(0, 1300, W, H - 1300);
+      baseY = 1445;
+    } else {
+      x.fillStyle = primary; x.fillRect(0, 0, W, H);
+      let av = null;
+      try { av = await anaLoadImg('ai-avatar.png'); } catch (e) {}
+      if (av) {
+        x.save(); x.beginPath(); x.arc(W / 2, 545, 245, 0, Math.PI * 2); x.clip();
+        anaDrawCover(x, av, W / 2 - 245, 300, 490, 490); x.restore();
+        x.lineWidth = 10; x.strokeStyle = accent; x.beginPath(); x.arc(W / 2, 545, 245, 0, Math.PI * 2); x.stroke();
+      }
+      baseY = 990;
+    }
+    x.textAlign = 'center';
+    x.fillStyle = accent;
+    x.font = '800 40px system-ui, Arial, sans-serif';
+    x.fillText(en ? 'MY WEEK 💙' : 'MI SEMANA 💙', W / 2, baseY);
+    x.fillStyle = inkOnPrimary;
+    let hSize = 86;
+    x.font = '900 ' + hSize + 'px system-ui, Arial, sans-serif';
+    while (x.measureText('@' + handle).width > W - 150 && hSize > 40) { hSize -= 6; x.font = '900 ' + hSize + 'px system-ui, Arial, sans-serif'; }
+    x.fillText('@' + handle, W / 2, baseY + 112);
+    x.font = '600 46px system-ui, Arial, sans-serif';
+    anaWrap(x, String(prideIt.text), W - 180, 3).forEach((ln, i) => x.fillText(ln, W / 2, baseY + 196 + i * 60));
+    x.fillStyle = subOnPrimary;
+    x.font = '600 34px system-ui, Arial, sans-serif';
+    x.fillText(en ? 'with @posty.doeseverything' : 'con @posty.hacetodo', W / 2, H - 84);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+    if (!blob) throw new Error('sin blob');
+    const file = new File([blob], 'mi-semana-posty.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: en ? 'My week' : 'Mi semana' });
+    } else {
+      const url = URL.createObjectURL(blob);
+      const aEl = document.createElement('a');
+      aEl.href = url; aEl.download = 'mi-semana-posty.png';
+      document.body.appendChild(aEl); aEl.click(); aEl.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      if (typeof toast === 'function') toast(en ? '✅ Card downloaded — share it wherever you like' : '✅ Tarjeta descargada — compartila donde quieras');
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    if (typeof toast === 'function') toast(en ? 'I could not build the card — try again in a bit 😅' : 'No pude armar la tarjeta — probá en un ratito 😅');
+  } finally { if (btn) btn.disabled = false; }
+}
+
 /* ---------- La carta completa ---------- */
 
 function anaCartaHTML(d) {
@@ -589,6 +738,7 @@ function anaCartaHTML(d) {
     }
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
     h += anaSignHTML(birth);
+    if (!anaPastMode) h += anaShareBlockHTML(a);
     if (!anaPastMode) h += `<div class="ana-refresh"><button class="btn btn-ghost btn-sm" onclick="anaRefresh(this)">↻ Actualizar análisis</button></div>`;
     h += `</div>`;
     return h;
