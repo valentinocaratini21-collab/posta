@@ -1050,6 +1050,23 @@ function captionPasses(caption, input) {
       }
     }
   }
+  // CUERPO-CORP (Juli, 2026-10-21 — directiva M90 del cerebro + vara de
+  // Valentino): "potenciar" es lenguaje corporativo de folleto y vivía
+  // solo en la vara y en el prompt — la puerta no lo miraba: el id 114
+  // ("¿Te gustaría potenciar tu mejor posteo…?") pasó captionPasses con
+  // ok=true, verificado hoy 21/10 contra la función real. El candidato
+  // llevaba dos días registrado (19 y 20/10): la regla de un día de M90
+  // lo convierte en gate hoy. Angosto sobre el VERBO vendiendo humo:
+  // infinitivo (potenciar/potenciarlo), gerundio (potenciando) y
+  // presente/imperativo con objeto del negocio (potencia/potenciá/
+  // potenciás + tu|tus|la|el|los|las|su|sus). El SUSTANTIVO técnico
+  // legítimo NO se toca: "la potencia del motor / de la heladera" no
+  // matchea ninguna de las tres formas (no es el verbo de folleto).
+  {
+    if (/\bpotenciar(?:lo|la|los|las|te)?\b/.test(low) || /\bpotenciando\b/.test(low) || /\bpotencia(?:s)?\s+(tu|tus|la|el|los|las|su|sus)\b/.test(low)) {
+      return { ok: false, reason: 'lenguaje corporativo (CUERPO-CORP): "potenciar" es palabra de folleto, no de un dueño hablando de su negocio — decí qué pasa en concreto (qué posteo se empuja, con qué pauta, para qué fecha) o sacá el verbo' };
+    }
+  }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====
   // Precios del caption vs lista de precios del negocio: un precio desactualizado
   // o inventado se rechaza (se avisa y se corrige antes de publicar).

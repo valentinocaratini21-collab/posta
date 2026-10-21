@@ -120,5 +120,29 @@ ok('control: la misma segunda oración SIN uso previo en la semana pasa', () => 
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (f) Lenguaje corporativo: "potenciar" (CUERPO-CORP, M90 — id 114 real) ==');
+ok('id 114 real: "¿Te gustaría potenciar tu mejor posteo…?" se rechaza', () => {
+  const cap = '¿Te gustaría potenciar tu mejor posteo y llegar a más personas? 🚀\n\nCon Posty identifico el posteo que más rindió y te propongo empujarlo con pauta, con el tope que vos fijás.\n\nEscribinos por DM y lo vemos juntos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/corporativo|potenciar/i.test(chk.reason), chk.reason);
+});
+ok('variante imperativa: "Potenciá tu cuenta…" también se rechaza', () => {
+  const cap = 'Potenciá tu cuenta esta semana y llegá a más clientes con el posteo que ya te rindió en el local.\n\nEscribinos por DM y te mostramos cuál es.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/corporativo|potenciar/i.test(chk.reason), chk.reason);
+});
+ok('control sustantivo legítimo: "la potencia del motor" NO es el verbo de folleto y pasa', () => {
+  const cap = 'La potencia se mide en el banco de pruebas, no de oído: este motor quedó en 180 caballos reales después del service completo.\n\nPasá por el local hoy y dejá tu turno reservado.';
+  const chk = gen.captionPasses(cap, { business: 'Taller Mecánico Sur', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: la versión concreta del 114 (sin "potenciar") pasa', () => {
+  const cap = '¿Querés que tu mejor posteo lo vea más gente esta semana? 🚀\n\nCon Posty identifico el posteo que más rindió y te propongo empujarlo con pauta, con el tope que vos fijás.\n\nEscribinos por DM y lo vemos juntos.';
+  const chk = gen.captionPasses(cap, IN);
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
