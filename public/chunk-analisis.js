@@ -458,10 +458,12 @@ function anaSignHTML(birth) {
 
 /* ---------- La carta narrativa (estilo carta nocturna, 2026-10-20) ----------
  * Si el payload trae `letter` (la compone el motor desde los datos reales),
- * la carta se lee como CARTA: saludo personal → narración en primera persona
- * de SU semana → la banda de números con su lectura ya integrada → el plan
- * dentro de la narración (fase en negrita, efecto en línea) → cierre de
- * líder motivacional → firma. Las cartas viejas (sin letter) se siguen
+ * la carta se lee como CARTA CORTA (resumen de menos de un minuto, tono
+ * amigo): saludo personal → narración breve en primera persona de SU semana
+ * (los números ya vienen leídos dentro del marcador de la propia carta —
+ * sin banda de tiles en esta vista) → el plan dentro de la narración (fase
+ * en negrita, efecto en línea) → cierre de líder motivacional → firma. Las
+ * cartas viejas (sin letter) se siguen
  * leyendo con la forma de bloques v3 de abajo: nada se rompe hacia atrás. */
 
 function anaLetterBodyHTML(a) {
@@ -471,7 +473,7 @@ function anaLetterBodyHTML(a) {
   let h = '';
   if (L.greeting) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
   let lastPhase = -1;
-  items.forEach((it, idx) => {
+  items.forEach((it) => {
     if (!it) return;
     if (it.t === 'plan') {
       const head = it.phase !== lastPhase ? `<b>${phaseNums[it.phase] || ''} ${esc(it.phase_name || '')} —</b> ` : '';
@@ -480,11 +482,11 @@ function anaLetterBodyHTML(a) {
     } else {
       h += `<p class="ana-ltr-p">${esc(it.text || '')}</p>`;
     }
-    // La banda de números ("Tu foto de hoy") va tras el primer párrafo,
-    // como la banda de la matemática honesta en la carta nocturna.
-    if (idx === 0) h += anaStatsHTML(a, null);
   });
-  if (!items.length) h += anaStatsHTML(a, null);
+  // CARTA CORTA (2026-10-20): la banda "Tu foto de hoy" NO va en la vista de
+  // carta — duplicaba los números que la propia carta ya trae leídos en su
+  // marcador (≤3, con su lectura) y alargaba el resumen. La foto completa
+  // (tiles + trayectoria) sigue existiendo en el análisis, fuera de la carta.
   return h;
 }
 

@@ -614,6 +614,16 @@ function weekSummary(analysis) {
 // fundamento). Ningún párrafo afirma un número que no venga de ahí.
 // Cada párrafo pasa lintTone: el que no pasa, no sale (fail-closed).
 // Se entrega los domingos a la noche (ver scheduler.js / refreshAnalysesSweep).
+//
+// CARTA CORTA + TONO AMIGO (correcciones de Valentino, 2026-10-20 22:43 y
+// 22:45): la carta es un RESUMEN que se lee en menos de un minuto, con la
+// voz de un amigo que además es su CM — cercano, cálido, coloquial, de su
+// lado; nada de distancia de agencia ni lenguaje de reporte. Topes duros:
+// apertura ≤2 líneas · el loop medido en UN movimiento · fortalezas ≤2 ·
+// marcador ≤3 números (cada uno con su lectura) · hallazgos ≤2 (los de
+// mayor impacto, en el orden del análisis) · plan con UN paso por fase (el
+// principal) con su efecto · cierre ≤2 líneas + firma. El análisis completo
+// sigue existiendo detrás; la carta es solo su resumen con sustancia.
 // ---------------------------------------------------------------------------
 function letterStrong(s, lang) {
   if (!s) return '';
@@ -661,8 +671,7 @@ function letterPhases(a, ctx = {}) {
   if (a && a.kind === 'nacimiento') {
     return [
       [
-        { step: T('Tu perfil nace completo: nombre, bio, foto y destacadas — tu kit está en esta misma carta.', 'Your profile is born complete: name, bio, photo and highlights — your kit is in this very letter.'), fx: T('Te ves profesional desde el primer posteo.', 'You look professional from the very first post.') },
-        { step: T('Tu primera vidriera: 9 piezas pensadas como un todo, cada una con su rol.', 'Your first storefront: 9 pieces designed as a whole, each with its role.'), fx: T('Quien entra a tu perfil entiende qué vendés en segundos.', 'Whoever lands on your profile gets what you sell in seconds.') },
+        { step: T('Tu cuenta nace completa: perfil armado con su kit (nombre, bio, foto y destacadas) y tu primera vidriera de 9 piezas pensada como un todo.', 'Your account is born complete: profile set up with its kit (name, bio, photo and highlights) and your first 9-piece storefront designed as a whole.'), fx: T('Quien entra a tu perfil entiende qué vendés en segundos — y te ves profesional desde el primer posteo.', 'Whoever lands on your profile gets what you sell in seconds — and you look professional from the very first post.') },
       ],
       [
         { step: T('El ritmo queda instalado: tu semana completa sale sola, cada semana.', 'The rhythm gets installed: your full week goes out on its own, every week.'), fx: T('Nacés con la constancia que a la mayoría de las cuentas les falta.', 'You are born with the consistency most accounts lack.') },
@@ -680,7 +689,7 @@ function letterPhases(a, ctx = {}) {
     let phase = LETTER_PHASE_BY_KEY[f.key];
     if (phase == null) phase = LETTER_PHASE_BY_GROUP[f.group];
     if (phase == null) phase = isMarket ? 1 : 0;
-    if (phases[phase].length < 3) {
+    if (phases[phase].length < 1) {
       const dot = /[.!?…]$/.test(step.trim()) ? step.trim() : step.trim() + '.';
       phases[phase].push({ step: dot, fx: letterFxFor(f, lang) });
     }
@@ -694,7 +703,7 @@ function letterPhases(a, ctx = {}) {
   }
   if (!phases[0].length) phases[0].push({ step: T('Tu semana sale completa y pareja, armada y programada por mí.', 'Your week comes out full and even, built and scheduled by me.'), fx: T('La constancia queda instalada desde la primera semana.', 'Consistency is installed from the very first week.') });
   if (!phases[1].length) phases[1].push({ step: T('Reviso tu vidriera — nombre, bio y destacadas — con tu cuenta ya andando.', 'I review your storefront — name, bio and highlights — with your account already running.'), fx: T('Tu perfil queda vendiendo solo, todo el día.', 'Your profile keeps selling on its own, all day long.') });
-  if (phases[2].length < 3) phases[2].push({ step: T('Cada semana te re-mido y ajusto la semana con lo nuevo que aprendo de tu cuenta.', 'Every week I re-measure you and adjust the week with what I newly learn from your account.'), fx: T('Lo que funciona se repite; lo que no, no vuelve.', 'What works gets repeated; what does not, does not come back.') });
+  if (phases[2].length < 1) phases[2].push({ step: T('Cada semana te re-mido y ajusto la semana con lo nuevo que aprendo de tu cuenta.', 'Every week I re-measure you and adjust the week with what I newly learn from your account.'), fx: T('Lo que funciona se repite; lo que no, no vuelve.', 'What works gets repeated; what does not, does not come back.') });
   return phases;
 }
 
@@ -731,65 +740,68 @@ function buildLetter(analysis, ctx = {}) {
   const P = (text) => { if (text && String(text).trim()) body.push({ t: 'p', text: String(text).trim() }); };
 
   if (birth) {
-    P(T('tu cuenta todavía no nació en Instagram — y eso, bien usado, es una ventaja enorme: no hay nada que corregir, todo por construir. Estudié tu negocio, tu rubro y tu zona, y armé el plan con el que nace. Te lo cuento tal como lo pensé, en esta carta que te voy a escribir cada domingo a la noche.',
-      'your account has not been born on Instagram yet — and, used well, that is a huge advantage: there is nothing to fix, everything to build. I studied your business, your category and your area, and built the plan it will be born with. I am telling you exactly how I thought it through, in this letter I will write you every Sunday night.'));
+    P(T('tu cuenta todavía no nació en Instagram — y es una ventaja hermosa: no hay nada que corregir, todo por construir. Estudié tu negocio, tu rubro y tu zona, y armé el plan con el que nace.',
+      'your account has not been born on Instagram yet — and that is a real advantage: nothing to fix, everything to build. I studied your business, your category and your area, and built the plan it will be born with.'));
     const known = (a.findings || []).filter((f) => f && f.text);
     if (known.length) {
-      P(T('Esto es lo que ya sé de tu negocio, leído de tus propias fuentes — nada inventado:',
+      P(T('Esto ya lo sé de tu negocio, leído de tus propias fuentes — nada inventado:',
         'This is what I already know about your business, read from your own sources — nothing made up:'));
-      known.forEach((f) => {
-        P(dot(T(lower(f.text) + (f.now ? ' — ' + f.now : '') + (f.decision ? '. Y ya está decidido: ' + lower(f.decision) : ''),
-          lower(f.text) + (f.now ? ' — ' + f.now : '') + (f.decision ? '. And it is already decided: ' + lower(f.decision) : ''))));
+      // Carta corta: lo esencial del fundamento, máx. 2 datos (el resto vive
+      // en el kit y en la vidriera de esta misma pantalla).
+      known.slice(0, 2).forEach((f) => {
+        P(dot(T(lower(f.text) + (f.now ? ' — ' + f.now : ''),
+          lower(f.text) + (f.now ? ' — ' + f.now : ''))));
       });
     }
   } else {
     const s = a.signals || {};
-    P(T('cerró tu semana y la estudié completa — tu ritmo, tus formatos, tus textos' + (a.market && a.market.available ? ' y tu competencia de la zona' : '') + '. Esta carta te la escribo cada domingo a la noche: lo que vi, lo que ya está en marcha y el plan con el que sigo, con tus números reales y sin vueltas.',
-      'your week closed and I studied it in full — your rhythm, your formats, your captions' + (a.market && a.market.available ? ' and your local competition' : '') + '. I write you this letter every Sunday night: what I saw, what is already in motion and the plan I am following, with your real numbers and no fluff.'));
-    // El loop medido: lo prometido la carta anterior, contra la cuenta de hoy.
-    // La carta narra los DOS movimientos que más cuentan (primero lo que
-    // mejoró; después lo que va en camino y lo que sigue empujando): una
-    // lista larga de chequeos suena a reporte, no a carta. El loop completo
-    // sigue en el payload para quien quiera el detalle.
+    P(T('cerró tu semana y la estudié completa. Esta es tu carta de domingo a la noche: lo que vi, lo que ya puse en marcha y cómo seguimos — con tus números reales, sin vueltas.',
+      'your week closed and I went through all of it. This is your Sunday-night letter: what I saw, what I already set in motion and where we go next — with your real numbers, no fluff.'));
+    // El loop medido: lo prometido la carta anterior, contra la cuenta de
+    // hoy, en UN solo movimiento (carta corta: el que más cuenta, primero lo
+    // que mejoró). El loop completo sigue en el payload para el detalle.
     if (a.loop && Array.isArray(a.loop.checks) && a.loop.checks.length) {
       const rank = { improved: 0, on_track: 1, behind: 2 };
       const ordered = a.loop.checks.filter((c) => c && c.text)
         .sort((x, y) => (rank[x.status] != null ? rank[x.status] : 3) - (rank[y.status] != null ? rank[y.status] : 3));
-      const texts = ordered.slice(0, 2).map((c) => c.text);
-      if (texts.length) P(T('Antes de lo nuevo, lo que me propuse en mi carta anterior, medido contra tu cuenta de hoy: ', 'Before the new stuff, what I set out to do in my previous letter, measured against your account today: ') + texts.join(' '));
+      const texts = ordered.slice(0, 1).map((c) => c.text);
+      if (texts.length) P(T('Lo que te prometí en mi carta anterior, medido contra tu cuenta de hoy: ', 'What I promised in my last letter, measured against your account today: ') + texts.join(' '));
     }
-    // Fortalezas primero, con su dato.
+    // Fortalezas primero, con su dato: máx. 2, una línea cada una.
     const strong = letterStrong(s, lang);
-    if (stage === 'fuerte') {
-      P(T('Primero lo que está bien, porque es real: tu cuenta ya viene trabajando' + (s.posts_per_week != null ? ' a ' + fr(s.posts_per_week) + ' posteos por semana' : '') + (strong ? ' y ' + strong : '') + '. Lo que sigue no es rescatar nada: es afinar y sostener — y de eso me encargo yo.',
-        'First what is going well, because it is real: your account is already working' + (s.posts_per_week != null ? ' at ' + fr(s.posts_per_week) + ' posts per week' : '') + (strong ? ' and ' + strong : '') + '. What follows is not rescuing anything: it is sharpening and sustaining — and that is on me.'));
-    } else if (strong) {
-      P(T('Primero lo que está bien, porque es real: ' + strong + '. Sobre eso construimos — no partimos de cero.',
-        'First what is going well, because it is real: ' + strong + '. We build on that — we are not starting from zero.'));
+    const strengths = [];
+    if (stage === 'fuerte' && s.posts_per_week != null) strengths.push(T('tu cuenta ya trabaja a ' + fr(s.posts_per_week) + ' posteos por semana', 'your account already posts ' + fr(s.posts_per_week) + ' times a week'));
+    if (strong && !strengths.includes(strong)) strengths.push(strong);
+    if (strengths.length) {
+      const tail = stage === 'fuerte'
+        ? T('. Sostenerlo y afinarlo es mi trabajo.', '. Keeping it up and sharpening it is my job.')
+        : T('. Sobre eso construimos — no partimos de cero.', '. We build on that — we are not starting from zero.');
+      P(T('Miremos primero lo bueno, que lo hay: ', 'First, the good stuff — because it is real: ') + strengths.slice(0, 2).join(T('; y ', '; and ')) + tail);
     }
-    // El marcador honesto: números reales, cada uno con su lectura.
+    // El marcador honesto: máx. 3 números reales, cada uno con su lectura.
     const bits = [];
     if (s.posts_per_week != null) bits.push(T('hoy salís a ' + fr(s.posts_per_week) + ' posteos por semana', 'today you are at ' + fr(s.posts_per_week) + ' posts per week'));
     if (s.max_gap_days != null && s.max_gap_days >= 2) bits.push(T('tu racha más larga en silencio fue de ' + s.max_gap_days + ' días', 'your longest silent stretch was ' + s.max_gap_days + ' days'));
     else if (s.days_since_last != null && s.days_since_last >= 2) bits.push(T('pasaron ' + s.days_since_last + ' días desde tu último posteo', s.days_since_last + ' days have gone by since your last post'));
     if (s.hook_pct != null) bits.push(T('el ' + s.hook_pct + '% de tus captions abre con un gancho que frena el scroll', s.hook_pct + '% of your captions open with a hook that stops the scroll'));
     if (bits.length >= 2) {
-      P(T('El marcador de hoy, dicho sin vueltas: ' + bits.join('; ') + '. No es un reto: es el punto de partida exacto desde el que armo tu semana.',
-        "Today's scoreboard, said plainly: " + bits.join('; ') + '. That is not a scolding: it is the exact starting point from which I build your week.'));
+      P(T('Tus números de hoy, dichos con cariño y sin vueltas: ' + bits.join('; ') + '. No es un reto: es el punto exacto desde el que armo tu semana.',
+        'Your numbers today, said kindly and plainly: ' + bits.join('; ') + '. That is not a scolding: it is the exact starting point I build your week from.'));
     }
-    // Los hallazgos, narrados: cada uno con su arreglo ya en marcha.
-    (a.findings || []).forEach((f) => {
+    // Los hallazgos, narrados: máx. 2, los de mayor impacto (el orden del
+    // análisis ya es por impacto), cada uno con su arreglo ya en marcha.
+    (a.findings || []).slice(0, 2).forEach((f) => {
       if (!f || !f.text) return;
       const fix = f.decision || f.with_posty || '';
-      P(dot(T('Noté esto: ' + lower(f.text) + (f.now ? ' — hoy: ' + f.now : '') + (fix ? '. Y ya está en marcha: ' + lower(fix) : ''),
-        'I noticed this: ' + lower(f.text) + (f.now ? ' — today: ' + f.now : '') + (fix ? '. And it is already in motion: ' + lower(fix) : ''))));
+      P(dot(T('Noté esto: ' + lower(f.text) + (f.now ? ' — hoy: ' + f.now : '') + (fix ? '. Tranqui: ya está en marcha — ' + lower(fix) : ''),
+        'I noticed this: ' + lower(f.text) + (f.now ? ' — today: ' + f.now : '') + (fix ? '. No worries — already in motion: ' + lower(fix) : ''))));
     });
   }
 
   // El plan, integrado en la narración: intro + pasos por fase con su efecto.
   P(birth
     ? T('Este es el plan con el que nace tu cuenta, en este orden — y ya arranca:', 'This is the plan your account is born with, in this order — and it is already starting:')
-    : T('Y este es el plan, en el orden en que lo ejecuto:', 'And this is the plan, in the order I will run it:'));
+    : T('Y acá va el plan — así lo voy haciendo, paso a paso:', 'And here is the plan — this is how I will run it, step by step:'));
   const phaseNames = [T('Esta semana', 'This week'), T('La que viene', 'Next week'), T('De acá en más', 'From here on')];
   letterPhases(a, ctx).forEach((steps, i) => {
     (steps || []).forEach((st) => body.push({ t: 'plan', phase: i, phase_name: phaseNames[i], step: st.step, fx: st.fx || '' }));
@@ -808,12 +820,12 @@ function buildLetter(analysis, ctx = {}) {
   }
 
   let closing;
-  if (birth) closing = T('Tu cuenta nace con plan, no improvisada. El domingo que viene, a esta hora, te escribo de nuevo: con tu primera semana ya andando.',
-    'Your account is born with a plan, not improvised. Next Sunday, at this time, I will write you again: with your first week already running.');
-  else if (stage === 'fuerte') closing = T('Ya venís bien — y esto recién empieza: yo sostengo el ritmo y afino todo lo que sigue. El domingo que viene, a esta hora, te escribo con lo nuevo que haya aprendido de tu cuenta.',
-    'You are already doing well — and this is just getting started: I keep the rhythm and sharpen everything that follows. Next Sunday, at this time, I will write you with what I have newly learned from your account.');
-  else closing = T('Tenés el negocio. La constancia la pongo yo. El domingo que viene, a esta hora, te escribo de nuevo: con este plan ya medido contra tu cuenta.',
-    'You have the business. Consistency is on me. Next Sunday, at this time, I will write you again: with this plan already measured against your account.');
+  if (birth) closing = T('Tu cuenta nace con plan, no improvisada — y nace acompañada. El domingo que viene, a esta hora, te escribo de nuevo, con tu primera semana ya andando.',
+    'Your account is born with a plan, not improvised — and it is not born alone. Next Sunday, at this time, I will write you again, with your first week already running.');
+  else if (stage === 'fuerte') closing = T('Ya venís bien, y esto recién empieza: yo sostengo el ritmo y afino lo que sigue. El domingo que viene, a esta hora, te escribo con lo nuevo que aprenda de tu cuenta.',
+    'You are already doing well, and this is just getting started: I keep the rhythm and sharpen what follows. Next Sunday, at this time, I will write you with what I have newly learned from your account.');
+  else closing = T('Tenés el negocio — la constancia la pongo yo. El domingo que viene, a esta hora, te escribo de nuevo, con este plan ya medido contra tu cuenta.',
+    'You have the business — consistency is on me. Next Sunday, at this time, I will write you again, with this plan already measured against your account.');
 
   // Fail-closed por párrafo: el que no pasa el lint de tono, no sale.
   const cleanBody = body.filter((it) => lintTone(it.t === 'plan' ? (it.step + ' ' + it.fx) : it.text, lang).ok);

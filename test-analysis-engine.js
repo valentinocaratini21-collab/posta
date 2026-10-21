@@ -175,7 +175,7 @@ ok(a1.letter.delivery === 'domingo-noche', 'C: la carta declara su entrega (domi
 const a1b = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, businessName: 'Café Aroma', handle: 'cafearoma' } });
 ok(a1b.letter.greeting === 'Hola, Café Aroma:', 'C: el saludo nombra al negocio (sin nombre, genérico — nunca inventado)');
 const idxPlan = a1.letter.body.findIndex((it) => it.t === 'plan');
-const idxMarcador = a1.letter.body.findIndex((it) => it.t === 'p' && /marcador de hoy/i.test(it.text || ''));
+const idxMarcador = a1.letter.body.findIndex((it) => it.t === 'p' && /números de hoy/i.test(it.text || ''));
 ok(idxPlan > 0, 'C: el plan está integrado en la narración (no es el primer bloque)');
 ok(idxMarcador === -1 || idxMarcador < idxPlan, 'C: el marcador honesto se lee ANTES del plan');
 const phasesInLetter = [...new Set(a1.letter.body.filter((it) => it.t === 'plan').map((it) => it.phase))].sort();
@@ -189,11 +189,28 @@ ok(aNext.letter && /carta anterior/i.test(letterTexts(aNext).join(' ')), 'C: la 
 ok(letterTexts(a1).every((t) => ae.lintTone(t).ok), 'C: toda la carta pasa el lint de tono');
 ok(a2.letter && a2.letter.title === 'Nacer con plan', 'C: nacimiento = carta de nacimiento, no radiografía fingida');
 ok(a2.letter.greeting === 'Hola, Panadería Sol:', 'C: la carta de nacimiento saluda al negocio por su nombre');
-ok(!/marcador de hoy/i.test(letterTexts(a2).join(' ')), 'C: nacimiento sin señales de feed → ningún marcador inventado');
+ok(!/números de hoy/i.test(letterTexts(a2).join(' ')), 'C: nacimiento sin señales de feed → ningún marcador inventado');
 ok(a2.letter.body.some((it) => it.t === 'p' && /Pan de masa madre/.test(it.text || '')), 'C: la carta de nacimiento nace del fundamento (su estrella, test de pertenencia)');
 const aEn = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, lang: 'en', businessName: 'Glow Studio' } });
 ok(aEn.letter && aEn.letter.greeting === 'Hi, Glow Studio:' && aEn.letter.title === 'Your first letter', 'C: la carta EN sale en inglés (saludo y título)');
 ok(letterTexts(aEn).every((t) => ae.lintTone(t, 'en').ok), 'C: la carta EN pasa el lint de tono EN');
+
+// ---------- LA CARTA CORTA (corrección de Valentino 22:43: "es muy larga") ----------
+// Topes duros del resumen: se lee en menos de un minuto.
+const planItems1 = a1.letter.body.filter((it) => it.t === 'plan');
+ok(planItems1.length <= 3, 'C-corta: el plan de la carta tiene ≤3 pasos (' + planItems1.length + ')');
+ok([0, 1, 2].every((ph) => planItems1.filter((it) => it.phase === ph).length === 1), 'C-corta: UN paso por fase — el principal de cada una');
+const hallazgosCarta = a1.letter.body.filter((it) => it.t === 'p' && /^Noté esto/.test(it.text || ''));
+ok(hallazgosCarta.length >= 1 && hallazgosCarta.length <= 2, 'C-corta: hallazgos narrados ≤2 (' + hallazgosCarta.length + ' de ' + a1.findings.length + ' del análisis completo)');
+const fortP = a1.letter.body.find((it) => it.t === 'p' && /lo bueno/.test(it.text || ''));
+ok(fortP && (fortP.text.match(/;/g) || []).length <= 1, 'C-corta: fortalezas ≤2, en un solo párrafo breve');
+const loopHits = (aNext.loop.checks || []).filter((c) => c.text && letterTexts(aNext).join(' ').includes(c.text)).length;
+ok(loopHits <= 1, 'C-corta: el loop medido se narra en UN movimiento (' + loopHits + ')');
+const totalCarta = letterTexts(a1).join(' ').length;
+ok(totalCarta <= 2300, 'C-corta: la carta entera se lee en menos de un minuto (' + totalCarta + ' caracteres)');
+ok(a2.letter.body.filter((it) => it.t === 'plan').length <= 3, 'C-corta: la carta de nacimiento también resume el plan (≤3 pasos)');
+ok(a2.letter.body.filter((it) => it.t === 'p').length <= 6, 'C-corta: nacimiento resumido — apertura + intro + ≤2 datos + plan + pedido (' + a2.letter.body.filter((it) => it.t === 'p').length + ' párrafos)');
+ok(aEn.letter.body.filter((it) => it.t === 'plan').length <= 3, 'C-corta: la carta EN respeta los mismos topes');
 
 // ---------- Persistencia + historial (DB temporal, sin red) ----------
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-test-analysis-'));
