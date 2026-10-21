@@ -14,7 +14,7 @@
   var LANG = (location.pathname === '/en' || location.pathname.indexOf('/en/') === 0 ||
     (document.documentElement.lang || '').toLowerCase().indexOf('en') === 0) ? 'en' : 'es';
   var T = LANG === 'en' ? {
-    greeting: 'Hi! I\'m Posty 🤖 I run Instagram for businesses like yours: analysis, posts, reels, everything. Want me to tell you what it would look like with your account, or do you have a specific question?',
+    greeting: 'hi! i\'m posty 🤖 i run instagram for businesses like yours: analysis, posts, reels, everything. want me to tell you what it would look like with your account, or do you have a specific question?',
     sub: 'Your community manager · replies instantly',
     dialogLabel: 'Chat with Posty',
     closeLabel: 'Close chat',
@@ -24,11 +24,11 @@
     placeholder: 'Message Posty…',
     send: 'Send',
     typing: 'Posty is typing…',
-    errReply: 'I glitched for a second 🤖 Try again in a moment.',
-    errConn: 'My connection dropped 🤖 Try again in a moment — or leave me your WhatsApp or email and someone from my team will write to you.',
+    errReply: 'i glitched for a second 🤖 try again in a moment.',
+    errConn: 'my connection dropped 🤖 try again in a moment — or leave me your whatsapp or email and someone from my team will write to you.',
     trialPath: '/en/prueba'
   } : {
-    greeting: '¡Hola! Soy Posty 🤖 Manejo el Instagram de negocios como el tuyo: análisis, posteos, reels, todo. ¿Querés que te cuente cómo sería con tu cuenta, o tenés una duda puntual?',
+    greeting: 'hola! soy posty 🤖 manejo el instagram de negocios como el tuyo: análisis, posteos, reels, todo. querés que te cuente cómo sería con tu cuenta, o tenés una duda puntual?',
     sub: 'Tu community manager · responde al instante',
     dialogLabel: 'Chat con Posty',
     closeLabel: 'Cerrar chat',
@@ -38,8 +38,8 @@
     placeholder: 'Escribile a Posty…',
     send: 'Enviar',
     typing: 'Posty está escribiendo…',
-    errReply: 'Se me cortó un segundo 🤖 Probá de nuevo en un ratito.',
-    errConn: 'Se me cortó la conexión 🤖 Probá de nuevo en un ratito — o dejame tu WhatsApp o tu email y te escribe una persona de mi equipo.',
+    errReply: 'se me cortó un segundo 🤖 probá de nuevo en un ratito.',
+    errConn: 'se me cortó la conexión 🤖 probá de nuevo en un ratito — o dejame tu whatsapp o tu email y te escribe una persona de mi equipo.',
     trialPath: '/prueba'
   };
   var GREETING = T.greeting;

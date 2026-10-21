@@ -603,7 +603,7 @@ function requireTrialValid(req, res, next) {
   try {
     const u = db.prepare('SELECT plan_status, trial_ends_at, trial_extended_until, created_at FROM users WHERE id = ?').get(req.session.userId);
     if (u && u.plan_status === 'trial' && trialEffectiveEnd(u) <= Date.now())
-      return res.status(402).json({ error: 'trial_expired', message: '¡Ey! Se terminó tu prueba gratis 😢 Elegí tu plan y seguimos publicando juntos — Posty te extraña.' });
+      return res.status(402).json({ error: 'trial_expired', message: 'ey! se terminó tu prueba gratis 😢 elegí tu plan y seguimos publicando juntos — posty te extraña.' });
   } catch (e) {
     // FAIL-CLOSED (2026-10-02): si la DB falla, NO dejamos pasar. Antes dejaba
     // usar la IA sin trial válido ante cualquier error transitorio.
@@ -1171,7 +1171,7 @@ app.post('/api/dna/from-audio', requireAuth, async (req, res) => {
   try { transcript = await transcribeAudio(audioDataUrl, apiKey); }
   catch (e) {
     console.error('[dna] whisper:', e.message);
-    return res.status(400).json({ error: 'No te escuché bien 😅 ¿Me lo mandás de nuevo?' });
+    return res.status(400).json({ error: 'no te escuché bien 😅 me lo mandás de nuevo?' });
   }
   if (!transcript)
     return res.status(400).json({ error: 'No se entendió el audio. Probá de nuevo.' });
@@ -2155,16 +2155,16 @@ app.post('/api/questions/:id/answer', requireAuth, (req, res) => {
       text: typeof body.text === 'string' ? body.text : '',
     });
     if (!r.ok) {
-      if (r.reason === 'gone') return res.status(404).json({ error: 'Esa pregunta ya no está 😅' });
-      if (r.reason === 'empty') return res.status(400).json({ error: 'Contame con tus palabras y lo guardo 😊' });
-      if (r.reason === 'bad_option') return res.status(400).json({ error: 'Esa opción no es válida 😅' });
-      return res.status(400).json({ error: 'No pude guardarla 😅' });
+      if (r.reason === 'gone') return res.status(404).json({ error: 'esa pregunta ya no está 😅' });
+      if (r.reason === 'empty') return res.status(400).json({ error: 'contame con tus palabras y lo guardo 😊' });
+      if (r.reason === 'bad_option') return res.status(400).json({ error: 'esa opción no es válida 😅' });
+      return res.status(400).json({ error: 'no pude guardarla 😅' });
     }
     try { track(uid, 'question_answered', r.applied || ''); } catch (e) {}
     res.json({ ok: true, applied: r.applied });
   } catch (e) {
     console.error('[posty-pregunta] answer:', e.message);
-    res.status(500).json({ error: 'No pude guardarla 😅 Probá de nuevo' });
+    res.status(500).json({ error: 'no pude guardarla 😅 probá de nuevo' });
   }
 });
 
@@ -2174,7 +2174,7 @@ app.post('/api/questions/:id/dismiss', requireAuth, (req, res) => {
     const r = postyQuestions.dismissQuestion(db, uid, req.params.id);
     try { track(uid, 'question_dismissed', String(req.params.id)); } catch (e) {}
     res.json({ ok: true, changed: r.changed });
-  } catch (e) { res.status(500).json({ error: 'No pude guardarla 😅' }); }
+  } catch (e) { res.status(500).json({ error: 'no pude guardarla 😅' }); }
 });
 
 // Los endpoints admin del loop viven tras requireAdminToken (definido más
@@ -2540,20 +2540,30 @@ app.post('/api/nudges/done', requireAuth, (req, res) => {
   } catch (e) {}
   res.json({ ok: true });
 });
+// VOZ DE CHAT (2026-10-21, mandato de Valentino): el chat de Posty escribe
+// como un amigo por WhatsApp — todo en minúscula y SIN signos de apertura
+// (nada de ¡ ni ¿; los de cierre van normal). La minúscula sale del prompt y
+// de las frases escritas a mano; esta es la ÚNICA red programática permitida:
+// si una salida de chat ARRANCA con ¡ o ¿, se lo saca. Jamás lowercasear a
+// ciegas una salida del modelo (rompería nombres propios del negocio).
+function chatStripOpen(text) {
+  return String(text == null ? '' : text).replace(/^\s*[¡¿]+\s*/, '');
+}
+
 // La IA entrevista al dueño por chat y extrae el perfil del negocio.
 // El frontend manda el historial; el backend devuelve la próxima intervención.
 const OB_STEPS = [
-  { key: 'nombre', pregunta: '¿Cómo se llama tu negocio? 🏪' },
-  { key: 'vende', pregunta: '¿Qué vendés? Contame con tus palabras, sin vueltas.' },
-  { key: 'cliente', pregunta: '¿A quién le vendés? ¿Quién es tu cliente ideal?' },
-  { key: 'distinto', pregunta: '¿Qué te hace distinto de otros que venden lo mismo?' },
-  { key: 'instagram', pregunta: '¿Cuál es tu Instagram? O pasame el de un competidor que te guste para chusmear el estilo. Si no tenés, decime "saltear".' },
-  { key: 'logo', pregunta: 'Subí tu logo y saco tus colores de ahí 🎨. Si no lo tenés a mano, decime "saltear".' },
-  { key: 'objetivo', pregunta: '¿Cuál es tu objetivo principal con Instagram?' },
-  { key: 'fotos', pregunta: '📸 Última: subí hasta 5 fotos de tu negocio — tu local, tus productos, vos laburando. Con esas fotos la IA aprende cómo se ve lo que hacés y te genera contenido nuevo cada semana, sin que tengas que pensar en fotos. Sacalas con luz de día si podés ☀️ Si preferís, escribí "saltear".' },
+  { key: 'nombre', pregunta: 'cómo se llama tu negocio? 🏪' },
+  { key: 'vende', pregunta: 'qué vendés? contame con tus palabras, sin vueltas.' },
+  { key: 'cliente', pregunta: 'a quién le vendés? quién es tu cliente ideal?' },
+  { key: 'distinto', pregunta: 'qué te hace distinto de otros que venden lo mismo?' },
+  { key: 'instagram', pregunta: 'cuál es tu instagram? o pasame el de un competidor que te guste para chusmear el estilo. si no tenés, decime "saltear".' },
+  { key: 'logo', pregunta: 'subí tu logo y saco tus colores de ahí 🎨. si no lo tenés a mano, decime "saltear".' },
+  { key: 'objetivo', pregunta: 'cuál es tu objetivo principal con instagram?' },
+  { key: 'fotos', pregunta: '📸 última: subí hasta 5 fotos de tu negocio — tu local, tus productos, vos laburando. con esas fotos la IA aprende cómo se ve lo que hacés y te genera contenido nuevo cada semana, sin que tengas que pensar en fotos. sacalas con luz de día si podés ☀️ si preferís, escribí "saltear".' },
 ];
 const OB_GOAL_CHIPS = ['Vender más', 'Conseguir seguidores', 'Llenar mi local', 'Contar novedades'];
-const OB_GREETING = '¡Hola! Soy Posty, tu community manager 🙌 Te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. Son 8, dale que va:';
+const OB_GREETING = 'hola! soy posty, tu community manager 🙌 te hago unas preguntas rápidas para conocer tu negocio a fondo y armarte todo. son 8, dale que va:';
 
 app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
   try {
@@ -2570,7 +2580,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
       const lastUser = [...history].reverse().find(m => m.role === 'user') || { text: '' };
       const apiKey = (getSettings(req.session.userId).openai_key) || process.env.OPENAI_API_KEY || '';
       if (!apiKey) {
-        reply = `¡Buenísimo! ${step.pregunta}`;
+        reply = `buenísimo! ${step.pregunta}`;
       } else {
         try {
           const r = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -2579,7 +2589,7 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
             body: JSON.stringify({
               model: 'gpt-4o-mini',
               messages: [
-                { role: 'system', content: `Sos Posty, el community manager personal de este negocio, entrevistando a su dueño para conocerlo a fondo. Tu nombre es Posty, siempre: nunca digas "Posta". Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta.` },
+                { role: 'system', content: `Sos Posty, el community manager personal de este negocio, entrevistando a su dueño para conocerlo a fondo. Tu nombre es Posty, siempre: nunca digas "Posta". Ya van ${userCount} de ${OB_STEPS.length} preguntas. El dueño acaba de responder: "${(lastUser.text || '').slice(0, 300)}". Escribí 1-2 líneas en español rioplatense con voseo: primero un acuse cálido y ESPECÍFICO de lo que dijo (nada genérico), y después hacé la siguiente pregunta: "${step.pregunta}". Si su respuesta fue evasiva ("no sé", "saltear", vacía o de una palabra), no insistas: pasá a la siguiente con buena onda. Nunca hagas más de una pregunta. Escribí todo en minúscula, como un amigo por WhatsApp: sin signos de apertura (nada de ¡ ni ¿; los de cierre van normal) y frases cortas.` },
               ],
               max_tokens: 220, temperature: 0.8,
             }),
@@ -2588,10 +2598,11 @@ app.post('/api/onboarding/chat', requireAuth, async (req, res) => {
           const j = await r.json();
           costs.trackUsage({ feature: 'onboarding', userId: req.session.userId, model: 'gpt-4o-mini', json: j });
           const txt = String((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
-          reply = cortar(txt, 500) || `¡Buenísimo! ${step.pregunta}`;
-        } catch (e) { reply = `¡Buenísimo! ${step.pregunta}`; }
+          reply = cortar(txt, 500) || `buenísimo! ${step.pregunta}`;
+        } catch (e) { reply = `buenísimo! ${step.pregunta}`; }
       }
     }
+    reply = chatStripOpen(reply);
     res.json({
       ok: true, done: false, reply, answered: userCount,
       chips: step.key === 'objetivo' ? OB_GOAL_CHIPS : null,
@@ -2620,7 +2631,7 @@ app.post('/api/onboarding/finish', requireAuth, async (req, res) => {
             model: 'gpt-4o-mini',
             response_format: { type: 'json_object' },
             messages: [
-              { role: 'system', content: 'Analizás la entrevista a un dueño de negocio y devolvés SOLO JSON: {"business_name":"...","category":"...","description":"...","audience":"...","differentiator":"...","instagram":"...","goal":"...","summary":"..."}. Reglas: category = la más cercana de [ropa, gastronomia, cafeteria, belleza, barberia, fitness, salud, mascotas, servicios, educacion, tecnologia, hogar, inmobiliaria, eventos, viajes, arte, otro]. description = 1-2 frases que resuman qué vende y para quién, con sus palabras. goal = una de [vender, seguidores, local, novedades] según lo que dijo (o vacío). summary = 2-3 líneas cálidas en español rioplatense con voseo, contándole lo que entendiste de su negocio, como un community manager que lo escuchó de verdad. Si un dato no está, dejalo vacío. Nada de texto fuera del JSON.' },
+              { role: 'system', content: 'Analizás la entrevista a un dueño de negocio y devolvés SOLO JSON: {"business_name":"...","category":"...","description":"...","audience":"...","differentiator":"...","instagram":"...","goal":"...","summary":"..."}. Reglas: category = la más cercana de [ropa, gastronomia, cafeteria, belleza, barberia, fitness, salud, mascotas, servicios, educacion, tecnologia, hogar, inmobiliaria, eventos, viajes, arte, otro]. description = 1-2 frases que resuman qué vende y para quién, con sus palabras. goal = una de [vender, seguidores, local, novedades] según lo que dijo (o vacío). summary = 2-3 líneas cálidas en español rioplatense con voseo, todo en minúscula y sin signos de apertura (nada de ¡ ni ¿), como un chat de WhatsApp, contándole lo que entendiste de su negocio, como un community manager que lo escuchó de verdad. Si un dato no está, dejalo vacío. Nada de texto fuera del JSON.' },
               { role: 'user', content: qa.slice(0, 3000) },
             ],
             max_tokens: 600, temperature: 0.5,
@@ -2639,7 +2650,8 @@ app.post('/api/onboarding/finish', requireAuth, async (req, res) => {
       } catch (e) { console.error('[onboarding/extract]', e.message); }
     }
     if (!profile.business_name && history[0] && history[0].text) profile.business_name = cortar(history[0].text, 80);
-    if (!summary) summary = profile.business_name ? `¡Listo! Ya conozco a ${profile.business_name} 🙌` : '¡Listo! Ya te conozco un poco más 🙌';
+    if (!summary) summary = profile.business_name ? `listo! ya conozco a ${profile.business_name} 🙌` : 'listo! ya te conozco un poco más 🙌';
+    summary = chatStripOpen(summary);
     res.json({ ok: true, profile, summary });
   } catch (e) {
     console.error('[onboarding/finish]', e.message);
@@ -2831,7 +2843,7 @@ app.put('/api/profile', requireAuth, (req, res) => {
     return res.json({ ok: true });
   }
   if (pageTouched) return res.json({ ok: true });
-  return res.status(400).json({ error: '¿Cómo se llama tu negocio? Lo necesito para arrancar 🏪' });
+  return res.status(400).json({ error: 'cómo se llama tu negocio? lo necesito para arrancar 🏪' });
 });
 
 function validTimezone(tz) {
@@ -3259,7 +3271,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
   let chatNote = '';
   if (typeof audio === 'string' && audio.startsWith('data:audio/')) {
     const akey = (getSettings(req.session.userId).openai_key || process.env.OPENAI_API_KEY || '');
-    const noAudio = { reply: 'No pude escuchar tu audio 🙏 ¿me lo escribís en una línea?', idea: null };
+    const noAudio = { reply: 'no pude escuchar tu audio 🙏 me lo escribís en una línea?', idea: null };
     if (!akey) return res.json(noAudio);
     let heard = '';
     try { heard = await transcribeAudio(audio, akey); } catch (e) { console.error('[chat] whisper:', e.message); }
@@ -3275,7 +3287,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
     const lastUserText = (clean.filter(m => m.role === 'user').pop() || {}).text || '';
     const greetRe = /^(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches|qu[ée] tal|qu[ée] onda|c[óo]mo (va|and[aá]s)|saludos|holis?)[ ,!.…?]*((posty|genio|capo|master|che|querido)[ ,!.…?]*)*$/i;
     if (greetRe.test(lastUserText.trim())) {
-      const reply = '¡Hola! 😄 ¿Con qué te ayudo hoy?';
+      const reply = 'hola! 😄 con qué te ayudo hoy?';
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
@@ -3302,7 +3314,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       if (cname) {
         cname = cname.trim().toLowerCase().replace(/(?:^|\s)\S/g, c => c.toUpperCase());
         db.prepare('UPDATE users SET client_name = ? WHERE id = ?').run(cname, uidChat);
-        const reply = `\u00A1Dale, ${cname}! \uD83D\uDE04 Ya me lo anoto.`;
+        const reply = `dale, ${cname}! \uD83D\uDE04 ya me lo anoto.`;
         try {
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'user', lastUserText.slice(0, 2000));
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uidChat, 'assistant', reply);
@@ -3323,8 +3335,8 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         const uid = req.session.userId;
         setPausedTipo(uid, tipo, !!pm);
         const reply = pm
-          ? `Listo, pauso ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} por un tiempo 👍`
-          : `Dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
+          ? `listo, pauso ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} por un tiempo 👍`
+          : `dale, vuelvo a proponerte ${TIPO_PLURAL[tipo] || 'ese tipo de posteos'} 👍`;
         try {
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', lastUserText.slice(0, 2000));
           db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', reply);
@@ -3452,8 +3464,9 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       settings.openai_key || process.env.OPENAI_API_KEY || ''
     ); } catch (e) {
       console.error('[chat] IA caída (modo estricto):', e.message);
-      return res.json({ reply: 'Uy, se me cortó la conexión un segundo 😅 Probá de nuevo en un ratito.', idea: null });
+      return res.json({ reply: 'uy, se me cortó la conexión un segundo 😅 probá de nuevo en un ratito.', idea: null });
     }
+    if (out && typeof out.reply === 'string') out.reply = chatStripOpen(out.reply);
     const uid = req.session.userId;
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
@@ -3678,7 +3691,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       // Si pidió mostrar pero no hay nada con imagen: no prometer imágenes.
       if (!showDrafts || !showDrafts.length) {
         showDrafts = [];
-        out.reply = 'Todavía no armé nada — ¿la armamos? 🚀';
+        out.reply = 'todavía no armé nada — la armamos? 🚀';
       }
     }
     // FM #5: si el publish quedó en revisión o falló, el festejo del modelo
@@ -4925,7 +4938,7 @@ app.post('/api/ads/boost', requireAuth, async (req, res) => {
     balance_cents: w2.balance_cents,
     message: launched
       ? '🚀 Tu pauta ya está corriendo en Instagram y Facebook.'
-      : '¡Listo! Tu pauta quedó programada: la activamos en las próximas horas y te avisamos.',
+      : 'listo! tu pauta quedó programada: la activamos en las próximas horas y te avisamos.',
   });
   } catch (e) {
     // FAIL-SAFE (2026-10-02): un throw acá antes mataba el proceso entero
@@ -5117,28 +5130,28 @@ app.get('/api/ideas/chat', requireAuth, (req, res) => {
       // y se ofrece rearmarla en 1 tap. NULL = no vino de /prueba (welcome actual).
       const importMissed = w.trial_import_n === 0;
       if (trialDrafts.length) {
-        welcome = (_cn ? `\u00A1${_cn}! \uD83C\uDF89 Tu semana ya est\u00E1 ac\u00E1 \u2014 la que armamos juntos en la prueba \u2728`
-                      : '\u00A1Hola! \uD83C\uDF89 Tu semana ya est\u00E1 ac\u00E1 \u2014 la que armamos juntos en la prueba \u2728');
+        welcome = (_cn ? `${_cn}! \uD83C\uDF89 tu semana ya est\u00E1 ac\u00E1 \u2014 la que armamos juntos en la prueba \u2728`
+                      : 'hola! \uD83C\uDF89 tu semana ya est\u00E1 ac\u00E1 \u2014 la que armamos juntos en la prueba \u2728');
         first_pick = firstPickFrom(trialDrafts);
       } else if (importMissed) {
         // La semana de /prueba no llegó adentro: decir la verdad con voz de
         // Posty y 1 tap para rearmarla (welcome_regen → botón en el frontend).
-        welcome = (_cn ? `\u00A1${_cn}! ` : '\u00A1Hola! ') +
-          'No encontr\u00E9 tu semana de prueba \uD83D\uDE05 \u2014 te la rearmo en 1 minuto \uD83D\uDC47';
+        welcome = (_cn ? `${_cn}! ` : 'hola! ') +
+          'no encontr\u00E9 tu semana de prueba \uD83D\uDE05 \u2014 te la rearmo en 1 minuto \uD83D\uDC47';
         welcome_regen = true;
       } else {
         const bits = [];
         try { if ((db.prepare(`SELECT COUNT(*) AS n FROM assets WHERE user_id = ? AND kind = 'photo'`).get(uid) || {}).n > 0) bits.push('mirando tus fotos \uD83D\uDCF8'); } catch (e) {}
         try { const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid); if (dr && dr.dna_json) bits.push('conociendo tu negocio'); } catch (e) {}
-        try { const pf = db.prepare('SELECT ig_connected FROM profiles WHERE user_id = ?').get(uid); if (pf && pf.ig_connected) bits.push('analizando tu Instagram'); } catch (e) {}
+        try { const pf = db.prepare('SELECT ig_connected FROM profiles WHERE user_id = ?').get(uid); if (pf && pf.ig_connected) bits.push('analizando tu instagram'); } catch (e) {}
         bits.push('buscando los mejores horarios para publicar \u23F0');
         const haciendo = bits.length > 1 ? bits.slice(0, -1).join(', ') + ' y ' + bits[bits.length - 1] : bits[0];
-        welcome = (_cn ? `\u00A1Hola ${_cn}! Soy Posty, tu community manager \uD83C\uDF89\n`
-                        : '\u00A1Hola! Soy Posty, tu community manager \uD83C\uDF89\n') +
-          `Ya estoy laburando en tus posteos: ${haciendo}.\n` +
-          'Yo armo los dise\u00F1os, textos y horarios \u2014 vos solo aprob\u00E1s \uD83D\uDC4C\n' +
-          'Te aviso cuando tu semana est\u00E9 lista \u2728' +
-          (_cn ? '' : '\n\u00BFC\u00F3mo te llamo? \uD83D\uDE04');
+        welcome = (_cn ? `hola ${_cn}! soy posty, tu community manager \uD83C\uDF89\n`
+                        : 'hola! soy posty, tu community manager \uD83C\uDF89\n') +
+          `ya estoy laburando en tus posteos: ${haciendo}.\n` +
+          'yo armo los dise\u00F1os, textos y horarios \u2014 vos solo aprob\u00E1s \uD83D\uDC4C\n' +
+          'te aviso cuando tu semana est\u00E9 lista \u2728' +
+          (_cn ? '' : '\nc\u00F3mo te llamo? \uD83D\uDE04');
         try {
           const otherDrafts = db.prepare(`SELECT ${draftSel} ORDER BY id ASC`).all(uid);
           first_pick = firstPickFrom(otherDrafts);
@@ -5172,10 +5185,10 @@ app.post('/api/posty/pick-feedback', requireAuth, (req, res) => {
       ON CONFLICT(user_id, post_id) DO NOTHING
     `).run(uid, post.id, post.caption || '', post.hashtags || '', post.scheduled_at || '', signal, post.week_key || '');
     const reply = choice === 'picked'
-      ? '¡Buena elección! 👌 Lo dejamos primero en tu semana ✨'
-      : 'Anotado ✍️ — la próxima apunto mejor 💪';
+      ? 'buena elección! 👌 lo dejamos primero en tu semana ✨'
+      : 'anotado ✍️ — la próxima apunto mejor 💪';
     res.json({ ok: true, reply });
-  } catch (e) { console.error('[posty] pick-feedback:', e.message); res.status(500).json({ error: 'No pude anotarlo 😅 Probá de nuevo' }); }
+  } catch (e) { console.error('[posty] pick-feedback:', e.message); res.status(500).json({ error: 'no pude anotarlo 😅 probá de nuevo' }); }
 });
 
 // Log de eventos locales del chat (confirmaciones de edición, fotos) y limpieza de la idea
@@ -5359,7 +5372,7 @@ app.post('/api/assets', requireAuth, express.raw({ type: ['image/*', 'video/*'],
   if (kind !== 'video' && !ct.startsWith('image/')) return res.status(400).json({ error: 'Eso no es una imagen 😅 Probá con un JPG o PNG' });
   if (kind === 'photo') {
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'photo'`).get(req.session.userId).c;
-    if (n >= 20) return res.status(400).json({ error: '¡20 fotos! Con esas me alcanza y sobra 📸' });
+    if (n >= 20) return res.status(400).json({ error: '20 fotos! con esas me alcanza y sobra 📸' });
   }
   if (kind === 'video') {
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind = 'video'`).get(req.session.userId).c;
@@ -5400,12 +5413,12 @@ function albumMissionPick(profile, weekKey) {
   else if (/moda|indument|ropa/.test(cat)) star = 'la prenda que más sale';
   else if (/belleza|estetic|peluquer|barber|spa/.test(cat)) star = 'un trabajo del que estés orgulloso';
   const list = [
-    { tag: 'producto', text: `Sacale una foto a ${star}, así como sale 📸` },
-    { tag: 'local', text: 'Mostrá tu local: la entrada o el rincón que más te guste 📸' },
-    { tag: 'equipo', text: /mascota|veterinar/.test(cat) ? 'Una foto con un cliente de cuatro patas recién atendido 🐾' : 'Una foto tuya o de tu equipo en acción, en pleno trabajo 📸' },
-    { tag: 'producto', text: '¿Qué hay de nuevo esta semana en tu negocio? Sacale una foto 📸' },
-    { tag: 'local', text: 'Un detalle de tu local que tus clientes aman: ese, en foto 📸' },
-    { tag: 'equipo', text: 'Manos a la obra: una foto de cómo se hace, del proceso 📸' },
+    { tag: 'producto', text: `sacale una foto a ${star}, así como sale 📸` },
+    { tag: 'local', text: 'mostrá tu local: la entrada o el rincón que más te guste 📸' },
+    { tag: 'equipo', text: /mascota|veterinar/.test(cat) ? 'una foto con un cliente de cuatro patas recién atendido 🐾' : 'una foto tuya o de tu equipo en acción, en pleno trabajo 📸' },
+    { tag: 'producto', text: 'qué hay de nuevo esta semana en tu negocio? sacale una foto 📸' },
+    { tag: 'local', text: 'un detalle de tu local que tus clientes aman: ese, en foto 📸' },
+    { tag: 'equipo', text: 'manos a la obra: una foto de cómo se hace, del proceso 📸' },
   ];
   const wk = Math.floor(Date.parse(weekKey + 'T12:00:00Z') / (7 * 86400000)) || 0;
   return list[Math.abs(wk) % list.length];
@@ -5808,7 +5821,7 @@ app.post('/api/album/photo', requireAuth, _albumRawImg, _albumRawVid, async (req
     const ct = req.get('Content-Type') || '';
     const isVideo = ct.startsWith('video/');
     const n = db.prepare(`SELECT COUNT(*) AS c FROM assets WHERE user_id = ? AND kind IN ('photo','video')`).get(uid).c;
-    if (n >= 20) return res.status(400).json({ error: '¡Tu álbum llegó a 20 archivos! Con eso Posty trabaja de sobra 📸 Borrá algo desde tu biblioteca si querés sumar más.' });
+    if (n >= 20) return res.status(400).json({ error: 'tu álbum llegó a 20 archivos! con eso posty trabaja de sobra 📸 borrá algo desde tu biblioteca si querés sumar más.' });
     if (isVideo) {
       if (!/mp4|quicktime/i.test(ct)) return res.status(400).json({ error: 'Ese formato de video no lo puedo usar 😅 Probá con un MP4 o MOV (el que sale del celular anda perfecto).' });
       const ext = ct.includes('quicktime') ? 'mov' : 'mp4';
@@ -5971,7 +5984,7 @@ app.post('/api/brand/logo-confirm', requireAuth, (req, res) => {
     // Limpiar la candidata después de confirmarla.
     try { db.prepare('UPDATE settings SET logo_candidate = ? WHERE user_id = ?').run('', uid); } catch (_) {}
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)')
-      .run(uid, 'assistant', '¡Listo! 🎉 Tu logo va a salir idéntico en todos tus posteos');
+      .run(uid, 'assistant', 'listo! 🎉 tu logo va a salir idéntico en todos tus posteos');
     res.json({ ok: true, path: cand });
   } catch (e) {
     console.error('[logo] confirm:', e.message);
@@ -6496,9 +6509,9 @@ app.patch('/api/posts/:id', requireAuth, (req, res) => {
           try {
             db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
               .run(req.session.userId,
-                `🚀 Ya aprobaste 10 posteos sin cambiarles nada — ¡parece que nos entendemos!\n\n` +
-                `¿Querés que de ahora en más los publique solo? Te aviso 30 min antes de cada uno por si querés frenarlo.\n\n` +
-                `Activá el Autopiloto en Ajustes cuando quieras ✨`);
+                `🚀 ya aprobaste 10 posteos sin cambiarles nada — parece que nos entendemos!\n\n` +
+                `querés que de ahora en más los publique solo? te aviso 30 min antes de cada uno por si querés frenarlo.\n\n` +
+                `activá el autopiloto en Ajustes cuando quieras ✨`);
           } catch (e) {}
           console.log(`[autopilot] usuario ${req.session.userId} desbloqueó la oferta (${u.clean_approvals} aprobaciones limpias)`);
         }
@@ -10455,7 +10468,7 @@ app.post('/api/proactive-shot-ask', requireAuth, async (req, res) => {
     const shots = await getShotsForWeek(uid);
     if (!shots.length) return res.json({ ok: true, asked: false });
     const lines = shots.slice(0, 3).map(s => `📸 ${String(s.foto || '').slice(0, 90)}`);
-    const msg = `¡Tu semana está armada! 🙌\nPara dejarla impecable con fotos reales, ¿me conseguís estas?\n${lines.join('\n')}\nMandamelas por acá cuando las tengas 👇`;
+    const msg = `tu semana está armada! 🙌\npara dejarla impecable con fotos reales, me conseguís estas?\n${lines.join('\n')}\nmandamelas por acá cuando las tengas 👇`;
     db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)`).run(uid, 'assistant', msg);
     db.prepare(`INSERT OR REPLACE INTO proactive_asks (user_id, kind, created_at) VALUES (?, 'fotos', datetime('now'))`).run(uid);
     res.json({ ok: true, asked: true });
@@ -10484,7 +10497,7 @@ app.post('/api/proactive-comments-ask', requireAuth, async (req, res) => {
     try { n = db.prepare(`SELECT COUNT(*) AS n FROM comment_queue WHERE user_id = ? AND status = 'pending'`).get(uid).n || 0; }
     catch (e) {}
     if (!n) return res.json({ ok: true, asked: false });
-    const msg = `💬 Tenés ${n} ${n === 1 ? 'comentario nuevo' : 'comentarios nuevos'} en Instagram. Escribime "comentarios" y los respondemos juntos 👇`;
+    const msg = `💬 tenés ${n} ${n === 1 ? 'comentario nuevo' : 'comentarios nuevos'} en instagram. escribime "comentarios" y los respondemos juntos 👇`;
     db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)`).run(uid, 'assistant', msg);
     db.prepare(`INSERT OR REPLACE INTO proactive_asks (user_id, kind, created_at) VALUES (?, 'comentarios', datetime('now'))`).run(uid);
     res.json({ ok: true, asked: true });
@@ -15133,21 +15146,21 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
   const msg = String(message || '').trim().slice(0, 300);
   const igKey = String(ig || '').trim().replace(/^@/, '').toLowerCase();
   const hintEn = String(langHint || '').trim().toLowerCase() === 'en';
-  if (!msg) return res.status(400).json({ error: hintEn ? 'Tell me what you want to change 🙂' : 'Escribí qué querés cambiar 🙂' });
-  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: hintEn ? 'Your Instagram is missing' : 'Falta tu Instagram' });
+  if (!msg) return res.status(400).json({ error: hintEn ? 'tell me what you want to change 🙂' : 'escribí qué querés cambiar 🙂' });
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: hintEn ? 'your instagram is missing' : 'falta tu instagram' });
   const chatChk = trialChatAllowed(ip);
   if (!chatChk.ok) return res.status(429).json({ error: 'chat_limit' });
   const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
-  if (!hit) return res.status(404).json({ error: hintEn ? 'We could not find your week. Build it again 🙂' : 'No encontramos tu semana. Generala de nuevo 🙂' });
+  if (!hit) return res.status(404).json({ error: hintEn ? 'we could not find your week. build it again 🙂' : 'no encontramos tu semana. generala de nuevo 🙂' });
   let out;
-  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: hintEn ? 'We could not read your week' : 'No pudimos leer tu semana' }); }
+  try { out = JSON.parse(hit.payload); } catch (e) { return res.status(500).json({ error: hintEn ? 'we could not read your week' : 'no pudimos leer tu semana' }); }
   // (v274 · MODO EN) El idioma del chat sale del payload de la prueba: si
   // la semana nació EN, Posty edita y responde en inglés (precios USD).
   const en = out.lang === 'en' || hintEn;
   const posts = out.posts || [];
-  if (!posts.length) return res.status(404).json({ error: en ? 'We could not find your posts' : 'No encontramos tus posteos' });
+  if (!posts.length) return res.status(404).json({ error: en ? 'we could not find your posts' : 'no encontramos tus posteos' });
   const apiKey = process.env.OPENAI_API_KEY || '';
-  if (!apiKey) return res.status(500).json({ error: en ? 'Chat is not available right now. Try again in a few minutes.' : 'El chat no está disponible ahora. Probá en unos minutos.' });
+  if (!apiKey) return res.status(500).json({ error: en ? 'chat is not available right now. try again in a few minutes.' : 'el chat no está disponible ahora. probá en unos minutos.' });
   const week = out.week || [];
   const postList = posts.map((p, i) => {
     const w = week.find((x) => x.post === i);
@@ -15165,7 +15178,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'You cannot change designs, photos or headlines (they are part of the image). If they ask to change a post PHOTO, guide them: "tap the post and then the 📷 Change photo button". ' +
     'If they ask to change COLORS, guide them: "tap the 🎨 Colors button right below". ' +
     'If they ask to change the design HEADLINE, explain in one line that the headline is part of the design and offer to improve the caption instead. ' +
-    'Write in clear US English, warm and confident, 1-2 lines.\n\n' +
+    'Write in clear US English, warm and confident, 1-2 lines. Your visible "reply" text is a WhatsApp-style chat: write it ALL in lowercase (even at the start of sentences), short and friendly — e.g. "done! i changed that caption for you ✅" or "sure — what would you tweak first?". The texts you edit (captions and hashtags) are the work product: they keep their normal published capitalization and punctuation.\n\n' +
     'Posts (index, day, current caption, current hashtags):\n' +
     postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
     (hist ? '\n\nRecent history:\n' + hist : '') +
@@ -15184,7 +15197,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'NO podés cambiar diseños, fotos ni titulares (vienen en la imagen). Si te pide cambiar la FOTO de un posteo, guialo: "tocá el posteo y después el botón 📷 Cambiar foto". ' +
     'Si te pide cambiar los COLORES, guialo: "tocá el botón 🎨 Colores que está acá abajo". ' +
     'Si te pide cambiar el TITULAR del diseño, explicale en una línea que el titular es parte del diseño y ofrecé mejorar el caption en su lugar. ' +
-    'Escribís en español rioplatense con voseo, tono cercano y canchero, 1-2 líneas.\n\n' +
+    'Escribís en español rioplatense con voseo, tono cercano y canchero, 1-2 líneas. Tu texto visible ("reply") es un chat de WhatsApp: escribilo TODO en minúscula (también al arrancar cada frase) y sin signos de apertura (nada de ¡ ni ¿; los de cierre van normal) — ej: "listo! te cambié ese caption ✅" o "dale — qué querés tocar primero?". Los textos que editás (captions y hashtags) son el trabajo que se publica: mantienen su escritura normal.\n\n' +
     'Posteos (índice, día, caption actual, hashtags actuales):\n' +
     postList.map((p) => `#${p.i} (${p.dia}): "${p.caption.slice(0, 220)}" [${p.hashtags.slice(0, 120)}]`).join('\n') +
     (hist ? '\n\nHistorial reciente:\n' + hist : '') +
@@ -15226,13 +15239,13 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
       try { db.prepare('UPDATE trial_cache SET payload = ? WHERE ig = ?').run(JSON.stringify(out), igKey); } catch (e) {}
     }
     res.json({
-      reply: String(parsed.reply || (en ? 'Done ✅ Anything else?' : 'Listo ✅ ¿Algo más?')).slice(0, 300),
+      reply: chatStripOpen(String(parsed.reply || (en ? 'done ✅ anything else?' : 'listo ✅ algo más?'))).slice(0, 300),
       edits: edits.map((e) => ({ post: e.post, caption: posts[e.post].caption, hashtags: posts[e.post].hashtags })),
       chat_remaining: chatChk.remaining,
     });
   } catch (e) {
     console.error('[posta] trial chat:', e.message);
-    res.status(500).json({ error: en ? 'I could not process that. Try again 🙂' : 'No pude procesar tu pedido. Probá de nuevo 🙂' });
+    res.status(500).json({ error: en ? 'i could not process that. try again 🙂' : 'no pude procesar tu pedido. probá de nuevo 🙂' });
   }
 });
 
@@ -15259,6 +15272,7 @@ const POSTY_CHAT_SYS = [
   '',
   'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Nunca devolvés una pregunta vacía: siempre proponés un paso concreto. La prueba gratis de 3 días (sin tarjeta) se ofrece cuando encaja en la conversación — NO en cada mensaje.',
   'FORMATO: texto plano, SIN markdown: nada de asteriscos, almohadillas ni negritas. Si enumerás planes o puntos, escribilos en frases corridas o en líneas simples empezando con "• ".',
+  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale $39.900 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
   '',
   'QUÉ ES POSTY (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana (7 posteos + 1 reel en el plan Esencial), escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
@@ -15269,9 +15283,9 @@ const POSTY_CHAT_SYS = [
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. La constancia y el trabajo los pone Posty; los resultados dependen de cada negocio. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba.',
   '- Sobre conectar y publicar: la conexión del Instagram propio y la publicación 100% automática están en la revisión final de Meta. Hoy el cliente prueba todo, ve su semana completa y su análisis; la publicación automática en su cuenta se activa apenas Meta dé el OK final. Decilo así, con naturalidad, SOLO si la persona pregunta por publicar o conectar su cuenta — no lo traigas vos.',
   '',
-  'IDENTIDAD: sos una inteligencia artificial, el robot Posty. Si preguntan si sos una persona, un robot o una IA, respondé con orgullo: "Soy Posty 🤖, una inteligencia artificial — el mismo que te va a manejar el Instagram. Detrás mío hay un equipo humano que revisa todo."',
+  'IDENTIDAD: sos una inteligencia artificial, el robot Posty. Si preguntan si sos una persona, un robot o una IA, respondé con orgullo: "soy posty 🤖, una inteligencia artificial — el mismo que te va a manejar el instagram. detrás mío hay un equipo humano que revisa todo."',
   '',
-  'ESCALACIÓN: si la persona quiere contratar algo a medida, tiene un problema con su cuenta o con un pago, pide hablar con una persona, o no podés resolver lo que pide, pedile UN dato de contacto (WhatsApp o email) así: "Eso te lo resuelve una persona de mi equipo. ¿Me dejás tu WhatsApp o tu email y te contactan hoy?" Cuando la persona deje su contacto (o acepte dejarlo), terminá tu respuesta con el token interno [[ESCALAR]] al final del texto: ese token es invisible para la persona y marca que un humano toma el caso. No uses ese token en ningún otro momento ni lo menciones jamás.',
+  'ESCALACIÓN: si la persona quiere contratar algo a medida, tiene un problema con su cuenta o con un pago, pide hablar con una persona, o no podés resolver lo que pide, pedile UN dato de contacto (WhatsApp o email) así: "eso te lo resuelve una persona de mi equipo. me dejás tu whatsapp o tu email y te contactan hoy?" Cuando la persona deje su contacto (o acepte dejarlo), terminá tu respuesta con el token interno [[ESCALAR]] al final del texto: ese token es invisible para la persona y marca que un humano toma el caso. No uses ese token en ningún otro momento ni lo menciones jamás.',
 ].join('\n');
 
 // (v276) System prompt EN del chat público: espejo del ES, en inglés US y
@@ -15283,6 +15297,7 @@ const POSTY_CHAT_SYS_EN = [
   '',
   'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
   'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
+  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $49 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
   '',
   'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts + 1 reel on the Essential plan), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
@@ -15293,9 +15308,9 @@ const POSTY_CHAT_SYS_EN = [
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
   '- About connecting and posting: connecting your own Instagram and 100% automatic posting are in Meta\'s final review. Today the client tries everything, sees their full week and their analysis; automatic posting to their account turns on as soon as Meta gives the final OK. Say it just like that, naturally, ONLY if the person asks about posting or connecting their account — do not bring it up yourself.',
   '',
-  'IDENTITY: you are an artificial intelligence, the robot Posty. If they ask whether you are a person, a robot or an AI, answer proudly: "I\'m Posty 🤖, an artificial intelligence — the same one that will run your Instagram. Behind me there is a human team that reviews everything."',
+  'IDENTITY: you are an artificial intelligence, the robot Posty. If they ask whether you are a person, a robot or an AI, answer proudly: "i\'m posty 🤖, an artificial intelligence — the same one that will run your instagram. behind me there is a human team that reviews everything."',
   '',
-  'ESCALATION: if the person wants something custom, has a problem with their account or a payment, asks to talk to a person, or you cannot solve what they are asking, ask for ONE contact detail (WhatsApp or email) like this: "That is something a person on my team will solve for you. Can you leave me your WhatsApp or your email and they will contact you today?" When the person leaves their contact (or agrees to leave it), end your reply with the internal token [[ESCALAR]] at the very end of the text: that token is invisible to the person and marks that a human takes the case. Never use that token at any other time and never mention it.',
+  'ESCALATION: if the person wants something custom, has a problem with their account or a payment, asks to talk to a person, or you cannot solve what they are asking, ask for ONE contact detail (WhatsApp or email) like this: "that is something a person on my team will solve for you. can you leave me your whatsapp or your email and they will contact you today?" When the person leaves their contact (or agrees to leave it), end your reply with the internal token [[ESCALAR]] at the very end of the text: that token is invisible to the person and marks that a human takes the case. Never use that token at any other time and never mention it.',
 ].join('\n');
 
 function postyChatParse(raw) {
@@ -15305,7 +15320,8 @@ function postyChatParse(raw) {
     escalate = true;
     text = text.split('[[ESCALAR]]').join('').trim();
   }
-  if (!text) text = '¡Listo! 🤖';
+  text = chatStripOpen(text);
+  if (!text) text = 'listo! 🤖';
   return { text: text.slice(0, 1500), escalate };
 }
 
@@ -15360,10 +15376,10 @@ function postyChatSave(sessionId, page, thread, reply, escalate) {
 }
 
 app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) => {
-  const FALLBACK = 'Uy, se me cortó un segundo 🤖 Probá de nuevo en un ratito — y si querés, dejame tu WhatsApp o tu email y te escribe una persona de mi equipo.';
-  const PAUSE = 'Hoy charlamos un montón 🤖 Dejame descansar un rato y seguimos en unas horas. Mientras tanto, tu semana gratis te espera: son 3 días, sin tarjeta.';
-  const FALLBACK_EN = 'Oops, I glitched for a second 🤖 Try again in a moment — and if you like, leave me your WhatsApp or email and someone from my team will write to you.';
-  const PAUSE_EN = 'We chatted a lot today 🤖 Let me rest a bit and we will pick this up in a few hours. Meanwhile, your free week is waiting: 3 days, no card required.';
+  const FALLBACK = 'uy, se me cortó un segundo 🤖 probá de nuevo en un ratito — y si querés, dejame tu whatsapp o tu email y te escribe una persona de mi equipo.';
+  const PAUSE = 'hoy charlamos un montón 🤖 dejame descansar un rato y seguimos en unas horas. mientras tanto, tu semana gratis te espera: son 3 días, sin tarjeta.';
+  const FALLBACK_EN = 'oops, i glitched for a second 🤖 try again in a moment — and if you like, leave me your whatsapp or email and someone from my team will write to you.';
+  const PAUSE_EN = 'we chatted a lot today 🤖 let me rest a bit and we will pick this up in a few hours. meanwhile, your free week is waiting: 3 days, no card required.';
   const body = req.body || {};
   const lang = body.lang === 'en' ? 'en' : 'es';
   let sessionId = String(body.session_id || '').trim();
@@ -15380,8 +15396,8 @@ app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) =>
     .filter((m) => m.text.trim());
   if (!thread.length || thread[thread.length - 1].role !== 'user') {
     return res.json({ ok: true, reply: lang === 'en'
-      ? 'Hi! I\'m Posty 🤖 How can I help? You can ask me what I do, how much it costs or how the free trial works.'
-      : '¡Hola! Soy Posty 🤖 ¿En qué te ayudo? Podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
+      ? 'hi! i\'m posty 🤖 how can i help? you can ask me what i do, how much it costs or how the free trial works.'
+      : 'hola! soy posty 🤖 en qué te ayudo? podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   }
   const ip = demo.clientIp(req);
   if (!postyChatAllowed(ip + '|' + sessionId)) {
@@ -15544,7 +15560,7 @@ app.get('/api/trial/week', (req, res) => {
   // (v274) El idioma manda: ?lang=en (funnel EN) o el del payload guardado.
   const qLang = String(req.query.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
   const igKey = String(req.query.ig || '').trim().replace(/^@/, '').toLowerCase();
-  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: qLang === 'en' ? 'Your Instagram is missing' : 'Falta tu Instagram' });
+  if (!igKey || !/^[a-z0-9._]{1,30}$/.test(igKey)) return res.status(400).json({ error: qLang === 'en' ? 'your instagram is missing' : 'falta tu instagram' });
   const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
   if (!hit || Date.now() - hit.created_at >= 72 * 3600 * 1000) {
     if (hit) { try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey); } catch (e) {} }
@@ -15990,7 +16006,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v304';
+const BUILD_ID = '20261021-v305';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v304'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v305'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -634,7 +634,7 @@ function wireIdeasBlock(slot) {
         await api.post('/api/ideas/' + id + '/make', {}, { timeout: 240000 });
         if (typeof IDEAS_PENDING_COUNT === 'number') IDEAS_PENDING_COUNT = Math.max(0, IDEAS_PENDING_COUNT - 1);
         paintIdeasChrome();
-        if (card) card.innerHTML = '<div class="idea-done">✅ ¡Listo! Tu posteo quedó como borrador en tu semana — revisalo cuando quieras.</div>';
+        if (card) card.innerHTML = '<div class="idea-done">✅ listo! tu posteo quedó como borrador en tu semana — revisalo cuando quieras.</div>';
         try { toast('✅ Posteo creado desde tu idea'); } catch (e) {}
         setTimeout(() => { refreshIdeas(); try { render(); } catch (e) {} }, 900);
       } catch (e) {
@@ -693,9 +693,9 @@ function questionCardHTML(q) {
     h += '</div>';
   }
   if (q.allow_text !== false) {
-    h += '<div class="pq-text-row"><input type="text" class="in pq-input" id="pqInput" placeholder="O escribilo con tus palabras…" maxlength="200" autocomplete="off"><button type="button" class="btn btn-primary btn-sm" id="pqSend">Guardar</button></div>';
+    h += '<div class="pq-text-row"><input type="text" class="in pq-input" id="pqInput" placeholder="o escribilo con tus palabras…" maxlength="200" autocomplete="off"><button type="button" class="btn btn-primary btn-sm" id="pqSend">Guardar</button></div>';
   }
-  h += '<div class="pq-foot"><button type="button" class="btn btn-ghost btn-sm" id="pqDismiss">Ahora no</button><span class="pq-hint">Una sola por semana: es para que tus posteos sean de TU negocio, no genéricos.</span></div>';
+  h += '<div class="pq-foot"><button type="button" class="btn btn-ghost btn-sm" id="pqDismiss">Ahora no</button><span class="pq-hint">una sola por semana: es para que tus posteos sean de tu negocio, no genéricos.</span></div>';
   h += '</div>';
   return h;
 }
@@ -731,17 +731,17 @@ function wireQuestionCard(slot) {
   const answer = async (payload) => {
     try {
       await api.post('/api/questions/' + id + '/answer', payload);
-      questionSwap('<div class="hs-question"><div class="hs-question-text">✅ ¡Gracias! Ya lo tengo en cuenta para tus próximos posteos.</div></div>');
-      try { toast('✅ ¡Gracias! Respuesta guardada'); } catch (e) {}
+      questionSwap('<div class="hs-question"><div class="hs-question-text">✅ gracias! ya lo tengo en cuenta para tus próximos posteos.</div></div>');
+      try { toast('✅ gracias! respuesta guardada'); } catch (e) {}
     } catch (e) {
-      try { toast('😅 ' + ((e && e.message) || 'No pude guardarla, probá de nuevo')); } catch (e2) {}
+      try { toast('😅 ' + ((e && e.message) || 'no pude guardarla, probá de nuevo')); } catch (e2) {}
     }
   };
   card.querySelectorAll('[data-q-opt]').forEach((b) => {
     b.onclick = () => {
       const v = b.getAttribute('data-q-opt');
       // "No, es otro": no envía nada — enfoca el texto para que lo escriba.
-      if (v === '__otro__') { if (inp) { inp.focus(); inp.placeholder = 'Escribí cuál es…'; } return; }
+      if (v === '__otro__') { if (inp) { inp.focus(); inp.placeholder = 'escribí cuál es…'; } return; }
       b.disabled = true;
       answer({ value: v });
     };
@@ -749,7 +749,7 @@ function wireQuestionCard(slot) {
   const send = card.querySelector('#pqSend');
   const doSend = () => {
     const t = String((inp && inp.value) || '').trim();
-    if (!t) { if (inp) { inp.focus(); inp.placeholder = 'Escribí tu respuesta 😊'; } return; }
+    if (!t) { if (inp) { inp.focus(); inp.placeholder = 'escribí tu respuesta 😊'; } return; }
     answer({ text: t });
   };
   if (send) send.onclick = doSend;
@@ -758,7 +758,7 @@ function wireQuestionCard(slot) {
   if (dis) dis.onclick = async () => {
     dis.disabled = true;
     try { await api.post('/api/questions/' + id + '/dismiss', {}); } catch (e) {}
-    questionSwap('<div class="hs-question"><div class="hs-question-text">👌 Dale — la semana que viene te pregunto otra cosa.</div></div>');
+    questionSwap('<div class="hs-question"><div class="hs-question-text">👌 dale — la semana que viene te pregunto otra cosa.</div></div>');
   };
 }
 function cleanIgHandle(v) {
@@ -2195,7 +2195,7 @@ function setupChecklistCelebrate(n) {
     try { flag = localStorage.getItem(SETUP_CELEBRATED_KEY); } catch (e) {}
     if (flag) return; // ya festejó: jamás repetir
     try { localStorage.setItem(SETUP_CELEBRATED_KEY, '1'); } catch (e) {} // flag ANTES de los efectos
-    const msg = '¡Listo! Ya estoy trabajando para vos 🎉';
+    const msg = 'listo! ya estoy trabajando para vos 🎉';
     chatSay(msg); // mensaje de Posty en el chat (persiste en el servidor vía /api/ideas/chat/log)
     toast('🎉 <b>¡Listo!</b> Ya estoy trabajando para vos 🎉'); // toast visible en la app
     postyConfetti(); // confetti sutil
@@ -4810,7 +4810,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
   ${wrap}
     ${title}${desc}
     <div class="chat-box" id="chatBox">
-      ${msgs || `<div class="chat-msg ai">¡Hola! 👋 ¿Qué hacemos hoy?</div>`}
+      ${msgs || `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>`}
     </div>${upRow}${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
@@ -4992,9 +4992,9 @@ async function chatUploadPhotos(files) {
       CHAT_PHOTO_IDX = CHAT_PHOTOS.length - 1;
       renderChatPreviews();
       renderChatStoryboard();
-      chatSay('📸 ¡Agregado! Actualicé los ejemplos 👇');
+      chatSay('📸 agregado! actualicé los ejemplos 👇');
     } else {
-      chatSay('📸 ¡Agregado! La IA también lo puede ver 👇');
+      chatSay('📸 agregado! la IA también lo puede ver 👇');
     }
   } catch (e) {
     if (m) m.innerHTML = `<div class="err">${esc(e.message || 'No pude subirlo 😅 Probá de nuevo')}</div>`;
@@ -5021,7 +5021,7 @@ function chatEditCommand(text) {
     m = t.match(/(?:ponelo|ponela|cambial[oe]|hacelo|hacela|en|de\s+color|con\s+color)\s+(?:color\s+)?(rojo|roja|rojos|rojas|azul|azules|celeste|verde|verdes|amarillo|amarillos|negro|blanco|rosa|rosas|naranja|violeta|dorado)\b/i);
     if (m && ORDER_COLORS[m[1].toLowerCase()]) {
       CUSTOM_PAL = orderPalette([ORDER_COLORS[m[1].toLowerCase()]]);
-      chatSay(`✅ Ahora en ${m[1].toLowerCase()} 👇`);
+      chatSay(`✅ ahora en ${m[1].toLowerCase()} 👇`);
       renderChatPreviews();
       return true;
     }
@@ -5039,7 +5039,7 @@ function chatEditCommand(text) {
       if (nt.length >= 2 && nt.length <= 50) {
         CHAT_IDEA.titulo = nt;
         CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0; // el texto se regenera para el nuevo título
-        chatSay(`✅ Título actualizado: "${nt}". Fijate los ejemplos 👇`);
+        chatSay(`✅ título actualizado: "${nt}". fijate los ejemplos 👇`);
         chatRenderProposal();
         refreshChatCaption();
         return true;
@@ -5050,7 +5050,7 @@ function chatEditCommand(text) {
   const nPhotos = CHAT_PHOTOS.length;
   if (nPhotos > 1 && /\botra\s+foto\b/i.test(t)) {
     CHAT_PHOTO_IDX = (CHAT_PHOTO_IDX + 1) % nPhotos;
-    chatSay('✅ Cambié la foto. ¿Te gusta más así? 👇');
+    chatSay('✅ cambié la foto. te gusta más así? 👇');
     renderChatPreviews();
     renderChatStoryboard();
     return true;
@@ -5060,7 +5060,7 @@ function chatEditCommand(text) {
     const idx = parseInt(m[1], 10) - 1;
     if (idx >= 0 && idx < nPhotos) {
       CHAT_PHOTO_IDX = idx;
-      chatSay(`✅ Usando la foto ${idx + 1} 👇`);
+      chatSay(`✅ usando la foto ${idx + 1} 👇`);
       renderChatPreviews();
       renderChatStoryboard();
       return true;
@@ -5068,7 +5068,7 @@ function chatEditCommand(text) {
   }
   // — Cambiar el estilo —
   if (/\botro\s+(estilo|diseño|fondo)\b/i.test(t) || /\b(cambi[ae]|ponele)\s+(otro\s+)?(fondo|estilo|diseño)\b/i.test(t) || /\bm[aá]s\s+(claro|oscuro)\b/i.test(t)) {
-    chatSay('✅ Generando con otro estilo 👇');
+    chatSay('✅ generando con otro estilo 👇');
     renderChatPreviews();
     renderChatStoryboard();
     return true;
@@ -5109,7 +5109,7 @@ function chatDismissProposal() {
   CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
   CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
   chatRenderProposal();
-  chatSay('Dale, la dejamos por acá 👍 ¿Qué más hacemos?');
+  chatSay('dale, la dejamos por acá 👍 qué más hacemos?');
   try { api.post('/api/ideas/chat/log', { clearIdea: true }).catch(() => {}); } catch (e) {}
 }
 
@@ -5130,9 +5130,9 @@ function chatDraftsCtx() {
 // éxito o error — para no dejar intervalos zombis. Si el elemento se desconecta
 // del DOM sin stop, el intervalo se apaga solo (seguro extra, no reemplazo).
 const POSTY_THINKING = [
-  'Estoy eligiendo tu mejor foto 📸…',
-  'Escribiendo en tu tono ✍️…',
-  'Dándole los toques finales ✨…',
+  'estoy eligiendo tu mejor foto 📸…',
+  'escribiendo en tu tono ✍️…',
+  'dándole los toques finales ✨…',
 ];
 function postyThinking(el, stages) {
   if (!el) return function () {};
@@ -5341,9 +5341,9 @@ async function showCommentsInChat() {
         <div class="hint" data-chatcmmsg="${c.id}" style="margin:6px 0 0"></div>
       </div>`).join('')}
     </div>`
-    : `<div class="chat-msg ai">💬 No tenés comentarios pendientes — todo respondido 👌</div>`;
+    : `<div class="chat-msg ai">💬 no tenés comentarios pendientes — todo respondido 👌</div>`;
   box.insertAdjacentHTML('beforeend', html);
-  const say = list.length ? `Te muestro los ${list.length} comentarios para responder 👆` : 'No tenés comentarios pendientes.';
+  const say = list.length ? `te muestro los ${list.length} comentarios para responder 👆` : 'no tenés comentarios pendientes.';
   CHAT.push({ role: 'assistant', text: say });
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
   bindChatComments();
@@ -5404,9 +5404,9 @@ async function showDMsInChat() {
         <div class="hint" data-chatdmmsg="${d.id}" style="margin:6px 0 0"></div>
       </div>`).join('')}
     </div>`
-    : `<div class="chat-msg ai">📩 No tenés mensajes pendientes — bandeja al día 👌</div>`;
+    : `<div class="chat-msg ai">📩 no tenés mensajes pendientes — bandeja al día 👌</div>`;
   box.insertAdjacentHTML('beforeend', html);
-  const say = list.length ? `Te muestro los ${list.length} mensajes para responder 👆` : 'No tenés mensajes pendientes.';
+  const say = list.length ? `te muestro los ${list.length} mensajes para responder 👆` : 'no tenés mensajes pendientes.';
   CHAT.push({ role: 'assistant', text: say });
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
   bindChatDMs();
@@ -5469,9 +5469,9 @@ async function showReviewsInChat() {
         <div class="hint" data-chatrvmsg="${rv.id}" style="margin:6px 0 0"></div>
       </div>`).join('')}
     </div>`
-    : `<div class="chat-msg ai">⭐ No tenés reseñas pendientes — todo respondido 👏</div>`;
+    : `<div class="chat-msg ai">⭐ no tenés reseñas pendientes — todo respondido 👏</div>`;
   box.insertAdjacentHTML('beforeend', html);
-  const say = list.length ? `Te muestro las ${list.length} reseñas para responder 👇` : 'No tenés reseñas pendientes.';
+  const say = list.length ? `te muestro las ${list.length} reseñas para responder 👇` : 'no tenés reseñas pendientes.';
   CHAT.push({ role: 'assistant', text: say });
   try { api.post('/api/ideas/chat/log', { messages: [{ role: 'assistant', text: say }] }).catch(() => {}); } catch (e) {}
   bindChatReviews();
@@ -5589,14 +5589,14 @@ async function chatExchange({ text, display, extra, pushed }) {
     postyNotify('Posty', r.reply || '…');
     // El ADN se completó en esta respuesta (bloque ```dna): invitar a generar de nuevo.
     // Nunca auto-disparar la generación: el cliente toca "⚡ Armemos tu semana" cuando quiere.
-    if (r.dna) chatSay('¡Ya sé lo esencial de tu negocio! 🎉 Ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
+    if (r.dna) chatSay('ya sé lo esencial de tu negocio! 🎉 ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
     // Opciones tocables que propone la IA (ej: "¿vender o alcance?")
     if (r.options && Array.isArray(r.options) && r.options.length) renderChatOptions(r.options);
     // La IA editó un borrador directo → refrescar la revisión y mostrar la imagen en el chat
     if (r.edit && r.edit.ok) {
       try { render(); } catch (e) {}
       if (r.edit.photoFailed) {
-        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">No pude cambiar la foto 😅 ¿me la mandás de nuevo?</div>`);
+        box.insertAdjacentHTML('beforeend', `<div class="chat-msg ai">no pude cambiar la foto 😅 me la mandás de nuevo?</div>`);
         chatScroll();
       }
       if (Array.isArray(r.edit.images) && r.edit.images.length) {
@@ -5675,7 +5675,7 @@ async function chatMakePost(asVideo) {
     if (m) {
       m.innerHTML = '<div class="okmsg"><span id="chatMkThinking"></span></div>';
       postyThinking($('#chatMkThinking'), asVideo
-        ? ['Estoy eligiendo tu mejor foto 📸…', 'Armando las escenas de tu reel 🎬…', 'Dándole los toques finales ✨…']
+        ? ['estoy eligiendo tu mejor foto 📸…', 'armando las escenas de tu reel 🎬…', 'dándole los toques finales ✨…']
         : POSTY_THINKING);
     }
     if (!asVideo && CHAT_PREVIEWS.length) {
@@ -5684,13 +5684,13 @@ async function chatMakePost(asVideo) {
       await draftFromIdea(idea, asVideo, 0, true);
     }
     stopPostyThinking(document.getElementById('chatMkThinking'));
-    if (m) m.innerHTML = '<div class="okmsg">¡Listo! ✅</div>';
+    if (m) m.innerHTML = '<div class="okmsg">listo! ✅</div>';
     CHAT_IDEA = null;
     CUSTOM_PAL = null;
     CHAT_PREVIEWS = []; CHAT_PREV_SEL = 0;
     CHAT_PHOTOS = []; CHAT_PHOTO_IDX = 0; CHAT_STYLE_IDX = 0;
     CHAT_CAPTION = null; CHAT_CAPTIONS = []; CHAT_CAP_SEL = 0;
-    const doneText = '¡Listo! Te lo dejé en revisión acá arriba 👆 Nada se programa hasta que vos lo apruebes.';
+    const doneText = 'listo! te lo dejé en revisión acá arriba 👆 nada se programa hasta que vos lo apruebes.';
     try { api.post('/api/ideas/chat/log', { clearIdea: true, messages: [{ role: 'assistant', text: doneText }] }).catch(() => {}); } catch (e) {}
     CHAT.push({ role: 'assistant', text: doneText });
     render();
@@ -5718,12 +5718,12 @@ function voiceTick() {
   const s = Math.floor((Date.now() - VOICE_START) / 1000);
   const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   if (b) b.textContent = `🔴 ${t}`;
-  if (msg) msg.innerHTML = `<div class="okmsg">🔴 Grabando ${t} — tocá de nuevo para enviar</div>`;
+  if (msg) msg.innerHTML = `<div class="okmsg">🔴 grabando ${t} — tocá de nuevo para enviar</div>`;
 }
 async function voiceToggle() {
   if (VOICE_REC) { voiceStop(); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-    chatSay('🎙 Tu navegador no soporta notas de voz. Escribime el pedido 👇');
+    chatSay('🎙 tu navegador no soporta notas de voz. escribime el pedido 👇');
     return;
   }
   try {
@@ -5745,7 +5745,7 @@ async function voiceToggle() {
     voiceTick();
     setTimeout(() => { if (VOICE_REC) voiceStop(); }, 90000); // tope 90 segundos
   } catch (e) {
-    chatSay('🎙 No pudimos usar el micrófono. Revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇');
+    chatSay('🎙 no pudimos usar el micrófono. revisá el permiso (Ajustes → Safari → Micrófono) o escribime el pedido 👇');
   }
 }
 function voiceStop() {
@@ -5770,7 +5770,7 @@ async function voiceSend() {
     fr.onerror = () => res('');
     fr.readAsDataURL(blob);
   });
-  if (!dataUrl) { chatSay('🎙 No pudimos procesar la nota de voz. Probá de nuevo o escribime 👇'); return; }
+  if (!dataUrl) { chatSay('🎙 no pudimos procesar la nota de voz. probá de nuevo o escribime 👇'); return; }
   return chatExchange({ text: '🎙️ Nota de voz', extra: { audio: dataUrl } });
 }
 
@@ -8476,7 +8476,7 @@ async function runAutopilot(n, tag) {
     if (dnaGate && !dnaGate.complete) {
       const postsNow = await api.get('/api/posts').catch(() => []);
       const hasDrafts = postsNow.some(p => p.status === 'draft');
-      prog.innerHTML = `<div class="okmsg">👋 Para que tu semana salga buena de verdad, charlemos 2 minutos de tu negocio 👇` +
+      prog.innerHTML = `<div class="okmsg">👋 para que tu semana salga buena de verdad, charlemos 2 minutos de tu negocio 👇` +
         (hasDrafts ? `<br><button class="btn btn-ghost btn-sm" id="dnaGateLater-${t}" style="margin-top:10px">Hacerlo después →</button>` : '') +
         `</div>`;
       const laterBtn = document.getElementById('dnaGateLater-' + t);
@@ -8515,12 +8515,12 @@ async function runAutopilot(n, tag) {
     }
     let ideas = IDEAS;
     if (!ideas.length) {
-      prog.innerHTML = `<div class="okmsg">💡 Generando ideas para tu negocio...</div>`;
+      prog.innerHTML = `<div class="okmsg">💡 generando ideas para tu negocio...</div>`;
       const r = await api.post('/api/ideas', {});
       // Sin datos del negocio no generamos nada: primero el onboarding conversacional.
       // (Generar a ciegas es lo que produce posteos inventados que no son el negocio.)
       if (r.need_profile) {
-        prog.innerHTML = `<div class="okmsg">👋 Para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/schedule" style="color:var(--cel);font-weight:700">hacelo después →</a></div>`;
+        prog.innerHTML = `<div class="okmsg">👋 para armar tu semana primero tengo que conocer tu negocio: <a href="#/app/onboarding" style="color:var(--cel);font-weight:700">charlamos 2 minutos</a> o <a href="#/app/schedule" style="color:var(--cel);font-weight:700">hacelo después →</a></div>`;
         return;
       }
       ideas = r.ideas || [];
@@ -8543,7 +8543,7 @@ async function runAutopilot(n, tag) {
     let quotaStopped = false, nextIdx = 0, doneCount = 0, firstErr = null;
     const poolRender = () => {
       // Mensaje de completitud desordenada: importa cuántos están listos, no cuál.
-      prog.innerHTML = `<div class="okmsg">⏳ Creando… ${doneCount} de ${picks.length} listos</div>${liveHTML()}`;
+      prog.innerHTML = `<div class="okmsg">⏳ creando… ${doneCount} de ${picks.length} listos</div>${liveHTML()}`;
     };
     async function apWorker() {
       while (!quotaStopped) {
@@ -8587,7 +8587,7 @@ async function runAutopilot(n, tag) {
     await Promise.all(Array.from({ length: Math.min(POOL_SIZE, picks.length) }, apWorker));
     // Si no salió NINGÚN borrador, algo está roto: mostrar el error en vez de un festejo vacío
     if (firstErr && !live.length) throw firstErr;
-    prog.innerHTML = `<div class="okmsg">🎉 ¡Tu semana está lista! La armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
+    prog.innerHTML = `<div class="okmsg">🎉 tu semana está lista! la armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
     // Chat-first: si el usuario está en el chat, la promesa "te aviso acá mismo"
     // se cumple acá — el aviso cae como mensaje de la IA (sin tarjetas: la
     // gestión vive en Mi semana) y se refrescan píldora + chips.
@@ -8604,9 +8604,9 @@ async function runAutopilot(n, tag) {
     // más presencia, cero trabajo extra. Caen en "Revisá tu semana" al refrescar.
     // (Las historias no consumen cupo; si el cupo frenó la corrida, tampoco se crean.)
     if (!quotaStopped) try {
-      prog.innerHTML = `<div class="okmsg">⏳ Creando tus historias y reels ✨...</div>${liveHTML()}`;
+      prog.innerHTML = `<div class="okmsg">⏳ creando tus historias y reels ✨...</div>${liveHTML()}`;
       api.post('/api/posts/generate-extras', {}).catch((e) => console.error('[extras]', e.message));
-      prog.innerHTML = `<div class="okmsg">🎉 ¡Tu semana está lista! La armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
+      prog.innerHTML = `<div class="okmsg">🎉 tu semana está lista! la armé con tu marca y tu estilo 💪</div>${liveHTML()}`;
     } catch (e) { console.error('[extras]', e.message); }
     track('week_generate_done', { count: live.length, ms: Date.now() - apT0, tag: t });
     // Racha: registrar la semana armada (idempotente por semana)
@@ -9004,7 +9004,7 @@ async function publishNowFlow(postId, mount) {
     catch (e) { continue; }
     if (st.status === 'published') {
       track('post_publish', { id: postId });
-      mount.innerHTML = `<div class="okmsg">✅ ¡Publicado en Instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ↗</a>` : ''}</div>`;
+      mount.innerHTML = `<div class="okmsg">✅ publicado en instagram! ${st.ig_permalink ? `<a href="${esc(st.ig_permalink)}" target="_blank" style="color:#2793C8">Ver en IG ↗</a>` : ''}</div>`;
       return { ok: true, permalink: st.ig_permalink };
     }
     if (st.status === 'failed' || st.status === 'cancelled') {
@@ -9013,7 +9013,7 @@ async function publishNowFlow(postId, mount) {
     }
     paint(Date.now() - t0 > 9000 ? 1 : 0, false);
   }
-  mount.innerHTML = `<div class="okmsg">⏳ Sigue publicándose… lo ves en Schedule en un minuto.</div>`;
+  mount.innerHTML = `<div class="okmsg">⏳ sigue publicándose… lo ves en Schedule en un minuto.</div>`;
   return { ok: true, pending: true };
 }
 
@@ -9238,7 +9238,7 @@ async function firstPublishFlow() {
         if (m0) m0.innerHTML = '<div id="apProg-schedule"></div>';
         prog = document.getElementById('apProg-schedule');
       }
-      if (prog) prog.innerHTML = '<div class="okmsg">🎨 Armando tu primer posteo…</div>';
+      if (prog) prog.innerHTML = '<div class="okmsg">🎨 armando tu primer posteo…</div>';
       const alreadyRunning = (typeof AUTOPILOT_RUNNING !== 'undefined') && !!AUTOPILOT_RUNNING;
       await runAutopilotSmart(1, 'schedule');
       drafts = await fpWaitDrafts(alreadyRunning ? 90000 : 8000);

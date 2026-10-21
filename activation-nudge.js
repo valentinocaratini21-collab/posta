@@ -29,10 +29,10 @@ function ensureNudgeColumn(db) {
 // Texto plano: el chat renderiza con esc() (sin links cliqueables), igual que
 // LEVEL_UP_MSGS en posty-level.js. La ruta va como texto de referencia.
 const MSGS = {
-  logo: '📸 Subí tu logo: con eso tus posteos salen con TU marca de verdad, no genéricos. Es 1 tap en Ajustes → Mi marca 👆',
-  logoConfirm: '🏷️ Ya tengo una propuesta de logo para vos — confirmala con 1 tap en Ajustes → Mi marca 👇',
-  ig: '📸 Conectá tu Instagram en Ajustes y publico por vos, sin que toques nada. Te lleva 1 minuto 👆',
-  estilo: '🎨 Pedime que analice tu estilo en Ajustes → Analizar mi estilo y tus posteos salen con tu estética, no con la de nadie ✨',
+  logo: '📸 subí tu logo: con eso tus posteos salen con tu marca de verdad, no genéricos. es 1 tap en Ajustes → Mi marca 👆',
+  logoConfirm: '🏷️ ya tengo una propuesta de logo para vos — confirmala con 1 tap en Ajustes → Mi marca 👇',
+  ig: '📸 conectá tu instagram en Ajustes y publico por vos, sin que toques nada. te lleva 1 minuto 👆',
+  estilo: '🎨 pedime que analice tu estilo en Ajustes → Analizar mi estilo y tus posteos salen con tu estética, no con la de nadie ✨',
 };
 
 function missingStep(db, userId) {

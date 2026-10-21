@@ -104,7 +104,7 @@ class AiCapExceeded extends Error {
   constructor(msg) { super(msg); this.name = 'AiCapExceeded'; }
 }
 
-const MSG_CAP = 'Llegamos al tope de IA de hoy 🔋 Seguimos mañana con todo — no se perdió nada, tus borradores están a salvo 💪';
+const MSG_CAP = 'llegamos al tope de IA de hoy 🔋 seguimos mañana con todo — no se perdió nada, tus borradores están a salvo 💪';
 
 // ---------- Techo mensual de IA por usuario (vara 5%, 2026-10-02) ----------
 // El costo variable de IA por usuario/mes no puede superar el 10% del precio de su plan.
@@ -149,7 +149,7 @@ function monthSpendUsd(userId) {
   }
 }
 
-const MSG_MONTHLY_CAP = 'Llegamos al tope de IA de tu plan por este mes 🔋 Se renueva solo el mes que viene — tus borradores están a salvo 💪';
+const MSG_MONTHLY_CAP = 'llegamos al tope de IA de tu plan por este mes 🔋 se renueva solo el mes que viene — tus borradores están a salvo 💪';
 
 // Llamar ANTES de gastar IA en endpoints user-facing. Tira AiCapExceeded si se superó el tope.
 function assertAiOk(userId) {
@@ -197,10 +197,10 @@ function checkRate(userId, feature, limit) {
   }
 }
 
-const MSG_CHAT_RATE = 'Hoy charlamos un montón 😅 Llegamos al tope de mensajes del día — seguimos mañana 💪';
-const MSG_WEEK_RATE = 'Ya armamos varias semanas hoy 📅 Seguimos mañana con más ideas 💪';
-const MSG_IDEAS_RATE = 'Ya generamos un montón de ideas hoy 💡 Seguimos mañana 💪';
-const MSG_REGEN_RATE = 'Ya regeneramos varias imágenes hoy 🎨 Seguimos mañana con más 💪';
+const MSG_CHAT_RATE = 'hoy charlamos un montón 😅 llegamos al tope de mensajes del día — seguimos mañana 💪';
+const MSG_WEEK_RATE = 'ya armamos varias semanas hoy 📅 seguimos mañana con más ideas 💪';
+const MSG_IDEAS_RATE = 'ya generamos un montón de ideas hoy 💡 seguimos mañana 💪';
+const MSG_REGEN_RATE = 'ya regeneramos varias imágenes hoy 🎨 seguimos mañana con más 💪';
 
 // ---------- Dedup de fotos (no reenviar lo ya visto) ----------
 function photoHash(dataUrl) {

@@ -59,7 +59,7 @@ function referralWinLine(db, userId, referralCode, baseUrl) {
     if (rr && rr.n >= 2) return '';
   } catch (e) { return ''; }
   const base = String(baseUrl || '').replace(/\/$/, '');
-  return `\n¿Conocés a alguien con negocio? Los dos ganan 50% off 👇\n${base}/?ref=${referralCode}`;
+  return `\nconocés a alguien con negocio? los dos ganan 50% off 👇\n${base}/?ref=${referralCode}`;
 }
 
 async function celebrateWins(db) {
@@ -127,7 +127,7 @@ async function celebrateWins(db) {
       // El festejo vive en el chat: Posty se lo dice ahí con su voz.
       // Pico de dopamina: una línea discreta de referido si le falta (<2 activos).
       const refLine = referralWinLine(db, p.user_id, p.referral_code, base);
-      const chatText = `🔥 ¡Tu posteo la está rompiendo! ${body} Seguí así que vamos bien 👌${refLine}`;
+      const chatText = `🔥 tu posteo la está rompiendo! ${body} seguí así que vamos bien 👌${refLine}`;
       let chatOk = false;
       try {
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(p.user_id, 'assistant', chatText.slice(0, 2000));

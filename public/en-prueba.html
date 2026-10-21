@@ -2578,7 +2578,7 @@ function initTrialChat() {
   }
   if (chatInit || !TRIAL) return;
   chatInit = true;
-  chatAddMsg('Hi! I am your editor 👋 Your 5 posts + 1 reel are already created. If something does not convince you, tell me what to change — for example: "the Wednesday one, but funnier".', 'bot');
+  chatAddMsg('hi! i am your editor 👋 your 5 posts + 1 reel are already created. if something does not convince you, tell me what to change — for example: "the Wednesday one, but funnier".', 'bot');
   const send = () => {
     const inp = $('#chatIn');
     const v = inp.value.trim();
@@ -2798,7 +2798,7 @@ async function sendTrialChat(text) {
   chatAddMsg(text, 'user');
   chatHist.push({ role: 'user', text });
   inp.value = '';
-  const typing = chatAddMsg('Typing…', 'bot typing');
+  const typing = chatAddMsg('typing…', 'bot typing');
   try {
     const r = await fetch('/api/trial/chat', {
       method: 'POST',
@@ -2814,8 +2814,8 @@ async function sendTrialChat(text) {
       const cl2 = $('#chatLeft');
       cl2.style.display = 'block';
       cl2.textContent = d.chat_remaining > 0
-        ? `💬 You have ${d.chat_remaining} messages left today in the trial`
-        : '💬 You are out of messages for today — we continue tomorrow 🙂';
+        ? `💬 you have ${d.chat_remaining} messages left today in the trial`
+        : '💬 you are out of messages for today — we continue tomorrow 🙂';
     }
     if (d.edits && d.edits.length) {
       for (const e of d.edits) {
@@ -2827,16 +2827,16 @@ async function sendTrialChat(text) {
       renderWeek();
       try { idb.set(TRIAL); } catch (err) {}
       const w = (TRIAL.week || []).find((x) => x.post === d.edits[0].post);
-      chatAddMsg(`✨ Updated — check out ${d.edits.length > 1 ? 'how they came out' : 'how the one from ' + (w ? w.day : 'post')} 👆`, 'bot');
+      chatAddMsg(`✨ updated — check out ${d.edits.length > 1 ? 'how they came out' : 'how the one from ' + (w ? w.day : 'post')} 👆`, 'bot');
     }
   } catch (e) {
     if (typing) typing.remove();
     if (String(e.message) === 'chat_limit') {
-      chatAddMsg('You hit the trial message limit. Create your free account and we keep improving them inside 🚀<span class="mini-cta" id="chatGoReg">Create my free account</span>', 'bot', true);
+      chatAddMsg('you hit the trial message limit. create your free account and we keep improving them inside 🚀<span class="mini-cta" id="chatGoReg">Create my free account</span>', 'bot', true);
       const g = $('#chatGoReg');
       if (g) g.onclick = openRegTrial;
     } else {
-      chatAddMsg('I could not process your request, try again 🙂', 'bot');
+      chatAddMsg('i could not process your request, try again 🙂', 'bot');
     }
   }
   chatBusy = false;
@@ -2928,7 +2928,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 });
 </script>
-<script src="/posty-chat.js?v=3" defer></script>
+<script src="/posty-chat.js?v=4" defer></script>
 <script>
 /* Campaign frame (growth wave 2): when a commercial window is open, the
    trial presents itself for that date. No active campaign, nothing shows. */

@@ -250,8 +250,8 @@ async function publishSinglePost(db, post, opts = {}) {
     try {
       if (!result.demo) {
         const fiesta = isFirstPost
-          ? '¡Tu primer posteo con Posty ya está vivo! 🎉 Esto funciona de verdad 💪 [celebrate]'
-          : '¡Ya está en tu Instagram! 🎉 [celebrate]';
+          ? 'tu primer posteo con posty ya está vivo! 🎉 esto funciona de verdad 💪 [celebrate]'
+          : 'ya está en tu instagram! 🎉 [celebrate]';
         const msg = result.permalink ? `${fiesta}\n${result.permalink}` : fiesta;
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(post.user_id, 'assistant', msg);
       }
@@ -297,7 +297,7 @@ function pausePostTrialExpired(db, post) {
     const u = db.prepare('SELECT trial_pause_notified FROM users WHERE id=?').get(post.user_id) || {};
     if (!u.trial_pause_notified) {
       db.prepare('UPDATE users SET trial_pause_notified=1 WHERE id=?').run(post.user_id);
-      const msg = 'Tus posteos se pausaron porque terminó tu prueba 🥹 — reactivá tu plan y siguen solos ✨';
+      const msg = 'tus posteos se pausaron porque terminó tu prueba 🥹 — reactivá tu plan y siguen solos ✨';
       db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(post.user_id, 'assistant', msg);
     }
     console.log(`[posta] Post #${post.id} pausado: trial vencido (usuario ${post.user_id})`);
@@ -464,7 +464,7 @@ async function celebrateWinsChat(db) {
         if (!(reach >= WIN_CHAT_FACTOR * avg && reach >= WIN_CHAT_MIN_REACH)) continue;
         const pct = Math.round((reach / avg - 1) * 100);
         const dia = DIAS_SEMANA_ES[Number(r.dow)] || '';
-        const msg = `Tu posteo del ${dia} llegó a ${fmtMilesAR(reach)} — ${pct}% más que tu promedio 🚀 [celebrate]`;
+        const msg = `tu posteo del ${dia} llegó a ${fmtMilesAR(reach)} — ${pct}% más que tu promedio 🚀 [celebrate]`;
         // Marcar ANTES de insertar (anti-spam: nunca repetir aunque algo falle).
         db.prepare('UPDATE posts SET win_celebrated = 1 WHERE id = ?').run(r.id);
         db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', msg);

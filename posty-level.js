@@ -32,10 +32,10 @@ const LEVELS = {
 // Mensajes de level-up en VOZ POSTY (voseo, cálido, concreto:
 // qué sabe ahora + qué desbloquea). Se insertan UNA sola vez en chat_messages.
 const LEVEL_UP_MSGS = {
-  2: '🧠 ¡Nivel 2! Ya veo tu marca: a partir de ahora te propongo posteos con tus colores y tus fotos 🎉',
-  3: '🧠 ¡Nivel 3! Ya sé tu gusto: escribo los captions en tu tono, como a vos te salen ✨',
-  4: '🧠 ¡Nivel 4! Ya sé tu ritmo: te sugiero los mejores horarios según tu Instagram ⏰',
-  5: '🧠 ¡Nivel 5! Te anticipo: de ahora en más te traigo ideas proactivas antes de que me las pidas 🚀',
+  2: '🧠 nivel 2! ya veo tu marca: a partir de ahora te propongo posteos con tus colores y tus fotos 🎉',
+  3: '🧠 nivel 3! ya sé tu gusto: escribo los captions en tu tono, como a vos te salen ✨',
+  4: '🧠 nivel 4! ya sé tu ritmo: te sugiero los mejores horarios según tu instagram ⏰',
+  5: '🧠 nivel 5! te anticipo: de ahora en más te traigo ideas proactivas antes de que me las pidas 🚀',
 };
 
 const nonEmpty = (v) => String(v == null ? '' : v).trim().length > 0;

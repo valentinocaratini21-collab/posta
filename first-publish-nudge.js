@@ -55,7 +55,7 @@ function trialActiveForNudge(db, userId) {
 // Mensaje en voz Posty: voseo rioplatense, cálido, 1 línea.
 // El frontend detecta [first-publish] y lo renderiza como banner con botón
 // táctil (mismo patrón que [logo-candidate:...] en chatMsgHtml).
-const FP_MSG = '🚀 ¿Publicamos tu primero? Te lo dejo listo en 1 tap 👇 [first-publish]';
+const FP_MSG = '🚀 publicamos tu primero? te lo dejo listo en 1 tap 👇 [first-publish]';
 
 function markFpNudged(db, userId) {
   try {

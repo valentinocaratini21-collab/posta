@@ -61,7 +61,7 @@ function candidatesFor(digest, dna) {
       out.push({
         kind: 'rubro',
         qkey: `rubro:${rid.rubro || c.rubro || ''}:${rid.nivel_duda || ''}`,
-        texto: c.texto || '¿Cuál es tu rubro?',
+        texto: c.texto || 'cuál es tu rubro?',
         opciones: c.opciones.map((o) => ({
           label: String(o.label || o.rubro || '').slice(0, 60),
           value: JSON.stringify({ rubro: o.rubro || '', subrubro: o.subrubro || '' }),
@@ -73,7 +73,7 @@ function candidatesFor(digest, dna) {
       out.push({
         kind: 'estrella',
         qkey: `estrella-inf:${norm(c.item)}`,
-        texto: c.texto || `¿Tu producto estrella es ${c.item}?`,
+        texto: c.texto || `tu producto estrella es ${c.item}?`,
         opciones: [
           { label: `Sí, es ${c.item}`.slice(0, 60), value: String(c.item) },
           { label: 'No, es otro', value: '__otro__' },
@@ -92,7 +92,7 @@ function candidatesFor(digest, dna) {
         out.push({
           kind: 'contradiccion',
           qkey: `precio:${norm(c.item)}`,
-          texto: c.texto || `¿Cuál es el precio actual de ${c.item}?`,
+          texto: c.texto || `cuál es el precio actual de ${c.item}?`,
           opciones,
           allow_text: true,
           ref: { item: c.item, valores },
@@ -110,7 +110,7 @@ function candidatesFor(digest, dna) {
     out.push({
       kind: 'estrella',
       qkey: 'hueco:estrella',
-      texto: '¿Cuál es tu producto o servicio estrella, el que más querés vender?',
+      texto: 'cuál es tu producto o servicio estrella, el que más querés vender?',
       opciones: names.map((n) => ({ label: n, value: n })),
       allow_text: true,
       ref: { hueco: true },
@@ -124,7 +124,7 @@ function candidatesFor(digest, dna) {
     out.push({
       kind: 'mas_vendido',
       qkey: 'hueco:mas_vendido',
-      texto: '¿Qué es lo que más se vende de tu negocio?',
+      texto: 'qué es lo que más se vende de tu negocio?',
       opciones: names.map((n) => ({ label: n, value: n })),
       allow_text: true,
       ref: { hueco: true },
@@ -139,7 +139,7 @@ function candidatesFor(digest, dna) {
     out.push({
       kind: 'promos',
       qkey: 'hueco:promos',
-      texto: '¿Tenés alguna promo activa que quieras que empuje en tus posteos? Contame cuál, o tocá «Sin promos».',
+      texto: 'tenés alguna promo activa que quieras que empuje en tus posteos? contame cuál, o tocá «Sin promos».',
       opciones: [{ label: 'Sin promos por ahora', value: '__none__' }],
       allow_text: true,
       ref: { hueco: true },
@@ -152,7 +152,7 @@ function candidatesFor(digest, dna) {
     out.push({
       kind: 'cliente',
       qkey: 'hueco:cliente',
-      texto: '¿Quién es tu cliente típico? (edad, qué busca, de dónde viene — con tus palabras)',
+      texto: 'quién es tu cliente típico? (edad, qué busca, de dónde viene — con tus palabras)',
       opciones: [],
       allow_text: true,
       ref: { hueco: true },
@@ -165,7 +165,7 @@ function candidatesFor(digest, dna) {
     out.push({
       kind: 'no_publicar',
       qkey: 'hueco:no_publicar',
-      texto: '¿Hay algo que NO quieras que publique jamás? (un tema, un producto, un precio…)',
+      texto: 'hay algo que no quieras que publique jamás? (un tema, un producto, un precio…)',
       opciones: [{ label: 'Nada, todo vale', value: '__none__' }],
       allow_text: true,
       ref: { hueco: true },

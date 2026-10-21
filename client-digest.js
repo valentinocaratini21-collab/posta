@@ -956,8 +956,8 @@ function questionCandidatesOf(d) {
       tipo: 'rubro', rubro: rid.rubro, subrubro: rid.subrubro || '', opciones,
       evidencia: rid.evidencia || [],
       texto: labels.length >= 2
-        ? `¿Tu negocio es más ${labels[0]} o ${labels[1]}?`
-        : `¿Confirmás que tu rubro es ${labels[0]}?`,
+        ? `tu negocio es más ${labels[0]} o ${labels[1]}?`
+        : `confirmás que tu rubro es ${labels[0]}?`,
     });
   }
   const star = d.inferred_star;
@@ -965,14 +965,14 @@ function questionCandidatesOf(d) {
   // nada que confirmar: el candidato no nace.
   const starDelDueno = (d.dueno && d.dueno.estrella) || (star && star.fuente === 'dueno');
   if (star && star.item && (star.confidence || 0) >= 0.5 && !starDelDueno) {
-    out.push({ tipo: 'estrella', item: star.item, texto: `¿Tu producto estrella es ${star.item}?` });
+    out.push({ tipo: 'estrella', item: star.item, texto: `tu producto estrella es ${star.item}?` });
   }
   const preciosDueno = (d.dueno && d.dueno.precios && typeof d.dueno.precios === 'object') ? d.dueno.precios : {};
   for (const c of (d.contradictions || []).slice(0, 2)) {
     // (v238) Una contradicción que el dueño ya resolvió no se repregunta.
     if (preciosDueno[norm(c.item)]) continue;
     const vs = Object.entries(c.valores || {}).map(([f, v]) => `${v} (${f === 'bio-link' ? 'link de bio' : f === 'web-catalog' ? 'catálogo web' : f === 'pdf' ? 'PDF' : f})`).join(' vs ');
-    if (vs) out.push({ tipo: 'contradiccion', item: c.item, texto: `¿Cuál es el precio actual de ${c.item}? Figura ${vs}.` });
+    if (vs) out.push({ tipo: 'contradiccion', item: c.item, texto: `cuál es el precio actual de ${c.item}? figura ${vs}.` });
   }
   return out.slice(0, 3);
 }

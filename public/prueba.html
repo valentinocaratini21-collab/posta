@@ -2576,7 +2576,7 @@ function initTrialChat() {
   }
   if (chatInit || !TRIAL) return;
   chatInit = true;
-  chatAddMsg('¡Hola! Soy tu editor 👋 Tus 5 posteos + 1 reel ya están creados. Si algo no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
+  chatAddMsg('hola! soy tu editor 👋 tus 5 posteos + 1 reel ya están creados. si algo no te convence, decime qué cambiar — por ejemplo: "el del miércoles, más divertido".', 'bot');
   const send = () => {
     const inp = $('#chatIn');
     const v = inp.value.trim();
@@ -2796,7 +2796,7 @@ async function sendTrialChat(text) {
   chatAddMsg(text, 'user');
   chatHist.push({ role: 'user', text });
   inp.value = '';
-  const typing = chatAddMsg('Escribiendo…', 'bot typing');
+  const typing = chatAddMsg('escribiendo…', 'bot typing');
   try {
     const r = await fetch('/api/trial/chat', {
       method: 'POST',
@@ -2812,8 +2812,8 @@ async function sendTrialChat(text) {
       const cl2 = $('#chatLeft');
       cl2.style.display = 'block';
       cl2.textContent = d.chat_remaining > 0
-        ? `💬 Te quedan ${d.chat_remaining} mensajes hoy en la prueba`
-        : '💬 Usaste tus mensajes de hoy — mañana seguimos 🙂';
+        ? `💬 te quedan ${d.chat_remaining} mensajes hoy en la prueba`
+        : '💬 usaste tus mensajes de hoy — mañana seguimos 🙂';
     }
     if (d.edits && d.edits.length) {
       for (const e of d.edits) {
@@ -2825,16 +2825,16 @@ async function sendTrialChat(text) {
       renderWeek();
       try { idb.set(TRIAL); } catch (err) {}
       const w = (TRIAL.week || []).find((x) => x.post === d.edits[0].post);
-      chatAddMsg(`✨ Actualizado — mirá ${d.edits.length > 1 ? 'cómo quedaron' : 'cómo quedó el del ' + (w ? w.day : 'post')} 👆`, 'bot');
+      chatAddMsg(`✨ actualizado — mirá ${d.edits.length > 1 ? 'cómo quedaron' : 'cómo quedó el del ' + (w ? w.day : 'post')} 👆`, 'bot');
     }
   } catch (e) {
     if (typing) typing.remove();
     if (String(e.message) === 'chat_limit') {
-      chatAddMsg('Llegaste al límite de mensajes de la prueba. Creá tu cuenta gratis y seguimos mejorándolos adentro 🚀<span class="mini-cta" id="chatGoReg">Crear mi cuenta gratis</span>', 'bot', true);
+      chatAddMsg('llegaste al límite de mensajes de la prueba. creá tu cuenta gratis y seguimos mejorándolos adentro 🚀<span class="mini-cta" id="chatGoReg">Crear mi cuenta gratis</span>', 'bot', true);
       const g = $('#chatGoReg');
       if (g) g.onclick = openRegTrial;
     } else {
-      chatAddMsg('No pude procesar tu pedido, probá de nuevo 🙂', 'bot');
+      chatAddMsg('no pude procesar tu pedido, probá de nuevo 🙂', 'bot');
     }
   }
   chatBusy = false;
@@ -2926,7 +2926,7 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 });
 </script>
-<script src="/posty-chat.js?v=3" defer></script>
+<script src="/posty-chat.js?v=4" defer></script>
 <script>
 /* Marco de campaña (growth ola 2): si hay una ventana comercial abierta, la
    prueba se presenta para esa fecha. Sin campaña activa, no aparece nada. */

@@ -38,7 +38,7 @@ function checkTriggers(db, userId) {
         triggers.push({
           type: 'trial_ending',
           priority: 1,
-          message: `⏰ Te quedan ${Math.ceil(hoursLeft / 24)} día(s) de prueba.\n\nYa viste lo que Posty puede hacer por tu Instagram. ¿Activamos tu plan para no frenar?`,
+          message: `⏰ te quedan ${Math.ceil(hoursLeft / 24)} día(s) de prueba.\n\nya viste lo que posty puede hacer por tu instagram. activamos tu plan para no frenar?`,
           push_title: '⏰ Tu prueba termina pronto',
           push_body: 'No frenes tu Instagram ahora que arrancó.',
           markSent: () => {
@@ -64,7 +64,7 @@ function checkTriggers(db, userId) {
           triggers.push({
             type: 'streak_risk',
             priority: 2,
-            message: `🔥 Tu racha de ${streak.streak_count} días se vence en unas horas.\n\nPublicá algo hoy y la mantenés viva. ¿Te armo un posteo rápido?`,
+            message: `🔥 tu racha de ${streak.streak_count} días se vence en unas horas.\n\npublicá algo hoy y la mantenés viva. te armo un posteo rápido?`,
             push_title: '🔥 Tu racha está en riesgo',
             push_body: `${streak.streak_count} días seguidos. No la pierdas.`,
           });
@@ -86,7 +86,7 @@ function checkTriggers(db, userId) {
         triggers.push({
           type: 'drafts_pending',
           priority: 3,
-          message: `👀 Tenés ${drafts.n} posteos esperando tu revisión.\n\nEstán listos, solo falta tu OK para programarlos. ¿Los vemos juntos?`,
+          message: `👀 tenés ${drafts.n} posteos esperando tu revisión.\n\nestán listos, solo falta tu ok para programarlos. los vemos juntos?`,
           push_title: '👀 Tenés posteos sin revisar',
           push_body: `${drafts.n} posteos te están esperando.`,
         });
@@ -113,7 +113,7 @@ function checkTriggers(db, userId) {
         triggers.push({
           type: 'need_photos',
           priority: 4,
-          message: `📸 Para que tu próximo posteo ("${cap}...") quede increíble, me vendría genial una foto real de tu producto/local.\n\n¿Me pasás 1 o 2 fotos? Las mejores publicaciones salen con tu material.`,
+          message: `📸 para que tu próximo posteo ("${cap}...") quede increíble, me vendría genial una foto real de tu producto/local.\n\nme pasás 1 o 2 fotos? las mejores publicaciones salen con tu material.`,
           push_title: '📸 ¿Me pasás unas fotos?',
           push_body: 'Tu próximo posteo va a quedar mucho mejor con fotos reales.',
         });
@@ -149,7 +149,7 @@ function checkTriggers(db, userId) {
           triggers.push({
             type: 'winner',
             priority: 5,
-            message: `🎉 ¡Tu posteo la rompió!\n\n"${cap}..."\n${mult}x tu promedio de engagement (${winner.ig_likes || 0} likes, ${winner.ig_comments || 0} comentarios).\n\n¿Hacemos más contenido así?`,
+            message: `🎉 tu posteo la rompió!\n\n"${cap}..."\n${mult}x tu promedio de engagement (${winner.ig_likes || 0} likes, ${winner.ig_comments || 0} comentarios).\n\nhacemos más contenido así?`,
             push_title: '🎉 Tu posteo la rompió',
             push_body: `${mult}x tu promedio. Tocá para ver.`,
           });
@@ -186,7 +186,7 @@ function checkTriggers(db, userId) {
         triggers.push({
           type: 'oportunidad',
           priority: 6,
-          message: `📅 ¡Se viene ${nm}!\n\nEs el ${fecha} (en ${daysLeft} días). Tu semana va a tener un posteo especial por la fecha — sale solo, como todo ✨\n\nSi querés empujar algo puntual (una promo, un producto), contame por acá y lo sumo.`,
+          message: `📅 se viene ${nm}!\n\nes el ${fecha} (en ${daysLeft} días). tu semana va a tener un posteo especial por la fecha — sale solo, como todo ✨\n\nsi querés empujar algo puntual (una promo, un producto), contame por acá y lo sumo.`,
           push_title: `📅 Se viene ${nm}`,
           push_body: 'Tu semana va a tener un posteo especial. Sale solo ✨',
           markSent: () => { try { db.prepare('INSERT INTO proactive_log (user_id, idea_title) VALUES (?, ?)').run(userId, key); } catch (e) {} },

@@ -106,33 +106,33 @@ async function isHolidayAR(ymd, fetchFn) {
 // ---------------------------------------------------------------------------
 const REACTIVE_RULES = [
   { id: 'storm-any', rubros: ['*'], when: w => w.weathercode >= 95, kind: 'weather',
-    headline: 'Cuidate hoy', body: 'Hoy se viene tormenta fuerte: cuidate y cuidá a los tuyos. Mañana te esperamos como siempre.', intent: 'social', notify: '⛈️ Se viene tormenta fuerte: Posty te armó un posteo para cuidar a tu gente 👇' },
+    headline: 'Cuidate hoy', body: 'Hoy se viene tormenta fuerte: cuidate y cuidá a los tuyos. Mañana te esperamos como siempre.', intent: 'social', notify: '⛈️ se viene tormenta fuerte: posty te armó un posteo para cuidar a tu gente 👇' },
   { id: 'rain-gastro', rubros: ['gastronomia'], when: w => w.weathercode >= 51 && w.weathercode <= 82, kind: 'weather',
-    headline: 'Día de delivery', body: 'Llueve y da fiaca salir: pedilo y te lo llevamos calentito a tu puerta.', intent: 'promo', notify: '🌧️ Posty vio que llueve y te armó un posteo de delivery 👇' },
+    headline: 'Día de delivery', body: 'Llueve y da fiaca salir: pedilo y te lo llevamos calentito a tu puerta.', intent: 'promo', notify: '🌧️ posty vio que llueve y te armó un posteo de delivery 👇' },
   { id: 'rain-bar', rubros: ['bar'], when: w => w.weathercode >= 51 && w.weathercode <= 82, kind: 'weather',
-    headline: 'Plan refugio', body: 'Afuera llueve, adentro se brinda: esta noche el plan es acá.', intent: 'evento', notify: '🌧️ Llueve: Posty te armó el posteo "plan refugio" 👇' },
+    headline: 'Plan refugio', body: 'Afuera llueve, adentro se brinda: esta noche el plan es acá.', intent: 'evento', notify: '🌧️ llueve: posty te armó el posteo "plan refugio" 👇' },
   { id: 'rain-fitness', rubros: ['fitness'], when: w => w.weathercode >= 51 && w.weathercode <= 82, kind: 'weather',
-    headline: 'La lluvia no frena', body: 'Afuera llueve, acá se entrena: vení que el clima no es excusa.', intent: 'social', notify: '🌧️ Llueve: Posty te armó un posteo motivador 👇' },
+    headline: 'La lluvia no frena', body: 'Afuera llueve, acá se entrena: vení que el clima no es excusa.', intent: 'social', notify: '🌧️ llueve: posty te armó un posteo motivador 👇' },
   { id: 'rain-hogar', rubros: ['hogar', 'deco'], when: w => w.weathercode >= 51 && w.weathercode <= 82, kind: 'weather',
-    headline: 'Día de hogar', body: 'Día de lluvia = día de casa: mirá cómo dejarla más linda.', intent: 'producto', notify: '🌧️ Día de lluvia: Posty te armó un posteo "día de hogar" 👇' },
+    headline: 'Día de hogar', body: 'Día de lluvia = día de casa: mirá cómo dejarla más linda.', intent: 'producto', notify: '🌧️ día de lluvia: posty te armó un posteo "día de hogar" 👇' },
   { id: 'rain-belleza', rubros: ['belleza'], when: w => w.weathercode >= 51 && w.weathercode <= 82, kind: 'weather',
-    headline: 'El plan perfecto', body: 'Día de lluvia, plan perfecto: un rato para vos. Reservá tu turno.', intent: 'promo', notify: '🌧️ Llueve: Posty te armó un posteo de autocuidado 👇' },
+    headline: 'El plan perfecto', body: 'Día de lluvia, plan perfecto: un rato para vos. Reservá tu turno.', intent: 'promo', notify: '🌧️ llueve: posty te armó un posteo de autocuidado 👇' },
   { id: 'cold-gastro', rubros: ['gastronomia', 'cafeteria'], when: w => w.temp <= 10, kind: 'weather',
-    headline: 'Para el frío', body: 'Con este frío, algo calentito: vení por el tuyo.', intent: 'producto', notify: '🥶 Hace frío: Posty te armó un posteo "algo calentito" 👇' },
+    headline: 'Para el frío', body: 'Con este frío, algo calentito: vení por el tuyo.', intent: 'producto', notify: '🥶 hace frío: posty te armó un posteo "algo calentito" 👇' },
   { id: 'cold-moda', rubros: ['moda'], when: w => w.temp <= 12, kind: 'weather',
-    headline: 'Llegó el frío', body: 'Bajó la temperatura y subió la onda: abrigos que te van a encantar.', intent: 'lanzamiento', notify: '🥶 Hace frío: Posty te armó un posteo de abrigos 👇' },
+    headline: 'Llegó el frío', body: 'Bajó la temperatura y subió la onda: abrigos que te van a encantar.', intent: 'lanzamiento', notify: '🥶 hace frío: posty te armó un posteo de abrigos 👇' },
   { id: 'hot-gastro', rubros: ['gastronomia', 'cafeteria', 'bar'], when: w => w.temp >= 32, kind: 'weather',
-    headline: 'Para el calor', body: 'Con este calor, algo bien fresquito: pasá a buscar el tuyo.', intent: 'producto', notify: '🥵 Hace calor: Posty te armó un posteo fresquito 👇' },
+    headline: 'Para el calor', body: 'Con este calor, algo bien fresquito: pasá a buscar el tuyo.', intent: 'producto', notify: '🥵 hace calor: posty te armó un posteo fresquito 👇' },
   { id: 'hot-moda', rubros: ['moda'], when: w => w.temp >= 30, kind: 'weather',
-    headline: 'Onda verano', body: 'Calor = liviano y fresco: la selección de verano ya está acá.', intent: 'lanzamiento', notify: '🥵 Hace calor: Posty te armó un posteo de verano 👇' },
+    headline: 'Onda verano', body: 'Calor = liviano y fresco: la selección de verano ya está acá.', intent: 'lanzamiento', notify: '🥵 hace calor: posty te armó un posteo de verano 👇' },
   { id: 'hot-mascotas', rubros: ['mascotas'], when: w => w.temp >= 35, kind: 'weather',
-    headline: 'Cuidalos del calor', body: 'Con este calor, ellos también la pasan mal: agua fresca y sombra siempre.', intent: 'tips', notify: '🥵 Calor extremo: Posty te armó un posteo para cuidar mascotas 👇' },
+    headline: 'Cuidalos del calor', body: 'Con este calor, ellos también la pasan mal: agua fresca y sombra siempre.', intent: 'tips', notify: '🥵 calor extremo: posty te armó un posteo para cuidar mascotas 👇' },
   { id: 'hot-bar', rubros: ['bar'], when: w => w.temp >= 30, kind: 'weather',
-    headline: 'Terraceo', body: 'Noche de calor, trago bien frío: la terraza te espera.', intent: 'evento', notify: '🥵 Noche de calor: Posty te armó el posteo de terraza 👇' },
+    headline: 'Terraceo', body: 'Noche de calor, trago bien frío: la terraza te espera.', intent: 'evento', notify: '🥵 noche de calor: posty te armó el posteo de terraza 👇' },
   { id: 'sun-turismo', rubros: ['turismo'], when: (w, ctx) => w.weathercode <= 1 && ctx.isWeekend, kind: 'weather',
-    headline: 'Día perfecto', body: 'Sol y finde: la escapada que venías posponiendo es hoy.', intent: 'promo', notify: '☀️ Día perfecto: Posty te armó un posteo de escapada 👇' },
+    headline: 'Día perfecto', body: 'Sol y finde: la escapada que venías posponiendo es hoy.', intent: 'promo', notify: '☀️ día perfecto: posty te armó un posteo de escapada 👇' },
   { id: 'holiday-any', rubros: ['*'], when: (w, ctx) => !!ctx.holiday, kind: 'holiday',
-    headline: 'Feriado', body: 'Es feriado y estamos: pasá en horario especial.', intent: 'social', notify: '📅 Es feriado: Posty te armó un posteo 👇' },
+    headline: 'Feriado', body: 'Es feriado y estamos: pasá en horario especial.', intent: 'social', notify: '📅 es feriado: posty te armó un posteo 👇' },
 ];
 
 function rubroMatch(rule, rubro) {
@@ -220,7 +220,7 @@ async function maybeCreateReactiveDraft(db, uid, deps) {
   // Aviso en el chat (una sola vez, al crear).
   try {
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)')
-      .run(uid, 'assistant', `${rule.notify || 'Posty te armó un posteo según el día 👇'}\nLo dejé en borradores para que lo revises.`);
+      .run(uid, 'assistant', `${rule.notify || 'posty te armó un posteo según el día 👇'}\nlo dejé en borradores para que lo revises.`);
   } catch (e) { /* no bloquea */ }
   return { created: true, postId, rule: rule.id, image: 'ok' };
 }
