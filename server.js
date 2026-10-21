@@ -16006,7 +16006,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v305';
+const BUILD_ID = '20261021-v306';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -16195,6 +16195,18 @@ try {
   visibility.registerVisibility(app, db, { requireAuth, requireAdminToken });
   visibility.startVisibilityJobs(db);
 } catch (e) { console.error('[visibility] no se pudo montar:', e && e.message); }
+
+// ---------- TOQUES DE RELACIÓN (2026-10-21): bienvenida inteligente + mitad de semana ----------
+// Posty le habla al cliente cuando tiene algo verdadero para decir: la
+// bienvenida al volver (solo con novedad real desde su última visita) y el
+// toque de mitad de semana condicionado (solo con dato). Solo dentro de la
+// app, nunca push, con techos globales coordinados en proactive_log.
+try {
+  const relacion = require('./relacion');
+  relacion.initSchema(db);
+  relacion.registerRelacion(app, db, { requireAuth, requireAdminToken });
+  relacion.startRelacionJobs(db);
+} catch (e) { console.error('[relacion] no se pudo montar:', e && e.message); }
 
 app.listen(PORT, () => {
   console.log(`[posta] Corriendo en http://localhost:${PORT} (${NODE_ENV})`);

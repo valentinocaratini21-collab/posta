@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v305'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v306'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -275,6 +275,32 @@ async function pzFillRefPeak(surface, root) {
     api.post('/api/visibility/shown', { surface }).catch(() => {});
     PZ_VIS_PROMISE = null;
   } catch (e) {}
+}
+
+// ---------- Toques de relación (2026-10-21): bienvenida inteligente + mitad de semana ----------
+// El slot #relacionSlot vive arriba de Inicio/Agenda. El servidor decide:
+// bienvenida SOLO con novedad real desde la última visita (primer ingreso
+// del día) y/o el toque de mitad de semana pendiente. Sin novedad ni dato,
+// el slot se borra y no se ve nada: el silencio es parte del diseño.
+function relacionBubbleHTML(text) {
+  const t = String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  return `<div class="relacion-bubble"><img src="ai-avatar.png" alt="Posty" class="relacion-ava"><p>${t}</p></div>`;
+}
+async function pzFillRelacion() {
+  const slot = document.getElementById('relacionSlot');
+  if (!slot || slot.dataset.done) return;
+  slot.dataset.done = '1';
+  try {
+    const r = await api.get('/api/relacion/entry');
+    if (!r || !r.ok) { slot.remove(); return; }
+    const msgs = [];
+    if (r.welcome && r.welcome.text) msgs.push({ id: 0, text: r.welcome.text });
+    if (Array.isArray(r.pending)) for (const m of r.pending) { if (m && m.text) msgs.push(m); }
+    if (!msgs.length) { slot.remove(); return; }
+    slot.innerHTML = msgs.map(m => relacionBubbleHTML(m.text)).join('');
+    const ids = msgs.map(m => Number(m.id) || 0).filter(n => n > 0);
+    if (ids.length) api.post('/api/relacion/seen', { ids }).catch(() => {});
+  } catch (e) { try { slot.remove(); } catch (e2) {} }
 }
 
 // true cuando el último refreshSession falló por red (no por sesión cerrada).
@@ -2381,7 +2407,7 @@ function appShell(tab, content) {
   </aside>
   ${tab === 'chat' ? '' : setupChecklistHtml(undefined, (tab === 'inicio' || tab === 'schedule') ? { omitIg: true } : undefined)}
   <div class="app-shell">
-    <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
+    <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${(tab === 'inicio' || tab === 'schedule') ? '<div id="relacionSlot"></div>' : ''}${content}</div>
   </div>
   ${mzTabsHTML(tab)}`;
 }
@@ -10666,6 +10692,9 @@ async function render() {
   try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
   // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
   setTimeout(() => { try { enhanceWeekReport(); } catch (e) {} }, 60);
+  // Toques de relación: la burbuja de Posty arriba de Inicio/Agenda se llena
+  // sola si el servidor tiene algo verdadero para decir (o no aparece).
+  setTimeout(() => { try { pzFillRelacion(); } catch (e) {} }, 90);
   // v223: enhanceIdeas ya NO se dispara desde render(): el bloque de
   // ideas tiene ciclo de vida propio y se enciende desde bindSchedule.
   setTimeout(() => { try { ttEnhance(); } catch (e) {} }, 80);

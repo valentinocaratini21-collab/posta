@@ -2796,3 +2796,10 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .fp-stat span{font-size:13px;color:#3D556E}
 .fp-name{font-size:13.5px;font-weight:700;margin-top:10px}
 .fp-link{display:inline-block;font-size:13.5px;font-weight:600;color:#0A4D8F;text-decoration:none;margin-top:1px}
+
+/* Toques de relación (2026-10-21): burbuja de Posty arriba de Inicio/Agenda.
+   Solo aparece cuando el servidor tiene algo verdadero para decir. */
+#relacionSlot{max-width:860px;margin:0 auto;padding:10px 14px 0}
+.relacion-bubble{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #DCEBF5;border-radius:16px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(10,30,51,.05)}
+.relacion-bubble .relacion-ava{width:34px;height:34px;border-radius:50%;flex:0 0 auto;background:#EAF5FB}
+.relacion-bubble p{margin:0;font-size:14.5px;line-height:1.45;color:#0A1E33}
