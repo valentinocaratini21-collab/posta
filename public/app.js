@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v308'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v311'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -754,6 +754,9 @@ function wireQuestionCard(slot) {
   card.dataset.wired = '1';
   const id = card.getAttribute('data-qid');
   const inp = card.querySelector('#pqInput');
+  // (v306) Radar: si el dueño tocó "un descuento", el Guardar manda el
+  // tipo junto al texto (cuál y hasta cuándo) — el servidor lo exige.
+  let pqPendingTipo = '';
   const answer = async (payload) => {
     try {
       await api.post('/api/questions/' + id + '/answer', payload);
@@ -768,6 +771,15 @@ function wireQuestionCard(slot) {
       const v = b.getAttribute('data-q-opt');
       // "No, es otro": no envía nada — enfoca el texto para que lo escriba.
       if (v === '__otro__') { if (inp) { inp.focus(); inp.placeholder = 'escribí cuál es…'; } return; }
+      // (v306) Radar — el descuento es la ÚNICA opción con repregunta:
+      // no se envía sin el dato; enfoca el texto y guarda el tipo.
+      let optTipo = '';
+      try { const ov = JSON.parse(v); if (ov && ov.tipo) optTipo = String(ov.tipo); } catch (e) {}
+      if (optTipo === 'descuento') {
+        pqPendingTipo = 'descuento';
+        if (inp) { inp.focus(); inp.placeholder = (typeof ME !== 'undefined' && ME.lang === 'en') ? 'tell me the discount and until when 😊' : 'contame el descuento y hasta cuándo 😊'; }
+        return;
+      }
       b.disabled = true;
       answer({ value: v });
     };
@@ -776,7 +788,7 @@ function wireQuestionCard(slot) {
   const doSend = () => {
     const t = String((inp && inp.value) || '').trim();
     if (!t) { if (inp) { inp.focus(); inp.placeholder = 'escribí tu respuesta 😊'; } return; }
-    answer({ text: t });
+    answer(pqPendingTipo ? { value: JSON.stringify({ radar: 1, tipo: pqPendingTipo }), text: t } : { text: t });
   };
   if (send) send.onclick = doSend;
   if (inp) inp.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); doSend(); } };

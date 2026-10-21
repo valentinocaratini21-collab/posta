@@ -451,6 +451,12 @@ function emptyDigest() {
     // refresco semanal lo preserva (applyDeepBlocks) y los candidatos a
     // pregunta lo respetan (questionCandidatesOf). null = sin respuestas.
     dueno: null,
+    // (v306) RADAR SEMANAL (posty-questions): la respuesta del dueño a
+    // "qué se viene esta semana?" — { tipo, detalle, week_key, at }.
+    // PERECEDERO por diseño: solo lo consume radarWeekLine si week_key
+    // es la semana en curso; el refresco lo preserva (copia base) pero
+    // la semana siguiente ya no se usa. null = sin respuesta esta semana.
+    radar: null,
   };
 }
 

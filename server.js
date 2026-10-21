@@ -2208,7 +2208,10 @@ app.post('/api/ideas/:id/make', requireAuth, requireTrialValid, async (req, res)
 function weeklyQuestionFor(uid) {
   try {
     const wk = mondayKeyOf(tzToday(userTz(uid)));
-    return postyQuestions.ensureWeeklyQuestion(db, uid, wk);
+    // (v306) El radar y el banco clave salen en el idioma de la cuenta.
+    let lang = 'es';
+    try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (u && u.lang === 'en') lang = 'en'; } catch (e) {}
+    return postyQuestions.ensureWeeklyQuestion(db, uid, wk, undefined, { lang });
   } catch (e) { return null; }
 }
 
@@ -2228,6 +2231,7 @@ app.post('/api/questions/:id/answer', requireAuth, (req, res) => {
     if (!r.ok) {
       if (r.reason === 'gone') return res.status(404).json({ error: 'esa pregunta ya no está 😅' });
       if (r.reason === 'empty') return res.status(400).json({ error: 'contame con tus palabras y lo guardo 😊' });
+      if (r.reason === 'needs_detail') return res.status(400).json({ error: 'contame el descuento y hasta cuándo 😊' });
       if (r.reason === 'bad_option') return res.status(400).json({ error: 'esa opción no es válida 😅' });
       return res.status(400).json({ error: 'no pude guardarla 😅' });
     }
@@ -5301,6 +5305,20 @@ function campaignLineFor(profile, uid) {
     return CAMPAIGNS_MOD.campaignThemeLine(new Date(), (profile && profile.category) || '', lang) || '';
   } catch (e) { return ''; }
 }
+// (v306) RADAR DEL DUEÑO: la respuesta a la pregunta-radar de ESTA
+// semana como directiva de ideas (espejo de campaignLineFor). Solo la
+// semana en curso: radarWeekLine devuelve '' para cualquier otra —
+// lo perecedero no se recicla, y sin respuesta la semana sale del
+// fundamento como siempre (cero bloqueo).
+function radarLineFor(uid) {
+  try {
+    const wk = mondayKeyOf(tzToday(userTz(uid)));
+    let lang = 'es';
+    try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (u && u.lang === 'en') lang = 'en'; } catch (e) {}
+    const digest = clientDigest.getDigest(db, uid);
+    return postyQuestions.radarWeekLine(digest && digest.radar, wk, lang) || '';
+  } catch (e) { return ''; }
+}
 function ideasInputFor(uid) {
   const profile = getProfile(uid);
   const dna = readDna(uid);
@@ -5325,6 +5343,7 @@ function ideasInputFor(uid) {
     recentTopics,
     ephemeris: ephemerisFor(profile),
     campaign: campaignLineFor(profile, uid),
+    radar: radarLineFor(uid),
     learnings: getContentLearnings(uid),
     styleRules,
     excluded: excludedTopicsLine(uid),
@@ -16230,7 +16249,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v310';
+const BUILD_ID = '20261021-v311';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

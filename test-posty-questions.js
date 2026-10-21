@@ -176,8 +176,15 @@ ok('semana 8: hueco "qué NO publicar" — cae al ADN y al digest', () => {
   assert.strictEqual(dna().no_publicar, 'Nunca muestres precios de la competencia');
   assert.strictEqual(stored().dueno.no_publicar, 'Nunca muestres precios de la competencia');
 });
-ok('semana 9: sin huecos ni dudas → no hay pregunta (no se molesta por molestar)', () => {
-  assert.strictEqual(pq.ensureWeeklyQuestion(dbInst, 77, '2026-12-14', NOW('2026-12-14')), null);
+ok('semana 9: sin huecos ni dudas → sale el RADAR (v306: la pregunta semanal de Valentino)', () => {
+  // (v306) La regla vieja era "sin huecos, no hay pregunta". La decisión
+  // de Valentino (2026-10-21) la reemplaza: con el fundamento completo,
+  // la pregunta de la semana es el RADAR — "qué se viene esta semana en
+  // tu negocio?" — cuya respuesta decide los posteos de la semana.
+  const q9 = pq.ensureWeeklyQuestion(dbInst, 77, '2026-12-14', NOW('2026-12-14')); stamp(q9, '2026-12-14');
+  assert.ok(q9);
+  assert.strictEqual(q9.kind, 'radar');
+  assert.strictEqual(q9.texto, 'qué se viene esta semana en tu negocio?');
 });
 
 console.log('== 5) "Ahora no": no vuelve por 42 días y la semana siguiente sale otra ==');
@@ -224,9 +231,12 @@ ok('el ítem confirmado por el dueño abre la rotación de temas', () => {
 });
 
 console.log('== 7) Contrato de deploy ==');
-ok('server: endpoints + reporte + BUILD_ID v238', () => {
+ok('server: endpoints + reporte + BUILD_ID presente', () => {
   const srv = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
-  assert.ok(srv.includes("const BUILD_ID = '20261019-v243'"));
+  // (v306) El pin literal de versión (v243) quedó fósil: fallaba con
+  // cualquier build posterior sin decir nada del contrato. Se verifica
+  // la FORMA del BUILD_ID, que es lo que el contrato necesita.
+  assert.ok(/const BUILD_ID = '\d{8}-v\d+'/.test(srv), 'BUILD_ID con forma AAAA-vNNN');
   assert.ok(srv.includes("app.get('/api/questions/current'"));
   assert.ok(srv.includes("app.post('/api/questions/:id/answer'"));
   assert.ok(srv.includes("app.post('/api/questions/:id/dismiss'"));

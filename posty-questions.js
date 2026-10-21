@@ -12,11 +12,187 @@
 // La respuesta del dueño es la fuente MÁS FUERTE: cae al digest (bloque
 // `dueno` + el campo que corresponda) y al ADN, y queda lockeada contra
 // el refresco semanal (applyDeepBlocks la preserva — ver client-digest).
+//
+// (v306) RADAR SEMANAL + BANCO DE PREGUNTAS CLAVE POR RUBRO (decisión de
+// Valentino, 2026-10-21): se suma UNA pregunta-radar — "qué se viene esta
+// semana en tu negocio?" — con opciones de un toque de etiquetas según el
+// rubro, cuya respuesta DECIDE qué tipo de posteos arma Posty esa semana
+// (ver radarWeekLine). Y el banco CLAVE: la pregunta clave de cada rubro,
+// como capa de hueco. Conviven con los huecos de siempre bajo el mismo
+// techo duro: 1 pregunta por semana en total.
 'use strict';
 
 const clientDigest = require('./client-digest');
 
 const norm = clientDigest.norm;
+
+// ---------------------------------------------------------------------------
+// (v306) RADAR SEMANAL — la pregunta que decide la semana.
+// Texto y opciones determinísticas (cero IA, cero costo), voz de chat
+// (minúscula, sin signos de apertura). El qkey lleva la semana: cada
+// semana es una pregunta NUEVA (nunca la bloquea la memoria de 42 días
+// de los huecos) y el techo de 1/semana lo sigue garantizando
+// ensureWeeklyQuestion (una resuelta esta semana ⇒ no nace otra).
+// ---------------------------------------------------------------------------
+const RADAR_TIPOS = ['evento', 'novedad', 'descuento', 'empuje', 'festejo', 'nada', 'libre'];
+
+// La etiqueta de "algo nuevo" según el rubro canónico (rubro-id.js).
+const RADAR_NOVEDAD_ES = {
+  moda: 'ingresó ropa', gastronomia: 'plato nuevo', cafeteria: 'plato nuevo',
+  bar: 'plato o trago nuevo', belleza: 'servicio nuevo', barberia: 'servicio nuevo',
+  hogar: 'pieza nueva', deco: 'pieza nueva', inmobiliaria: 'propiedad nueva',
+  educacion: 'curso o clase nueva',
+};
+const RADAR_NOVEDAD_EN = {
+  moda: 'new clothes in', gastronomia: 'a new dish', cafeteria: 'a new dish',
+  bar: 'a new dish or drink', belleza: 'a new service', barberia: 'a new service',
+  hogar: 'a new piece', deco: 'a new piece', inmobiliaria: 'a new listing',
+  educacion: 'a new course or class',
+};
+
+function rubroKeyOf(digest) {
+  const d = (digest && typeof digest === 'object') ? digest : {};
+  const raw = (d.rubro_id && d.rubro_id.rubro) || d.category || '';
+  return norm(String(raw)).replace(/\s+/g, '');
+}
+
+function radarCandidate(digest, weekKey, lang) {
+  if (!weekKey) return null;
+  const en = lang === 'en';
+  const rk = rubroKeyOf(digest);
+  const novedad = en ? (RADAR_NOVEDAD_EN[rk] || 'something new') : (RADAR_NOVEDAD_ES[rk] || 'algo nuevo');
+  const L = en ? {
+    texto: "what's coming up this week in your business?",
+    evento: '🗓️ an important event', descuento: '🏷️ a discount', empuje: '📦 something to push',
+    festejo: '⭐ something to celebrate', nada: '😴 nothing special',
+  } : {
+    texto: 'qué se viene esta semana en tu negocio?',
+    evento: '🗓️ un evento importante', descuento: '🏷️ un descuento', empuje: '📦 algo para empujar',
+    festejo: '⭐ algo para festejar', nada: '😴 nada especial',
+  };
+  const opt = (tipo, label) => ({ label, value: JSON.stringify({ radar: 1, tipo }) });
+  return {
+    kind: 'radar',
+    qkey: `radar:${weekKey}`,
+    texto: L.texto,
+    opciones: [
+      opt('evento', L.evento),
+      opt('novedad', `🆕 ${novedad}`),
+      opt('descuento', L.descuento),
+      opt('empuje', L.empuje),
+      opt('festejo', L.festejo),
+      opt('nada', L.nada),
+    ],
+    allow_text: true,
+    ref: { radar: true, rubro: rk },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// (v306) BANCO DE PREGUNTAS CLAVE POR RUBRO (aprobadas por Valentino,
+// 2026-10-21) — la pregunta que un buen CM le hace a ESE rubro. Entran
+// como capa de hueco (kind 'clave', memoria de 42 días como el resto):
+// su respuesta es combustible de contenido y cae al bloque `radar` del
+// digest con tipo 'clave' (insumo de la semana, perenne como el radar).
+// ---------------------------------------------------------------------------
+const CLAVE_ES = {
+  gastronomia: 'qué sale de la cocina esta semana que todavía no mostramos? un plato nuevo, un ingrediente de estación, algo que solo hacés vos?',
+  cafeteria: 'qué sale de la cocina esta semana que todavía no mostramos? un plato nuevo, un ingrediente de estación, algo que solo hacés vos?',
+  bar: 'qué sale esta semana que todavía no mostramos? un trago nuevo, un plato, algo que solo hacés vos?',
+  belleza: 'qué tratamiento está funcionando mejor? si llega una clienta nueva esta semana, a qué querés que venga?',
+  barberia: 'qué servicio querés llenar esta semana? hay algún hueco de agenda que salimos a vender?',
+  moda: 'qué entró nuevo, o qué quedó colgado con stock? eso sale esta semana.',
+  hogar: 'qué pieza querés que se vaya esta semana? esa es la protagonista.',
+  deco: 'qué pieza querés que se vaya esta semana? esa es la protagonista.',
+  fitness: 'qué logro de un alumno podemos festejar? y hay horario o profe nuevo para empujar?',
+  mascotas: 'hay algún paciente que sea la historia de la semana? qué servicio querés recordar: baño, vacuna, control?',
+  salud: 'qué es lo que más te preguntan últimamente? lo respondemos en un posteo esta semana.',
+  autos: 'qué trabajo zarpado entró al taller? con una foto de eso vendemos solos.',
+  profesionales: 'qué caso o resultado de esta semana podés contar, sin nombres? eso es autoridad pura.',
+  servicios: 'qué caso o resultado de esta semana podés contar, sin nombres? eso es autoridad pura.',
+  inmobiliaria: 'qué propiedad querés empujar esta semana? esa sale de protagonista.',
+  educacion: 'hay un curso, una clase o un grupo nuevo para empujar esta semana?',
+  eventos: 'qué evento se viene que queramos llenar?',
+  flores: 'qué fecha o arreglo se viene que salimos a vender?',
+  joyeria: 'qué pieza querés que se vaya esta semana? esa es la protagonista.',
+  turismo: 'qué destino o salida querés empujar esta semana?',
+  viajes: 'qué destino o salida querés empujar esta semana?',
+  fotografia: 'qué sesión o trabajo de esta semana podemos mostrar?',
+  arte: 'qué obra o pieza nueva tenés para mostrar esta semana?',
+  tecnologia: 'qué novedad o trabajo de esta semana podemos mostrar?',
+};
+const CLAVE_EN = {
+  gastronomia: "what's coming out of the kitchen this week that we haven't shown yet? a new dish, a seasonal ingredient, something only you make?",
+  cafeteria: "what's coming out of the kitchen this week that we haven't shown yet? a new dish, a seasonal ingredient, something only you make?",
+  bar: "what's on this week that we haven't shown yet? a new drink, a dish, something only you make?",
+  belleza: 'which treatment is working best? if a new client walks in this week, what should she come for?',
+  barberia: 'which service do you want to fill this week? any empty slots in the book we should sell?',
+  moda: 'what just came in, or what is sitting in stock? that goes out this week.',
+  hogar: 'which piece do you want gone this week? that one is the star.',
+  deco: 'which piece do you want gone this week? that one is the star.',
+  fitness: "what's a member win we can celebrate? and is there a new schedule or trainer to push?",
+  mascotas: 'is there a patient who is the story of the week? what service should we remind people about: bath, vaccine, checkup?',
+  salud: 'what do people ask you most lately? we answer it in a post this week.',
+  autos: 'what a great job came into the shop? with one photo of that, it sells itself.',
+  profesionales: 'what case or result from this week can you share, no names? that is pure authority.',
+  servicios: 'what case or result from this week can you share, no names? that is pure authority.',
+  inmobiliaria: 'which property do you want to push this week? that one leads.',
+  educacion: 'is there a new course, class or group to push this week?',
+  eventos: 'what event is coming up that we want to fill?',
+  flores: 'what date or arrangement is coming up that we should sell?',
+  joyeria: 'which piece do you want gone this week? that one is the star.',
+  turismo: 'what trip or destination do you want to push this week?',
+  viajes: 'what trip or destination do you want to push this week?',
+  fotografia: 'what session or job from this week can we show?',
+  arte: 'what new piece do you have to show this week?',
+  tecnologia: 'what new thing or job from this week can we show?',
+};
+const CLAVE_COMODIN_ES = 'pasó algo esta semana en tu negocio que tus clientes deberían saber?';
+const CLAVE_COMODIN_EN = 'did anything happen this week at your business that your customers should know?';
+
+function claveCandidate(digest, lang) {
+  const en = lang === 'en';
+  const rk = rubroKeyOf(digest);
+  const texto = en ? (CLAVE_EN[rk] || CLAVE_COMODIN_EN) : (CLAVE_ES[rk] || CLAVE_COMODIN_ES);
+  return {
+    kind: 'clave', qkey: `clave:${rk || 'general'}`, texto,
+    opciones: [], allow_text: true, ref: { clave: true, rubro: rk },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// EL MAPEO respuesta → semana. Lo consume el brief de ideas (server.js
+// radarLineFor → ideasInputFor → openaiIdeas, espejo de la capa de
+// campaña): cada tipo se vuelve UNA directiva de contenido para la
+// semana EN CURSO — y solo para esa: week_key distinto ⇒ '' (lo
+// perecedero jamás se recicla). Descuento SIN detalle ⇒ '' también:
+// sin dato real no hay posteo de descuento, punto.
+// ---------------------------------------------------------------------------
+function radarWeekLine(radar, weekKey, lang) {
+  if (!radar || typeof radar !== 'object' || !weekKey || radar.week_key !== weekKey) return '';
+  const det = String(radar.detalle || '').trim();
+  const conDet = det ? `: ${det}` : '';
+  if (lang === 'en') {
+    switch (radar.tipo) {
+      case 'evento': return `📡 OWNER RADAR (this week): there's an IMPORTANT EVENT${conDet}. Build the week around it: an anticipation post and a reminder the day before.`;
+      case 'novedad': return `📡 OWNER RADAR (this week): something NEW${conDet}. The week's hero post is this launch.`;
+      case 'descuento': return det ? `📡 OWNER RADAR (this week): a REAL discount confirmed by the owner: ${det}. Sales post with that EXACT data — never invent other discounts, percentages or dates.` : '';
+      case 'empuje': return `📡 OWNER RADAR (this week): something to PUSH${conDet}. Product post with REAL scarcity only (whatever is actually true).`;
+      case 'festejo': return `📡 OWNER RADAR (this week): something to CELEBRATE${conDet}. Social-proof post.`;
+      case 'clave': case 'libre': return det ? `📡 OWNER RADAR (this week): the owner shared: ${det}. Use it as a topic or angle where it fits the week.` : '';
+      default: return '';
+    }
+  }
+  switch (radar.tipo) {
+    case 'evento': return `📡 RADAR DEL DUEÑO (esta semana): hay un EVENTO IMPORTANTE${conDet}. La semana se ordena alrededor del evento: posteo de anticipación + recordatorio el día anterior.`;
+    case 'novedad': return `📡 RADAR DEL DUEÑO (esta semana): hay algo NUEVO${conDet}. El posteo protagonista de la semana es el lanzamiento de esta novedad.`;
+    case 'descuento': return det ? `📡 RADAR DEL DUEÑO (esta semana): DESCUENTO REAL confirmado por el dueño: ${det}. Posteo de venta con ese dato EXACTO — prohibido inventar otros descuentos, porcentajes o fechas.` : '';
+    case 'empuje': return `📡 RADAR DEL DUEÑO (esta semana): hay algo para EMPUJAR${conDet}. Posteo de producto con escasez REAL (solo la que sea verdad).`;
+    case 'festejo': return `📡 RADAR DEL DUEÑO (esta semana): hay algo para FESTEJAR${conDet}. Posteo de prueba social.`;
+    case 'clave': case 'libre': return det ? `📡 RADAR DEL DUEÑO (esta semana): el dueño contó: ${det}. Usalo como tema o ángulo donde encaje en la semana.` : '';
+    default: return '';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // CANDIDATOS — orden de prioridad FIJO:
@@ -47,7 +223,8 @@ function itemNamesOf(digest, max) {
   return out;
 }
 
-function candidatesFor(digest, dna) {
+function candidatesFor(digest, dna, opts) {
+  opts = (opts && typeof opts === 'object') ? opts : {};
   const d = (digest && typeof digest === 'object') ? digest : {};
   const a = (dna && typeof dna === 'object') ? dna : {};
   const dueno = (d.dueno && typeof d.dueno === 'object') ? d.dueno : {};
@@ -101,13 +278,14 @@ function candidatesFor(digest, dna) {
     }
   }
 
+  const gaps = [];
   // 4) Hueco estrella: ni ADN, ni inferido, ni confirmado por el dueño.
   const starKnown = String(a.producto_estrella || '').trim().length >= 3
     || String(dueno.estrella || '').trim().length >= 3
     || (d.inferred_star && d.inferred_star.item && (d.inferred_star.confidence || 0) >= 0.5);
   if (!starKnown) {
     const names = itemNamesOf(d, 3);
-    out.push({
+    gaps.push({
       kind: 'estrella',
       qkey: 'hueco:estrella',
       texto: 'cuál es tu producto o servicio estrella, el que más querés vender?',
@@ -121,7 +299,7 @@ function candidatesFor(digest, dna) {
   const bestKnown = String(a.mas_vendido || '').trim().length >= 3 || String(dueno.mas_vendido || '').trim().length >= 3;
   if (!bestKnown) {
     const names = itemNamesOf(d, 3);
-    out.push({
+    gaps.push({
       kind: 'mas_vendido',
       qkey: 'hueco:mas_vendido',
       texto: 'qué es lo que más se vende de tu negocio?',
@@ -136,7 +314,7 @@ function candidatesFor(digest, dna) {
     || (Array.isArray(a.promos_activas) && a.promos_activas.length > 0)
     || (Array.isArray(a.promos) && a.promos.length > 0);
   if (!promosKnown) {
-    out.push({
+    gaps.push({
       kind: 'promos',
       qkey: 'hueco:promos',
       texto: 'tenés alguna promo activa que quieras que empuje en tus posteos? contame cuál, o tocá «Sin promos».',
@@ -149,7 +327,7 @@ function candidatesFor(digest, dna) {
   // 7) Hueco: cliente ideal (el "cliente típico" de la ficha).
   const clientKnown = String(a.cliente_ideal || '').trim().length >= 3 || String(dueno.cliente || '').trim().length >= 3;
   if (!clientKnown) {
-    out.push({
+    gaps.push({
       kind: 'cliente',
       qkey: 'hueco:cliente',
       texto: 'quién es tu cliente típico? (edad, qué busca, de dónde viene — con tus palabras)',
@@ -162,7 +340,7 @@ function candidatesFor(digest, dna) {
   // 8) Hueco: qué NO publicar jamás.
   const banKnown = String(a.no_publicar || '').trim().length >= 3 || String(dueno.no_publicar || '').trim().length >= 3;
   if (!banKnown) {
-    out.push({
+    gaps.push({
       kind: 'no_publicar',
       qkey: 'hueco:no_publicar',
       texto: 'hay algo que no quieras que publique jamás? (un tema, un producto, un precio…)',
@@ -172,7 +350,23 @@ function candidatesFor(digest, dna) {
     });
   }
 
-  return out;
+  // (v306) Ensamble final, en orden:
+  //   1) derivados del digest (rubro/estrella/precio): prioridad crítica;
+  //   2) huecos 4–8: si el fundamento está incompleto, COMPLETARLO manda
+  //      (el radar presupone un fundamento que ya funciona);
+  //   3) la pregunta CLAVE, si la semana pasada el radar no trajo señal
+  //      (opts.preferGap);
+  //   4) el RADAR: el default semanal con el fundamento completo;
+  //   5) la CLAVE en su turno normal.
+  // Techo intacto: 1 pregunta por semana en total.
+  const radar = radarCandidate(digest, opts.weekKey, opts.lang);
+  const clave = claveCandidate(digest, opts.lang);
+  return [
+    ...out, ...gaps,
+    ...(opts.preferGap ? [clave] : []),
+    ...(radar ? [radar] : []),
+    ...(opts.preferGap ? [] : [clave]),
+  ];
 }
 
 // Memoria de preguntas: filas de posty_questions → qkeys bloqueadas.
@@ -192,9 +386,9 @@ function blockedKeys(history, nowMs) {
   return blocked;
 }
 
-function pickWeeklyCandidate(digest, dna, history, nowMs) {
+function pickWeeklyCandidate(digest, dna, history, nowMs, opts) {
   const blocked = blockedKeys(history, nowMs);
-  for (const c of candidatesFor(digest, dna)) {
+  for (const c of candidatesFor(digest, dna, opts)) {
     if (!blocked.has(c.qkey)) return c;
   }
   return null;
@@ -243,7 +437,7 @@ function publicShape(row) {
 // elige UNA (la de mayor prioridad no bloqueada) y la crea. TOPE DURO:
 // jamás dos pending en la misma semana — esta función es la única que
 // crea filas y siempre mira primero las pending de la semana.
-function ensureWeeklyQuestion(db, uid, weekKey, nowMs) {
+function ensureWeeklyQuestion(db, uid, weekKey, nowMs, opts) {
   ensureTable(db);
   const now = typeof nowMs === 'number' ? nowMs : Date.now();
   // 1) Lo que quedó pending de semanas pasadas expira (fue ignorado:
@@ -264,7 +458,27 @@ function ensureWeeklyQuestion(db, uid, weekKey, nowMs) {
   const dna = readDnaRow(db, uid);
   let history = [];
   try { history = db.prepare(`SELECT qkey, status, created_at FROM posty_questions WHERE user_id = ?`).all(uid); } catch (e) {}
-  const cand = pickWeeklyCandidate(digest, dna, history, now);
+  // (v306) ¿Cómo le fue al radar la semana pasada? Si el dueño participó
+  // y no trajo señal (contestó "nada especial" o la descartó), esta
+  // semana la capa de hueco (clave por rubro / huecos) va primero. Si
+  // expiró sin ser vista, el radar vuelve a ofrecerse tal cual: es LA
+  // pregunta semanal.
+  let preferGap = false;
+  try {
+    const lr = db.prepare(`SELECT week_key, status, respuesta FROM posty_questions WHERE user_id = ? AND kind = 'radar' AND week_key != '' AND week_key < ? ORDER BY id DESC LIMIT 1`).get(uid, weekKey);
+    if (lr) {
+      const prev = new Date(String(weekKey) + 'T12:00:00Z');
+      prev.setUTCDate(prev.getUTCDate() - 7);
+      const prevKey = prev.toISOString().slice(0, 10);
+      if (String(lr.week_key) >= prevKey) {
+        preferGap = lr.status === 'dismissed'
+          || (lr.status === 'answered' && String(lr.respuesta || '').trim() === 'nada');
+      }
+    }
+  } catch (e) {}
+  const cand = pickWeeklyCandidate(digest, dna, history, now, {
+    weekKey, lang: (opts && opts.lang) || 'es', preferGap,
+  });
   if (!cand) return null;
   const info = db.prepare(`INSERT INTO posty_questions (user_id, week_key, qkey, kind, texto, opciones_json, ref_json, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`)
@@ -329,6 +543,7 @@ function applyAnswer(db, uid, questionId, answer) {
   if (!digest.dueno || typeof digest.dueno !== 'object') digest.dueno = {};
   const dna = readDnaRow(db, uid);
   let applied = '';
+  let storedAnswer = '';
 
   if (row.kind === 'rubro') {
     let pick = null;
@@ -408,6 +623,37 @@ function applyAnswer(db, uid, questionId, answer) {
       dna.no_publicar = free;
       applied = 'no_publicar';
     }
+  } else if (row.kind === 'radar') {
+    // (v306) RADAR SEMANAL: la opción trae { tipo } en JSON; el texto,
+    // si vino, es el detalle. El descuento EXIGE el detalle (cuál y
+    // hasta cuándo): sin dato → 'needs_detail' y no se guarda nada —
+    // jamás un posteo de descuento inventado. La respuesta cae como
+    // bloque `radar` del digest, insumo PERECEDERO de esta semana
+    // (radarWeekLine lo lee solo si week_key es la semana en curso):
+    // NO va al ADN ni al bloque `dueno`, que son memoria durable.
+    let tipo = '';
+    try { const v = JSON.parse(value || ''); if (v && v.tipo) tipo = String(v.tipo); } catch (e) {}
+    const detalle = text ? cleanAnswerText(text, 200) : '';
+    if (!tipo && detalle) tipo = 'libre';
+    if (!tipo) return { ok: false, reason: 'empty' };
+    if (!RADAR_TIPOS.includes(tipo)) return { ok: false, reason: 'bad_option' };
+    if (tipo === 'descuento' && !detalle) return { ok: false, reason: 'needs_detail' };
+    digest.radar = {
+      tipo, detalle: tipo === 'nada' ? '' : detalle,
+      week_key: row.week_key || '', at: new Date().toISOString(), fuente: 'dueno',
+    };
+    storedAnswer = tipo === 'nada' ? 'nada' : (detalle ? `${tipo}: ${detalle}` : tipo);
+    applied = `radar:${tipo}`;
+  } else if (row.kind === 'clave') {
+    // (v306) PREGUNTA CLAVE del rubro: la respuesta es combustible de
+    // contenido — cae al mismo bloque perenne de la semana (digest
+    // `radar`, tipo 'clave') para que el brief de ideas la tenga a mano.
+    if (!free) return { ok: false, reason: 'empty' };
+    digest.radar = {
+      tipo: 'clave', detalle: free,
+      week_key: row.week_key || '', at: new Date().toISOString(), fuente: 'dueno',
+    };
+    applied = 'clave';
   } else {
     return { ok: false, reason: 'kind' };
   }
@@ -415,7 +661,7 @@ function applyAnswer(db, uid, questionId, answer) {
   clientDigest.saveDigest(db, uid, digest);
   writeDnaRow(db, uid, dna);
   db.prepare(`UPDATE posty_questions SET status = 'answered', respuesta = ?, acted_at = datetime('now') WHERE id = ? AND user_id = ?`)
-    .run(answeredText || applied, row.id, uid);
+    .run(storedAnswer || answeredText || applied, row.id, uid);
   return { ok: true, applied };
 }
 
@@ -429,4 +675,5 @@ module.exports = {
   candidatesFor, blockedKeys, pickWeeklyCandidate,
   ensureTable, ensureWeeklyQuestion, currentQuestion, publicShape,
   applyAnswer, dismissQuestion,
+  radarCandidate, claveCandidate, radarWeekLine, rubroKeyOf, RADAR_TIPOS,
 };
