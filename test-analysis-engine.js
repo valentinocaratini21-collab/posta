@@ -152,12 +152,17 @@ const badTone = visibleLines.filter((l) => l && !ae.lintTone(l).ok);
 ok(badTone.length === 0, 'T: ' + visibleLines.length + ' líneas visibles, cero vocabulario de reto' + (badTone.length ? ' — ofensas: ' + JSON.stringify(badTone.slice(0, 2)) : ''));
 ok(ae.lintTone('tu cuenta es un desastre total').ok === false, 'T: el lint sí caza el reto (control positivo)');
 
-// ---------- LA CARTA (estilo carta nocturna, entrega domingo a la noche) ----------
+// ---------- LA CARTA MÍNIMA (v280, aprobada por Valentino: "aun mas simple") ----------
+// Forma: saludo → foto de su mejor posteo (solo localizada por el servidor)
+// → UNA línea de festejo con EL dato → UNA línea honesta con su arreglo en
+// marcha → "Esta semana hago esto:" con 2–3 acciones → "De tu lado: nada"
+// → cierre amigo en una línea con "Domingo N conmigo". Sin bloques de
+// fases, sin marcador como sección, sin apertura narrativa separada.
 const letterTexts = (a) => {
   const L = a && a.letter;
   if (!L) return [];
   const out = [L.title, L.greeting, L.closing];
-  (L.body || []).forEach((it) => { if (it.t === 'plan') out.push(it.step, it.fx); else out.push(it.text); });
+  (L.body || []).forEach((it) => { if (it.t === 'p' || it.t === 'action') out.push(it.text); });
   return out.filter(Boolean);
 };
 const letterDigitsOk = (a) => {
@@ -166,54 +171,71 @@ const letterDigitsOk = (a) => {
   const norm = (x) => x.replace(',', '.').replace(/\.$/, '');
   const rest = JSON.parse(JSON.stringify(a)); delete rest.letter;
   const universe = new Set((JSON.stringify(rest).match(/\d+[.,]?\d*/g) || []).map(norm));
+  // El N de "Domingo N conmigo" no sale del análisis: sale del contador
+  // real de cartas del cliente (el n de persistencia de la carta anterior
+  // + 1). Su procedencia es ese historial — el universo lo declara.
+  if (a.letter && a.letter.sundays != null) universe.add(String(a.letter.sundays));
   const toks = (letterTexts(a).join(' ').match(/\d+[.,]?\d*/g) || []).map(norm);
   return toks.every((t) => universe.has(t));
 };
-ok(a1.letter && a1.letter.style === 'carta-nocturna', 'C: la carta viene en el payload (estilo carta nocturna)');
-ok(a1.letter.title && a1.letter.title.length > 0, 'C: título evocativo presente ("' + (a1.letter && a1.letter.title) + '")');
-ok(a1.letter.delivery === 'domingo-noche', 'C: la carta declara su entrega (domingo a la noche)');
+const L1 = a1.letter || {};
+ok(L1.style === 'carta-nocturna' && L1.v === 2 && L1.minimal === true, 'C: la carta viene en el payload, en su forma mínima (v2)');
+ok(L1.title && L1.title.length > 0, 'C: título evocativo presente ("' + (L1.title || '') + '")');
+ok(L1.delivery === 'domingo-noche', 'C: la carta declara su entrega (domingo a la noche)');
 const a1b = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, businessName: 'Café Aroma', handle: 'cafearoma' } });
 ok(a1b.letter.greeting === 'Hola, Café Aroma:', 'C: el saludo nombra al negocio (sin nombre, genérico — nunca inventado)');
-const idxPlan = a1.letter.body.findIndex((it) => it.t === 'plan');
-const idxMarcador = a1.letter.body.findIndex((it) => it.t === 'p' && /números de hoy/i.test(it.text || ''));
-ok(idxPlan > 0, 'C: el plan está integrado en la narración (no es el primer bloque)');
-ok(idxMarcador === -1 || idxMarcador < idxPlan, 'C: el marcador honesto se lee ANTES del plan');
-const phasesInLetter = [...new Set(a1.letter.body.filter((it) => it.t === 'plan').map((it) => it.phase))].sort();
-ok(JSON.stringify(phasesInLetter) === '[0,1,2]', 'C: el plan narrado cubre las 3 fases (esta semana / la que viene / de acá en más)');
-ok(a1.letter.body.filter((it) => it.t === 'plan').every((it) => it.step && it.fx), 'C: cada paso del plan trae su efecto');
-ok(/domingo/i.test(letterTexts(a1).join(' ')), 'C: la carta nombra su cita del domingo (apertura o cierre)');
+// Estructura mínima: NADA de bloques de fases en la carta.
+ok(!(L1.body || []).some((it) => it.t === 'plan'), 'C-mínima: la carta NO tiene bloques de fases (murieron las ①②③)');
+const festejos = (L1.body || []).filter((it) => it.kind === 'festejo');
+ok(festejos.length === 1 && L1.festejo === festejos[0].text, 'C-mínima: UN solo festejo, con EL dato de la semana');
+const honestas = (L1.body || []).filter((it) => it.kind === 'honesta');
+ok(honestas.length <= 1, 'C-mínima: UNA línea honesta como máximo (' + honestas.length + ')');
+ok(honestas.length === 0 || /^Noté esto/.test(honestas[0].text) && /Tranqui: ya está en marcha/.test(honestas[0].text), 'C-mínima: lo flojo va en una frase, con su arreglo ya en marcha pegado');
+const acciones = (L1.body || []).filter((it) => it.t === 'action');
+ok(acciones.length >= 2 && acciones.length <= 3, 'C-mínima: 2–3 acciones de esta semana (' + acciones.length + ')');
+ok(Array.isArray(L1.actions) && L1.actions.length === acciones.length, 'C-mínima: letter.actions espeja las acciones del cuerpo');
+ok((L1.body || []).some((it) => it.kind === 'acciones-head' && it.text === 'Esta semana hago esto:'), 'C-mínima: las acciones se anuncian con "Esta semana hago esto:"');
+ok(/De tu lado, esta semana: nada/.test(L1.ask || ''), 'C-mínima: del lado del cliente, esta semana: nada');
+// (B) Domingo N conmigo: N = número de esta carta en su historia.
+ok(L1.sundays === 1 && /Domingo 1 conmigo/.test(L1.closing || ''), 'C-mínima: la primera carta cierra "Domingo 1 conmigo"');
+ok(aNext.letter.sundays === 2 && /Domingo 2 conmigo/.test(aNext.letter.closing || ''), 'C-mínima: la segunda carta (prior n=1) cierra "Domingo 2 conmigo"');
+ok(/lo que te prometí en mi carta anterior, cumplido/.test(aNext.letter.festejo || ''), 'C-mínima: el loop cumplido ES el festejo (no una sección más)');
 ok(/constancia la pongo yo/i.test(letterTexts(a1).join(' ')), 'C: cierre de líder motivacional con la firma de la casa');
+// (A) La foto: SOLO localizada por el servidor (ctx.bestPhoto con /media/).
+ok(L1.photo === null && !(L1.body || []).some((it) => it.t === 'photo'), 'C-mínima: sin foto localizada no hay foto (los thumbs crudos de IG no cuentan)');
+const a1Foto = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, businessName: 'Café Aroma', handle: 'cafearoma', bestPhoto: { src: '/media/igthumb-demo123.jpg', likes: 50 } } });
+ok(a1Foto.letter.photo && a1Foto.letter.photo.src === '/media/igthumb-demo123.jpg' && a1Foto.letter.body[0].t === 'photo', 'C-mínima: con mejor posteo localizado, la foto abre el cuerpo de la carta');
+const a1Cruda = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, bestPhoto: { src: 'https://scontent.cdninstagram.com/x.jpg', likes: 9 } } });
+ok(a1Cruda.letter.photo === null, 'C-mínima: una URL cruda de Instagram JAMÁS entra como foto (fail-closed)');
+const bestPick = ae.pickBestPost([{ thumb: 'a', likes: 10, comments: 1, taken_at: 100 }, { thumb: 'b', likes: 30, comments: 0, taken_at: 90 }, { thumb: 'c', likes: 30, comments: 4, taken_at: 80 }]);
+ok(bestPick && bestPick.thumb === 'c' && bestPick.likes === 30, 'C-mínima: pickBestPost elige más likes y desempata por comentarios');
+ok(ae.pickBestPost([]) === null && ae.pickBestPost([{ likes: 5 }]) === null, 'C-mínima: sin posteos con foto, pickBestPost devuelve null');
 ok(letterDigitsOk(a1), 'C: cero números en la carta que no vengan del análisis (regla de verdad)');
 ok(letterDigitsOk(aNext), 'C: la carta con loop medido tampoco afirma números sin respaldo');
-ok(aNext.letter && /carta anterior/i.test(letterTexts(aNext).join(' ')), 'C: la segunda carta narra el plan anterior medido (loop en prosa)');
+ok(letterDigitsOk(a2), 'C: la carta de nacimiento tampoco inventa números');
 ok(letterTexts(a1).every((t) => ae.lintTone(t).ok), 'C: toda la carta pasa el lint de tono');
 ok(a2.letter && a2.letter.title === 'Nacer con plan', 'C: nacimiento = carta de nacimiento, no radiografía fingida');
 ok(a2.letter.greeting === 'Hola, Panadería Sol:', 'C: la carta de nacimiento saluda al negocio por su nombre');
-ok(!/números de hoy/i.test(letterTexts(a2).join(' ')), 'C: nacimiento sin señales de feed → ningún marcador inventado');
-ok(a2.letter.body.some((it) => it.t === 'p' && /Pan de masa madre/.test(it.text || '')), 'C: la carta de nacimiento nace del fundamento (su estrella, test de pertenencia)');
+ok(a2.letter.sundays === 1 && /Domingo 1 conmigo/.test(a2.letter.closing || ''), 'C-mínima: nacimiento = domingo 1 conmigo');
+ok(a2.letter.photo === null, 'C-mínima: nacimiento sin posteos → carta SIN foto (jamás una genérica)');
+ok(/Pan de masa madre/.test(a2.letter.festejo || ''), 'C-mínima: el festejo de nacimiento nace del fundamento (su estrella, test de pertenencia)');
 const aEn = ae.analyzeExisting({ profile: { followers: 320, posts_count: 40 }, posts: weakPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, lang: 'en', businessName: 'Glow Studio' } });
 ok(aEn.letter && aEn.letter.greeting === 'Hi, Glow Studio:' && aEn.letter.title === 'Your first letter', 'C: la carta EN sale en inglés (saludo y título)');
+ok(/Sunday 1 with me/.test(aEn.letter.closing || '') && /This week I am doing this:/.test(letterTexts(aEn).join(' ')), 'C-mínima: la carta EN también es mínima (Sunday N with me + acciones)');
 ok(letterTexts(aEn).every((t) => ae.lintTone(t, 'en').ok), 'C: la carta EN pasa el lint de tono EN');
 
-// ---------- LA CARTA CORTA (corrección de Valentino 22:43: "es muy larga") ----------
-// Topes duros del resumen: se lee en menos de un minuto.
-const planItems1 = a1.letter.body.filter((it) => it.t === 'plan');
-ok(planItems1.length <= 3, 'C-corta: el plan de la carta tiene ≤3 pasos (' + planItems1.length + ')');
-ok([0, 1, 2].every((ph) => planItems1.filter((it) => it.phase === ph).length === 1), 'C-corta: UN paso por fase — el principal de cada una');
-const hallazgosCarta = a1.letter.body.filter((it) => it.t === 'p' && /^Noté esto/.test(it.text || ''));
-ok(hallazgosCarta.length >= 1 && hallazgosCarta.length <= 2, 'C-corta: hallazgos narrados ≤2 (' + hallazgosCarta.length + ' de ' + a1.findings.length + ' del análisis completo)');
-const fortP = a1.letter.body.find((it) => it.t === 'p' && /lo bueno/.test(it.text || ''));
-ok(fortP && (fortP.text.match(/;/g) || []).length <= 1, 'C-corta: fortalezas ≤2, en un solo párrafo breve');
-const loopHits = (aNext.loop.checks || []).filter((c) => c.text && letterTexts(aNext).join(' ').includes(c.text)).length;
-ok(loopHits <= 1, 'C-corta: el loop medido se narra en UN movimiento (' + loopHits + ')');
+// ---------- LA CARTA SE LEE EN MENOS DE UN MINUTO (topes de la forma mínima) ----------
+ok((L1.body || []).length <= 8, 'C-corta: el cuerpo de la carta tiene ≤8 ítems (' + (L1.body || []).length + ': festejo+honesta+anuncio+acciones+pedido)');
+const loopCrudo = (aNext.loop.checks || []).filter((c) => c.text && letterTexts(aNext).join(' ').includes(c.text)).length;
+ok(loopCrudo === 0, 'C-corta: el loop NUNCA se narra con su texto métrico crudo (se compone en palabras de amigo)');
 const totalCarta = letterTexts(a1).join(' ').length;
-ok(totalCarta <= 2300, 'C-corta: la carta entera se lee en menos de un minuto (' + totalCarta + ' caracteres)');
-ok(a2.letter.body.filter((it) => it.t === 'plan').length <= 3, 'C-corta: la carta de nacimiento también resume el plan (≤3 pasos)');
-ok(a2.letter.body.filter((it) => it.t === 'p').length <= 6, 'C-corta: nacimiento resumido — apertura + intro + ≤2 datos + plan + pedido (' + a2.letter.body.filter((it) => it.t === 'p').length + ' párrafos)');
-ok(aEn.letter.body.filter((it) => it.t === 'plan').length <= 3, 'C-corta: la carta EN respeta los mismos topes');
+ok(totalCarta <= 1200, 'C-corta: la carta mínima entera se lee de un vistazo (' + totalCarta + ' caracteres)');
+ok((a2.letter.body || []).filter((it) => it.t === 'p' || it.t === 'action').length <= 7, 'C-corta: nacimiento igual de mínimo (' + (a2.letter.body || []).length + ' ítems en el cuerpo)');
+ok(acciones.every((it) => (it.text || '').length <= 170), 'C-corta: cada acción es corta, una por línea (el porqué va adentro, en pocas palabras)');
 // TONO AMIGO (22:45): Posty es el amigo del cliente, no una agencia que reporta.
 ok(/festejemos lo bueno, que es mérito tuyo/.test(letterTexts(a1).join(' ')), 'C-amigo: las fortalezas se festejan como mérito del cliente, no se reportan');
 ok(/celebrate the good stuff/.test(letterTexts(aEn).join(' ')), 'C-amigo: la carta EN también festeja antes de contar');
+ok(/Tranqui: ya está en marcha/.test(letterTexts(a1).join(' ')) && /No worries — already in motion/.test(letterTexts(aEn).join(' ')), 'C-amigo: lo flojo se cuenta como un amigo, con la solución ya en marcha (ES/EN)');
 ok(!/sinergia|performance|engagement/i.test(letterTexts(a1).join(' ') + ' ' + letterTexts(aEn).join(' ')), 'C-amigo: cero jerga de agencia en la carta (ES/EN)');
 
 // ---------- Persistencia + historial (DB temporal, sin red) ----------

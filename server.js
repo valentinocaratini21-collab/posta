@@ -5816,7 +5816,26 @@ async function buildAccountAnalysis(uid, opts = {}) {
       try {
         paletteHues = await Promise.race([feedAudit.analyzePalette(data.posts || []), new Promise((r) => setTimeout(() => r(null), 1500))]);
       } catch (e) { /* sin paleta: el hallazgo no se afirma */ }
-      analysis = analysisEngine.analyzeExisting({ profile: data.profile, posts: data.posts, ctx: Object.assign({}, ctx, { paletteHues }) });
+      // (Carta mínima v280, agregado A) La foto del mejor posteo de la
+      // semana para la carta dominical: se elige con pickBestPost (el de
+      // más likes entre los que traen foto) y se LOCALIZA a MEDIA_DIR con
+      // localizeTrialPhotos — la miniatura cruda de IG expira y no se
+      // hotlinkea; la carta solo acepta un src propio /media/.... Todo
+      // fail-closed con timeout corto: sin foto localizada, la carta sale
+      // SIN foto — jamás una genérica ni una de otro.
+      let bestPhoto = null;
+      try {
+        const best = analysisEngine.pickBestPost(data.posts || []);
+        if (best && best.thumb) {
+          const loc = await Promise.race([
+            feedAudit.localizeTrialPhotos({ handle: ig, photos: [best.thumb] }, MEDIA_DIR),
+            new Promise((r) => setTimeout(() => r(null), 3000)),
+          ]);
+          const src = loc && Array.isArray(loc.photos) ? loc.photos[0] : null;
+          if (src && /^\/media\/[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp)$/.test(src)) bestPhoto = { src, likes: best.likes };
+        }
+      } catch (e) { /* sin foto: la carta sale sin foto */ }
+      analysis = analysisEngine.analyzeExisting({ profile: data.profile, posts: data.posts, ctx: Object.assign({}, ctx, { paletteHues, bestPhoto }) });
     }
   }
   if (!analysis) {
@@ -15386,7 +15405,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v279';
+const BUILD_ID = '20261020-v280';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

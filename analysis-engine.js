@@ -626,7 +626,18 @@ function weekSummary(analysis) {
 // mayor impacto, en el orden del análisis) · plan con UN paso por fase (el
 // principal) con su efecto · cierre ≤2 líneas + firma. El análisis completo
 // sigue existiendo detrás; la carta es solo su resumen con sustancia.
-// ---------------------------------------------------------------------------
+  //
+  // MÍNIMA (v280, 2026-10-21, Valentino: "que sea aun mas simple" + su
+  // "dale"): la carta se reduce a ~10 líneas — saludo → foto de su mejor
+  // posteo (si el servidor la localizó) → UNA línea de festejo con EL
+  // dato → UNA línea honesta con su arreglo en marcha → "Esta semana hago
+  // esto:" con 2–3 acciones → "De tu lado: nada" → cierre amigo en UNA
+  // línea con "Domingo N conmigo" (N = número de carta en su historia;
+  // sin historia confiable, no se pone). Mueren los bloques de fases, el
+  // marcador como sección y la apertura narrativa (el festejo ES la
+  // apertura). Las cartas v1 guardadas se siguen rindiendo con su forma;
+  // las nuevas salen con v:2. El análisis completo no cambia.
+//// ---------------------------------------------------------------------------
 function letterStrong(s, lang) {
   if (!s) return '';
   const en = lang === 'en';
@@ -709,6 +720,108 @@ function letterPhases(a, ctx = {}) {
   return phases;
 }
 
+/* El mejor posteo de una lista cruda de IG: el de más likes (desempate:
+ * más comentarios, después el más reciente) entre los que tienen foto.
+ * Pura y sin red: la localización de la miniatura es trabajo del servidor. */
+function pickBestPost(posts) {
+  const list = (Array.isArray(posts) ? posts : []).filter((p) => p && typeof p === 'object' && p.thumb);
+  let best = null;
+  const lk = (x) => (Number.isFinite(x.likes) ? x.likes : -1);
+  const cm = (x) => (Number.isFinite(x.comments) ? x.comments : -1);
+  const ts = (x) => (Number.isFinite(x.taken_at) ? x.taken_at : 0);
+  list.forEach((p) => {
+    if (!best) { best = p; return; }
+    if (lk(p) > lk(best) || (lk(p) === lk(best) && (cm(p) > cm(best) || (cm(p) === cm(best) && ts(p) > ts(best))))) best = p;
+  });
+  if (!best) return null;
+  return {
+    thumb: best.thumb,
+    likes: Number.isFinite(best.likes) ? best.likes : null,
+    comments: Number.isFinite(best.comments) ? best.comments : null,
+    shortcode: best.shortcode || null,
+  };
+}
+
+/* El movimiento del loop en palabras de amigo (no el texto métrico crudo
+ * del check): mode 'win' = cumplido (para el festejo), 'soft' = en curso
+ * (para la línea honesta, en fraseo neutro: "en curso" no garantiza que
+ * haya mejorado). Devuelve '' si el check no trae un dato real. */
+function letterLoopPhrase(c, lang, mode) {
+  if (!c || !Number.isFinite(c.actual)) return '';
+  const en = lang === 'en';
+  const T = (es, enS) => (en ? enS : es);
+  const fr = (x) => fmtRate(x, lang);
+  const a = c.actual;
+  const win = mode === 'win';
+  switch (c.key) {
+    case 'posts_per_week':
+      return win
+        ? T('ya salís a ' + fr(a) + ' posteos por semana', 'you are already at ' + fr(a) + ' posts a week')
+        : T('tu ritmo viene en ' + fr(a) + ' posteos por semana', 'your pace is at ' + fr(a) + ' posts a week');
+    case 'max_gap_days':
+      return win
+        ? T('tu racha más larga en silencio bajó a ' + a + (a === 1 ? ' día' : ' días'), 'your longest silent stretch is down to ' + a + (a === 1 ? ' day' : ' days'))
+        : T('tu racha en silencio viene en ' + a + (a === 1 ? ' día' : ' días'), 'your silent stretch is at ' + a + (a === 1 ? ' day' : ' days'));
+    case 'videos':
+      return win
+        ? T('ya tenés ' + a + ' reels arriba', 'you already have ' + a + ' reels up')
+        : T('venís con ' + a + ' reels', 'you are at ' + a + ' reels');
+    case 'hook_pct':
+      return T('el ' + a + '% de tus captions abre con gancho', a + '% of your captions open with a hook');
+    default:
+      return win
+        ? T('"' + (c.label || '') + '" llegó a ' + fr(a), '"' + (c.label || '') + '" reached ' + fr(a))
+        : T('"' + (c.label || '') + '" viene en ' + fr(a), '"' + (c.label || '') + '" is at ' + fr(a));
+  }
+}
+
+/* Las 2–3 acciones de ESTA semana (carta mínima): las decisiones de los
+ * hallazgos cuyo trabajo arranca ya (fase 0 del mapa de fases de la carta)
+ * en orden de impacto + las del mercado cuando el plan lo incluye (mismo
+ * gateo que letterPhases); si no alcanzan, el arreglo del hallazgo
+ * principal — ya está en marcha, es trabajo de esta semana — y el proceso
+ * propio de Posty (siempre verdad: la semana del cliente existe). Cada
+ * decisión del motor ya trae su porqué adentro: es el formato con el que
+ * se escriben. En nacimiento, las acciones son el plan de nacimiento
+ * empezando ahora, en su forma corta. */
+function letterWeekActions(a, ctx = {}) {
+  const lang = a && a.lang;
+  const en = lang === 'en';
+  const T = (es, enS) => (en ? enS : es);
+  const cap = (t) => { const s = String(t || '').trim(); return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; };
+  const dot = (t) => { const s = String(t || '').trim(); return s && !/[.!?…]$/.test(s) ? s + '.' : s; };
+  if (a && a.kind === 'nacimiento') {
+    return [
+      T('Tu cuenta nace completa: perfil armado con su kit (nombre, bio, foto y destacadas) y tu primera vidriera de 9 piezas pensada como un todo.', 'Your account is born complete: profile set up with its kit (name, bio, photo and highlights) and your first 9-piece storefront designed as a whole.'),
+      T('El ritmo queda instalado desde la primera semana: tu semana completa sale sola, cada semana.', 'The rhythm is installed from the very first week: your full week goes out on its own, every week.'),
+      T('Te mido desde el día uno: cada análisis nuevo compara contra el anterior y ajusto la semana con lo que aprendo de tu cuenta.', 'I measure you from day one: every new analysis compares against the previous one and adjusts the week with what I learn from your account.'),
+    ];
+  }
+  const phaseOf = (f) => {
+    let ph = LETTER_PHASE_BY_KEY[f.key];
+    if (ph == null) ph = LETTER_PHASE_BY_GROUP[f.group];
+    return ph;
+  };
+  const out = [];
+  const push = (f) => {
+    if (!f || out.length >= 3) return;
+    const step = f.decision || (f.with_posty ? cap(String(f.with_posty).replace(/^todos:\s*/i, '')) : '');
+    if (!step) return;
+    const txt = dot(step);
+    if (out.includes(txt)) return;
+    out.push(txt);
+  };
+  const findings = ((a && a.findings) || []).filter((f) => f && (f.decision || f.with_posty));
+  findings.filter((f) => phaseOf(f) === 0).forEach(push);
+  const fullPlan = ['pro', 'total', 'free'].includes(String(ctx.plan || (a && a.plan_layer) || ''));
+  if (fullPlan && a.market && a.market.available && Array.isArray(a.market.findings)) {
+    a.market.findings.filter((f) => f && (phaseOf(f) === 0 || phaseOf(f) == null)).forEach(push);
+  }
+  if (out.length < 2) findings.forEach(push);
+  if (out.length < 2) out.push(T('Tu semana sale completa y pareja, armada y programada por mí.', 'Your week comes out full and even, built and scheduled by me.'));
+  return out.slice(0, 3);
+}
+
 function letterTitle(a, stage, hasPrior) {
   const en = a && a.lang === 'en';
   const T = (es, enS) => (en ? enS : es);
@@ -728,7 +841,6 @@ function buildLetter(analysis, ctx = {}) {
   const lang = a.lang === 'en' ? 'en' : 'es';
   const en = lang === 'en';
   const T = (es, enS) => (en ? enS : es);
-  const fr = (x) => fmtRate(x, lang);
   const birth = a.kind === 'nacimiento';
   const hasPrior = !!(ctx.prior || a.loop);
   const stage = birth ? 'starter' : letterStage(a);
@@ -738,105 +850,134 @@ function buildLetter(analysis, ctx = {}) {
     : T('Hola:', 'Hi:');
   const lower = (t) => { const s = String(t || '').trim(); return s ? s.charAt(0).toLowerCase() + s.slice(1) : ''; };
   const dot = (t) => { const s = String(t || '').trim(); return s && !/[.!?…]$/.test(s) ? s + '.' : s; };
-  const body = [];
-  const P = (text) => { if (text && String(text).trim()) body.push({ t: 'p', text: String(text).trim() }); };
 
+  // (B) "Domingo N conmigo": N sale SOLO de la historia real de cartas —
+  // el n que persistencia le dio a la carta anterior, + 1 (el barrido lo
+  // trae en ctx.prior; evaluateLoop lo deja también en a.loop.from_n).
+  // Sin historia, esta es su primera carta: domingo 1 (nacimiento = 1).
+  // Historia sin número confiable → no se pone (fail-closed).
+  let sundays = null;
+  if (Number.isFinite(ctx.letterNumber) && ctx.letterNumber >= 1) sundays = Math.floor(ctx.letterNumber);
+  else if (ctx.prior && Number.isFinite(ctx.prior.n) && ctx.prior.n >= 1) sundays = Math.floor(ctx.prior.n) + 1;
+  else if (a.loop && Number.isFinite(a.loop.from_n) && a.loop.from_n >= 1) sundays = Math.floor(a.loop.from_n) + 1;
+  else if (!hasPrior) sundays = 1;
+
+  // (A) La foto de su mejor posteo, arriba de la carta: entra SOLO
+  // localizada por el servidor (ctx.bestPhoto con src propio /media/...).
+  // La URL cruda de Instagram expira y no se deja hotlinkear: jamás va en
+  // la carta. Sin posteos reales (nacimiento, sin feed) → sin foto.
+  let photo = null;
+  if (!birth && ctx.bestPhoto && typeof ctx.bestPhoto.src === 'string'
+    && /^\/media\/[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp)$/.test(ctx.bestPhoto.src)) {
+    photo = { src: ctx.bestPhoto.src, likes: Number.isFinite(ctx.bestPhoto.likes) ? ctx.bestPhoto.likes : null };
+  }
+
+  let festejo = '';
+  let honesta = '';
   if (birth) {
-    P(T('tu cuenta todavía no nació en Instagram — y es una ventaja hermosa: no hay nada que corregir, todo por construir. Estudié tu negocio, tu rubro y tu zona, y armé el plan con el que nace.',
-      'your account has not been born on Instagram yet — and that is a real advantage: nothing to fix, everything to build. I studied your business, your category and your area, and built the plan it will be born with.'));
-    const known = (a.findings || []).filter((f) => f && f.text);
-    if (known.length) {
-      P(T('Esto ya lo sé de tu negocio, leído de tus propias fuentes — nada inventado:',
-        'This is what I already know about your business, read from your own sources — nothing made up:'));
-      // Carta corta: lo esencial del fundamento, máx. 2 datos (el resto vive
-      // en el kit y en la vidriera de esta misma pantalla).
-      known.slice(0, 2).forEach((f) => {
-        P(dot(T(lower(f.text) + (f.now ? ' — ' + f.now : ''),
-          lower(f.text) + (f.now ? ' — ' + f.now : ''))));
-      });
-    }
+    const fs = (a.findings || []).filter((f) => f && f.text);
+    const star = fs.find((f) => f.key === 'estrella' && f.now);
+    const rev = fs.find((f) => f.key === 'resenas' && f.now);
+    const core = star
+      ? T('tu negocio ya tiene su estrella: ' + star.now + ' — y tu vidriera abre con ella', 'your business already has its star: ' + star.now + ' — and your storefront opens with it')
+      : (rev
+        ? T('ya tenés reputación de la buena: ' + lower(rev.now) + ' — ahora se va a ver en Instagram', 'you already have the good kind of reputation: ' + lower(rev.now) + ' — now it will show on Instagram')
+        : T('tu negocio ya tiene todo para arrancar bien: yo le sumo el plan y la constancia', 'your business already has everything it needs for a strong start: I add the plan and the consistency'));
+    festejo = T('Primero festejemos lo bueno, que es mérito tuyo: ', 'First, let us celebrate the good stuff — you earned it: ') + core + '.';
+    const mkt = fs.find((f) => f.key === 'mercado-ritmo' && f.now)
+      || ((a.market && Array.isArray(a.market.findings)) ? a.market.findings.find((f) => f && f.key === 'mercado-ritmo' && f.now && f.text) : null);
+    if (mkt) honesta = dot(T('Te cuento la vara de tu rubro: ' + lower(mkt.text) + ' — ' + mkt.now + '. Tranqui: ya está en marcha — nacés con ese ritmo instalado',
+      'Here is the bar in your category: ' + lower(mkt.text) + ' — ' + mkt.now + '. No worries — already in motion: you are born with that pace installed'));
   } else {
     const s = a.signals || {};
-    P(T('cerró tu semana y la estudié completa. Esta es tu carta de domingo a la noche: lo que vi, lo que ya puse en marcha y cómo seguimos — con tus números reales, sin vueltas.',
-      'your week closed and I went through all of it. This is your Sunday-night letter: what I saw, what I already set in motion and where we go next — with your real numbers, no fluff.'));
-    // El loop medido: lo prometido la carta anterior, contra la cuenta de
-    // hoy, en UN solo movimiento (carta corta: el que más cuenta, primero lo
-    // que mejoró). El loop completo sigue en el payload para el detalle.
-    if (a.loop && Array.isArray(a.loop.checks) && a.loop.checks.length) {
-      const rank = { improved: 0, on_track: 1, behind: 2 };
-      const ordered = a.loop.checks.filter((c) => c && c.text)
-        .sort((x, y) => (rank[x.status] != null ? rank[x.status] : 3) - (rank[y.status] != null ? rank[y.status] : 3));
-      const texts = ordered.slice(0, 1).map((c) => c.text);
-      if (texts.length) P(T('Lo que te prometí en mi carta anterior, medido contra tu cuenta de hoy: ', 'What I promised in my last letter, measured against your account today: ') + texts.join(' '));
-    }
-    // Fortalezas primero, con su dato: máx. 2, una línea cada una.
-    const strong = letterStrong(s, lang);
-    const strengths = [];
-    if (stage === 'fuerte' && s.posts_per_week != null) strengths.push(T('tu cuenta ya trabaja a ' + fr(s.posts_per_week) + ' posteos por semana', 'your account already posts ' + fr(s.posts_per_week) + ' times a week'));
-    if (strong && !strengths.includes(strong)) strengths.push(strong);
-    if (strengths.length) {
+    const fr = (x) => fmtRate(x, lang);
+    // EL festejo: un solo dato, el más fuerte de la semana, celebrado como
+    // mérito del cliente — y es la apertura (ya no hay apertura narrativa
+    // separada). El movimiento del loop cumplido manda: es lo que Posty
+    // prometió en la carta anterior, cumplido.
+    let core = '';
+    const checks = (a.loop && Array.isArray(a.loop.checks)) ? a.loop.checks : [];
+    const doneCheck = checks.find((c) => c && c.status === 'cumplida' && letterLoopPhrase(c, lang, 'win'));
+    if (doneCheck) core = T('lo que te prometí en mi carta anterior, cumplido: ', 'what I promised in my last letter, delivered: ') + letterLoopPhrase(doneCheck, lang, 'win');
+    else if (stage === 'fuerte' && s.posts_per_week != null) core = T('tu cuenta ya trabaja a ' + fr(s.posts_per_week) + ' posteos por semana', 'your account already posts ' + fr(s.posts_per_week) + ' times a week');
+    else if (s.n_posts >= 3) core = T('ya tenés ' + s.n_posts + ' posteos publicados: hay material real para apoyarnos', 'you already have ' + s.n_posts + ' published posts: real material to build on');
+    else if (s.hook_pct != null && s.hook_pct >= 50) core = T('el ' + s.hook_pct + '% de tus captions ya abre con un gancho que frena el scroll', s.hook_pct + '% of your captions already open with a scroll-stopping hook');
+    else core = letterStrong(s, lang) || (s.n_posts >= 1 ? T('ya tenés posteos publicados: hay material real para apoyarnos', 'you already have published posts: there is real material to build on') : '');
+    if (core) {
       const tail = stage === 'fuerte'
         ? T('. Sostenerlo y afinarlo es mi trabajo — para eso estoy.', '. Keeping it up and sharpening it is my job — that is what I am here for.')
         : T('. Sobre eso construimos — no partimos de cero.', '. We build on that — we are not starting from zero.');
-      P(T('Primero festejemos lo bueno, que es mérito tuyo: ', 'First, let us celebrate the good stuff — you earned it: ') + strengths.slice(0, 2).join(T('; y ', '; and ')) + tail);
+      festejo = T('Primero festejemos lo bueno, que es mérito tuyo: ', 'First, let us celebrate the good stuff — you earned it: ') + core + tail;
     }
-    // El marcador honesto: máx. 3 números reales, cada uno con su lectura.
-    const bits = [];
-    if (s.posts_per_week != null) bits.push(T('hoy salís a ' + fr(s.posts_per_week) + ' posteos por semana', 'today you are at ' + fr(s.posts_per_week) + ' posts per week'));
-    if (s.max_gap_days != null && s.max_gap_days >= 2) bits.push(T('tu racha más larga en silencio fue de ' + s.max_gap_days + ' días', 'your longest silent stretch was ' + s.max_gap_days + ' days'));
-    else if (s.days_since_last != null && s.days_since_last >= 2) bits.push(T('pasaron ' + s.days_since_last + ' días desde tu último posteo', s.days_since_last + ' days have gone by since your last post'));
-    if (s.hook_pct != null) bits.push(T('el ' + s.hook_pct + '% de tus captions abre con un gancho que frena el scroll', s.hook_pct + '% of your captions open with a hook that stops the scroll'));
-    if (bits.length >= 2) {
-      P(T('Tus números de hoy, dichos con cariño y sin vueltas: ' + bits.join('; ') + '. No es un reto: es el punto exacto desde el que armo tu semana.',
-        'Your numbers today, said kindly and plainly: ' + bits.join('; ') + '. That is not a scolding: it is the exact starting point I build your week from.'));
+    // LA línea honesta: el punto flojo principal (el análisis ya ordena
+    // por impacto) en una frase, con su arreglo ya en marcha pegado.
+    const f0 = (a.findings || []).find((f) => f && f.text);
+    if (f0) {
+      const fix = f0.decision || f0.with_posty || '';
+      honesta = dot(T('Noté esto: ' + lower(f0.text) + (f0.now ? ' — hoy: ' + f0.now : '') + (fix ? '. Tranqui: ya está en marcha — ' + lower(fix) : ''),
+        'I noticed this: ' + lower(f0.text) + (f0.now ? ' — today: ' + f0.now : '') + (fix ? '. No worries — already in motion: ' + lower(fix) : '')));
+    } else {
+      // Sin hallazgos: si el loop dejó algo en curso, ese es el punto flojo.
+      const going = checks.find((c) => c && c.status === 'en-curso' && letterLoopPhrase(c, lang, 'soft'));
+      if (going) {
+        const tgt = Number.isFinite(going.target) ? T(' y la meta es ', ' and the target is ') + fmtRate(going.target, lang) : '';
+        honesta = dot(T('Te cuento lo que viene más flojo: ' + letterLoopPhrase(going, lang, 'soft') + tgt + '. Tranqui: ya está en marcha — esta semana lo sigo empujando',
+          'Here is the softest spot: ' + letterLoopPhrase(going, lang, 'soft') + tgt + '. No worries — already in motion: this week I keep pushing it'));
+      }
     }
-    // Los hallazgos, narrados: máx. 2, los de mayor impacto (el orden del
-    // análisis ya es por impacto), cada uno con su arreglo ya en marcha.
-    (a.findings || []).slice(0, 2).forEach((f) => {
-      if (!f || !f.text) return;
-      const fix = f.decision || f.with_posty || '';
-      P(dot(T('Noté esto: ' + lower(f.text) + (f.now ? ' — hoy: ' + f.now : '') + (fix ? '. Tranqui: ya está en marcha — ' + lower(fix) : ''),
-        'I noticed this: ' + lower(f.text) + (f.now ? ' — today: ' + f.now : '') + (fix ? '. No worries — already in motion: ' + lower(fix) : ''))));
-    });
   }
 
-  // El plan, integrado en la narración: intro + pasos por fase con su efecto.
-  P(birth
-    ? T('Este es el plan con el que nace tu cuenta, en este orden — y ya arranca:', 'This is the plan your account is born with, in this order — and it is already starting:')
-    : T('Y acá va el plan — así lo voy haciendo, paso a paso:', 'And here is the plan — this is how I will run it, step by step:'));
-  const phaseNames = [T('Esta semana', 'This week'), T('La que viene', 'Next week'), T('De acá en más', 'From here on')];
-  letterPhases(a, ctx).forEach((steps, i) => {
-    (steps || []).forEach((st) => body.push({ t: 'plan', phase: i, phase_name: phaseNames[i], step: st.step, fx: st.fx || '' }));
-  });
+  const actions = letterWeekActions(a, ctx);
+  const ask = birth
+    ? (() => {
+        const asks = [];
+        if (!ctx.hasIg) asks.push(T('conectá tu Instagram desde Ajustes — así publico por vos y tu análisis se afina con tus métricas reales', 'connect your Instagram from Settings — so I can post for you and your analysis sharpens with your real metrics'));
+        asks.push(T('mandame tus fotos favoritas (3 a 5) — tu vidriera sale con tu material real, no con fotos genéricas', 'send me your favorite photos (3 to 5) — your storefront goes out with your real material, not generic photos'));
+        return T('De tu lado, cuando puedas: ' + asks.join('; ') + '. Con eso, tu cuenta nace completa.',
+          'On your side, whenever you can: ' + asks.join('; ') + '. With that, your account is born complete.');
+      })()
+    : T('De tu lado, esta semana: nada, de verdad. El plan lo corro yo — vos seguí haciendo lo que mejor sabés hacer: tu negocio.',
+        'On your side this week: nothing, really. I have the plan — you keep doing what you do best: your business.');
 
-  // Lo único que la carta le pide al dueño.
-  if (birth) {
-    const asks = [];
-    if (!ctx.hasIg) asks.push(T('conectá tu Instagram desde Ajustes — así publico por vos y tu análisis se afina con tus métricas reales', 'connect your Instagram from Settings — so I can post for you and your analysis sharpens with your real metrics'));
-    asks.push(T('mandame tus fotos favoritas (3 a 5) — tu vidriera sale con tu material real, no con fotos genéricas', 'send me your favorite photos (3 to 5) — your storefront goes out with your real material, not generic photos'));
-    P(T('De tu lado, cuando puedas: ' + asks.join('; ') + '. Con eso, tu cuenta nace completa.',
-      'On your side, whenever you can: ' + asks.join('; ') + '. With that, your account is born complete.'));
-  } else {
-    P(T('De tu lado, esta semana: nada, de verdad. El plan lo corro yo — vos seguí haciendo lo que mejor sabés hacer: tu negocio.',
-      'On your side this week: nothing, really. I have the plan — you keep doing what you do best: your business.'));
-  }
-
+  const sun = sundays != null
+    ? T(' Domingo ' + sundays + ' conmigo: vamos por más.', ' Sunday ' + sundays + ' with me: let us keep going.')
+    : null;
   let closing;
-  if (birth) closing = T('Tu cuenta nace con plan, no improvisada — y nace acompañada. El domingo que viene, a esta hora, te escribo de nuevo, con tu primera semana ya andando.',
-    'Your account is born with a plan, not improvised — and it is not born alone. Next Sunday, at this time, I will write you again, with your first week already running.');
-  else if (stage === 'fuerte') closing = T('Ya venís bien, y esto recién empieza: yo sostengo el ritmo y afino lo que sigue. El domingo que viene, a esta hora, te escribo con lo nuevo que aprenda de tu cuenta.',
-    'You are already doing well, and this is just getting started: I keep the rhythm and sharpen what follows. Next Sunday, at this time, I will write you with what I have newly learned from your account.');
-  else closing = T('Tenés el negocio — la constancia la pongo yo. El domingo que viene, a esta hora, te escribo de nuevo, con este plan ya medido contra tu cuenta.',
-    'You have the business — consistency is on me. Next Sunday, at this time, I will write you again, with this plan already measured against your account.');
+  if (birth) closing = T('Tu cuenta nace con plan, no improvisada — y nace acompañada.', 'Your account is born with a plan, not improvised — and it is not born alone.')
+    + (sun || T(' El domingo que viene, a esta hora, te escribo de nuevo, con tu primera semana ya andando.', ' Next Sunday, at this time, I will write you again, with your first week already running.'));
+  else if (stage === 'fuerte') closing = T('Ya venís bien, y esto recién empieza: yo sostengo el ritmo y afino lo que sigue.', 'You are already doing well, and this is just getting started: I keep the rhythm and sharpen what follows.')
+    + (sun || T(' El domingo que viene, a esta hora, te escribo con lo nuevo que aprenda de tu cuenta.', ' Next Sunday, at this time, I will write you with what I have newly learned from your account.'));
+  else closing = T('Tenés el negocio — la constancia la pongo yo.', 'You have the business — consistency is on me.')
+    + (sun || T(' El domingo que viene, a esta hora, te escribo de nuevo, con este plan ya medido contra tu cuenta.', ' Next Sunday, at this time, I will write you again, with this plan already measured against your account.'));
 
-  // Fail-closed por párrafo: el que no pasa el lint de tono, no sale.
-  const cleanBody = body.filter((it) => lintTone(it.t === 'plan' ? (it.step + ' ' + it.fx) : it.text, lang).ok);
-  if (!cleanBody.length || !lintTone(closing, lang).ok) return null;
+  // Cuerpo mínimo, en orden de lectura (la foto va tras el saludo, junto
+  // al festejo). Fail-closed por ítem con el lint de tono de siempre; sin
+  // festejo ni honesta no hay carta (la vista v3 hace de fallback).
+  const body = [];
+  if (photo) body.push({ t: 'photo', src: photo.src });
+  if (festejo) body.push({ t: 'p', kind: 'festejo', text: festejo });
+  if (honesta) body.push({ t: 'p', kind: 'honesta', text: honesta });
+  if (actions.length) {
+    body.push({ t: 'p', kind: 'acciones-head', text: T('Esta semana hago esto:', 'This week I am doing this:') });
+    actions.forEach((text) => body.push({ t: 'action', text }));
+  }
+  body.push({ t: 'p', kind: 'pedido', text: ask });
+  const cleanBody = body.filter((it) => it.t === 'photo' || lintTone(it.text, lang).ok);
+  const hasVoice = cleanBody.some((it) => it.kind === 'festejo' || it.kind === 'honesta');
+  if (!hasVoice || !cleanBody.some((it) => it.t === 'action') || !lintTone(closing, lang).ok) return null;
+  const pickText = (kind) => { const it = cleanBody.find((x) => x.kind === kind); return it ? it.text : ''; };
   return {
-    v: 1,
+    v: 2,
     style: 'carta-nocturna',
+    minimal: true,
     title: letterTitle(a, stage, hasPrior),
     greeting,
+    photo,
+    festejo: pickText('festejo'),
+    honesta: pickText('honesta'),
+    actions: cleanBody.filter((it) => it.t === 'action').map((it) => it.text),
+    ask: pickText('pedido'),
+    sundays,
     body: cleanBody,
     closing,
     delivery: 'domingo-noche',
@@ -1026,6 +1167,7 @@ module.exports = {
   whyForPost,
   weekSummary,
   buildLetter,
+  pickBestPost,
   analyzeExisting,
   analyzeColdStart,
   isColdStart,

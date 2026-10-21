@@ -466,8 +466,33 @@ function anaSignHTML(birth) {
  * cartas viejas (sin letter) se siguen
  * leyendo con la forma de bloques v3 de abajo: nada se rompe hacia atrás. */
 
+/* CARTA MÍNIMA (v2, 2026-10-21): la forma aprobada por Valentino — saludo →
+ * foto de su mejor posteo (chica, solo si el servidor la localizó; si la
+ * imagen falla, el figure se oculta solo) → festejo → línea honesta →
+ * "Esta semana hago esto:" con 2–3 acciones (cada una en su tarjeta suave,
+ * con el porqué adentro del texto) → "De tu lado: nada" → el cierre va en
+ * el banner de siempre. ~10 líneas: nada más se renderiza en esta vista. */
+function anaLetterMinimalHTML(a) {
+  const L = a.letter;
+  const items = Array.isArray(L.body) ? L.body : [];
+  let h = '';
+  if (L.greeting) h += `<p class="ana-ltr-p ana-ltr-greet">${esc(L.greeting)}</p>`;
+  items.forEach((it) => {
+    if (!it) return;
+    if (it.t === 'photo' && it.src) {
+      h += `<figure style="margin:2px 0 12px"><img src="${esc(it.src)}" alt="" loading="lazy" style="width:148px;height:148px;object-fit:cover;border-radius:14px;display:block" onerror="this.parentNode.style.display='none'"></figure>`;
+    } else if (it.t === 'action') {
+      h += `<div class="ana-ltr-plan"><p>• ${esc(it.text || '')}</p></div>`;
+    } else if (it.t === 'p') {
+      h += `<p class="ana-ltr-p">${esc(it.text || '')}</p>`;
+    }
+  });
+  return h;
+}
+
 function anaLetterBodyHTML(a) {
   const L = a.letter;
+  if (L && (L.v >= 2 || L.minimal)) return anaLetterMinimalHTML(a);
   const items = Array.isArray(L.body) ? L.body : [];
   const phaseNums = ['①', '②', '③'];
   let h = '';
@@ -520,11 +545,15 @@ function anaCartaHTML(d) {
     </div>`;
   if (carta) {
     // FORMA CARTA (domingo a la noche): narración primero, datos como apoyo.
+    // CARTA MÍNIMA (v2): la carta ES la superficie — kit/mercado/historial
+    // no se agregan debajo (el análisis completo sigue en el payload y en
+    // las vistas sin carta; las cartas v1 conservan su forma con apoyo).
+    const minimal = !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
     h += anaLetterBodyHTML(a);
-    if (birth) h += anaKitHTML(a);
-    if (!birth) h += anaMarketHTML(a);
-    h += anaHistoryHTML(d, a);
-    if (Array.isArray(a.data_notes) && a.data_notes.length) {
+    if (!minimal && birth) h += anaKitHTML(a);
+    if (!minimal && !birth) h += anaMarketHTML(a);
+    if (!minimal) h += anaHistoryHTML(d, a);
+    if (!minimal && Array.isArray(a.data_notes) && a.data_notes.length) {
       h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
     }
     h += `<div class="ana-banner">${esc(a.letter.closing || anaBanner(stage, ctx))}</div>`;
