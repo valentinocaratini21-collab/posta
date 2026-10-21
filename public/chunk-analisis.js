@@ -129,12 +129,13 @@ function anaVerdict(a, stage, birth) {
   const rate = s.posts_per_week != null ? anaFmtRate(s.posts_per_week) : null;
   const strong = anaStrong(s);
   if (stage === 'fuerte') {
-    return 'Tu cuenta ya viene trabajando' + (rate ? ' a ' + rate + ' posteos por semana' : '') + (strong ? ' y ' + strong : '') + '. Lo que sigue no es rescatar nada: es afinar y sostener — y de eso me encargo yo.';
+    return 'Tu cuenta ya viene trabajando' + (strong ? ' y ' + strong : '') + '. Lo que sigue no es rescatar nada: es afinar y sostener — y de eso me encargo yo.';
   }
   const parts = [];
   if (strong) parts.push('Tenés con qué: ' + strong + '.');
-  if (rate) parts.push('Hoy tu ritmo es de ' + rate + ' posteos por semana — y la constancia no depende de tu tiempo: la pongo yo.');
-  else parts.push('Tu cuenta está viva — lo que sigue es darle constancia y dirección: de eso me encargo yo.');
+  if (rate) parts.push('La constancia no depende de tu tiempo: la pongo yo.');
+  else if (strong) parts.push('Tu cuenta está viva — lo que sigue es darle constancia y dirección: de eso me encargo yo.');
+  else parts.push('Todavía estoy juntando los primeros datos de tu cuenta — mientras tanto el plan ya está: constancia y dirección desde esta semana, y de eso me encargo yo.');
   parts.push('Abajo está el plan, en orden.');
   return parts.join(' ');
 }
@@ -187,7 +188,7 @@ function anaGroupsHTML(a) {
     return `<div class="ana-group"><p class="ana-gtitle">${title}</p>${fs.map(anaFindingHTML).join('')}</div>`;
   }).join('');
   if (html) return html;
-  return `<div class="ana-group"><p class="ana-t" style="margin-top:14px">Tu cuenta viene prolija: la semana sostiene lo que ya funciona y empuja los formatos que más rinden.</p></div>`;
+  return `<div class="ana-group"><p class="ana-t" style="margin-top:14px">Esta semana no encontré nada para corregir: la semana sostiene lo que ya funciona, empuja los formatos que más rinden y sigo midiendo tu cuenta.</p></div>`;
 }
 
 /* ---------- Plan de ejecución: nace de los hallazgos y sus decisiones ---------- */
@@ -261,7 +262,7 @@ function anaStarterPhases() {
 
 function anaNeedLine(a, birth) {
   if (!birth) {
-    return `De tu lado: <b>nada</b> — yo arranco. Tu semana ya está armada con este plan: la ves en <a href="#/app/schedule" style="color:inherit;text-decoration:underline">Schedule</a> 👇`;
+    return `De tu lado: <b>nada</b> — yo arranco. Tu semana ya está armada con este plan: la ves en <a href="#/app/schedule" style="color:inherit;text-decoration:underline">tu agenda</a> 👇`;
   }
   const parts = [];
   try {
@@ -306,7 +307,7 @@ function anaMarketHTML(a) {
   const teaser = a.market_teaser;
   if (teaser && Array.isArray(teaser.items) && teaser.items.length) {
     const items = teaser.items.map((it) => `<p class="ana-t" style="margin-top:8px">📌 ${esc(it.text || '')}${it.now ? ` — <span style="color:var(--mut);font-weight:600">${esc(it.now)}</span>` : ''}</p>`).join('');
-    return `<p class="ana-sec-t">🗺️ Tu mercado <span class="ana-badge">PROBADA</span></p>${items}`
+    return `<p class="ana-sec-t">🗺️ Tu mercado <span class="ana-badge">MUESTRA</span></p>${items}`
       + `<p class="ana-upsell">El mapa completo — tu competencia una por una, tu posición en el rubro y las decisiones que tomamos con eso — es parte de <b>Growth</b> (planes Pro y Total).</p>`
       + `<a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?plan=1">Ver planes →</a>`;
   }
@@ -490,6 +491,33 @@ function anaLetterMinimalHTML(a) {
   return h;
 }
 
+/* El análisis COMPLETO detrás de un toque (diseño asentado de la carta
+ * mínima: la carta es la superficie; la radiografía entera — los mismos
+ * bloques de la forma de bloques — vive a un toque, sin salir de la
+ * pantalla). Sin la línea de progreso: la carta ya es el resumen. */
+function anaFullHTML(d, a, birth) {
+  if (birth) return anaKitHTML(a || {}) + anaPlanHTML(a, true) + anaHistoryHTML(d, a);
+  let h = '';
+  h += anaStatsHTML(a, d);
+  h += anaGroupsHTML(a);
+  h += anaPlanHTML(a, false);
+  h += anaMarketHTML(a);
+  h += anaLoopHTML(a);
+  h += anaHistoryHTML(d, a);
+  if (a && Array.isArray(a.data_notes) && a.data_notes.length) {
+    h += a.data_notes.map((n) => `<p class="ana-note">${esc(n)}</p>`).join('');
+  }
+  return h;
+}
+
+function anaToggleFull(btn) {
+  const box = document.getElementById('anaFull');
+  if (!box) return;
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? 'Ver mi análisis completo →' : 'Ver menos ↑';
+}
+
 function anaLetterBodyHTML(a) {
   const L = a.letter;
   if (L && (L.v >= 2 || L.minimal)) return anaLetterMinimalHTML(a);
@@ -550,6 +578,9 @@ function anaCartaHTML(d) {
     // las vistas sin carta; las cartas v1 conservan su forma con apoyo).
     const minimal = !!(a.letter && (a.letter.v >= 2 || a.letter.minimal));
     h += anaLetterBodyHTML(a);
+    if (minimal) {
+      h += `<div style="text-align:center;margin:14px 0 4px"><button class="btn btn-ghost" onclick="anaToggleFull(this)">Ver mi análisis completo →</button></div><div id="anaFull" style="display:none">${anaFullHTML(d, a, birth)}</div>`;
+    }
     if (!minimal && birth) h += anaKitHTML(a);
     if (!minimal && !birth) h += anaMarketHTML(a);
     if (!minimal) h += anaHistoryHTML(d, a);
