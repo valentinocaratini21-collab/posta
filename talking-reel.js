@@ -428,14 +428,32 @@ function buildAss({ words, moments, hook, brandHex }) {
     lines.push(`Dialogue: 2,${assTime(0.1)},${assTime(HOOK_SEC)},Hook,,0,0,0,,${assEsc(hook.text)}`);
   }
   for (const g of phraseGroups(words || [])) {
+    // Un evento por palabra CON ventana visible. Las palabras relámpago
+    // (Whisper a veces les da el mismo inicio que a la siguiente: ventana
+    // de 0–40 ms) no se descartan: se funden con la palabra vecina y se
+    // resaltan juntas — cada palabra dicha se resalta exactamente una vez
+    // y la frase nunca desaparece de pantalla entre eventos.
+    const evs = [];
+    let pending = [];
     for (let i = 0; i < g.length; i++) {
       const start = g[i].s;
       const end = i + 1 < g.length ? g[i + 1].s : g[i].e;
-      if (end - start < 0.05) continue;
-      const text = g.map((w, k) => k === i
+      if (end - start < 0.05 && i + 1 < g.length) { pending.push(i); continue; }
+      const colored = new Set([...pending, i]);
+      const evStart = pending.length ? g[pending[0]].s : start;
+      if (end - evStart < 0.05 && evs.length) {
+        evs[evs.length - 1].end = end;
+        for (const k of colored) evs[evs.length - 1].colored.add(k);
+      } else {
+        evs.push({ start: evStart, end, colored });
+      }
+      pending = [];
+    }
+    for (const ev of evs) {
+      const text = g.map((w, k) => ev.colored.has(k)
         ? `{\\c${accent}&\\b1}${assEsc(w.w)}{\\c&HFFFFFF&}`
         : assEsc(w.w)).join(' ');
-      lines.push(`Dialogue: 0,${assTime(start)},${assTime(end)},Cap,,0,0,0,,${text}`);
+      lines.push(`Dialogue: 0,${assTime(ev.start)},${assTime(ev.end)},Cap,,0,0,0,,${text}`);
     }
   }
   for (const mo of moments || []) {

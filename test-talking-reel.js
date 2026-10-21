@@ -100,7 +100,12 @@ async function main() {
   const assWords = phrases.join(' ').split(/\s+/).filter(Boolean);
   const origWords = words.map(w => w.w);
   ok(JSON.stringify(assWords) === JSON.stringify(origWords), 'ASS: el subtítulo reproduce la transcripción palabra por palabra');
-  ok(capTexts.length === origWords.length, 'ASS: un evento karaoke por palabra (' + capTexts.length + '/' + origWords.length + ')');
+  // Contrato karaoke real: cada palabra se RESALTA exactamente una vez
+  // (las palabras relámpago de Whisper — ventana <50 ms — se funden con
+  // la vecina y se resaltan juntas; eventos puede haber menos que
+  // palabras, resaltadas no).
+  const coloredCount = (ass.match(/\{\\c&H[0-9A-F]+&\\b1\}[^{]+?\{\\c&HFFFFFF&\}/g) || []).length;
+  ok(coloredCount === origWords.length, 'ASS: cada palabra se resalta exactamente una vez (' + coloredCount + '/' + origWords.length + ', en ' + capTexts.length + ' eventos)');
   ok(ass.includes('Style: Cap,') && ass.includes('Style: Chip,') && ass.includes('Style: Hook,'), 'ASS: estilos Cap/Chip/Hook presentes');
   ok((ass.match(/Dialogue: 1,/g) || []).length === det.moments.filter(m => m.fact).length, 'ASS: una placa de dato por momento');
   ok(tr._internals.hexToAss('#FEC14D') === '&H004DC1FE', 'hexToAss convierte #RRGGBB → &HBBGGRR');
