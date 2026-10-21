@@ -31,10 +31,10 @@ Sin esas variables, las push quedan apagadas en silencio: nada se rompe.
 
 ### Paso 2 — Generar la app Android con PWABuilder (lo hacés vos)
 1. Entrá a https://www.pwabuilder.com.
-2. Pegá `https://www.postahacetodo.com` y dale a **Start**.
+2. Pegá `https://postyhacetodo.com` y dale a **Start**.
 3. Tiene que dar todo ✅ (la PWA ya cumple: manifest completo, iconos 192+512 + maskable, display standalone, HTTPS, service worker).
 4. En **Android**, elegí la opción recomendada y descargá el **AAB** (Android App Bundle).
-   - Package ID sugerido: `com.postahacetodo.app` (tiene que ser este, el servidor ya lo espera).
+   - Package ID sugerido: `com.postyhacetodo.app` (tiene que ser este, el servidor ya lo espera).
    - Firmá con la opción default de PWABuilder.
 
 ### Paso 3 — Subir a Play Console (lo hacés vos)
@@ -45,9 +45,9 @@ Sin esas variables, las push quedan apagadas en silencio: nada se rompe.
 
 ### Paso 4 — Conectar la app con la web (2 minutos)
 1. Copiá ese SHA-256 en este formato exacto:
-   `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.postahacetodo.app","sha256_cert_fingerprints":["PEGÁ_ACÁ_EL_SHA256"]}}]`
+   `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.postyhacetodo.app","sha256_cert_fingerprints":["PEGÁ_ACÁ_EL_SHA256"]}}]`
 2. En Railway → Variables, agregá `ASSETLINKS_JSON` con ese texto.
-3. Verificá: abrí `https://www.postahacetodo.com/.well-known/assetlinks.json` — tiene que mostrar tu SHA-256.
+3. Verificá: abrí `https://postyhacetodo.com/.well-known/assetlinks.json` — tiene que mostrar tu SHA-256.
 
 Sin el SHA-256 real, la app igual funciona pero abre en una pestaña de Chrome en vez de pantalla completa.
 

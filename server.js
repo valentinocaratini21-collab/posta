@@ -578,10 +578,16 @@ app.use('/media', express.static(MEDIA_DIR, {
 }));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, fp) => {
-    // JS/CSS: la URL lleva la versión (?v= en index.html, que sigue
-    // no-cache) — cada deploy es una URL nueva, así que pueden cachear
-    // 30 días inmutable: abrir la app no re-baja el código cada vez.
-    if (/\.(js|css)$/.test(fp)) res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    // sw.js: SIEMPRE fresco — si queda cacheado, la PWA no se entera de
+    // las versiones nuevas del propio service worker.
+    if (/sw\.js$/.test(fp)) { res.setHeader('Cache-Control', 'no-cache'); return; }
+    // JS/CSS: immutable de 30 días SOLO si la URL trae ?v= (la versión ES
+    // el contenido). Sin ?v=, la caché larga dejaba código viejo pegado
+    // por 30 días — multiplicador del incidente del iPhone (2026-10-21).
+    if (/\.(js|css)$/.test(fp)) {
+      const u = (res.req && res.req.url) || '';
+      res.setHeader('Cache-Control', u.includes('?v=') ? 'public, max-age=2592000, immutable' : 'no-cache');
+    }
     else if (/\.html$/.test(fp)) res.setHeader('Cache-Control', 'no-cache');
   },
 }));
@@ -13499,6 +13505,7 @@ app.get('/api/calendar/upcoming', requireAuth, (req, res) => {
 // ---------- Demo pública self-service (sin login) ----------
 // El visitante genera 3 posteos de muestra sin registro ni WhatsApp.
 app.get('/demo', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'demo.html'));
 });
 
@@ -13555,15 +13562,59 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   }
 });
 
+// ---------- Gancho "3 ideas cada lunes" (cierre de /prueba) ----------
+// El frente posteaba a esta ruta desde su lanzamiento y NO EXISTÍA: cada
+// lead que se suscribía recibía error y se perdía en silencio.
+try { db.exec(`CREATE TABLE IF NOT EXISTS idea_subscribers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  ig_handle TEXT DEFAULT '',
+  rubro TEXT DEFAULT '',
+  business_name TEXT DEFAULT '',
+  source TEXT DEFAULT '',
+  created_at INTEGER NOT NULL
+)`); } catch (e) { console.error('[ideas-subscribe] tabla:', e.message); }
+app.post('/api/ideas/subscribe', (req, res) => {
+  const b = req.body || {};
+  let email = String(b.email || '').trim().toLowerCase();
+  if (!email && req.session && req.session.userId) {
+    try { const u = db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId); if (u) email = u.email; } catch (e) {}
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
+    return res.status(400).json({ ok: false, error: 'Necesito un email válido 📧' });
+  try {
+    db.prepare(`INSERT INTO idea_subscribers (email, ig_handle, rubro, business_name, source, created_at) VALUES (?,?,?,?,?,?)
+      ON CONFLICT(email) DO UPDATE SET ig_handle=excluded.ig_handle, rubro=excluded.rubro, business_name=excluded.business_name`)
+      .run(email, String(b.ig_handle || '').slice(0, 60), String(b.rubro || '').slice(0, 60), String(b.business_name || '').slice(0, 120), String(b.source || '').slice(0, 40), Date.now());
+  } catch (e) {
+    console.error('[ideas-subscribe]', e.message);
+    return res.status(500).json({ ok: false, error: 'No pudimos suscribirte 😅 Probá de nuevo' });
+  }
+  res.json({ ok: true, message: '¡Listo! Desde el lunes te llegan tus 3 ideas 💡' });
+});
+
+// Alias de las legales sin extensión (los links compartidos sin .html
+// caían en el fallback SPA y mostraban la home).
+app.get('/privacidad', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'privacidad.html'));
+});
+app.get('/terminos', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'terminos.html'));
+});
+
 // ---------- Prueba completa: la app por dentro, una sola vez, sin registro ----------
 // El visitante pasa por onboarding mini → ve sus 6 ideas → su semana Pro armada
 // (5 posteos: 4 imágenes + 1 video) → cartel de compra en el pico de emoción.
 app.get('/prueba', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
 });
 
 // ---------- Frente EN: landing y prueba en inglés (mismo motor) ----------
 app.get('/en/prueba', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'en-prueba.html'));
 });
 // Las páginas /en referencian assets con rutas relativas ("ig-cafe.jpg",
@@ -13588,6 +13639,7 @@ app.get('/panel', (req, res) => {
 // Página pública /auditoria → POST /api/audit {ig} → reporte con score.
 // Cache 72h por @ (no consume intento), anti-spam 5/día por IP con reembolso.
 app.get('/auditoria', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'auditoria.html'));
 });
 app.post('/api/audit', express.json({ limit: '16kb' }), async (req, res) => {
@@ -15828,7 +15880,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v297';
+const BUILD_ID = '20261021-v298';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -15984,8 +16036,16 @@ app.get('/p/:slug', (req, res) => {
   }
 });
 
-// SPA fallback
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// SPA fallback con 404 real: las rutas de la app viven en el hash
+// (#/app/...) y nunca llegan al servidor — un path desconocido acá NO es
+// una ruta válida. Antes se servía la home con 200 para todo: /api/*
+// inexistentes, assets rotos y páginas fantasma devolvían la landing.
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
+  res.status(404);
+  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async
 // sin try/catch = unhandled rejection = el proceso MUERE para todos los usuarios.

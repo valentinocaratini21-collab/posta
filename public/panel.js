@@ -52,7 +52,7 @@ const api = {
   del: (u) => api.req('DELETE', u),
 };
 
-const CHUNK_V = '20261017-v171'; // misma constante que CHUNK_V en app.js
+const CHUNK_V = '20261020-v292'; // misma constante que CHUNK_V en app.js
 
 function panelFailHTML() {
   return '<div class="card" style="text-align:center">'

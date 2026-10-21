@@ -50,7 +50,7 @@ async function meliFetchJson(url) {
     const res = await fetch(url, {
       signal: ctl.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PostaBot/1.0; +https://postahacetodo.com)',
+        'User-Agent': 'Mozilla/5.0 (compatible; PostyBot/1.0; +https://postyhacetodo.com)',
         'Accept': 'application/json',
       },
     });

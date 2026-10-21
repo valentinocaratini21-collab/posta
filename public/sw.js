@@ -1,7 +1,7 @@
 // Posta PWA — service worker mínimo y seguro.
 // Solo cachea los íconos de la app. Todo lo demás (HTML, JS, CSS, API)
 // pasa siempre por la red: nunca sirve contenido viejo de la app.
-const CACHE = 'posta-icons-v1';
+const CACHE = 'posta-icons-v2';
 const ICONS = [
   '/icon-192.png',
   '/icon-512.png',
@@ -9,6 +9,7 @@ const ICONS = [
   '/icon-maskable-512.png',
   '/apple-touch-icon.png',
   '/manifest.json',
+  '/offline.html',
 ];
 
 self.addEventListener('install', (e) => {
@@ -27,6 +28,13 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Navegación sin red (PWA abierta en frío, sin conexión): página offline
+  // de marca en vez del error del navegador. Solo navegaciones — el HTML,
+  // el JS y la API de la app siempre van por red.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(fetch(e.request).catch(() => caches.match('/offline.html')));
+    return;
+  }
   const url = new URL(e.request.url);
   if (!ICONS.includes(url.pathname)) return; // la app siempre va por red
   e.respondWith(

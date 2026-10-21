@@ -103,7 +103,10 @@ function isFirstWeek(db, userId) {
 // Misma lógica que publicImageUrl de scheduler.js.
 function absoluteMediaUrl(imagePath, imageBaseUrl) {
   const file = path.basename(String(imagePath || ''));
-  const base = imageBaseUrl || process.env.IMAGE_BASE_URL || 'http://localhost:3000';
+  let base = imageBaseUrl || process.env.IMAGE_BASE_URL || '';
+  // Sin base válida (localhost/dominio viejo), Instagram no puede descargar
+  // la imagen: caer al dominio canónico (misma guarda que scheduler.js).
+  if (!base || /postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) base = 'https://postyhacetodo.com';
   return `${String(base).replace(/\/$/, '')}/media/${file}`;
 }
 

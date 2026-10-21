@@ -34,7 +34,7 @@ function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   let base =
     imageBaseUrl ||
     process.env.IMAGE_BASE_URL ||
-    (reqHost ? `http://${reqHost}` : '');
+    (reqHost ? `https://${reqHost}` : '');
   // 2026-10-13: bases muertas — el dominio viejo (postahacetodo.com) ya no
   // responde y localhost no es alcanzable desde internet. Con cualquiera de
   // las dos, Instagram no puede descargar la imagen y la publicación falla
