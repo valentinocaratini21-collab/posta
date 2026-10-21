@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v303'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v304'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -829,7 +829,7 @@ function lpInitHero() {
   }
 }
 
-/* ---------- v176: carrusel de perfiles soñados (20 rubros) ---------- */
+/* ---------- v176: carrusel de perfiles soñados (28 rubros desde v303) ---------- */
 const LP_PROFILES = [
   { rubro: 'Cafetería', user: 'cafe.aurora', name: 'Café Aurora ☕', cat: 'Cafetería · Palermo', stats: ['128', '4.812', '96'],
     bio: ['☕ Café de especialidad y brunch', '🥐 Medialunas recién horneadas, todos los días', '📍 Gorriti 4380 · 8 a 20 h'], link: 'cafe-aurora',
@@ -837,39 +837,66 @@ const LP_PROFILES = [
     hls: [['hl-menu.jpg', 'Menú'], ['hl-promos.jpg', 'Promos'], ['hl-local.jpg', 'El local'], ['hl-clientes.jpg', 'Clientes']],
     cells: ['ig-cafe.jpg', 'g-tazas.jpg', 'g-pasta.jpg', 'g-latte.jpg', 'VIDEO', 'g-platos.jpg', 'g-vaso.jpg', 'g-tres.jpg', 'g-gourmet.jpg'],
     cellAlt: 'Posteo de Instagram de Café Aurora' },
-  { rubro: 'Barbería', user: 'elcorte.barberia', name: 'El Corte Barbería 💈', cat: 'Barbería · Caballito', stats: ['96', '3.214', '88'],
-    bio: ['💈 Degradé, barba y diseño', '📲 Reservá tu turno desde el link', '📍 Av. Rivadavia 5120 · 10 a 20 h'], link: 'elcorte',
-    slug: 'elcorte', hls: ['Cortes', 'Barba', 'El local', 'Clientes'] },
+  { rubro: 'Detailing', user: 'bustos.detailing', name: 'Bustos Detailing 🔧', cat: 'Detailing y mecánica · Boedo', stats: ['86', '2.340', '61'],
+    bio: ['🔧 Detailing y mecánica ligera', '✨ Cerámico, pulidos y tapizados', '📍 Av. La Plata 2180 · 9 a 19 h'], link: 'bustos',
+    slug: 'bustos', hls: ['Pulidos', 'Cerámico', 'El taller', 'Clientes'] },
   { rubro: 'Moda', user: 'tiendacora', name: 'Tienda Cora 👕', cat: 'Tienda de ropa · Recoleta', stats: ['210', '6.540', '132'],
     bio: ['👕 Nueva colección cada semana', '🛵 Envíos a todo el país', '📍 Santa Fe 2140 · 10 a 20 h'], link: 'tiendacora',
     slug: 'tiendacora', hls: ['Nuevo', 'Looks', 'El local', 'Clientas'] },
+  { rubro: 'Inmobiliaria', user: 'roca.propiedades', name: 'Roca Propiedades 🏠', cat: 'Inmobiliaria · Belgrano', stats: ['164', '3.905', '88'],
+    bio: ['🏠 Ventas y alquileres en zona norte', '🔑 Tasaciones sin cargo', '📍 Cabildo 2040 · 10 a 19 h'], link: 'roca',
+    slug: 'roca', hls: ['Propiedades', 'Tasaciones', 'El equipo', 'Clientes'] },
+  { rubro: 'Barbería', user: 'elcorte.barberia', name: 'El Corte Barbería 💈', cat: 'Barbería · Caballito', stats: ['96', '3.214', '88'],
+    bio: ['💈 Degradé, barba y diseño', '📲 Reservá tu turno desde el link', '📍 Av. Rivadavia 5120 · 10 a 20 h'], link: 'elcorte',
+    slug: 'elcorte', hls: ['Cortes', 'Barba', 'El local', 'Clientes'] },
+  { rubro: 'Odontología', user: 'dental.prado', name: 'Dental Prado 🦷', cat: 'Clínica dental · Recoleta', stats: ['97', '2.612', '73'],
+    bio: ['🦷 Implantes, ortodoncia y estética dental', '😁 Primera consulta con diagnóstico incluido', '📍 Santa Fe 1820 · 9 a 20 h'], link: 'dental-prado',
+    slug: 'dentalprado', hls: ['Sonrisas', 'Tratamientos', 'La clínica', 'Pacientes'] },
   { rubro: 'Belleza', user: 'estetica.alma', name: 'Estética Alma 💅', cat: 'Centro de estética · Belgrano', stats: ['154', '5.103', '117'],
     bio: ['💅 Uñas, pestañas y cejas', '📲 Turnos por WhatsApp', '📍 Cabildo 2350 · 9 a 19 h'], link: 'estetica-alma',
     slug: 'esteticaalma', hls: ['Uñas', 'Diseños', 'Promos', 'Clientas'] },
+  { rubro: 'Academia', user: 'academia.ritmo', name: 'Academia Ritmo 💃', cat: 'Escuela de baile · Palermo', stats: ['142', '4.205', '97'],
+    bio: ['💃 Salsa, tango, ballet y urbano', '🎟️ Primera clase sin cargo', '📍 Scalabrini Ortiz 1240 · 10 a 22 h'], link: 'academia-ritmo',
+    slug: 'ritmo', hls: ['Clases', 'Profes', 'El salón', 'Alumnos'] },
   { rubro: 'Gastronomía', user: 'laesquina.resto', name: 'Parrilla La Esquina 🔥', cat: 'Parrilla · San Telmo', stats: ['187', '4.376', '95'],
     bio: ['🔥 Parrilla y cocina criolla', '🍷 Vinos de bodegas chicas', '📍 Defensa 1135 · desde las 20 h'], link: 'laesquina',
     slug: 'laesquina', hls: ['La carta', 'Promos', 'El local', 'Clientes'] },
+  { rubro: 'Estudio contable', user: 'estudio.ferrer', name: 'Estudio Ferrer 📊', cat: 'Contadores · Microcentro', stats: ['58', '1.480', '42'],
+    bio: ['📊 Contabilidad e impuestos para pymes', '🧾 Monotributo, sueldos y sociedades', '📍 Florida 656 · 9 a 18 h'], link: 'estudio-ferrer',
+    slug: 'ferrer', hls: ['Impuestos', 'Pymes', 'El estudio', 'Clientes'] },
   { rubro: 'Panadería', user: 'eltrigodorado', name: 'El Trigo Dorado 🥐', cat: 'Panadería · Villa Crespo', stats: ['88', '2.845', '64'],
     bio: ['🥐 Pan de masa madre, todos los días', '🎂 Tortas por encargo', '📍 Malabia 920 · 7:30 a 20 h'], link: 'eltrigodorado',
     slug: 'eltrigodorado', hls: ['Del horno', 'Facturas', 'El local', 'Encargos'] },
+  { rubro: 'Ferretería', user: 'ferreteria.eltornillo', name: 'Ferretería El Tornillo 🔩', cat: 'Ferretería · Caballito', stats: ['73', '1.864', '55'],
+    bio: ['🔩 Herramientas, pintura y sanitarios', '🔑 Copias de llaves en el acto', '📍 Av. Directorio 890 · 8:30 a 19:30 h'], link: 'el-tornillo',
+    slug: 'tornillo', hls: ['Herramientas', 'Pinturas', 'El local', 'Clientes'] },
+  { rubro: 'Fitness', user: 'gymnorte', name: 'Gym Norte 💪', cat: 'Gimnasio · Belgrano', stats: ['167', '4.508', '143'],
+    bio: ['💪 Musculación y clases grupales', '🎟️ Primera clase sin cargo', '📍 Monroe 2620 · 6 a 23 h'], link: 'gymnorte',
+    slug: 'gymnorte', hls: ['Clases', 'Profes', 'El gym', 'Alumnos'] },
+  { rubro: 'Mueblería', user: 'muebles.andrada', name: 'Muebles Andrada 🪑', cat: 'Muebles a medida · Palermo', stats: ['118', '3.377', '84'],
+    bio: ['🪑 Muebles a medida en madera maciza', '📐 Diseñamos el tuyo sin cargo', '📍 Av. Córdoba 4380 · 10 a 19 h'], link: 'andrada',
+    slug: 'andrada', hls: ['A medida', 'El taller', 'Ambientes', 'Clientes'] },
+  { rubro: 'Mascotas', user: 'petshop.huella', name: 'Pet Shop Huella 🐶', cat: 'Pet shop · Villa Crespo', stats: ['129', '3.366', '89'],
+    bio: ['🐶 Baño, corte y alimento balanceado', '🚗 Retiro y entrega a domicilio', '📍 Scalabrini Ortiz 780 · 9 a 20 h'], link: 'petshop-huella',
+    slug: 'petshop', hls: ['Baños', 'Cortes', 'Productos', 'Clientes'] },
+  { rubro: 'Joyería', user: 'joyeria.herrera', name: 'Joyería Herrera 💍', cat: 'Joyería y relojería · Microcentro', stats: ['89', '2.958', '63'],
+    bio: ['💍 Alianzas y piezas a pedido', '⌚ Relojería y composturas', '📍 Libertad 650 · 10 a 19 h'], link: 'herrera',
+    slug: 'herrera', hls: ['Piezas', 'Relojes', 'El taller', 'Clientes'] },
+  { rubro: 'Deco', user: 'casalinda.deco', name: 'Casa Linda 🛋️', cat: 'Deco y hogar · Palermo', stats: ['203', '7.214', '156'],
+    bio: ['🛋️ Objetos que hacen hogar', '✨ Nuevos ingresos cada semana', '📍 Honduras 4750 · 10 a 19 h'], link: 'casalinda',
+    slug: 'casalinda', hls: ['Ambientes', 'Nuevos', 'El showroom', 'Clientes'] },
+  { rubro: 'Lavadero', user: 'splash.lavadero', name: 'Splash Lavadero 🚗', cat: 'Lavadero de autos · Núñez', stats: ['104', '2.290', '71'],
+    bio: ['🚗 Lavado premium y detailing exprés', '🧽 Interiores, tapizados y motor', '📍 Cabildo 3650 · 8 a 20 h'], link: 'splash',
+    slug: 'splash', hls: ['Lavados', 'Detailing', 'El lavadero', 'Clientes'] },
+  { rubro: 'Florería', user: 'elrosedal.flores', name: 'El Rosedal 💐', cat: 'Florería · Recoleta', stats: ['92', '2.410', '66'],
+    bio: ['💐 Ramos armados en el día', '🚚 Envíos en el día en CABA', '📍 Junín 1180 · 9 a 20 h'], link: 'elrosedal',
+    slug: 'elrosedal', hls: ['Ramos', 'Eventos', 'El local', 'Clientes'] },
   { rubro: 'Pizzería', user: 'donroquepizza', name: 'Pizzería Don Roque 🍕', cat: 'Pizzería · Almagro', stats: ['143', '3.730', '71'],
     bio: ['🍕 Pizza a la piedra en horno de barro', '🛵 Delivery en 30 min', '📍 Corrientes 4020 · 19 a 00 h'], link: 'donroque',
     slug: 'donroque', hls: ['Pizzas', 'Promos', 'El horno', 'Clientes'] },
   { rubro: 'Heladería', user: 'miogelato', name: 'Mío Gelato 🍦', cat: 'Heladería · Núñez', stats: ['76', '1.932', '58'],
     bio: ['🍦 Gelato artesanal, 24 sabores', '🌱 Opciones sin TACC y veganas', '📍 Cabildo 3100 · 12 a 00 h'], link: 'miogelato',
     slug: 'miogelato', hls: ['Sabores', 'Promos', 'El local', 'Clientes'] },
-  { rubro: 'Fitness', user: 'gymnorte', name: 'Gym Norte 💪', cat: 'Gimnasio · Belgrano', stats: ['167', '4.508', '143'],
-    bio: ['💪 Musculación y clases grupales', '🎟️ Primera clase sin cargo', '📍 Monroe 2620 · 6 a 23 h'], link: 'gymnorte',
-    slug: 'gymnorte', hls: ['Clases', 'Profes', 'El gym', 'Alumnos'] },
-  { rubro: 'Mascotas', user: 'petshop.huella', name: 'Pet Shop Huella 🐶', cat: 'Pet shop · Villa Crespo', stats: ['129', '3.366', '89'],
-    bio: ['🐶 Baño, corte y alimento balanceado', '🚗 Retiro y entrega a domicilio', '📍 Scalabrini Ortiz 780 · 9 a 20 h'], link: 'petshop-huella',
-    slug: 'petshop', hls: ['Baños', 'Cortes', 'Productos', 'Clientes'] },
-  { rubro: 'Deco', user: 'casalinda.deco', name: 'Casa Linda 🛋️', cat: 'Deco y hogar · Palermo', stats: ['203', '7.214', '156'],
-    bio: ['🛋️ Objetos que hacen hogar', '✨ Nuevos ingresos cada semana', '📍 Honduras 4750 · 10 a 19 h'], link: 'casalinda',
-    slug: 'casalinda', hls: ['Ambientes', 'Nuevos', 'El showroom', 'Clientes'] },
-  { rubro: 'Florería', user: 'elrosedal.flores', name: 'El Rosedal 💐', cat: 'Florería · Recoleta', stats: ['92', '2.410', '66'],
-    bio: ['💐 Ramos armados en el día', '🚚 Envíos en el día en CABA', '📍 Junín 1180 · 9 a 20 h'], link: 'elrosedal',
-    slug: 'elrosedal', hls: ['Ramos', 'Eventos', 'El local', 'Clientes'] },
   { rubro: 'Cafetería', user: 'cafe.martinez', name: 'Café Martínez ☕', cat: 'Cafetería · Microcentro', stats: ['231', '8.930', '210'],
     bio: ['☕ Café de especialidad al paso', '🥐 Medialunas y tostados', '📍 Florida 340 · 7 a 21 h'], link: 'cafe-martinez',
     slug: 'cafemartinez', hls: ['Menú', 'Promos', 'El local', 'Clientes'] },
@@ -890,10 +917,7 @@ const LP_PROFILES = [
     slug: 'box360', hls: ['Clases', 'Profes', 'El box', 'Alumnos'] },
   { rubro: 'Mascotas', user: 'patitas.peluqueria', name: 'Patitas 🐾', cat: 'Peluquería canina · Caballito', stats: ['111', '3.502', '74'],
     bio: ['🐾 Baño y corte con turno', '💅 Corte de uñas y limpieza de oídos', '📍 Acoyte 560 · 9 a 19 h'], link: 'patitas',
-    slug: 'patitas', hls: ['Baños', 'Cortes', 'Antes y después', 'Clientes'] },
-  { rubro: 'Panadería', user: 'laespiga.pasteleria', name: 'La Espiga 🎂', cat: 'Pastelería · Villa Crespo', stats: ['139', '4.127', '69'],
-    bio: ['🎂 Pastelería artesanal', '☕ Meriendas y desayunos', '📍 Thames 890 · 8 a 20 h'], link: 'laespiga',
-    slug: 'laespiga', hls: ['Tortas', 'Facturas', 'Promos', 'Encargos'] }
+    slug: 'patitas', hls: ['Baños', 'Cortes', 'Antes y después', 'Clientes'] }
 ];
 function lpTiles(p) {
   if (p.cells) return p.cells;
@@ -1145,7 +1169,10 @@ const LP_WEEK = {
   moda: { ejemplo: 'de una tienda de moda', u: 'tiendacora', l: 'T', c: '#E4F0FA', alt: 'Posteo de Instagram de Tienda Cora hecho por Posty', imgs: ['ig-moda.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-8.jpg'] },
   belleza: { ejemplo: 'de una estética', u: 'estetica.alma', l: 'A', c: '#FBE4EC', alt: 'Posteo de Instagram de Estética Alma hecho por Posty', imgs: ['ig-belleza.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-8.jpg'] },
   mascotas: { ejemplo: 'de un pet shop', u: 'petshop.huella', l: 'H', c: '#E2F2E4', alt: 'Posteo de Instagram de Pet Shop Huella hecho por Posty', imgs: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-4.jpg', 'gt-petshop-6.jpg', 'gt-petshop-8.jpg'] },
-  fitness: { ejemplo: 'de un gimnasio', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Posteo de Instagram de Gym Norte hecho por Posty', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] }
+  fitness: { ejemplo: 'de un gimnasio', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Posteo de Instagram de Gym Norte hecho por Posty', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] },
+  detailing: { ejemplo: 'de un taller de detailing', u: 'bustos.detailing', l: 'B', c: '#F3E3C2', alt: 'Posteo de Instagram de Bustos Detailing hecho por Posty', imgs: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-4.jpg', 'gt-bustos-6.jpg', 'gt-bustos-9.jpg'] },
+  inmobiliaria: { ejemplo: 'de una inmobiliaria', u: 'roca.propiedades', l: 'R', c: '#EFE6DA', alt: 'Posteo de Instagram de Roca Propiedades hecho por Posty', imgs: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-9.jpg'] },
+  odontologia: { ejemplo: 'de una clínica dental', u: 'dental.prado', l: 'D', c: '#DFF3EC', alt: 'Posteo de Instagram de Dental Prado hecho por Posty', imgs: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-3.jpg'] }
 };
 // v186 — Garantía "nunca la misma foto dos veces en una semana".
 // Pools de respaldo por rubro (la foto ig-* del rubro + las gt-* de su set
@@ -1158,7 +1185,10 @@ const LP_WEEK_POOLS = {
   moda: ['ig-moda.jpg', 'gt-tiendacora-1.jpg', 'gt-tiendacora-2.jpg', 'gt-tiendacora-3.jpg', 'gt-tiendacora-4.jpg', 'gt-tiendacora-5.jpg', 'gt-tiendacora-6.jpg', 'gt-tiendacora-7.jpg', 'gt-tiendacora-8.jpg', 'gt-tiendacora-9.jpg'],
   belleza: ['ig-belleza.jpg', 'gt-esteticaalma-1.jpg', 'gt-esteticaalma-2.jpg', 'gt-esteticaalma-3.jpg', 'gt-esteticaalma-4.jpg', 'gt-esteticaalma-5.jpg', 'gt-esteticaalma-6.jpg', 'gt-esteticaalma-7.jpg', 'gt-esteticaalma-8.jpg', 'gt-esteticaalma-9.jpg'],
   mascotas: ['ig-mascotas.jpg', 'gt-petshop-1.jpg', 'gt-petshop-2.jpg', 'gt-petshop-3.jpg', 'gt-petshop-4.jpg', 'gt-petshop-5.jpg', 'gt-petshop-6.jpg', 'gt-petshop-7.jpg', 'gt-petshop-8.jpg', 'gt-petshop-9.jpg'],
-  fitness: ['ig-fitness.jpg', 'gt-gymnorte-1.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-3.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-5.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-7.jpg', 'gt-gymnorte-8.jpg', 'gt-gymnorte-9.jpg']
+  fitness: ['ig-fitness.jpg', 'gt-gymnorte-1.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-3.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-5.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-7.jpg', 'gt-gymnorte-8.jpg', 'gt-gymnorte-9.jpg'],
+  detailing: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-3.jpg', 'gt-bustos-4.jpg', 'gt-bustos-5.jpg', 'gt-bustos-6.jpg', 'gt-bustos-7.jpg', 'gt-bustos-8.jpg', 'gt-bustos-9.jpg'],
+  inmobiliaria: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-3.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-6.jpg', 'gt-roca-7.jpg', 'gt-roca-8.jpg', 'gt-roca-9.jpg'],
+  odontologia: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-3.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-6.jpg', 'gt-dentalprado-7.jpg', 'gt-dentalprado-8.jpg']
 };
 const LP_WEEK_ALIAS = {
   'gt-petshop-2.jpg': 'ig-mascotas.jpg',
@@ -1558,7 +1588,7 @@ function landingView(cfg) {
         </div>
         <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Perfiles siguientes" onclick="lpWallStep(1)">›</button>
       </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">20 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 5</span></div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">28 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 7</span></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
@@ -1604,6 +1634,9 @@ function landingView(cfg) {
       <div class="lp-wchips" role="group" aria-label="Ver la semana de un rubro">
         <button type="button" class="lp-wchip on" onclick="lpWeekSet('mixto', this)">⭐ Ejemplo mixto</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('cafeteria', this)">☕ Cafetería</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('detailing', this)">🔧 Detailing</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('inmobiliaria', this)">🏠 Inmobiliaria</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('odontologia', this)">🦷 Odontología</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('barberia', this)">💈 Barbería</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('moda', this)">👕 Moda</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('belleza', this)">💅 Belleza</button>
