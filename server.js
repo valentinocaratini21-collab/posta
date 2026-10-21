@@ -15905,7 +15905,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v300';
+const BUILD_ID = '20261021-v301';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -16083,6 +16083,17 @@ process.on('uncaughtException', (err) => {
   console.error('[FATAL-SAFE] uncaughtException:', err && err.message ? err.message : err);
   // En uncaughtException sí conviene reiniciar, pero loggeamos antes.
 });
+
+// ---------- CAPA DE VISIBILIDAD (2026-10-21): que cada cliente atraiga más ----------
+// Superficies de referidos con cap de frecuencia, sello de bio opt-in y el
+// disparador FOMO de competidores (mecanismos 1·3·4·5). El módulo es
+// autosuficiente: si algo falla al montar, la app sigue sin la capa.
+try {
+  const visibility = require('./visibility');
+  visibility.initSchema(db);
+  visibility.registerVisibility(app, db, { requireAuth, requireAdminToken });
+  visibility.startVisibilityJobs(db);
+} catch (e) { console.error('[visibility] no se pudo montar:', e && e.message); }
 
 app.listen(PORT, () => {
   console.log(`[posta] Corriendo en http://localhost:${PORT} (${NODE_ENV})`);
