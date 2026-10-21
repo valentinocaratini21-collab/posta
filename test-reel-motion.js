@@ -55,6 +55,18 @@ function frameAt(file, t, out) {
   execFileSync('ffmpeg', ['-y', '-v', 'error', '-ss', String(t), '-i', file, '-frames:v', '1', '-q:v', '3', out]);
   return out;
 }
+// Cuenta píxeles cercanos al color de marca en la banda superior de un
+// frame ya extraído: verifica que la palabra clave + la barra de
+// acento REALMENTE se pintaron en el color del cliente.
+function countBrandInFrame(jpgFile, hex) {
+  const buf = execFileSync('ffmpeg', ['-v', 'error', '-i', jpgFile, '-vf', 'crop=1080:460:0:100,format=rgb24', '-frames:v', '1', '-f', 'rawvideo', 'pipe:1'], { maxBuffer: 64 * 1024 * 1024 });
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  let n = 0;
+  for (let i = 0; i + 2 < buf.length; i += 3) {
+    if (Math.abs(buf[i] - r) + Math.abs(buf[i + 1] - g) + Math.abs(buf[i + 2] - b) < 110) n++;
+  }
+  return n;
+}
 
 async function main() {
   console.log('== test-reel-motion.js ==');
@@ -79,6 +91,52 @@ async function main() {
     && engine.templateFor('consulta').move === 'calm' && engine.templateFor('autoridad').move === 'push-out',
     'plantillas por intención (venta/reserva/consulta/autoridad)');
 
+  // --- Pulido 2026-10-20: efectos POR PROMPT (reel-effects.js) ---
+  const fx = require('./reel-effects');
+  ok(fx.pickEffect({ intent: 'reserva', mood: 'chill', rubro: 'peluqueria' }).id === 'polvo-dorado-contraluz',
+    'efectos: peluquería+reserva+chill → polvo dorado en contraluz');
+  ok(fx.pickEffect({ intent: 'venta', mood: 'chill', rubro: 'cafeteria' }).id === 'vineta-calida-cafe',
+    'efectos: cafetería+venta+chill → viñeta cálida de café');
+  ok(fx.pickEffect({ intent: 'venta', mood: 'upbeat', rubro: 'fitness' }).id === 'glow-neon-fitness',
+    'efectos: fitness → glow de neón sutil');
+  ok(fx.pickEffect({ intent: 'venta', mood: 'groove', rubro: 'moda' }).id === 'barrido-luz-vidriera',
+    'efectos: venta sin rubro específico → barrido de luz de vidriera');
+  ok(fx.pickEffect({ intent: 'autoridad', mood: 'chill', rubro: 'deco' }).id === 'sobrio-editorial',
+    'efectos: autoridad → sobrio editorial');
+  ok(fx.pickEffect({ intent: '', mood: '', rubro: '' }).id === 'neutro-limpio',
+    'efectos: sin contexto → neutro declarado (no se inventa efecto)');
+  ok(fx.EFFECT_PROMPTS.every(e => e.prompt && e.prompt.length > 40 && e.realize),
+    'efectos: cada prompt tiene su texto de dirección y su realización');
+  const planFxCafe = fx.effectsForReel({ intent: 'venta', mood: 'chill', rubro: 'cafeteria',
+    scenes: [{ role: 'hook' }, { role: 'problem' }, { role: 'solution' }, { role: 'cta' }] });
+  ok(planFxCafe.perScene.length === 4 && planFxCafe.perScene.every(s => s.effectId === 'vineta-calida-cafe' && s.prompt.length > 40),
+    'efectos: UN solo prompt gobierna todas las escenas del reel');
+  ok(planFxCafe.perScene[0].overlay && planFxCafe.perScene[0].overlay.kind === 'sweep'
+    && !planFxCafe.perScene[1].overlay && planFxCafe.perScene[2].overlay && !planFxCafe.perScene[3].overlay,
+    'efectos: el barrido se contiene (gancho y primera solución, nada más)');
+
+  // --- Pulido: movimientos variados por escena ---
+  for (const mv of ['push-in', 'pan', 'calm', 'dynamic', 'push-out']) {
+    const plan = engine.movementPlanFor(mv, 6);
+    const noRepeat = plan.every((m, i) => i === 0 || m !== plan[i - 1]);
+    const par = plan.filter(m => m === 'parallax').length;
+    ok(plan.length === 6 && noRepeat && par <= 2, `movimientos ${mv}: variados, sin consecutivos iguales, parallax ≤2`, plan.join(','));
+  }
+
+  // --- Pulido: medición tipográfica y palabra clave ---
+  const advFull = await engine.measureAdvance('¿Tu balayage perdió', 72, OUT);
+  const advSum = (await engine.measureAdvance('¿Tu ', 72, OUT))
+    + (await engine.measureAdvance('balayage', 72, OUT))
+    + (await engine.measureAdvance(' perdió', 72, OUT));
+  ok(Math.abs(advFull - advSum) <= 2, 'medición: los segmentos suman el avance de la línea (≤2 px)', `${advFull} vs ${advSum}`);
+  const fakeChunks = [{ role: 'hook', fit: { lines: ['¿Tu balayage', 'perdió brillo?'] } }];
+  const kwA = engine.findKeyword(fakeChunks, ['Balayage']);
+  ok(kwA && fakeChunks[0].fit.lines[kwA.lineIdx].slice(kwA.start, kwA.end) === 'balayage',
+    'palabra clave: match con un producto/servicio del fundamento');
+  const kwB = engine.findKeyword(fakeChunks, []);
+  ok(kwB && fakeChunks[0].fit.lines[kwB.lineIdx].slice(kwB.start, kwB.end) === 'balayage',
+    'palabra clave: sin fundamento, la más larga del gancho');
+
   const belleza = fs.readdirSync(path.join(__dirname, 'stock', 'belleza')).filter(f => f.endsWith('.jpg')).map(f => path.join(__dirname, 'stock', 'belleza', f));
   const cafe = fs.readdirSync(path.join(__dirname, 'stock', 'cafeteria')).filter(f => f.endsWith('.jpg')).map(f => path.join(__dirname, 'stock', 'cafeteria', f));
   ok(belleza.length >= 4 && cafe.length >= 3, 'material de stock real para los renders', `${belleza.length}/${cafe.length}`);
@@ -92,12 +150,31 @@ async function main() {
   ok(scriptPelu.source === 'ai', 'render 1: guion IA (stub) válido');
   const planPelu = kc.planKineticCaptions(scriptPelu);
   ok(kc.validateCaptionPlan(planPelu).ok, 'render 1: plan cinético válido');
+  // Grafo del render 1 capturado: candado anti-bordado (sin cajas).
+  process.env.POSTY_REEL_DEBUG = '1';
+  const origLog = console.log;
+  let graphLog = '';
+  console.log = (...a) => { const s = a.join(' '); if (s.includes('filtergraph')) graphLog = s; origLog(...a); };
   const r1 = await engine.buildReelPro({
     mediaDir: OUT, photos: belleza.slice(0, 5), videos: [],
     script: scriptPelu, captionPlan: planPelu, template: 'reserva',
     handle: '@salonaurora', brandHex: '#2793C8', mood: 'chill',
+    rubro: 'peluqueria',
+    keywords: ['Balayage', 'Corte y brushing', 'Alisado sin formol', 'Máscara nutritiva de karité'],
   });
+  console.log = origLog;
+  delete process.env.POSTY_REEL_DEBUG;
+  ok(graphLog.length > 0 && !graphLog.includes('box=1'),
+    'render 1: el grafo v3 NO dibuja cajas de texto (fin del bordado)');
+  ok(graphLog.includes("alpha='if(lt(t") && graphLog.includes('premultiply') && graphLog.includes('alphamerge'),
+    'render 1: fades por chunk + halo del cierre + parallax presentes en el grafo');
   ok(r1.scripted === true && r1.template === 'reserva', 'render 1: despachó a v3 con plantilla reserva');
+  ok(r1.captionStyle === 'limpio-v2', 'render 1: estilo de subtítulos limpio-v2 (sin cajas)');
+  ok(Array.isArray(r1.effects) && r1.effects.length === 5 && r1.effects.every(e => e.effectId === 'polvo-dorado-contraluz' && e.prompt.length > 40),
+    'render 1: prompt de efecto registrado por escena', JSON.stringify((r1.effects || []).map(e => e.effectId)));
+  ok(Array.isArray(r1.movements) && r1.movements.length === 5
+    && r1.movements.every((m, i, arr) => i === 0 || m.move !== arr[i - 1].move || m.move === 'video'),
+    'render 1: movimientos por escena sin repetir consecutivos', (r1.movements || []).map(m => m.move).join(','));
   const p1 = probe(r1.file);
   const v1 = p1.streams.find(s => s.codec_type === 'video');
   ok(v1.width === 1080 && v1.height === 1920, 'render 1: 1080×1920', `${v1.width}x${v1.height}`);
@@ -119,6 +196,8 @@ async function main() {
   console.log(`    frames render 1: hook "${hookChunk.text}" @${outT(hookChunk).toFixed(1)}s → ${f1}`);
   console.log(`                     problema "${probChunk.text}" @${outT(probChunk).toFixed(1)}s → ${f2}`);
   console.log(`                     cierre (CTA "${ctaChunk.text}" + @) → ${f3}`);
+  const brandPx1 = countBrandInFrame(f1, '#2793C8');
+  ok(brandPx1 > 600, 'render 1: palabra clave + barra en el color de marca del cliente (píxeles reales)', String(brandPx1));
 
   // ============ RENDER 2: cafetería, venta (fade/push-in), 15 s ============
   const scriptCafe = await rs.buildReelScript({
@@ -132,12 +211,18 @@ async function main() {
     mediaDir: OUT, photos: cafe.slice(0, 4), videos: [],
     script: scriptCafe, captionPlan: planCafe, template: 'venta',
     handle: '@cafebruma', brandHex: '#FEC14D', mood: 'chill',
+    rubro: 'cafeteria',
+    keywords: ['Flat white', 'Medialunas de manteca', 'Café en grano de Etiopía'],
   });
   const p2 = probe(r2.file);
   const esperado2 = 15 - 3 * engine.templateFor('venta').xf; // 13.8
   ok(Math.abs(Number(p2.format.duration) - esperado2) < 0.35, `render 2: duración ≈ ${esperado2}s`, p2.format.duration);
+  ok(Array.isArray(r2.effects) && r2.effects.length === 4 && r2.effects.every(e => e.effectId === 'vineta-calida-cafe'),
+    'render 2: prompt viñeta cálida de café registrado en todas las escenas', JSON.stringify((r2.effects || []).map(e => e.effectId)));
   const f4 = frameAt(r2.file, 0.8, path.join(OUT, 'r2-hook.jpg'));
   console.log(`    render 2: ${r2.file} · beatsSnapped=${r2.beatsSnapped} · frame hook → ${f4}`);
+  const brandPx2 = countBrandInFrame(f4, '#FEC14D');
+  ok(brandPx2 > 600, 'render 2: énfasis de marca (amarillo del cliente) presente en el gancho', String(brandPx2));
 
   // ============ REGRESIÓN: v2 sin script sigue igual ============
   const r3 = await engine.buildReelPro({

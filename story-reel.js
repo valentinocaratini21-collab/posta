@@ -181,13 +181,14 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
   const reelPhotos = rot(photos, salt * 2).slice(0, 5);
   const reelVideos = rot(videos, salt);
 
-  // MOTION v3 (Fase 2, 2026-10-20 — spec-motion-v3.md): con
-  // POSTY_REEL_SCRIPT=1 el guion NACE del fundamento (reel-script.js) y
-  // el motor renderiza subtítulos cinéticos + xfade (reel-engine v3).
-  // Cualquier problema (sin fundamento, IA caída, guion rechazado) cae
-  // al camino v2 de abajo DECLARÁNDOLO en el log — nunca en silencio.
-  // Default OFF: la activación la decide el agente principal al pushear.
-  if (process.env.POSTY_REEL_SCRIPT === '1') {
+  // MOTION v3 (Fase 2, 2026-10-20 — spec-motion-v3.md; ACTIVADO POR
+  // DEFECTO el 2026-10-21 por mandato de Valentino): el guion NACE del
+  // fundamento (reel-script.js) y el motor renderiza subtítulos
+  // cinéticos + xfade (reel-engine v3). Cualquier problema (sin
+  // fundamento, IA caída, guion rechazado) cae al camino v2 de abajo
+  // DECLARÁNDOLO en el log — nunca en silencio.
+  // Apagado de emergencia: POSTY_REEL_SCRIPT=0 (vuelve al reel v2).
+  if (process.env.POSTY_REEL_SCRIPT !== '0') {
     try {
       const clientDigest = require('./client-digest');
       const { buildReelScript } = require('./reel-script');
@@ -208,6 +209,11 @@ async function makeReelVideoPro({ db, uid, feedPosts, mediaDir, salt = 0 }) {
             script, captionPlan, template: script.intent,
             hook: script.hook, mid: `${script.problem} ${script.solution}`.trim(), cta: script.cta,
             handle, brandHex, mood,
+            // Pulido v3 (2026-10-20): el rubro elige el prompt de
+            // efecto y los nombres reales del fundamento marcan la
+            // palabra clave del gancho (énfasis en color de marca).
+            rubro: profile.category || undefined,
+            keywords: [...(digest.productos || []), ...(digest.servicios || [])].map(x => x && x.nombre).filter(Boolean),
           });
         }
         console.log(`[reel-script] usuario ${uid}: plan de subtítulos inválido (${planCheck.errors.join(',')}) — sigo con v2`);

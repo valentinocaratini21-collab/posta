@@ -199,8 +199,20 @@ function moodForCategory(category, rubro) {
 // - Subtítulos CINÉTICOS: un drawtext por chunk de 2–4 palabras
 //   (kinetic-captions.js), en la banda del plan (hook/cta arriba,
 //   problema/solución abajo) — nunca en el centro, nunca fijos en
-//   píxeles heredados: la Y sale de la banda, el alfa de la luminancia
-//   real de ESA banda en ESA escena.
+//   píxeles heredados: la Y sale de la banda.
+// - PULIDO 2026-10-20 (feedback de Valentino: "el fondo de las
+//   palabras se ve como un BORDADO" + "más efectos visuales, DE
+//   PROMPTS" + "las fotos no pueden sentirse estáticas"): estilo de
+//   subtítulos limpio SIN cajas (scrim con pluma de intensidad ÚNICA
+//   por reel según la peor banda, texto con trazo+sombra, fades y
+//   asentamiento por chunk, palabra clave del gancho en color de
+//   marca medida al píxel); capa de EFECTOS POR PROMPT
+//   (reel-effects.js: el prompt gobierna grado/overlays de la escena
+//   y queda registrado en el resultado); movimientos VARIADOS por
+//   escena con easing suave y parallax de dos capas; cierre con
+//   pastilla de marca redondeada, halo que late y asentamiento.
+//   Detalle y diagnóstico en el bloque PULIDO DE SUBTÍTULOS de
+//   buildReelV3 y en reel-effects.js.
 // - Cortes con snap al beat de la pista (music-beats.js, ±150 ms) si
 //   la pista tiene grilla confiable; si no, duraciones del guion
 //   intactas (declarado en el resultado: beatsSnapped).
@@ -213,7 +225,11 @@ const MOTION_TEMPLATES = {
   reserva:   { transition: 'slideleft', xf: 0.45, move: 'pan' },
   consulta:  { transition: 'fade',      xf: 0.40, move: 'calm' },
   prueba:    { transition: 'fade',      xf: 0.20, move: 'dynamic' },
-  autoridad: { transition: 'fade',      xf: 0.40, move: 'push-out' },
+  // fadeblack: el fundido a negro breve es el corte editorial de las
+  // piezas de autoridad (respira, separa actos). wipe/circle y demás
+  // xfades de fantasía se evaluaron y se RECHAZARON: en reels de
+  // negocios locales se leen como plantilla barata, no como dirección.
+  autoridad: { transition: 'fadeblack', xf: 0.40, move: 'push-out' },
 };
 function templateFor(intent) {
   return MOTION_TEMPLATES[intent] || { transition: 'fade', xf: 0.4, move: 'cycle' };
@@ -221,6 +237,7 @@ function templateFor(intent) {
 
 function photoMovementFor(move, idx, frames) {
   const S = smoothExpr(frames);
+  const S2 = smoothExpr2(frames);
   const cx = 'iw/2-(iw/zoom/2)';
   switch (move) {
     case 'push-in':  return { z: `1+0.15*${S}`, x: cx, y: `(ih-ih/zoom)*${idx % 2 ? 0.5 : 0.42}` };
@@ -228,12 +245,191 @@ function photoMovementFor(move, idx, frames) {
     case 'pan':      return idx % 2
       ? { z: '1.25', x: `(iw-iw/zoom)*(1-${S})`, y: '(ih-ih/zoom)/2' }
       : { z: '1.25', x: `(iw-iw/zoom)*${S}`, y: '(ih-ih/zoom)/2' };
-    case 'calm':     return { z: `1+0.06*${S}`, x: cx, y: '(ih-ih/zoom)/2' };
+    case 'pan-r':    return { z: '1.25', x: `(iw-iw/zoom)*${S2}`, y: '(ih-ih/zoom)/2' };
+    case 'pan-l':    return { z: '1.25', x: `(iw-iw/zoom)*(1-${S2})`, y: '(ih-ih/zoom)/2' };
+    case 'calm':     return { z: `1+0.06*${S2}`, x: cx, y: '(ih-ih/zoom)/2' };
     case 'dynamic':  return idx % 2
       ? { z: '1.3', x: `(iw-iw/zoom)*${S}`, y: '(ih-ih/zoom)/2' }
       : { z: `1+0.22*${S}`, x: cx, y: '(ih-ih/zoom)*0.42' };
     default:         return photoMovement(idx, frames);
   }
+}
+
+// Smootherstep (Ken Perlin): u³(u(6u−15)+10) — easing más suave que el
+// smoothstep en los extremos; se usa en paneos y en el parallax, donde
+// el ojo más nota el arranque/frenada robóticos del zoom lineal.
+function smoothExpr2(frames) {
+  const D = Math.max(1, frames - 1);
+  const U = `(on/${D})`;
+  return `(${U}*${U}*${U}*((${U}*6-15)*${U}+10))`;
+}
+
+// MOVIMIENTO POR ESCENA (pulido 2026-10-20, precisión de Valentino:
+// "las fotos no pueden sentirse estáticas"). photoMovementFor es el
+// piso, no el techo: cada plantilla declara una SECUENCIA de
+// movimientos y el plan garantiza (a) dos escenas seguidas NUNCA
+// repiten movimiento, (b) parallax como máximo 2 veces por reel,
+// (c) variedad real — paneos con smootherstep, push con anclas
+// alternadas y parallax fondo/sujeto en las escenas marcadas.
+const MOVE_SEQUENCES = {
+  'push-in':  ['push-in', 'pan-r', 'parallax', 'push-in', 'pan-l', 'push-out'],
+  'pan':      ['pan-l', 'parallax', 'pan-r', 'push-in', 'parallax', 'pan-l'],
+  'calm':     ['calm', 'parallax', 'calm', 'pan-r', 'calm', 'parallax'],
+  'dynamic':  ['dynamic', 'parallax', 'push-in', 'dynamic', 'pan-r', 'parallax'],
+  'push-out': ['push-out', 'parallax', 'pan-l', 'push-out', 'calm', 'parallax'],
+  'cycle':    ['push-in', 'pan-r', 'parallax', 'push-out', 'pan-l', 'parallax'],
+};
+function movementPlanFor(move, n) {
+  const seq = MOVE_SEQUENCES[move] || MOVE_SEQUENCES.cycle;
+  const plan = [];
+  let parallaxCount = 0;
+  for (let i = 0; i < n; i++) {
+    let m = seq[i % seq.length];
+    if (m === 'parallax') { parallaxCount++; if (parallaxCount > 2) m = (i % 2 ? 'pan-r' : 'push-in'); }
+    if (i > 0 && plan[i - 1] === m) m = (m === 'pan-r' ? 'pan-l' : 'pan-r');
+    if (i > 0 && plan[i - 1] === m) m = 'calm';
+    plan.push(m);
+  }
+  return plan;
+}
+
+let _reelEffects = null;
+function reelEffectsMod() {
+  if (_reelEffects === null) { try { _reelEffects = require('./reel-effects'); } catch (e) { _reelEffects = false; } }
+  return _reelEffects || null;
+}
+
+// ---------- Medición tipográfica exacta (para la palabra clave) ----------
+// drawtext no expone el avance de un texto ajeno: para pintar SOLO la
+// palabra clave del gancho en color de marca, alineada al píxel con
+// el resto de su línea, se mide el avance real de cada segmento con
+// el "truco del pipe": el avance de S = borde de tinta derecho de
+// "S|" − borde de tinta derecho de "|" (la barra testigo cancela su
+// propio bearing). Verificado: error ≤1 px contra la línea completa.
+function ffmpegBuffer(args) {
+  return new Promise((resolve, reject) => {
+    execFile('ffmpeg', ['-v', 'error', ...args], { timeout: 30000, maxBuffer: 64 * 1024 * 1024, encoding: 'buffer' },
+      (err, stdout) => err ? reject(err) : resolve(stdout));
+  });
+}
+let _measureN = 0;
+async function drawTextGray(text, size, tmpDir) {
+  const wpx = Math.ceil(size * 1.05 * text.length) + 400;
+  const hpx = Math.ceil(size * 2.2);
+  const tf = path.join(tmpDir, `m${_measureN++}.txt`);
+  fs.writeFileSync(tf, text, 'utf8');
+  const buf = await ffmpegBuffer(['-f', 'lavfi', '-i', `color=black:s=${wpx}x${hpx}`,
+    '-vf', `drawtext=fontfile='${FONT}':textfile='${tf}':fontsize=${size}:fontcolor=white:x=100:y=40,format=gray`,
+    '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'gray', 'pipe:1']);
+  return { buf, wpx, hpx };
+}
+function inkRightEdge(buf, w, h) {
+  for (let x = w - 1; x >= 0; x--) for (let y = 0; y < h; y++) if (buf[y * w + x] > 40) return x;
+  return -1;
+}
+const _advCache = new Map();
+const _pipeCache = new Map();
+async function measureAdvance(text, size, tmpDir) {
+  const key = size + ':' + text;
+  if (_advCache.has(key)) return _advCache.get(key);
+  if (!_pipeCache.has(size)) {
+    const r = await drawTextGray('|', size, tmpDir);
+    _pipeCache.set(size, inkRightEdge(r.buf, r.wpx, r.hpx));
+  }
+  const r = await drawTextGray(text + '|', size, tmpDir);
+  const adv = inkRightEdge(r.buf, r.wpx, r.hpx) - _pipeCache.get(size);
+  _advCache.set(key, adv);
+  return adv;
+}
+
+function normalizeWord(w) {
+  return String(w || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+/* Palabra clave del gancho: primero la que coincide con un producto/
+ * servicio real del fundamento (opts.keywords); si no hay match, la
+ * palabra más larga (≥5 letras) del primer chunk del gancho. Una sola
+ * por reel: el énfasis que se repite deja de ser énfasis. */
+function findKeyword(chunks, keywords) {
+  const kwTokens = new Set();
+  for (const k of keywords || []) {
+    for (const tok of String(k).split(/\s+/)) {
+      const n = normalizeWord(tok);
+      if (n.length >= 3) kwTokens.add(n);
+    }
+  }
+  const hooks = (chunks || []).filter(c => c && c.role === 'hook' && !c.skip && c.fit);
+  const eachWord = (fn) => {
+    for (const rc of hooks) {
+      for (let li = 0; li < rc.fit.lines.length; li++) {
+        const line = rc.fit.lines[li];
+        const re = /\S+/g;
+        let m;
+        while ((m = re.exec(line))) {
+          const hit = fn(normalizeWord(m[0]), rc, li, m.index, m.index + m[0].length);
+          if (hit) return hit;
+        }
+      }
+    }
+    return null;
+  };
+  const byDigest = eachWord((n, rc, li, s, e) => kwTokens.has(n) ? { chunk: rc, lineIdx: li, start: s, end: e } : null);
+  if (byDigest) return byDigest;
+  let best = null;
+  eachWord((n, rc, li, s, e) => {
+    if (n.length >= 5 && (!best || n.length > best.len)) best = { chunk: rc, lineIdx: li, start: s, end: e, len: n.length };
+    return null;
+  });
+  return best;
+}
+
+// ---------- Activos gráficos del pulido (PNG en tmpDir) ----------
+// Scrim de banda: negro con alfa en meseta sobre la zona del texto y
+// pluma hacia el centro. UNA sola intensidad por reel (ver buildReelV3).
+async function genScrimPng(tmpDir, peak, flip) {
+  const out = path.join(tmpDir, flip ? 'scrim-bottom.png' : 'scrim-top.png');
+  const vf = `format=rgba,geq=r=0:g=0:b=0:a='${peak}*(1-clip((Y-540)/260,0,1))'${flip ? ',vflip' : ''}`;
+  await runFfmpeg(['-f', 'lavfi', '-i', 'color=black:s=1080x800', '-vf', vf, '-frames:v', '1', out]);
+  return out;
+}
+// Banda de luz diagonal para el barrido (gaussiana suave, se anima la
+// posición en el overlay; el alfa ya trae la forma). El alfa se
+// ventana a CERO en los cuatro bordes del lienzo: sin eso, la cola de
+// la gaussiana se corta en el borde del PNG y al entrar al cuadro se
+// ve un escalón vertical de brillo (cazado en frames, 2026-10-20).
+async function genSweepPng(tmpDir) {
+  const out = path.join(tmpDir, 'sweep.png');
+  const ss = (u) => `((${u})*(${u})*(3-2*(${u})))`;
+  const win = `*${ss('clip(X/220,0,1)')}` + `*${ss('clip((1040-X)/220,0,1)')}` + `*${ss('clip(Y/280,0,1)')}` + `*${ss('clip((1707-Y)/280,0,1)')}`;
+  await runFfmpeg(['-f', 'lavfi', '-i', 'color=white:s=1040x1707', '-vf',
+    `format=rgba,geq=r=255:g=255:b=255:a='255*exp(-pow((X-520)*0.80+(Y-853)*0.60,2)/(2*pow(210,2)))${win}'`,
+    '-frames:v', '1', out]);
+  return out;
+}
+// Partículas en contraluz: ruido → umbral alto → blur = puntos suaves
+// escasos sobre lienzo alto (2160) para derivar sin repetir en escena.
+async function genParticlesPng(tmpDir) {
+  const out = path.join(tmpDir, 'particles.png');
+  await runFfmpeg(['-f', 'lavfi', '-i', 'color=white:s=1080x2160',
+    '-f', 'lavfi', '-i', `color=black:s=1080x2160,noise=alls=95:allf=t,format=gray,lut=y='if(gt(val,238),255,0)',gblur=sigma=2.4`,
+    '-filter_complex', '[0:v][1:v]alphamerge,format=rgba', '-frames:v', '1', out]);
+  return out;
+}
+// Tarjeta del @: pastilla de marca con esquinas redondeadas (SDF en
+// geq, antialias de 1 px) y el handle compuesto adentro. Reemplaza al
+// rectángulo de drawtext de bordes rectos.
+async function genPlatePng(tmpDir, handle, brandHex) {
+  const advH = await measureAdvance(handle, 82, tmpDir);
+  const PW = advH + 96, PH = 150;
+  const CX = Math.floor(PW / 2), HX = Math.floor(PW / 2) - 34, HY = 75 - 34;
+  const r = parseInt(brandHex.slice(1, 3), 16), g = parseInt(brandHex.slice(3, 5), 16), b = parseInt(brandHex.slice(5, 7), 16);
+  const f = path.join(tmpDir, 'handle.txt');
+  fs.writeFileSync(f, handle, 'utf8');
+  const out = path.join(tmpDir, 'plate.png');
+  await runFfmpeg(['-f', 'lavfi', '-i', `color=black:s=${PW}x${PH}`, '-vf',
+    `format=rgba,geq=r=${r}:g=${g}:b=${b}:a='255*clip(34.5-sqrt(pow(max(abs(X-${CX})-${HX},0),2)+pow(max(abs(Y-75)-${HY},0),2))-min(max(abs(X-${CX})-${HX},abs(Y-75)-${HY}),0),0,1)',drawtext=fontfile='${FONT}':textfile='${f}':fontsize=82:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2`,
+    '-frames:v', '1', out]);
+  return { file: out, w: PW, h: PH };
 }
 
 let _musicBeats = null;
@@ -335,15 +531,33 @@ async function buildReelV3(opts) {
       return lum;
     };
 
-    // ---------- Subtítulos cinéticos por chunk ----------
-    let dtN = 0;
-    const dtChunk = (lines, { size, lineH, y0, alpha, enable }) => lines.map((ln, i) => {
-      const f = path.join(tmpDir, `t${dtN++}.txt`);
-      fs.writeFileSync(f, ln, 'utf8');
-      return `drawtext=fontfile='${FONT}':textfile='${f}':fontsize=${size}:fontcolor=white:` +
-        `box=1:boxcolor=black@${alpha}:boxborderw=22:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
-        `x=(w-text_w)/2:y=${Math.round(y0 + i * lineH)}:enable='${enable}'`;
-    }).join(',');
+    // =====================================================
+    // PULIDO DE SUBTÍTULOS (2026-10-20 — feedback de Valentino:
+    // "el fondo de las palabras se ve como un BORDADO").
+    //
+    // DIAGNÓSTICO (verificado en frames de los renders de prueba):
+    // el dtChunk anterior dibujaba UNA CAJA POR LÍNEA (drawtext con
+    // box=1 por cada línea del chunk). Tres defectos compuestos:
+    //  1. Cada línea tenía su propio rectángulo pegado a su texto →
+    //     anchos escalonados entre líneas, silueta de parche.
+    //  2. La caja de una línea (alto de glifo + 2×boxborderw=44)
+    //     superaba el interlineado (lh=88 con fuente 72) → las cajas
+    //     de líneas vecinas se SOLAPABAN y la franja de solape se
+    //     oscurecía al doble: la "costura" literal del bordado.
+    //  3. El alfa salía de la luminancia de ESA escena en 4 escalones
+    //     discretos (boxAlphaFor) y la caja entraba/salía en corte
+    //     seco (enable between): entre chunk y chunk el parche
+    //     cambiaba de tamaño, de tono y de golpe.
+    //
+    // ESTILO NUEVO ("limpio premium"): SIN cajas. Texto blanco
+    // Montserrat 800 con trazo fino (borderw) y sombra suave sobre
+    // un SCRIM con pluma por banda (gradiente con meseta sobre la
+    // zona del texto, nunca un rectángulo). El contraste lo decide
+    // la PEOR banda del reel y el pico del scrim es UNO SOLO para
+    // todo el reel → cero saltos de tono entre chunks. Cada chunk
+    // entra con fade de 0,13 s + asentamiento vertical de 10 px
+    // (smoothstep) y sale con fade: nada aparece de golpe.
+    // =====================================================
     const CHUNK_TIERS = [{ size: 72, ch: 15, lh: 88 }, { size: 64, ch: 17, lh: 80 }, { size: 56, ch: 20, lh: 70 }];
     const BAND_Y = { top: 150, bottom: 1330 }; // dentro de [0.07,0.30] y [0.66,0.88] de 1920
     // Ventanas de salida de cada chunk. Al remapear, el primer chunk de
@@ -355,6 +569,7 @@ async function buildReelV3(opts) {
     // banda, un chunk nunca arranca antes de que termine el anterior —
     // el arranque se corre, nada se borra.
     const renderChunks = [];
+    let worstLum = 0;
     for (const chunk of (opts.captionPlan.chunks || [])) {
       const seg = segs[chunk.sceneIndex];
       if (!seg) continue;
@@ -364,8 +579,8 @@ async function buildReelV3(opts) {
       const fit = fitText(chunk.text, CHUNK_TIERS, 2);
       if (!fit) continue;
       const band = chunk.band === 'top' ? 'top' : 'bottom';
-      const alpha = boxAlphaFor(await lumFor(seg, band));
-      renderChunks.push({ fit, band, alpha, a: a0, b: Math.min(b, totalOut), role: chunk.role });
+      worstLum = Math.max(worstLum, await lumFor(seg, band));
+      renderChunks.push({ fit, band, a: a0, b: Math.min(b, totalOut), role: chunk.role });
     }
     const bandFreeAt = { top: 0, bottom: 0 };
     for (const rc of renderChunks) {
@@ -373,35 +588,111 @@ async function buildReelV3(opts) {
       if (rc.b - rc.a < 0.25) rc.skip = true; // sin aire tras el corrimiento: no destella
       else bandFreeAt[rc.band] = rc.b;
     }
-    const textFilters = [];
-    let hookMaxLines = 0, hookLh = 88, hookOutEnd = 0;
+    // Pico del scrim: la banda más brillante del reel tiene que bajar
+    // a luminancia efectiva ≤115 tras el scrim (contraste ≥4,5:1
+    // contra el blanco del texto); piso 0,30 (presencia de estilo
+    // aun en escenas oscuras) y techo 0,66 (que no ensucie la foto).
+    const scrimPeak = Math.round(255 * Math.min(0.66, Math.max(0.30, 1 - 115 / Math.max(worstLum, 1))));
+    // Corridas de texto por banda: chunks pegados (gap ≤0,4 s) comparten
+    // UN scrim que respira con la corrida, no un fundido por chunk.
+    const runs = { top: [], bottom: [] };
     for (const rc of renderChunks) {
       if (rc.skip) continue;
-      textFilters.push(dtChunk(rc.fit.lines, {
-        size: rc.fit.size, lineH: rc.fit.lh, y0: BAND_Y[rc.band],
-        alpha: rc.alpha, enable: `between(t,${rc.a.toFixed(2)},${rc.b.toFixed(2)})`,
-      }));
+      const list = runs[rc.band];
+      const last = list[list.length - 1];
+      if (last && rc.a - last.b <= 0.4) last.b = Math.max(last.b, rc.b);
+      else list.push({ a: rc.a, b: rc.b });
+    }
+
+    // ---------- Efectos por prompt + movimientos por escena ----------
+    const fxm = reelEffectsMod();
+    const fxPlan = fxm
+      ? fxm.effectsForReel({ intent: opts.template || script.intent, mood: opts.mood, rubro: opts.rubro, scenes })
+      : { effect: { id: 'neutro-limpio' }, perScene: scenes.map(() => ({ effectId: 'neutro-limpio', prompt: '', grade: [], glow: 0, overlay: null })) };
+    const movePlan = movementPlanFor(tpl.move, N);
+    const appliedMoves = segs.map((s, i) => (s.kind === 'video' ? 'video' : movePlan[i]));
+
+    // ---------- Palabra clave del gancho (énfasis de marca) ----------
+    const kwHit = findKeyword(renderChunks, opts.keywords);
+    if (kwHit) kwHit.chunk.kw = { lineIdx: kwHit.lineIdx, start: kwHit.start, end: kwHit.end };
+
+    // ---------- Constructores de texto del estilo limpio ----------
+    let dtN = 0;
+    const clampE = (e) => `min(1,max(0,${e}))`;
+    const ssE = (u) => `(${u}*${u}*(3-2*${u}))`;
+    const alphaExpr = (a, b) => {
+      const fi = Math.min(0.13, (b - a) / 2);
+      return `if(lt(t,${a.toFixed(2)}),0,if(lt(t,${(a + fi).toFixed(2)}),(t-${a.toFixed(2)})/${fi.toFixed(2)},if(lt(t,${(b - fi).toFixed(2)}),1,max(0,1-(t-${(b - fi).toFixed(2)})/${fi.toFixed(2)}))))`;
+    };
+    const dtLine = (text, { size, yBase, x, color, a, b }) => {
+      const f = path.join(tmpDir, `t${dtN++}.txt`);
+      fs.writeFileSync(f, text, 'utf8');
+      const bw = Math.max(2, Math.round(size / 24));
+      const y = `${Math.round(yBase)}+10*(1-${ssE(clampE(`(t-${a.toFixed(2)})/0.20`))})`;
+      return `drawtext=fontfile='${FONT}':textfile='${f}':fontsize=${size}:fontcolor=${color}:` +
+        `borderw=${bw}:bordercolor=black@0.5:shadowcolor=black@0.35:shadowx=${bw}:shadowy=${bw}:` +
+        `x=${x}:y='${y}':alpha='${alphaExpr(a, b)}':enable='between(t,${a.toFixed(2)},${b.toFixed(2)})'`;
+    };
+    const textFilters = [];
+    let hookMaxLines = 0, hookLh = 88, hookOutEnd = 0;
+    const brandDraw = '0x' + brand.slice(1);
+    for (const rc of renderChunks) {
+      if (rc.skip) continue;
+      const size = rc.fit.size;
+      for (let i = 0; i < rc.fit.lines.length; i++) {
+        const line = rc.fit.lines[i];
+        const yBase = BAND_Y[rc.band] + i * rc.fit.lh;
+        if (rc.kw && rc.kw.lineIdx === i) {
+          // Línea con la palabra clave: tres segmentos medidos al
+          // píxel (pre / clave en color de marca / sufijo), misma
+          // línea base y mismos fades que una línea común.
+          const pre = line.slice(0, rc.kw.start);
+          const kw = line.slice(rc.kw.start, rc.kw.end);
+          const suf = line.slice(rc.kw.end);
+          const advLine = await measureAdvance(line, size, tmpDir);
+          const advPre = pre ? await measureAdvance(pre, size, tmpDir) : 0;
+          const advKw = await measureAdvance(kw, size, tmpDir);
+          const xLine = Math.round((W - advLine) / 2);
+          if (pre) textFilters.push(dtLine(pre, { size, yBase, x: xLine, color: 'white', a: rc.a, b: rc.b }));
+          textFilters.push(dtLine(kw, { size, yBase, x: xLine + advPre, color: brandDraw, a: rc.a, b: rc.b }));
+          if (suf) textFilters.push(dtLine(suf, { size, yBase, x: xLine + advPre + advKw, color: 'white', a: rc.a, b: rc.b }));
+        } else {
+          textFilters.push(dtLine(line, { size, yBase, x: '(w-text_w)/2', color: 'white', a: rc.a, b: rc.b }));
+        }
+      }
       if (rc.role === 'hook') {
         if (rc.fit.lines.length > hookMaxLines) { hookMaxLines = rc.fit.lines.length; hookLh = rc.fit.lh; }
         hookOutEnd = Math.max(hookOutEnd, rc.b);
       }
     }
-    // Barra de acento de marca bajo el gancho (firma v2, en banda superior).
+    // Barra de acento de marca bajo el gancho: CRECE desde el centro
+    // (antes aparecía de golpe, un rectángulo más del bordado).
     if (hookMaxLines) {
       const barY = Math.round(BAND_Y.top + hookMaxLines * hookLh + 28);
-      textFilters.push(`drawbox=x=465:y=${barY}:w=150:h=10:color=${brand}@0.95:t=fill:enable='between(t,0,${hookOutEnd.toFixed(2)})'`);
+      const grow = clampE('(t-0.05)/0.40');
+      textFilters.push(`drawbox=x='(1080-150*${grow})/2':y=${barY}:w='150*${grow}':h=10:color=${brand}@0.95:t=fill:enable='between(t,0,${hookOutEnd.toFixed(2)})'`);
     }
-    // Cierre: @ del negocio en la BANDA INFERIOR (el v2 lo ponía en el
-    // centro, y=800 — en v3 el centro está prohibido también en reels).
+    // Cierre: la @ vive en una PASTILLA de marca redondeada (PNG,
+    // genPlatePng) en la BANDA INFERIOR — el centro está prohibido
+    // también en reels. Entra asentándose con un halo de marca que
+    // late una vez (ver cadena final). closeStart = últimos 2 s.
+    const closeStart = Math.max(0, Math.round((totalOut - 2) * 100) / 100);
+    let plate = null, plateX = 0;
+    const PLATE_Y = 1530;
     if (handleLine) {
-      const f = path.join(tmpDir, `t${dtN++}.txt`);
-      fs.writeFileSync(f, handleLine, 'utf8');
-      textFilters.push(`drawtext=fontfile='${FONT}':textfile='${f}':fontsize=82:fontcolor=white:` +
-        `box=1:boxcolor=${brand}@0.92:boxborderw=24:shadowcolor=black@0.4:shadowx=3:shadowy=3:` +
-        `x=(w-text_w)/2:y=1600:enable='between(t,${Math.max(0, totalOut - 2).toFixed(2)},${totalOut.toFixed(2)})'`);
+      plate = await genPlatePng(tmpDir, handleLine, brand);
+      plateX = Math.round((W - plate.w) / 2);
     }
 
-    // ---------- Inputs ----------
+    // ---------- Activos de efecto según el plan ----------
+    const needSweep = fxPlan.perScene.some(s => s.overlay && s.overlay.kind === 'sweep');
+    const needParticles = fxPlan.perScene.some(s => s.overlay && s.overlay.kind === 'particles');
+    const scrimTopFile = runs.top.length ? await genScrimPng(tmpDir, scrimPeak, false) : null;
+    const scrimBottomFile = runs.bottom.length ? await genScrimPng(tmpDir, scrimPeak, true) : null;
+    const sweepFile = needSweep ? await genSweepPng(tmpDir) : null;
+    const particlesFile = needParticles ? await genParticlesPng(tmpDir) : null;
+
+    // ---------- Inputs (índices dinámicos) ----------
     const args = [];
     segs.forEach((s) => {
       if (s.kind === 'video') args.push('-ss', String(s.start.toFixed(2)), '-t', String(s.dur.toFixed(2)), '-i', s.file);
@@ -411,20 +702,87 @@ async function buildReelV3(opts) {
       if (s.kind === 'video' && s.hasAudio) args.push('-ss', String(s.start.toFixed(2)), '-t', String(s.dur.toFixed(2)), '-i', s.file);
       else args.push('-f', 'lavfi', '-t', String(s.dur.toFixed(2)), '-i', 'anullsrc=r=48000:cl=stereo');
     });
+    let nextIn = 2 * N;
     let musicIdx = -1;
-    if (musicFile) { args.push('-stream_loop', '-1', '-i', musicFile); musicIdx = 2 * N; }
+    if (musicFile) { args.push('-stream_loop', '-1', '-i', musicFile); musicIdx = nextIn++; }
+    const assetIdx = {};
+    if (scrimTopFile) { args.push('-loop', '1', '-framerate', String(FPS), '-t', String(totalOut), '-i', scrimTopFile); assetIdx.scrimTop = nextIn++; }
+    if (scrimBottomFile) { args.push('-loop', '1', '-framerate', String(FPS), '-t', String(totalOut), '-i', scrimBottomFile); assetIdx.scrimBottom = nextIn++; }
+    if (sweepFile) { args.push('-loop', '1', '-framerate', String(FPS), '-t', String(totalOut), '-i', sweepFile); assetIdx.sweep = nextIn++; }
+    if (particlesFile) { args.push('-loop', '1', '-framerate', String(FPS), '-t', String(totalOut), '-i', particlesFile); assetIdx.particles = nextIn++; }
+    if (plate) { args.push('-loop', '1', '-framerate', String(FPS), '-t', String(totalOut), '-i', plate.file); assetIdx.plate = nextIn++; }
 
-    // ---------- Filtergraph: conformar → xfade/acrossfade → texto ----------
+    // ---------- Filtergraph: conformar → grado/efectos → xfade ----------
     const fc = [];
+    const sweepScenes = fxPlan.perScene.map((s, i) => i).filter(i => fxPlan.perScene[i].overlay && fxPlan.perScene[i].overlay.kind === 'sweep');
+    const partScenes = fxPlan.perScene.map((s, i) => i).filter(i => fxPlan.perScene[i].overlay && fxPlan.perScene[i].overlay.kind === 'particles');
+    if (sweepScenes.length) fc.push(`[${assetIdx.sweep}:v]split=${sweepScenes.length}${sweepScenes.map((_, j) => `[swi${j}]`).join('')}`);
+    if (partScenes.length) fc.push(`[${assetIdx.particles}:v]split=${partScenes.length}${partScenes.map((_, j) => `[pti${j}]`).join('')}`);
+    const clampE2 = (e) => `min(1,max(0,${e}))`;
     segs.forEach((s, i) => {
+      const frames = Math.max(2, Math.round(s.dur * FPS));
+      let cur;
       if (s.kind === 'video') {
-        fc.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},fps=${FPS},setsar=1,format=yuv420p,settb=AVTB[v${i}]`);
-      } else {
-        const frames = Math.max(2, Math.round(s.dur * FPS));
-        const mv = photoMovementFor(tpl.move, i, frames);
+        fc.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},fps=${FPS},setsar=1,format=yuv420p[s${i}raw]`);
+        cur = `s${i}raw`;
+      } else if (appliedMoves[i] === 'parallax') {
+        // PARALLAX simple (dos capas de la MISMA foto): fondo con más
+        // zoom, blur y push-in lento; frente apenas más grande, con
+        // bordes plumados (alphaextract+boxblur+alphamerge) y deriva
+        // lateral contraria con smootherstep. La diferencia de
+        // velocidades entre capas se lee como profundidad.
+        const S = smoothExpr(frames);
+        const S2 = smoothExpr2(frames);
+        const drift = i % 2 ? `(iw-iw/zoom)*(0.56-0.12*${S2})` : `(iw-iw/zoom)*(0.44+0.12*${S2})`;
         fc.push(`[${i}:v]scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,crop=2160:3840,setsar=1,` +
-          `zoompan=z='${mv.z}':x='${mv.x}':y='${mv.y}':d=${frames}:s=${W}x${H}:fps=${FPS},format=yuv420p,settb=AVTB[v${i}]`);
+          `zoompan=z='1.30+0.05*${S}':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*0.42':d=${frames}:s=${W}x${H}:fps=${FPS},gblur=sigma=10,format=yuv420p[pbg${i}]`);
+        fc.push(`[${i}:v]scale=2376:4224:force_original_aspect_ratio=increase:flags=lanczos,crop=2376:4224,setsar=1,` +
+          `zoompan=z='1.10':x='${drift}':y='(ih-ih/zoom)/2':d=${frames}:s=1188x2112:fps=${FPS},format=rgba,split[pfgc${i}][pfga${i}]`);
+        fc.push(`[pfga${i}]alphaextract,boxblur=luma_radius=26:luma_power=2[pfgb${i}]`);
+        fc.push(`[pfgc${i}][pfgb${i}]alphamerge[pfgf${i}]`);
+        fc.push(`[pbg${i}][pfgf${i}]overlay=x=-54:y=-96,format=yuv420p[s${i}raw]`);
+        cur = `s${i}raw`;
+      } else {
+        const mv = photoMovementFor(appliedMoves[i], i, frames);
+        fc.push(`[${i}:v]scale=2160:3840:force_original_aspect_ratio=increase:flags=lanczos,crop=2160:3840,setsar=1,` +
+          `zoompan=z='${mv.z}':x='${mv.x}':y='${mv.y}':d=${frames}:s=${W}x${H}:fps=${FPS},format=yuv420p[s${i}raw]`);
+        cur = `s${i}raw`;
       }
+      // Grado del prompt de efecto (sutil, el mismo en todo el reel).
+      const fxi = fxPlan.perScene[i] || { grade: [], glow: 0, overlay: null };
+      if (fxi.grade && fxi.grade.length) {
+        fc.push(`[${cur}]${fxi.grade.join(',')}[s${i}g]`);
+        cur = `s${i}g`;
+      }
+      // Glow (fitness): copia borrosa en blend screen de baja
+      // opacidad. OJO: el blend va en RGB (gbrp) — en YUV el modo
+      // screen opera por plano y destruye el croma neutro (128):
+      // todo el cuadro sale magenta (verificado en laboratorio).
+      if (fxi.glow > 0) {
+        fc.push(`[${cur}]split[s${i}ga][s${i}gb]`);
+        fc.push(`[s${i}ga]format=gbrp[s${i}gar]`);
+        fc.push(`[s${i}gb]gblur=sigma=12,format=gbrp[s${i}gbl]`);
+        fc.push(`[s${i}gar][s${i}gbl]blend=all_mode=screen:all_opacity=${fxi.glow},format=yuv420p[s${i}gl]`);
+        cur = `s${i}gl`;
+      }
+      // Overlays del prompt: barrido de luz (pasa y se va) o partículas
+      // en contraluz (ambiente, deriva lenta hacia arriba).
+      if (fxi.overlay && fxi.overlay.kind === 'sweep') {
+        const j = sweepScenes.indexOf(i);
+        const scaleW = fxi.overlay.scaleW || 1300;
+        const scaleH = Math.max(2000, Math.round(scaleW * 1707 / 1040));
+        const durS = Math.max(0.5, Math.min(fxi.overlay.dur || 1.7, s.dur - 0.4));
+        const oy = Math.round((H - scaleH) / 2);
+        fc.push(`[swi${j}]scale=${scaleW}:${scaleH},format=rgba,colorchannelmixer=aa=${fxi.overlay.opacity}[swf${i}]`);
+        fc.push(`[${cur}][swf${i}]overlay=x='-${scaleW + 100}+${W + scaleW + 200}*${clampE2(`(t-0.25)/${durS.toFixed(2)}`)}':y=${oy}:enable='between(t,0.25,${(0.25 + durS).toFixed(2)})'[s${i}fx]`);
+        cur = `s${i}fx`;
+      } else if (fxi.overlay && fxi.overlay.kind === 'particles') {
+        const j = partScenes.indexOf(i);
+        fc.push(`[pti${j}]format=rgba,colorchannelmixer=aa=${fxi.overlay.opacity}[ptf${i}]`);
+        fc.push(`[${cur}][ptf${i}]overlay=x=0:y='-60-14*t'[s${i}fx]`);
+        cur = `s${i}fx`;
+      }
+      fc.push(`[${cur}]settb=AVTB[v${i}]`);
       fc.push(`[${N + i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,apad=whole_dur=${s.dur.toFixed(2)},atrim=0:${s.dur.toFixed(2)}[a${i}]`);
     });
     let vCur = 'v0', aCur = 'a0';
@@ -434,8 +792,44 @@ async function buildReelV3(opts) {
       fc.push(`[${aCur}][a${k}]acrossfade=d=${XF}[ax${k}]`);
       vCur = `x${k}`; aCur = `ax${k}`;
     }
-    const vf = [`fade=t=in:st=0:d=0.25`, `fade=t=out:st=${(totalOut - 0.45).toFixed(2)}:d=0.45`, ...textFilters].filter(Boolean).join(',');
-    fc.push(`[${vCur}]${vf}[vout]`);
+    // ---------- Cadena final: fades → scrims → texto → cierre ----------
+    fc.push(`[${vCur}]fade=t=in:st=0:d=0.25,fade=t=out:st=${(totalOut - 0.45).toFixed(2)}:d=0.45[vt0]`);
+    vCur = 'vt0';
+    for (const band of ['top', 'bottom']) {
+      const list = runs[band];
+      if (!list.length) continue;
+      const srcIdx = band === 'top' ? assetIdx.scrimTop : assetIdx.scrimBottom;
+      fc.push(`[${srcIdx}:v]split=${list.length}${list.map((_, j) => `[scr${band}${j}]`).join('')}`);
+      list.forEach((run, j) => {
+        const aIn = Math.max(0, run.a - 0.02);
+        fc.push(`[scr${band}${j}]format=rgba,fade=t=in:st=${aIn.toFixed(2)}:d=0.18:alpha=1,fade=t=out:st=${Math.max(aIn, run.b - 0.2).toFixed(2)}:d=0.2:alpha=1[scr${band}${j}f]`);
+        fc.push(`[${vCur}][scr${band}${j}f]overlay=x=0:y=${band === 'top' ? 0 : H - 800}:enable='between(t,${aIn.toFixed(2)},${(run.b + 0.02).toFixed(2)})'[vt${band}${j}]`);
+        vCur = `vt${band}${j}`;
+      });
+    }
+    if (textFilters.length) {
+      fc.push(`[${vCur}]${textFilters.join(',')}[vtxt]`);
+      vCur = 'vtxt';
+    }
+    if (plate) {
+      // Remate del cierre: halo de marca (la pastilla premultiplicada,
+      // borrosa, en screen) que sube y late UNA vez suave, y la
+      // pastilla nítida que se asienta sobre él.
+      const cs = closeStart.toFixed(2);
+      // premultiply inplace (con su propio alfa): la variante de dos
+      // entradas multiplica por el primer plano del segundo stream y
+      // el halo sale rectangular. Y el blend screen va en RGB (gbrp):
+      // en YUV corrompe el croma de todo el cuadro a magenta.
+      fc.push(`[${assetIdx.plate}:v]split=2[plg][plc]`);
+      fc.push(`[plg]premultiply=inplace=1,pad=${W}:${H}:x=${plateX}:y=${PLATE_Y},gblur=sigma=16,format=gbrp,` +
+        `fade=t=in:st=${cs}:d=0.3,fade=t=out:st=${(closeStart + 0.6).toFixed(2)}:d=0.3,fade=t=in:st=${(closeStart + 1.05).toFixed(2)}:d=0.35[plgf]`);
+      fc.push(`[${vCur}]format=gbrp[vtg]`);
+      fc.push(`[vtg][plgf]blend=all_mode=screen:all_opacity=0.5:enable='between(t,${cs},${totalOut.toFixed(2)})',format=yuv420p[vglow]`);
+      fc.push(`[plc]format=rgba,fade=t=in:st=${cs}:d=0.25:alpha=1[plcf]`);
+      const settle = ssE(clampE(`(t-${cs})/0.30`));
+      fc.push(`[vglow][plcf]overlay=x=${plateX}:y='${PLATE_Y}+16*(1-${settle})':enable='gte(t,${cs})'[vout]`);
+      vCur = 'vout';
+    }
 
     let alabel;
     if (musicIdx >= 0) {
@@ -450,7 +844,7 @@ async function buildReelV3(opts) {
     if (process.env.POSTY_REEL_DEBUG) console.log('[reel3] filtergraph:', fc.join(';'));
     args.push(
       '-filter_complex', fc.join(';'),
-      '-map', '[vout]', '-map', `[${alabel}]`,
+      '-map', `[${vCur}]`, '-map', `[${alabel}]`,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
       '-movflags', '+faststart', '-video_track_timescale', '30000',
@@ -470,6 +864,11 @@ async function buildReelV3(opts) {
       file: outPath, url: `/media/${outName}`, duration: totalOut,
       coverPath: fs.existsSync(coverPath) ? coverPath : null, music: !!musicFile,
       scripted: true, template: tplName, beatsSnapped,
+      // Trazabilidad del pulido: estilo de subtítulos, prompt de
+      // efecto por escena (con su texto) y movimiento aplicado.
+      captionStyle: 'limpio-v2',
+      effects: fxPlan.perScene.map((s, i) => ({ scene: i, effectId: s.effectId, prompt: s.prompt })),
+      movements: segs.map((s, i) => ({ scene: i, move: appliedMoves[i] })),
     };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -683,4 +1082,4 @@ async function buildReelPro(opts) {
   }
 }
 
-module.exports = { buildReelPro, buildReelV3, moodForCategory, wrapLines, MUSIC_TRACKS, MOTION_TEMPLATES, templateFor };
+module.exports = { buildReelPro, buildReelV3, moodForCategory, wrapLines, MUSIC_TRACKS, MOTION_TEMPLATES, templateFor, movementPlanFor, measureAdvance, findKeyword };
