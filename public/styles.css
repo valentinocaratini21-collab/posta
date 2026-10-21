@@ -2777,3 +2777,22 @@ body.mz-sheet-open{overflow:hidden}
   .cap-flip .cap-copy{order:2}
   .cap-flip .cap-side{order:1}
 }
+
+/* ===== Agenda v284: botón Feed diferenciado, día vacío con motivo, perfil IG ===== */
+.scf-seg .scf-seg-feed{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.scf-ig-ico{width:16px;height:16px;flex:none}
+button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-size:16px;font-weight:800;color:var(--cel);cursor:pointer;width:100%;touch-action:manipulation}
+.scf-cell-free.past{color:#C4D2DE}
+.fp-head{background:#fff;color:#0A1E33;border:1px solid var(--line);border-radius:14px;padding:14px 16px 12px;margin-bottom:10px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;text-align:left}
+.fp-head-top{display:flex;align-items:center;gap:18px}
+.fp-ava{width:76px;height:76px;flex:none;border-radius:50%;padding:3px;background:conic-gradient(from 210deg,#FEDA75,#FA7E1E,#D62976,#962FBF,#4F5BD5,#FEDA75)}
+.fp-ava-in{position:relative;width:100%;height:100%;border-radius:50%;background:#EDF3F8;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;overflow:hidden;font-weight:800;font-size:26px;color:var(--cel)}
+.fp-ava-in img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.fp-head-right{flex:1;min-width:0}
+.fp-user{font-size:16.5px;font-weight:600;overflow-wrap:anywhere}
+.fp-stats{display:flex;gap:26px;margin-top:6px}
+.fp-stat{display:flex;flex-direction:column;line-height:1.25}
+.fp-stat b{font-size:15.5px}
+.fp-stat span{font-size:13px;color:#3D556E}
+.fp-name{font-size:13.5px;font-weight:700;margin-top:10px}
+.fp-link{display:inline-block;font-size:13.5px;font-weight:600;color:#0A4D8F;text-decoration:none;margin-top:1px}

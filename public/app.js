@@ -2280,7 +2280,7 @@ function appShell(tab, content) {
     <div class="drawer-grow"></div>
     <button class="drawer-link drawer-logout" id="drawerLogout"><span class="di">🚪</span>Salir</button>
   </aside>
-  ${tab === 'chat' ? '' : setupChecklistHtml(undefined, tab === 'inicio' ? { omitIg: true } : undefined)}
+  ${tab === 'chat' ? '' : setupChecklistHtml(undefined, (tab === 'inicio' || tab === 'schedule') ? { omitIg: true } : undefined)}
   <div class="app-shell">
     <div class="main ${tab === 'chat' ? 'main-chat' : ''}">${content}</div>
   </div>
@@ -3655,6 +3655,10 @@ async function doAcceptAll(btn) {
     let items = $$('#reviewCard [data-revwhen]')
       .map((inp) => ({ id: +inp.dataset.revwhen, scheduled_at: inp.value ? new Date(inp.value).toISOString() : null }))
       .filter((it) => it.id > 0);
+    // Si los ítems salieron de la tarjeta del editor (#reviewCard), su
+    // "aceptar todos" es SOLO esa tarjeta (puede ser un subconjunto, p. ej.
+    // los posteos que el chat acaba de armar): no se fusiona nada.
+    const fromCard = items.length > 0;
     if (!items.length) {
       // Carrusel del home: botones Aceptar con data-proposed
       items = $$('#hsWeekList [data-revaccept]')
@@ -3666,6 +3670,24 @@ async function doAcceptAll(btn) {
         })
         .filter((it) => it.id > 0);
     }
+    // "Todo" es TODO: la vista actual no siempre renderiza cada borrador
+    // (Semana muestra máx. 3 por día en el cofre; Mes y Feed no pintan
+    // botones de aceptar). Se completa con los borradores conocidos
+    // (REVIEW_DRAFTS, que la agenda carga completos): sin propuesta visible,
+    // viajan sin hora y el servidor asigna el horario con su política de
+    // mejor hora, igual que en el autopilot. El servidor revalida dueño y
+    // estado: un id viejo o ya aceptado es un no-op.
+    try {
+      if (!fromCard && Array.isArray(REVIEW_DRAFTS) && REVIEW_DRAFTS.length) {
+        const have = new Set(items.map((it) => it.id));
+        for (const d of REVIEW_DRAFTS) {
+          const did = +(d && d.id);
+          if (!(did > 0) || have.has(did)) continue;
+          have.add(did);
+          items.push({ id: did, scheduled_at: d.scheduled_at ? new Date(d.scheduled_at).toISOString() : null });
+        }
+      }
+    } catch (e) {}
     const r = await api.post('/api/posts/accept-all', { items });
     const n = (r && r.accepted) || 0;
     if (!n) throw new Error('No había borradores pendientes');
@@ -3679,7 +3701,7 @@ async function doAcceptAll(btn) {
     toast(n === 1
       ? `✅ <b>Listo, acepté el posteo.</b><br>Sale solo a la hora indicada 👌`
       : (r && r.partial)
-      ? `✅ <b>Acepté ${n}.</b><br>Los otros ${r.total - n} quedan en borrador: la semana de esos posteos ya está completa 👌`
+      ? `✅ <b>Acepté ${n}.</b><br>Los otros ${r.total - n} quedan en borrador por ahora 👌`
       : nw > 0
       ? `✅ <b>Listo, acepté los ${n}.</b><br>${nw === n ? 'Quedan programados para la semana que viene 📮' : `${nw} de ellos quedan para la semana que viene 📮`}`
       : `✅ <b>Listo, acepté los ${n}.</b><br>Salen solos a la hora indicada 👌`);
@@ -3687,7 +3709,7 @@ async function doAcceptAll(btn) {
   } catch (e) {
     if (isPlanLimitErr(e)) { planLimitModal(e); }
     else if (m) { m.innerHTML = `<div class="err">😅 ${esc(e.message)}</div>`; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    if (b) { b.disabled = false; b.textContent = '✅ Aceptar todos'; }
+    if (b) { b.disabled = false; b.textContent = '✅ Aceptar todo'; }
   }
 }
 function bindAcceptAll() {
@@ -5733,14 +5755,21 @@ function computeProposedIsos(all, list, tz) {
     }
     const now = new Date();
     const hourNow = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(now), 10);
-    // Base: hoy si todavía no pasaron las 10:00 del cliente; si no, mañana.
-    const cursorFeed = new Date(now.getTime() + (hourNow >= 10 ? 86400000 : 0));
+    // Hora propuesta: la mejor hora del negocio (slotHour: best_hour medida
+    // con Instagram, 19:00 de respaldo) — la MISMA política que el servidor
+    // usa al programar (assignScheduleSlots). Antes era 10:00 fija, y esa
+    // hora propuesta es la que el cliente termina aceptando: salía todo a
+    // las 10:00 aunque la cuenta tuviera su mejor hora medida.
+    const pHour = (typeof slotHour === 'function') ? slotHour() : 19;
+    const pHH = String(pHour).padStart(2, '0');
+    // Base: hoy si todavía no pasó la hora propuesta del cliente; si no, mañana.
+    const cursorFeed = new Date(now.getTime() + (hourNow >= pHour ? 86400000 : 0));
     const cursorStory = new Date(cursorFeed.getTime());
     const nextFree = (cursor, taken) => {
       let d = new Date(cursor.getTime());
       for (let k = 0; k < 21; k++) {
         const ymd = d.toLocaleDateString('en-CA', { timeZone: tz });
-        if (!taken.has(ymd)) { taken.add(ymd); return { iso: `${ymd}T10:00:00`, next: new Date(d.getTime() + 86400000) }; }
+        if (!taken.has(ymd)) { taken.add(ymd); return { iso: `${ymd}T${pHH}:00:00`, next: new Date(d.getTime() + 86400000) }; }
         d = new Date(d.getTime() + 86400000);
       }
       return null;
@@ -5762,8 +5791,8 @@ function proposedLabelFor(d, proposedIsos, tz) {
   try {
     const iso = (proposedIsos.get(d.id) || {}).iso || null;
     if (!iso) return { label: '📝 Borrador', iso: null };
-    const lbl = new Date(iso.slice(0, 10) + 'T10:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
-    return { label: `📅 ${lbl} · 10:00`, iso };
+    const lbl = new Date(iso.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', timeZone: tz });
+    return { label: `📅 ${lbl} · ${iso.slice(11, 16)}`, iso };
   } catch (e) { return { label: '📝 Borrador', iso: null }; }
 }
 // LA tarjeta grande réplica de Instagram (la del carrusel de v215).
@@ -5936,29 +5965,14 @@ function homeWeekHTML(posts, quota, generating, noDna) {
   const cards = rail.map((d, i) => weekCardHTML(d, { bizName, tz, prop: proposedFor(d), count: `${i + 1} de ${rail.length}` })).join('');
   // 2026-10-14 (pedido de Valentino): contador visible de la semana — cuántos
   // posteos van y cuántos quedan del plan, para que el cliente sepa cómo viene.
-  const qLeft = Math.max(0, qTotal - qUsed);
-  const qPct = qTotal > 0 ? Math.min(100, Math.round((qUsed / qTotal) * 100)) : 0;
-  // Explicación de desborde (2026-10-16, pedido de Valentino): si hay más
-  // borradores de feed que cupo libre esta semana, el resto YA es la semana
-  // que viene — y la pantalla lo dice. Copy v215: NUNCA "8 de 5" — el
-  // armado de la semana que viene se muestra capeado al cupo y el resto
-  // como "en espera".
-  const feedDrafts = list.filter(pp => pp.status === 'draft' && !/^(story|video)$/.test(String(pp.media_type || 'image'))).length;
-  const rollover = Math.max(0, feedDrafts - qLeft);
-  const nextArmed = Math.min(rollover, qTotal);
-  const nextLine = rollover > 0
-    ? `<div class="hs-quota-next">✨ Ya están armados <b>${nextArmed} de ${qTotal}</b> de la semana que viene${rollover > qTotal ? ` · y <b>${rollover - qTotal} más</b> en espera` : ''}</div>`
-    : '';
-  const quotaLine = qTotal > 0 ? `<div class="hs-quota">
-      <div class="hs-quota-txt">${qUsed >= qTotal
-        ? `🎉 <b>¡Semana completa!</b> ${qUsed} de ${qTotal} posteos listos`
-        : `📊 <b>${qUsed} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
-      <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
-      ${nextLine}
-    </div>` : '';
+  // Cupo: UNA sola implementación en todas las superficies (schedQuotaHTML
+  // con conteo por ubicación real, schedWeekCounts). La copia que vivía acá
+  // contaba con otra lógica y la misma semana daba números distintos en el
+  // carrusel y en la agenda.
+  const quotaLine = schedQuotaHTML(list, quota, schedWeekCounts(all, tz, proposedIsos));
   // 2026-10-09: flechas laterales del carrusel (pedido de Valentino) — sin números.
   return `<div class="hs-week">
-    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>` : ''}</div>
+    <div class="hs-week-head"><b>Tu semana</b>${list.some(p => p.status === 'draft') ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo (${list.filter(p => p.status === 'draft').length})</button>` : ''}</div>
     ${quotaLine}
     <div id="hs-report"></div>
     ${generating ? `<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>` : ''}
@@ -6001,6 +6015,7 @@ function homeWhenLabel(iso) {
    Todo se pinta desde scheduled_at / día propuesto / estado — el
    mismo dato de siempre, sin estado paralelo. */
 let SCHED_MODE = 'semana';
+let FEED_PROFILE = null; // encabezado de la vista Feed: SOLO datos reales del IG (avatar público + seguidores)
 try { const m0 = localStorage.getItem('posty_sched_mode'); if (m0 === 'dia' || m0 === 'semana' || m0 === 'mes' || m0 === 'feed') SCHED_MODE = m0; } catch (e) {}
 let SCHED_WEEK_OFFSET = 0; // semanas desde la actual (vista Semana)
 let SCHED_MONTH_OFFSET = 0; // meses desde el actual (vista Mes)
@@ -6072,23 +6087,55 @@ function schedPlacements(all, tz) {
 // Línea de cupo de Schedule (la misma cuenta y el mismo copy que pinta
 // homeWeekHTML en el chat: hechos/quedan + la semana que viene capeada,
 // nunca "8 de 5").
-function schedQuotaHTML(list, quota) {
+// Conteo por UBICACIÓN REAL (la misma moneda que la grilla): piezas del
+// pool de feed ubicadas en la semana actual (publicadas + programadas +
+// borradores, cada una en SU día) y borradores armados de la semana que
+// viene. Es la única fuente de los números del cupo en TODAS las
+// superficies (agenda y carrusel): antes cada una contaba distinto — el
+// servidor contaba solo programados/publicados, la "semana que viene" era
+// una resta de slots y la nota de "fuera de esta semana" contaba por
+// ubicación — y los tres números no reconciliaban a la vista del cliente.
+function schedWeekCounts(all, tz, proposals) {
+  const out = { thisWeek: 0, nextDrafts: 0 };
+  try {
+    const posts = Array.isArray(all) ? all : [];
+    const today = schedTodayYmd(tz);
+    const mon = schedMondayOf(today), sun = schedAddDays(mon, 6);
+    const nMon = schedAddDays(mon, 7), nSun = schedAddDays(mon, 13);
+    const dayOf = (p) => {
+      if (p.status === 'published') { const dt = pcParseDate(p.published_at || p.scheduled_at); return dt ? schedDayKeyOf(dt, tz) : ''; }
+      if (p.scheduled_at) { const dt = pcParseDate(p.scheduled_at); return dt ? schedDayKeyOf(dt, tz) : ''; }
+      const iso = proposals && proposals.get ? ((proposals.get(p.id) || {}).iso || '') : '';
+      return iso ? iso.slice(0, 10) : '';
+    };
+    for (const p of posts) {
+      if (!p || /^(story|video)$/.test(String(p.media_type || 'image'))) continue;
+      const k = dayOf(p);
+      if (!k) continue;
+      if (k >= mon && k <= sun && (p.status === 'draft' || p.status === 'scheduled' || p.status === 'published')) out.thisWeek++;
+      if (p.status === 'draft' && k >= nMon && k <= nSun) out.nextDrafts++;
+    }
+  } catch (e) {}
+  return out;
+}
+function schedQuotaHTML(list, quota, wk) {
   const q = quota || {};
   const qTotal = Number(q.limit) || 0;
-  const qUsed = Math.max(0, Number(q.used) || 0);
   if (!(qTotal > 0)) return '';
-  const qLeft = Math.max(0, qTotal - qUsed);
-  const qPct = Math.min(100, Math.round((qUsed / qTotal) * 100));
-  const feedDrafts = (list || []).filter(pp => pp.status === 'draft' && !/^(story|video)$/.test(String(pp.media_type || 'image'))).length;
-  const rollover = Math.max(0, feedDrafts - qLeft);
-  const nextArmed = Math.min(rollover, qTotal);
-  const nextLine = rollover > 0
-    ? `<div class="hs-quota-next">✨ Ya están armados <b>${nextArmed} de ${qTotal}</b> de la semana que viene${rollover > qTotal ? ` · y <b>${rollover - qTotal} más</b> en espera` : ''}</div>`
+  const qUsed = Math.max(0, Number(q.used) || 0);
+  // La línea principal cuenta las piezas UBICADAS en esta semana (lo que la
+  // grilla muestra); sin datos de ubicación cae al "used" del servidor.
+  const shown = (wk && Number.isFinite(wk.thisWeek)) ? wk.thisWeek : qUsed;
+  const qLeft = Math.max(0, qTotal - shown);
+  const qPct = Math.min(100, Math.round((shown / qTotal) * 100));
+  const nd = wk ? (wk.nextDrafts || 0) : 0;
+  const nextLine = nd > 0
+    ? `<div class="hs-quota-next">✨ Ya están armados <b>${Math.min(nd, qTotal)} de ${qTotal}</b> de la semana que viene${nd > qTotal ? ` · y <b>${nd - qTotal} más</b> en espera` : ''}</div>`
     : '';
   return `<div class="hs-quota">
-      <div class="hs-quota-txt">${qUsed >= qTotal
-        ? `🎉 <b>¡Semana completa!</b> ${qUsed} de ${qTotal} posteos listos`
-        : `📊 <b>${qUsed} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
+      <div class="hs-quota-txt">${shown >= qTotal
+        ? `🎉 <b>¡Semana completa!</b> ${shown} de ${qTotal} posteos esta semana`
+        : `📊 <b>${shown} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
       ${nextLine}
     </div>`;
@@ -6122,7 +6169,7 @@ function schedMiniHTML(p, timeLabel) {
 function schedMiniTime(p) {
   const dt = pcParseDate(p.scheduled_at || p.published_at);
   if (dt) { try { return dt.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: pcTz() }); } catch (e) {} }
-  return '10:00'; // borrador: su día propuesto sale a las 10:00
+  return String((typeof slotHour === 'function') ? slotHour() : 19).padStart(2, '0') + ':00'; // borrador sin fecha: su propuesta sale a la mejor hora
 }
 // --- Vista DÍA: tarjetas grandes de un solo día, en riel horizontal ---
 function schedDiaBodyHTML(ctx) {
@@ -6192,7 +6239,14 @@ function schedSemanaBodyHTML(ctx) {
     const shown = items.slice(0, 3);
     const minis = shown.map(({ p }) => `<span class="scf-mini-x" data-post-id="${esc(String(p.id))}" data-day="${ymd}" data-pop-cls="${popCls}">${schedMiniHTML(p, schedMiniTime(p))}</span>`).join('');
     const more = items.length > shown.length ? `<button type="button" class="scf-more" data-scf-day="${ymd}">+${items.length - shown.length}</button>` : '';
-    const free = !items.length ? '<span class="scf-cell-free">·</span>' : '';
+    // Día vacío: hoy/futuro → "+" accionable que salta a Día (donde vive el
+    // pedido de posteo); pasado → guion tenue con su motivo (ese día ya fue:
+    // no hay acción posible, pero tampoco un punto mudo).
+    const free = !items.length
+      ? (ymd < today
+        ? '<span class="scf-cell-free past" title="Este día no tuvo posteo">–</span>'
+        : `<button type="button" class="scf-cell-free add" data-scf-day="${ymd}" aria-label="Pedirle a Posty un posteo para este día">+</button>`)
+      : '';
     for (const { p } of shown) {
       const prop = p.status === 'published'
         ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
@@ -6325,7 +6379,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
   const drafts = posts.filter(p => p && p.status === 'draft');
   const ctx = { pl, tz, bizName, all: posts };
   const info = schedNavInfo(tz);
-  const body = SCHED_MODE === 'dia' ? schedDiaBodyHTML(ctx) : SCHED_MODE === 'mes' ? schedMesBodyHTML(ctx) : SCHED_MODE === 'feed' ? feedPreviewHTML(posts, tz) : schedSemanaBodyHTML(ctx);
+  const body = SCHED_MODE === 'dia' ? schedDiaBodyHTML(ctx) : SCHED_MODE === 'mes' ? schedMesBodyHTML(ctx) : SCHED_MODE === 'feed' ? feedPreviewHTML(posts, tz, (typeof FEED_PROFILE !== 'undefined' ? FEED_PROFILE : null)) : schedSemanaBodyHTML(ctx);
   // En Feed la barra no lleva navegación por período (vista rodante).
   const navHTML = SCHED_MODE === 'feed' ? '' : `<div class="scf-nav">
         <button type="button" class="scf-navbtn" id="scfNavPrev" aria-label="Anterior">‹</button>
@@ -6334,9 +6388,9 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
         ${info.offset !== 0 ? '<button type="button" class="scf-todaybtn" id="scfNavToday">hoy</button>' : ''}
       </div>`;
   return `<div class="hs-week scf">
-    <div class="hs-week-head"><b>📅 Tu agenda</b>${drafts.length ? '<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo</button>' : ''}</div>
+    <div class="hs-week-head"><b>📅 Tu agenda</b>${drafts.length ? `<button type="button" class="btn btn-primary btn-sm" id="hsAcceptAll">✅ Aceptar todo (${drafts.length})</button>` : ''}</div>
     <div id="revMsg"></div>
-    ${schedQuotaHTML(pl.list, quota)}
+    ${schedQuotaHTML(pl.list, quota, schedWeekCounts(posts, tz, pl.proposals))}
     <div id="hs-report"></div>
     ${generating ? '<div class="hs-completing">✨ Estoy armando los posteos que faltan…</div>' : ''}
     ${schedStaleHTML(posts, tz)}
@@ -6345,7 +6399,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
         <button type="button" role="tab" data-scf-mode="dia" class="${SCHED_MODE === 'dia' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'dia'}">Día</button>
         <button type="button" role="tab" data-scf-mode="semana" class="${SCHED_MODE === 'semana' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'semana'}">Semana</button>
         <button type="button" role="tab" data-scf-mode="mes" class="${SCHED_MODE === 'mes' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'mes'}">Mes</button>
-        <button type="button" role="tab" data-scf-mode="feed" class="${SCHED_MODE === 'feed' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'feed'}">Feed</button>
+        <button type="button" role="tab" data-scf-mode="feed" class="scf-seg-feed ${SCHED_MODE === 'feed' ? 'on' : ''}" aria-selected="${SCHED_MODE === 'feed'}"><svg class="scf-ig-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="scfIgGrad" x1="0" y1="24" x2="24" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".6" stop-color="#D62976"/><stop offset=".8" stop-color="#962FBF"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs><rect x="3" y="3" width="18" height="18" rx="5.2" stroke="url(#scfIgGrad)" stroke-width="2.1"/><circle cx="12" cy="12" r="4.1" stroke="url(#scfIgGrad)" stroke-width="2.1"/><circle cx="17.3" cy="6.7" r="1.35" fill="url(#scfIgGrad)"/></svg>Feed</button>
       </div>
       ${navHTML}
     </div>
@@ -6375,7 +6429,30 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
 // no viven en la grilla del perfil. Tocar un tile que se viene salta a
 // su día en la agenda (bindSchedule); tocar un publicado abre el
 // lightbox.
-function feedPreviewHTML(all, tz) {
+// Encabezado réplica del perfil de Instagram (vista Feed): foto con anillo
+// en degradé, @, nombre, conteos y link — SOLO con datos reales de la cuenta
+// (prof: avatar público cacheado + seguidores reales si existen). Lo que la
+// cuenta no tiene (bio leída, seguidos, total de posteos de IG) se omite con
+// gracia: jamás un número fabricado (regla de verdad).
+function feedProfileHeadHTML(prof, bizName) {
+  const u = prof && prof.username ? String(prof.username) : '';
+  const name = ((prof && prof.name) || bizName || '').trim();
+  if (!u && !name) return '';
+  const letter = esc((name || u || 'P').charAt(0).toUpperCase());
+  const pic = prof && prof.pic ? `<img src="${esc(prof.pic)}" alt="" loading="lazy" onerror="this.remove()">` : '';
+  const stats = [];
+  if (prof && Number(prof.followers) > 0) stats.push(`<div class="fp-stat"><b>${Number(prof.followers).toLocaleString('es-AR')}</b><span>seguidores</span></div>`);
+  const statsHTML = stats.length ? `<div class="fp-stats">${stats.join('')}</div>` : '';
+  return `<div class="fp-head">
+    <div class="fp-head-top">
+      <div class="fp-ava"><div class="fp-ava-in"><span class="fp-ava-letter">${letter}</span>${pic}</div></div>
+      <div class="fp-head-right">${u ? `<div class="fp-user">${esc(u)}</div>` : ''}${statsHTML}</div>
+    </div>
+    ${name ? `<div class="fp-name">${esc(name)}</div>` : ''}
+    ${u ? `<a class="fp-link" href="https://www.instagram.com/${esc(u)}/" target="_blank" rel="noopener">instagram.com/${esc(u)}</a>` : ''}
+  </div>`;
+}
+function feedPreviewHTML(all, tz, prof) {
   const posts = (Array.isArray(all) ? all : []).filter(p => p && p.status !== 'failed' && String(p.media_type || '') !== 'story');
   if (!posts.length) return '';
   const pl = schedPlacements(posts, tz);
@@ -6429,7 +6506,9 @@ function feedPreviewHTML(all, tz) {
   // v223 (amendment): la grilla ES el cuerpo de la vista Feed del
   // filtro — sin rótulo propio (la identidad la da el segmento "Feed");
   // la línea de honestidad queda como pie discreto de la vista.
+  const bizNameF = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim();
   return `<section class="hs-feed" id="hsFeed">
+    ${feedProfileHeadHTML(prof, bizNameF)}
     <div class="fp-grid">${grid}</div>
     ${anyUp ? '<div class="fp-line">Los que llevan pastillita todavía no salieron 😉</div>' : ''}${moreBtn}
   </section>`;
@@ -10987,7 +11066,10 @@ async function scheduleView() {
   const ftBlock = (!published.length && ftCandidates.length) ? fastTrackCardHTML(ftCandidates) : '';
   // "🚀 Publicar mi primero" (mejora 2026-09-30): hero de 1 tap, visible SOLO
   // con 0 posteos publicados. Si no hay borradores, el botón genera uno primero.
-  const fpBlock = (!published.length) ? firstPublishCardHTML(drafts) : '';
+  // Una sola tarjeta de "primer posteo": con candidatos con foto manda el
+  // fast-track guiado; el hero de 1 tap queda para cuando no hay candidato
+  // (sin borradores o sin foto). Antes se apilaban las dos, mismo título.
+  const fpBlock = (!published.length && !ftCandidates.length) ? firstPublishCardHTML(drafts) : '';
   // Fallidos: debajo de la revisión, antes del calendario.
   const failedBlock = failedCardHTML(failed);
   const parse = (iso) => {
@@ -11061,6 +11143,20 @@ async function scheduleView() {
   const armBlock = (!drafts.length && empty) ? autopilotCardHTML('schedule') : '';
   // 2026-10-05: home en Schedule (primera pestaña) — 5 tarjetas fijas arriba,
   // chat abajo en la misma pantalla. Pedido de Valentino.
+  // Vista Feed: el encabezado réplica del perfil se alimenta SOLO de datos
+  // reales — foto y nombre del avatar público de IG (cacheado en el
+  // servidor) y los seguidores que la vista YA cargó en `st` (sin pedidos
+  // extra). Lo que no existe no se pide ni se inventa: el encabezado lo omite.
+  if (SCHED_MODE === 'feed') {
+    const igu = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_username) || '';
+    if (igu && !(FEED_PROFILE && FEED_PROFILE.username === igu)) {
+      try {
+        const av = await api.get('/api/ig/avatar?u=' + encodeURIComponent(igu)).catch(() => null);
+        const fol = (st && Number(st.followers) > 0) ? Number(st.followers) : null;
+        FEED_PROFILE = { username: igu, pic: (av && av.pic_url) || null, name: (av && av.name) || '', followers: fol };
+      } catch (e) {}
+    }
+  }
   const homeWeekBlock = schedFilterBlockHTML(allPosts, quota, weekGenerating, weekNoDna);
   // v223: la grilla del feed ya NO es una sección debajo de los posteos:
   // es el cuarto modo del filtro de la agenda (Día·Semana·Mes·Feed) y
