@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v317'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v318'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -432,7 +432,7 @@ function pzPerDayHTML(p) {
 function planCardsHTML(plans) {
   return (plans || []).map(p => `
     <div class="price-card${p.highlighted ? ' hot' : ''}">
-      ${p.highlighted ? '<div class="tag">EL MÁS ELEGIDO</div>' : ''}
+      ${p.highlighted ? '<div class="tag">RECOMENDADO</div>' : ''}
       <h3>Plan ${esc(p.name)}</h3>
       <div class="price">${esc(p.price_label)}<small>/mes</small></div>
       ${pzPerDayHTML(p)}
@@ -1859,7 +1859,7 @@ function landingView(cfg) {
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
       <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$1.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$2.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>

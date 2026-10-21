@@ -183,7 +183,7 @@ async function partA() {
 
   section('A5 · estructura — endpoints, hooks y chunk');
   {
-    ok(serverSrc.includes("const BUILD_ID = '20261020-v285'"), 'BUILD_ID v285');
+    ok(/const BUILD_ID = '2026\d{4}-v\d+';/.test(serverSrc), 'BUILD_ID presente con forma válida (pin fósil v285 corregido en v317, precedente v311)');
     ok(serverSrc.includes("app.post('/api/autopilot/pause-all'"), 'existe POST /api/autopilot/pause-all');
     ok(serverSrc.includes("app.post('/api/autopilot/resume-all'"), 'existe POST /api/autopilot/resume-all');
     const pauseBlock = serverSrc.slice(serverSrc.indexOf("app.post('/api/autopilot/pause-all'"), serverSrc.indexOf("app.post('/api/autopilot/resume-all'"));
@@ -222,10 +222,10 @@ async function partB() {
   try {
     let up = false;
     for (let i = 0; i < 120 && !up; i++) {
-      try { const r = await fetch(base + '/api/version'); const j = await r.json(); if (j && j.build === '20261020-v285') up = true; } catch (e) {}
+      try { const r = await fetch(base + '/api/version'); const j = await r.json(); if (j && /^2026\d{4}-v\d+$/.test(String(j.build || ''))) up = true; } catch (e) {}
       if (!up) await sleep(750);
     }
-    ok(up, 'el servidor bootea y sirve v283');
+    ok(up, 'el servidor bootea y sirve su build');
     if (!up) { console.error(bootLog.slice(-800)); return; }
     // Registro (crea la sesión).
     const email = `v283-${Date.now()}@example.com`;

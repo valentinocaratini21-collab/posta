@@ -480,13 +480,13 @@ function landingView(cfg) {
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $39.900</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $69.900</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">Probalo gratis, sin tarjeta</div></div>
       <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
     </div>
-    <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$39.900</b>.</p>
+    <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$69.900</b>.</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
   <div class="section" id="planes"><div class="wrap">

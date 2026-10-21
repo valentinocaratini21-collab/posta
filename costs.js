@@ -108,7 +108,7 @@ const MSG_CAP = 'llegamos al tope de IA de hoy 🔋 seguimos mañana con todo �
 
 // ---------- Techo mensual de IA por usuario (vara 5%, 2026-10-02) ----------
 // El costo variable de IA por usuario/mes no puede superar el 10% del precio de su plan.
-// Esencial ($69.900 ARS): $6.990 ARS/mes ≈ USD 4.90. Pro: ≈ USD 9.11. Total: ≈ USD 14.03.
+// Esencial ($69.900 ARS): $6.990 ARS/mes ≈ USD 4.91. Pro: ≈ USD 9.12. Total: ≈ USD 14.03.
 // Es el techo DURO: pase lo que pase, ningún usuario cuesta más que eso en IA por mes.
 // (Un cap diario por usuario no sirve: la generación semanal mete ~USD 0.32 en un día
 // y quedaría bloqueada. El mensual permite el batch semanal y frena la cola.)

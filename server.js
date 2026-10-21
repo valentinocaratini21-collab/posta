@@ -412,7 +412,7 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
       // Transformación (antes/desp ués, renovación) o precio.
       seed = sentences.find(c => hasWords(c) && (/\b(antes|después|despues|renova|quedó|quedo|transform)/i.test(c) || /\$\s?\d/.test(c)));
     } else if (/gastronom|cafeter|bar\b|parrilla|pizzer|panader|rotiser|helader|reposter|pasteler|carnicer/.test(r)) {
-      // Precio explícito: "$39.900", "$10.000"
+      // Precio explícito: "$69.900", "$10.000"
       seed = sentences.find(c => hasWords(c) && /\$\s?\d/.test(c));
     } else if (/belleza|estetica|estética|peluquer|barber/.test(r)) {
       // Técnica brandeada: entre comillas o 2+ palabras con mayúscula sostenida
@@ -2826,7 +2826,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   // Sello de fundador (red de seguridad): cualquier alta paga real —MP, Stripe
   // o manual— recibe su número al primer /me, en orden, hasta 200.
@@ -2856,6 +2856,10 @@ app.get('/api/auth/me', (req, res) => {
       billing_provider: user.stripe_subscription_id ? 'stripe' : (user.mp_preapproval_id ? 'mp' : null), // (v285) qué riel cobra esta cuenta
       founder_number: user.founder_number || 0, // (growth ola 2) Los Primeros 200: 0 = todavía no
       founder_public: !!user.founder_public, // permiso registrado para la página pública de fundadores
+      founder_price: user.founder_price || 0, // (v317) precio de alta congelado por 12 meses (0 = sin precio fundador)
+      founder_currency: user.founder_currency || '',
+      founder_plan: user.founder_plan || '',
+      founder_price_at: user.founder_price_at || 0,
       lang: user.lang === 'en' ? 'en' : 'es', // (v274) idioma de la cuenta (del funnel de la prueba)
     },
   });
@@ -10101,7 +10105,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Ingresá el email de tu cuenta de MercadoPago.' });
   }
   try {
-    const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id, referred_by, email_verified FROM users WHERE id = ?').get(req.session.userId);
+    const user = db.prepare('SELECT id, email, plan_status, mp_preapproval_id, referred_by, email_verified, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
     if (user.plan_status === 'active' && user.mp_preapproval_id) {
       return res.status(400).json({ error: 'Ya tenés una suscripción activa. Si querés cambiar de plan, primero cancelá la actual desde Mi plan.' });
     }
@@ -10112,17 +10116,27 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
     const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
     // Descuento por referidos: 2 amigos con suscripción activa = 50% off (tiene prioridad);
     // si no, invitado con link = 20% off
-    let finalPlan = plan;
+    // (v317) Precio fundador: Los Primeros 200 conservan el precio de su
+    // alta por 12 meses — si re-suscribe dentro de la ventana, mismo plan y
+    // misma moneda, la BASE es su precio fundador. Los descuentos de
+    // referidos se aplican sobre esa base, como siempre (no se tocan).
+    let basePlan = plan;
+    if (user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
+        && String(user.founder_currency || '') === String(plan.currency || 'ARS')
+        && Number(user.founder_price_at) > 0 && (Date.now() - Number(user.founder_price_at)) < 365 * 24 * 3600 * 1000) {
+      basePlan = { ...plan, price: Number(user.founder_price) };
+    }
+    let finalPlan = basePlan;
     let discount = false;
     let mult = 1;
     if (referralStats(user.id).discount_active) {
       discount = true;
       mult = REFERRAL_DISCOUNT;
-      finalPlan = { ...plan, price: Math.round(plan.price * REFERRAL_DISCOUNT), name: `${plan.name} (50% off referidos)` };
+      finalPlan = { ...basePlan, price: Math.round(basePlan.price * REFERRAL_DISCOUNT), name: `${plan.name} (50% off referidos)` };
     } else if (user.referred_by) {
       discount = true;
       mult = FRIEND_DISCOUNT;
-      finalPlan = { ...plan, price: Math.round(plan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
+      finalPlan = { ...basePlan, price: Math.round(basePlan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
     }
     const { init_point, preapproval_id } = await mp.createSubscription({
       plan: finalPlan,
@@ -10137,7 +10151,7 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
       try { db.prepare(`UPDATE users SET mp_preapproval_id = ? WHERE id = ?`).run(String(preapproval_id), user.id); } catch (e) {}
     }
     // Guardar base y multiplicador para la conciliación automática con MP
-    try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(plan.price, mult, user.id); } catch (e) {}
+    try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(basePlan.price, mult, user.id); } catch (e) {}
     res.json({ init_point, discount_applied: discount });
   } catch (e) {
     console.error('[posta] Error creando suscripción MP:', e.message);
@@ -10232,7 +10246,7 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Payments are not configured yet.' });
   }
   try {
-    const user = db.prepare('SELECT id, email, plan_status, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, created_at, lang FROM users WHERE id = ?').get(req.session.userId);
+    const user = db.prepare('SELECT id, email, plan_status, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, created_at, lang, founder_number, founder_price, founder_currency, founder_plan, founder_price_at FROM users WHERE id = ?').get(req.session.userId);
     if (!user || user.lang !== 'en') {
       return res.status(400).json({ error: 'Stripe checkout is only available for US accounts.' });
     }
@@ -10248,7 +10262,18 @@ app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
       const endMs = trialEffectiveEnd(user);
       if (endMs - Date.now() > (48 * 3600 + 300) * 1000) trialEndSec = Math.floor(endMs / 1000);
     }
-    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec });
+    // (v317) Precio fundador: dentro de los 12 meses y si su monto difiere
+    // del catálogo vigente, el checkout cobra con un precio de Stripe a su
+    // monto de alta (las suscripciones vivas ya conservan su precio solas).
+    let founderPriceId = null;
+    if (user.founder_number && Number(user.founder_price) > 0 && user.founder_plan === plan.id
+        && String(user.founder_currency || '') === 'USD'
+        && Number(user.founder_price_at) > 0 && (Date.now() - Number(user.founder_price_at)) < 365 * 24 * 3600 * 1000
+        && Number(user.founder_price) !== Number(plan.price)) {
+      try { founderPriceId = await stripeBilling.ensureFounderPrice(null, plan, Number(user.founder_price)); }
+      catch (e) { console.error('[stripe] precio fundador:', e.message); }
+    }
+    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec, ...(founderPriceId ? { priceId: founderPriceId } : {}) });
     track(user.id, 'checkout_start', plan.id);
     res.json({ url: out.url });
   } catch (e) {
@@ -13860,13 +13885,34 @@ app.get('/api/capacity', (req, res) => {
 const FOUNDERS_TOTAL = 200;
 function stampFounder(userId) {
   try {
-    const u = db.prepare(`SELECT founder_number, plan, plan_status FROM users WHERE id = ?`).get(userId);
+    const u = db.prepare(`SELECT founder_number, plan, plan_status, lang, mp_base_amount, stripe_subscription_id FROM users WHERE id = ?`).get(userId);
     if (!u || u.founder_number) return u ? u.founder_number : 0;
     if (u.plan_status !== 'active' || !u.plan || u.plan === 'free') return 0;
     const row = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE COALESCE(founder_number, 0) > 0`).get();
     const next = (row ? row.n : 0) + 1;
     if (next > FOUNDERS_TOTAL) return 0;
     db.prepare(`UPDATE users SET founder_number = ? WHERE id = ? AND COALESCE(founder_number, 0) = 0`).run(next, userId);
+    // (v317) Precio fundador: se congela el precio de ESTA alta paga por 12
+    // meses. Stripe → el precio USD del plan; MP → mp_base_amount (el precio
+    // lleno de su suscripción; la moneda se deduce del catálogo UY).
+    try {
+      let fPrice = 0, fCur = '';
+      if (u.stripe_subscription_id) {
+        const p = getPlan(u.plan, 'US');
+        fPrice = Number(p && p.price) || 0; fCur = 'USD';
+      } else if (Number(u.mp_base_amount) > 0) {
+        fPrice = Number(u.mp_base_amount);
+        const uy = getPlan(u.plan, 'UY');
+        fCur = (uy && Number(uy.price) === fPrice) ? 'UYU' : 'ARS';
+      } else {
+        const p = getPlan(u.plan, u.lang === 'en' ? 'US' : 'AR');
+        fPrice = Number(p && p.price) || 0; fCur = (p && p.currency) || 'ARS';
+      }
+      if (fPrice > 0) {
+        db.prepare(`UPDATE users SET founder_price = ?, founder_currency = ?, founder_plan = ?, founder_price_at = ? WHERE id = ?`)
+          .run(fPrice, fCur, u.plan, Date.now(), userId);
+      }
+    } catch (e) { console.error('[founders] precio fundador:', e.message); }
     console.log(`[founders] Usuario ${userId} = fundador #${next} de ${FOUNDERS_TOTAL}`);
     return next;
   } catch (e) { console.error('[founders] stamp:', e.message); return 0; }
@@ -15545,7 +15591,7 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
   });
   const hist = Array.isArray(history) ? history.slice(-6).map((h) => `${h.role === 'user' ? (en ? 'Owner' : 'Dueño') : (en ? 'Posty' : 'Posta')}: ${String(h.text || '').slice(0, 200)}`).join('\n') : '';
   // (v274 · MODO EN) System prompt del chat EN: mismo rol y mismas reglas,
-  // en inglés US y con los precios EN (USD 59/119/179 — ver config/plans.js,
+  // en inglés US y con los precios EN (USD 49/99/149 — ver config/plans.js,
   // bloque PLANS_US: el cobro US va por Stripe, todavía sin alta; el chat
   // solo informa precios, nunca cobra).
   const sysEn =
@@ -15563,9 +15609,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
     'If the request applies to several posts, include all of them. If it is unclear, edits: [] and ask for clarification in reply. ' +
     'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
-    'Free 3-day trial, no card. Plans: Essential $59/month (community manager: 7 posts + 1 reel per week), Pro $119/month (adds Growth: 3 reels per week, stories 3x per week), Total $179/month (adds customer care: daily stories, comment and message replies — under $6 a day). ' +
+    'Free 3-day trial, no card. Plans: Essential $59/month (community manager: 7 posts + 1 reel per week), Pro $119/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $3.97 a day), Total $179/month (adds customer care: daily stories, comment and message replies). ' +
     'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
-    'If they say no, do not insist. Objections: "too expensive" → under $6 a day on Total, and Essential starts at $59; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
+    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $3.97 a day, and Essential starts at $59; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
     '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
   const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
@@ -15582,9 +15628,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
     'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply. ' +
     'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
-    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $69.900/mes (7 posteos + 1 reel por semana), Pro $129.900/mes (el más elegido), Total $199.900/mes. ' +
+    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $69.900/mes (Community Manager), Pro $129.900/mes (CM + Growth, el recomendado — $4.330 por día), Total $199.900/mes (CM + Growth + Atención al cliente). ' +
     'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
-    'Si dice que no, no insistas. Objeciones: "es caro" → menos de $1.500 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
+    'Si dice que no, no insistas. Objeciones: "es caro" → el recomendado sale $4.330 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
     // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
     (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
   const sys = en ? sysEn : sysEs;
@@ -15654,7 +15700,7 @@ const POSTY_CHAT_SYS = [
   'QUÉ ES POSTY (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana (7 posteos + 1 reel en el plan Esencial), escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
   '- EL ANÁLISIS: al poner tu @ en la prueba, Posty lee tu Instagram real y te escribe una carta con qué mejorar, qué incrementar y qué reducir, más su plan de ejecución (esta semana / la que viene / de acá en más).',
-  '- Planes (por mes, en pesos): Esencial $69.900 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $129.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa. Total $199.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
+  '- Planes (por mes, en pesos): Esencial $69.900 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $129.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa (el recomendado — $4.330 por día). Total $199.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
   '- Prueba gratis completa de 3 días, sin tarjeta. Referidos: si 2 amigos se suman, 50% de descuento.',
   '',
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. La constancia y el trabajo los pone Posty; los resultados dependen de cada negocio. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba.',
@@ -15666,7 +15712,7 @@ const POSTY_CHAT_SYS = [
 ].join('\n');
 
 // (v276) System prompt EN del chat público: espejo del ES, en inglés US y
-// con los precios EN (USD 59/119/179 — config/plans.js PLANS_US; el chat
+// con los precios EN (USD 49/99/149 — config/plans.js PLANS_US; el chat
 // solo informa precios, nunca cobra). Se usa solo si el cliente manda
 // lang:'en' (website /en); el default sigue siendo el ES de arriba.
 const POSTY_CHAT_SYS_EN = [
@@ -15679,7 +15725,7 @@ const POSTY_CHAT_SYS_EN = [
   'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts + 1 reel on the Essential plan), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
   '- THE ANALYSIS: when you enter your @ in the trial, Posty reads your real Instagram and writes you a letter with what to improve, what to increase and what to reduce, plus its execution plan (this week / next week / from here on).',
-  '- Plans (per month, in USD): Essential $59 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $119 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography. Total $179 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
+  '- Plans (per month, in USD): Essential $59 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $119 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $3.97 a day). Total $179 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
   '- Full free 3-day trial, no card required. Referrals: if 2 friends join, 50% off.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
@@ -16383,7 +16429,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v317';
+const BUILD_ID = '20261021-v318';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

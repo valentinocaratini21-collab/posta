@@ -917,6 +917,13 @@ try { db.exec(`ALTER TABLE users ADD COLUMN pause_snapshot TEXT DEFAULT ''`); } 
 // para aparecer en la página pública con nombre de negocio + rubro + ciudad.
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_number INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_public INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Precio fundador (v317, decisión de Valentino 2026-10-21): el precio del alta
+// paga queda registrado (monto + moneda + plan + cuándo) y las renovaciones /
+// re-suscripciones lo respetan durante 12 meses.
+try { db.exec(`ALTER TABLE users ADD COLUMN founder_price INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN founder_currency TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN founder_plan TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN founder_price_at INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Backfill idempotente (corre en cada boot, solo sube de nivel): nadie regresa
 // de nivel por la migración — conserva lo ganado con los mecanismos viejos.
 try { db.exec(`UPDATE users SET trust_level = 2 WHERE COALESCE(autopilot_enabled, 0) = 1 AND COALESCE(trust_level, 0) < 2`); } catch (e) {}

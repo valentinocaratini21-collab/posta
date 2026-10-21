@@ -44,9 +44,10 @@ function constructEvent(client, rawBody, signature) {
 const priceIdCache = new Map(); // planId -> priceId (por proceso)
 function lookupKeyFor(planId) { return `posty_us_${planId}_monthly`; }
 function planIdFromLookupKey(lk) {
-  const m = /^posty_us_(esencial|pro|total)_monthly$/.exec(String(lk || ''));
+  const m = /^posty_us_(esencial|pro|total)_(monthly|founder_\d+)$/.exec(String(lk || ''));
   return m ? m[1] : null;
 }
+function founderLookupKeyFor(planId, amountUsd) { return `posty_us_${planId}_founder_${Math.round(Number(amountUsd) * 100)}`; }
 
 // Idempotente: busca por lookup_key; crea producto+precio solo si no existe.
 // Nunca duplica en redeploys (la búsqueda por lookup_key es la fuente de verdad).
@@ -58,6 +59,23 @@ async function ensureCatalog(client) {
     if (priceIdCache.has(plan.id)) { out[plan.id] = priceIdCache.get(plan.id); continue; }
     const found = await client.prices.list({ lookup_keys: [lookupKeyFor(plan.id)], active: true, limit: 1 });
     let price = found && found.data && found.data[0];
+    const wantCents = Math.round(plan.price * 100);
+    if (price && Number(price.unit_amount) !== wantCents) {
+      // (v317 · suba 2026-10-21) Los precios de Stripe son INMUTABLES: si el
+      // monto del catálogo cambió, se crea un precio NUEVO sobre el mismo
+      // producto y se le transfiere el lookup_key (el precio viejo queda
+      // desactivado). Las suscripciones ya creadas conservan su precio:
+      // Stripe jamás las re-precifica solas.
+      price = await client.prices.create({
+        product: price.product,
+        unit_amount: wantCents,
+        currency: 'usd',
+        recurring: { interval: 'month' },
+        lookup_key: lookupKeyFor(plan.id),
+        transfer_lookup_key: true,
+        metadata: { plan_id: plan.id },
+      });
+    }
     if (!price) {
       const product = await client.products.create({
         name: `Posty — ${plan.name}`,
@@ -121,11 +139,54 @@ function buildCheckoutParams({ priceId, plan, user, baseUrl, trialEndSec }) {
   return params;
 }
 
-async function createCheckout(db, client, { user, plan, baseUrl, trialEndSec }) {
+// ---------- Precio fundador (v317): el alta paga de Los Primeros 200 ----------
+// Precio de Stripe con el monto EXACTO del alta del fundador (lookup_key por
+// monto: idempotente y compartido por todos los fundadores del mismo monto).
+// Se usa solo cuando un fundador re-suscribe dentro de sus 12 meses.
+const founderPriceCache = new Map(); // lookup_key -> priceId (por proceso)
+async function ensureFounderPrice(client, plan, amountUsd) {
   client = client || stripeClient();
   if (!client) throw new Error('Stripe no configurado');
-  const prices = await ensureCatalog(client);
-  const priceId = prices[plan.id];
+  const cents = Math.round(Number(amountUsd) * 100);
+  if (!plan || !plan.id || !(cents > 0)) throw new Error('Precio fundador inválido');
+  const lk = founderLookupKeyFor(plan.id, amountUsd);
+  if (founderPriceCache.has(lk)) return founderPriceCache.get(lk);
+  const found = await client.prices.list({ lookup_keys: [lk], active: true, limit: 1 });
+  let price = found && found.data && found.data[0];
+  if (!price) {
+    let productId = null;
+    try {
+      const cat = await client.prices.list({ lookup_keys: [lookupKeyFor(plan.id)], active: true, limit: 1 });
+      if (cat && cat.data && cat.data[0]) productId = cat.data[0].product;
+    } catch (e) { /* si falla, se crea el producto abajo */ }
+    if (!productId) {
+      const product = await client.products.create({
+        name: `Posty — ${plan.name}`,
+        description: plan.tagline || undefined,
+        metadata: { plan_id: plan.id, app: 'posty' },
+      });
+      productId = product.id;
+    }
+    price = await client.prices.create({
+      product: productId,
+      unit_amount: cents,
+      currency: 'usd',
+      recurring: { interval: 'month' },
+      lookup_key: lk,
+      metadata: { plan_id: plan.id, founder: '1' },
+    });
+  }
+  founderPriceCache.set(lk, price.id);
+  return price.id;
+}
+// Solo para tests: limpia las cachés de precios del proceso.
+function _clearPriceCache() { priceIdCache.clear(); founderPriceCache.clear(); }
+
+async function createCheckout(db, client, { user, plan, baseUrl, trialEndSec, priceId: priceOverride }) {
+  client = client || stripeClient();
+  if (!client) throw new Error('Stripe no configurado');
+  const prices = priceOverride ? null : await ensureCatalog(client);
+  const priceId = priceOverride || (prices && prices[plan.id]);
   if (!priceId) throw new Error('No se pudo resolver el precio del plan');
   const customerId = await getOrCreateCustomer(db, client, user);
   const params = buildCheckoutParams({
@@ -248,7 +309,7 @@ async function processEvent(db, client, event, hooks = {}) {
 
 module.exports = {
   stripeConfigured, webhookConfigured, stripeClient, _setClient,
-  constructEvent, ensureCatalog, getOrCreateCustomer,
+  constructEvent, ensureCatalog, ensureFounderPrice, founderLookupKeyFor, _clearPriceCache, getOrCreateCustomer,
   buildCheckoutParams, createCheckout, createPortalSession,
   processEvent, applySubscription,
   lookupKeyFor, planIdFromLookupKey, planIdFromSubscription,

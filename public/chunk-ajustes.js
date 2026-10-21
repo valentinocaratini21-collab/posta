@@ -1358,9 +1358,14 @@ function bindSettings() {
     const n = (typeof ME !== 'undefined' && ME && ME.founder_number) || 0;
     if (!n) return;
     const pub = !!(ME && ME.founder_public);
+    const fpN = Number((ME && ME.founder_price) || 0);
+    const fpCur = (ME && ME.founder_currency) || '';
+    const fpLbl = fpN ? ((fpCur === 'UYU' ? '$U ' : '$') + fpN.toLocaleString('es-AR') + (fpCur === 'USD' ? ' USD' : '')) : '';
+    const fpLine = fpN ? (en ? `💙 Your founder price (${fpLbl}/mo) stays fixed for 12 months from your signup.` : `💙 Tu precio de fundador (${fpLbl}/mes) queda fijo por 12 meses desde tu alta.`) : '';
     z.innerHTML = `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
       <div style="font-size:15px;font-weight:800">⭐ ${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 200' : 'de Los Primeros 200'}</div>
       <p style="color:var(--mut);font-size:13px;line-height:1.55;margin:6px 0 10px">${en ? 'Your spot in the founding cohort is yours. Do you want your business on the public founders page, with its name, trade and city?' : 'Tu lugar en la cohorte fundadora ya es tuyo. ¿Te sumás a la página de fundadores con el nombre de tu negocio, su rubro y su ciudad?'}</p>
+      ${fpLine ? `<p style="color:var(--mut);font-size:13px;line-height:1.55;margin:0 0 10px">${fpLine}</p>` : ''}
       <label style="display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;cursor:pointer"><input type="checkbox" id="founderPub" ${pub ? 'checked' : ''} style="width:18px;height:18px"> ${en ? 'Yes, list my business' : 'Sí, sumame a la página'}</label>
       <div id="founderPubMsg" style="font-size:12px;color:var(--dim);margin-top:6px"></div>
       <a href="${en ? '/en/founders' : '/fundadores'}" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:700;color:var(--cel)">${en ? 'See the founders page →' : 'Ver la página de fundadores →'}</a>
@@ -1458,7 +1463,7 @@ function bindSettings() {
         const feats = (p.features || []).filter(f => !pmMixDup.test(f)).slice(0, 6);
         return `
           <div class="plan-mini${p.id === cur && hasActive ? ' cur' : ''}${p.highlighted ? ' rec' : ''}">
-            ${p.highlighted ? '<div class="pm-flag">EL MÁS ELEGIDO</div>' : ''}
+            ${p.highlighted ? `<div class="pm-flag">${isUS ? 'RECOMMENDED' : 'RECOMENDADO'}</div>` : ''}
             <div class="pm-top"><b>${esc(p.name)}</b>${p.id === cur && hasActive ? '<span class="pm-cur-tag">Tu plan</span>' : ''}</div>
             ${p.tagline ? `<p class="pm-tagline">${esc(p.tagline)}</p>` : ''}
             <div class="pm-price">${esc(p.price_label)}<small>/mes</small></div>

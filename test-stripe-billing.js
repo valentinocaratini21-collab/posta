@@ -83,7 +83,7 @@ async function partA() {
   ok(cat1.esencial && cat1.pro && cat1.total, 'ensureCatalog devuelve los 3 price ids');
   ok(fake._calls.productsCreate === 3 && fake._calls.pricesCreate === 3, 'primer bootstrap: crea 3 productos y 3 precios');
   const amounts = ['esencial', 'pro', 'total'].map((p) => fake._prices.get(sb.lookupKeyFor(p)).unit_amount);
-  ok(JSON.stringify(amounts) === JSON.stringify([4900, 9900, 14900]), `montos USD correctos (4900/9900/14900): ${amounts}`);
+  ok(JSON.stringify(amounts) === JSON.stringify([5900, 11900, 17900]), `montos USD correctos (5900/11900/17900): ${amounts}`);
   ok(['esencial', 'pro', 'total'].every((p) => fake._prices.get(sb.lookupKeyFor(p)).currency === 'usd'
     && fake._prices.get(sb.lookupKeyFor(p)).recurring.interval === 'month'), 'los 3 precios son USD mensuales');
   const cat2 = await sb.ensureCatalog(fake);
@@ -200,7 +200,42 @@ async function partA() {
   ok(serverSrc.includes("app.post('/api/billing/stripe/checkout', requireAuth"), 'endpoint de checkout autenticado');
   ok(serverSrc.includes("app.post('/api/billing/stripe/portal', requireAuth"), 'endpoint de portal autenticado');
   ok(serverSrc.includes('stripe_configured: stripeBilling.stripeConfigured()'), '/api/billing/plans expone stripe_configured');
-  ok(serverSrc.includes('20261020-v285'), 'BUILD_ID v285');
+  ok(/const BUILD_ID = '2026\d{4}-v\d+';/.test(serverSrc), 'BUILD_ID presente con forma válida (el pin fósil a v285 se corrigió en v317, precedente v311)');
+
+  section('A8 · migración de precios (v317): el monto nuevo crea precio nuevo y transfiere el lookup_key');
+  {
+    const fake2 = makeFakeStripe();
+    const olds = { esencial: 4900, pro: 9900, total: 14900 };
+    for (const pid of Object.keys(olds)) {
+      fake2._prices.set(sb.lookupKeyFor(pid), { id: 'price_old_' + pid, product: 'prod_' + pid, unit_amount: olds[pid], currency: 'usd', recurring: { interval: 'month' }, lookup_key: sb.lookupKeyFor(pid), active: true });
+    }
+    sb._clearPriceCache();
+    const catM = await sb.ensureCatalog(fake2);
+    const amountsM = ['esencial', 'pro', 'total'].map((x) => fake2._prices.get(sb.lookupKeyFor(x)).unit_amount);
+    ok(JSON.stringify(amountsM) === JSON.stringify([5900, 11900, 17900]), `migración: los lookup_keys resuelven a los montos nuevos: ${amountsM}`);
+    ok(fake2._calls.pricesCreate === 3 && fake2._calls.productsCreate === 0, 'migración: 3 precios nuevos y 0 productos nuevos (reusa el producto)');
+    ok(catM.pro !== 'price_old_pro' && fake2._prices.get(sb.lookupKeyFor('pro')).product === 'prod_pro', 'migración: el precio nuevo cuelga del mismo producto');
+    ok([...fake2._prices.values()].every((x) => x.transfer_lookup_key === true), 'migración: los precios nuevos piden transfer_lookup_key');
+    sb._clearPriceCache();
+  }
+
+  section('A9 · precio fundador (v317): precio por monto de alta, idempotente');
+  {
+    const fake3 = makeFakeStripe();
+    const proPlan = { id: 'pro', name: 'Pro', tagline: 'To actually grow' };
+    const fp1 = await sb.ensureFounderPrice(fake3, proPlan, 79);
+    const rec = fake3._prices.get(sb.founderLookupKeyFor('pro', 79));
+    ok(!!fp1 && !!rec && rec.unit_amount === 7900 && rec.currency === 'usd', 'fundador: crea el precio con el monto exacto del alta (USD 79)');
+    const fp2 = await sb.ensureFounderPrice(fake3, proPlan, 79);
+    ok(fp2 === fp1 && fake3._calls.pricesCreate === 1, 'fundador: el segundo llamado reusa el precio (idempotente)');
+    ok(sb.planIdFromLookupKey(sb.founderLookupKeyFor('pro', 79)) === 'pro', 'fundador: su lookup_key mapea al plan');
+    ok(sb.planIdFromLookupKey('posty_us_pro_monthly') === 'pro', 'catálogo: el lookup_key clásico sigue mapeando al plan');
+    const db3 = memDb();
+    await sb.createCheckout(db3, fake3, { user: { id: 9, email: 'f@x.co' }, plan: proPlan, baseUrl: 'https://x', trialEndSec: null, priceId: fp1 });
+    const sess = fake3._calls.sessionsCreate[fake3._calls.sessionsCreate.length - 1];
+    ok(sess && sess.line_items[0].price === fp1, 'fundador: el checkout cobra el precio fundador cuando viene explícito');
+    sb._clearPriceCache();
+  }
 }
 
 async function partB() {
@@ -240,16 +275,16 @@ async function partB() {
   try {
     let up = false;
     for (let i = 0; i < 120 && !up; i++) {
-      try { const r = await fetch(base + '/api/version'); const j = await r.json(); if (j && j.build === '20261020-v285') up = true; } catch (e) {}
+      try { const r = await fetch(base + '/api/version'); const j = await r.json(); if (j && /^2026\d{4}-v\d+$/.test(String(j.build || ''))) up = true; } catch (e) {}
       if (!up) await sleep(750);
     }
-    ok(up, 'el servidor bootea y sirve v285 (sin ninguna variable STRIPE_*)');
+    ok(up, 'el servidor bootea y sirve su build (sin ninguna variable STRIPE_*)');
     if (!up) { console.error(bootLog.slice(-1200)); return; }
     const home = await fetch(base + '/');
     ok(home.status === 200, 'la home responde 200, intacta');
     const plans = await (await fetch(base + '/api/billing/plans?country=US')).json();
     ok(plans.currency === 'USD' && plans.stripe_configured === false, 'planes US en USD con stripe_configured=false');
-    ok(JSON.stringify(plans.plans.map((p) => p.price)) === JSON.stringify([49, 99, 149]), 'precios US 49/99/149 desde PLANS_US');
+    ok(JSON.stringify(plans.plans.map((p) => p.price)) === JSON.stringify([59, 119, 179]), 'precios US 59/119/179 desde PLANS_US');
     const plansAr = await (await fetch(base + '/api/billing/plans')).json();
     ok(plansAr.currency === 'ARS' && plansAr.mp_configured !== undefined, 'el flujo AR/MP no cambió');
 

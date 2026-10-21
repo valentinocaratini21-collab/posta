@@ -7,7 +7,7 @@
 // TECHO DE IA (vara de Valentino, 2026-10-02): el costo variable de IA por usuario/mes
 // no puede superar el 5% del precio del plan (Esencial: $3.495 ARS/mes). Se enforcea
 // con `monthlyCapUsd` en costs.js (calculado desde price × 0.05) + límites diarios `ai`.
-// Precios UY confirmados por Valentino el 2026-10-21 (misma suba premium que AR).
+// ✅ PRECIOS UY CONFIRMADOS por Valentino (2026-10-21): UYU 1.490 / 2.990 / 4.990.
 
 // Límites diarios de IA por plan. El cap mensual (5%) es el techo duro;
 // estos límites son el ritmo para que un usuario normal nunca lo note.
@@ -97,7 +97,7 @@ const PLANS_AR = {
   },
 };
 
-// Precios UY confirmados por Valentino el 2026-10-21.
+// ✅ UY CONFIRMADO por Valentino (2026-10-21) — misma arquitectura que AR: el Pro es el héroe (≈ $U 100/día).
 const PLANS_UY = {
   esencial: {
     id: 'esencial',
@@ -175,15 +175,14 @@ const PLANS_UY = {
 };
 
 // Texto de ancla de precio por país (se muestra sobre las tarjetas de planes).
-// Valor UY confirmado el 2026-10-21 junto con los precios.
+// Valores confirmados por Valentino (2026-10-21).
 const PLAN_ANCHOR = {
   AR: { cm: '$300.000+/mes', desde: '$69.900' },
   UY: { cm: '$U 50.000+/mes', desde: '$U 1.490' },
 };
 
 // (v274 · MODO EN) Planes US — escalera definida por Valentino el
-// 2026-10-20: USD 49 / 99 / 149 → repreciado el 2026-10-21 a USD 59 / 119 / 179
-// (misma lógica premium que AR/UY), mismos roles que AR (Plan 1 = Community
+// 2026-10-20: USD 59 / 119 / 179 (segunda suba de Valentino 2026-10-21; la escalera original del 2026-10-20 era 49 / 99 / 149), mismos roles que AR (Plan 1 = Community
 // Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
 // ✅ COBRO US CONECTADO (v285, 2026-10-21): el checkout vive en
 // stripe-billing.js (Checkout Sessions + suscripciones, cuenta PERSONAL de
@@ -230,6 +229,7 @@ const PLANS_US = {
       'Scheduled automatic publishing',
       'Full competitor breakdown',
     ],
+    highlighted: true,
   },
   total: {
     id: 'total',
