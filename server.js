@@ -14667,6 +14667,30 @@ const POSTY_CHAT_SYS = [
   'ESCALACIÓN: si la persona quiere contratar algo a medida, tiene un problema con su cuenta o con un pago, pide hablar con una persona, o no podés resolver lo que pide, pedile UN dato de contacto (WhatsApp o email) así: "Eso te lo resuelve una persona de mi equipo. ¿Me dejás tu WhatsApp o tu email y te contactan hoy?" Cuando la persona deje su contacto (o acepte dejarlo), terminá tu respuesta con el token interno [[ESCALAR]] al final del texto: ese token es invisible para la persona y marca que un humano toma el caso. No uses ese token en ningún otro momento ni lo menciones jamás.',
 ].join('\n');
 
+// (v276) System prompt EN del chat público: espejo del ES, en inglés US y
+// con los precios EN (USD 49/99/149 — config/plans.js PLANS_US; el chat
+// solo informa precios, nunca cobra). Se usa solo si el cliente manda
+// lang:'en' (website /en); el default sigue siendo el ES de arriba.
+const POSTY_CHAT_SYS_EN = [
+  'You are Posty 🤖, the robot community manager of Posty (postyhacetodo.com). You are talking with website visitors — business owners, mostly in the US — in a public chat. Your job: answer questions and move the person toward trying Posty free for 3 days, without being pushy.',
+  '',
+  'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
+  'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
+  '',
+  'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
+  '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts + 1 reel on the Essential plan), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
+  '- THE ANALYSIS: when you enter your @ in the trial, Posty reads your real Instagram and writes you a letter with what to improve, what to increase and what to reduce, plus its execution plan (this week / next week / from here on).',
+  '- Plans (per month, in USD): Essential $49 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $99 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography. Total $149 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
+  '- Full free 3-day trial, no card required. Referrals: if 2 friends join, 50% off.',
+  '',
+  'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
+  '- About connecting and posting: connecting your own Instagram and 100% automatic posting are in Meta\'s final review. Today the client tries everything, sees their full week and their analysis; automatic posting to their account turns on as soon as Meta gives the final OK. Say it just like that, naturally, ONLY if the person asks about posting or connecting their account — do not bring it up yourself.',
+  '',
+  'IDENTITY: you are an artificial intelligence, the robot Posty. If they ask whether you are a person, a robot or an AI, answer proudly: "I\'m Posty 🤖, an artificial intelligence — the same one that will run your Instagram. Behind me there is a human team that reviews everything."',
+  '',
+  'ESCALATION: if the person wants something custom, has a problem with their account or a payment, asks to talk to a person, or you cannot solve what they are asking, ask for ONE contact detail (WhatsApp or email) like this: "That is something a person on my team will solve for you. Can you leave me your WhatsApp or your email and they will contact you today?" When the person leaves their contact (or agrees to leave it), end your reply with the internal token [[ESCALAR]] at the very end of the text: that token is invisible to the person and marks that a human takes the case. Never use that token at any other time and never mention it.',
+].join('\n');
+
 function postyChatParse(raw) {
   let text = String(raw || '').trim();
   let escalate = false;
@@ -14731,7 +14755,10 @@ function postyChatSave(sessionId, page, thread, reply, escalate) {
 app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) => {
   const FALLBACK = 'Uy, se me cortó un segundo 🤖 Probá de nuevo en un ratito — y si querés, dejame tu WhatsApp o tu email y te escribe una persona de mi equipo.';
   const PAUSE = 'Hoy charlamos un montón 🤖 Dejame descansar un rato y seguimos en unas horas. Mientras tanto, tu semana gratis te espera: son 3 días, sin tarjeta.';
+  const FALLBACK_EN = 'Oops, I glitched for a second 🤖 Try again in a moment — and if you like, leave me your WhatsApp or email and someone from my team will write to you.';
+  const PAUSE_EN = 'We chatted a lot today 🤖 Let me rest a bit and we will pick this up in a few hours. Meanwhile, your free week is waiting: 3 days, no card required.';
   const body = req.body || {};
+  const lang = body.lang === 'en' ? 'en' : 'es';
   let sessionId = String(body.session_id || '').trim();
   if (!/^[A-Za-z0-9_-]{6,80}$/.test(sessionId)) {
     sessionId = 'srv-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -14745,12 +14772,15 @@ app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) =>
     }))
     .filter((m) => m.text.trim());
   if (!thread.length || thread[thread.length - 1].role !== 'user') {
-    return res.json({ ok: true, reply: '¡Hola! Soy Posty 🤖 ¿En qué te ayudo? Podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
+    return res.json({ ok: true, reply: lang === 'en'
+      ? 'Hi! I\'m Posty 🤖 How can I help? You can ask me what I do, how much it costs or how the free trial works.'
+      : '¡Hola! Soy Posty 🤖 ¿En qué te ayudo? Podés preguntarme qué hago, cuánto sale o cómo es la prueba gratis.' });
   }
   const ip = demo.clientIp(req);
   if (!postyChatAllowed(ip + '|' + sessionId)) {
-    postyChatSave(sessionId, page, thread, PAUSE, false);
-    return res.json({ ok: true, reply: PAUSE, limited: true });
+    const pauseTxt = lang === 'en' ? PAUSE_EN : PAUSE;
+    postyChatSave(sessionId, page, thread, pauseTxt, false);
+    return res.json({ ok: true, reply: pauseTxt, limited: true });
   }
   try {
     const apiKey = process.env.OPENAI_API_KEY || '';
@@ -14760,7 +14790,7 @@ app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) =>
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [{ role: 'system', content: POSTY_CHAT_SYS }].concat(
+        messages: [{ role: 'system', content: lang === 'en' ? POSTY_CHAT_SYS_EN : POSTY_CHAT_SYS }].concat(
           thread.map((m) => ({ role: m.role, content: m.text }))
         ),
         max_tokens: 500,
@@ -14778,8 +14808,9 @@ app.post('/api/posty-chat', express.json({ limit: '64kb' }), async (req, res) =>
     return res.json(out);
   } catch (e) {
     console.error('[posta] posty-chat:', e.message);
-    postyChatSave(sessionId, page, thread, FALLBACK, false);
-    return res.json({ ok: true, reply: FALLBACK });
+    const fbTxt = lang === 'en' ? FALLBACK_EN : FALLBACK;
+    postyChatSave(sessionId, page, thread, fbTxt, false);
+    return res.json({ ok: true, reply: fbTxt });
   }
 });
 
@@ -15352,7 +15383,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v275';
+const BUILD_ID = '20261020-v276';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

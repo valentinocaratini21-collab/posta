@@ -1,14 +1,48 @@
 /* posty-chat.js — Chat público "Hablá con Posty" (landing + /prueba).
    Vanilla, sin dependencias: inyecta sus estilos y su DOM. Se incluye con
-   <script src="/posty-chat.js?v=2" defer></script>. SIN botón flotante:
+   <script src="/posty-chat.js?v=3" defer></script>. SIN botón flotante:
    el panel se abre solo desde puertas [data-posty-chat] ("Ayuda",
    "Soporte", "Necesito ayuda") o vía window.PostyChat.open(). Dentro de
-   la app (#/app/...) se oculta solo: la app tiene su propio chat. */
+   la app (#/app/...) se oculta solo: la app tiene su propio chat.
+   i18n (v276): en rutas /en* el widget habla inglés y manda lang:'en' a
+   /api/posty-chat; en cualquier otra ruta el comportamiento es el ES de
+   siempre, con los textos originales sin cambios. */
 (function () {
   if (window.__postyChatLoaded) return;
   window.__postyChatLoaded = true;
 
-  var GREETING = '¡Hola! Soy Posty 🤖 Manejo el Instagram de negocios como el tuyo: análisis, posteos, reels, todo. ¿Querés que te cuente cómo sería con tu cuenta, o tenés una duda puntual?';
+  var LANG = (location.pathname === '/en' || location.pathname.indexOf('/en/') === 0 ||
+    (document.documentElement.lang || '').toLowerCase().indexOf('en') === 0) ? 'en' : 'es';
+  var T = LANG === 'en' ? {
+    greeting: 'Hi! I\'m Posty 🤖 I run Instagram for businesses like yours: analysis, posts, reels, everything. Want me to tell you what it would look like with your account, or do you have a specific question?',
+    sub: 'Your community manager · replies instantly',
+    dialogLabel: 'Chat with Posty',
+    closeLabel: 'Close chat',
+    chipPrice: 'How much is it?',
+    chipWhat: 'What exactly does Posty do?',
+    chipAnalysis: 'I want my free analysis',
+    placeholder: 'Message Posty…',
+    send: 'Send',
+    typing: 'Posty is typing…',
+    errReply: 'I glitched for a second 🤖 Try again in a moment.',
+    errConn: 'My connection dropped 🤖 Try again in a moment — or leave me your WhatsApp or email and someone from my team will write to you.',
+    trialPath: '/en/prueba'
+  } : {
+    greeting: '¡Hola! Soy Posty 🤖 Manejo el Instagram de negocios como el tuyo: análisis, posteos, reels, todo. ¿Querés que te cuente cómo sería con tu cuenta, o tenés una duda puntual?',
+    sub: 'Tu community manager · responde al instante',
+    dialogLabel: 'Chat con Posty',
+    closeLabel: 'Cerrar chat',
+    chipPrice: '¿Cuánto sale?',
+    chipWhat: '¿Qué hace Posty exactamente?',
+    chipAnalysis: 'Quiero mi análisis gratis',
+    placeholder: 'Escribile a Posty…',
+    send: 'Enviar',
+    typing: 'Posty está escribiendo…',
+    errReply: 'Se me cortó un segundo 🤖 Probá de nuevo en un ratito.',
+    errConn: 'Se me cortó la conexión 🤖 Probá de nuevo en un ratito — o dejame tu WhatsApp o tu email y te escribe una persona de mi equipo.',
+    trialPath: '/prueba'
+  };
+  var GREETING = T.greeting;
   var PAGE = location.pathname.indexOf('prueba') !== -1 ? 'prueba' : 'landing';
 
   var sid = null;
@@ -30,7 +64,7 @@
     '.pc-head img{width:40px;height:40px;border-radius:50%;background:#fff;display:block}',
     '.pc-head .pc-name{font-weight:800;font-size:16px;line-height:1.15}',
     '.pc-head .pc-sub{font-size:12px;opacity:.92;line-height:1.2}',
-    '.pc-close{margin-left:auto;background:rgba(255,255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;line-height:1;flex:none}',
+    '.pc-close{margin-left:auto;background:rgba(255,255,.18);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;line-height:1;flex:none}',
     '.pc-msgs{flex:1;overflow-y:auto;padding:14px;background:#F4FAFD;display:flex;flex-direction:column;gap:8px}',
     '.pc-b{max-width:84%;padding:10px 13px;font-size:14.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;border-radius:16px}',
     '.pc-a{align-self:flex-start;background:#fff;border:1px solid #E3EDF4;border-bottom-left-radius:6px}',
@@ -57,22 +91,22 @@
   var root = document.createElement('div');
   root.id = 'posty-chat-root';
   root.innerHTML =
-    '<div id="pcPanel" class="pc-hidden" role="dialog" aria-label="Chat con Posty">' +
+    '<div id="pcPanel" class="pc-hidden" role="dialog" aria-label="' + T.dialogLabel + '">' +
       '<div class="pc-head">' +
         '<img src="/ai-avatar.png" alt="Posty">' +
         '<div><div class="pc-name">Posty</div>' +
-        '<div class="pc-sub">Tu community manager · responde al instante</div></div>' +
-        '<button class="pc-close" type="button" aria-label="Cerrar chat">✕</button>' +
+        '<div class="pc-sub">' + T.sub + '</div></div>' +
+        '<button class="pc-close" type="button" aria-label="' + T.closeLabel + '">✕</button>' +
       '</div>' +
       '<div class="pc-msgs" id="pcMsgs"></div>' +
       '<div class="pc-chips" id="pcChips">' +
-        '<button class="pc-chip" type="button" data-send="¿Cuánto sale?">¿Cuánto sale?</button>' +
-        '<button class="pc-chip" type="button" data-send="¿Qué hace Posty exactamente?">¿Qué hace Posty exactamente?</button>' +
-        '<button class="pc-chip" type="button" data-goto="analisis">Quiero mi análisis gratis</button>' +
+        '<button class="pc-chip" type="button" data-send="' + T.chipPrice + '">' + T.chipPrice + '</button>' +
+        '<button class="pc-chip" type="button" data-send="' + T.chipWhat + '">' + T.chipWhat + '</button>' +
+        '<button class="pc-chip" type="button" data-goto="analisis">' + T.chipAnalysis + '</button>' +
       '</div>' +
       '<form class="pc-form" id="pcForm">' +
-        '<input id="pcInput" type="text" maxlength="1000" autocomplete="off" placeholder="Escribile a Posty…">' +
-        '<button class="pc-send" id="pcSend" type="submit">Enviar</button>' +
+        '<input id="pcInput" type="text" maxlength="1000" autocomplete="off" placeholder="' + T.placeholder + '">' +
+        '<button class="pc-send" id="pcSend" type="submit">' + T.send + '</button>' +
       '</form>' +
     '</div>';
   document.body.appendChild(root);
@@ -135,7 +169,7 @@
           if (inp) setTimeout(function () { try { inp.focus(); } catch (e) {} }, 450);
         }
       } else {
-        location.href = '/prueba';
+        location.href = T.trialPath;
       }
     }, 80);
   }
@@ -159,24 +193,24 @@
     input.value = '';
     var loading = document.createElement('div');
     loading.className = 'pc-loading';
-    loading.textContent = 'Posty está escribiendo…';
+    loading.textContent = T.typing;
     msgs.appendChild(loading);
     scrollMsgs();
     fetch('/api/posty-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sid, page: PAGE, messages: thread.slice(-12) })
+      body: JSON.stringify({ session_id: sid, page: PAGE, lang: LANG, messages: thread.slice(-12) })
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         loading.remove();
-        var reply = (data && data.reply) || 'Se me cortó un segundo 🤖 Probá de nuevo en un ratito.';
+        var reply = (data && data.reply) || T.errReply;
         thread.push({ role: 'assistant', text: reply });
         addBubble('assistant', reply);
       })
       .catch(function () {
         loading.remove();
-        addBubble('assistant', 'Se me cortó la conexión 🤖 Probá de nuevo en un ratito — o dejame tu WhatsApp o tu email y te escribe una persona de mi equipo.');
+        addBubble('assistant', T.errConn);
       })
       .then(function () {
         busy = false;
