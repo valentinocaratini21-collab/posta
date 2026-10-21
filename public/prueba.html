@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Posty — Tu semana de Instagram armada gratis</title>
-<meta name="description" content="Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia lo que vende. Probalo 3 días gratis, sin tarjeta.">
+<meta name="description" content="Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia tu contenido. Probalo 3 días gratis, sin tarjeta.">
 <link rel="canonical" href="https://postyhacetodo.com/prueba">
 <link rel="alternate" hreflang="es" href="https://postyhacetodo.com/prueba">
 <link rel="alternate" hreflang="en" href="https://postyhacetodo.com/en/prueba">
@@ -14,6 +14,11 @@
 <meta property="og:title" content="Posty te arma tu semana de posteos — gratis">
 <meta property="og:description" content="Contanos tu negocio en 1 minuto y te mostramos tus ideas, diseños, textos y hashtags, como si ya fueras cliente. Probalo gratis, sin tarjeta.">
 <meta property="og:image" content="https://postyhacetodo.com/og-prueba.jpg">
+<meta property="og:locale" content="es_AR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Posty te arma tu semana de posteos — gratis">
+<meta name="twitter:description" content="Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia tu contenido. Probalo 3 días gratis, sin tarjeta.">
+<meta name="twitter:image" content="https://postyhacetodo.com/og-prueba.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -870,7 +875,7 @@ html{scroll-behavior:smooth}
             style="flex:1;min-width:0;font-size:16px;padding:12px 14px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33">
           <button id="ideasGo" class="btn btn-primary" style="white-space:nowrap;padding:12px 20px">Quiero mis ideas</button>
         </div>
-        <button id="ideasGoAuth" class="btn btn-primary" style="display:none;white-space:nowrap;padding:12px 22px">Sí, mandame 3 ideas cada lunes 💡</button>
+        <button id="ideasGoAuth" class="btn btn-primary" style="display:none;white-space:normal;max-width:100%;padding:12px 22px">Sí, mandame 3 ideas cada lunes 💡</button>
         <p class="tiny" id="ideasMsg" style="margin:8px 0 0;min-height:18px"></p>
       </div>
       </div>
@@ -1070,8 +1075,9 @@ const TEST_KEY_QS = (() => {
 })();
 // Link del email "tu semana te está esperando": ?ig=... carga la semana
 // guardada directo en la pantalla de resultados (viene del cron de abandono).
+const DEEP_IG_RAW = new URLSearchParams(location.search).get('ig') || '';
 const DEEP_IG = (() => {
-  const v = new URLSearchParams(location.search).get('ig');
+  const v = DEEP_IG_RAW;
   return v && /^[a-z0-9._]{1,30}$/i.test(v.trim()) ? v.trim().replace(/^@/, '').toLowerCase() : '';
 })();
 // Link de la landing "pegá la web de tu negocio": ?web=... lee el sitio y
@@ -1178,6 +1184,7 @@ function show(id) {
     } catch (e) {}
   }
   if (DEEP_IG) { try { const fi = $('#f_ig'); if (fi && !fi.value) fi.value = '@' + DEEP_IG; } catch (e) {} }
+  else if (DEEP_IG_RAW) { try { const fi = $('#f_ig'); if (fi && !fi.value) fi.value = DEEP_IG_RAW.slice(0, 40); } catch (e) {} } // @ inválido: queda escrito para corregirlo, no se descarta en silencio
   // ¿Ya generaste tu semana en este navegador? Mostrala directo.
   // (En otro navegador o dispositivo: completás el form con el mismo @
   // y el servidor te devuelve tu semana cacheada al instante.)
@@ -2918,6 +2925,6 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
   document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
 });
 </script>
-<script src="/posty-chat.js?v=2" defer></script>
+<script src="/posty-chat.js?v=3" defer></script>
 </body>
 </html>

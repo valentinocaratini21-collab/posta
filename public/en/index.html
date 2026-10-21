@@ -48,7 +48,7 @@
 })();
 </script>
 <title>Posty — Your community manager on autopilot</title>
-<meta name="description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts what sells. Try it free for 3 days, no card required.">
+<meta name="description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts your content. Try it free for 3 days, no card required.">
 <link rel="canonical" href="https://postyhacetodo.com/en/">
 <link rel="alternate" hreflang="es" href="https://postyhacetodo.com/">
 <link rel="alternate" hreflang="en" href="https://postyhacetodo.com/en/">
@@ -58,13 +58,13 @@
 <meta property="og:locale" content="en_US">
 <meta property="og:locale:alternate" content="es_AR">
 <meta property="og:title" content="Your Instagram working every day, with just one click · Posty">
-<meta property="og:description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts what sells. Try it free for 3 days, no card required.">
+<meta property="og:description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts your content. Try it free for 3 days, no card required.">
 <meta property="og:image" content="https://postyhacetodo.com/og-cover-en-v2.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Your Instagram working every day, with just one click · Posty">
-<meta name="twitter:description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts what sells. Try it free for 3 days, no card required.">
+<meta name="twitter:description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts your content. Try it free for 3 days, no card required.">
 <meta name="twitter:image" content="https://postyhacetodo.com/og-cover-en-v2.jpg">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#2793C8">
@@ -77,7 +77,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261020h">
+<link rel="stylesheet" href="/styles.css?v=20261021i">
 </head>
 <body>
 <div id="app">
@@ -117,12 +117,12 @@
     <h1>Your Instagram, working<br><span class="hl">every day, with a single click</span></h1>
     <p class="sub">Posty creates the ideas, the designs and the copy with <b>your brand</b> — and posts them by itself. Posts, reels, stories, comments, messages and ads — your whole Instagram, done by Posty. You do nothing: you only step in if something doesn't feel right.</p>
     <form class="lp-igform" onsubmit="return lpGoTrial(event)">
-      <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Tu Instagram">
+      <input id="lpIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
       <button class="btn btn-primary" type="submit">See my week →</button>
     </form>
     <p class="lp-igform-note">Drop your Instagram handle and see <b>your</b> real week, with your brand 👆</p>
     <div class="hero-note">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
-    <p class="lp-spots" data-spots="">🔥 Only <b>50 of 50 spots left</b> this month</p>
+    <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show" id="ejemplos">
       <p class="lp-show-eyebrow">✨ This is what your Instagram looks like with Posty</p>
       <div class="lp-wall" id="lpWall">
@@ -315,12 +315,12 @@
       <div class="lp-wall-meta"><span class="lp-wall-note">20 industries · profiles built by Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 5</span></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">This is an example. <b>Yours</b> is ready in 1 minute 👇</p>
-        <form class="lp-igform lp-show-form" onsubmit="var v=this.querySelector('input').value.replace('@','').trim().toLowerCase();location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
-          <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Tu Instagram">
+        <form class="lp-igform lp-show-form" onsubmit="var v=lpCleanIg(this.querySelector('input').value);location.href=v?'/en/prueba?ig='+encodeURIComponent(v):'/en/prueba';return false">
+          <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
           <button class="btn btn-primary" type="submit">I want my profile like this →</button>
         </form>
         <p class="lp-show-cert">3 days free · no card · cancel anytime</p>
-        <p class="lp-spots" data-spots="">🔥 Only <b>50 of 50 spots left</b> this month</p>
+        <p class="lp-spots" data-spots hidden></p>
       </div>
       <div class="lp-live" id="lpLive">
         <div class="lp-live-head"><span class="lp-live-dot"></span><b>Posty at work</b><span>this is how it works for this business, every day</span></div>
@@ -837,7 +837,7 @@
     <h2>Is your Instagram selling?</h2>
     <p class="lede">Posty analyzes your profile <b>for free</b> and tells you what's holding your sales back: what to post, what to answer, what to improve.</p>
     <form class="lp-igform lp-audit-form" onsubmit="return lpGoAudit(event)">
-      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Tu Instagram">
+      <input id="lpAuditIg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
       <button class="btn btn-primary" type="submit">Audit my Instagram for free</button>
     </form>
     <p class="lp-audit-note">No sign-up · Your result arrives in under a minute</p>
@@ -848,7 +848,7 @@
     <p>Tell us about your business and see it in 1 minute. Free, no card.</p>
     <a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:18px 44px">See my week, free 👀</a>
     <div class="hero-note" style="margin-top:18px">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
-    <p class="lp-spots" data-spots="">🔥 Only <b>50 of 50 spots left</b> this month</p>
+    <p class="lp-spots" data-spots hidden></p>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
@@ -863,13 +863,41 @@ function toggleMobileMenu() {
   const m = document.getElementById('mobileMenu');
   if (m) m.classList.toggle('open');
 }
-function lpGoPrueba(e) {
+function lpCleanIg(v) {
+  let s = String(v || '').trim().toLowerCase();
+  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  if (s.indexOf('instagram.com/') === 0) s = s.slice('instagram.com/'.length);
+  return s.split(/[\/?#\s]/)[0].replace(/^@+/, '');
+}
+function lpGoTrial(e) {
   if (e) e.preventDefault();
   const inp = document.getElementById('lpIg');
-  const v = inp && inp.value ? inp.value.trim().replace(/^@/, '') : '';
+  const v = lpCleanIg(inp && inp.value);
   location.href = '/en/prueba' + (v ? '?ig=' + encodeURIComponent(v) : '');
   return false;
 }
+function lpGoAudit(e) {
+  if (e) e.preventDefault();
+  const inp = document.getElementById('lpAuditIg');
+  const v = lpCleanIg(inp && inp.value);
+  location.href = '/auditoria' + (v ? '?ig=' + encodeURIComponent(v) : '');
+  return false;
+}
+// Live scarcity: the number comes from /api/capacity (same as ES). The
+// hardcoded "50 of 50" was a false claim — the lines stay hidden until
+// the real number arrives.
+function lpRefreshScarcity() {
+  fetch('/api/capacity').then(function (r) { return r.json(); }).then(function (c) {
+    if (!c || typeof c.spots_left !== 'number') return;
+    var el = document.getElementById('scarcityLine');
+    if (el) el.innerHTML = '🔥 Only <b>' + c.spots_left + ' spots</b> — we personally onboard every business that joins.';
+    document.querySelectorAll('[data-spots]').forEach(function (s) {
+      s.innerHTML = '🔥 Only <b>' + c.spots_left + ' of ' + c.spots_total + ' spots left</b> this month';
+      s.hidden = false;
+    });
+  }).catch(function () {});
+}
+lpRefreshScarcity();
 /* — Profile wall: ONE row of 4 with ‹ › arrows (same mechanics as the
    Spanish landing, v211): pages of 4, track sliding −100% per page,
    arrows .off at the ends, touch swipe. On ≤1023px the pages flatten
