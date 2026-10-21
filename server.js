@@ -1486,7 +1486,7 @@ app.post('/api/auth/register', (req, res) => {
     const utmS = String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
     const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
-    const newUserId = newUserId;
+    const newUserId = r.lastInsertRowid;
     // Si viene de /prueba con el mismo @, su semana generada lo espera adentro como borradores
     try {
       const nImp = importTrialWeek(newUserId, trial_ig);
@@ -16006,7 +16006,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v306';
+const BUILD_ID = '20261021-v307';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
