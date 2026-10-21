@@ -184,13 +184,12 @@ const PLAN_ANCHOR = {
 // (v274 · MODO EN) Planes US — escalera definida por Valentino el
 // 2026-10-20: USD 49 / 99 / 149, mismos roles que AR (Plan 1 = Community
 // Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
-// ⚠️ PUNTO DE CONEXIÓN DE COBRO US: estos precios hoy son SOLO TEXTO en el
-// funnel EN (landing /en y el chat de la prueba). El checkout US va con la
-// cuenta PERSONAL de Stripe de Valentino (decisión 2026-10-20: NO bajo la
-// LLC), que todavía no está dada de alta — su único paso pendiente es la
-// verificación de identidad en Stripe. Cuando exista, el checkout se
-// construye acá (price ids de Stripe por plan) y getPlan(id, 'US') ya
-// devuelve el plan correcto. NO inventar checkout mientras tanto.
+// ✅ COBRO US CONECTADO (v285, 2026-10-21): el checkout vive en
+// stripe-billing.js (Checkout Sessions + suscripciones, cuenta PERSONAL de
+// Stripe de Valentino — decisión 2026-10-20: NO bajo la LLC). Los price ids
+// NO se hardcodean: el bootstrap crea/reusa los precios de Stripe por
+// lookup_key estable `posty_us_<plan>_monthly` desde ESTOS montos. El módulo
+// es fail-closed: sin STRIPE_SECRET_KEY en el entorno, nada cambia.
 const PLANS_US = {
   esencial: {
     id: 'esencial',

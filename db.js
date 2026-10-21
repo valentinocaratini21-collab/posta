@@ -447,6 +447,15 @@ try { db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at INTEGER`); } catch (e)
 try { db.exec(`ALTER TABLE users ADD COLUMN trial_extended_until INTEGER`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_base_amount INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_mult REAL DEFAULT 1`); } catch (e) { /* ya existe */ }
+// (v285) Stripe — espejo de las columnas MP para el cobro US (USD): customer y
+// suscripción del usuario + registro de eventos del webhook (idempotencia).
+try { db.exec(`ALTER TABLE users ADD COLUMN stripe_customer_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN stripe_subscription_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+db.exec(`CREATE TABLE IF NOT EXISTS stripe_events (
+  id TEXT PRIMARY KEY,
+  type TEXT DEFAULT '',
+  received_at INTEGER DEFAULT 0
+)`);
 
 // Registro permanente de cuentas de Instagram usadas (anti trial duplicado):
 // un IG = una sola prueba gratis, aunque lo desconecten o borren la cuenta

@@ -191,6 +191,7 @@ function saveGoldenExample(uid, postId, caption, visualBrief) {
 // autopilot.maybeGraduate(db, uid) sube a trust_level=1 (y espeja
 // training_wheels=0); autopilot.maybeGraduateLevel2(db, uid) sube a 2.
 const mp = require('./mercadopago');
+const stripeBilling = require('./stripe-billing'); // (v285) cobro US en USD — fail-closed sin STRIPE_SECRET_KEY
 const demo = require('./demo');
 const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
@@ -469,6 +470,47 @@ if (IS_PROD && !SESSION_SECRET) {
   process.exit(1);
 }
 if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
+
+// (v285) Webhook de Stripe: la verificación de firma exige el body CRUDO, así
+// que esta ruta se registra ANTES del parser JSON global. Fail-closed: sin
+// STRIPE_WEBHOOK_SECRET responde 503 y no procesa nada; sin STRIPE_SECRET_KEY,
+// tampoco. Los hooks espejan la activación/cancelación del flujo MercadoPago.
+function stripeHooks() {
+  return {
+    onActivated: (uid, planId) => {
+      reactivatePausedPosts(uid);
+      track(uid, 'subscribed', planId);
+      evTrack(uid, 'payment_ok', { plan: planId, provider: 'stripe' });
+      console.log(`[stripe] ✅ Plan ${planId} activado para el usuario ${uid}`);
+    },
+    onCancelled: (uid) => { console.log(`[stripe] Plan cancelado para el usuario ${uid}`); },
+    onPaymentOk: (uid, planId) => { evTrack(uid, 'payment_ok', { plan: planId || '', provider: 'stripe' }); },
+    // Gracia espejo MP: el fallo de cobro se registra pero NO cancela el plan;
+    // Stripe reintenta y solo subscription.deleted da de baja.
+    onPaymentFailed: (uid, planId) => { evTrack(uid, 'payment_failed', { plan: planId || '', provider: 'stripe' }); },
+  };
+}
+app.post('/api/billing/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res) => {
+  if (!stripeBilling.webhookConfigured() || !stripeBilling.stripeConfigured()) {
+    return res.status(503).json({ ok: false, error: 'stripe_no_configurado' });
+  }
+  const client = stripeBilling.stripeClient();
+  let event;
+  try {
+    event = stripeBilling.constructEvent(client, req.body, req.get('stripe-signature'));
+  } catch (e) {
+    console.error('[stripe] webhook: firma inválida:', e.message);
+    return res.status(400).json({ ok: false, error: 'firma_invalida' });
+  }
+  try {
+    await stripeBilling.processEvent(db, client, event, stripeHooks());
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    // 500 para que Stripe REINTENTE (misma lección que el webhook de MP).
+    console.error('[stripe] webhook falló:', e.message);
+    res.status(500).json({ ok: false, error: 'retry' });
+  }
+});
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -2594,7 +2636,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, trial_ends_at, trial_extended_until, email_verified, lang FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const nowMs = Date.now();
@@ -2616,6 +2658,7 @@ app.get('/api/auth/me', (req, res) => {
       is_trial: user.plan_status !== 'active',
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
+      billing_provider: user.stripe_subscription_id ? 'stripe' : (user.mp_preapproval_id ? 'mp' : null), // (v285) qué riel cobra esta cuenta
       lang: user.lang === 'en' ? 'en' : 'es', // (v274) idioma de la cuenta (del funnel de la prueba)
     },
   });
@@ -9567,16 +9610,17 @@ async function maybeReferralNudge(referrerId, baseUrl) {
 
 // ---------- Facturación (Mercado Pago) ----------
 app.get('/api/billing/plans', (req, res) => {
-  const country = req.query.country === 'UY' ? 'UY' : 'AR';
+  const country = req.query.country === 'UY' ? 'UY' : (req.query.country === 'US' ? 'US' : 'AR');
   const plans = getPlans(country);
   const anchor = PLAN_ANCHOR[country];
   res.json({
     country,
-    currency: country === 'UY' ? 'UYU' : 'ARS',
+    currency: country === 'UY' ? 'UYU' : (country === 'US' ? 'USD' : 'ARS'),
     plans: Object.values(plans).map((p) => ({ ...p, price_label: formatPrice(p) })),
     anchor,
     trial_plan: TRIAL_PLAN,
     mp_configured: mp.mpConfigured(),
+    stripe_configured: stripeBilling.stripeConfigured(),
   });
 });
 
@@ -9736,6 +9780,66 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
   // Referidos: si este usuario vino por referido, revalidar el descuento del referidor
   try { if (user && user.referred_by) revalidateReferralDiscount(user.referred_by).catch(() => {}); } catch (e) { console.error('[referral-discount] hook cancel:', e.message); }
   res.json({ ok: true });
+});
+
+// ---------- Facturación US (Stripe) — espejo de MP para cuentas lang='en' ----------
+// Fail-closed y silencioso: sin STRIPE_SECRET_KEY los endpoints responden un
+// error limpio y nada más cambia (el sitio y la app quedan como siempre).
+app.post('/api/billing/stripe/checkout', requireAuth, async (req, res) => {
+  const { plan: planId } = req.body || {};
+  const plan = getPlans('US')[planId];
+  if (!plan) return res.status(400).json({ error: 'Invalid plan' });
+  if (!stripeBilling.stripeConfigured()) {
+    return res.status(400).json({ error: 'Payments are not configured yet.' });
+  }
+  try {
+    const user = db.prepare('SELECT id, email, plan_status, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, created_at, lang FROM users WHERE id = ?').get(req.session.userId);
+    if (!user || user.lang !== 'en') {
+      return res.status(400).json({ error: 'Stripe checkout is only available for US accounts.' });
+    }
+    if (user.plan_status === 'active' && user.stripe_subscription_id) {
+      return res.status(400).json({ error: 'You already have an active subscription. To change plans, manage your current one first from My plan.' });
+    }
+    const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
+    // El cobro arranca cuando termina SU prueba de la app (trial_end de Stripe),
+    // nunca antes. Stripe exige trial_end ≥48 h en el futuro en Checkout: si a
+    // la prueba le queda menos que eso, la suscripción cobra al confirmar.
+    let trialEndSec = null;
+    if (user.plan_status === 'trial') {
+      const endMs = trialEffectiveEnd(user);
+      if (endMs - Date.now() > (48 * 3600 + 300) * 1000) trialEndSec = Math.floor(endMs / 1000);
+    }
+    const out = await stripeBilling.createCheckout(db, null, { user, plan, baseUrl, trialEndSec });
+    track(user.id, 'checkout_start', plan.id);
+    res.json({ url: out.url });
+  } catch (e) {
+    console.error('[stripe] Error creando checkout:', e.message);
+    res.status(500).json({ error: 'Could not start the payment: ' + e.message });
+  }
+});
+
+// Billing Portal de Stripe: el usuario US gestiona/cancela su suscripción ahí
+// (espejo de la cancelación MP). Requiere el portal configurado en el dashboard
+// de Stripe; si no lo está, Stripe devuelve error y lo mostramos tal cual.
+app.post('/api/billing/stripe/portal', requireAuth, async (req, res) => {
+  if (!stripeBilling.stripeConfigured()) {
+    return res.status(400).json({ error: 'Payments are not configured yet.' });
+  }
+  try {
+    const user = db.prepare('SELECT id, stripe_customer_id FROM users WHERE id = ?').get(req.session.userId);
+    if (!user || !user.stripe_customer_id) {
+      return res.status(400).json({ error: 'No Stripe subscription found for your account.' });
+    }
+    const host = req.get('host') || ''; const baseUrl = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`;
+    const out = await stripeBilling.createPortalSession(null, {
+      customerId: user.stripe_customer_id,
+      returnUrl: `${baseUrl}/#/app/ajustes`,
+    });
+    res.json({ url: out.url });
+  } catch (e) {
+    console.error('[stripe] Error creando portal:', e.message);
+    res.status(500).json({ error: 'Could not open subscription management: ' + e.message });
+  }
 });
 
 // ---------- Referidos ----------
@@ -15578,7 +15682,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v284';
+const BUILD_ID = '20261020-v285';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

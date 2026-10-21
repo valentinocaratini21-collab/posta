@@ -31,9 +31,11 @@ function ajustesView() {
     : q.get('google') === 'error' ? `<div class="err">❌ ${esc(q.get('msg') || 'Error al conectar Google')}</div>` : '';
   const tnMsg = q.get('tn') === 'ok' ? `<div class="okmsg">✅ ¡Tiendanube conectada! Posty ya lee tu catálogo, tu stock y tus ventas 🛍️</div>`
     : q.get('tn') === 'error' ? `<div class="err">❌ No pudimos conectar tu Tiendanube. Probá de nuevo desde Conexiones.</div>` : '';
-  const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago con MercadoPago…</div>`
+  const planMsg = IS_NATIVE ? '' : q.get('plan') === 'ok' ? `<div class="okmsg" id="planConfirmMsg">⏳ Confirmando tu pago…</div>`
     : q.get('plan') === 'pending' ? `<div class="okmsg">⏳ Tu pago está en proceso. Te avisamos cuando se acredite.</div>`
-    : q.get('plan') === 'error' ? `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>` : '';
+    : q.get('plan') === 'error' ? ((typeof ME !== 'undefined' && ME && ME.lang === 'en')
+      ? `<div class="err">❌ The payment was not completed. Tap <b>Subscribe</b> to try again.</div>`
+      : `<div class="err">❌ El pago no se completó. Si fue por el email, tocá <b>Suscribirse</b> de nuevo y fijate que sea el mismo de tu cuenta de MercadoPago.</div>`) : '';
   const tokenWarn = s.ig_token_warning ? `<div class="err" style="margin-bottom:18px">⚠️ <b>Tu conexión con Instagram necesita atención:</b> no pudimos renovar tu token automáticamente. Reconectá tu cuenta abajo.</div>` : '';
   const bc = brandColors();
   // Resúmenes de estado en el título de cada sección (v257): texto chico a la
@@ -1352,7 +1354,7 @@ function bindSettings() {
     const loadPlans = async () => {
       let lastErr = null;
       for (let i = 0; i < 2; i++) {
-        try { return await api.get('/api/billing/plans'); }
+        try { return await api.get('/api/billing/plans' + ((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '?country=US' : '')); }
         catch (e) { lastErr = e; console.error('[planes] intento ' + (i + 1) + ':', e.message); }
       }
       throw lastErr;
@@ -1389,13 +1391,14 @@ function bindSettings() {
         </div>`;
         return;
       }
-      const { plans, mp_configured } = await loadPlans();
+      const { plans, mp_configured, stripe_configured } = await loadPlans();
+      const isUS = !!(ME && ME.lang === 'en');
       const cur = (ME && ME.plan) || 'esencial';
       const hasActive = ME && !ME.is_trial && ME.plan_status === 'active';
       const pcm = document.getElementById('planConfirmMsg');
       if (pcm) pcm.innerHTML = hasActive
-        ? '✅ ¡Pago recibido! Tu plan ya está activo.'
-        : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.';
+        ? (isUS ? '✅ Payment received! Your plan is now active.' : '✅ ¡Pago recibido! Tu plan ya está activo.')
+        : (isUS ? '⏳ Your payment is being confirmed with Stripe. In a few seconds your plan will activate on its own — nothing else to do.' : '⏳ Tu pago está confirmándose con MercadoPago. En unos segundos tu plan se activa solo — no hace falta que hagas nada.');
       const statusTag = !hasActive ? `<span style="font-size:11.5px;color:var(--dim)">(${ME && ME.plan_status === 'cancelled' ? 'cancelado' : (ME && ME.trial_expired) ? 'prueba terminada' : 'trial'})</span>` : '';
       const trialLeft = (ME && ME.trial_days_left) || 0;
       // refInfo se obtiene una sola vez acá: lo usan bindSub (clic Suscribirse) y los banners
@@ -1437,8 +1440,24 @@ function bindSettings() {
           </div>`;
       };
       const bindSub = () => {
-        $$('#planList [data-sub]').forEach(b => b.onclick = () => {
+        $$('#planList [data-sub]').forEach(b => b.onclick = async () => {
           track('plan_select', { plan: b.dataset.sub });
+          // (v285) Cuentas US (lang=en): el cobro va por Stripe Checkout —
+          // sin paso de email de MP; Stripe pide los datos en su página.
+          if (isUS) {
+            if (!stripe_configured) { $('#planMsg').innerHTML = `<div class="err">Payments are not configured yet.</div>`; return; }
+            b.disabled = true;
+            $('#planMsg').innerHTML = `<div style="font-size:12.5px;color:var(--mut)">⏳ Taking you to secure checkout…</div>`;
+            try {
+              const { url } = await api.post('/api/billing/stripe/checkout', { plan: b.dataset.sub });
+              track('checkout_start', { plan: b.dataset.sub, kind: 'plan' }); trackBeacon();
+              location.href = url;
+            } catch (e) {
+              b.disabled = false;
+              $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+            }
+            return;
+          }
           if (!mp_configured) { $('#planMsg').innerHTML = `<div class="err">Pagos no configurados todavía.</div>`; return; }
           // Paso 1: pedir el email de la cuenta de MercadoPago (debe coincidir con la que paga)
           const preset = esc((ME && (ME.mp_payer_email || ME.email)) || '');
@@ -1524,11 +1543,26 @@ function bindSettings() {
             <div class="pc-name">${esc(curPlan.name)}</div>
             <div class="pc-det">${esc(curPlan.price_label)}/mes · ${pmMixTxt(curPlan)}/semana · se renueva solo cada mes</div>
           </div>
-          <button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>
+          ${(ME && ME.billing_provider === 'stripe')
+            ? '<button class="btn btn-ghost btn-sm" id="btnStripePortal">Manage subscription</button>'
+            : '<button class="btn btn-ghost btn-sm" id="btnCancelSub" style="color:#c0392b">Cancelar suscripción</button>'}
         </div>
         <div id="planMsg" style="margin-top:10px"></div>
-        <p style="font-size:11.5px;color:var(--dim)">Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.</p>`;
-        $('#btnCancelSub').onclick = async () => {
+        <p style="font-size:11.5px;color:var(--dim)">${(ME && ME.billing_provider === 'stripe') ? 'Manage or cancel your subscription in the secure Stripe portal.' : 'Para cambiar de plan, primero cancelá tu suscripción actual y después elegí el nuevo.'}</p>`;
+        // (v285) Usuario Stripe: gestionar/cancelar vive en el Billing Portal.
+        const btnPortal = $('#btnStripePortal');
+        if (btnPortal) btnPortal.onclick = async () => {
+          btnPortal.disabled = true; btnPortal.textContent = 'Opening…';
+          try {
+            const { url } = await api.post('/api/billing/stripe/portal', {});
+            location.href = url;
+          } catch (e) {
+            $('#planMsg').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+            btnPortal.disabled = false; btnPortal.textContent = 'Manage subscription';
+          }
+        };
+        const btnCancel = $('#btnCancelSub');
+        if (btnCancel) btnCancel.onclick = async () => {
           if (!confirm('¿Cancelar tu suscripción? Mantenés tu plan hasta el fin del período ya pago.')) return;
           const reasonRaw = prompt('¿Nos contás por qué te vas? (opcional)\n\n1 · Precio\n2 · No me sirvió el contenido\n3 · Prefiero hacerlo yo\n4 · Otro motivo', '');
           const reasonMap = { 1: 'Precio', 2: 'No me sirvió el contenido', 3: 'Prefiero hacerlo yo', 4: 'Otro motivo' };
