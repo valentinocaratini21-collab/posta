@@ -5,9 +5,9 @@
 // story-reel.js generateWeekExtras, idempotente por déficit, en cada semana).
 //
 // TECHO DE IA (vara de Valentino, 2026-10-02): el costo variable de IA por usuario/mes
-// no puede superar el 5% del precio del plan (Esencial: $2.000 ARS/mes). Se enforcea
+// no puede superar el 5% del precio del plan (Esencial: $3.495 ARS/mes). Se enforcea
 // con `monthlyCapUsd` en costs.js (calculado desde price × 0.05) + límites diarios `ai`.
-// ⚠️ PRECIOS UY PROPUESTOS — a confirmar por el usuario antes de cobrar en Uruguay.
+// Precios UY confirmados por Valentino el 2026-10-21 (misma suba premium que AR).
 
 // Límites diarios de IA por plan. El cap mensual (5%) es el techo duro;
 // estos límites son el ritmo para que un usuario normal nunca lo note.
@@ -25,7 +25,7 @@ const PLANS_AR = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 39900,
+    price: 69900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -44,7 +44,7 @@ const PLANS_AR = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 79900,
+    price: 129900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -68,7 +68,7 @@ const PLANS_AR = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 129900,
+    price: 199900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 5,
@@ -97,12 +97,12 @@ const PLANS_AR = {
   },
 };
 
-// ⚠️ PROPUESTA UY — precios a confirmar por el usuario.
+// Precios UY confirmados por Valentino el 2026-10-21.
 const PLANS_UY = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 890,
+    price: 1490,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -121,7 +121,7 @@ const PLANS_UY = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 1790,
+    price: 2990,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -145,7 +145,7 @@ const PLANS_UY = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 2990,
+    price: 4990,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 5,
@@ -175,14 +175,15 @@ const PLANS_UY = {
 };
 
 // Texto de ancla de precio por país (se muestra sobre las tarjetas de planes).
-// ⚠️ El valor UY es propuesta — confirmar junto con los precios.
+// Valor UY confirmado el 2026-10-21 junto con los precios.
 const PLAN_ANCHOR = {
-  AR: { cm: '$300.000+/mes', desde: '$39.900' },
-  UY: { cm: '$U 50.000+/mes', desde: '$U 890' },
+  AR: { cm: '$300.000+/mes', desde: '$69.900' },
+  UY: { cm: '$U 50.000+/mes', desde: '$U 1.490' },
 };
 
 // (v274 · MODO EN) Planes US — escalera definida por Valentino el
-// 2026-10-20: USD 49 / 99 / 149, mismos roles que AR (Plan 1 = Community
+// 2026-10-20: USD 49 / 99 / 149 → repreciado el 2026-10-21 a USD 59 / 119 / 179
+// (misma lógica premium que AR/UY), mismos roles que AR (Plan 1 = Community
 // Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
 // ✅ COBRO US CONECTADO (v285, 2026-10-21): el checkout vive en
 // stripe-billing.js (Checkout Sessions + suscripciones, cuenta PERSONAL de
@@ -194,7 +195,7 @@ const PLANS_US = {
   esencial: {
     id: 'esencial',
     name: 'Essential',
-    price: 49,
+    price: 59,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -213,7 +214,7 @@ const PLANS_US = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 99,
+    price: 119,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -233,7 +234,7 @@ const PLANS_US = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 149,
+    price: 179,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 3,
