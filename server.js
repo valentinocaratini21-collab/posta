@@ -3110,6 +3110,7 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   const count = Math.min(3, Math.max(1, parseInt(n, 10) || 1));
   try {
     const input = contentInputFor(req.session.userId, topic, tipo, seed);
+    input.strict = true; // endpoint interactivo del cliente: error honesto, nunca plantilla silenciosa
     const key = openaiKeyFor(req.session.userId);
     if (count > 1) {
       const out = await generateCaptions(input, count, key);
@@ -3430,11 +3431,15 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       } catch (e) {}
       needMediaAsk = lastAsk < Date.now() - 7 * 24 * 3600 * 1000 && freshCount === 0;
     } catch (e) {}
-    const out = await chatIdea(
+    let out;
+    try { out = await chatIdea(
       // Niveles que se sienten: el nivel cambia REALMENTE el payload del chat.
-      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0) }),
+      levelBoosted(uid0, 'chat', { messages: clean, profile: getProfile(req.session.userId), taste: tasteProfile(req.session.userId) + inspoLine, photos: cleanPhotos, library: cleanLibrary, drafts: cleanDrafts, performance: perfLine, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden: goldenExamples(req.session.userId), note: chatNote, tz: userTz(uid0), sales, outcome: outcomeBrief(uid0), userId: uid0, clientName: (su && su.client_name) || '', needMediaAsk, captionExtras: captionExtrasFor(uid0), strict: true }),
       settings.openai_key || process.env.OPENAI_API_KEY || ''
-    );
+    ); } catch (e) {
+      console.error('[chat] IA caída (modo estricto):', e.message);
+      return res.json({ reply: 'Uy, se me cortó la conexión un segundo 😅 Probá de nuevo en un ratito.', idea: null });
+    }
     const uid = req.session.userId;
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'user', clean[clean.length - 1].text);
     db.prepare('INSERT INTO chat_messages (user_id, role, text) VALUES (?,?,?)').run(uid, 'assistant', String(out.reply || '').slice(0, 2000));
@@ -10480,6 +10485,7 @@ app.post('/api/recycle', requireAuth, requireTrialValid, async (req, res) => {
     if (apiKey) {
       try {
         const out = await generateContent({
+          strict: true, // republicación interactiva: error honesto, nunca plantilla silenciosa
           userId: uid, usedHookIds: recentHookIds(uid),
           business: profile.business_name, category: profile.category, tone: profile.tone,
           description: profile.description, dna: readDna(uid),
@@ -15822,7 +15828,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v296';
+const BUILD_ID = '20261021-v297';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

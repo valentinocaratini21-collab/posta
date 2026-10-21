@@ -1748,6 +1748,7 @@ async function openaiGenerate({ business, category, description, dna, tone, topi
     ? `\nIntención de venta de esta pieza: ${salesIntent}${salesAngle ? ` (ángulo: ${salesAngle})` : ''}.${salesProof ? ` Prueba/propuesta concreta a usar — dato real del negocio, no inventes otros: ${salesProof}.` : ''} El caption cierra acorde a la intención.`
     : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: AbortSignal.timeout(45000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1839,7 +1840,13 @@ async function generateContent(input, apiKey) {
       console.error('OpenAI falló, usando plantillas:', e.message);
     }
   }
-  if (!out) out = templateGenerate(input);
+  if (!out) {
+    // Modo estricto (flujos interactivos del cliente): si la IA cayó, el
+    // error SUBE y el cliente ve un aviso honesto — jamás se le entrega
+    // una plantilla silenciosa como si la hubiera escrito la IA.
+    if (input && input.strict) throw new Error('La IA no respondió (modo estricto: sin plantillas)');
+    out = templateGenerate(input);
+  }
   out._anchored = belongAnchors.length ? belongCheck(out).ok : true;
   // Hook engine: el caption SIEMPRE abre con hook (después de la puerta de calidad).
   return applyPostyHook(out, input);
@@ -1848,6 +1855,7 @@ async function generateContent(input, apiKey) {
 // ---------- Creador v2: N captions distintos + hashtags ----------
 async function openaiCaptions({ business, category, description, dna, tone, topic, feedback, goal, taste, tipo, performance, styleRules, voice, golden, captionExtras, tasteBlock }, n, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: AbortSignal.timeout(45000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1923,6 +1931,9 @@ async function generateCaptions(input, n, apiKey) {
       console.error('OpenAI captions falló, usando plantillas:', e.message);
     }
   }
+  // Modo estricto: sin IA (o con la IA caída) no hay captions de plantilla
+  // para un cliente — el error sube y la pantalla lo muestra.
+  if (input && input.strict) throw new Error('La IA no respondió (modo estricto: sin plantillas)');
   const seedBase = input.seedBase || 0;
   const captions = [];
   const overlays = [];
@@ -2153,6 +2164,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
     ? `\nEl negocio tiene web (${String(dna.website_url).slice(0, 80)}): CON CRITERIO (orientativo: como máximo 1 de cada 6-8 ideas, nunca siempre), una de las ideas puede ser un posteo que lleve tráfico a la web. Tiene que presentar algo CONCRETO de la web (un producto con su precio real, el catálogo, una promo vigente) y cerrar con CTA "link en bio" o "mirá todos los detalles en la web". Solo cuando el tema calce de verdad; prohibido el posteo vago tipo "visitá nuestra web" sin nada concreto.`
     : '';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: AbortSignal.timeout(45000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -2241,6 +2253,7 @@ async function generatePillars({ business, category, description, performance },
   if (apiKey) {
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        signal: AbortSignal.timeout(45000),
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3987,17 +4000,22 @@ async function repairEditJson(brokenRaw, apiKey, tz) {
   return edit;
 }
 
-async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey) {
+async function chatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine, strict }, apiKey) {
   let text;
   if (apiKey) {
     try {
       text = await openaiChatIdea({ messages, profile, taste, photos, library, drafts, performance, dna, needDna, dnaMissing, igAnalysis, frustrated, styleRules, voice, golden, note, tz, sales, outcome, userId, clientName, needMediaAsk, captionExtras, tasteBlock, photoPriorityLine }, apiKey);
     } catch (e) {
+      // Modo estricto (chat del cliente): una respuesta de plantilla puede
+      // cerrar bloques ```idea que disparan generación REAL de posteos —
+      // con la IA caída, el error sube y la ruta responde con aviso honesto.
+      if (strict) throw e;
       console.error('OpenAI chat falló, usando plantilla:', e.message);
       console.log('[chat] motor: plantilla (fallback por error)');
       text = templateChatIdea({ messages, profile });
     }
   } else {
+    if (strict) throw new Error('IA no configurada (modo estricto: sin plantillas)');
     console.log('[chat] motor: plantilla (sin API key)');
     text = templateChatIdea({ messages, profile });
   }
@@ -4398,6 +4416,7 @@ async function suggestReply(args, apiKey) {
 // La misión es específica (no "sacá fotos"): lo específico se hace, lo vago se pospone.
 async function openaiMission({ business, category, description }, apiKey) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: AbortSignal.timeout(45000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

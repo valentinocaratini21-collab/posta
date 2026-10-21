@@ -18,6 +18,14 @@ function getAuthUrl(embedUrl, state) {
 
 // Paso 1: canjear el code por un token de corta duración + user ID
 // Paso 2: canjearlo por un token de larga duración (60 días)
+// fetch a Meta con timeout duro: un publish colgado dejaba el posteo en
+// 'publishing' por 15 minutos y el reintento podía duplicar en Instagram.
+function igFetch(url, opts = {}) {
+  if (!opts || typeof opts !== 'object') opts = {};
+  if (!opts.signal) opts = { ...opts, signal: AbortSignal.timeout(30000) };
+  return fetch(url, opts);
+}
+
 async function exchangeCodeForTokens(appId, appSecret, redirectUri, code) {
   const form = new URLSearchParams({
     client_id: appId,
@@ -26,7 +34,7 @@ async function exchangeCodeForTokens(appId, appSecret, redirectUri, code) {
     redirect_uri: redirectUri,
     code,
   });
-  const shortRes = await fetch('https://api.instagram.com/oauth/access_token', {
+  const shortRes = await igFetch('https://api.instagram.com/oauth/access_token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: form.toString(),
@@ -41,7 +49,7 @@ async function exchangeCodeForTokens(appId, appSecret, redirectUri, code) {
     client_secret: appSecret,
     access_token: short.access_token,
   });
-  const longRes = await fetch(`https://graph.instagram.com/access_token?${longParams}`);
+  const longRes = await igFetch(`https://graph.instagram.com/access_token?${longParams}`);
   const long = await longRes.json();
   if (long.error) throw new Error(long.error.message || 'Error al obtener el token de larga duración');
   if (!long.access_token) throw new Error('Meta no devolvió el token de larga duración');
@@ -59,7 +67,7 @@ async function getIgUsername(igUserId, accessToken) {
 async function getIgProfile(igUserId, accessToken) {
   const lookup = async (uid, fields) => {
     const params = new URLSearchParams({ fields, access_token: accessToken });
-    const res = await fetch(`${IG_HOST}/${API_VERSION}/${uid}?${params}`);
+    const res = await igFetch(`${IG_HOST}/${API_VERSION}/${uid}?${params}`);
     return res.json();
   };
   let data = await lookup(igUserId, 'username,account_type');
@@ -86,7 +94,7 @@ async function refreshLongLivedToken(accessToken) {
     grant_type: 'ig_refresh_token',
     access_token: accessToken,
   });
-  const res = await fetch(`${IG_HOST}/refresh_access_token?${params}`);
+  const res = await igFetch(`${IG_HOST}/refresh_access_token?${params}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error.message || 'Error de Meta');
   if (!data.access_token) throw new Error('Meta no devolvió un token nuevo');
@@ -95,7 +103,7 @@ async function refreshLongLivedToken(accessToken) {
 
 async function publishReal({ imageUrl, caption }, { igUserId, accessToken }) {
   // Paso 1: crear el contenedor
-  const createRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+  const createRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -113,7 +121,7 @@ async function publishReal({ imageUrl, caption }, { igUserId, accessToken }) {
   let status = '';
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 3000));
-    const stRes = await fetch(
+    const stRes = await igFetch(
       `${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`
     );
     const st = await stRes.json();
@@ -125,7 +133,7 @@ async function publishReal({ imageUrl, caption }, { igUserId, accessToken }) {
   if (status !== 'FINISHED') throw new Error('Instagram tardó demasiado en procesar la imagen. Probá de nuevo.');
 
   // Paso 2: publicar el contenedor
-  const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
+  const pubRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -137,7 +145,7 @@ async function publishReal({ imageUrl, caption }, { igUserId, accessToken }) {
   if (published.error) throw new Error(published.error.message);
 
   // Paso 3: obtener el permalink
-  const mediaRes = await fetch(
+  const mediaRes = await igFetch(
     `${IG_HOST}/${API_VERSION}/${published.id}?fields=permalink&access_token=${accessToken}`
   );
   const media = await mediaRes.json();
@@ -168,7 +176,7 @@ async function publishPost(media, creds, demoMode) {
 // Publicación real en dos pasos: crear el contenedor REEL, esperar que Meta
 // termine de procesarlo, y publicarlo.
 async function publishVideoReal({ videoUrl, caption }, { igUserId, accessToken }) {
-  const createRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+  const createRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -186,7 +194,7 @@ async function publishVideoReal({ videoUrl, caption }, { igUserId, accessToken }
   let status = '';
   for (let i = 0; i < 24; i++) {
     await new Promise((r) => setTimeout(r, 5000));
-    const stRes = await fetch(
+    const stRes = await igFetch(
       `${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`
     );
     const st = await stRes.json();
@@ -196,7 +204,7 @@ async function publishVideoReal({ videoUrl, caption }, { igUserId, accessToken }
   }
   if (status !== 'FINISHED') throw new Error('El video tardó demasiado en procesarse en Meta');
 
-  const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
+  const pubRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ creation_id: created.id, access_token: accessToken }),
@@ -204,7 +212,7 @@ async function publishVideoReal({ videoUrl, caption }, { igUserId, accessToken }
   const published = await pubRes.json();
   if (published.error) throw new Error(published.error.message);
 
-  const mediaRes = await fetch(
+  const mediaRes = await igFetch(
     `${IG_HOST}/${API_VERSION}/${published.id}?fields=permalink&access_token=${accessToken}`
   );
   const media = await mediaRes.json();
@@ -231,7 +239,7 @@ async function publishVideo(media, creds, demoMode) {
 // ---------- Historias ----------
 // Publicación real: crear el contenedor STORIES, esperar y publicar.
 async function publishStoryReal({ imageUrl }, { igUserId, accessToken }) {
-  const createRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+  const createRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -247,7 +255,7 @@ async function publishStoryReal({ imageUrl }, { igUserId, accessToken }) {
   let status = '';
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 3000));
-    const stRes = await fetch(
+    const stRes = await igFetch(
       `${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`
     );
     const st = await stRes.json();
@@ -258,7 +266,7 @@ async function publishStoryReal({ imageUrl }, { igUserId, accessToken }) {
   }
   if (status !== 'FINISHED') throw new Error('Instagram tardó demasiado en procesar la historia. Probá de nuevo.');
 
-  const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
+  const pubRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -297,7 +305,7 @@ async function publishCarouselReal({ imageUrls, caption }, { igUserId, accessTok
   urls = urls.slice(0, 10);
   const children = [];
   for (const url of urls) {
-    const r = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+    const r = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_url: url, is_carousel_item: true, access_token: accessToken }),
@@ -307,7 +315,7 @@ async function publishCarouselReal({ imageUrls, caption }, { igUserId, accessTok
     if (!j.id) throw new Error('Meta no devolvió el contenedor de la imagen');
     children.push(j.id);
   }
-  const cRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
+  const cRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ media_type: 'CAROUSEL', children, caption, access_token: accessToken }),
@@ -318,21 +326,21 @@ async function publishCarouselReal({ imageUrls, caption }, { igUserId, accessTok
   let status = '';
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 3000));
-    const stRes = await fetch(`${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`);
+    const stRes = await igFetch(`${IG_HOST}/${API_VERSION}/${created.id}?fields=status_code&access_token=${accessToken}`);
     const st = await stRes.json();
     status = st.status_code || '';
     if (status === 'FINISHED') break;
     if (status === 'ERROR') throw new Error('Instagram no pudo procesar el carrusel.');
   }
   if (status !== 'FINISHED') throw new Error('Instagram tardó demasiado en procesar el carrusel. Probá de nuevo.');
-  const pubRes = await fetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
+  const pubRes = await igFetch(`${IG_HOST}/${API_VERSION}/${igUserId}/media_publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ creation_id: created.id, access_token: accessToken }),
   });
   const published = await pubRes.json();
   if (published.error) throw new Error(published.error.message);
-  const mediaRes = await fetch(`${IG_HOST}/${API_VERSION}/${published.id}?fields=permalink&access_token=${accessToken}`);
+  const mediaRes = await igFetch(`${IG_HOST}/${API_VERSION}/${published.id}?fields=permalink&access_token=${accessToken}`);
   const media = await mediaRes.json();
   return { success: true, permalink: media.permalink || '', mediaId: published.id };
 }
@@ -361,7 +369,7 @@ async function analyzeInstagram(igUserId, accessToken) {
   try {
     if (!igUserId || !accessToken) return { summary: '' };
     const url = `${IG_HOST}/${API_VERSION}/${igUserId}/media?fields=caption,like_count,comments_count,media_type,timestamp&limit=20&access_token=${accessToken}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const res = await igFetch(url, { signal: AbortSignal.timeout(20000) });
     if (!res.ok) return { summary: '' };
     const data = await res.json();
     const items = Array.isArray(data.data) ? data.data : [];
@@ -401,7 +409,7 @@ async function getPostInsights(mediaId, accessToken) {
   try {
     if (!mediaId || !accessToken) return out;
     const url = `${IG_HOST}/${API_VERSION}/${mediaId}/insights?metric=reach,impressions,saved,shares,profile_visits&access_token=${accessToken}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const res = await igFetch(url, { signal: AbortSignal.timeout(15000) });
     if (!res.ok) return out;
     const data = await res.json();
     const rows = Array.isArray(data.data) ? data.data : [];
@@ -426,7 +434,7 @@ async function analyzeInstagramDeep(igUserId, accessToken) {
     const apiKey = process.env.OPENAI_API_KEY || '';
     if (!apiKey) return { learnings: null };
     const url = `${IG_HOST}/${API_VERSION}/${igUserId}/media?fields=caption,like_count,comments_count,media_type,timestamp&limit=25&access_token=${accessToken}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    const res = await igFetch(url, { signal: AbortSignal.timeout(20000) });
     if (!res.ok) return { learnings: null };
     const data = await res.json();
     const items = Array.isArray(data.data) ? data.data : [];
@@ -458,7 +466,7 @@ async function analyzeInstagramDeep(igUserId, accessToken) {
       if (p.insights.shares != null) extras += `, compartidos ${p.insights.shares}`;
       return `${i + 1}. ${p.tipo} (${p.fecha}): "${first}" — ${p.likes} likes, ${p.comments} comentarios${extras}`;
     }).join('\n');
-    const gptRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    const gptRes = await igFetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
