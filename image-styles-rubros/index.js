@@ -6,6 +6,7 @@ module.exports = [
   ...require('./bar'),
   ...require('./barberia'),
   ...require('./belleza'),
+  ...require('./boliche'),
   ...require('./cafeteria'),
   ...require('./deco'),
   ...require('./educacion'),

@@ -5316,7 +5316,7 @@ function radarLineFor(uid) {
     let lang = 'es';
     try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (u && u.lang === 'en') lang = 'en'; } catch (e) {}
     const digest = clientDigest.getDigest(db, uid);
-    return postyQuestions.radarWeekLine(digest && digest.radar, wk, lang) || '';
+    return postyQuestions.radarWeekLine(digest && digest.radar, wk, lang, postyQuestions.rubroKeyOf(digest)) || '';
   } catch (e) { return ''; }
 }
 function ideasInputFor(uid) {
@@ -16383,7 +16383,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v315';
+const BUILD_ID = '20261021-v316';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -16538,6 +16538,84 @@ app.get('/p/:slug', (req, res) => {
     }));
   }
 });
+
+// ---------- MODO FLYER · BOLICHES (v315, 2026-10-21) ----------
+// El tipo de pieza del vertical de vida nocturna: el dueño carga los
+// datos reales de su fiesta y Posty le devuelve el paquete (flyer de
+// feed + historia + cuenta regresiva) como borradores en la Agenda.
+// El arte sale del motor de imágenes del producto (gpt-image vía
+// genConceptImage, 4:5) y el texto lo compone flyer-compose.py — la IA
+// jamás escribe la fecha ni el lineup. Fail-closed: sin clave no hay
+// paquete ni éxito falso.
+try {
+  const flyer = require('./flyer');
+  flyer.registerFlyer(app, db, {
+    requireAuth,
+    mediaDir: MEDIA_DIR,
+    genArt: async (uid, prompt) => {
+      const key = (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '';
+      if (!key) return null;
+      return genConceptImage(key, prompt, [], null, uid, 'flyer');
+    },
+    weekKeyFor: (uid) => mondayKeyOf(tzToday(userTz(uid))),
+    langFor: (uid) => { try { const r = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); return (r && r.lang) || 'es'; } catch (e) { return 'es'; } },
+    tzFor: (uid) => userTz(uid),
+    digestFor: (uid) => { try { return require('./client-digest').getDigest(db, uid); } catch (e) { return null; } },
+    profileFor: (uid) => { try { return getProfile(uid); } catch (e) { return null; } },
+  });
+} catch (e) { console.error('[flyer] no se pudo montar:', e && e.message); }
+
+// SPA fallback con 404 real: las rutas de la app viven en el hash
+// (#/app/...) y nunca llegan al servidor — un path desconocido acá NO es
+// una ruta válida. Antes se servía la home con 200 para todo: /api/*
+// inexistentes, assets rotos y páginas fantasma devolvían la landing.
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
+  res.status(404);
+  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async
+// sin try/catch = unhandled rejection = el proceso MUERE para todos los usuarios.
+// Esto lo convierte en log en vez de crash. (Igual hay que poner try/catch en
+// los handlers, esto es la red de seguridad.)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL-SAFE] unhandledRejection capturada (el servidor sigue vivo):', reason && reason.message ? reason.message : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL-SAFE] uncaughtException:', err && err.message ? err.message : err);
+  // En uncaughtException sí conviene reiniciar, pero loggeamos antes.
+});
+
+// ---------- CAPA DE VISIBILIDAD (2026-10-21): que cada cliente atraiga más ----------
+// Superficies de referidos con cap de frecuencia, sello de bio opt-in y el
+// disparador FOMO de competidores (mecanismos 1·3·4·5). El módulo es
+// autosuficiente: si algo falla al montar, la app sigue sin la capa.
+try {
+  const visibility = require('./visibility');
+  visibility.initSchema(db);
+  visibility.registerVisibility(app, db, { requireAuth, requireAdminToken });
+  visibility.startVisibilityJobs(db);
+} catch (e) { console.error('[visibility] no se pudo montar:', e && e.message); }
+
+// ---------- REEL HABLADO (2026-10-21) ----------
+// El cliente sube un video hablando de su producto; Posty lo transcribe
+// (Whisper con timestamps por palabra), detecta las menciones contra su
+// fundamento y lo devuelve editado como BORRADOR en la Agenda. El módulo
+// es autosuficiente y fail-closed (sin clave OpenAI, el job falla con el
+// motivo a la vista; nada se publica solo).
+try {
+  const talkingReel = require('./talking-reel');
+  talkingReel.registerTalkingReel(app, db, {
+    requireAuth,
+    mediaDir: MEDIA_DIR,
+    apiKeyFor: (uid) => (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '',
+    weekKeyFor: (uid) => mondayKeyOf(tzToday(userTz(uid))),
+    langFor: (uid) => { try { const r = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); return (r && r.lang) || 'es'; } catch (e) { return 'es'; } },
+    logCost: (x) => { try { costs.logApiCost(x); } catch (e) {} },
+  });
+} catch (e) { console.error('[talking-reel] no se pudo montar:', e && e.message); }
 
 // SPA fallback con 404 real: las rutas de la app viven en el hash
 // (#/app/...) y nunca llegan al servidor — un path desconocido acá NO es

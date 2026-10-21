@@ -46,7 +46,7 @@ const CATEGORIES = [
   'moda', 'gastronomia', 'belleza', 'fitness', 'mascotas', 'salud', 'hogar',
   'inmobiliaria', 'autos', 'educacion', 'turismo', 'eventos', 'tecnologia',
   'deco', 'joyeria', 'fotografia', 'profesionales', 'flores', 'bar',
-  'cafeteria', 'barberia', 'servicios', 'viajes', 'arte', 'otro',
+  'cafeteria', 'barberia', 'servicios', 'viajes', 'arte', 'boliche', 'otro',
 ];
 const CATEGORY_LABELS = {
   moda: 'Moda / Tienda de ropa',
@@ -73,6 +73,7 @@ const CATEGORY_LABELS = {
   servicios: 'Servicios',
   flores: 'Florería / Vivero',
   bar: 'Bar / Cervecería',
+  boliche: 'Boliche / Vida nocturna',
   otro: 'Otro',
 };
 const COUNTRIES = ['AR', 'UY', 'US']; // (v274) 'US' entra con el modo EN del motor
@@ -117,6 +118,7 @@ const CATEGORY_PHOTOS = {
   tecnologia: [...TECH, ...OFFICE.slice(0, 2)],
   turismo: [...LIFE, ...BAR.slice(0, 2), ...FOOD.slice(0, 2)],
   eventos: [...BAR, ...LIFE.slice(0, 5), ...FOOD.slice(0, 2)],
+  boliche: [...BAR, ...LIFE.slice(0, 4), ...FOOD.slice(0, 2)],
   fotografia: [...LIFE.slice(0, 5), ...FASHION.slice(0, 4), ...OFFICE.slice(0, 2)],
   autos: [...OFFICE.slice(0, 4), ...LIFE.slice(0, 5), 'lifestyle-6', ...HOME.slice(0, 2)],
   cafeteria: [...FOOD.slice(0, 5), ...LIFE.slice(0, 4), ...BAR.slice(0, 2)],

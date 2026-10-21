@@ -60,7 +60,7 @@ const RUBROS = [
   'moda', 'gastronomia', 'belleza', 'fitness', 'mascotas', 'salud', 'hogar',
   'inmobiliaria', 'autos', 'educacion', 'turismo', 'eventos', 'tecnologia',
   'deco', 'joyeria', 'fotografia', 'profesionales', 'flores', 'bar',
-  'cafeteria', 'barberia', 'servicios', 'viajes', 'arte', 'otro',
+  'cafeteria', 'barberia', 'servicios', 'viajes', 'arte', 'boliche', 'otro',
 ];
 const SUBRUBROS = {
   belleza: ['peluqueria', 'makeup', 'unas', 'estetica'],
@@ -74,7 +74,7 @@ const SUBRUBROS = {
 };
 const RUBRO_LABELS = {
   moda: 'Moda / Tienda de ropa', gastronomia: 'Gastronomía / Restaurante',
-  cafeteria: 'Cafetería', bar: 'Bar / Cervecería', belleza: 'Belleza / Estética',
+  cafeteria: 'Cafetería', bar: 'Bar / Cervecería', boliche: 'Boliche / Vida nocturna', belleza: 'Belleza / Estética',
   barberia: 'Barbería', fitness: 'Fitness / Gimnasio', mascotas: 'Mascotas / Veterinaria',
   salud: 'Salud / Odontología', hogar: 'Servicios para el hogar', deco: 'Muebles / Decoración',
   inmobiliaria: 'Inmobiliaria', autos: 'Autos / Taller', educacion: 'Educación / Cursos',
@@ -97,7 +97,7 @@ const SUBRUBRO_LABELS = {
 // rubro de /en/prueba y cualquier superficie que liste opciones).
 const RUBRO_LABELS_EN = {
   moda: 'Fashion / Clothing store', gastronomia: 'Food / Restaurant',
-  cafeteria: 'Coffee shop', bar: 'Bar / Brewery', belleza: 'Beauty / Salon',
+  cafeteria: 'Coffee shop', bar: 'Bar / Brewery', boliche: 'Nightclub / Nightlife', belleza: 'Beauty / Salon',
   barberia: 'Barbershop', fitness: 'Fitness / Gym', mascotas: 'Pets / Vet',
   salud: 'Health / Dental', hogar: 'Home services', deco: 'Furniture / Decor',
   inmobiliaria: 'Real estate', autos: 'Auto / Repair shop', educacion: 'Education / Courses',
@@ -138,7 +138,7 @@ const JSONLD_MAP = {
   bakery: ['cafeteria', 'panaderia'], cafeorcoffeeshop: ['cafeteria', 'cafe'],
   restaurant: ['gastronomia', ''], fastfoodrestaurant: ['gastronomia', ''],
   foodestablishment: ['gastronomia', ''], barorpub: ['bar', ''], brewery: ['bar', ''],
-  winestore: ['bar', ''], liquorstore: ['bar', ''],
+  winestore: ['bar', ''], liquorstore: ['bar', ''], nightclub: ['boliche', ''],
   florist: ['flores', 'floreria'],
   healthclub: ['fitness', 'gimnasio'], exercisegym: ['fitness', 'gimnasio'],
   sportsclub: ['fitness', 'gimnasio'], sportsactivitylocation: ['fitness', ''],
@@ -231,6 +231,12 @@ const TEXT_VOTES = [
   [/\bcommunity manager\b|\bagencia de (marketing|contenido|publicidad|redes)\b|\bmarketing digital\b|\bmanejo de redes\b|\bcreaci[oó]n de contenido\b/i, 'profesionales', '', 3, 'contenido/CM'],
   [/\babogad\w*\b|\bcontad\w*\b|\bescriban\w*\b|\bestudio jur[ií]dico\b|\bestudio contable\b|\bconsultora\b|\barquitecto\b|\bingeniero\b/i, 'profesionales', '', 2, 'profesionales'],
   [/\bbar\b|\bpub\b|\bcervecer[ií]a\b|\bcocteler[ií]a\b|\bcocktails?\b|\btragos\b|\bvinoteca\b|\bbirra\b|\bvinos?\b/i, 'bar', '', 2, 'bar'],
+  // --- boliche / vida nocturna: el local que ABRE de noche y vende la
+  // fiesta misma (flyers, DJs, anticipadas). Distinto de bar (tomar algo)
+  // y de eventos (salones/planners que venden el espacio para TERCEROS).
+  [/\bboliche\b|\bdiscoteca\b|\bnight\s?club\b|\bclub nocturno\b|\bantro\b/i, 'boliche', '', 3, 'boliche'],
+  [/\bpista de baile\b|\bdj residente\b|\bcabina de dj\b|\bboliche bailable\b/i, 'boliche', '', 2, 'pista/dj residente'],
+  [/\bentradas anticipadas\b|\banticipadas\b/i, 'boliche', '', 1, 'anticipadas'],
   [/\bhotel\b|\bhostel\b|\bposada\b|\bcaba[ñn]as\b|\bapart hotel\b|\bturismo\b|\bexcursiones\b/i, 'turismo', '', 2, 'turismo/hotel'],
   [/\bagencia de viajes\b|\bviajes\b|\bpasajes\b|\baerol[ií]nea\b/i, 'viajes', '', 2, 'viajes'],
   [/\beventos\b|\bcasamientos?\b|\bbodas?\b|\bquince\w*\b|\bsal[oó]n de (fiestas|eventos)\b|\bcatering\b|\bdj\b|\bnovias?\b/i, 'eventos', '', 1, 'eventos'],
@@ -259,6 +265,7 @@ const HANDLE_TERMS = [
   ['muebles', 'hogar', '', 2], ['joyeria', 'joyeria', '', 3], ['joyas', 'joyeria', '', 3],
   ['foto', 'fotografia', '', 2], ['tattoo', 'arte', '', 3], ['tatuaje', 'arte', '', 3],
   ['hotel', 'turismo', '', 2], ['viajes', 'viajes', '', 2], ['dental', 'salud', '', 3],
+  ['boliche', 'boliche', '', 3], ['nightclub', 'boliche', '', 3], ['bailable', 'boliche', '', 3], ['disco', 'boliche', '', 2],
   ['odonto', 'salud', '', 3], ['deco', 'deco', '', 2], ['spa', 'belleza', 'estetica', 2],
   ['estetica', 'belleza', 'estetica', 2], ['heladeria', 'gastronomia', '', 2],
   ['moda', 'moda', '', 2], ['indumentaria', 'moda', '', 2], ['eventos', 'eventos', '', 2],
@@ -299,6 +306,7 @@ const IGCAT_VOTES = [
   [/lawyer|accounting|consulting|business service/i, 'profesionales', '', 'professional'],
   [/school|education/i, 'educacion', '', 'education'],
   [/bar|pub|brewery/i, 'bar', '', 'bar'],
+  [/night\s?club|dance club/i, 'boliche', '', 'nightclub'],
   [/interior design/i, 'deco', '', 'interior design'],
   [/furniture|home goods/i, 'hogar', '', 'home'],
 ];

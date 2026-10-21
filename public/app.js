@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v315'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v316'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -867,7 +867,7 @@ function lpInitHero() {
   }
 }
 
-/* ---------- v176: carrusel de perfiles soñados (28 rubros desde v303) ---------- */
+/* ---------- v176: carrusel de perfiles soñados (29 rubros desde v316: + boliche) ---------- */
 const LP_PROFILES = [
   { rubro: 'Cafetería', user: 'cafe.aurora', name: 'Café Aurora ☕', cat: 'Cafetería · Palermo', stats: ['128', '4.812', '96'],
     bio: ['☕ Café de especialidad y brunch', '🥐 Medialunas recién horneadas, todos los días', '📍 Gorriti 4380 · 8 a 20 h'], link: 'cafe-aurora',
@@ -884,6 +884,9 @@ const LP_PROFILES = [
   { rubro: 'Inmobiliaria', user: 'roca.propiedades', name: 'Roca Propiedades 🏠', cat: 'Inmobiliaria · Belgrano', stats: ['164', '3.905', '88'],
     bio: ['🏠 Ventas y alquileres en zona norte', '🔑 Tasaciones sin cargo', '📍 Cabildo 2040 · 10 a 19 h'], link: 'roca',
     slug: 'roca', hls: ['Propiedades', 'Tasaciones', 'El equipo', 'Clientes'] },
+  { rubro: 'Boliche', user: 'nocta.club', name: 'NOCTA Club 🪩', cat: 'Boliche · Palermo', stats: ['214', '18.400', '312'],
+    bio: ['🪩 Dos pistas: cachengue y electrónica', '🎟️ Anticipadas en el link', '📍 Gorriti 5120 · vie y sáb desde las 00'], link: 'nocta',
+    slug: 'nocta', hls: ['Fiestas', 'La pista', 'DJs', 'La barra'] },
   { rubro: 'Barbería', user: 'elcorte.barberia', name: 'El Corte Barbería 💈', cat: 'Barbería · Caballito', stats: ['96', '3.214', '88'],
     bio: ['💈 Degradé, barba y diseño', '📲 Reservá tu turno desde el link', '📍 Av. Rivadavia 5120 · 10 a 20 h'], link: 'elcorte',
     slug: 'elcorte', hls: ['Cortes', 'Barba', 'El local', 'Clientes'] },
@@ -1210,6 +1213,7 @@ const LP_WEEK = {
   fitness: { ejemplo: 'de un gimnasio', u: 'gymnorte', l: 'G', c: '#E6E0F5', alt: 'Posteo de Instagram de Gym Norte hecho por Posty', imgs: ['ig-fitness.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-8.jpg'] },
   detailing: { ejemplo: 'de un taller de detailing', u: 'bustos.detailing', l: 'B', c: '#F3E3C2', alt: 'Posteo de Instagram de Bustos Detailing hecho por Posty', imgs: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-4.jpg', 'gt-bustos-6.jpg', 'gt-bustos-9.jpg'] },
   inmobiliaria: { ejemplo: 'de una inmobiliaria', u: 'roca.propiedades', l: 'R', c: '#EFE6DA', alt: 'Posteo de Instagram de Roca Propiedades hecho por Posty', imgs: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-9.jpg'] },
+  boliche: { ejemplo: 'de un boliche', u: 'nocta.club', l: 'N', c: '#E9E4F5', alt: 'Flyer de fiesta de NOCTA Club hecho por Posty', imgs: ['gt-nocta-1.jpg', 'gt-nocta-2.jpg', 'gt-nocta-3.jpg', 'gt-nocta-4.jpg', 'gt-nocta-5.jpg'] },
   odontologia: { ejemplo: 'de una clínica dental', u: 'dental.prado', l: 'D', c: '#DFF3EC', alt: 'Posteo de Instagram de Dental Prado hecho por Posty', imgs: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-3.jpg'] }
 };
 // v186 — Garantía "nunca la misma foto dos veces en una semana".
@@ -1226,6 +1230,7 @@ const LP_WEEK_POOLS = {
   fitness: ['ig-fitness.jpg', 'gt-gymnorte-1.jpg', 'gt-gymnorte-2.jpg', 'gt-gymnorte-3.jpg', 'gt-gymnorte-4.jpg', 'gt-gymnorte-5.jpg', 'gt-gymnorte-6.jpg', 'gt-gymnorte-7.jpg', 'gt-gymnorte-8.jpg', 'gt-gymnorte-9.jpg'],
   detailing: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-3.jpg', 'gt-bustos-4.jpg', 'gt-bustos-5.jpg', 'gt-bustos-6.jpg', 'gt-bustos-7.jpg', 'gt-bustos-8.jpg', 'gt-bustos-9.jpg'],
   inmobiliaria: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-3.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-6.jpg', 'gt-roca-7.jpg', 'gt-roca-8.jpg', 'gt-roca-9.jpg'],
+  boliche: ['gt-nocta-1.jpg', 'gt-nocta-2.jpg', 'gt-nocta-3.jpg', 'gt-nocta-4.jpg', 'gt-nocta-5.jpg', 'gt-nocta-6.jpg', 'gt-nocta-7.jpg', 'gt-nocta-8.jpg', 'gt-nocta-9.jpg'],
   odontologia: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-3.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-6.jpg', 'gt-dentalprado-7.jpg', 'gt-dentalprado-8.jpg']
 };
 const LP_WEEK_ALIAS = {
@@ -1626,7 +1631,7 @@ function landingView(cfg) {
         </div>
         <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Perfiles siguientes" onclick="lpWallStep(1)">›</button>
       </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">28 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 7</span></div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">29 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 7</span></div>
       <div class="lp-show-cta">
         <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
@@ -1680,6 +1685,7 @@ function landingView(cfg) {
         <button type="button" class="lp-wchip" onclick="lpWeekSet('belleza', this)">💅 Belleza</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('mascotas', this)">🐶 Mascotas</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('fitness', this)">🏋️ Fitness</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('boliche', this)">🪩 Boliche</button>
       </div>
       <div class="lp-week-grid" id="lpWeekGrid">
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#FDEBD2">C</i></span><b>cafe.aurora</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-cafe.jpg" alt="Posteo de Instagram de una cafetería hecho por Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></span></div><div class="lp-day-meta"><b>Lun</b><span>Posteo</span></div><div class="lp-day-ok">✓ Publicado · lun 10:32</div></div>
@@ -6887,6 +6893,7 @@ async function bindAlbumCard() {
       </label>
       <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
       <button type="button" class="btn btn-soft btn-block" id="talkReelBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '🎬 Talking reel: record yourself presenting your product' : '🎬 Reel hablado: grabate contando tu producto'}</button>
+      ${(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.category === 'boliche') ? `<button type="button" class="btn btn-soft btn-block" id="flyerBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '🎉 Party flyer: build the one for your next night' : '🎉 Flyer de fiesta: armá el de tu próxima fecha'}</button><div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'The feed flyer, the story and the countdown, with your party’s real details.' : 'El flyer de feed, la historia y la cuenta regresiva, con los datos reales de tu fiesta.'}</div>` : ''}
       <div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You talk for 20–40 seconds and Posty edits it: subtitles in your own words and cuts to your product.' : 'Hablás 20–40 segundos y Posty lo edita: subtítulos con tus palabras y cortes a tu producto.'}</div>
     </div>`;
   const perfHTML = data.perf
@@ -6922,6 +6929,8 @@ async function bindAlbumCard() {
   </div>`;
   const trBtn = document.getElementById('talkReelBtn');
   if (trBtn) trBtn.onclick = async () => { try { await loadChunk('reel'); } catch (e) {} if (window.openTalkingReelSheet) openTalkingReelSheet(); };
+  const flBtn = document.getElementById('flyerBtn');
+  if (flBtn) flBtn.onclick = async () => { try { await loadChunk('flyer'); } catch (e) {} if (window.openFlyerSheet) openFlyerSheet(); };
   const aTgl = document.getElementById('albumToggle');
   if (aTgl) aTgl.onclick = () => {
     const g = document.getElementById('albumGrid');

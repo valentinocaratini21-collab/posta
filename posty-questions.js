@@ -41,13 +41,13 @@ const RADAR_NOVEDAD_ES = {
   moda: 'ingresó ropa', gastronomia: 'plato nuevo', cafeteria: 'plato nuevo',
   bar: 'plato o trago nuevo', belleza: 'servicio nuevo', barberia: 'servicio nuevo',
   hogar: 'pieza nueva', deco: 'pieza nueva', inmobiliaria: 'propiedad nueva',
-  educacion: 'curso o clase nueva',
+  educacion: 'curso o clase nueva', boliche: 'fiesta nueva',
 };
 const RADAR_NOVEDAD_EN = {
   moda: 'new clothes in', gastronomia: 'a new dish', cafeteria: 'a new dish',
   bar: 'a new dish or drink', belleza: 'a new service', barberia: 'a new service',
   hogar: 'a new piece', deco: 'a new piece', inmobiliaria: 'a new listing',
-  educacion: 'a new course or class',
+  educacion: 'a new course or class', boliche: 'a new party',
 };
 
 function rubroKeyOf(digest) {
@@ -55,6 +55,14 @@ function rubroKeyOf(digest) {
   const raw = (d.rubro_id && d.rubro_id.rubro) || d.category || '';
   return norm(String(raw)).replace(/\s+/g, '');
 }
+
+// El texto de la pregunta-radar según el rubro: la del boliche es la
+// pregunta de su semana (la fiesta del finde manda sobre todo lo demás).
+const RADAR_TEXTO_ES = { boliche: 'qué fiesta se viene este finde?' };
+const RADAR_TEXTO_EN = { boliche: "what party is coming up this weekend?" };
+// Y su opción de evento habla de fiesta, no de "evento".
+const RADAR_EVENTO_ES = { boliche: '🗓️ una fiesta grande' };
+const RADAR_EVENTO_EN = { boliche: '🗓️ a big party night' };
 
 function radarCandidate(digest, weekKey, lang) {
   if (!weekKey) return null;
@@ -70,13 +78,15 @@ function radarCandidate(digest, weekKey, lang) {
     evento: '🗓️ un evento importante', descuento: '🏷️ un descuento', empuje: '📦 algo para empujar',
     festejo: '⭐ algo para festejar', nada: '😴 nada especial',
   };
+  const texto = en ? (RADAR_TEXTO_EN[rk] || L.texto) : (RADAR_TEXTO_ES[rk] || L.texto);
+  const eventoLbl = en ? (RADAR_EVENTO_EN[rk] || L.evento) : (RADAR_EVENTO_ES[rk] || L.evento);
   const opt = (tipo, label) => ({ label, value: JSON.stringify({ radar: 1, tipo }) });
   return {
     kind: 'radar',
     qkey: `radar:${weekKey}`,
-    texto: L.texto,
+    texto,
     opciones: [
-      opt('evento', L.evento),
+      opt('evento', eventoLbl),
       opt('novedad', `🆕 ${novedad}`),
       opt('descuento', L.descuento),
       opt('empuje', L.empuje),
@@ -113,6 +123,7 @@ const CLAVE_ES = {
   inmobiliaria: 'qué propiedad querés empujar esta semana? esa sale de protagonista.',
   educacion: 'hay un curso, una clase o un grupo nuevo para empujar esta semana?',
   eventos: 'qué evento se viene que queramos llenar?',
+  boliche: 'quién toca este finde? hay anticipadas para empujar?',
   flores: 'qué fecha o arreglo se viene que salimos a vender?',
   joyeria: 'qué pieza querés que se vaya esta semana? esa es la protagonista.',
   turismo: 'qué destino o salida querés empujar esta semana?',
@@ -139,6 +150,7 @@ const CLAVE_EN = {
   inmobiliaria: 'which property do you want to push this week? that one leads.',
   educacion: 'is there a new course, class or group to push this week?',
   eventos: 'what event is coming up that we want to fill?',
+  boliche: "who's playing this weekend? any presale tickets to push?",
   flores: 'what date or arrangement is coming up that we should sell?',
   joyeria: 'which piece do you want gone this week? that one is the star.',
   turismo: 'what trip or destination do you want to push this week?',
@@ -168,13 +180,15 @@ function claveCandidate(digest, lang) {
 // perecedero jamás se recicla). Descuento SIN detalle ⇒ '' también:
 // sin dato real no hay posteo de descuento, punto.
 // ---------------------------------------------------------------------------
-function radarWeekLine(radar, weekKey, lang) {
+function radarWeekLine(radar, weekKey, lang, rubroKey) {
   if (!radar || typeof radar !== 'object' || !weekKey || radar.week_key !== weekKey) return '';
   const det = String(radar.detalle || '').trim();
   const conDet = det ? `: ${det}` : '';
   if (lang === 'en') {
     switch (radar.tipo) {
-      case 'evento': return `📡 OWNER RADAR (this week): there's an IMPORTANT EVENT${conDet}. Build the week around it: an anticipation post and a reminder the day before.`;
+      case 'evento': return rubroKey === 'boliche'
+        ? `📡 OWNER RADAR (this week): there's a PARTY${conDet}. The week is built around the party: the FLYER MODE package goes out (feed flyer + story + countdown) with the REAL data the owner confirmed — never an invented DJ, date or price.`
+        : `📡 OWNER RADAR (this week): there's an IMPORTANT EVENT${conDet}. Build the week around it: an anticipation post and a reminder the day before.`;
       case 'novedad': return `📡 OWNER RADAR (this week): something NEW${conDet}. The week's hero post is this launch.`;
       case 'descuento': return det ? `📡 OWNER RADAR (this week): a REAL discount confirmed by the owner: ${det}. Sales post with that EXACT data — never invent other discounts, percentages or dates.` : '';
       case 'empuje': return `📡 OWNER RADAR (this week): something to PUSH${conDet}. Product post with REAL scarcity only (whatever is actually true).`;
@@ -184,7 +198,9 @@ function radarWeekLine(radar, weekKey, lang) {
     }
   }
   switch (radar.tipo) {
-    case 'evento': return `📡 RADAR DEL DUEÑO (esta semana): hay un EVENTO IMPORTANTE${conDet}. La semana se ordena alrededor del evento: posteo de anticipación + recordatorio el día anterior.`;
+    case 'evento': return rubroKey === 'boliche'
+      ? `📡 RADAR DEL DUEÑO (esta semana): hay una FIESTA${conDet}. La semana se ordena alrededor de la fiesta: sale el paquete del MODO FLYER (flyer de feed + historia + cuenta regresiva) con los datos REALES que confirmó el dueño — jamás un DJ, una fecha o un precio inventados.`
+      : `📡 RADAR DEL DUEÑO (esta semana): hay un EVENTO IMPORTANTE${conDet}. La semana se ordena alrededor del evento: posteo de anticipación + recordatorio el día anterior.`;
     case 'novedad': return `📡 RADAR DEL DUEÑO (esta semana): hay algo NUEVO${conDet}. El posteo protagonista de la semana es el lanzamiento de esta novedad.`;
     case 'descuento': return det ? `📡 RADAR DEL DUEÑO (esta semana): DESCUENTO REAL confirmado por el dueño: ${det}. Posteo de venta con ese dato EXACTO — prohibido inventar otros descuentos, porcentajes o fechas.` : '';
     case 'empuje': return `📡 RADAR DEL DUEÑO (esta semana): hay algo para EMPUJAR${conDet}. Posteo de producto con escasez REAL (solo la que sea verdad).`;
