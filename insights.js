@@ -3,6 +3,31 @@
 const IG_HOST = 'https://graph.instagram.com';
 const API_VERSION = 'v26.0';
 
+// (2026-10-21, cableado Atención Total) El suggestFn puede devolver el
+// string histórico o el objeto de suggestReplyDetailed (generator.js):
+// { reply, needsHuman, reason }. Se normaliza acá para que las colas
+// nazcan 'needs_human' cuando el fundamento no cubre la pregunta o hay
+// una queja — nunca una respuesta inventada esperando aprobación.
+function normalizeSuggest(r) {
+  if (r && typeof r === 'object') {
+    return { reply: String(r.reply || ''), needsHuman: !!r.needsHuman, reason: String(r.reason || '') };
+  }
+  return { reply: String(r || ''), needsHuman: false, reason: '' };
+}
+let classifyCommentFn = null;
+function classifyCare(text) {
+  try {
+    if (!classifyCommentFn) classifyCommentFn = require('./community').classifyComment;
+    return classifyCommentFn(text);
+  } catch (e) { return 'ok'; }
+}
+function registerFollowupSafe(db, userId, data) {
+  try { require('./followups').registerConversation(db, userId, data); } catch (e) {}
+}
+function closeFollowupSafe(db, userId, conversationKey, opts) {
+  try { require('./followups').closeConversation(db, userId, conversationKey, opts || {}); } catch (e) {}
+}
+
 function getCreds(db, userId) {
   const s = db.prepare('SELECT ig_user_id, ig_access_token FROM settings WHERE user_id = ?').get(userId) || {};
   if (!s.ig_user_id || !s.ig_access_token) return null;
@@ -88,16 +113,27 @@ async function syncComments(db, userId, suggestFn, apiKey) {
       if (replied) continue;
       const exists = db.prepare('SELECT id FROM comment_queue WHERE ig_comment_id = ?').get(c.id);
       if (exists) continue;
+      // Quejas y temas sensibles nacen needs_human (sin redactar nada) y
+      // los trolls ni se encolan: misma doctrina que community.js.
+      const cls = classifyCare(c.text);
+      if (cls === 'troll') continue;
       let suggested = '';
-      try {
-        suggested = await suggestFn(
-          { business: profile.business_name, category: profile.category, tone: profile.tone, username: c.username, commentText: c.text },
-          apiKey
-        );
-      } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+      let status = 'pending';
+      if (cls === 'needs_human') {
+        status = 'needs_human';
+      } else {
+        try {
+          const r = normalizeSuggest(await suggestFn(
+            { business: profile.business_name, category: profile.category, tone: profile.tone, username: c.username, commentText: c.text },
+            apiKey
+          ));
+          suggested = r.reply;
+          if (r.needsHuman) status = 'needs_human';
+        } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+      }
       db.prepare(
-        `INSERT INTO comment_queue (user_id, ig_comment_id, ig_media_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,'pending')`
-      ).run(userId, c.id, m.id, c.username, String(c.text).slice(0, 500), String(suggested).slice(0, 300));
+        `INSERT INTO comment_queue (user_id, ig_comment_id, ig_media_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,?)`
+      ).run(userId, c.id, m.id, c.username, String(c.text).slice(0, 500), String(suggested).slice(0, 300), status);
       fresh++;
     }
   }
@@ -155,15 +191,29 @@ async function syncDMs(db, userId, suggestFn, apiKey) {
       username = other ? String(other.username || '') : '';
     }
     let suggested = '';
-    try {
-      suggested = await suggestFn(
-        { business: profile.business_name, category: profile.category, tone: profile.tone, username, commentText: text },
-        apiKey
-      );
-    } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+    let status = 'pending';
+    // Un DM con queja o tema sensible tampoco se redacta: needs_human.
+    // (Los trolls en DM NO se descartan en silencio: los decide un humano.)
+    if (classifyCare(text) !== 'ok') {
+      status = 'needs_human';
+    } else {
+      try {
+        const r = normalizeSuggest(await suggestFn(
+          { business: profile.business_name, category: profile.category, tone: profile.tone, username, commentText: text },
+          apiKey
+        ));
+        suggested = r.reply;
+        if (r.needsHuman) status = 'needs_human';
+      } catch (e) { suggested = '¡Gracias por escribirnos! 🙌'; }
+    }
     db.prepare(
-      `INSERT INTO dm_queue (user_id, ig_conversation_id, ig_message_id, ig_sender_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,?, 'pending')`
-    ).run(userId, String(conv.id || ''), last.id, String(last.from.id), username, text.slice(0, 500), String(suggested).slice(0, 300));
+      `INSERT INTO dm_queue (user_id, ig_conversation_id, ig_message_id, ig_sender_id, username, text, suggested, status) VALUES (?,?,?,?,?,?,?, ?)`
+    ).run(userId, String(conv.id || ''), last.id, String(last.from.id), username, text.slice(0, 500), String(suggested).slice(0, 300), status);
+    // La conversación quedó abierta sin cierre: arranca el reloj de
+    // seguimiento (24–48 h, tope 2 — followups.js). Nunca se sigue solo.
+    registerFollowupSafe(db, userId, {
+      source: 'dm', conversationKey: String(conv.id || ''), username, topic: text.slice(0, 300),
+    });
     fresh++;
   }
   return fresh;
@@ -173,6 +223,14 @@ async function syncDMs(db, userId, suggestFn, apiKey) {
 async function sendDM(db, userId, recipientIgId, message) {
   const creds = getCreds(db, userId);
   if (!creds) throw new Error('Instagram no conectado');
+  // Conversación asociada (para cerrarla en seguimiento tras el envío).
+  let convKey = '';
+  try {
+    const row = db.prepare(
+      `SELECT ig_conversation_id FROM dm_queue WHERE user_id = ? AND ig_sender_id = ? AND status IN ('pending','needs_human') ORDER BY id DESC LIMIT 1`
+    ).get(userId, String(recipientIgId));
+    convKey = row ? String(row.ig_conversation_id || '') : '';
+  } catch (e) {}
   const r = await fetch(`${IG_HOST}/${API_VERSION}/${creds.igUserId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -181,7 +239,10 @@ async function sendDM(db, userId, recipientIgId, message) {
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || data.error) throw new Error((data.error && data.error.message) || `IG ${r.status}`);
-  db.prepare(`UPDATE dm_queue SET status='replied' WHERE user_id = ? AND ig_sender_id = ? AND status='pending'`).run(userId, String(recipientIgId));
+  db.prepare(`UPDATE dm_queue SET status='replied' WHERE user_id = ? AND ig_sender_id = ? AND status IN ('pending','needs_human')`).run(userId, String(recipientIgId));
+  // El dueño respondió: la conversación quedó atendida por un humano y
+  // el seguimiento se cierra (followups.js: 'closed' = respondida).
+  if (convKey) closeFollowupSafe(db, userId, convKey, {});
   return true;
 }
 

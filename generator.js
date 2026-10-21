@@ -4357,7 +4357,10 @@ function moneyNumbersInText(text) {
 
 async function suggestReplyDetailed(args, apiKey) {
   const a = args || {};
-  const fallback = '¡Gracias por escribirnos! 🙌';
+  // Espejo EN (cableado Atención Total, 2026-10-21): la cuenta manda el
+  // idioma (users.lang). Sin lang o 'es' → comportamiento histórico.
+  const en = a.lang === 'en';
+  const fallback = en ? 'Thanks for reaching out! 🙌' : '¡Gracias por escribirnos! 🙌';
   const intent = replyIntent(a.commentText);
   const hasFund = !!(a.fundamento || a.horarios);
   const facts = hasFund ? foundationFacts(a.fundamento, a.horarios) : null;
@@ -4370,9 +4373,13 @@ async function suggestReplyDetailed(args, apiKey) {
   if (!apiKey) return { reply: fallback, needsHuman: false, reason: 'sin_api_key', intent, factsUsed: [] };
   try {
     const block = facts ? foundationBlock(facts) : '';
-    const system = hasFund
+    const system = en
+      ? (hasFund
+        ? `You are Posty, the community manager and salesperson for "${a.business || 'a business'}" (${a.category || 'general business'}). Reply to @${a.username || 'a customer'} warmly, in at most 1-2 short lines. Tone: ${a.tone || 'friendly'}.\nREAL BUSINESS DATA (the only allowed source for prices, services and hours):\n${block || '(no data loaded)'}\nHARD RULES: if they ask about price, service or hours, answer ONLY with the data above, verbatim. Never invent a price, a discount, stock or hours that are not in the list. If what they ask is not in the list, say you will confirm it right away here, without inventing the data. If they want to book or buy, offer the concrete next step using the real data. Reply ONLY with the reply, no quotes.`
+        : `You are the community manager for "${a.business || 'a business'}" (${a.category || 'general business'}). Reply to the Instagram comment from @${a.username || 'a follower'} warmly, in at most 1-2 short lines. Tone: ${a.tone || 'friendly'}. If they ask about price/stock/hours and you do not know, invite them to DM without inventing data. Reply ONLY with the reply, no quotes.`)
+      : (hasFund
       ? `Sos Posty, el community manager y vendedor de "${a.business || 'un negocio'}" (${a.category || 'rubro general'}). Respondé el mensaje de @${a.username || 'un cliente'} con calidez argentina (voseo), en 1-2 líneas como mucho. Tono ${a.tone || 'canchero'}.\nDATOS REALES DEL NEGOCIO (única fuente permitida para precios, servicios y horarios):\n${block || '(sin datos cargados)'}\nREGLAS DURAS: si pregunta precio, servicio u horario, respondé SOLO con los datos de arriba, textuales. Jamás inventes un precio, un descuento, stock ni un horario que no esté en la lista. Si justo lo que pregunta no está en la lista, decí que se lo confirmás enseguida por acá, sin inventar el dato. Si quiere reservar o comprar, ofrecé el siguiente paso concreto usando los datos reales. Respondé SOLO con la respuesta, sin comillas.`
-      : `Sos el community manager de "${a.business || 'un negocio'}" (${a.category || 'rubro general'}). Respondé el comentario de Instagram de @${a.username || 'un seguidor'} con calidez argentina (voseo), en 1-2 líneas como mucho. Tono ${a.tone || 'canchero'}. Si pregunta precio/stock/horario y no lo sabés, invitalo a escribir por DM sin inventar datos. Respondé SOLO con la respuesta, sin comillas.`;
+      : `Sos el community manager de "${a.business || 'un negocio'}" (${a.category || 'rubro general'}). Respondé el comentario de Instagram de @${a.username || 'un seguidor'} con calidez argentina (voseo), en 1-2 líneas como mucho. Tono ${a.tone || 'canchero'}. Si pregunta precio/stock/horario y no lo sabés, invitalo a escribir por DM sin inventar datos. Respondé SOLO con la respuesta, sin comillas.`);
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },

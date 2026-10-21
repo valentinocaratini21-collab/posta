@@ -1036,6 +1036,34 @@ function proCommunityDeps(db) {
         return s.openai_key || process.env.OPENAI_API_KEY || '';
       } catch (e) { return process.env.OPENAI_API_KEY || ''; }
     },
+    // Atención = plan Total: sin la feature, el poll ni mira la cuenta
+    // (fail-closed si plan-gate no carga o el gate falla).
+    planFilter: (uid) => {
+      try { return require('./plan-gate').planGate(db, uid, 'atencion').ok; }
+      catch (e) { return false; }
+    },
+  };
+}
+
+// (2026-10-21, cableado Atención Total) Sugerencia de respuesta CON el
+// fundamento de la cuenta — espejo del helper de server.js, local al
+// scheduler para no crear circulares. Devuelve el objeto detailed de
+// generator.js: insights.js lo normaliza y la fila nace 'needs_human'
+// cuando el dato no está en el fundamento (nunca se inventa).
+function careSuggestFn(db, uid) {
+  return async (args, apiKey) => {
+    let digest = null, horarios = '', lang = 'es';
+    try { digest = require('./client-digest').getDigest(db, uid); } catch (e) {}
+    try {
+      const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+      const dna = dr && dr.dna_json ? JSON.parse(dr.dna_json) : {};
+      horarios = String(dna.horarios || '');
+    } catch (e) {}
+    try {
+      const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid);
+      if (u && u.lang === 'en') lang = 'en';
+    } catch (e) {}
+    return require('./generator').suggestReplyDetailed({ ...args, fundamento: digest, horarios, lang }, apiKey);
   };
 }
 
@@ -1449,7 +1477,6 @@ async function sendWeeklyReports(db) {
 // Baja comentarios nuevos de todos los usuarios con IG conectado (2x por día).
 async function syncAllComments(db) {
   const { syncComments } = require('./insights');
-  const { suggestReply } = require('./generator');
   const users = db.prepare(`
     SELECT u.id FROM users u JOIN settings s ON s.user_id = u.id
     WHERE s.ig_user_id IS NOT NULL AND s.ig_user_id != ''
@@ -1460,7 +1487,7 @@ async function syncAllComments(db) {
     try {
       const st = getSettings(db, u.id) || {};
       const apiKey = st.openai_key || process.env.OPENAI_API_KEY || '';
-      total += await syncComments(db, u.id, suggestReply, apiKey);
+      total += await syncComments(db, u.id, careSuggestFn(db, u.id), apiKey);
     } catch (e) { console.error('[comentarios] usuario', u.id, e.message); }
     await new Promise((r) => setTimeout(r, 500));
   }

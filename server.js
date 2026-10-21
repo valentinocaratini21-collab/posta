@@ -32,6 +32,16 @@ try {
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
 const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses } = require('./generator');
+// ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
+// Los módulos se construyeron el 2026-10-20 (build-atencion-total) y
+// quedaron sin conectar: este es el cableado. Regla FIJA del producto:
+// el dueño aprueba CADA respuesta con un toque antes de que salga —
+// no existe modo autopilot en ningún plan (payment-close lo enforce).
+const { suggestReplyDetailed } = require('./generator');
+const { planGate, planGateMiddleware } = require('./plan-gate');
+const bookingMod = require('./booking');
+const followupsMod = require('./followups');
+const paymentCloseMod = require('./payment-close');
 const demoAi = require('./demo-ai'); // v198: proyección con IA solo para perfiles ilustrados/mascota
 const { upcomingEphemeris } = require('./ephemeris');
 const creator = require('./creator.js');
@@ -55,6 +65,67 @@ function planForUid(uid) {
     const u = db.prepare('SELECT plan, plan_status FROM users WHERE id = ?').get(uid);
     return getPlan(u && u.plan_status === 'active' ? u.plan : TRIAL_PLAN);
   } catch (e) { return getPlan(TRIAL_PLAN); }
+}
+// ---------- ATENCIÓN: sugerencias con fundamento (cableado 2026-10-21) ----------
+// Idioma de la cuenta (users.lang): las respuestas al cliente final salen
+// en SU idioma, con la voz del negocio (entrega profesional).
+function langOfUser(uid) {
+  try {
+    const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid);
+    return u && u.lang === 'en' ? 'en' : 'es';
+  } catch (e) { return 'es'; }
+}
+// Objeto detailed de generator.suggestReplyDetailed con el fundamento de
+// la cuenta (digest + horarios del ADN): si el cliente pregunta un dato
+// que NO está en el fundamento, devuelve needsHuman y la fila de la cola
+// nace 'needs_human' — jamás una respuesta inventada (insights.js lo
+// normaliza). Lo usan los syncs de comentarios y DMs.
+function suggestDetailedForUser(uid) {
+  return async (args, apiKey) => {
+    let digest = null, horarios = '';
+    try { digest = clientDigest.getDigest(db, uid); } catch (e) {}
+    try {
+      const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+      const dna = dr && dr.dna_json ? JSON.parse(dr.dna_json) : {};
+      horarios = String(dna.horarios || '');
+    } catch (e) {}
+    return suggestReplyDetailed({ ...args, fundamento: digest, horarios, lang: langOfUser(uid) }, apiKey);
+  };
+}
+// Variante string para los callers que esperan texto (reseñas de Google):
+// si escala a humano, la sugerencia queda vacía y el flujo histórico de
+// google.js cae a su plantilla segura.
+function suggestForUser(uid) {
+  const detailed = suggestDetailedForUser(uid);
+  return async (args, apiKey) => {
+    const r = await detailed(args, apiKey);
+    return r.needsHuman ? '' : r.reply;
+  };
+}
+// aiFn({system, user}) para los borradores de seguimiento (followups.js),
+// con la clave de la cuenta o la del entorno — mismo patrón que
+// community.js. Sin clave devuelve null y el borrador sale por plantilla
+// determinística con datos reales del fundamento.
+function careAiFnFor(uid) {
+  try {
+    const st = getSettings(uid) || {};
+    const key = st.openai_key || process.env.OPENAI_API_KEY || '';
+    if (!key) return null;
+    return async ({ system, user }) => {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini', temperature: 0.7, max_tokens: 160,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        }),
+        signal: AbortSignal.timeout(45000),
+      });
+      if (!res.ok) throw new Error('openai_' + res.status);
+      const data = await res.json();
+      return String((data.choices && data.choices[0] && data.choices[0].message.content) || '').trim();
+    };
+  } catch (e) { return null; }
 }
 const AI_LIMITS_DEFAULT = { chatPerDay: 40, weeksPerDay: 1, regensPerDay: 3 };
 function aiLimitsFor(uid) {
@@ -5010,29 +5081,31 @@ app.get('/api/weekly-report', requireAuth, (req, res) => {
 });
 
 // ---------- Comentarios de Instagram: responder en un toque ----------
-app.get('/api/comments', requireAuth, (req, res) => {
+// (2026-10-21) Atención = plan Total: TODAS estas rutas llevan el gate
+// de plan-gate.js, y las sugerencias nacen del fundamento de la cuenta.
+app.get('/api/comments', requireAuth, planGateMiddleware(db, 'comentarios'), (req, res) => {
   let rows = [];
   try {
-    rows = db.prepare(`SELECT id, username, text, suggested, ig_media_id, created_at FROM comment_queue
-      WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
+    rows = db.prepare(`SELECT id, username, text, suggested, status, ig_media_id, created_at FROM comment_queue
+      WHERE user_id = ? AND status IN ('pending', 'needs_human') ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
   } catch (e) { /* tabla nueva */ }
   res.json({ comments: rows });
 });
-app.post('/api/comments/refresh', requireAuth, requireTrialValid, async (req, res) => {
+app.post('/api/comments/refresh', requireAuth, planGateMiddleware(db, 'comentarios'), requireTrialValid, async (req, res) => {
   try {
     const { syncComments } = require('./insights');
     const st = getSettings(req.session.userId) || {};
-    const n = await syncComments(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    const n = await syncComments(db, req.session.userId, suggestDetailedForUser(req.session.userId), st.openai_key || process.env.OPENAI_API_KEY || '');
     res.json({ ok: true, fresh: n });
   } catch (e) {
     res.status(500).json({ error: 'No pude revisar los comentarios 😅 Probá de nuevo' });
   }
 });
-app.post('/api/comments/:id/reply', requireAuth, async (req, res) => {
+app.post('/api/comments/:id/reply', requireAuth, planGateMiddleware(db, 'comentarios'), async (req, res) => {
   try {
     const { replyComment } = require('./insights');
     const c = db.prepare('SELECT * FROM comment_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
-    if (!c || c.status !== 'pending') return res.status(404).json({ error: 'Ese comentario se me perdió 😅 Actualizá y probá de nuevo' });
+    if (!c || !['pending', 'needs_human'].includes(c.status)) return res.status(404).json({ error: 'Ese comentario se me perdió 😅 Actualizá y probá de nuevo' });
     const message = String((req.body && req.body.message) || c.suggested || '').slice(0, 1000);
     if (!message.trim()) return res.status(400).json({ error: 'Escribí la respuesta primero ✍️' });
     await replyComment(db, req.session.userId, c.ig_comment_id, message);
@@ -5041,35 +5114,35 @@ app.post('/api/comments/:id/reply', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'No pudimos responder: ' + String(e.message).slice(0, 120) });
   }
 });
-app.post('/api/comments/:id/dismiss', requireAuth, (req, res) => {
+app.post('/api/comments/:id/dismiss', requireAuth, planGateMiddleware(db, 'comentarios'), (req, res) => {
   try { db.prepare(`UPDATE comment_queue SET status='dismissed' WHERE id = ? AND user_id = ?`).run(req.params.id, req.session.userId); } catch (e) {}
   res.json({ ok: true });
 });
 
 // ---------- Mensajes directos de Instagram: responder en un toque ----------
-app.get('/api/dms', requireAuth, (req, res) => {
+app.get('/api/dms', requireAuth, planGateMiddleware(db, 'dms'), (req, res) => {
   let rows = [];
   try {
-    rows = db.prepare(`SELECT id, username, text, suggested, ig_conversation_id, created_at FROM dm_queue
-      WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
+    rows = db.prepare(`SELECT id, username, text, suggested, status, ig_conversation_id, created_at FROM dm_queue
+      WHERE user_id = ? AND status IN ('pending', 'needs_human') ORDER BY created_at DESC LIMIT 20`).all(req.session.userId);
   } catch (e) { /* tabla nueva */ }
   res.json({ dms: rows });
 });
-app.post('/api/dms/refresh', requireAuth, requireTrialValid, async (req, res) => {
+app.post('/api/dms/refresh', requireAuth, planGateMiddleware(db, 'dms'), requireTrialValid, async (req, res) => {
   try {
     const { syncDMs } = require('./insights');
     const st = getSettings(req.session.userId) || {};
-    const n = await syncDMs(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    const n = await syncDMs(db, req.session.userId, suggestDetailedForUser(req.session.userId), st.openai_key || process.env.OPENAI_API_KEY || '');
     res.json({ ok: true, fresh: n });
   } catch (e) {
     res.status(500).json({ error: 'No pude revisar tus mensajes 😅 Probá de nuevo' });
   }
 });
-app.post('/api/dms/:id/reply', requireAuth, async (req, res) => {
+app.post('/api/dms/:id/reply', requireAuth, planGateMiddleware(db, 'dms'), async (req, res) => {
   try {
     const { sendDM } = require('./insights');
     const d = db.prepare('SELECT * FROM dm_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
-    if (!d || d.status !== 'pending') return res.status(404).json({ error: 'Ese mensaje se me perdió 😅 Actualizá y probá de nuevo' });
+    if (!d || !['pending', 'needs_human'].includes(d.status)) return res.status(404).json({ error: 'Ese mensaje se me perdió 😅 Actualizá y probá de nuevo' });
     const message = String((req.body && req.body.message) || d.suggested || '').slice(0, 1000);
     if (!message.trim()) return res.status(400).json({ error: 'Escribí la respuesta primero ✍️' });
     await sendDM(db, req.session.userId, d.ig_sender_id, message);
@@ -5078,7 +5151,7 @@ app.post('/api/dms/:id/reply', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'No pudimos responder: ' + String(e.message).slice(0, 120) });
   }
 });
-app.post('/api/dms/:id/dismiss', requireAuth, (req, res) => {
+app.post('/api/dms/:id/dismiss', requireAuth, planGateMiddleware(db, 'dms'), (req, res) => {
   try { db.prepare(`UPDATE dm_queue SET status='dismissed' WHERE id = ? AND user_id = ?`).run(req.params.id, req.session.userId); } catch (e) {}
   res.json({ ok: true });
 });
@@ -9577,7 +9650,9 @@ app.post('/api/connections/tiendanube/disconnect', requireAuth, (req, res) => {
 });
 
 // ---------- Reseñas de Google: responder en un toque ----------
-app.get('/api/reviews', requireAuth, (req, res) => {
+// (2026-10-21) Gate de plan Total + sugerencias con fundamento (variante
+// string: si el dato no está, google.js cae a su plantilla segura).
+app.get('/api/reviews', requireAuth, planGateMiddleware(db, 'resenas'), (req, res) => {
   let rows = [];
   try {
     rows = db.prepare(`SELECT id, reviewer, star_rating, text, suggested, created_at FROM review_queue
@@ -9585,16 +9660,16 @@ app.get('/api/reviews', requireAuth, (req, res) => {
   } catch (e) { /* tabla nueva */ }
   res.json({ reviews: rows });
 });
-app.post('/api/reviews/refresh', requireAuth, requireTrialValid, async (req, res) => {
+app.post('/api/reviews/refresh', requireAuth, planGateMiddleware(db, 'resenas'), requireTrialValid, async (req, res) => {
   try {
     const st = getSettings(req.session.userId) || {};
-    const n = await google.syncReviews(db, req.session.userId, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+    const n = await google.syncReviews(db, req.session.userId, suggestForUser(req.session.userId), st.openai_key || process.env.OPENAI_API_KEY || '');
     res.json({ ok: true, fresh: n });
   } catch (e) {
     res.status(500).json({ error: 'No pude revisar tus reseñas 😅 Probá de nuevo' });
   }
 });
-app.post('/api/reviews/:id/reply', requireAuth, async (req, res) => {
+app.post('/api/reviews/:id/reply', requireAuth, planGateMiddleware(db, 'resenas'), async (req, res) => {
   try {
     const r = db.prepare('SELECT * FROM review_queue WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
     if (!r || r.status !== 'pending') return res.status(404).json({ error: 'Esa reseña se me perdió 😅 Actualizá y probá de nuevo' });
@@ -9607,7 +9682,7 @@ app.post('/api/reviews/:id/reply', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'No pudimos responder: ' + String(e.message).slice(0, 120) });
   }
 });
-app.post('/api/reviews/:id/dismiss', requireAuth, (req, res) => {
+app.post('/api/reviews/:id/dismiss', requireAuth, planGateMiddleware(db, 'resenas'), (req, res) => {
   try { db.prepare(`UPDATE review_queue SET status='dismissed' WHERE id = ? AND user_id = ?`).run(req.params.id, req.session.userId); } catch (e) {}
   res.json({ ok: true });
 });
@@ -10486,12 +10561,12 @@ app.post('/api/proactive-comments-ask', requireAuth, async (req, res) => {
     try {
       const { syncComments } = require('./insights');
       const st = getSettings(uid) || {};
-      await syncComments(db, uid, suggestReply, st.openai_key || process.env.OPENAI_API_KEY || '');
+      await syncComments(db, uid, suggestDetailedForUser(uid), st.openai_key || process.env.OPENAI_API_KEY || '');
     } catch (e) {}
     try {
       const { syncDMs } = require('./insights');
       const st2 = getSettings(uid) || {};
-      await syncDMs(db, uid, suggestReply, st2.openai_key || process.env.OPENAI_API_KEY || '');
+      await syncDMs(db, uid, suggestDetailedForUser(uid), st2.openai_key || process.env.OPENAI_API_KEY || '');
     } catch (e) {}
     let n = 0;
     try { n = db.prepare(`SELECT COUNT(*) AS n FROM comment_queue WHERE user_id = ? AND status = 'pending'`).get(uid).n || 0; }
@@ -13244,7 +13319,8 @@ app.post('/api/story-generate', requireAuth, requireTrialValid, express.json(), 
 
 // Community: cola de aprobación de respuestas a comentarios.
 // NUNCA se envía sin aprobación explícita del cliente.
-app.get('/api/community/pending', requireAuth, async (req, res) => {
+// (2026-10-21) Gate de plan Total en toda la cola, como el resto de atención.
+app.get('/api/community/pending', requireAuth, planGateMiddleware(db, 'comentarios'), async (req, res) => {
   try {
     const uid = req.session.userId;
     const C = require('./community');
@@ -13255,7 +13331,7 @@ app.get('/api/community/pending', requireAuth, async (req, res) => {
 });
 
 // Aprobar + enviar una respuesta a Instagram.
-app.post('/api/community/reply', requireAuth, requireTrialValid, express.json(), async (req, res) => {
+app.post('/api/community/reply', requireAuth, planGateMiddleware(db, 'comentarios'), requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     const id = Number((req.body || {}).id);
@@ -13274,7 +13350,7 @@ app.post('/api/community/reply', requireAuth, requireTrialValid, express.json(),
 });
 
 // Descartar una respuesta propuesta (no se envía nada).
-app.post('/api/community/dismiss', requireAuth, express.json(), async (req, res) => {
+app.post('/api/community/dismiss', requireAuth, planGateMiddleware(db, 'comentarios'), express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
     const id = Number((req.body || {}).id);
@@ -13284,6 +13360,154 @@ app.post('/api/community/dismiss', requireAuth, express.json(), async (req, res)
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// =====================================================================
+// ATENCIÓN TOTAL — agenda, seguimiento y cierre (cableado 2026-10-21)
+// Los motores son booking.js / followups.js / payment-close.js (build
+// 2026-10-20). REGLA FIJA: ningún endpoint de esta sección envía
+// mensajes por su cuenta — todo nace como turno, borrador o fila, y
+// sale SOLO por la acción del dueño (aprobar/enviar en un toque).
+// =====================================================================
+
+// --- Agenda de turnos (plan Total) ---
+app.get('/api/bookings/reminders', requireAuth, planGateMiddleware(db, 'agenda'), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const prof = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid) || {};
+    const lang = langOfUser(uid);
+    const items = bookingMod.dueReminders(db, uid, {})
+      .map((b) => ({ ...b, reminder_text: bookingMod.reminderText(b, prof.business_name || '', lang) }));
+    res.json({ ok: true, reminders: items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/bookings', requireAuth, planGateMiddleware(db, 'agenda'), (req, res) => {
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, bookings: bookingMod.listBookings(db, req.session.userId, { status: q.status, from: q.from, to: q.to, limit: q.limit }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = bookingMod.createBooking(db, uid, req.body || {});
+    // Si el turno nació de una conversación atendida, esa conversación
+    // cerró (compró/reservó): el seguimiento no la persigue más.
+    const convKey = (req.body && (req.body.conversation_key || req.body.conversationKey)) || '';
+    if (convKey) { try { followupsMod.closeConversation(db, uid, String(convKey), { converted: true }); } catch (e) {} }
+    res.json({ ok: true, booking: b });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings/:id/confirm', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try { res.json({ ok: true, booking: bookingMod.confirmBooking(db, Number(req.params.id), req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings/:id/reschedule', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    res.json({ ok: true, booking: bookingMod.rescheduleBooking(db, Number(req.params.id), req.session.userId, body.starts_at || body.startsAt, { keepConfirmed: !!body.keepConfirmed }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings/:id/cancel', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try { res.json({ ok: true, booking: bookingMod.cancelBooking(db, Number(req.params.id), req.session.userId, (req.body || {}).reason) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings/:id/complete', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try { res.json({ ok: true, booking: bookingMod.completeBooking(db, Number(req.params.id), req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings/:id/no-show', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try { res.json({ ok: true, booking: bookingMod.markNoShow(db, Number(req.params.id), req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/bookings/:id/reminder-sent', requireAuth, planGateMiddleware(db, 'agenda'), express.json(), (req, res) => {
+  try { res.json({ ok: true, ...bookingMod.markReminderSent(db, Number(req.params.id), req.session.userId) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+// --- Seguimiento a no-cerradores (plan Total) ---
+// due: conversaciones vencidas (24–48 h) con su borrador YA armado con
+// datos reales del fundamento. El borrador NO se envió: el dueño lo
+// manda con un toque por el canal de la conversación y recién ahí se
+// registra con /sent.
+app.get('/api/followups/due', requireAuth, planGateMiddleware(db, 'seguimiento'), async (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const prof = db.prepare('SELECT business_name FROM profiles WHERE user_id = ?').get(uid) || {};
+    let digest = null, horarios = '';
+    try { digest = clientDigest.getDigest(db, uid); } catch (e) {}
+    try {
+      const dr = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid);
+      horarios = String((dr && dr.dna_json ? JSON.parse(dr.dna_json) : {}).horarios || '');
+    } catch (e) {}
+    const lang = langOfUser(uid);
+    const aiFn = careAiFnFor(uid);
+    const rows = followupsMod.dueFollowups(db, uid);
+    const items = [];
+    for (const r of rows) {
+      const d = await followupsMod.draftFollowup({
+        fundamento: digest, horarios, business: prof.business_name || '',
+        customerName: r.customer_name, username: r.customer_username,
+        topic: r.topic, attempt: Number(r.followup_count || 0) + 1, lang, aiFn,
+      });
+      items.push({ ...r, draft: d.draft, draft_via: d.via });
+    }
+    res.json({ ok: true, followups: items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.get('/api/followups', requireAuth, planGateMiddleware(db, 'seguimiento'), (req, res) => {
+  try {
+    res.json({ ok: true, followups: followupsMod.listFollowups(db, req.session.userId, { status: (req.query || {}).status }) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/followups/:id/sent', requireAuth, planGateMiddleware(db, 'seguimiento'), express.json(), (req, res) => {
+  try {
+    const f = followupsMod.recordFollowupSent(db, req.session.userId, Number(req.params.id), { draft: (req.body || {}).draft || '' });
+    res.json({ ok: true, followup: f });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/followups/close', requireAuth, planGateMiddleware(db, 'seguimiento'), express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    const key = String(body.conversation_key || body.conversationKey || '');
+    if (!key) return res.status(400).json({ ok: false, error: 'Falta conversation_key' });
+    res.json({ ok: true, ...followupsMod.closeConversation(db, req.session.userId, key, { converted: !!body.converted }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+// --- Configuración de atención + cierre con link de pago/seña ---
+app.get('/api/care/config', requireAuth, planGateMiddleware(db, 'atencion'), (req, res) => {
+  try { res.json({ ok: true, config: paymentCloseMod.getCareConfig(db, req.session.userId) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/care/config', requireAuth, planGateMiddleware(db, 'atencion'), express.json(), (req, res) => {
+  try { res.json({ ok: true, config: paymentCloseMod.setCareConfig(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/care/close', requireAuth, planGateMiddleware(db, 'cierre_pago'), express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const body = req.body || {};
+    // Doble candado de verdad: un precio que no está en el fundamento
+    // del negocio NO entra al mensaje de cierre (ni a mano ni por IA).
+    const price = String(body.price || '').trim();
+    if (price) {
+      let digest = null;
+      try { digest = clientDigest.getDigest(db, uid); } catch (e) {}
+      const allowed = digest ? clientDigest.digestNumbers(digest) : new Set();
+      const nums = clientDigest.numbersInText(price);
+      const invented = [...nums].filter((n) => !allowed.has(n));
+      if (invented.length || (/\$/.test(price) && !nums.size)) {
+        return res.status(400).json({ ok: false, error: 'Ese precio no está en los datos de tu negocio' });
+      }
+    }
+    const out = paymentCloseMod.closeForUser(db, uid, {
+      customerName: body.customerName || body.customer_name || '',
+      itemName: body.itemName || body.item_name || '',
+      price, lang: langOfUser(uid),
+    });
+    res.json({ ok: out.ok, ...out });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
 // "🎠 Hacer carousel": convierte un borrador en carousel automático — portada
@@ -16006,7 +16230,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v309';
+const BUILD_ID = '20261021-v310';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -16207,6 +16431,16 @@ try {
   relacion.registerRelacion(app, db, { requireAuth, requireAdminToken });
   relacion.startRelacionJobs(db);
 } catch (e) { console.error('[relacion] no se pudo montar:', e && e.message); }
+
+// ---------- ATENCIÓN TOTAL: tablas propias (2026-10-21) ----------
+// booking/followups/payment-close crean sus tablas con ensureTable en
+// cada operación; este montaje las deja listas al boot. Fail-safe: si
+// algo falla acá, la app sigue (cada módulo reintenta al usarse).
+try {
+  bookingMod.ensureTable(db);
+  followupsMod.ensureTable(db);
+  paymentCloseMod.ensureTable(db);
+} catch (e) { console.error('[atencion] no se pudieron crear las tablas:', e && e.message); }
 
 app.listen(PORT, () => {
   console.log(`[posta] Corriendo en http://localhost:${PORT} (${NODE_ENV})`);

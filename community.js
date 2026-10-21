@@ -234,7 +234,12 @@ function dismissReply(db, replyId, uid) {
 
 // ---------------------------------------------------------------------------
 // pollCommunity(db, deps) — entrada del scheduler (2 veces/día).
-// deps: { getBriefBlock(uid), getStyleBlock(uid), getBusiness(uid), getApiKey(uid), fetchFn }
+// deps: { getBriefBlock(uid), getStyleBlock(uid), getBusiness(uid), getApiKey(uid), fetchFn,
+//         planFilter(uid) } — planFilter (2026-10-21, cableado Atención
+// Total): la atención es del plan Total; el scheduler pasa el gate de
+// plan-gate.js y los usuarios sin la feature se saltean. Si el filtro
+// lanza, el usuario se saltea igual (fail-closed). Sin dep, no filtra
+// (compat con tests y callers históricos).
 // Nunca lanza: un usuario fallido no rompe el resto.
 // ---------------------------------------------------------------------------
 async function pollCommunity(db, deps) {
@@ -252,6 +257,11 @@ async function pollCommunity(db, deps) {
   const fetchPosts = d.fetchFn || fetchPostComments;
   for (const u of users) {
     try {
+      if (d.planFilter) {
+        let allowed = false;
+        try { allowed = !!d.planFilter(u.id); } catch (e) { allowed = false; }
+        if (!allowed) continue; // sin plan Total no hay cola de atención
+      }
       out.users++;
       const posts = await fetchPosts(u.ig_user_id, u.ig_access_token);
       const briefBlock = d.getBriefBlock ? d.getBriefBlock(u.id) : '';
