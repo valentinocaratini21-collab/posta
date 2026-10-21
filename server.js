@@ -4702,14 +4702,29 @@ function getAdWallet(userId) {
   }
   return w;
 }
+// Índice único (usuario, ref, kind): la red de seguridad contra doble
+// acreditación si un webhook se reintenta — el segundo INSERT revienta
+// dentro de la transacción y el saldo no se mueve dos veces.
+try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_ad_tx_ref_kind ON ad_transactions (user_id, ref, kind) WHERE ref != ''`); }
+catch (e) { console.error('[ads] no pude crear el índice único de billetera:', e.message); }
 function adWalletMove(userId, amountCents, kind, ref, note) {
-  const w = getAdWallet(userId);
-  const after = w.balance_cents + amountCents;
-  if (after < 0) throw new Error('Saldo insuficiente');
-  db.prepare(`UPDATE ad_wallets SET balance_cents = ?, updated_at = datetime('now') WHERE user_id = ?`).run(after, userId);
-  db.prepare(`INSERT INTO ad_transactions (user_id, kind, amount_cents, balance_after, ref, note) VALUES (?,?,?,?,?,?)`)
-    .run(userId, kind, amountCents, after, ref || '', note || '');
-  return after;
+  // UPDATE de saldo + INSERT del ledger en UNA transacción: si el proceso
+  // muere entre los dos, no queda saldo acreditado sin ledger (el dedupe
+  // del webhook busca el ledger: sin él, el reintento acreditaba de nuevo).
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const w = getAdWallet(userId);
+    const after = w.balance_cents + amountCents;
+    if (after < 0) throw new Error('Saldo insuficiente');
+    db.prepare(`UPDATE ad_wallets SET balance_cents = ?, updated_at = datetime('now') WHERE user_id = ?`).run(after, userId);
+    db.prepare(`INSERT INTO ad_transactions (user_id, kind, amount_cents, balance_after, ref, note) VALUES (?,?,?,?,?,?)`)
+      .run(userId, kind, amountCents, after, ref || '', note || '');
+    db.exec('COMMIT');
+    return after;
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (e2) {}
+    throw e;
+  }
 }
 // País del negocio (para el targeting de la pauta): UY si el plan es UY, si no AR
 function adCountry(userId) {
@@ -8175,8 +8190,18 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
     try {
       const { generateWeekExtras } = require('./story-reel');
       const feedDrafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND week_key = ? AND status = 'draft' AND media_type = 'image' ORDER BY created_at ASC`).all(uid, weekKey);
-      await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
-    } catch (e) { console.error(`[pipeline:${tag}] extras historias/reels:`, e.message); }
+      const xr = await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
+      // Semana "ok" sin el reel/historias del plan = fallo de barrido: se
+      // registra para que el sistema de reintentos la complete (antes el
+      // resultado se ignoraba y el faltante era invisible).
+      if (xr && xr.need && xr.have && (xr.have.stories < xr.need.stories || xr.have.reels < xr.need.reels)) {
+        console.error(`[pipeline:${tag}] extras incompletos usuario ${uid}: ${xr.have.stories}/${xr.need.stories} historias, ${xr.have.reels}/${xr.need.reels} reels`);
+        try { recordSweepFailure(uid, weekKey, 'extras_missing'); } catch (e) {}
+      }
+    } catch (e) {
+      console.error(`[pipeline:${tag}] extras historias/reels:`, e.message);
+      try { recordSweepFailure(uid, weekKey, 'extras_error'); } catch (e2) {}
+    }
     // 2026-10-08: si no se creó NADA, es un fallo (no un éxito vacío).
     // Antes retornaba ok:true con created:0 y el retry lo borraba como si
     // hubiera funcionado — por eso la semana de Valentino nunca se reintentó.
@@ -9551,7 +9576,11 @@ app.post('/api/data-deletion', express.urlencoded({ extended: false }), (req, re
       db.prepare(`UPDATE settings SET ig_user_id='', ig_page_id='', ig_access_token='' WHERE user_id=?`).run(uid);
       db.prepare('UPDATE profiles SET ig_username=NULL, ig_connected=0 WHERE user_id=?').run(uid);
     }
-  } catch (e) { /* no bloquea la confirmación */ }
+  } catch (e) {
+    // El borrado falló: NO confirmar 'done' — 500 para que Meta reintente.
+    console.error('[data-deletion] borrado falló:', e.message);
+    return res.status(500).json({ error: 'no se pudo completar el borrado' });
+  }
   const code = crypto.randomBytes(8).toString('hex');
   try { db.prepare('INSERT INTO deletion_requests (code, meta_user_id, status) VALUES (?, ?, ?)').run(code, metaUserId, 'done'); } catch (e) {}
   const base = 'https://' + req.get('host');
@@ -9626,6 +9655,15 @@ async function revalidateReferralDiscount(referrerId) {
     if (!base) { console.log(`[referral-discount] user=${u.id} sin precio base, no hago nada`); return { ok: false, reason: 'no-base' }; }
     const newAmount = want ? Math.round(base * REFERRAL_DISCOUNT) : Math.round(base);
     await mp.updateSubscriptionAmount(u.mp_preapproval_id, newAmount);
+    // Verificación post-PUT: ese endpoint de MP no está verificado contra la
+    // API real — un 200 no garantiza que el monto haya cambiado. Solo se
+    // toca la DB (y se avisa al usuario) si el monto leído ES el objetivo.
+    const verifySub = await mp.getSubscription(u.mp_preapproval_id);
+    const appliedAmt = Number(verifySub && verifySub.auto_recurring && verifySub.auto_recurring.transaction_amount) || 0;
+    if (appliedAmt !== newAmount) {
+      console.error(`[referral-discount] user=${u.id}: MP no aplicó el monto (leído ${appliedAmt}, esperado ${newAmount}) — DB intacta`);
+      return { ok: false, reason: 'mp-verify-mismatch' };
+    }
     db.prepare(`UPDATE users SET referral_discount = ?, mp_mult = ? WHERE id = ?`).run(want, want ? REFERRAL_DISCOUNT : 1, u.id);
     console.log(`[referral-discount] user=${u.id} count=${st.referred_count} discount=${cur}->${want} old=${fmtPesos(base)} new=${fmtPesos(newAmount)} ok=true`);
     try {
@@ -9788,12 +9826,18 @@ app.post('/api/billing/subscribe', requireAuth, async (req, res) => {
       mult = FRIEND_DISCOUNT;
       finalPlan = { ...plan, price: Math.round(plan.price * FRIEND_DISCOUNT), name: `${plan.name} (20% off invitado)` };
     }
-    const { init_point } = await mp.createSubscription({
+    const { init_point, preapproval_id } = await mp.createSubscription({
       plan: finalPlan,
       userId: user.id,
       baseUrl,
       payerEmail,
     });
+    // Persistir el id YA: si el webhook de MP nunca llega, billing-sync
+    // (reconcilePending) encuentra la suscripción y activa el plan. Sin
+    // esto, el usuario pagaba y el plan jamás se activaba.
+    if (preapproval_id) {
+      try { db.prepare(`UPDATE users SET mp_preapproval_id = ? WHERE id = ?`).run(String(preapproval_id), user.id); } catch (e) {}
+    }
     // Guardar base y multiplicador para la conciliación automática con MP
     try { db.prepare(`UPDATE users SET mp_base_amount = ?, mp_mult = ? WHERE id = ?`).run(plan.price, mult, user.id); } catch (e) {}
     res.json({ init_point, discount_applied: discount });
@@ -15778,7 +15822,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v295';
+const BUILD_ID = '20261021-v296';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

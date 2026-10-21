@@ -11044,6 +11044,12 @@ async function scheduleView() {
         <div style="font-size:13px;line-height:1.6;color:var(--mut)">Tu semana se sigue armando, pero ningún posteo puede salir hasta que conectes tu cuenta. Es una sola vez y queda.</div>
         <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?ig=1">Conectar Instagram</a>
       </div>`
+    : (typeof SETTINGS !== 'undefined' && SETTINGS && SETTINGS.ig_token_warning)
+    ? `<div class="card card-hi-yl" style="margin:0 0 12px;padding:14px 16px;border-radius:14px">
+        <div style="font-weight:800;font-size:14px;margin-bottom:6px">📸 Tu conexión con Instagram venció</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--mut)">Tu semana se sigue armando, pero ningún posteo puede salir hasta que renueves la conexión. Es un toque y queda.</div>
+        <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?ig=1">Reconectar Instagram</a>
+      </div>`
     : '';
   // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
   let dogfoodPost = null;

@@ -248,11 +248,11 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   const plan = getPlan(u.plan_status === 'active' ? u.plan : TRIAL_PLAN);
   const nStories = Number(plan.storiesPerWeek) || 0;
   const nReels = Number(plan.reelsPerWeek) || 0;
-  if (!nStories && !nReels) return { stories: 0, reels: 0, plan: plan.id };
+  if (!nStories && !nReels) return { stories: 0, reels: 0, plan: plan.id, need: { stories: 0, reels: 0 }, have: { stories: 0, reels: 0 } };
   const feed = (feedDrafts || []).filter(d => d && d.image_path && localFile(mediaDir, d.image_path));
   if (!feed.length) {
     console.log(`[extras:${tag}] usuario ${uid}: sin imágenes de feed, no hay historias/reels`);
-    return { stories: 0, reels: 0, plan: plan.id, reason: 'no_feed_images' };
+    return { stories: 0, reels: 0, plan: plan.id, reason: 'no_feed_images', need: { stories: nStories, reels: nReels }, have: { stories: 0, reels: 0 } };
   }
   const ins = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review) VALUES (?,?,?,?, 'draft',?,?,?,?,?,?,?)`);
   const rev = needsReview ? 1 : 0;
@@ -271,7 +271,7 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   } catch (e) {}
   if (have.story >= nStories && have.video >= nReels) {
     console.log(`[extras:${tag}] usuario ${uid} semana ${weekKey}: extras ya completos (${have.story} historias, ${have.video} reels)`);
-    return { stories: 0, reels: 0, plan: plan.id, already: true };
+    return { stories: 0, reels: 0, plan: plan.id, already: true, need: { stories: nStories, reels: nReels }, have: { stories: have.story, reels: have.video } };
   }
 
   // Historias: round-robin sobre los posteos (cada historia usa otro posteo).
@@ -322,7 +322,7 @@ async function generateWeekExtras({ db, uid, weekKey, tag, mediaDir, feedDrafts,
   }
 
   console.log(`[extras:${tag}] usuario ${uid} semana ${weekKey}: ${stories} historias + ${reels} reels`);
-  return { stories, reels, plan: plan.id };
+  return { stories, reels, plan: plan.id, need: { stories: nStories, reels: nReels }, have: { stories: have.story + stories, reels: have.video + reels } };
 }
 
 module.exports = { makeStoryImage, makeReelVideo, makeReelVideoPro, generateWeekExtras, STORY_HOUR };

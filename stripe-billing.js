@@ -165,7 +165,7 @@ function applySubscription(db, sub, hooks, hints = {}) {
   if (!sub || !sub.id) return;
   const userId = (sub.metadata && Number(sub.metadata.user_id)) || hints.userIdHint
     || userIdByCustomer(db, sub.customer) || userIdBySubscription(db, sub.id);
-  if (!userId) return;
+  if (!userId) { console.error('[stripe] applySubscription sin usuario: sub', sub.id, 'customer', sub.customer); return; }
   const planId = planIdFromSubscription(sub) || hints.planHint || null;
   try { db.prepare('UPDATE users SET stripe_subscription_id=? WHERE id=?').run(String(sub.id), userId); } catch (e) {}
   if (sub.status === 'active' || sub.status === 'trialing') {
@@ -184,11 +184,12 @@ function applySubscription(db, sub, hooks, hints = {}) {
 
 async function processEvent(db, client, event, hooks = {}) {
   if (!event || !event.id || !event.type) return { ok: false, reason: 'bad-event' };
-  // Idempotencia por event id: registrar ANTES de aplicar; si ya está, salir.
+  // Idempotencia por event id: si ya se APLICÓ, salir. El registro se hace
+  // DESPUÉS de aplicar (antes se registraba primero y un fallo al aplicar —
+  // p.ej. subscriptions.retrieve — dejaba el evento marcado: el reintento
+  // de Stripe se descartaba como "duplicado" y el plan nunca activaba).
   const seen = db.prepare('SELECT id FROM stripe_events WHERE id = ?').get(event.id);
   if (seen) return { ok: true, duplicate: true };
-  db.prepare('INSERT INTO stripe_events (id, type, received_at) VALUES (?,?,?)')
-    .run(event.id, event.type, Date.now());
   const obj = (event.data && event.data.object) || {};
   switch (event.type) {
     case 'checkout.session.completed': {
@@ -236,8 +237,12 @@ async function processEvent(db, client, event, hooks = {}) {
       break;
     }
     default:
-      break; // eventos que no nos importan: 200 igual (ya registrados)
+      break; // eventos que no nos importan: 200 igual (se registran abajo)
   }
+  // Recién ahora el evento queda registrado como procesado. Si el switch
+  // lanzó, processEvent propaga y el webhook responde 500 SIN registrar:
+  // Stripe reintenta y el evento se aplica de verdad.
+  try { db.prepare('INSERT INTO stripe_events (id, type, received_at) VALUES (?,?,?)').run(event.id, event.type, Date.now()); } catch (e) {}
   return { ok: true };
 }
 

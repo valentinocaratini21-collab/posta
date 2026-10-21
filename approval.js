@@ -166,15 +166,18 @@ async function notifyMissed(db, post, reason) {
     console.log(`[notif] demo: no se envía (post #${post.id})`);
     return { ok: false, demo: true };
   }
+  let pushRes = null, emailRes = null;
   try {
     const m = require('./notify-push');
-    if (m && typeof m.sendMissedPush === 'function') await m.sendMissedPush(db, post, reason);
+    if (m && typeof m.sendMissedPush === 'function') pushRes = await m.sendMissedPush(db, post, reason);
   } catch (e) { console.error('[notif] push missed:', e.message); }
+  if (pushRes && pushRes.ok) return { ok: true, channel: 'push' };
   try {
     const m = require('./notify-email');
-    if (m && typeof m.sendMissedEmail === 'function') await m.sendMissedEmail(db, post, reason);
+    if (m && typeof m.sendMissedEmail === 'function') emailRes = await m.sendMissedEmail(db, post, reason);
   } catch (e) { console.error('[notif] email missed:', e.message); }
-  return { ok: true };
+  if (emailRes && emailRes.ok) return { ok: true, channel: 'email' };
+  return { ok: false, channel: 'none' };
 }
 
 module.exports = {

@@ -13,6 +13,7 @@
 // nunca cambia la DB si MP no confirmó el cambio.
 
 const mp = require('./mercadopago');
+const { PLANS } = require('./config/plans');
 
 // Mantener sincronizado con server.js
 const REFERRALS_NEEDED = 2;
@@ -81,8 +82,31 @@ async function reconcileUser(db, userId) {
   return { ok: true, reason: 'updated', from: have, to: want, amount: newAmount };
 }
 
+// Pendientes: el usuario pagó en MP pero el webhook nunca llegó. El
+// preapproval_id quedó persistido al crear la suscripción (server.js); si MP
+// dice que está authorized, el plan se activa acá. Solo cuentas que nunca
+// estuvieron activas (trial/vencidas): una baja real jamás se reactiva sola.
+async function reconcilePending(db) {
+  const rows = db.prepare(
+    `SELECT id, mp_preapproval_id, mp_base_amount FROM users WHERE plan_status IN ('trial', 'expired') AND mp_preapproval_id IS NOT NULL AND mp_preapproval_id != ''`
+  ).all();
+  for (const r of rows) {
+    try {
+      const sub = await mp.getSubscription(r.mp_preapproval_id);
+      if (!sub || String(sub.status) !== 'authorized') continue;
+      const planId = Object.keys(PLANS || {}).find((k) => PLANS[k] && Number(PLANS[k].price) === Number(r.mp_base_amount));
+      if (!planId) { console.error(`[billing-sync] pendiente user ${r.id}: no identifico el plan (base=${r.mp_base_amount})`); continue; }
+      db.prepare(`UPDATE users SET plan = ?, plan_status = 'active' WHERE id = ?`).run(planId, r.id);
+      console.log(`[billing-sync] ✅ pendiente activado: user ${r.id} plan ${planId} (el webhook de MP nunca llegó)`);
+    } catch (e) {
+      console.error(`[billing-sync] pendiente user ${r.id}: ${e.message}`);
+    }
+  }
+}
+
 async function reconcileAll(db) {
   if (!mp.mpConfigured()) return;
+  await reconcilePending(db);
   const rows = db.prepare(
     `SELECT id FROM users WHERE plan_status = 'active' AND mp_preapproval_id IS NOT NULL AND mp_preapproval_id != ''`
   ).all();
@@ -95,4 +119,4 @@ async function reconcileAll(db) {
   }
 }
 
-module.exports = { reconcileUser, reconcileAll, targetMult };
+module.exports = { reconcileUser, reconcileAll, reconcilePending, targetMult };

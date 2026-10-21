@@ -260,6 +260,12 @@ async function publishSinglePost(db, post, opts = {}) {
   } catch (e) {
     const msg = String(e.message).slice(0, 500);
     db.prepare(`UPDATE posts SET status = 'failed', error = ? WHERE id = ?`).run(msg, post.id);
+    // Token de IG vencido/revocado (error 190 de Meta): se marca el aviso en
+    // settings para que Schedule muestre el banner de reconexión (antes el
+    // perfil seguía figurando conectado y el aviso vivía solo en Ajustes).
+    if (/\b190\b|OAuthException|access token|token.*(expir|invalid|revoked)/i.test(msg)) {
+      try { db.prepare(`UPDATE settings SET ig_token_warning = 1 WHERE user_id = ?`).run(post.user_id); } catch (e2) {}
+    }
     // (v198-A) Evento persistente con la causa real (ver schedEvent arriba).
     schedEvent(db, post.user_id, 'post_failed', {
       post_id: post.id, kind: 'publish_error', cause: msg,
@@ -386,9 +392,16 @@ async function processApprovalNotifications(db) {
   let sent = 0;
   for (const post of rows) {
     try {
-      await approval.notifyApproval(db, post);
-      db.prepare(`UPDATE posts SET notified = 1, notify_at = datetime('now') WHERE id = ?`).run(post.id);
-      sent++;
+      const nres = await approval.notifyApproval(db, post);
+      // Marcar SOLO si el aviso salió por algún canal (o es demo: no debe
+      // salir nunca). Antes se marcaba siempre: si el aviso fallaba, el
+      // posteo quedaba "notificado" y nadie se enteraba de que sale en 3 h.
+      if (nres && ((nres.ok && nres.channel && nres.channel !== 'none') || nres.demo)) {
+        db.prepare(`UPDATE posts SET notified = 1, notify_at = datetime('now') WHERE id = ?`).run(post.id);
+        sent++;
+      } else {
+        console.error('[notif] post', post.id, 'sin canal de aviso (queda para reintentar)');
+      }
     } catch (e) {
       console.error('[notif] post', post.id, e.message);
     }
@@ -1731,10 +1744,11 @@ async function weeklyWowSummary(db) {
           .run(u.id, msg);
       } catch (e) {}
 
-      // Push si está suscrito.
+      // Push si está suscrito. (sendPushToUser no existe: el push del wow
+      // semanal NUNCA salía; la función real es sendPush(userId, {...}).)
       try {
-        const { sendPushToUser } = require('./push');
-        await sendPushToUser(db, u.id, {
+        const { sendPush } = require('./push');
+        await sendPush(u.id, {
           title: '🎉 Tu semana en Posty',
           body: `${n} posteos publicados. Tocá para ver cómo te fue.`,
           url: '/#/app/semana',
@@ -1774,10 +1788,11 @@ async function proactiveIdeas(db) {
           .run(u.id, trigger.message);
       } catch (e) {}
 
-      // Push.
+      // Push. (sendPush real: el nombre viejo no existía y el push
+      // proactivo nunca salía.)
       try {
-        const { sendPushToUser } = require('./push');
-        await sendPushToUser(db, u.id, {
+        const { sendPush } = require('./push');
+        await sendPush(u.id, {
           title: trigger.push_title,
           body: trigger.push_body,
           url: '/#/app/chat',
@@ -1819,16 +1834,26 @@ async function autopilotPreNotify(db) {
 
   for (const p of posts) {
     try {
-      // Marcar como notificado ANTES de enviar (evita doble push si falla).
-      db.prepare(`UPDATE posts SET autopilot_notified = 1 WHERE id = ?`).run(p.id);
-
       const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
-      const { sendPushToUser } = require('./push');
-      await sendPushToUser(db, p.user_id, {
+
+      // El aviso sale por la función REAL (sendPushToUser no existe: este
+      // aviso — el freno de emergencia del autopiloto — NUNCA llegaba, y la
+      // marca previa lo daba por enviado). Marcar SOLO si el push salió o si
+      // el canal no está disponible (sin suscripciones/VAPID no hay nada que
+      // reintentar); ante un fallo real de envío queda sin marcar y el
+      // próximo tick reintenta.
+      const { sendPush } = require('./push');
+      const pr = await sendPush(p.user_id, {
         title: '🚀 Publico en 30 min',
         body: `"${cap}..." — tocá para verlo o frenarlo`,
         url: `/#/app/semana?post=${p.id}`,
       });
+      const pushOk = pr && (pr.ok || pr.reason === 'no_subs' || pr.reason === 'no_vapid');
+      if (!pushOk) {
+        console.error(`[autopilot-notify] push no entregado para post ${p.id}:`, pr && pr.reason);
+        continue;
+      }
+      db.prepare(`UPDATE posts SET autopilot_notified = 1 WHERE id = ?`).run(p.id);
 
       // También en el chat.
       try {
