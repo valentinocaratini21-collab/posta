@@ -5804,6 +5804,19 @@ async function buildAccountAnalysis(uid, opts = {}) {
     const bh = db.prepare('SELECT best_hour FROM users WHERE id = ?').get(uid);
     if (bh && bh.best_hour >= 9 && bh.best_hour <= 21) ctx.insights = { bestHour: bh.best_hour };
   } catch (e) { /* sin dato: el análisis sigue con los datos públicos */ }
+  // (v281) La ESTRATEGIA del negocio para la carta (queda en el análisis):
+  // su estrella efectiva (dueño > ventas reales de Tiendanube > inferida
+  // del feed, vía effectiveStarOf) y su objetivo comercial (reserva si
+  // toma turnos; venta si tiene estrella o productos; consulta si vive de
+  // servicios). Sin fundamento utilizable no se proyecta nada y la carta
+  // cae a su selección de siempre — jamás una estrategia inventada.
+  try {
+    const star = (digest && clientDigest.effectiveStarOf) ? clientDigest.effectiveStarOf(digest) : null;
+    if (star && star.item) ctx.star = { item: String(star.item), source: star.source || null };
+    const nProds = (digest && Array.isArray(digest.productos)) ? digest.productos.length : 0;
+    const nServs = (digest && Array.isArray(digest.servicios)) ? digest.servicios.length : 0;
+    ctx.goal = (digest && digest.has_booking) ? 'reserva' : ((ctx.star || nProds > 0) ? 'venta' : (nServs > 0 ? 'consulta' : null));
+  } catch (e) { /* sin estrategia: la carta usa su selección de siempre */ }
   let analysis = null;
   const ig = feedAudit.sanitizeHandle(prof.ig_username || '');
   if (ig) {
@@ -15405,7 +15418,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v280';
+const BUILD_ID = '20261020-v281';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

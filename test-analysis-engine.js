@@ -252,5 +252,86 @@ const hist = ae.analysisHistory(db, 42, 6);
 ok(hist.length === 2 && hist[0].loop_checks && hist[0].loop_checks.length >= 2, 'P: historial con los chequeos del loop');
 try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
 
+// ---------- (v281) E: LA CARTA SE ARMA PARA LA ESTRATEGIA DE CADA NEGOCIO ----------
+// Test de pertenencia sobre la carta entera: negocios con señales
+// parecidas pero objetivos distintos reciben cartas SUSTANTIVAMENTE
+// distintas — el festejo celebra lo que mueve SU objetivo, la honesta
+// nombra SU cuello de botella (no el primer hallazgo de una lista fija)
+// y las acciones empujan SU mundo (su estrella, sus turnos, sus
+// consultas). Sin estrategia proyectada, la selección de siempre.
+const priorCopia = (a, n) => { const c = JSON.parse(JSON.stringify(a)); c.n = n; return c; };
+
+// E1 — Peluquería de turnos (reserva): ritmo flojo y una racha de 12 días
+// en silencio. El orden fijo daría "ritmo" como línea honesta; su cuello
+// real es el silencio (desaparecer = no existir para quien reserva).
+const turnosPosts = mkPosts([
+  { daysAgo: 30, caption: 'Foto del salón' }, { daysAgo: 28, caption: 'Corte de hoy' },
+  { daysAgo: 25, caption: 'Coloración' }, { daysAgo: 22, caption: 'Trabajo de la semana' },
+  { daysAgo: 19, caption: 'Peinado' }, { daysAgo: 17, caption: 'Foto del equipo' },
+  { daysAgo: 15, caption: 'Antes y después' }, { daysAgo: 13, caption: 'Nuestro salón' },
+  { daysAgo: 1, caption: 'Volvimos' },
+]);
+const aE1 = ae.analyzeExisting({ profile: { followers: 640, posts_count: 58 }, posts: turnosPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, prior: priorCopia(a1, 1), businessName: 'Peluquería Brillo', handle: 'peluqueriabrillo', goal: 'reserva' } });
+ok(aE1.strategy && aE1.strategy.goal === 'reserva', 'E1: la estrategia queda en el análisis (objetivo: reserva)');
+ok(/agenda/.test(aE1.letter.festejo || ''), 'E1: el festejo celebra la constancia que llena SU agenda');
+ok(/racha más larga fue de 12 días/.test(aE1.letter.honesta || ''), 'E1: la honesta nombra SU cuello (la racha en silencio), no el primer hallazgo de la lista');
+ok((aE1.letter.actions || [])[0] && /rachas en silencio/.test(aE1.letter.actions[0]), 'E1: la primera acción es el arreglo de ese cuello');
+ok((aE1.letter.actions || []).some((t) => /buscar turnos/.test(t)), 'E1: una acción empuja SU objetivo (reservas)');
+ok(aE1.letter.title === 'Cero días en silencio', 'E1: el título nombra el tema de SU carta');
+ok(letterDigitsOk(aE1) && letterTexts(aE1).every((t) => ae.lintTone(t).ok), 'E1: dígitos con respaldo y tono amigo, como siempre');
+
+// E2 — Tienda de productos (venta): catálogo fuerte, estrella de ventas
+// reales y ritmo débil (0,8/sem). Su festejo es su estrella; su cuello,
+// el ritmo que no la muestra.
+const tiendaPosts = mkPosts([
+  { daysAgo: 105, caption: '¿Ya probaste el shampoo sólido?' }, { daysAgo: 100, caption: 'Stock nuevo' },
+  { daysAgo: 90, caption: '¿Sabías que uno rinde tres meses?' }, { daysAgo: 81, caption: 'Foto del local' },
+  { daysAgo: 71, caption: '¿Tu pelo pide un cambio?' }, { daysAgo: 62, caption: 'Nuestros productos' },
+  { daysAgo: 52, caption: '¿Conocés la línea de caléndula?' }, { daysAgo: 43, caption: 'Packaging nuevo' },
+  { daysAgo: 33, caption: '¿Buscás un regalo distinto?' }, { daysAgo: 24, caption: 'La vidriera' },
+  { daysAgo: 14, caption: '¿Ya armaste tu rutina?' }, { daysAgo: 5, caption: 'Foto de la tienda' },
+]);
+const aE2 = ae.analyzeExisting({ profile: { followers: 1500, posts_count: 120 }, posts: tiendaPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, prior: priorCopia(a1, 3), businessName: 'Verde Almacén Natural', handle: 'verdealmacen', goal: 'venta', star: { item: 'Shampoo sólido de caléndula', source: 'sales' }, paletteHues: 7 } });
+ok(aE2.strategy && aE2.strategy.star && aE2.strategy.star.source === 'sales', 'E2: la estrella de ventas reales queda en el análisis');
+ok(/Shampoo sólido de caléndula/.test(aE2.letter.festejo || ''), 'E2: el festejo nombra SU estrella (lo que más vende su tienda)');
+ok(/0,8 posteos por semana/.test(aE2.letter.honesta || ''), 'E2: su cuello es el ritmo (0,8/sem) y la honesta lo nombra');
+ok((aE2.letter.actions || [])[1] && /Shampoo sólido de caléndula/.test(aE2.letter.actions[1]) && /primero en la grilla/.test(aE2.letter.actions[1]), 'E2: la estrella abre la semana en las acciones');
+ok(aE2.letter.title === 'La constancia la pongo yo', 'E2: el título nombra su cuello (ritmo)');
+ok(letterDigitsOk(aE2) && letterTexts(aE2).every((t) => ae.lintTone(t).ok), 'E2: dígitos con respaldo y tono amigo, como siempre');
+
+// E3 — Nacimiento: taller de cerámica nuevo, con estrella elegida por el
+// dueño en el fundamento. La carta nace hablando de SU producto.
+const aE3 = ae.analyzeColdStart({ business: { name: 'Taller Barro', category: 'cerámica artesanal', city: 'Palermo', ig_username: '' }, digest: { inferred_star: { item: 'Vajilla esmaltada a mano', fuente: 'dueno', confidence: 1 }, productos: [{ nombre: 'Vajilla esmaltada a mano' }, { nombre: 'Tazas de autor' }], servicios: [], promos: [] }, peers: [], reviews: { rating: 4.9, total: 212 }, ctx: { postsPerWeek: 7, plan: 'trial' } });
+ok(aE3.strategy && aE3.strategy.goal === 'venta' && aE3.strategy.star && aE3.strategy.star.item === 'Vajilla esmaltada a mano', 'E3: nacimiento con estrategia del fundamento (estrella del dueño)');
+ok(/Vajilla esmaltada a mano/.test(letterTexts(aE3).join(' ')), 'E3: la carta de nacimiento nombra SU producto estrella');
+ok((aE3.letter.actions || [])[0] && /producto estrella/.test(aE3.letter.actions[0]), 'E3: la primera acción de nacimiento abre la vidriera con su estrella');
+ok(letterDigitsOk(aE3) && letterTexts(aE3).every((t) => ae.lintTone(t).ok), 'E3: dígitos con respaldo y tono amigo, como siempre');
+
+// E4 — Cuenta fuerte (consulta): estudio de pilates con ritmo sano; su
+// cuello fino son los ganchos y su objetivo, las consultas por mensaje.
+const pilatesPosts = mkPosts([
+  { daysAgo: 16, caption: '¿Probaste una clase de prueba?' }, { daysAgo: 13, caption: 'Nuestro estudio' },
+  { daysAgo: 12, caption: '¿Dolor de espalda al entrenar?' }, { daysAgo: 11, caption: 'Foto de la sala', type: 'GraphVideo' },
+  { daysAgo: 9, caption: 'Trabajo de core' }, { daysAgo: 8, caption: '¿Querés mejorar tu postura?', type: 'GraphVideo' },
+  { daysAgo: 6, caption: 'Alumnas en acción', type: 'GraphVideo' }, { daysAgo: 5, caption: '¿Empezás esta semana?' },
+  { daysAgo: 3, caption: 'El equipo', type: 'GraphVideo' }, { daysAgo: 2, caption: 'Horarios de la sala' },
+  { daysAgo: 1, caption: 'Clase de la mañana', type: 'GraphVideo' }, { daysAgo: 0, caption: 'Foto del estudio' },
+]);
+const aE4 = ae.analyzeExisting({ profile: { followers: 2300, posts_count: 210 }, posts: pilatesPosts, ctx: { postsPerWeek: 7, plan: 'pro', peers, prior: priorCopia(aNext, 5), businessName: 'Estudio Aura Pilates', handle: 'aura.pilates', goal: 'consulta', paletteHues: 6 } });
+ok(aE4.strategy && aE4.strategy.goal === 'consulta', 'E4: la estrategia queda en el análisis (objetivo: consulta)');
+ok(/gancho/.test(aE4.letter.honesta || ''), 'E4: en una cuenta fuerte, la honesta va a SU cuello fino (los ganchos), no al ritmo');
+ok((aE4.letter.actions || []).some((t) => /invitando a escribirte/.test(t)), 'E4: una acción empuja SU objetivo (consultas por mensaje)');
+ok(letterDigitsOk(aE4) && letterTexts(aE4).every((t) => ae.lintTone(t).ok), 'E4: dígitos con respaldo y tono amigo, como siempre');
+
+// E5 — Control: sin fundamento proyectado no hay estrategia y la carta
+// usa su selección de siempre, sin filtrar palabras de otros mundos.
+ok(a1.strategy == null, 'E5: sin fundamento proyectado no hay estrategia (fail-closed)');
+ok(!/agenda|estrella/.test(a1.letter.festejo || ''), 'E5: sin estrategia, el festejo no habla de agendas ni estrellas');
+ok(!(a1.letter.actions || []).some((t) => /estrella abre|buscar turnos|invitando a escribirte/.test(t)), 'E5: sin estrategia, ninguna acción es de estrategia');
+// Pertenencia cruzada: ningún festejo de la galería sirve para otro.
+const festejosE = [aE1, aE2, aE3, aE4].map((a) => a.letter.festejo);
+ok(new Set(festejosE).size === 4, 'E: los cuatro festejos de la galería son sustantivamente distintos');
+ok(/agenda/.test(aE1.letter.festejo) && !/agenda/.test(aE2.letter.festejo) && /Shampoo/.test(aE2.letter.festejo) && !/Shampoo/.test(aE1.letter.festejo), 'E: objetivos distintos → festejos distintos en lo sustantivo (reserva vs venta)');
+
 console.log(fails ? '\n✗ ' + fails + ' fallas' : '\n✓ TODO VERDE — test-analysis-engine');
 process.exit(fails ? 1 : 0);

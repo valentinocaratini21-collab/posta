@@ -742,6 +742,111 @@ function pickBestPost(posts) {
   };
 }
 
+/* (v281) LA ESTRATEGIA DE ESTE NEGOCIO, tal como la lee la carta. Dos
+ * datos del fundamento, y nada más: su OBJETIVO comercial (reserva si toma
+ * turnos — digest.has_booking; venta si tiene estrella o productos;
+ * consulta si vive de servicios — la misma derivación que usa
+ * sales-brain para las cuotas de la semana) y su ESTRELLA efectiva (la
+ * que confirmó el dueño > la de ventas reales de su tienda > la inferida
+ * del feed con confianza ≥0,5 — effectiveStarOf de client-digest). El
+ * servidor los proyecta al ctx del barrido (ctx.star / ctx.goal);
+ * analyzeColdStart los deriva del digest directo. Sin fundamento
+ * utilizable NO hay estrategia (null) y la carta cae a su cadena de
+ * selección de siempre: jamás se inventa un objetivo ni una estrella. */
+function strategyFromCtx(ctx) {
+  const c = ctx || {};
+  const star = (c.star && c.star.item) ? { item: String(c.star.item), source: c.star.source || null } : null;
+  const goal = ['reserva', 'venta', 'consulta'].includes(c.goal) ? c.goal : null;
+  if (!star && !goal) return null;
+  return { goal, star };
+}
+
+function strategyFromDigest(digest) {
+  const d = (digest && typeof digest === 'object') ? digest : null;
+  if (!d) return null;
+  let star = null;
+  const inf = d.inferred_star;
+  const tn = d.connections && d.connections.tiendanube;
+  if (d.dueno && d.dueno.estrella) star = { item: String(d.dueno.estrella), source: 'dueno' };
+  else if (inf && inf.item && inf.fuente === 'dueno') star = { item: String(inf.item), source: 'dueno' };
+  else if (tn && tn.star && tn.star.name && (tn.star.units_30d || 0) > 0) star = { item: String(tn.star.name), source: 'sales' };
+  else if (inf && inf.item && (inf.confidence || 0) >= 0.5) star = { item: String(inf.item), source: 'inferred' };
+  const goal = d.has_booking ? 'reserva'
+    : (star || (Array.isArray(d.productos) && d.productos.length > 0)) ? 'venta'
+      : (Array.isArray(d.servicios) && d.servicios.length > 0) ? 'consulta' : null;
+  if (!star && !goal) return null;
+  return { goal, star };
+}
+
+function letterStrategyOf(a, ctx) {
+  const fromA = strategyFromCtx(a && a.strategy ? { star: a.strategy.star, goal: a.strategy.goal } : null);
+  const fromCtx = strategyFromCtx(ctx);
+  return {
+    goal: (fromA && fromA.goal) || (fromCtx && fromCtx.goal) || null,
+    star: (fromA && fromA.star) || (fromCtx && fromCtx.star) || null,
+  };
+}
+
+/* (v281) EL CUELLO DE BOTELLA DE ESTA SEMANA: el hallazgo que la carta
+ * pone en su línea honesta y en su primera acción ya no es "el primero
+ * de la lista" (un orden fijo de fábrica) sino el que la estrategia de
+ * ESTE negocio necesita destrabar. Puntaje determinístico y auditable:
+ * base por tipo de hallazgo (desaparecer —silencio/ritmo— es existencial:
+ * un negocio que no aparece no vende ni reserva), severidad medida desde
+ * la evidencia del propio hallazgo, y un empujón según su objetivo (en
+ * venta, los ganchos y la vidriera convierten; en reserva/consulta, los
+ * ganchos y el formato que descubre empujan los mensajes). Empate: gana
+ * el orden del análisis, como siempre. */
+const LETTER_BOTTLENECK_BASE = { silencio: 60, ritmo: 55, reels: 35, captions: 30, paleta: 25, horarios: 20 };
+
+function letterBottleneck(a, strategy) {
+  const fs = ((a && a.findings) || []).filter((f) => f && f.text);
+  if (!fs.length) return null;
+  const goal = strategy && strategy.goal;
+  let best = null;
+  let bestScore = -1;
+  fs.forEach((f) => {
+    let sc = LETTER_BOTTLENECK_BASE[f.key] != null ? LETTER_BOTTLENECK_BASE[f.key] : 15;
+    const v = (f.evidence && Number.isFinite(f.evidence.value)) ? f.evidence.value : null;
+    if (f.key === 'silencio' && v != null) sc += Math.min(v, 30);
+    if (f.key === 'ritmo' && v != null && v < 1) sc += 20;
+    if (goal === 'venta') { if (f.key === 'captions' || f.key === 'paleta') sc += 25; if (f.key === 'reels') sc += 5; }
+    if (goal === 'reserva') { if (f.key === 'captions') sc += 15; if (f.key === 'reels') sc += 10; }
+    if (goal === 'consulta') { if (f.key === 'captions') sc += 20; if (f.key === 'reels') sc += 10; }
+    if (sc > bestScore) { bestScore = sc; best = f; }
+  });
+  return best;
+}
+
+/* (v281) LA ACCIÓN DE SU ESTRATEGIA: lo que esta semana empuja el
+ * objetivo de ESTE negocio, en las palabras de su mundo. Son hechos del
+ * producto, no promesas: la semana nace con cuotas por intención
+ * (sales-brain: con reservas, ≥1 pieza empuja a reservar; la estrella
+ * abre la rotación de la grilla; con servicios sin reservas, hay pieza
+ * de consulta). Si las acciones ya cubren el tema, no se duplica. */
+function letterStrategyAction(a, strat, joined) {
+  if (!strat || (!strat.goal && !strat.star)) return '';
+  const en = a && a.lang === 'en';
+  const T = (es, enS) => (en ? enS : es);
+  const j = String(joined || '');
+  if (strat.goal === 'venta' && strat.star) {
+    const item = strat.star.item;
+    if (j.includes(item)) return '';
+    if (strat.star.source === 'sales') return T('Tu estrella abre la semana: ' + item + ' va primero en la grilla — es lo que más vendés.', 'Your star opens the week: ' + item + ' goes first on the grid — it is your top seller.');
+    if (strat.star.source === 'dueno') return T('Tu estrella abre la semana: ' + item + ' va primero en la grilla — es la que vos elegiste.', 'Your star opens the week: ' + item + ' goes first on the grid — the one you picked.');
+    return T('Tu estrella abre la semana: ' + item + ' va primero en la grilla — es lo que más empuja tu cuenta.', 'Your star opens the week: ' + item + ' goes first on the grid — it is what pushes your account the most.');
+  }
+  if (strat.goal === 'reserva') {
+    if (/reserv|turno|agend|book/i.test(j)) return '';
+    return T('La semana sale a buscar turnos: los posteos clave llevan el llamado a reservar bien a la vista.', 'The week goes after bookings: the key posts carry the call to book, front and center.');
+  }
+  if (strat.goal === 'consulta') {
+    if (/escrib|consult|mensaje|message|inquir/i.test(j)) return '';
+    return T('Los posteos clave cierran invitando a escribirte: en tu negocio, la consulta es el primer paso de la venta.', 'The key posts close by inviting people to message you: in your business, the inquiry is the first step of the sale.');
+  }
+  return '';
+}
+
 /* El movimiento del loop en palabras de amigo (no el texto métrico crudo
  * del check): mode 'win' = cumplido (para el festejo), 'soft' = en curso
  * (para la línea honesta, en fraseo neutro: "en curso" no garantiza que
@@ -791,11 +896,17 @@ function letterWeekActions(a, ctx = {}) {
   const cap = (t) => { const s = String(t || '').trim(); return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; };
   const dot = (t) => { const s = String(t || '').trim(); return s && !/[.!?…]$/.test(s) ? s + '.' : s; };
   if (a && a.kind === 'nacimiento') {
-    return [
+    const base = [
       T('Tu cuenta nace completa: perfil armado con su kit (nombre, bio, foto y destacadas) y tu primera vidriera de 9 piezas pensada como un todo.', 'Your account is born complete: profile set up with its kit (name, bio, photo and highlights) and your first 9-piece storefront designed as a whole.'),
       T('El ritmo queda instalado desde la primera semana: tu semana completa sale sola, cada semana.', 'The rhythm is installed from the very first week: your full week goes out on its own, every week.'),
       T('Te mido desde el día uno: cada análisis nuevo compara contra el anterior y ajusto la semana con lo que aprendo de tu cuenta.', 'I measure you from day one: every new analysis compares against the previous one and adjusts the week with what I learn from your account.'),
     ];
+    // (v281) Si el fundamento ya conoce su estrella, SU decisión abre las
+    // acciones (es lo más propio de este negocio); el kit y el ritmo la
+    // siguen y la medición — la más genérica — cede su lugar.
+    const starF = ((a && a.findings) || []).find((f) => f && f.key === 'estrella' && f.decision);
+    if (starF) return [dot(cap(starF.decision)), base[0], base[1]];
+    return base;
   }
   const phaseOf = (f) => {
     let ph = LETTER_PHASE_BY_KEY[f.key];
@@ -812,6 +923,16 @@ function letterWeekActions(a, ctx = {}) {
     out.push(txt);
   };
   const findings = ((a && a.findings) || []).filter((f) => f && (f.decision || f.with_posty));
+  // (v281) El orden de las acciones lo manda SU momento, no la fábrica:
+  // 1) la decisión de su cuello de botella (la carta ya dice que está en
+  // marcha ESTA semana — su arreglo va primero, sea de la fase que sea);
+  // 2) la acción de su estrategia (su estrella, sus turnos, sus
+  // consultas); 3) el resto de decisiones que arrancan ya, como siempre.
+  const strat = letterStrategyOf(a, ctx);
+  const bottle = letterBottleneck(a, strat);
+  if (bottle) push(bottle);
+  const sAct = letterStrategyAction(a, strat, out.join(' '));
+  if (sAct && out.length < 3) out.push(dot(sAct));
   findings.filter((f) => phaseOf(f) === 0).forEach(push);
   const fullPlan = ['pro', 'total', 'free'].includes(String(ctx.plan || (a && a.plan_layer) || ''));
   if (fullPlan && a.market && a.market.available && Array.isArray(a.market.findings)) {
@@ -822,16 +943,20 @@ function letterWeekActions(a, ctx = {}) {
   return out.slice(0, 3);
 }
 
-function letterTitle(a, stage, hasPrior) {
+function letterTitle(a, stage, hasPrior, bottleKey) {
   const en = a && a.lang === 'en';
   const T = (es, enS) => (en ? enS : es);
   if (a && a.kind === 'nacimiento') return T('Nacer con plan', 'Born with a plan');
   if (!hasPrior) return T('Tu primera carta', 'Your first letter');
   if (stage === 'fuerte') return T('A sostener y afinar', 'Keep it, sharpen it');
-  const first = (a.findings || [])[0];
-  if (first && first.key === 'ritmo') return T('La constancia la pongo yo', 'Consistency is on me');
-  if (first && first.key === 'silencio') return T('Cero días en silencio', 'Zero silent days');
-  if (first && first.key === 'reels') return T('El formato que empuja', 'The format that pushes');
+  // (v281) El título nombra el tema de SU carta: su cuello de botella de
+  // esta semana (sin cuello calculado, el primer hallazgo, como antes).
+  const fk = bottleKey || ((a.findings || [])[0] || {}).key;
+  if (fk === 'ritmo') return T('La constancia la pongo yo', 'Consistency is on me');
+  if (fk === 'silencio') return T('Cero días en silencio', 'Zero silent days');
+  if (fk === 'reels') return T('El formato que empuja', 'The format that pushes');
+  if (fk === 'captions') return T('El gancho que frena', 'The hook that stops');
+  if (fk === 'paleta') return T('Una sola vidriera', 'One single storefront');
   return T('Tu semana, en orden', 'Your week, in order');
 }
 
@@ -874,6 +999,7 @@ function buildLetter(analysis, ctx = {}) {
 
   let festejo = '';
   let honesta = '';
+  let bottleKey = null;
   if (birth) {
     const fs = (a.findings || []).filter((f) => f && f.text);
     const star = fs.find((f) => f.key === 'estrella' && f.now);
@@ -898,7 +1024,24 @@ function buildLetter(analysis, ctx = {}) {
     let core = '';
     const checks = (a.loop && Array.isArray(a.loop.checks)) ? a.loop.checks : [];
     const doneCheck = checks.find((c) => c && c.status === 'cumplida' && letterLoopPhrase(c, lang, 'win'));
+    // (v281) Después del loop — que es su HISTORIA y manda — el festejo lo
+    // elige su ESTRATEGIA, no una cadena fija igual para todos: un negocio
+    // de catálogo festeja su estrella (lo que vende, con su nombre); uno
+    // de turnos festeja la constancia que le llena la agenda. Sin datos
+    // para su objetivo, se cae a la cadena de siempre, intacta.
+    const strat = letterStrategyOf(a, ctx);
+    const bottle = letterBottleneck(a, strat);
+    bottleKey = bottle && bottle.key;
     if (doneCheck) core = T('lo que te prometí en mi carta anterior, cumplido: ', 'what I promised in my last letter, delivered: ') + letterLoopPhrase(doneCheck, lang, 'win');
+    else if (strat.star && s.n_posts >= 3 && (strat.goal === 'venta' || strat.star.source === 'dueno' || strat.star.source === 'sales')) {
+      const item = strat.star.item;
+      core = strat.star.source === 'sales'
+        ? T('tu estrella está vendiendo: ' + item + ' es lo que más sale de tu tienda', 'your star is doing the selling: ' + item + ' is what moves most in your store')
+        : strat.star.source === 'dueno'
+          ? T('tu cuenta ya tiene centro: tu estrella, ' + item, 'your account already has its center: your star, ' + item)
+          : T('tu cuenta ya tiene una estrella clara: ' + item, 'your account already has a clear star: ' + item);
+    }
+    else if (strat.goal === 'reserva' && s.posts_per_week != null && s.posts_per_week >= 2) core = T('tu constancia ya trabaja para tu agenda: salís a ' + fr(s.posts_per_week) + ' posteos por semana', 'your consistency is already working for your bookings: you post ' + fr(s.posts_per_week) + ' times a week');
     else if (stage === 'fuerte' && s.posts_per_week != null) core = T('tu cuenta ya trabaja a ' + fr(s.posts_per_week) + ' posteos por semana', 'your account already posts ' + fr(s.posts_per_week) + ' times a week');
     else if (s.n_posts >= 3) core = T('ya tenés ' + s.n_posts + ' posteos publicados: hay material real para apoyarnos', 'you already have ' + s.n_posts + ' published posts: real material to build on');
     else if (s.hook_pct != null && s.hook_pct >= 50) core = T('el ' + s.hook_pct + '% de tus captions ya abre con un gancho que frena el scroll', s.hook_pct + '% of your captions already open with a scroll-stopping hook');
@@ -909,9 +1052,10 @@ function buildLetter(analysis, ctx = {}) {
         : T('. Sobre eso construimos — no partimos de cero.', '. We build on that — we are not starting from zero.');
       festejo = T('Primero festejemos lo bueno, que es mérito tuyo: ', 'First, let us celebrate the good stuff — you earned it: ') + core + tail;
     }
-    // LA línea honesta: el punto flojo principal (el análisis ya ordena
-    // por impacto) en una frase, con su arreglo ya en marcha pegado.
-    const f0 = (a.findings || []).find((f) => f && f.text);
+    // LA línea honesta: SU cuello de botella de esta semana — el que su
+    // estrategia necesita destrabar, elegido por letterBottleneck (no el
+    // primero de una lista fija) — en una frase, con su arreglo pegado.
+    const f0 = bottle || (a.findings || []).find((f) => f && f.text);
     if (f0) {
       const fix = f0.decision || f0.with_posty || '';
       honesta = dot(T('Noté esto: ' + lower(f0.text) + (f0.now ? ' — hoy: ' + f0.now : '') + (fix ? '. Tranqui: ya está en marcha — ' + lower(fix) : ''),
@@ -970,7 +1114,7 @@ function buildLetter(analysis, ctx = {}) {
     v: 2,
     style: 'carta-nocturna',
     minimal: true,
-    title: letterTitle(a, stage, hasPrior),
+    title: letterTitle(a, stage, hasPrior, bottleKey),
     greeting,
     photo,
     festejo: pickText('festejo'),
@@ -1026,6 +1170,11 @@ function analyzeExisting({ profile = {}, posts = [], ctx = {} } = {}) {
   a.market = analyzeMarket(signals, ctx.peers || [], ctx);
   if (ctx.prior) a.loop = evaluateLoop(ctx.prior, signals);
   a.predictions = buildPredictions(a, ctx);
+  // (v281) La estrategia del negocio (objetivo + estrella del fundamento,
+  // proyectados por el servidor en el ctx) queda EN el análisis: la carta
+  // la lee para elegir festejo, cuello y acciones, y queda registrada
+  // para auditar por qué cada carta salió como salió.
+  a.strategy = strategyFromCtx(ctx);
   const { analysis } = enforceEvidence(a);
   analysis.letter = buildLetter(analysis, ctx);
   return analysis;
@@ -1040,6 +1189,10 @@ function analyzeColdStart({ business = {}, digest = null, peers = [], reviews = 
   a.starter_grid = starterGrid({ digest, market: a.market, reviews, lang: ctx.lang });
   if (ctx.prior) a.loop = evaluateLoop(ctx.prior, {});
   a.predictions = buildPredictions(a, ctx);
+  // (v281) En nacimiento la estrategia sale del digest directo (estrella
+  // del dueño/tienda + objetivo): la carta de una cuenta nueva también se
+  // arma para SU negocio, no de molde.
+  a.strategy = strategyFromDigest(digest);
   const { analysis } = enforceEvidence(a);
   analysis.letter = buildLetter(analysis, Object.assign({}, ctx, {
     businessName: ctx.businessName || business.name || '',
