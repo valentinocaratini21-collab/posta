@@ -2137,8 +2137,11 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   }
 }
 
-async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, tasteBlock, styleLockExtras, lang }, apiKey) {
+async function openaiIdeas({ business, category, description, dna, tone, competitors, taste, recentTopics, ephemeris, campaign, performance, learnings, styleRules, excluded, approved, outcome, contentPerf, tasteBlock, styleLockExtras, lang }, apiKey) {
   const en = lang === 'en';
+  // (growth ola 2) Capa de campaña comercial: sugiere SIN imponer — si el
+  // negocio no vende en esa fecha, se ignora (test de pertenencia manda).
+  const campLine = campaign ? `\n${campaign}` : '';
   const ephLine = ephemeris
     ? (en
       ? `\n⚠️ DATE COMING UP: ${ephemeris.emoji} ${ephemeris.name} is on ${ephemeris.date} (in ${ephemeris.daysLeft} days). Idea #1 MUST be about it (angle: ${ephemeris.angle}). It's a date that sells: don't skip it.`
@@ -2183,7 +2186,7 @@ async function openaiIdeas({ business, category, description, dna, tone, competi
         {
           role: 'user',
           content: businessContext({ business, category, description, dna, tone, learnings }) +
-            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\nGenerá las 7 ideas.`,
+            `\nCompetidores a superar: ${competitors || 'no indicados'}${taste || ''}${recentTopics ? `\nTemas ya publicados recientemente (NO los repitas ni con otra vuelta: proponé ideas nuevas): ${recentTopics}` : ''}${excludedLine}${approvedLine}${ephLine}${campLine}${performance ? `\nRendimiento real de tu cuenta:\n${performance}` : ''}${webAngleLine}${outcome || ''}${contentPerf || ''}${rulesLine}${styleLockExtras ? `\n${styleLockExtras}` : ''}\nGenerá las 7 ideas.`,
         },
       ],
       // 2600 (2026-10-15): con 1200 el modelo entra en presupuesto y

@@ -586,6 +586,7 @@ html{scroll-behavior:smooth}
   <a class="logo-posty" href="/en"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
   <span class="pill">TRY IT FREE</span>
 </div></div>
+<div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
 
 <!-- VISTA: onboarding -->
 <div id="v-onboarding">
@@ -2928,5 +2929,15 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 });
 </script>
 <script src="/posty-chat.js?v=3" defer></script>
+<script>
+/* Campaign frame (growth wave 2): when a commercial window is open, the
+   trial presents itself for that date. No active campaign, nothing shows. */
+fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(function(d){
+  if(!d || !d.campaign) return;
+  var b = document.getElementById('campBanner'); if(!b) return;
+  b.textContent = d.campaign.emoji + ' We are building ' + d.campaign.frame + ' — see yours free 👇';
+  b.style.display = 'block';
+}).catch(function(){});
+</script>
 </body>
 </html>

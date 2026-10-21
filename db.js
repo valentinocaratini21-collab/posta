@@ -912,6 +912,11 @@ try { db.exec(`ALTER TABLE users ADD COLUMN notify_letter INTEGER DEFAULT 1`); }
 try { db.exec(`ALTER TABLE users ADD COLUMN notify_failed INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
 // Pausar todo (v283): snapshot reversible del freno de cuenta {at, autopilot_enabled, post_ids}.
 try { db.exec(`ALTER TABLE users ADD COLUMN pause_snapshot TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// Los Primeros 200 (growth ola 2, 2026-10-21): lugar de fundador 1-200 asignado
+// al primer alta paga, en orden; founder_public = permiso registrado del cliente
+// para aparecer en la página pública con nombre de negocio + rubro + ciudad.
+try { db.exec(`ALTER TABLE users ADD COLUMN founder_number INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN founder_public INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Backfill idempotente (corre en cada boot, solo sube de nivel): nadie regresa
 // de nivel por la migración — conserva lo ganado con los mecanismos viejos.
 try { db.exec(`UPDATE users SET trust_level = 2 WHERE COALESCE(autopilot_enabled, 0) = 1 AND COALESCE(trust_level, 0) < 2`); } catch (e) {}

@@ -111,6 +111,7 @@
     <a href="/#/login">Log in</a>
     <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
   </div></div>
+  <div id="campBanner" style="display:none;background:#FEC14D;color:#0A1E33;text-align:center;font-weight:800;font-size:14.5px;padding:10px 16px"></div>
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, your community manager">
     <div class="pill">🤖 Your community manager</div>
@@ -1116,5 +1117,15 @@ function lpCalcRate(btn) {
 
 </script>
 <script src="/posty-chat.js?v=3" defer></script>
+<script>
+/* Campaign frame (growth wave 2): top band only when a commercial window is open. */
+fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(function(d){
+  if(!d || !d.campaign) return;
+  var b = document.getElementById('campBanner'); if(!b) return;
+  var f = d.campaign.frame;
+  b.textContent = d.campaign.emoji + ' ' + f.charAt(0).toUpperCase() + f.slice(1) + ' — try free how yours would look 👇';
+  b.style.display = 'block';
+}).catch(function(){});
+</script>
 </body>
 </html>

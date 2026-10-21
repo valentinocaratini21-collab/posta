@@ -233,6 +233,7 @@ function ajustesView() {
   </div></div>
   <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
+    <div id="founderZone"></div>
   </div></div>
   <div class="card ajsec${openSec==='marca' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎨 Tu marca y estilos</h3>${stBrand}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:16px">Acá definís tu logo y tus colores: todo lo que generemos sale con tu identidad.</p>
@@ -1347,6 +1348,33 @@ function bindSettings() {
     ov.querySelector('#pvX').onclick = close;
     ov.querySelector('#pvOk').onclick = close;
   }
+  // ⭐ Los Primeros 200 (growth ola 2): distintivo de fundador + captura del
+  // permiso de aparición pública. Vive en Mi plan (la superficie post-pago) y
+  // solo aparece para cuentas pagas con número de fundador asignado.
+  (async () => {
+    const z = $('#founderZone');
+    if (!z) return;
+    const en = typeof ME !== 'undefined' && ME && ME.lang === 'en';
+    const n = (typeof ME !== 'undefined' && ME && ME.founder_number) || 0;
+    if (!n) return;
+    const pub = !!(ME && ME.founder_public);
+    z.innerHTML = `<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+      <div style="font-size:15px;font-weight:800">⭐ ${en ? 'Founder' : 'Fundador'} #${n} ${en ? 'of The First 200' : 'de Los Primeros 200'}</div>
+      <p style="color:var(--mut);font-size:13px;line-height:1.55;margin:6px 0 10px">${en ? 'Your spot in the founding cohort is yours. Do you want your business on the public founders page, with its name, trade and city?' : 'Tu lugar en la cohorte fundadora ya es tuyo. ¿Te sumás a la página de fundadores con el nombre de tu negocio, su rubro y su ciudad?'}</p>
+      <label style="display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;cursor:pointer"><input type="checkbox" id="founderPub" ${pub ? 'checked' : ''} style="width:18px;height:18px"> ${en ? 'Yes, list my business' : 'Sí, sumame a la página'}</label>
+      <div id="founderPubMsg" style="font-size:12px;color:var(--dim);margin-top:6px"></div>
+      <a href="${en ? '/en/founders' : '/fundadores'}" target="_blank" rel="noopener" style="font-size:12.5px;font-weight:700;color:var(--cel)">${en ? 'See the founders page →' : 'Ver la página de fundadores →'}</a>
+    </div>`;
+    const cb = document.getElementById('founderPub');
+    if (cb) cb.onchange = async () => {
+      const msg = document.getElementById('founderPubMsg');
+      try {
+        const r = await api.put('/api/founders/consent', { public: cb.checked });
+        if (typeof ME !== 'undefined' && ME) ME.founder_public = !!(r && r.founder_public);
+        if (msg) msg.textContent = cb.checked ? (en ? 'Done! You are on the page 💙' : '¡Listo! Ya estás en la página 💙') : (en ? 'Removed from the public page.' : 'Te saqué de la página pública.');
+      } catch (e) { cb.checked = !cb.checked; if (msg) msg.textContent = en ? 'Could not save — try again.' : 'No se pudo guardar — probá de nuevo.'; }
+    };
+  })();
   // Mi plan
   (async () => {
     const z = $('#planZone');

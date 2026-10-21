@@ -66,6 +66,7 @@
     </div>
     <a class="lp-entrar" href="#/login">Entrar</a>
   </div></div>
+  <div id="campBanner" style="display:none;background:#FEC14D;color:#0A1E33;text-align:center;font-weight:800;font-size:14.5px;padding:10px 16px"></div>
   <div class="hero"><div class="wrap">
     <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
     <div class="pill">🤖 Tu community manager</div>
@@ -110,7 +111,17 @@
 /* v210: splash calmo — Posty estatico, sin malabares. */
 </style>
 <script>setTimeout(function(){var b=document.getElementById('posty-boot');if(b)b.remove();},6000);</script>
-<script src="/app.js?v=208"></script>
+<script src="/app.js?v=209"></script>
+<script>
+/* Marco de campaña (growth ola 2): banda superior solo si hay ventana comercial abierta. */
+fetch('/api/campaign/current?lang=es').then(function(r){return r.json()}).then(function(d){
+  if(!d || !d.campaign) return;
+  var b = document.getElementById('campBanner'); if(!b) return;
+  var f = d.campaign.frame;
+  b.textContent = d.campaign.emoji + ' ' + f.charAt(0).toUpperCase() + f.slice(1) + ' — probá gratis cómo se ve la tuya 👇';
+  b.style.display = 'block';
+}).catch(function(){});
+</script>
 <script>
 /* Oferta de idioma (frente EN, 2026-10-20): si el navegador está en inglés y
    estamos en la landing, ofrecemos /en con un toque. La elección se recuerda

@@ -478,6 +478,7 @@ if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 function stripeHooks() {
   return {
     onActivated: (uid, planId) => {
+      try { stampFounder(uid); } catch (e) {}
       reactivatePausedPosts(uid);
       track(uid, 'subscribed', planId);
       evTrack(uid, 'payment_ok', { plan: planId, provider: 'stripe' });
@@ -2738,8 +2739,13 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', (req, res) => {
   if (!req.session.userId) return res.json({ user: null });
-  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT id, email, created_at, plan, plan_status, mp_preapproval_id, mp_payer_email, stripe_customer_id, stripe_subscription_id, trial_ends_at, trial_extended_until, email_verified, lang, founder_number, founder_public FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.json({ user: null });
+  // Sello de fundador (red de seguridad): cualquier alta paga real —MP, Stripe
+  // o manual— recibe su número al primer /me, en orden, hasta 200.
+  if (!user.founder_number && user.plan_status === 'active' && user.plan && user.plan !== 'free') {
+    try { user.founder_number = stampFounder(user.id) || user.founder_number; } catch (e) {}
+  }
   const plan = getPlan(user.plan_status === 'active' ? user.plan : TRIAL_PLAN);
   const nowMs = Date.now();
   const tEnds = trialEffectiveEnd(user);
@@ -2761,6 +2767,8 @@ app.get('/api/auth/me', (req, res) => {
       trial_days_left: trialDaysLeft,
       trial_expired: trialExpired,
       billing_provider: user.stripe_subscription_id ? 'stripe' : (user.mp_preapproval_id ? 'mp' : null), // (v285) qué riel cobra esta cuenta
+      founder_number: user.founder_number || 0, // (growth ola 2) Los Primeros 200: 0 = todavía no
+      founder_public: !!user.founder_public, // permiso registrado para la página pública de fundadores
       lang: user.lang === 'en' ? 'en' : 'es', // (v274) idioma de la cuenta (del funnel de la prueba)
     },
   });
@@ -5195,6 +5203,18 @@ function openaiKeyFor(uid) {
   try { return getSettings(uid).openai_key || process.env.OPENAI_API_KEY || ''; }
   catch (e) { return process.env.OPENAI_API_KEY || ''; }
 }
+// (growth ola 2) Capa de campaña del fundamento: si la semana cae en una
+// ventana comercial y el rubro del negocio vende en esa fecha, el brief de
+// ideas recibe el tema como CAPA — nunca reemplaza productos reales del
+// negocio (test de pertenencia: el generador puede ignorarla si no aplica).
+function campaignLineFor(profile, uid) {
+  try {
+    if (!CAMPAIGNS_MOD) return '';
+    let lang = 'es';
+    try { const u = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); if (u && u.lang === 'en') lang = 'en'; } catch (e) {}
+    return CAMPAIGNS_MOD.campaignThemeLine(new Date(), (profile && profile.category) || '', lang) || '';
+  } catch (e) { return ''; }
+}
 function ideasInputFor(uid) {
   const profile = getProfile(uid);
   const dna = readDna(uid);
@@ -5218,6 +5238,7 @@ function ideasInputFor(uid) {
     taste: tasteProfile(uid),
     recentTopics,
     ephemeris: ephemerisFor(profile),
+    campaign: campaignLineFor(profile, uid),
     learnings: getContentLearnings(uid),
     styleRules,
     excluded: excludedTopicsLine(uid),
@@ -9905,6 +9926,7 @@ app.post('/api/billing/webhook', async (req, res) => {
     if (sub.status === 'authorized') {
       db.prepare(`UPDATE users SET plan=?, plan_status='active', mp_preapproval_id=? WHERE id=?`)
         .run(planId, String(mpId), Number(userId));
+      try { stampFounder(Number(userId)); } catch (e) {}
       reactivatePausedPosts(Number(userId));
       track(Number(userId), 'subscribed', planId);
       evTrack(Number(userId), 'payment_ok', { plan: planId });
@@ -13440,6 +13462,58 @@ app.get('/api/capacity', (req, res) => {
   res.json({ ok: true, spots_left: spotsLeft(), spots_total: MONTHLY_SPOTS });
 });
 
+// ---------- Los Primeros 200 + campañas (growth ola 2, 2026-10-21) ----------
+// Cohorte fundadora: los primeros 200 clientes PAGOS reales reciben su número
+// de fundador en orden de alta paga. Regla de verdad: el contador público
+// sale SOLO de la base (hoy 0) y la lista pública muestra ÚNICAMENTE a
+// quienes registraron su permiso (founder_public=1).
+const FOUNDERS_TOTAL = 200;
+function stampFounder(userId) {
+  try {
+    const u = db.prepare(`SELECT founder_number, plan, plan_status FROM users WHERE id = ?`).get(userId);
+    if (!u || u.founder_number) return u ? u.founder_number : 0;
+    if (u.plan_status !== 'active' || !u.plan || u.plan === 'free') return 0;
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE COALESCE(founder_number, 0) > 0`).get();
+    const next = (row ? row.n : 0) + 1;
+    if (next > FOUNDERS_TOTAL) return 0;
+    db.prepare(`UPDATE users SET founder_number = ? WHERE id = ? AND COALESCE(founder_number, 0) = 0`).run(next, userId);
+    console.log(`[founders] Usuario ${userId} = fundador #${next} de ${FOUNDERS_TOTAL}`);
+    return next;
+  } catch (e) { console.error('[founders] stamp:', e.message); return 0; }
+}
+app.get('/api/founders', (req, res) => {
+  try {
+    const taken = db.prepare(`SELECT COUNT(*) AS n FROM users WHERE COALESCE(founder_number, 0) > 0`).get();
+    const list = db.prepare(`SELECT u.founder_number AS n, p.business_name AS negocio, p.industry AS rubro, p.city AS ciudad
+      FROM users u JOIN profiles p ON p.user_id = u.id
+      WHERE u.founder_public = 1 AND COALESCE(u.founder_number, 0) > 0
+      ORDER BY u.founder_number ASC LIMIT 200`).all()
+      .filter(r => r.negocio).map(r => ({ n: r.n, negocio: r.negocio, rubro: r.rubro || '', ciudad: r.ciudad || '' }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, taken: taken ? taken.n : 0, total: FOUNDERS_TOTAL, list });
+  } catch (e) { res.status(500).json({ ok: false, error: 'founders_unavailable' }); }
+});
+app.put('/api/founders/consent', requireAuth, (req, res) => {
+  try {
+    const on = req.body && (req.body.public === true || req.body.public === 1 || req.body.public === '1');
+    stampFounder(req.userId);
+    db.prepare(`UPDATE users SET founder_public = ? WHERE id = ?`).run(on ? 1 : 0, req.userId);
+    const u = db.prepare(`SELECT founder_number, founder_public FROM users WHERE id = ?`).get(req.userId);
+    res.json({ ok: true, founder_number: (u && u.founder_number) || 0, founder_public: !!(u && u.founder_public) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'consent_failed' }); }
+});
+// Campaña comercial activa (calendario por rubro): marco de la prueba pública
+// y capa del fundamento. El módulo es fail-safe: sin él, no hay campaña.
+const CAMPAIGNS_MOD = (() => { try { return require('./campaigns'); } catch (e) { console.error('[campaigns] módulo no cargó:', e.message); return null; } })();
+app.get('/api/campaign/current', (req, res) => {
+  try {
+    const lang = String(req.query.lang || 'es').slice(0, 2) === 'en' ? 'en' : 'es';
+    const c = CAMPAIGNS_MOD ? CAMPAIGNS_MOD.currentCampaign(new Date(), lang) : null;
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, campaign: c });
+  } catch (e) { res.json({ ok: true, campaign: null }); }
+});
+
 // ---------- Banco de ideas (2026-10-03, funcionalidad 3) ----------
 app.get('/api/idea-bank', requireAuth, (req, res) => {
   try {
@@ -13637,10 +13711,21 @@ app.get('/prueba', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'prueba.html'));
 });
 
+// ---------- Los Primeros 200: página pública de la cohorte fundadora ----------
+// El contador y la lista salen SOLO de /api/founders (datos reales; hoy 0).
+app.get('/fundadores', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'fundadores.html'));
+});
+
 // ---------- Frente EN: landing y prueba en inglés (mismo motor) ----------
 app.get('/en/prueba', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(__dirname, 'public', 'en-prueba.html'));
+});
+app.get('/en/founders', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', 'en-fundadores.html'));
 });
 // Las páginas /en referencian assets con rutas relativas ("ig-cafe.jpg",
 // "posty-rubros.mp4"): esta ruta acotada por extensión los resuelve contra
@@ -15905,7 +15990,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v304';
+const BUILD_ID = '20261021-v303';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

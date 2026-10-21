@@ -586,6 +586,7 @@ html{scroll-behavior:smooth}
   <a class="logo-posty" href="/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
   <span class="pill">PROBALO GRATIS</span>
 </div></div>
+<div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
 
 <!-- VISTA: onboarding -->
 <div id="v-onboarding">
@@ -2926,5 +2927,15 @@ $('#ovReg').addEventListener('click', (e) => { if (e.target.id === 'ovReg') clos
 });
 </script>
 <script src="/posty-chat.js?v=3" defer></script>
+<script>
+/* Marco de campaña (growth ola 2): si hay una ventana comercial abierta, la
+   prueba se presenta para esa fecha. Sin campaña activa, no aparece nada. */
+fetch('/api/campaign/current?lang=es').then(function(r){return r.json()}).then(function(d){
+  if(!d || !d.campaign) return;
+  var b = document.getElementById('campBanner'); if(!b) return;
+  b.textContent = d.campaign.emoji + ' Estamos armando ' + d.campaign.frame + ' — mirá gratis cómo se vería la tuya 👇';
+  b.style.display = 'block';
+}).catch(function(){});
+</script>
 </body>
 </html>
