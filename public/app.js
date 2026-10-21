@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261020-v287'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261020-v291'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -2164,7 +2164,7 @@ function igConnectHere() {
   igConnect(cur);
 }
 function setupChecklistHtml(title, opts) {
-  const rows = [];
+  let rows = [];
   if (!(PROFILE && (PROFILE.business_name || '').trim())) {
     rows.push(`<button class="setup-row" id="setupBizRow"><span class="setup-ico">🏪</span><span class="setup-txt"><b>Poné el nombre de tu negocio</b><small>Es obligatorio: así todo Posty se siente tuyo.</small></span><span class="setup-go">Completar →</span></button>`);
   }
@@ -10223,13 +10223,22 @@ async function maybeAutoStartWeek() {
 /* ---------- AJUSTES ---------- */
 
 /* ---------- CONECTAR INSTAGRAM: popup de primer ingreso ---------- */
-function postAuthLanding() {
+function postAuthLanding(isReg) {
   // FASE 4 (autopilot): onboarding si falta el negocio; si no, directo a la
   // semana. El chat queda como escape hatch en la navegación secundaria.
   const homeTab = mzHomeHash();
   const chosen = localStorage.getItem('posta_chosen_plan');
+  // Deep-link previo al login: si el guardia nos desvio desde una ruta
+  // #/app/* concreta, el destino tras el login es ESA, no el default.
+  // Se consume siempre (aunque no se use) para que no salte despues.
+  // En un registro fresco manda el onboarding: la cuenta recien nace.
+  let ret = null;
+  try { ret = sessionStorage.getItem('posta_return_to'); sessionStorage.removeItem('posta_return_to'); } catch (e) {}
+  const retOk = !isReg && ret && ret.startsWith('#/app/') && ret.split('?')[0] !== '#/app/onboarding';
   if (PROFILE && PROFILE.business_name) {
-    location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : homeTab;
+    location.hash = chosen ? '#/app/ajustes?plan_sel=' + encodeURIComponent(chosen) : (retOk ? ret : homeTab);
+  } else if (retOk) {
+    location.hash = ret;
   } else {
     location.hash = '#/app/onboarding';
     OB = freshOB();
@@ -10662,9 +10671,17 @@ const GOALS = [
 ];
 
 /* ---------- ROUTER ---------- */
-async function render() {
-  // La app ya pintó: chau splash de carga (index.html).
+function bootSplashOff() {
   try { const b = document.getElementById('posty-boot'); if (b) b.remove(); } catch (e) {}
+}
+async function render() {
+  // Splash de carga (index.html): en rutas #/app/* NO se saca al entrar.
+  // Debajo del splash vive el shell publico y la app todavia esta resolviendo
+  // sesion/vista: sacarlo antes de pintar era el flash a la landing en
+  // deep-links y recargas logueadas. Se saca al pintar la app (appShell /
+  // offline) o al caer en ruta publica/auth, cuyo render lo remueve aca.
+  const _bootPath = (location.hash || '#/').split('?')[0];
+  if (!_bootPath.startsWith('#/app')) bootSplashOff();
   // La hoja de chat de Inicio pudo quedar abierta en el body: cada render arranca limpio.
   try { document.body.classList.remove('mz-sheet-open'); } catch (e) {}
   // Tarjeta de reporte semanal: se llena sola si la vista la incluye.
@@ -10786,7 +10803,7 @@ async function render() {
           localStorage.removeItem('posta_trial_profile');
         }
         // Primer ingreso: el popup de conectar Instagram aparece solo (una vez por cuenta)
-        postAuthLanding();
+        postAuthLanding(isReg);
       } catch (e) {
         const dup = /ya está registrado/i.test(e.message || '');
         $('#formErr').innerHTML = `<div class="err">${dup ? `Ese email ya tiene cuenta. ¿Eras vos? <a href="#/login" style="color:var(--cel);font-weight:700">Entrá</a>` : esc(e.message)}</div>`;
@@ -10844,8 +10861,13 @@ async function render() {
   // App (requiere login)
   LANDING_ON = false;
   await refreshSession();
-  if (!ME && NET_OFFLINE) { root.innerHTML = offlineView(); bindOffline(); return; }
-  if (!ME) { location.hash = '#/login'; return; }
+  if (!ME && NET_OFFLINE) { bootSplashOff(); root.innerHTML = offlineView(); bindOffline(); return; }
+  if (!ME) {
+    // Deep-link: recordamos a donde queria ir para aterrizar ahi tras el
+    // login (postAuthLanding lo consume), en vez del destino por defecto.
+    try { if (path.startsWith('#/app')) sessionStorage.setItem('posta_return_to', location.hash); } catch (e) {}
+    location.hash = '#/login'; return;
+  }
   const tabRaw = path.split('/')[2] || '';
   // 🔔 Posty te avisa: #/app/post/:id → el id del posteo a aprobar
   const postId = decodeURIComponent(path.split('/')[3] || '').trim();
@@ -10871,6 +10893,7 @@ async function render() {
   else if (tab === 'post') content = await approvalPostView(postId); // 🔔 Posty te avisa: aprobar por notificación
   else if (tab === 'dogfood') content = await dogfoodView(postId); // 🤖 Posty dogfood: propuesta del día
   else { let __okJ = true; try { await loadChunk('ajustes'); } catch (e) { __okJ = false; } content = __okJ ? ajustesView() : chunkFailHTML(); }
+  bootSplashOff();
   root.innerHTML = appShell(tab, content);
   bindApp(tab);
   // El banner de trial vencido lleva id único: si algún re-render lo duplicara, queda solo uno.
