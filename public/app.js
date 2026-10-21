@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v311'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v312'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6886,6 +6886,8 @@ async function bindAlbumCard() {
         <input type="file" id="albumFile" accept="image/*,video/*" multiple style="display:none">
       </label>
       <div style="font-size:12px;opacity:.65;margin-top:5px">Videos de hasta 90 segundos: Posty los usa en tus reels 🎬</div>
+      <button type="button" class="btn btn-soft btn-block" id="talkReelBtn" style="margin-top:8px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? '🎬 Talking reel: record yourself presenting your product' : '🎬 Reel hablado: grabate contando tu producto'}</button>
+      <div style="font-size:12px;opacity:.65;margin-top:5px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You talk for 20–40 seconds and Posty edits it: subtitles in your own words and cuts to your product.' : 'Hablás 20–40 segundos y Posty lo edita: subtítulos con tus palabras y cortes a tu producto.'}</div>
     </div>`;
   const perfHTML = data.perf
     ? `<div style="font-size:13.5px;margin:8px 0">📈 Tus posteos con <b>fotos propias</b> llegan en promedio a <b>${data.perf.foto}</b> personas${data.perf.sin ? ` (los de IA, a <b>${data.perf.sin}</b>)` : ''}. Por eso te pido fotos 😉</div>`
@@ -6918,6 +6920,8 @@ async function bindAlbumCard() {
     ${grid}
     <div id="albumMsg" style="font-size:13px;margin-top:6px"></div>
   </div>`;
+  const trBtn = document.getElementById('talkReelBtn');
+  if (trBtn) trBtn.onclick = async () => { try { await loadChunk('reel'); } catch (e) {} if (window.openTalkingReelSheet) openTalkingReelSheet(); };
   const aTgl = document.getElementById('albumToggle');
   if (aTgl) aTgl.onclick = () => {
     const g = document.getElementById('albumGrid');

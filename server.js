@@ -16249,7 +16249,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v311';
+const BUILD_ID = '20261021-v312';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -16438,6 +16438,24 @@ try {
   visibility.registerVisibility(app, db, { requireAuth, requireAdminToken });
   visibility.startVisibilityJobs(db);
 } catch (e) { console.error('[visibility] no se pudo montar:', e && e.message); }
+
+// ---------- REEL HABLADO (2026-10-21) ----------
+// El cliente sube un video hablando de su producto; Posty lo transcribe
+// (Whisper con timestamps por palabra), detecta las menciones contra su
+// fundamento y lo devuelve editado como BORRADOR en la Agenda. El módulo
+// es autosuficiente y fail-closed (sin clave OpenAI, el job falla con el
+// motivo a la vista; nada se publica solo).
+try {
+  const talkingReel = require('./talking-reel');
+  talkingReel.registerTalkingReel(app, db, {
+    requireAuth,
+    mediaDir: MEDIA_DIR,
+    apiKeyFor: (uid) => (getSettings(uid).openai_key) || process.env.OPENAI_API_KEY || '',
+    weekKeyFor: (uid) => mondayKeyOf(tzToday(userTz(uid))),
+    langFor: (uid) => { try { const r = db.prepare('SELECT lang FROM users WHERE id = ?').get(uid); return (r && r.lang) || 'es'; } catch (e) { return 'es'; } },
+    logCost: (x) => { try { costs.logApiCost(x); } catch (e) {} },
+  });
+} catch (e) { console.error('[talking-reel] no se pudo montar:', e && e.message); }
 
 // ---------- TOQUES DE RELACIÓN (2026-10-21): bienvenida inteligente + mitad de semana ----------
 // Posty le habla al cliente cuando tiene algo verdadero para decir: la
