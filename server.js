@@ -227,6 +227,12 @@ function evTrack(userId, name, props = null, sessionId = '') {
     db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)')
       .run(userId || null, String(sessionId || '').slice(0, 32), name, p);
   } catch (e) { /* el tracking nunca bloquea */ }
+  // 😕 Aviso al dueño (v283): el post_failed que se emite desde server.js
+  // (posteos trabados en publishing) avisa igual que los del scheduler —
+  // mismo helper, mismo toggle y mismo dedupe (push.js). Nunca bloquea.
+  if (name === 'post_failed' && userId) {
+    try { push.notifyPostFailed(userId).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
+  }
 }
 
 // Palabras en las que un titular JAMÁS debe terminar: se vería cortado a mitad
@@ -2633,15 +2639,24 @@ app.get('/api/profile', requireAuth, (req, res) => {
 });
 
 app.put('/api/profile', requireAuth, (req, res) => {
-  const { business_name, category, tone, description, ig_username, competitors, goal, monthly_goal, whatsapp, page_slug, page_enabled } = req.body || {};
+  const { business_name, category, tone, description, ig_username, competitors, goal, monthly_goal, whatsapp, page_slug, page_enabled, closed_days } = req.body || {};
   const uid = req.session.userId;
   getProfile(uid);
   // Página pública + WhatsApp (v169): se guardan si vienen en el body, sin
   // exigir el resto del form de perfil (la sección "Tu página" guarda sola).
   let pageTouched = false;
-  if (whatsapp !== undefined || page_slug !== undefined || page_enabled !== undefined) {
+  if (whatsapp !== undefined || page_slug !== undefined || page_enabled !== undefined || closed_days !== undefined) {
     const sets = [];
     const vals = [];
+    // Días de cierre (v283): array estructurado de días ISO (1=Lun..7=Dom).
+    // Se sanitiza en silencio (ints válidos, únicos, ordenados): un dato
+    // sucio jamás tumba el guardado del resto del perfil.
+    if (closed_days !== undefined) {
+      const clean = Array.isArray(closed_days)
+        ? [...new Set(closed_days.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))].sort((a, b) => a - b)
+        : [];
+      sets.push('closed_days=?'); vals.push(JSON.stringify(clean));
+    }
     if (whatsapp !== undefined) { sets.push('whatsapp=?'); vals.push(String(whatsapp || '').replace(/\D/g, '').slice(0, 20)); }
     if (page_enabled !== undefined) { sets.push('page_enabled=?'); vals.push(page_enabled ? 1 : 0); }
     if (page_slug !== undefined) {
@@ -2689,6 +2704,17 @@ app.get('/api/autopilot', requireAuth, (req, res) => {
     const u = db.prepare('SELECT autopilot_enabled, clean_approvals, autopilot_offered, trust_level, autopilot_prenotify FROM users WHERE id = ?').get(req.session.userId);
     const clean = (u && u.clean_approvals) || 0;
     const tl = autopilot.trustLevel(db, req.session.userId);
+    // ⏸ Pausar todo (v283): el freno de cuenta v275, visible para el dueño.
+    let paused = false, pausedAt = '', pausedCount = 0;
+    try {
+      const pu = db.prepare('SELECT publishing_stopped, pause_snapshot FROM users WHERE id = ?').get(req.session.userId);
+      paused = !!(pu && pu.publishing_stopped);
+      if (paused && pu.pause_snapshot) {
+        const snap = JSON.parse(pu.pause_snapshot);
+        pausedAt = snap.at || '';
+        pausedCount = Array.isArray(snap.post_ids) ? snap.post_ids.length : 0;
+      }
+    } catch (e) { /* sin snapshot: la pausa se lee igual por la bandera */ }
     res.json({
       ok: true,
       enabled: !!(u && u.autopilot_enabled),
@@ -2699,6 +2725,9 @@ app.get('/api/autopilot', requireAuth, (req, res) => {
       // En nivel 1 el aviso pre-publicación es obligatorio (freno de
       // emergencia); en nivel 2 es opt-in.
       pre_notify: tl >= 2 ? !!((u && u.autopilot_prenotify)) : true,
+      paused,
+      paused_at: pausedAt,
+      paused_count: pausedCount,
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'No pude leer el estado 😅' });
@@ -2749,6 +2778,108 @@ app.post('/api/autopilot/pre-notify', requireAuth, express.json(), (req, res) =>
     db.prepare(`UPDATE users SET autopilot_prenotify = ? WHERE id = ?`).run(on ? 1 : 0, req.session.userId);
     console.log(`[autopilot] usuario ${req.session.userId} ${on ? 'ACTIVÓ' : 'apagó'} el aviso pre-publicación`);
     res.json({ ok: true, pre_notify: on });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
+  }
+});
+// ⏸ PAUSAR TODO (v283) — el freno de CUENTA del dueño, con el MISMO mecanismo
+// del stop v275 (nada de un segundo sistema de pausa): desprograma lo que
+// estaba por salir, marca user_stopped en todo el stock sin marcar y levanta
+// users.publishing_stopped (la bandera que ya respetan el embudo
+// scheduleAllDrafts, la regla 24h y la recuperación de publishing). Antes de
+// mutar se captura el snapshot reversible (users.pause_snapshot): la fecha,
+// el autopiloto previo y los ids que ESTA pausa marca — la reanudación
+// deshace exactamente eso y nada más (lo que el dueño frenó a mano, posteo
+// por posteo, no se toca).
+app.post('/api/autopilot/pause-all', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const u = db.prepare('SELECT autopilot_enabled, publishing_stopped FROM users WHERE id = ?').get(uid);
+    if (u && u.publishing_stopped) return res.json({ ok: true, paused: true, already: true });
+    // Ids que esta pausa va a marcar: el stock frenable todavía sin marca
+    // (incluye los scheduled, que primero se desprograman).
+    const ids = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status IN ('draft', 'paused', 'publishing', 'scheduled') AND COALESCE(user_stopped, 0) = 0`).all(uid).map((r) => r.id);
+    const snapshot = { at: new Date().toISOString(), autopilot_enabled: (u && u.autopilot_enabled) ? 1 : 0, post_ids: ids };
+    const upd = db.prepare(`UPDATE posts SET status = 'draft', scheduled_at = NULL, user_stopped = 1 WHERE user_id = ? AND status = 'scheduled'`).run(uid);
+    db.prepare(`UPDATE posts SET user_stopped = 1 WHERE user_id = ? AND status IN ('draft', 'paused', 'publishing') AND COALESCE(user_stopped, 0) = 0`).run(uid);
+    db.prepare('UPDATE users SET autopilot_enabled = 0, publishing_stopped = 1, pause_snapshot = ? WHERE id = ?').run(JSON.stringify(snapshot), uid);
+    evTrack(uid, 'pause_all', { posts: ids.length, unscheduled: upd.changes });
+    console.log(`[pause-all] usuario ${uid}: ${upd.changes} desprogramados, ${ids.length} marcados, cuenta frenada`);
+    res.json({ ok: true, paused: true, paused_at: snapshot.at, paused_count: ids.length });
+  } catch (e) {
+    console.error('[pause-all]', e.message);
+    res.status(500).json({ ok: false, error: 'No pude pausar todo 😅' });
+  }
+});
+// ▶️ REANUDAR (v283) — solo el dueño, un toque, alcance exacto del snapshot:
+// limpia la bandera de cuenta, desmarca SOLO los posteos que la pausa marcó
+// (si siguen en borrador/pausa), restaura el autopiloto que había y, si el
+// autopiloto quedó activo, reprograma por el embudo de siempre
+// (scheduleAllDrafts). Sin snapshot (pausa administrativa v275 sin snapshot)
+// se limpia solo la bandera: las marcas quedan para reactivación del dueño,
+// como ya era la reanudación existente.
+app.post('/api/autopilot/resume-all', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const u = db.prepare('SELECT publishing_stopped, pause_snapshot FROM users WHERE id = ?').get(uid);
+    if (!u || !u.publishing_stopped) return res.json({ ok: true, paused: false, already: true });
+    let snap = null;
+    try { snap = u.pause_snapshot ? JSON.parse(u.pause_snapshot) : null; } catch (e) { snap = null; }
+    let unmarked = 0;
+    if (snap && Array.isArray(snap.post_ids) && snap.post_ids.length) {
+      const ph = snap.post_ids.map(() => '?').join(',');
+      const r = db.prepare(`UPDATE posts SET user_stopped = 0 WHERE user_id = ? AND status IN ('draft', 'paused') AND id IN (${ph})`).run(uid, ...snap.post_ids);
+      unmarked = r.changes;
+    }
+    const restoreAp = snap && snap.autopilot_enabled ? 1 : 0;
+    db.prepare('UPDATE users SET publishing_stopped = 0, pause_snapshot = ?, autopilot_enabled = ? WHERE id = ?').run('', restoreAp, uid);
+    let rescheduled = 0;
+    if (restoreAp) {
+      try { const r = scheduleAllDrafts(uid); rescheduled = (r && r.scheduled) ? r.scheduled.length : 0; } catch (e) { console.error('[resume-all] reprogramar:', e.message); }
+    }
+    evTrack(uid, 'resume_all', { unmarked, rescheduled, autopilot: restoreAp });
+    console.log(`[resume-all] usuario ${uid}: ${unmarked} desmarcados, ${rescheduled} reprogramados, autopiloto ${restoreAp ? 'restaurado' : 'queda manual'}`);
+    res.json({ ok: true, paused: false, unmarked, rescheduled });
+  } catch (e) {
+    console.error('[resume-all]', e.message);
+    res.status(500).json({ ok: false, error: 'No pude reanudar 😅' });
+  }
+});
+// 🔔 Preferencias de avisos push (v283): la carta del domingo y los posteos
+// fallidos viven acá; el de antes-de-publicar mantiene su endpoint propio
+// (pre-notify) y acá solo se LEE para pintar el bloque completo. has_push_sub
+// le dice a la UI si este dueño tiene algún dispositivo suscripto (si no,
+// los avisos están prendidos pero no tienen dónde llegar — la UI lo explica).
+app.get('/api/settings/notify-prefs', requireAuth, (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const u = db.prepare('SELECT notify_letter, notify_failed, autopilot_prenotify FROM users WHERE id = ?').get(uid);
+    const tl = autopilot.trustLevel(db, uid);
+    let subs = 0;
+    try { subs = db.prepare('SELECT COUNT(*) AS c FROM push_subscriptions WHERE user_id = ?').get(uid).c; } catch (e) {}
+    res.json({
+      ok: true,
+      pre_notify: tl >= 2 ? !!((u && u.autopilot_prenotify)) : true,
+      pre_notify_locked: tl < 2,
+      notify_letter: !u || u.notify_letter == null ? true : !!u.notify_letter,
+      notify_failed: !u || u.notify_failed == null ? true : !!u.notify_failed,
+      has_push_sub: subs > 0,
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'No pude leer tus avisos 😅' });
+  }
+});
+app.post('/api/settings/notify-prefs', requireAuth, express.json(), (req, res) => {
+  try {
+    const uid = req.session.userId;
+    const b = req.body || {};
+    const sets = [];
+    const vals = [];
+    if (b.notify_letter !== undefined) { sets.push('notify_letter = ?'); vals.push(b.notify_letter ? 1 : 0); }
+    if (b.notify_failed !== undefined) { sets.push('notify_failed = ?'); vals.push(b.notify_failed ? 1 : 0); }
+    if (sets.length) db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals, uid);
+    const u = db.prepare('SELECT notify_letter, notify_failed FROM users WHERE id = ?').get(uid);
+    res.json({ ok: true, notify_letter: !!(u && u.notify_letter), notify_failed: !!(u && u.notify_failed) });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'No pude guardarlo 😅' });
   }
@@ -8187,6 +8318,27 @@ function scheduleDayTaken(uid, post, whenIso) {
   return false;
 }
 
+// 🚪 Días de cierre (v283): profiles.closed_days es un JSON de días ISO
+// (1=Lun..7=Dom) en los que el negocio NO abre. Los dos motores de slots lo
+// respetan: ningún posteo automático cae en un día cerrado. (La fecha que el
+// dueño elige a mano en el PATCH queda fuera: es su decisión explícita,
+// como su programación manual ya limpia el freno de cuenta.)
+function weekdayOfYmd(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+  if (!m) return 0;
+  const wd = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
+  return wd === 0 ? 7 : wd;
+}
+function closedDaysOf(uid) {
+  try {
+    const p = db.prepare('SELECT closed_days FROM profiles WHERE user_id = ?').get(uid);
+    if (!p || !p.closed_days) return new Set();
+    const arr = JSON.parse(p.closed_days);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7));
+  } catch (e) { return new Set(); }
+}
+
 function assignScheduleSlots(uid, drafts) {
   const tz = userTz(uid);
   let bestHour = 19;
@@ -8209,6 +8361,7 @@ function assignScheduleSlots(uid, drafts) {
     return zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
   };
   const out = new Map();
+  const closedSet = closedDaysOf(uid);
   let off = 0, offStory = 0, guard = 0;
   for (const d of drafts) {
     const isStory = d.media_type === 'story';
@@ -8216,14 +8369,17 @@ function assignScheduleSlots(uid, drafts) {
     const tset = isStory ? takenStory : taken;
     let o = isStory ? offStory : off;
     let iso = null;
-    while (guard++ < 160) {
+    while (guard++ < 400) {
       const cand = slotAt(o++, hour);
       if (!cand) break;
       const k = ymdInTz(cand, tz);
+      if (k && closedSet.has(weekdayOfYmd(k))) continue; // 🚪 día de cierre: no se programa
       if (k && !tset.has(k)) { tset.add(k); iso = cand; break; }
     }
     if (isStory) offStory = o; else off = o;
-    if (!iso) iso = slotAt(o++, hour);
+    // Sin slot: si cierra TODOS los días no hay fallback posible (el de
+    // siempre podría caer en un día cerrado); queda sin asignar.
+    if (!iso && closedSet.size < 7) iso = slotAt(o++, hour);
     if (iso) out.set(d.id, iso);
     // (Si no hay slot —tz inválida—, se saltea: nunca scheduled_at=NULL.)
   }
@@ -8290,6 +8446,7 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
     }
   } catch (e) { /* no bloquea */ }
   const pools = weekQuotaPools(uid);
+  const closedSet = closedDaysOf(uid);
   const scheduled = [];
   const waiting = [];
   for (const d of drafts) {
@@ -8305,15 +8462,18 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
       continue;
     }
     // Primer día libre dentro de SU semana (desde mañana si es la actual).
+    // 🚪 Los días de cierre se saltan siempre: si los abiertos no alcanzan,
+    // la semana sale con menos posteos — jamás se viola un cierre.
     let iso = null;
     const firstDay = monday < tomorrow ? tomorrow : monday;
     for (let i = 0; i < 7; i++) {
       const ymd = shiftDays(monday, i);
       if (ymd < firstDay || tset.has(ymd)) continue;
+      if (closedSet.has(weekdayOfYmd(ymd))) continue;
       const cand = zonedWallToUtc(`${ymd} ${String(hour).padStart(2, '0')}:00`, tz);
       if (cand && ymdInTz(cand, tz) === ymd) { tset.add(ymd); iso = cand; break; }
     }
-    if (!iso) { waiting.push({ id: d.id, week_key: monday, reason: 'no_slot' }); continue; }
+    if (!iso) { waiting.push({ id: d.id, week_key: monday, reason: closedSet.size >= 7 ? 'closed_days' : 'no_slot' }); continue; }
     pools.consume(monday, poolKey);
     apply(iso, d);
     try { recordSignal(uid, d, 'approved'); } catch (e) { /* no bloquea */ }
@@ -15418,7 +15578,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261020-v282';
+const BUILD_ID = '20261020-v283';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -15863,6 +16023,13 @@ async function refreshAnalysesSweep(opts = {}) {
         summary.users++;
         const fresh = await buildAccountAnalysis(uid);
         if (fresh) summary.built++;
+        // 📩 Aviso de la carta (v283, la "C" de la carta dominical): SOLO en
+        // modo ventana y SOLO cuando se construyó una carta nueva — las
+        // cuentas con carta reciente ya se saltaron arriba (skippedDup), así
+        // que una carta nueva equivale a un único push, jamás dos.
+        if (sundayWindow && fresh && fresh.letter) {
+          try { await push.notifySundayLetter(uid); } catch (e) { /* el aviso nunca frena el barrido */ }
+        }
       } catch (e) { summary.errors++; console.error('[analysis-sweep] usuario ' + uid + ':', e.message); }
     }
   } catch (e) { console.error('[analysis-sweep] sweep:', e.message); }

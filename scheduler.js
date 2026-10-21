@@ -21,6 +21,12 @@ function schedEvent(db, userId, name, props) {
     db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)')
       .run(userId || null, '', name, p);
   } catch (e) { /* el instrumento nunca frena nada */ }
+  // 😕 Aviso al dueño (v283): un posteo que no salió también le llega por
+  // push (toggle users.notify_failed + dedupe de 30 min en push.js).
+  // Fire-and-forget: el aviso jamás frena ni rompe la publicación.
+  if (name === 'post_failed' && userId) {
+    try { require('./push').notifyPostFailed(userId).catch(() => {}); } catch (e) { /* sin aviso, nunca un error */ }
+  }
 }
 
 function publicImageUrl(imagePath, imageBaseUrl, reqHost) {

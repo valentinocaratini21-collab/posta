@@ -18,6 +18,7 @@ function ajustesView() {
   const openSec = q.get('plan') ? 'plan'
     : (q.get('ig') || q.get('tiktok') || q.get('google') || q.get('tn')) ? 'conex'
     : q.get('auto') ? 'auto'
+    : q.get('avisos') ? 'avisos'
     : q.get('pagina') ? 'pagina'
     : (q.get('estilos') || q.get('marca')) ? 'marca'
     : q.get('referidos') ? 'referidos'
@@ -141,6 +142,10 @@ function ajustesView() {
         <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
         <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
       </div>
+      <div class="field"><label>🚪 Días que cerrás</label>
+        <div id="closedDaysRow" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <div class="hint" id="closedDaysHint">Tocá los días en que tu negocio no abre: Posty no programa posteos esos días.</div>
+      </div>
       <div class="hint">Estos datos se guardan con el botón <b>Guardar</b> de acá abajo, junto con todo tu negocio — un solo guardado para todo.</div>
       <div id="webDnaZone"></div>
       <div id="dnaFuentesZone"></div>
@@ -180,6 +185,13 @@ function ajustesView() {
     <div id="tnMsg"></div>
   </div></div>
   <div class="card ajsec${openSec==='auto' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🚀 Posty en automático</h3><span class="ajsec-st" id="ajStAuto"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <div style="font-weight:800;margin-bottom:8px">⏸ Pausar todo</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">¿Vacaciones o una semana sin publicar? Frená todo con un toque: lo programado vuelve a borrador y nada sale hasta que reanudes. Tu semana y tus borradores quedan guardados, tal como están.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnPauseAll">Cargando...</button>
+      <span id="pauseStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div style="border-bottom:1px solid var(--line);margin:18px 0"></div>
     <div style="font-weight:800;margin-bottom:8px">Publicación</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Posty programa y publica tus posteos solo, en sus mejores horarios — vos no tenés que aceptar nada. Si algo no pasa el filtro de calidad, queda en revisión y te avisa. Y cualquier posteo se puede frenar antes de que salga, desde Schedule.</p>
     <div style="display:flex;align-items:center;gap:12px">
@@ -193,12 +205,28 @@ function ajustesView() {
       <button class="btn btn-ghost" id="btnAutoWeekToggle">Cargando...</button>
       <span id="autoWeekStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
-    <div style="font-weight:800;margin:18px 0 8px">Aviso antes de publicar</div>
+  </div></div>
+  <div class="card ajsec${openSec==='avisos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔔 Avisos</h3><span class="ajsec-st" id="ajStAvisos"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:14px">Posty te avisa por notificación en tu celu — solo cuando importa, nada de ruido.</p>
+    <div style="font-weight:800;margin-bottom:8px">Aviso antes de publicar</div>
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Te aviso 30 minutos antes de que salga cada posteo automático, para que puedas frenarlo desde Schedule si querés.</p>
     <div style="display:flex;align-items:center;gap:12px">
       <button class="btn btn-ghost" id="btnPreNotifyToggle">Cargando...</button>
       <span id="preNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
     </div>
+    <div style="font-weight:800;margin:18px 0 8px">📩 Tu carta del domingo</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Cada domingo a la noche te escribo tu carta: cómo viene tu Instagram y qué ya estoy haciendo por tu negocio. Te aviso apenas llega.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnLetterToggle">Cargando...</button>
+      <span id="letterNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div style="font-weight:800;margin:18px 0 8px">😕 Si un posteo no pudo salir</div>
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Si un posteo falla al publicar, te aviso en el momento. Nunca sale a medias: queda en borrador para que lo mires.</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-ghost" id="btnFailToggle">Cargando...</button>
+      <span id="failNotifyStatus" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+    <div class="hint" id="avisosPushHint" style="display:none;margin-top:14px">📱 Todavía no activaste las notificaciones en tu celu: los avisos quedan prendidos, pero no tienen dónde llegar. Cuando Posty te pida permiso para mandar notificaciones, tocá <b>Permitir</b>.</div>
   </div></div>
   <div class="card ajsec${openSec==='plan' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>💳 Mi plan</h3>${stPlan}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="planZone"><p style="color:var(--dim)">Cargando...</p></div>
@@ -509,6 +537,8 @@ function bindSettings() {
   // Resumen de estado en el título de "🚀 Posty en automático" (v257): se pinta
   // recién cuando AMBOS toggles cargaron su estado real; si algo falla, no se muestra nada.
   let __apOn = null, __awOn = null;
+  let __pausedAll = false;
+  const fmtPauseAt = (iso) => { try { let s = String(iso || '').trim().replace(' ', 'T'); if (!s) return ''; if (!/[zZ]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'; const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
   const paintAjStAuto = () => { try { const el = $('#ajStAuto'); if (!el || __apOn === null || __awOn === null) return; el.textContent = (__apOn && __awOn) ? 'Activado' : (!__apOn && !__awOn) ? 'Desactivado' : 'Parcial'; } catch (e) {} };
   // --- Autopiloto (4 puntos, 2026-10-02) ---
   const btnAp = $('#btnAutopilotToggle');
@@ -557,6 +587,28 @@ function bindSettings() {
             if (pnSt) pnSt.textContent = 'En tu nivel el aviso es obligatorio: es tu freno de emergencia antes de cada publicación.';
           }
         }
+        // ⏸ Pausar todo (v283): el estado sale de este mismo GET (paused /
+        // paused_at / paused_count). Mientras dura la pausa, el estado del
+        // autopiloto NO promete "salen solos": dice la verdad.
+        __pausedAll = !!r.paused;
+        const btnPause = $('#btnPauseAll');
+        if (btnPause) {
+          btnPause.disabled = false;
+          btnPause.textContent = r.paused ? '▶️ Reanudar todo' : '⏸ Pausar todo';
+          btnPause.classList.toggle('btn-primary', !!r.paused);
+          const pSt = $('#pauseStatus');
+          if (pSt) {
+            if (r.paused) {
+              const f = fmtPauseAt(r.paused_at);
+              pSt.textContent = `Todo pausado${f ? ' desde el ' + f : ''} — nada va a salir hasta que reanudes.${r.paused_count ? ` ${r.paused_count} posteo${r.paused_count === 1 ? '' : 's'} en borrador, esperándote.` : ''}`;
+            } else pSt.textContent = '';
+          }
+        }
+        if (r.paused) {
+          const apSt = $('#autopilotStatus');
+          if (apSt) apSt.textContent = '⏸ Todo está pausado: nada va a salir hasta que reanudes.';
+          const aws = $('#autoWeekStatus'); if (aws && __awOn) aws.textContent = '⏸ En pausa: tu semana no se arma mientras esté todo pausado.';
+        }
       } catch (e) {
         btnAp.textContent = 'Error';
       }
@@ -572,8 +624,72 @@ function bindSettings() {
       } catch (e) { alert('No pude cambiarlo 😅'); }
       btnAp.disabled = false;
     };
+    const btnPauseAll = $('#btnPauseAll');
+    if (btnPauseAll) {
+      btnPauseAll.onclick = async () => {
+        btnPauseAll.disabled = true;
+        try {
+          const r2 = __pausedAll
+            ? await api.post('/api/autopilot/resume-all', {})
+            : await api.post('/api/autopilot/pause-all', {});
+          if (r2 && r2.ok) await loadAp();
+          else alert('No pude cambiarlo 😅');
+        } catch (e) { alert('No pude cambiarlo 😅'); }
+        btnPauseAll.disabled = false;
+      };
+    }
     loadAp();
   }
+  // --- 🔔 Avisos: carta del domingo + posteos fallidos (v283) ---
+  // El aviso antes de publicar lo sigue pintando loadAp (su botón vive ahora
+  // en esta tarjeta, con los mismos ids: btnPreNotifyToggle/preNotifyStatus).
+  const loadNotifyPrefs = async () => {
+    try {
+      const r = await api.get('/api/settings/notify-prefs');
+      if (!r || !r.ok) return;
+      const hint = $('#avisosPushHint');
+      if (hint) hint.style.display = r.has_push_sub ? 'none' : '';
+      const paintT = (btn, st, on, onText, offText) => {
+        if (!btn) return;
+        btn.disabled = false;
+        btn.textContent = on ? '🟢 Activado' : '⚪ Activar';
+        btn.classList.toggle('btn-primary', !on);
+        if (st) st.textContent = on ? onText : offText;
+      };
+      let letterOn = !!r.notify_letter, failOn = !!r.notify_failed;
+      const btnL = $('#btnLetterToggle'), btnF = $('#btnFailToggle');
+      paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Tu análisis.');
+      paintT(btnF, $('#failNotifyStatus'), failOn, 'Te aviso apenas un posteo no pueda salir.', 'Sin aviso: los fallos los ves al entrar a tu semana.');
+      const paintSum = () => {
+        try {
+          const el = $('#ajStAvisos');
+          if (!el) return;
+          const n = (r.pre_notify ? 1 : 0) + (letterOn ? 1 : 0) + (failOn ? 1 : 0);
+          el.textContent = n === 3 ? 'Todos activos' : n === 0 ? 'Silenciados' : `${n} de 3 activos`;
+        } catch (e) {}
+      };
+      paintSum();
+      if (btnL) btnL.onclick = async () => {
+        btnL.disabled = true;
+        try {
+          const r2 = await api.post('/api/settings/notify-prefs', { notify_letter: !letterOn });
+          if (r2 && r2.ok) { letterOn = !!r2.notify_letter; paintT(btnL, $('#letterNotifyStatus'), letterOn, 'Te aviso el domingo apenas tu carta esté lista.', 'Sin aviso: la carta llega igual — la leés en Tu análisis.'); paintSum(); }
+          else alert('No pude cambiarlo 😅');
+        } catch (e) { alert('No pude cambiarlo 😅'); }
+        btnL.disabled = false;
+      };
+      if (btnF) btnF.onclick = async () => {
+        btnF.disabled = true;
+        try {
+          const r2 = await api.post('/api/settings/notify-prefs', { notify_failed: !failOn });
+          if (r2 && r2.ok) { failOn = !!r2.notify_failed; paintT(btnF, $('#failNotifyStatus'), failOn, 'Te aviso apenas un posteo no pueda salir.', 'Sin aviso: los fallos los ves al entrar a tu semana.'); paintSum(); }
+          else alert('No pude cambiarlo 😅');
+        } catch (e) { alert('No pude cambiarlo 😅'); }
+        btnF.disabled = false;
+      };
+    } catch (e) { /* sin prefs: los botones quedan en "Cargando..." solo si el GET falla */ }
+  };
+  loadNotifyPrefs();
   // --- Mi semana en automático (abrir y listo, 2026-10-03) ---
   const btnAw = $('#btnAutoWeekToggle');
   if (btnAw) {
@@ -584,7 +700,9 @@ function bindSettings() {
         __awOn = on; paintAjStAuto();
         btnAw.textContent = on ? '🟢 Activado' : '⚪ Activar';
         btnAw.classList.toggle('btn-primary', !on);
-        $('#autoWeekStatus').textContent = on
+        $('#autoWeekStatus').textContent = (__pausedAll && on)
+          ? '⏸ En pausa: tu semana no se arma mientras esté todo pausado.'
+          : on
           ? 'Tu semana se arma y programa sola ✨'
           : 'Vos armás tu semana a mano.';
       } catch (e) { btnAw.textContent = 'Error'; }
@@ -655,6 +773,34 @@ function bindSettings() {
     if (el) el.addEventListener('input', markDirty);
     if (el) el.addEventListener('change', markDirty);
   });
+  // --- 🚪 Días de cierre (v283): selector Lun–Dom en Tu negocio. El estado
+  // vive en profiles.closed_days (JSON de días ISO 1–7) y se guarda con el
+  // Guardar único, por la rama parcial de PUT /api/profile. Los motores de
+  // slots del servidor no programan posteos automáticos en esos días.
+  const closedSel = new Set();
+  try {
+    const raw = (PROFILE && PROFILE.closed_days) || '';
+    const arr = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+    if (Array.isArray(arr)) arr.forEach(d => { const n = Number(d); if (Number.isInteger(n) && n >= 1 && n <= 7) closedSel.add(n); });
+  } catch (e) {}
+  const closedRow = $('#closedDaysRow');
+  if (closedRow) {
+    const DAYLBL = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+    const paintClosed = () => {
+      closedRow.innerHTML = DAYLBL.map((lbl, i) => {
+        const d = i + 1, on = closedSel.has(d);
+        return `<button type="button" data-day="${d}" style="border:1px solid ${on ? 'var(--cel)' : 'var(--line)'};background:${on ? 'var(--cel)' : '#fff'};color:${on ? '#fff' : 'var(--mut)'};border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer">${lbl}</button>`;
+      }).join('');
+      closedRow.querySelectorAll('button[data-day]').forEach(b => { b.onclick = () => { const d = Number(b.dataset.day); if (closedSel.has(d)) closedSel.delete(d); else closedSel.add(d); paintClosed(); markDirty(); }; });
+      const hint = $('#closedDaysHint');
+      if (hint) hint.textContent = closedSel.size === 0
+        ? 'Tocá los días en que tu negocio no abre: Posty no programa posteos esos días.'
+        : closedSel.size >= 7
+          ? '⚠️ Marcaste todos los días: no se va a programar ningún posteo hasta que desmarques alguno.'
+          : 'Los días marcados quedan libres de posteos. Si una semana no tiene días abiertos suficientes, sale con menos posteos.';
+    };
+    paintClosed();
+  }
   $('#btnSaveProfile').onclick = async () => {
     const btnSave = $('#btnSaveProfile');
     if (!$('#s_biz').value.trim()) { $('#profMsg').innerHTML = '<div class="err">Poné el nombre de tu negocio</div>'; return; }
@@ -667,6 +813,7 @@ function bindSettings() {
         tone: $('#s_tone').value, description: $('#s_desc').value,
         competitors: compChips.join(', '), goal: $('#s_goal').value,
         monthly_goal: $('#s_mgoal') ? $('#s_mgoal').value : '',
+        closed_days: [...closedSel].sort((a, b) => a - b),
       });
       await api.put('/api/settings', { timezone: $('#s_tz').value });
       // Guardado único (v282): el ADN se guarda en la misma pasada — ya no

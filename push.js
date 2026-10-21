@@ -356,11 +356,97 @@ async function sendPush(userId, { title, body, url, image, actions, data } = {})
   return { ok: false, reason: firstReason.value };
 }
 
+// ---------- Avisos de Ajustes (v283): carta dominical y posteos fallidos ----------
+// Los toggles viven en users (notify_letter / notify_failed, default ON) y el
+// servidor los respeta acá, en el único lugar desde donde salen estos push.
+// Nunca tiran: devuelven { ok:false, reason } en silencio como sendPush.
+// opts.sendFn permite inyectar el envío en tests (mismo patrón que
+// server.js con opts.pushFn). opts.db pisa la DB global (tests).
+
+function avisosUserRow(db, userId) {
+  try {
+    return db.prepare('SELECT notify_letter, notify_failed, lang FROM users WHERE id = ?').get(userId) || {};
+  } catch (e) { return {}; }
+}
+
+// 📩 Push de la carta del domingo: lo llama el barrido dominical SOLO cuando
+// acaba de construir una carta nueva para la cuenta (la anti-duplicación la
+// da la ventana del barrido: una carta nueva = un llamado = un push).
+async function notifySundayLetter(userId, opts = {}) {
+  const db = opts.db || DB;
+  if (!db) return { ok: false, reason: 'no_db' };
+  const u = avisosUserRow(db, userId);
+  if (u.notify_letter != null && !u.notify_letter) return { ok: false, reason: 'opted_out' };
+  const en = u.lang === 'en';
+  const send = opts.sendFn || sendPush;
+  try {
+    return await send(userId, en ? {
+      title: 'Your Sunday letter from Posty is here 📩',
+      body: 'A quick, honest note on how your week went — and what I am already doing about it. Come take a look 💌',
+      url: '/#/app/analisis',
+    } : {
+      title: 'Tu carta de Posty ya llegó 📩',
+      body: 'Te cuento cómo viene tu Instagram y qué ya estoy haciendo por tu negocio esta semana. Pasá a leerla 💌',
+      url: '/#/app/analisis',
+    });
+  } catch (e) { return { ok: false, reason: 'send_failed' }; }
+}
+
+// 😕 Push de posteo fallido, enganchado a los eventos post_failed (v198-A).
+// Dedupe decidido (v283): el PRIMER fallo avisa al instante; los fallos que
+// caen dentro de los 30 minutos siguientes NO re-avisan (quedan registrados
+// como eventos post_failed, auditables) — si en la ventana de 10 minutos
+// hubo 2 o más, la copia del que avisa dice "algunos posteos". El marcador
+// es el evento post_failed_push en la misma tabla events.
+async function notifyPostFailed(userId, opts = {}) {
+  const db = opts.db || DB;
+  if (!db) return { ok: false, reason: 'no_db' };
+  const u = avisosUserRow(db, userId);
+  if (u.notify_failed != null && !u.notify_failed) return { ok: false, reason: 'opted_out' };
+  try {
+    const recent = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE user_id = ? AND name = 'post_failed_push' AND created_at >= datetime('now', '-30 minutes')`).get(userId);
+    if (recent && recent.c > 0) return { ok: false, reason: 'throttled' };
+  } catch (e) { /* sin tabla de eventos no hay dedupe: se avisa igual */ }
+  let fails = 1;
+  try {
+    const f = db.prepare(`SELECT COUNT(*) AS c FROM events WHERE user_id = ? AND name = 'post_failed' AND created_at >= datetime('now', '-10 minutes')`).get(userId);
+    if (f && f.c > 0) fails = f.c;
+  } catch (e) { /* la copia sale en singular */ }
+  const en = u.lang === 'en';
+  const multi = fails >= 2;
+  const send = opts.sendFn || sendPush;
+  let r;
+  try {
+    r = await send(userId, en ? {
+      title: multi ? 'A few posts could not go out 😕' : 'One post could not go out 😕',
+      body: multi
+        ? 'I kept them as drafts so nothing half-done reaches your Instagram. Take a look when you can.'
+        : 'I kept it as a draft so nothing half-done reaches your Instagram. Take a look when you can.',
+      url: '/#/app/schedule',
+    } : {
+      title: multi ? 'Algunos posteos no pudieron salir 😕' : 'Un posteo no pudo salir 😕',
+      body: multi
+        ? 'Los dejé en borrador para que nada a medias llegue a tu Instagram. Miralos cuando puedas.'
+        : 'Lo dejé en borrador para que nada a medias llegue a tu Instagram. Miralo cuando puedas.',
+      url: '/#/app/schedule',
+    });
+  } catch (e) { r = { ok: false, reason: 'send_failed' }; }
+  // El intento queda marcado SIEMPRE (haya o no suscripciones): es lo que
+  // frena la repeteción durante 30 minutos aunque el push no haya salido.
+  try {
+    db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)')
+      .run(userId || null, '', 'post_failed_push', JSON.stringify({ count: fails, sent: r && r.ok ? 1 : 0, reason: (r && r.reason) || '' }).slice(0, 2000));
+  } catch (e) { /* el marcador nunca bloquea */ }
+  return r;
+}
+
 module.exports = {
   initPush,
   sendPush,
   vapidPublicKey,
   pushConfigured,
   ensureTransportColumn,
+  notifySundayLetter,
+  notifyPostFailed,
   TRANSPORTS: ['webpush', 'fcm', 'apns'],
 };

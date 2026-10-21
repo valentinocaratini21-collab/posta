@@ -85,6 +85,8 @@ try { db.exec(`ALTER TABLE profiles ADD COLUMN subrubro TEXT DEFAULT ''`); } cat
 try { db.exec(`ALTER TABLE profiles ADD COLUMN whatsapp TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN page_slug TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE profiles ADD COLUMN page_enabled INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+// Días de cierre del negocio (v283): JSON de días ISO 1=Lun..7=Dom en que NO se programa nada automático.
+try { db.exec(`ALTER TABLE profiles ADD COLUMN closed_days TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN timezone TEXT DEFAULT 'America/Argentina/Buenos_Aires'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_issued_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN ig_token_warning INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
@@ -896,6 +898,11 @@ try { db.exec(`ALTER TABLE users ADD COLUMN trust_level INTEGER DEFAULT 0`); } c
 try { db.exec(`ALTER TABLE users ADD COLUMN auto_weeks_clean INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Opt-in del aviso pre-publicación (30 min) en nivel 2 (en nivel 1 es obligatorio).
 try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_prenotify INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Avisos push (v283): carta del domingo y posteos fallidos (default ON). El pre-publicación vive en autopilot_prenotify.
+try { db.exec(`ALTER TABLE users ADD COLUMN notify_letter INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN notify_failed INTEGER DEFAULT 1`); } catch (e) { /* ya existe */ }
+// Pausar todo (v283): snapshot reversible del freno de cuenta {at, autopilot_enabled, post_ids}.
+try { db.exec(`ALTER TABLE users ADD COLUMN pause_snapshot TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Backfill idempotente (corre en cada boot, solo sube de nivel): nadie regresa
 // de nivel por la migración — conserva lo ganado con los mecanismos viejos.
 try { db.exec(`UPDATE users SET trust_level = 2 WHERE COALESCE(autopilot_enabled, 0) = 1 AND COALESCE(trust_level, 0) < 2`); } catch (e) {}
