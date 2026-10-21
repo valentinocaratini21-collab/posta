@@ -194,7 +194,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261020-v291'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261020-v292'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -10846,10 +10846,17 @@ async function render() {
     // App instalada: se comporta como app, no como web. Va directo a la semana
     // (o al login si no hay sesión) en vez de la landing de marketing.
     if (pwaIsStandalone()) { location.hash = mzHomeHash(); return; }
-    // Logueado en la web: la vista principal es la semana (Schedule, FASE 4).
+    // Logueado en la web (v292): rebota a SU pantalla con la MISMA regla que
+    // tras el login — postAuthLanding es la única fuente de verdad del
+    // destino (onboarding si falta el negocio, plan elegido, return-to, o la
+    // home —inicio/schedule— vía mzHomeHash). Antes esto mandaba siempre a la
+    // home y un usuario sin negocio caía en la app en vez del onboarding.
+    // Orden de rebotes en la raíz: 1º standalone (arriba), 2º gate de idioma
+    // del shell (vive en index.html y solo actúa con hash de landing; este
+    // destino es siempre #/app/*, así que nunca se cruzan), 3º este rebote.
     // Visitante no logueado: la landing pública no cambia.
     await refreshSession();
-    if (ME) { location.hash = mzHomeHash(); return; }
+    if (ME) { postAuthLanding(); return; }
     PLANS_CACHE = await api.get('/api/billing/plans').catch(() => null);
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;

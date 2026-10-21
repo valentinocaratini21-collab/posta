@@ -19,6 +19,34 @@
   } catch (e) {}
 })();
 </script>
+<script>
+/* 🔐 Sesión viva en navegador (v292, espejo de la raíz ES): si quien abre
+   /en ya tiene sesión, va directo a su app en vez de quedarse en la landing.
+   La raíz ES lo resuelve la SPA (render raíz → postAuthLanding); esta página
+   es estática y no carga app.js, así que confirma la sesión contra
+   /api/auth/me y salta a la home de la app con el criterio de la propia
+   app (mzIsMobile de app.js: viewport ≤820 → inicio; si no, schedule);
+   una vez adentro manda el flujo normal de la SPA. Sin sesión (o si la red falla)
+   no toca nada: la landing se ve como siempre y el chequeo es async, nunca
+   la demora. Orden en esta página: 1º rebote standalone, 2º este rebote.
+   El gate de idioma vive en la raíz ES y no se cruza: los hash #/app no
+   son landing para ese gate. Solo actúa en la raíz (sin hash o '#/');
+   las anclas de la landing (#planes, #faq, …) quedan afuera. */
+(function () {
+  try {
+    var h = location.hash || '';
+    if (h && h !== '#/') return;
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.user) return;
+        var w = window.innerWidth || 999;
+        location.replace('/' + (w <= 820 ? '#/app/inicio' : '#/app/schedule'));
+      })
+      .catch(function () {});
+  } catch (e) {}
+})();
+</script>
 <title>Posty — Your community manager on autopilot</title>
 <meta name="description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts what sells. Try it free for 3 days, no card required.">
 <link rel="canonical" href="https://postyhacetodo.com/en/">
