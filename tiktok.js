@@ -173,6 +173,19 @@ async function publishPhoto({ accessToken, imageUrls, title, description }) {
   return { publishId: data.publish_id, privacyLevel: privacy };
 }
 
+// Subida a la BANDEJA del dueño (scope video.upload): el video llega a
+// su TikTok como borrador/notificación para terminar de publicarlo
+// desde la app. No fija privacidad ni depende de la auditoría de
+// Direct Post: el dueño decide todo en su TikTok. Solo PULL_FROM_URL.
+async function publishVideoInbox({ accessToken, videoUrl }) {
+  if (!videoUrl) throw new Error('Falta la URL del video');
+  const data = await ttPost(accessToken, '/v2/post/publish/inbox/video/init/', {
+    source_info: { source: 'PULL_FROM_URL', video_url: videoUrl },
+  });
+  if (!data.publish_id) throw new Error('TikTok no devolvió el id de publicación');
+  return { publishId: data.publish_id };
+}
+
 async function publishStatus(accessToken, publishId) {
   const data = await ttPost(accessToken, '/v2/post/publish/status/fetch/', { publish_id: publishId });
   return {
@@ -186,5 +199,5 @@ async function publishStatus(accessToken, publishId) {
 module.exports = {
   configured, buildAuthUrl, exchangeCode, refreshToken, fetchUserInfo,
   getAccount, saveAccount, deleteAccount, getValidToken,
-  creatorInfo, publishVideo, publishPhoto, publishStatus, SCOPES,
+  creatorInfo, publishVideo, publishVideoInbox, publishPhoto, publishStatus, SCOPES,
 };

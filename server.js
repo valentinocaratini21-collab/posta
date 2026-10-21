@@ -9472,6 +9472,33 @@ app.post('/api/tiktok/publish/:postId', requireAuth, async (req, res) => {
   }
 });
 
+// Enviar un REEL a la bandeja de TikTok del dueño (scope video.upload):
+// le llega a su cuenta para terminar de publicarlo desde la app de
+// TikTok, cuando quiera. No depende de la auditoría de Direct Post ni
+// fija privacidad: decide el dueño en su TikTok. Siempre a pedido, sobre
+// un posteo ya existente — nunca automático ni programado.
+app.post('/api/tiktok/inbox/:postId', requireAuth, async (req, res) => {
+  try {
+    const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.postId, req.session.userId);
+    if (!post) return res.status(404).json({ error: 'Ese posteo no aparece 😅 Actualizá y probá de nuevo.' });
+    if (!tiktok.configured()) return res.status(503).json({ error: 'TikTok todavía no está activo en Posty. ¡Falta poquito! 🎵' });
+    if (!tiktok.getAccount(db, req.session.userId)) return res.status(400).json({ error: 'Conectá tu TikTok en Ajustes primero 🎵' });
+    const mt = String(post.media_type || 'image');
+    const isVideo = mt === 'video' || /\.mp4($|\?)/i.test(String(post.image_path || ''));
+    if (!post.image_path || !isVideo) return res.status(400).json({ error: 'El borrador de TikTok es solo para reels 🎬 Ese posteo no es un video.' });
+    const accessToken = await tiktok.getValidToken(db, req.session.userId);
+    if (!accessToken) return res.status(400).json({ error: 'Tu conexión con TikTok venció. Reconectala en Ajustes 🎵' });
+    const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+    const abs = (p) => /^https?:\/\//i.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p);
+    const out = await tiktok.publishVideoInbox({ accessToken, videoUrl: abs(post.image_path) });
+    try { track(req.session.userId, 'tiktok_inbox'); } catch (e) {}
+    res.json({ ok: true, publish_id: out.publishId, message: '📥 ¡Listo! Te mandé el reel a tu TikTok: abrí la app y tocá la notificación en tu bandeja — el video ya está ahí para publicarlo cuando quieras.' });
+  } catch (e) {
+    console.error('[tiktok/inbox]', e.message);
+    res.status(502).json({ error: 'TikTok no pudo recibir el reel 😅 ' + String(e.message || '').slice(0, 140) });
+  }
+});
+
 // ---------- Google Business Profile: conectar la ficha + reseñas en un toque ----------
 app.get('/api/google/status', requireAuth, (req, res) => {
   const acc = google.getAccount(db, req.session.userId);
@@ -16356,7 +16383,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v314';
+const BUILD_ID = '20261021-v315';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

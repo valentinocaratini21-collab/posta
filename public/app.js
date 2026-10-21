@@ -205,7 +205,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v312'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261021-v315'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -7538,7 +7538,7 @@ function postCardHTML(p, opts) {
   // cuenta — el botón nace oculto y ttEnhance() lo muestra según /api/tiktok/status.
   const ttActs = !isPub ? '' : (p.tiktok_publish_id
     ? `<div class="pcard-actions"><span style="font-size:11.5px;font-weight:700;color:var(--dim)">🎵 Ya está en TikTok ✓</span></div>`
-    : `<div class="pcard-actions"><button type="button" data-pc-act="tiktok" hidden>🎵 Compartir en TikTok</button></div>`);
+    : `<div class="pcard-actions"><button type="button" data-pc-act="tiktok" hidden>🎵 Compartir en TikTok</button>${isV ? '<button type="button" data-pc-act="tiktok-inbox" hidden>📥 Borrador TikTok</button>' : ''}</div>`);
   return `<div class="pcard pcard-${layout}" data-post-id="${esc(String(p.id))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
     <button type="button" class="pcard-media" data-pc-act="open" aria-label="Ver posteo">${media}</button>
     <div class="pcard-body">
@@ -7558,7 +7558,7 @@ function ttStatusOnce() {
 async function ttEnhance() {
   try {
     const st = await ttStatusOnce();
-    if (st && st.connected) document.querySelectorAll('[data-pc-act="tiktok"]').forEach(b => { b.hidden = false; });
+    if (st && st.connected) document.querySelectorAll('[data-pc-act="tiktok"], [data-pc-act="tiktok-inbox"]').forEach(b => { b.hidden = false; });
   } catch (e) {}
 }
 async function pcShareTikTok(id, btn) {
@@ -7570,6 +7570,17 @@ async function pcShareTikTok(id, btn) {
   } catch (e) {
     postToast({ text: '😅 ' + ((e && e.message) || 'No se pudo compartir en TikTok'), ms: 6000 });
     if (btn) { btn.disabled = false; btn.textContent = '🎵 Compartir en TikTok'; }
+  }
+}
+async function pcShareTikTokInbox(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '📥 Enviando…'; }
+  try {
+    const r = await api.post('/api/tiktok/inbox/' + encodeURIComponent(id), {});
+    postToast({ text: (r && r.message) || '📥 ¡Reel enviado a tu TikTok!', ms: 7000 });
+    if (btn) { btn.disabled = false; btn.textContent = '📥 Borrador TikTok'; }
+  } catch (e) {
+    postToast({ text: '😅 ' + ((e && e.message) || 'No se pudo enviar el borrador'), ms: 6000 });
+    if (btn) { btn.disabled = false; btn.textContent = '📥 Borrador TikTok'; }
   }
 }
 // Toast con acciones (fijo abajo, sobre el input). actions: [{label, fn}]
@@ -7895,6 +7906,7 @@ function pcOnClick(e) {
   if (act === 'approve') { pcApprove(id, root, el); return; }
   if (act === 'pubnow') { pcPublishNow(id, root, el); return; }
   if (act === 'tiktok') { pcShareTikTok(id, el); return; }
+  if (act === 'tiktok-inbox') { pcShareTikTokInbox(id, el); return; }
   if (act === 'img-style') {
     const wrap = root.querySelector('.pcsheet-stylewrap');
     if (wrap) {
