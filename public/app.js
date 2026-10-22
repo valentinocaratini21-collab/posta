@@ -211,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261022-v324'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261022-v325'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -6050,7 +6050,7 @@ function weekCardHTML(d, o) {
         ${statusHTML}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" aria-label="Ver posteo">${media}</button>`}
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull)}" data-tags="${esc(String(d.hashtags || ''))}" aria-label="Ver posteo">${media}</button>`}
       ${foot}
     </div>`;
 }
@@ -6678,7 +6678,7 @@ function feedPreviewHTML(all, tz, prof) {
       const pill = sched ? (dObj ? `${dObj.getUTCDate()} ${MESES[dObj.getUTCMonth()]}` : 'programado') : 'borrador';
       return `<button type="button" class="fp-tile up${extra}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}<span class="fp-pill">${esc(pill)}</span>${reel}</button>`;
     }
-    const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}"` : '';
+    const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}"` : '';
     return `<button type="button" class="fp-tile pub${extra}" data-post-id="${esc(String(p.id))}"${lb}>${media}${reel}</button>`;
   }).join('');
   const moreBtn = parts.length > VIS ? '<button type="button" class="fp-more" id="fpMore">Ver más posteos</button>' : '';
@@ -7149,7 +7149,7 @@ async function bindChatView() {
   // Home simple: tocar un posteo del carrusel lo abre en grande (patrón data-lightbox).
   $$('.hs-week [data-lightbox]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();
-    if (el.dataset.lightbox) try { openLightbox(el.dataset.lightbox, el.dataset.video === '1'); } catch (err) {}
+    if (el.dataset.lightbox) try { openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || ''); } catch (err) {}
   });
   bindScheduleAll();
   bindAcceptAll();
@@ -8984,8 +8984,12 @@ function humanError(err) {
   if (/timeout|network|econn|fetch failed/i.test(e)) return 'Hubo un problema de conexión. Reintentá en unos minutos.';
   return 'No se pudo publicar en Instagram. Reintentá o reconectá tu cuenta.';
 }
-// Lightbox: ver el diseño en grande (tap en la miniatura)
-function openLightbox(src, isVideo) {
+// Lightbox: ver el diseño en grande (tap en la miniatura). v325: si el
+// llamador pasa cap/tags (tarjetas del calendario), el pie de foto va
+// DEBAJO del media — en el celular tocar la foto es EL gesto de "ver el
+// posteo" y el caption no aparecía en ninguna parte de esa vista
+// (reporte de Valentino 2026-10-22). Sin cap: comportamiento idéntico.
+function openLightbox(src, isVideo, cap, tags) {
   let lb = $('#lightbox');
   if (!lb) {
     lb = document.createElement('div');
@@ -8996,15 +9000,24 @@ function openLightbox(src, isVideo) {
     lb.querySelector('.lb-close').onclick = closeLightbox;
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
   }
-  lb.querySelector('.lb-content').innerHTML = isVideo
-    ? `<video src="${esc(src)}" controls autoplay playsinline style="max-width:92vw;max-height:84vh;border-radius:12px"></video>`
-    : `<img src="${esc(src)}" alt="Diseño" style="max-width:92vw;max-height:84vh;border-radius:12px;object-fit:contain">`;
+  const capT = String(cap || '').trim();
+  const tagsT = String(tags || '').trim();
+  const hasCap = !!(capT || tagsT);
+  const mediaHTML = isVideo
+    ? `<video src="${esc(src)}" controls autoplay playsinline style="max-width:92vw;${hasCap ? '' : 'max-height:84vh;'}border-radius:12px"></video>`
+    : `<img src="${esc(src)}" alt="Diseño" style="max-width:92vw;${hasCap ? '' : 'max-height:84vh;'}border-radius:12px;object-fit:contain">`;
+  const capHTML = hasCap
+    ? `<div class="lb-cap">${capT ? `<div class="lb-cap-txt">${esc(capT)}</div>` : ''}${tagsT ? `<div class="lb-cap-tags">${esc(tagsT)}</div>` : ''}</div>`
+    : '';
+  const content = lb.querySelector('.lb-content');
+  content.classList.toggle('with-cap', hasCap);
+  content.innerHTML = mediaHTML + capHTML;
   lb.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 function closeLightbox() {
   const lb = $('#lightbox');
-  if (lb) { lb.style.display = 'none'; lb.querySelector('.lb-content').innerHTML = ''; }
+  if (lb) { lb.style.display = 'none'; const lc = lb.querySelector('.lb-content'); lc.innerHTML = ''; lc.classList.remove('with-cap'); }
   document.body.style.overflow = '';
 }
 function postItem(p, actions) {
@@ -11656,7 +11669,7 @@ function bindInicio() {
     if (hn) hn.onclick = () => wl.scrollBy({ left: step(), behavior: 'smooth' });
   }
   $$('#inicioView [data-lightbox]').forEach(el => el.onclick = () => {
-    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1');
+    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || '');
   });
   // El chat de la hoja: EXACTAMENTE el cableado de Schedule (mismo
   // historial, mismo envío, misma subida). Una sola implementación.
@@ -11979,7 +11992,7 @@ function bindSchedule() {
     if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 480);
   });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
-    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1');
+    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || '');
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
