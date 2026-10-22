@@ -1025,7 +1025,10 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'
 // Analytics propio: mide el uso para mejorar el producto. Fire-and-forget: jamás frena la página.
 const _TQ = [];
 function _tsid() { try { let s = localStorage.getItem('posta_sid'); if (!s) { s = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('posta_sid', s); } return s; } catch (e) { return 'nosid'; } }
-function trk(name, props) { try { if (!/^[a-z0-9_]{2,40}$/.test(name)) return; _TQ.push({ name, props: props || {}, sid: _tsid() }); if (_TQ.length > 200) _TQ.splice(0, _TQ.length - 200); } catch (e) {} }
+// (v322) ORIGEN del funnel: ?src= se persiste en el navegador y viaja en cada
+// evento hasta el registro y el pago; el tablero separa por canal e idioma.
+function _postySrc() { try { const q = new URLSearchParams(location.search).get('src'); if (q) { localStorage.setItem('posty_src', String(q).slice(0, 60)); const u = JSON.parse(localStorage.getItem('posta_utm') || 'null') || {}; if (!u.source) { u.source = String(q).slice(0, 40); localStorage.setItem('posta_utm', JSON.stringify(u)); } } return localStorage.getItem('posty_src'); } catch (e) { return null; } }
+function trk(name, props) { try { if (!/^[a-z0-9_]{2,40}$/.test(name)) return; const pp = Object.assign({}, props || {}); try { const s = _postySrc(); if (s && !pp.src) pp.src = s; if (!pp.lang) pp.lang = 'en'; } catch (e) {} _TQ.push({ name, props: pp, sid: _tsid() }); if (_TQ.length > 200) _TQ.splice(0, _TQ.length - 200); } catch (e) {} }
 async function _tflush() { if (!_TQ.length) return; const b = _TQ.splice(0, 60); try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: b }), keepalive: true }); } catch (e) {} }
 setInterval(_tflush, 10000);
 try { window.addEventListener('pagehide', () => { try { if (_TQ.length && navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([JSON.stringify({ events: _TQ.splice(0, 60) })], { type: 'application/json' })); } catch (e) {} }); } catch (e) {}

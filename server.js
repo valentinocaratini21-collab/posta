@@ -58,6 +58,7 @@ const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
+const LA = require('./launch-analytics'); // (v322) analytics de lanzamiento: época, tablero, termómetro, alertas, carta
 // Plan del usuario (para techo mensual de IA y límites diarios por plan).
 // Un solo lugar: costs.js lo usa vía planFor para el techo 5%.
 function planForUid(uid) {
@@ -294,6 +295,20 @@ function track(userId, event, meta = '') {
 function evTrack(userId, name, props = null, sessionId = '') {
   try {
     if (!/^[a-z0-9_]{2,40}$/.test(name)) return;
+    // (v322) ORIGEN: todo evento con usuario hereda src (canal normalizado) e
+    // idioma de su cuenta si el emisor no los trae — registered/payment y el
+    // resto del funnel quedan separables por canal e idioma en el tablero.
+    if (userId && props == null || userId && typeof props === 'object') {
+      try {
+        const u = db.prepare('SELECT utm_source, lang FROM users WHERE id = ?').get(userId);
+        if (u) {
+          const pp = Object.assign({}, props || {});
+          if (!pp.src) { const s = LA.normalizeSrc(u.utm_source); if (s) pp.src = s; }
+          if (!pp.lang && u.lang) pp.lang = u.lang;
+          if (pp.src || pp.lang) props = pp;
+        }
+      } catch (e) { /* sin usuario legible: el evento sale como nació */ }
+    }
     let p = '';
     try { p = JSON.stringify(props || {}).slice(0, 2000); } catch (e) {}
     db.prepare('INSERT INTO events (user_id, session_id, name, props) VALUES (?,?,?,?)')
@@ -1554,7 +1569,9 @@ app.post('/api/auth/register', (req, res) => {
       if (referrer && referrer.id) referredBy = referrer.id;
     }
     const trialEnds = Date.now() + TRIAL_DAYS * 24 * 3600 * 1000;
-    const utmS = String((utm && utm.source) || '').slice(0, 40);
+    // (v322) el canal se guarda NORMALIZADO (email/dm/referido/clinica/
+    // organico/directo/otro) para que el tablero separe sin adivinar textos.
+    const utmS = LA.normalizeSrc(utm && utm.source) || String((utm && utm.source) || '').slice(0, 40);
     const utmC = String((utm && utm.campaign) || '').slice(0, 80);
     const r = db.prepare('INSERT INTO users (email, password_hash, referral_code, referred_by, trial_ends_at, utm_source, utm_campaign, trust_level, autopilot_enabled) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)').run(email.trim().toLowerCase(), hash, code, referredBy, trialEnds, utmS, utmC);
     const newUserId = r.lastInsertRowid;
@@ -3957,23 +3974,27 @@ app.post('/api/admin/ideas/make', requireAdminToken, express.json(), async (req,
     res.json(r);
   } catch (e) { res.status(500).json({ error: String(e.message || e).slice(0, 200) }); }
 });
-function funnelUniquesPrev(name, days) {
+function funnelUniquesPrev(name, days, era) {
   // Período anterior equivalente: [2*days, days] — para tendencias.
+  // (v322) ÉPOCA: con era=launch el piso de la época también aplica acá.
   const ids = new Set();
+  const ec = LA.eraCond('created_at', era || 'launch');
   try {
     const rows = db.prepare(`SELECT user_id, session_id FROM events
-      WHERE name = ? AND datetime(created_at) >= datetime('now', ?) AND datetime(created_at) < datetime('now', ?)`)
-      .all(name, `-${days * 2} days`, `-${days} days`);
+      WHERE name = ? AND datetime(created_at) >= datetime('now', ?) AND datetime(created_at) < datetime('now', ?) AND ${ec.sql}`)
+      .all(name, `-${days * 2} days`, `-${days} days`, ...ec.params);
     for (const r of rows) ids.add(r.user_id ? 'u:' + r.user_id : 's:' + (r.session_id || '?'));
   } catch (e) {}
   return ids;
 }
-function funnelUniques(name, days) {
+function funnelUniques(name, days, era) {
   // Usuarios únicos por paso: user_id si hay login, si no la sesión anónima.
+  // (v322) ÉPOCA: por defecto solo desde el lanzamiento; era=all abre la era de prueba.
   const ids = new Set();
+  const ec = LA.eraCond('created_at', era || 'launch');
   try {
     const rows = db.prepare(`SELECT user_id, session_id FROM events
-      WHERE name = ? AND datetime(created_at) >= datetime('now', ?)`).all(name, `-${days} days`);
+      WHERE name = ? AND datetime(created_at) >= datetime('now', ?) AND ${ec.sql}`).all(name, `-${days} days`, ...ec.params);
     for (const r of rows) ids.add(r.user_id ? 'u:' + r.user_id : 's:' + (r.session_id || '?'));
   } catch (e) {}
   return ids;
@@ -4011,7 +4032,12 @@ app.get('/api/admin/user-posts', requireAdminToken, (req, res) => {
   try {
     const user = db.prepare('SELECT id, email, plan, plan_status, autopilot_enabled, trust_level FROM users WHERE id = ?').get(uid) || null;
     const posts = db.prepare(`SELECT id, media_type, status, scheduled_at, tipo, week_key, substr(caption, 1, 90) AS cap, created_at FROM posts WHERE user_id = ? ORDER BY id DESC LIMIT 80`).all(uid);
-    res.json({ ok: true, user, posts });
+    // (v322) Vista de posteos por cuenta COMPLETA (monitoreo/QC del fundador):
+    // todos los posteos con miniatura, caption entero, horarios, su porqué y
+    // banderas de atención + señales del cliente + termómetro + intervenciones.
+    // La aprobación sigue viviendo en la cola de Revisión: acá no se duplica.
+    const detail = LA.accountPostsDetail(db, uid);
+    res.json({ ok: true, user, posts, detail });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/admin/stop-publishing', requireAdminToken, express.json(), (req, res) => {
@@ -4089,15 +4115,80 @@ app.post('/api/admin/extend-trial', requireAdminToken, express.json(), (req, res
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// ---------- (v322) ANALYTICS DE LANZAMIENTO: tablero único ----------
+// Precio vigente de la cuenta (misma deducción de moneda que stampFounder) y
+// contexto de costo IA para termómetro/alertas. La conversión UYU→USD solo se
+// hace con UYU_PER_USD configurado: sin tipo de cambio, el margen de esa
+// moneda queda null y se declara (regla de verdad), nunca se inventa.
+function analyticsPriceFor(u) {
+  if (!u || !u.plan || u.plan === 'free') return null;
+  let amount = 0, currency = 'ARS';
+  if (Number(u.founder_price) > 0) { amount = Number(u.founder_price); currency = u.founder_currency || 'ARS'; }
+  else if (u.stripe_subscription_id) { const p = getPlan(u.plan, 'US'); amount = Number(p && p.price) || 0; currency = 'USD'; }
+  else if (Number(u.mp_base_amount) > 0) {
+    amount = Number(u.mp_base_amount);
+    const uy = getPlan(u.plan, 'UY');
+    currency = (uy && Number(uy.price) === amount) ? 'UYU' : 'ARS';
+  } else {
+    const p = getPlan(u.plan, u.lang === 'en' ? 'US' : 'AR');
+    amount = Number(p && p.price) || 0; currency = (p && p.currency) || 'ARS';
+  }
+  if (!(amount > 0)) return null;
+  let usd = null;
+  if (currency === 'USD') usd = amount;
+  else if (currency === 'ARS') usd = amount / ARS_USD_RATE;
+  else if (currency === 'UYU') { const r = parseFloat(process.env.UYU_PER_USD || ''); if (r > 0) usd = amount / r; }
+  return { amount, currency, usd: usd != null ? Math.round(usd * 100) / 100 : null };
+}
+function analyticsCostCtx(u) {
+  const p = analyticsPriceFor(u);
+  let ms = 0;
+  try { ms = costs.monthSpendUsd(u.id) || 0; } catch (e) {}
+  return { monthSpendUsd: ms, planPriceUsd: p ? p.usd : null };
+}
+const ANALYTICS_OPTS = { priceFor: analyticsPriceFor, costCtx: analyticsCostCtx };
+// PORTADA DE LA MAÑANA (vista principal del ritual diario)
+app.get('/api/admin/morning', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, morning: LA.morning(db, ANALYTICS_OPTS, req.query) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// TABLERO (vista Negocio): funnel + plata + calidad + cohortes + proyección
+app.get('/api/admin/launch-board', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, board: LA.board(db, ANALYTICS_OPTS, req.query) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// POSTEOS POR CUENTA: overview con termómetro, cuentas con atención primero
+app.get('/api/admin/accounts-posts', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, ...LA.accountsOverview(db, ANALYTICS_OPTS) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// ALERTAS automáticas (con clave determinística: dedup por construcción)
+app.get('/api/admin/alerts', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, alerts: LA.computeAlerts(db, ANALYTICS_OPTS) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// CARTA DEL LUNES del fundador (se genera sola; ?regen=1 la rehace)
+app.get('/api/admin/founder-letter', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, letter: LA.founderLetter(db, ANALYTICS_OPTS, req.query) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// LOOP DE APRENDIZAJE (E): estado de la estructura (fail-closed sin métricas IG)
+app.get('/api/admin/learning', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, learning: LA.syncLearning(db), dictionary: LA.dictionaryAudit(db) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  const era = LA.eraOf(req.query); // (v322) época de lanzamiento por defecto
+  const ec = LA.eraCond('created_at', era);
   const totals = {};
-  const perStep = FUNNEL_STEPS.map(s => ({ ...s, ids: funnelUniques(s.key, days) }));
+  const perStep = FUNNEL_STEPS.map(s => ({ ...s, ids: funnelUniques(s.key, days, era) }));
   // Historial viejo: se suma a los pasos que correspondan
   try {
     for (const [legacy, mapped] of Object.entries(LEGACY_FUNNEL_MAP)) {
       const rows = db.prepare(`SELECT user_id FROM funnel_events
-        WHERE event = ? AND datetime(created_at) >= datetime('now', ?)`).all(legacy, `-${days} days`);
+        WHERE event = ? AND datetime(created_at) >= datetime('now', ?) AND ${ec.sql}`).all(legacy, `-${days} days`, ...ec.params);
       const st = perStep.find(s => s.key === mapped);
       if (st) for (const r of rows) st.ids.add(r.user_id ? 'u:' + r.user_id : 's:?');
     }
@@ -4116,7 +4207,7 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
   let byDay = [];
   try {
     byDay = db.prepare(`SELECT date(created_at) AS d, name, COUNT(*) AS n FROM events
-      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d, name ORDER BY d DESC LIMIT 600`).all(`-${days} days`);
+      WHERE datetime(created_at) >= datetime('now', ?) AND ${ec.sql} GROUP BY d, name ORDER BY d DESC LIMIT 600`).all(`-${days} days`, ...ec.params);
   } catch (e) {}
   // Meta 200 suscriptores: suscriptores pagos, MRR y conversión trial→pago.
   let goal = { target: 200, subscribers: 0, mrr: 0, trial_to_paid: 0, new_30d: 0 };
@@ -4131,7 +4222,7 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
     }
     const regs = (totals['prueba_register'] || 0), paid = (totals['payment_ok'] || 0);
     const newRows = db.prepare(`SELECT COUNT(DISTINCT user_id) AS n FROM events
-      WHERE name = 'payment_ok' AND user_id IS NOT NULL AND datetime(created_at) >= datetime('now', '-30 days')`).get();
+      WHERE name = 'payment_ok' AND user_id IS NOT NULL AND datetime(created_at) >= datetime('now', '-30 days') AND ${ec.sql}`).get(...ec.params);
     goal = { target: 200, subscribers: actives.length, mrr: Math.round(mrr),
       trial_to_paid: regs ? Math.round(paid / regs * 1000) / 10 : 0,
       new_30d: newRows ? newRows.n : 0 };
@@ -4140,7 +4231,7 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
   const trends = {};
   try {
     for (const s of perStep) {
-      const cur = s.ids.size, prev = funnelUniquesPrev(s.key, days).size;
+      const cur = s.ids.size, prev = funnelUniquesPrev(s.key, days, era).size;
       trends[s.key] = { cur, prev,
         delta: prev ? Math.round((cur - prev) / prev * 1000) / 10 : (cur ? 100 : 0) };
     }
@@ -4153,7 +4244,7 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
         SELECT user_id, MIN(published_at) AS first_pub FROM posts
         WHERE status = 'published' AND published_at IS NOT NULL GROUP BY user_id
       ) p ON p.user_id = u.id
-      WHERE datetime(u.created_at) >= datetime('now', '-90 days')`).all();
+      WHERE datetime(u.created_at) >= datetime('now', '-90 days') AND ${LA.eraCond('u.created_at', era).sql}`).all(...LA.eraCond('u.created_at', era).params);
     const hs = rows.map(r => Number(r.h)).filter(h => h >= 0 && h < 24 * 60).sort((a, b) => a - b);
     if (hs.length) {
       const avg = hs.reduce((s, h) => s + h, 0) / hs.length;
@@ -4161,24 +4252,26 @@ app.get('/api/admin/funnel', requireAdminToken, (req, res) => {
         d1_pct: Math.round(hs.filter(h => h <= 24).length / hs.length * 1000) / 10 };
     }
   } catch (e) {}
-  res.json({ days, totals, funnel, by_day: byDay, goal, trends, ttv, admin_token_set: true });
+  res.json({ days, era: LA.eraInfo(era), totals, funnel, by_day: byDay, goal, trends, ttv, admin_token_set: true });
 });
 
 // Actividad: eventos por día + usuarios activos por día (login o sesión anónima)
 app.get('/api/admin/activity', requireAdminToken, (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 30, 1), 90);
+  const era = LA.eraOf(req.query); // (v322) época por defecto; era=all abre la era de prueba
+  const ec = LA.eraCond('created_at', era);
   let byDay = [], dau = [], totals = {};
   try {
     byDay = db.prepare(`SELECT date(created_at) AS d, COUNT(*) AS n FROM events
-      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d ORDER BY d DESC`).all(`-${days} days`);
+      WHERE datetime(created_at) >= datetime('now', ?) AND ${ec.sql} GROUP BY d ORDER BY d DESC`).all(`-${days} days`, ...ec.params);
     dau = db.prepare(`SELECT date(created_at) AS d,
         COUNT(DISTINCT COALESCE('u:' || user_id, 's:' || session_id)) AS n FROM events
-      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY d ORDER BY d DESC`).all(`-${days} days`);
+      WHERE datetime(created_at) >= datetime('now', ?) AND ${ec.sql} GROUP BY d ORDER BY d DESC`).all(`-${days} days`, ...ec.params);
     const rows = db.prepare(`SELECT name, COUNT(*) AS n FROM events
-      WHERE datetime(created_at) >= datetime('now', ?) GROUP BY name ORDER BY n DESC LIMIT 60`).all(`-${days} days`);
+      WHERE datetime(created_at) >= datetime('now', ?) AND ${ec.sql} GROUP BY name ORDER BY n DESC LIMIT 60`).all(`-${days} days`, ...ec.params);
     for (const r of rows) totals[r.name] = r.n;
   } catch (e) {}
-  res.json({ ok: true, days, by_day: byDay, dau, totals });
+  res.json({ ok: true, days, era: LA.eraInfo(era), by_day: byDay, dau, totals });
 });
 
 // Gasto de IA por función (anti-quemado). ?token=ADMIN_TOKEN&days=1
@@ -4188,8 +4281,13 @@ app.get('/api/admin/ai-costs', requireAdminToken, (req, res) => {
   const days = Math.min(Math.max(Number(req.query.days) || 1, 1), 90);
   res.json({
     ok: true, days,
+    // (v322) EXCEPCIÓN DURA de la época: el dinero gastado NO se resetea.
+    // Este ledger se lee SIEMPRE completo, sin filtro de época, a propósito.
+    era_filter: false,
+    era_note: 'el ledger de costos de IA nunca se filtra por época: el dinero gastado se lee desde el día uno',
     daily_cap_usd: costs.DAILY_CAP_USD,
     today_spend_usd: Math.round(costs.daySpendUsd() * 10000) / 10000,
+    total_all_time_usd: (() => { try { return Math.round(db.prepare('SELECT COALESCE(SUM(est_cost_usd), 0) AS s FROM api_costs').get().s * 100) / 100; } catch (e) { return null; } })(),
     breakdown: costs.costBreakdown(days),
   });
 });
@@ -4220,6 +4318,8 @@ app.get('/api/admin/events', requireAdminToken, (req, res) => {
   const name = String(req.query.name || '').slice(0, 40);
   const email = String(req.query.email || '').trim().toLowerCase();
   const userId = Number(req.query.user_id) || 0;
+  const era = LA.eraOf(req.query); // (v322) época por defecto
+  const ec = LA.eraCond('e.created_at', era);
   let rows = [];
   try {
     if (userId || email) {
@@ -4229,15 +4329,15 @@ app.get('/api/admin/events', requireAdminToken, (req, res) => {
         uid = u ? u.id : -1;
       }
       rows = db.prepare(`SELECT e.*, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id
-        WHERE e.user_id = ? ${name ? 'AND e.name = ?' : ''} AND datetime(e.created_at) >= datetime('now', ?)
-        ORDER BY e.id DESC LIMIT ?`).all(...(name ? [uid, name, `-${days} days`, limit] : [uid, `-${days} days`, limit]));
+        WHERE e.user_id = ? ${name ? 'AND e.name = ?' : ''} AND datetime(e.created_at) >= datetime('now', ?) AND ${ec.sql}
+        ORDER BY e.id DESC LIMIT ?`).all(...(name ? [uid, name, `-${days} days`, ...ec.params, limit] : [uid, `-${days} days`, ...ec.params, limit]));
     } else {
       rows = db.prepare(`SELECT e.*, u.email FROM events e LEFT JOIN users u ON u.id = e.user_id
-        WHERE ${name ? 'e.name = ? AND ' : ''}datetime(e.created_at) >= datetime('now', ?)
-        ORDER BY e.id DESC LIMIT ?`).all(...(name ? [name, `-${days} days`, limit] : [`-${days} days`, limit]));
+        WHERE ${name ? 'e.name = ? AND ' : ''}datetime(e.created_at) >= datetime('now', ?) AND ${ec.sql}
+        ORDER BY e.id DESC LIMIT ?`).all(...(name ? [name, `-${days} days`, ...ec.params, limit] : [`-${days} days`, ...ec.params, limit]));
     }
   } catch (e) {}
-  res.json({ ok: true, events: rows.map(r => ({ id: r.id, user_id: r.user_id, email: r.email || null,
+  res.json({ ok: true, era: LA.eraInfo(era), events: rows.map(r => ({ id: r.id, user_id: r.user_id, email: r.email || null,
     session_id: r.session_id, name: r.name, props: r.props, created_at: r.created_at })) });
 });
 
@@ -4420,6 +4520,14 @@ app.get('/api/admin/growth', requireAdminToken, (req, res) => {
         last_pub: c.last_pub || null, last_act: c.last_act || null,
       }));
       if (out.churn.length) alerts.push({ sev: 'med', text: `${out.churn.length} cliente(s) sin publicar hace 7+ días — escribiles antes de que cancelen.` });
+      // (v322) las alertas del analytics de lanzamiento (pago, fallo de
+      // publicación, semana atrasada, costo IA) se suman a ESTE banner: es el
+      // canal que la superficie admin ya tiene, no se inventa otro.
+      try {
+        for (const a of LA.computeAlerts(db, ANALYTICS_OPTS)) {
+          alerts.push({ sev: a.sev === 'ok' ? 'low' : a.sev, text: a.title + (a.detail ? ' — ' + a.detail : '') });
+        }
+      } catch (e) {}
       out.alerts = alerts;
     } catch (e) { out.alerts = []; out.churn = []; }
     // 🚀 Readiness de inversión: ¿vale la pena meter los $5000/mes?
@@ -16457,7 +16565,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v321';
+const BUILD_ID = '20261022-v322';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

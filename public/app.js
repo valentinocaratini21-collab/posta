@@ -129,7 +129,13 @@ function anSid() {
 function track(name, props) {
   try {
     if (!/^[a-z0-9_]{2,40}$/.test(name || '')) return;
-    AN_Q.push({ name, props: props || {}, sid: anSid() });
+    // (v322) cada evento lleva src (canal) e idioma si la captura los conoce
+    const pp = Object.assign({}, props || {});
+    try {
+      if (!pp.src) { const s = localStorage.getItem('posty_src'); if (s) pp.src = String(s).slice(0, 60); }
+      if (!pp.lang) pp.lang = (document.documentElement.lang || 'es').slice(0, 2);
+    } catch (e) {}
+    AN_Q.push({ name, props: pp, sid: anSid() });
     if (AN_Q.length > 200) AN_Q.splice(0, AN_Q.length - 200); // tope de memoria
   } catch (e) {}
 }
@@ -205,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261021-v318'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261022-v322'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -10755,6 +10761,17 @@ async function render() {
     const us = qs.get('utm_source'), uc = qs.get('utm_campaign');
     if (us || uc) {
       try { localStorage.setItem('posta_utm', JSON.stringify({ source: String(us || '').slice(0, 40), campaign: String(uc || '').slice(0, 80) })); } catch (e) {}
+    }
+    // (v322) ORIGEN del funnel: ?src= (clinica-…, campaña, referido) se
+    // persiste en el navegador y viaja en cada evento hasta el registro y el
+    // pago — el tablero separa el funnel por canal e idioma.
+    const sp = qs.get('src');
+    if (sp) {
+      try {
+        localStorage.setItem('posty_src', String(sp).slice(0, 60));
+        const uu = JSON.parse(localStorage.getItem('posta_utm') || 'null') || {};
+        if (!uu.source) { uu.source = String(sp).slice(0, 40); localStorage.setItem('posta_utm', JSON.stringify(uu)); }
+      } catch (e) {}
     }
   } catch (e) {}
   const hash = location.hash || '#/';

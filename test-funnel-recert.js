@@ -136,7 +136,9 @@ async function main() {
     rows = q(`SELECT event FROM funnel_events WHERE user_id=? AND event='client_week_accepted'`, uid);
     ok(rows.length === 1, "funnel_events.client_week_accepted registrado");
     // 9) El panel cuenta el recorrido
-    const fr = await fetch(`${BASE}/api/admin/funnel?token=${ADMIN}&days=30`);
+    // (v322) El panel filtra por la ÉPOCA de lanzamiento por defecto; esta
+    // recertificación valida la CAPTURA de eventos, así que lee la era completa.
+    const fr = await fetch(`${BASE}/api/admin/funnel?token=${ADMIN}&days=30&era=all`);
     const fj = await fr.json();
     ok(fr.status === 200 && !!fj.totals, 'GET /api/admin/funnel responde');
     for (const k of ['prueba_view', 'prueba_complete', 'prueba_register', 'week_generate_done', 'post_publish']) {

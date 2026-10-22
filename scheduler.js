@@ -514,6 +514,19 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[ideas] no se pudo programar:', e.message);
   }
+  // 📬 CARTA DEL LUNES del fundador (v322): se genera sola a las 09:05 ART y
+  // queda guardada en founder_letters; el admin la lee en la vista Semana.
+  // Fail-closed adentro: sin datos de lanzamiento, la carta lo dice.
+  try {
+    const LA = require('./launch-analytics');
+    cron.schedule('5 9 * * 1', () => {
+      try { LA.founderLetter(db, {}, {}); console.log('[posta] Carta del lunes generada'); }
+      catch (e) { console.error('[carta] ', e.message); }
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Carta del lunes: lunes 09:05 (Buenos Aires)');
+  } catch (e) {
+    console.error('[carta] no se pudo programar:', e.message);
+  }
   // 🧠 Resumen semanal de conocimiento de Posty: lunes 09:00 (Buenos Aires).
   // Cuenta lo que Posty aprendió de cada usuario en la semana y se lo cuenta
   // en el chat. Si no hay nada nuevo: silencio total.

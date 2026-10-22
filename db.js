@@ -410,6 +410,36 @@ CREATE TABLE IF NOT EXISTS post_signals (
   UNIQUE(user_id, post_id)
 );
 CREATE INDEX IF NOT EXISTS idx_signals_user_week ON post_signals(user_id, week_key);
+-- (v322) ANALYTICS DE LANZAMIENTO: intervenciones rojo→verde (registro y
+-- medición del rescate), carta del lunes del fundador, autopsia de bajas y
+-- estructura del loop de aprendizaje (E: datos, sin UI que prometa de más).
+CREATE TABLE IF NOT EXISTS health_interventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL, cause TEXT NOT NULL, play TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'abierta',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT, days_to_resolve REAL
+);
+CREATE TABLE IF NOT EXISTS founder_letters (
+  week_key TEXT PRIMARY KEY, generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  era TEXT NOT NULL DEFAULT 'launch', text TEXT NOT NULL DEFAULT '', data TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS churn_autopsies (
+  user_id INTEGER PRIMARY KEY, captured_at TEXT NOT NULL DEFAULT (datetime('now')),
+  basis TEXT NOT NULL DEFAULT '', snapshot TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS piece_learning (
+  post_id INTEGER PRIMARY KEY, user_id INTEGER, week_key TEXT DEFAULT '',
+  intent TEXT DEFAULT '', angle TEXT DEFAULT '', style_code TEXT DEFAULT '', template TEXT DEFAULT '',
+  format TEXT DEFAULT '', hour TEXT DEFAULT '',
+  reach INTEGER, likes INTEGER, comments INTEGER, shares INTEGER, saves INTEGER,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS account_experiments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, week_key TEXT DEFAULT '',
+  hypothesis TEXT NOT NULL DEFAULT '', result TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_signals_signal ON post_signals(user_id, client_signal);
 CREATE TABLE IF NOT EXISTS milestones_seen (
   user_id INTEGER NOT NULL,

@@ -509,7 +509,17 @@ function registerVisibility(app, db, guards) {
       } catch (e) {}
       const rows = db.prepare('SELECT * FROM fomo_queue ORDER BY id DESC LIMIT 200').all();
       const triggers = db.prepare('SELECT * FROM fomo_triggers ORDER BY created_at DESC LIMIT 50').all();
-      res.json({ ok: true, email_configured: emailConfigured, counts, rows, triggers,
+      // (v322) ÉPOCA: las COLAS son operativas (trabajo pendiente del producto)
+      // y NO se filtran — esconder trabajo por época sería un error. Lo que sí
+      // se mide por época es el conteo de disparadores desde el lanzamiento.
+      let era = null, triggersInEra = null;
+      try {
+        const LA = require('./launch-analytics');
+        era = LA.eraInfo(LA.eraOf(req.query));
+        const ec = LA.eraCond('created_at', LA.eraOf(req.query));
+        triggersInEra = db.prepare(`SELECT COUNT(*) AS n FROM fomo_triggers WHERE ${ec.sql}`).get(...ec.params).n;
+      } catch (e) {}
+      res.json({ ok: true, email_configured: emailConfigured, counts, rows, triggers, era, triggers_since_epoch: triggersInEra,
         nota: emailConfigured ? '' : 'Envío bloqueado: falta RESEND_API_KEY — la cola espera, no sale nada.' });
     });
 

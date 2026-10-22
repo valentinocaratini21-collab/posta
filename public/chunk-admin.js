@@ -58,6 +58,7 @@ async function bindAdmin() {
   }
   card.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-soft btn-sm" data-atab="launch">🚀 Lanzamiento</button>
       <button class="btn btn-soft btn-sm" data-atab="home">🏠 Panel</button>
       <button class="btn btn-soft btn-sm" data-atab="funnel">Funnel /prueba</button>
       <button class="btn btn-soft btn-sm" data-atab="activity">Actividad</button>
@@ -593,10 +594,154 @@ async function bindAdmin() {
       catch (e) { alert('No se pudo rechazar'); b.disabled = false; }
     });
   }
+  // ---------- (v322) LANZAMIENTO: Portada · Semana · Negocio · Posteos ----------
+  let launchEra = 'launch';
+  const seenAlerts = () => { try { return JSON.parse(localStorage.getItem('posta_admin_alerts_seen') || '[]'); } catch (e) { return []; } };
+  const healthChip = (lv) => lv === 'rojo' ? '<span style="background:#fee2e2;border:1px solid #fca5a5;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">🔴 rojo</span>'
+    : lv === 'amarillo' ? '<span style="background:#fef9c3;border:1px solid #fde047;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">🟡 amarillo</span>'
+    : lv === 'nuevo' ? '<span style="background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:2px 9px;font-size:11.5px">⚪ nuevo</span>'
+    : '<span style="background:#dcfce7;border:1px solid #86efac;border-radius:99px;padding:2px 9px;font-size:11.5px;font-weight:700">🟢 verde</span>';
+  const deltaTxt = (d) => { if (!d) return ''; if (!d.has_prev) return '<span style="color:var(--mut)">· sin período anterior</span>';
+    const up = d.delta_pct >= 0; return `<span style="color:${up ? '#16a34a' : '#dc2626'};font-weight:700">${up ? '▲' : '▼'} ${Math.abs(d.delta_pct)}%</span> <span style="color:var(--mut)">vs período anterior (${d.prev})</span>`; };
+  const usd = (v) => v == null ? '—' : 'US$ ' + (Math.round(v * 100) / 100).toLocaleString('es-AR');
+  const imgTag = (url, tok) => url ? `<img src="${esc(url)}?token=${encodeURIComponent(tok)}" style="width:54px;height:68px;object-fit:cover;border-radius:8px" loading="lazy">` : '';
+  async function showLaunch(sub) {
+    sub = sub || 'portada';
+    body.innerHTML = `<div class="d">⏳ Cargando el tablero de lanzamiento…</div>`;
+    const tok = adminToken();
+    const eraSel = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        <button class="btn btn-soft btn-sm" data-lsub="portada">☀️ Portada</button>
+        <button class="btn btn-soft btn-sm" data-lsub="semana">📬 Semana</button>
+        <button class="btn btn-soft btn-sm" data-lsub="negocio">📈 Negocio</button>
+        <button class="btn btn-soft btn-sm" data-lsub="posteos">🖼️ Posteos por cuenta</button>
+        <span style="flex:1"></span>
+        <label style="font-size:12px;color:var(--mut)">Medición:
+          <select id="laEra" style="font-size:14px;border:2px solid var(--line);border-radius:8px;padding:4px">
+            <option value="launch" ${launchEra === 'launch' ? 'selected' : ''}>desde el lanzamiento (1/1/2027)</option>
+            <option value="all" ${launchEra === 'all' ? 'selected' : ''}>todo, incl. era de prueba</option>
+          </select></label>
+      </div><div id="laBody"></div>`;
+    body.innerHTML = eraSel;
+    const lb = $('#laBody');
+    body.querySelectorAll('[data-lsub]').forEach(b => { if (b.dataset.lsub === sub) b.classList.add('btn-primary'); b.onclick = () => showLaunch(b.dataset.lsub); });
+    const es = $('#laEra'); if (es) es.onchange = () => { launchEra = es.value; showLaunch(sub); };
+    const q = 'era=' + launchEra;
+    if (sub === 'portada') {
+      let r; try { r = await adminApi('morning?' + q); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar la portada.</div>'; return; }
+      const M = r.morning || {}; const A = M.attention || {}; const Y = M.yesterday || {}; const T = M.today || {}; const P = M.pulse || {};
+      const seen = seenAlerts();
+      const alertsHtml = (A.alerts || []).map(a => `<div style="font-size:13px;padding:7px 0;border-bottom:1px solid var(--line)">${seen.includes(a.key) ? '' : '<b style="color:#dc2626">NUEVA</b> '}${esc(a.title)}<div style="font-size:12px;color:var(--mut)">${esc(a.detail || '')}</div></div>`).join('') || '<div class="d">Sin alertas activas. 🎉</div>';
+      const riskHtml = (A.risk_accounts || []).map(a => `<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)">${healthChip(a.level)}<b>${esc(a.business_name || '')}</b><span style="color:var(--mut)">${esc(a.cause_why || '')}</span>${a.founder_decision ? '<b style="color:#dc2626">⭐ decisión del fundador</b>' : ''}${a.play ? `<span style="font-size:11.5px;color:var(--mut)">jugada: ${esc(a.play)}</span>` : ''}</div>`).join('') || '<div class="d">Ninguna cuenta en amarillo o rojo.</div>';
+      const cnt = Y.counts || {}, dl = Y.deltas || {};
+      const cntRow = (label, key) => `<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">${label}</div><div style="font-size:20px;font-weight:800">${cnt[key] || 0}</div><div style="font-size:11.5px">${deltaTxt(dl[key])}</div></div>`;
+      const byAcct = {};
+      (Y.published || []).forEach(p => { (byAcct[p.business_name || ('cuenta ' + p.user_id)] = byAcct[p.business_name || ('cuenta ' + p.user_id)] || []).push(p); });
+      lb.innerHTML = `
+      <h4 style="margin:2px 0 8px">🚨 Atención primero</h4>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:6px">${alertsHtml}
+      <button class="btn btn-soft btn-sm" id="laSeen" style="margin-top:8px">Marcar alertas como vistas</button></div>
+      <div style="margin-bottom:16px">${riskHtml}</div>
+      <h4 style="margin:0 0 8px">🌙 Lo que pasó desde ayer <span style="font-size:11px;color:var(--mut)">(${esc(M.day_basis || '')})</span></h4>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin-bottom:10px">
+        ${cntRow('Pagos', 'payments')}${cntRow('Pruebas iniciadas', 'trials_started')}${cntRow('Pruebas completadas', 'trials_completed')}${cntRow('Registros', 'registers')}${cntRow('Publicados', 'published')}${cntRow('Fallidos', 'failed')}${cntRow('Semanas generadas', 'weeks_generated')}
+      </div>
+      ${(Y.payments || []).length ? `<div style="font-size:13px;margin-bottom:8px">🎉 Pagos: ${(Y.payments || []).map(p => '<b>' + esc(p.business_name || 'cuenta ' + p.user_id) + '</b>').join(' · ')}</div>` : ''}
+      ${(Y.registers || []).length ? `<div style="font-size:13px;margin-bottom:8px">🆕 Registros: ${(Y.registers || []).map(p => esc(p.business_name || p.email)).join(' · ')}</div>` : ''}
+      ${Object.entries(byAcct).map(([name, ps]) => `<div style="margin-bottom:8px"><div style="font-size:12.5px;color:var(--mut);margin-bottom:4px">${esc(name)}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${ps.map(p => imgTag(p.image_url, tok)).join('')}</div></div>`).join('')}
+      ${(Y.failed || []).length ? `<div style="font-size:13px;color:#dc2626;margin-bottom:12px">❌ Fallos: ${(Y.failed || []).map(f => esc(f.business_name || '') + ' — ' + esc(f.cause || '')).join(' · ')}</div>` : '<div style="font-size:13px;margin-bottom:12px">Sin posteos fallidos ayer. ✅</div>'}
+      <h4 style="margin:0 0 8px">📅 Lo que pasa hoy</h4>
+      ${(T.posts || []).length ? (T.posts || []).map(p => `<div style="display:flex;gap:10px;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)">${imgTag(p.image_url, tok)}<span><b>${esc(p.time_art || '')}</b> · ${esc(p.business_name || '')} · ${esc(p.tipo || p.media_type || '')}</span></div>`).join('') : '<div class="d">Hoy no sale ningún posteo programado.</div>'}
+      ${(T.pending_approval_weeks || []).length ? `<div style="font-size:13px;margin-top:8px">⏳ Semanas esperando aprobación del cliente: ${(T.pending_approval_weeks || []).map(w => esc(w.business_name || '') + ' (' + w.pending + ')').join(' · ')}</div>` : ''}
+      <div style="font-size:12px;color:var(--mut);margin-top:6px">Preguntas radar sin responder: ${T.radar_pending == null ? 'sin fuente consultable todavía (se declara, no se inventa)' : T.radar_pending}</div>
+      <h4 style="margin:14px 0 8px">💓 El pulso</h4>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px">
+        <div style="font-size:13px">Suscriptores pagos: <b style="font-size:19px">${(P.subscribers || {}).payers || 0}</b> / 200 (${(P.subscribers || {}).pct || 0}%)</div>
+        ${bar((P.subscribers || {}).pct || 0)}
+        <div style="font-size:12.5px;color:var(--mut);margin-top:8px">${esc((P.subscribers || {}).basis || (P.subscribers || {}).reason || '')}</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px">
+          <span>Gasto IA ayer: <b>${usd(P.ai_cost_yesterday_usd)}</b></span>
+          <span>Acumulado histórico: <b>${usd(P.ai_cost_all_time_usd)}</b></span>
+        </div>
+        <div style="font-size:11.5px;color:var(--mut);margin-top:4px">${esc(P.ai_note || '')}</div>
+      </div>`;
+      const sb = $('#laSeen'); if (sb) sb.onclick = () => { try { localStorage.setItem('posta_admin_alerts_seen', JSON.stringify((A.alerts || []).map(a => a.key))); } catch (e) {} showLaunch('portada'); };
+      return;
+    }
+    if (sub === 'semana') {
+      let r; try { r = await adminApi('founder-letter?' + q); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar la carta.</div>'; return; }
+      const L = r.letter || {};
+      lb.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b>📬 Carta del lunes — semana del ${esc(L.week_key || '')}</b><span style="font-size:11.5px;color:var(--mut)">${L.cached ? 'guardada' : 'recién generada'} ${esc((L.generated_at || '').slice(0, 16))}</span><button class="btn btn-soft btn-sm" id="laRegen">↻ Regenerar</button></div>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:16px;white-space:pre-wrap;font-size:14px;line-height:1.55">${esc(L.text || '')}</div>`;
+      const rb = $('#laRegen'); if (rb) rb.onclick = async () => { try { await adminApi('founder-letter?' + q + '&regen=1'); showLaunch('semana'); } catch (e) { alert('No se pudo regenerar'); } };
+      return;
+    }
+    if (sub === 'negocio') {
+      let r; try { r = await adminApi('launch-board?' + q + '&days=' + days()); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar el tablero.</div>'; return; }
+      const B = r.board || {}; const F = B.funnel || {}; const Mo = B.money || {}; const Q = B.quality || {}; const Tx = Q.taxonomy || {};
+      const stepRows = (F.steps || []).map(st => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(st.label)}</span><span><b>${st.users}</b> ${deltaTxt(st.delta)}</span></div>`).join('');
+      const dimTable = (title, obj) => { const keys = Object.keys(obj || {}); if (!keys.length) return ''; return `<div style="font-size:12.5px;color:var(--mut);margin:10px 0 4px">${title}</div>` + keys.map(k => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--line)"><span>${esc(k)}</span><span>${(F.steps || []).map(st => (obj[k][st.key] || 0)).join(' → ')}</span></div>`).join(''); };
+      lb.innerHTML = `
+      ${B.window && B.window.prev_note ? `<div style="font-size:12px;color:#b45309;margin-bottom:8px">⚠️ ${esc(B.window.prev_note)}</div>` : ''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">⏱️ Time-to-value</div><div style="font-size:19px;font-weight:800">${B.ttv && B.ttv.n ? (B.ttv.med_h + ' h') : '—'}</div><div style="font-size:11.5px;color:var(--mut)">${B.ttv && B.ttv.n ? ('mediana registro → primer posteo publicado · promedio ' + B.ttv.avg_h + ' h · ' + B.ttv.d1_pct + '% en 24 h · n=' + B.ttv.n) : 'sin publicaciones medidas en la ventana'}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">🎯 Rumbo a los 200</div><div style="font-size:19px;font-weight:800">${(B.projection || {}).payers || 0} / 200</div><div style="font-size:11.5px;color:var(--mut)">${esc((B.projection || {}).basis || (B.projection || {}).reason || '')}</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">💰 Margen del período</div><div style="font-size:19px;font-weight:800">${usd((Mo.totals || {}).margin_period_usd)}</div><div style="font-size:11.5px;color:var(--mut)">ingresos ${usd((Mo.totals || {}).revenue_period_usd)} − IA ${usd((Mo.totals || {}).cost_period_usd)} · acumulado IA histórico ${usd((Mo.totals || {}).cost_all_time_usd)} (nunca reseteado)</div></div>
+        <div class="card" style="padding:12px"><div style="font-size:11px;color:var(--mut)">✨ Calidad a la primera</div><div style="font-size:19px;font-weight:800">${Q.first_pass_pct == null ? '—' : Q.first_pass_pct + '%'}</div><div style="font-size:11.5px;color:var(--mut)">${Q.first_pass || 0}/${Q.total || 0} piezas sin toques · tendencia ${Q.trend ? (Q.trend.first_half_pct + '% → ' + Q.trend.second_half_pct + '%') : '—'} · ediciones/cuenta/semana: ${Q.edits_per_account_week == null ? '—' : Q.edits_per_account_week}</div></div>
+      </div>
+      <h4 style="margin:0 0 6px">🧭 Funnel (${esc((B.window || {}).days || '')} días)</h4>${stepRows}
+      ${dimTable('Por canal (src)', F.by_src)}${dimTable('Por idioma', F.by_lang)}
+      <h4 style="margin:14px 0 6px">🏷️ Qué mejorar primero (taxonomía de rechazos)</h4>
+      ${(Tx.improve_first || []).length ? (Tx.improve_first || []).map(t => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(t.cause)}</span><b>${t.n}</b></div>`).join('') : '<div class="d">Sin ediciones/rechazos clasificados en la ventana.</div>'}
+      <div style="font-size:11.5px;color:var(--mut)">${esc(((Tx.rules || []).join(' · ')))}</div>
+      <h4 style="margin:14px 0 6px">💸 Costo de IA por cuenta y margen por plan</h4>
+      ${(Mo.accounts || []).slice(0, 15).map(a => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(a.email)} · ${esc(a.plan || '')}</span><span>IA ${usd(a.cost_period_usd)} · histórico ${usd(a.cost_all_time_usd)} · margen ${usd(a.margin_period_usd)}</span></div>`).join('') || '<div class="d">Sin costos en la ventana.</div>'}
+      ${(Mo.by_plan || []).map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>plan ${esc(p.plan)} · ${p.subs} subs</span><span>ingresos ${p.revenue_known ? usd(p.revenue_usd) : '—'} · margen ${usd(p.margin_usd)}</span></div>`).join('')}
+      ${(Mo.by_rubro || []).length ? '<div style="font-size:12.5px;color:var(--mut);margin:8px 0 2px">Por rubro</div>' + (Mo.by_rubro || []).map(p => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(p.rubro)} · ${p.subs} subs</span><span>margen ${usd(p.margin_usd)}</span></div>`).join('') : ''}
+      <div style="font-size:12.5px;margin-top:8px">LTV: ${Mo.ltv ? (usd(Mo.ltv.ltv_usd) + ' (precio prom. ' + usd(Mo.ltv.avg_price_usd) + ' × ' + Mo.ltv.avg_months_retained + ' meses retenidos, n=' + Mo.ltv.payers + ')') : 'sin dato todavía'} · CAC: ${Mo.cac && Mo.cac.cac_usd != null ? usd(Mo.cac.cac_usd) : 'sin dato'} <span style="color:var(--mut)">${esc((Mo.cac || {}).by_channel_note || '')}</span></div>
+      <h4 style="margin:14px 0 6px">🔁 Cohortes semanales</h4>
+      ${(B.cohorts || []).map(c => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>semana ${esc(c.week)}</span><span>${c.signups} altas · conv. ${c.conversion_pct}% · retención ${c.retention_pct == null ? 'todavía no medible' : c.retention_pct + '%'} · IA ${usd(c.ai_cost_usd)}</span></div>`).join('') || '<div class="d">Sin altas en la ventana.</div>'}
+      <h4 style="margin:14px 0 6px">🌡️ Rescate por causa (rojo → verde)</h4>
+      ${((B.health || {}).rescue_by_cause || []).map(x => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(x.cause)} · ${esc(x.play)}</span><span>${x.resueltas}/${x.total} rescatadas (${x.rescate_pct}%)${x.avg_days != null ? ' · ' + x.avg_days + ' días prom.' : ''} · abiertas ${x.abiertas}</span></div>`).join('') || '<div class="d">Todavía no hubo intervenciones registradas.</div>'}
+      <div style="font-size:12.5px;margin-top:6px">Autopsia de bajas: ${(B.churn || {}).n ? ((B.churn || {}).n + ' foto(s) finales guardadas · con intervención previa: ' + (B.churn || {}).with_prior_intervention) : esc((B.churn || {}).note || '')}</div>
+      <div style="font-size:12.5px;margin-top:6px">Loop de aprendizaje: ${esc(((B.learning || {}).note || ''))}</div>
+      ${((B.dictionary || {}).unregistered || []).length ? `<div style="font-size:12.5px;color:#b45309;margin-top:6px">📖 Eventos sin registrar en el diccionario (legado): ${esc(((B.dictionary || {}).unregistered || []).join(', '))}</div>` : ''}`;
+      return;
+    }
+    // posteos por cuenta
+    let r; try { r = await adminApi('accounts-posts'); } catch (e) { lb.innerHTML = '<div class="err">No se pudo cargar la vista de posteos.</div>'; return; }
+    const accs = r.accounts || [];
+    lb.innerHTML = `<div style="font-size:12.5px;color:var(--mut);margin-bottom:8px">Orden: primero las cuentas que necesitan ojos. 🔴 ${(r.by_level || {}).rojo || 0} · 🟡 ${(r.by_level || {}).amarillo || 0} · 🟢 ${(r.by_level || {}).verde || 0} · ⚪ ${(r.by_level || {}).nuevo || 0}</div>
+    <div style="font-size:11.5px;color:var(--mut);margin-bottom:10px">${(r.rules || []).map(esc).join(' · ')}</div>
+    <div id="laAccList">${accs.map(a => `<button class="btn btn-ghost btn-block" data-acc="${a.user_id}" style="text-align:left;margin-bottom:6px">${healthChip(a.health)} <b>${esc(a.business_name || a.email)}</b> <span style="color:var(--mut)">@${esc(a.ig_username || '—')} · ${esc(a.plan || '')}/${esc(a.plan_status || '')} · aprueba ${a.signals.approved} · edita ${a.signals.edited} · rechaza ${a.signals.rejected}${a.signals.approval_rate != null ? ' · aprobación ' + a.signals.approval_rate + '%' : ''}${a.founder_decision ? ' · ⭐ decisión del fundador' : ''}<br><span style="font-size:11.5px">${esc((a.reasons || []).join(' · '))}</span></span></button>`).join('') || '<div class="d">Sin cuentas.</div>'}</div>
+    <div id="laAccDetail"></div>`;
+    lb.querySelectorAll('[data-acc]').forEach(b => b.onclick = async () => {
+      const det = $('#laAccDetail'); det.innerHTML = '<div class="d">⏳ Cargando posteos…</div>';
+      let dr; try { dr = await adminApi('user-posts?user_id=' + b.dataset.acc); } catch (e) { det.innerHTML = '<div class="err">No se pudo cargar la cuenta.</div>'; return; }
+      const D = dr.detail || {}; const S = D.signals || {};
+      det.innerHTML = `<div style="border:1.5px solid var(--line);border-radius:14px;padding:14px;margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b>${esc((D.user || {}).business_name || (D.user || {}).email || '')}</b>
+        <button class="btn btn-soft btn-sm" id="laGoReview">✨ Ir a la cola de Revisión</button></div>
+        <div style="font-size:12.5px;color:var(--mut);margin:6px 0">Señales 30 días — aprueba ${S.approved || 0} · edita ${S.edits || 0} · rechaza ${(S.rejected || 0) + (S.rating_low || 0)} · aprobación ${S.approval_rate == null ? '—' : S.approval_rate + '%'} · regeneraciones ${(S.posts || {}).img_redos || 0} · sin ancla ${(S.posts || {}).sin_ancla || 0}</div>
+        ${(D.interventions || []).length ? `<div style="font-size:12.5px;margin-bottom:8px">Intervenciones: ${(D.interventions || []).map(i => esc(i.cause) + ' → ' + esc(i.play) + ' (' + esc(i.status) + ', ' + esc(String(i.created_at).slice(0, 10)) + ')').join(' · ')}</div>` : ''}
+        ${(D.posts || []).map(p => `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+          ${imgTag(p.image_url, tok)}
+          <div style="flex:1;font-size:12.5px">
+            <b>${esc(p.tipo || p.media_type || '')}</b> · ${esc(p.status)}${p.approval ? ' · ' + esc(p.approval) : ''} · ${esc((p.scheduled_at || p.published_at || p.created_at || '').slice(0, 16))}
+            ${(p.flags || []).map(f => `<span style="background:#fee2e2;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700;margin-left:4px">⚠️ ${esc(f)}</span>`).join('')}
+            <div style="white-space:pre-wrap;margin-top:3px">${esc((p.caption || '').slice(0, 220))}</div>
+            ${p.why ? `<div style="color:var(--mut);margin-top:3px">Por qué: ${esc(p.why)}</div>` : ''}
+            ${p.error ? `<div style="color:#dc2626;margin-top:3px">${esc(p.error)}</div>` : ''}
+          </div></div>`).join('') || '<div class="d">Sin posteos.</div>'}
+        <div style="font-size:11.5px;color:var(--mut);margin-top:8px">${esc(D.review_note || '')}</div></div>`;
+      const gb = $('#laGoReview'); if (gb) gb.onclick = () => { const rb = $('#adminCard [data-atab="review"]'); if (rb) rb.click(); };
+      det.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
   $$('#adminCard [data-atab]').forEach(b => b.onclick = () => {
     $$('#adminCard [data-atab]').forEach(x => x.classList.remove('btn-primary'));
     b.classList.add('btn-primary');
-    ({ home: showHome, funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
+    ({ launch: showLaunch, home: showHome, funnel: showFunnel, activity: showActivity, users: showUsers, review: showReview, money: showMoney, referrals: showReferrals, content: showContent, cohorts: showCohorts, churn: showChurn, health: showHealth })[b.dataset.atab]();
   });
   // Banner de alertas: la info tiene que buscar al dueño
   try {
@@ -610,6 +755,6 @@ async function bindAdmin() {
       card.insertBefore(bar, card.firstChild);
     }
   } catch (e) {}
-  const f0 = $('#adminCard [data-atab="home"]'); if (f0) f0.click();
+  const f0 = $('#adminCard [data-atab="launch"]'); if (f0) f0.click();
   const dd = $('#adDays'); if (dd) dd.onchange = () => { const cur = $('#adminCard .btn-primary[data-atab]'); if (cur) cur.click(); };
 }
