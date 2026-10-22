@@ -211,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261022-v322'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261022-v324'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -964,7 +964,26 @@ const LP_PROFILES = [
     slug: 'box360', hls: ['Clases', 'Profes', 'El box', 'Alumnos'] },
   { rubro: 'Mascotas', user: 'patitas.peluqueria', name: 'Patitas 🐾', cat: 'Peluquería canina · Caballito', stats: ['111', '3.502', '74'],
     bio: ['🐾 Baño y corte con turno', '💅 Corte de uñas y limpieza de oídos', '📍 Acoyte 560 · 9 a 19 h'], link: 'patitas',
-    slug: 'patitas', hls: ['Baños', 'Cortes', 'Antes y después', 'Clientes'] }
+    slug: 'patitas', hls: ['Baños', 'Cortes', 'Antes y después', 'Clientes'] },
+  { rubro: 'Cervecería', user: 'cerveceria.ambar', name: 'Cervecería Ámbar 🍺', cat: 'Cervecería artesanal · Villa Crespo', stats: ['112', '3.480', '74'],
+    bio: ['🍺 IPA, honey y porter de la casa', '🍔 Picadas y papas cerveceras', '📍 Thames 1120 · desde las 18 h'], link: 'cerveceria-ambar',
+    slug: 'ambar', hls: ['La carta', 'Canillas', 'El local', 'Clientes'],
+    cells: ['gt-ambar-1.jpg', 'gt-ambar-2.jpg', 'gt-ambar-3.jpg', 'gt-ambar-4.jpg', 'VIDEO', 'gt-ambar-6.jpg', 'gt-ambar-7.jpg', 'gt-ambar-8.jpg', 'gt-ambar-9.jpg'] },
+  { rubro: 'Farmacia', user: 'farmacia.vidal', name: 'Farmacia Vida 💊', cat: 'Farmacia y perfumería · Caballito', stats: ['96', '2.150', '58'],
+    bio: ['💊 Farmacia y perfumería', '🧴 Skincare y dermocosmética', '📍 Av. Rivadavia 4900 · 8 a 22 h'], link: 'farmacia-vidal',
+    slug: 'vidal', hls: ['Skincare', 'Ofertas', 'El local', 'Consejos'] },
+  { rubro: 'Librería', user: 'libreria.umbral', name: 'Librería Umbral 📚', cat: 'Librería · San Telmo', stats: ['88', '2.760', '64'],
+    bio: ['📚 Nuevos y usados elegidos a mano', '☕ Rincón de lectura con café', '📍 Defensa 980 · 10 a 20 h'], link: 'libreria-umbral',
+    slug: 'umbral', hls: ['Recomendados', 'Novedades', 'El local', 'Club de lectura'] },
+  { rubro: 'Verdulería', user: 'mercado.fresco', name: 'Mercado Fresco 🥬', cat: 'Verdulería y mercado · Belgrano', stats: ['104', '2.980', '71'],
+    bio: ['🥬 Verdura de estación, directo del mercado', '🧺 Bolsones semanales a domicilio', '📍 Juramento 2080 · 8 a 20 h'], link: 'mercado-fresco',
+    slug: 'fresco', hls: ['De estación', 'Bolsones', 'El puesto', 'Recetas'] },
+  { rubro: 'Óptica', user: 'optica.prisma', name: 'Óptica Prisma 👓', cat: 'Óptica · Palermo', stats: ['92', '2.340', '66'],
+    bio: ['👓 Armazones de autor y clásicos', '🔬 Examen visual sin cargo', '📍 Honduras 4770 · 10 a 20 h'], link: 'optica-prisma',
+    slug: 'prisma', hls: ['Armazones', 'Examen', 'El local', 'Clientes'] },
+  { rubro: 'Veterinaria', user: 'vet.norte', name: 'Clínica Veterinaria Norte 🐾', cat: 'Clínica veterinaria · Saavedra', stats: ['118', '3.760', '79'],
+    bio: ['🐾 Clínica, vacunas y peluquería', '🩺 Guardia los fines de semana', '📍 Crisólogo Larralde 3900 · 9 a 20 h'], link: 'vet-norte',
+    slug: 'vetnorte', hls: ['Pacientes', 'Vacunas', 'La clínica', 'Consejos'] }
 ];
 function lpTiles(p) {
   if (p.cells) return p.cells;
@@ -1220,7 +1239,13 @@ const LP_WEEK = {
   detailing: { ejemplo: 'de un taller de detailing', u: 'bustos.detailing', l: 'B', c: '#F3E3C2', alt: 'Posteo de Instagram de Bustos Detailing hecho por Posty', imgs: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-4.jpg', 'gt-bustos-6.jpg', 'gt-bustos-9.jpg'] },
   inmobiliaria: { ejemplo: 'de una inmobiliaria', u: 'roca.propiedades', l: 'R', c: '#EFE6DA', alt: 'Posteo de Instagram de Roca Propiedades hecho por Posty', imgs: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-9.jpg'] },
   boliche: { ejemplo: 'de un boliche', u: 'nocta.club', l: 'N', c: '#E9E4F5', alt: 'Flyer de fiesta de NOCTA Club hecho por Posty', imgs: ['gt-nocta-1.jpg', 'gt-nocta-2.jpg', 'gt-nocta-3.jpg', 'gt-nocta-4.jpg', 'gt-nocta-5.jpg'] },
-  odontologia: { ejemplo: 'de una clínica dental', u: 'dental.prado', l: 'D', c: '#DFF3EC', alt: 'Posteo de Instagram de Dental Prado hecho por Posty', imgs: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-3.jpg'] }
+  odontologia: { ejemplo: 'de una clínica dental', u: 'dental.prado', l: 'D', c: '#DFF3EC', alt: 'Posteo de Instagram de Dental Prado hecho por Posty', imgs: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-3.jpg'] },
+  cerveceria: { ejemplo: 'de una cervecería', u: 'cerveceria.ambar', l: 'A', c: '#F3E3C2', alt: 'Posteo de Instagram de Cervecería Ámbar hecho por Posty', imgs: ['gt-ambar-1.jpg', 'gt-ambar-2.jpg', 'gt-ambar-3.jpg', 'gt-ambar-4.jpg', 'gt-ambar-6.jpg'] },
+  farmacia: { ejemplo: 'de una farmacia', u: 'farmacia.vidal', l: 'V', c: '#DFF3EC', alt: 'Posteo de Instagram de Farmacia Vida hecho por Posty', imgs: ['gt-vidal-1.jpg', 'gt-vidal-2.jpg', 'gt-vidal-3.jpg', 'gt-vidal-4.jpg', 'gt-vidal-5.jpg'] },
+  libreria: { ejemplo: 'de una librería', u: 'libreria.umbral', l: 'U', c: '#EFE6DA', alt: 'Posteo de Instagram de Librería Umbral hecho por Posty', imgs: ['gt-umbral-1.jpg', 'gt-umbral-2.jpg', 'gt-umbral-3.jpg', 'gt-umbral-4.jpg', 'gt-umbral-5.jpg'] },
+  verduleria: { ejemplo: 'de una verdulería', u: 'mercado.fresco', l: 'F', c: '#E2F2E4', alt: 'Posteo de Instagram de Mercado Fresco hecho por Posty', imgs: ['gt-fresco-1.jpg', 'gt-fresco-2.jpg', 'gt-fresco-3.jpg', 'gt-fresco-4.jpg', 'gt-fresco-5.jpg'] },
+  optica: { ejemplo: 'de una óptica', u: 'optica.prisma', l: 'P', c: '#E6E0F5', alt: 'Posteo de Instagram de Óptica Prisma hecho por Posty', imgs: ['gt-prisma-1.jpg', 'gt-prisma-2.jpg', 'gt-prisma-3.jpg', 'gt-prisma-4.jpg', 'gt-prisma-5.jpg'] },
+  veterinaria: { ejemplo: 'de una clínica veterinaria', u: 'vet.norte', l: 'N', c: '#E4F2F7', alt: 'Posteo de Instagram de Clínica Veterinaria Norte hecho por Posty', imgs: ['gt-vetnorte-1.jpg', 'gt-vetnorte-2.jpg', 'gt-vetnorte-3.jpg', 'gt-vetnorte-4.jpg', 'gt-vetnorte-5.jpg'] }
 };
 // v186 — Garantía "nunca la misma foto dos veces en una semana".
 // Pools de respaldo por rubro (la foto ig-* del rubro + las gt-* de su set
@@ -1237,7 +1262,13 @@ const LP_WEEK_POOLS = {
   detailing: ['gt-bustos-1.jpg', 'gt-bustos-2.jpg', 'gt-bustos-3.jpg', 'gt-bustos-4.jpg', 'gt-bustos-5.jpg', 'gt-bustos-6.jpg', 'gt-bustos-7.jpg', 'gt-bustos-8.jpg', 'gt-bustos-9.jpg'],
   inmobiliaria: ['gt-roca-1.jpg', 'gt-roca-2.jpg', 'gt-roca-3.jpg', 'gt-roca-4.jpg', 'gt-roca-5.jpg', 'gt-roca-6.jpg', 'gt-roca-7.jpg', 'gt-roca-8.jpg', 'gt-roca-9.jpg'],
   boliche: ['gt-nocta-1.jpg', 'gt-nocta-2.jpg', 'gt-nocta-3.jpg', 'gt-nocta-4.jpg', 'gt-nocta-5.jpg', 'gt-nocta-6.jpg', 'gt-nocta-7.jpg', 'gt-nocta-8.jpg', 'gt-nocta-9.jpg'],
-  odontologia: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-3.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-6.jpg', 'gt-dentalprado-7.jpg', 'gt-dentalprado-8.jpg']
+  odontologia: ['gt-dentalprado-1.jpg', 'gt-dentalprado-2.jpg', 'gt-dentalprado-3.jpg', 'gt-dentalprado-4.jpg', 'gt-dentalprado-5.jpg', 'gt-dentalprado-6.jpg', 'gt-dentalprado-7.jpg', 'gt-dentalprado-8.jpg'],
+  cerveceria: ['gt-ambar-1.jpg', 'gt-ambar-2.jpg', 'gt-ambar-3.jpg', 'gt-ambar-4.jpg', 'gt-ambar-6.jpg', 'gt-ambar-7.jpg', 'gt-ambar-8.jpg', 'gt-ambar-9.jpg'],
+  farmacia: ['gt-vidal-1.jpg', 'gt-vidal-2.jpg', 'gt-vidal-3.jpg', 'gt-vidal-4.jpg', 'gt-vidal-5.jpg', 'gt-vidal-6.jpg', 'gt-vidal-7.jpg', 'gt-vidal-8.jpg', 'gt-vidal-9.jpg'],
+  libreria: ['gt-umbral-1.jpg', 'gt-umbral-2.jpg', 'gt-umbral-3.jpg', 'gt-umbral-4.jpg', 'gt-umbral-5.jpg', 'gt-umbral-6.jpg', 'gt-umbral-7.jpg', 'gt-umbral-8.jpg', 'gt-umbral-9.jpg'],
+  verduleria: ['gt-fresco-1.jpg', 'gt-fresco-2.jpg', 'gt-fresco-3.jpg', 'gt-fresco-4.jpg', 'gt-fresco-5.jpg', 'gt-fresco-6.jpg', 'gt-fresco-7.jpg', 'gt-fresco-8.jpg', 'gt-fresco-9.jpg'],
+  optica: ['gt-prisma-1.jpg', 'gt-prisma-2.jpg', 'gt-prisma-3.jpg', 'gt-prisma-4.jpg', 'gt-prisma-5.jpg', 'gt-prisma-6.jpg', 'gt-prisma-7.jpg', 'gt-prisma-8.jpg', 'gt-prisma-9.jpg'],
+  veterinaria: ['gt-vetnorte-1.jpg', 'gt-vetnorte-2.jpg', 'gt-vetnorte-3.jpg', 'gt-vetnorte-4.jpg', 'gt-vetnorte-5.jpg', 'gt-vetnorte-6.jpg', 'gt-vetnorte-7.jpg', 'gt-vetnorte-8.jpg', 'gt-vetnorte-9.jpg']
 };
 const LP_WEEK_ALIAS = {
   'gt-petshop-2.jpg': 'ig-mascotas.jpg',

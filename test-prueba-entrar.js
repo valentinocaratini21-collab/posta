@@ -58,6 +58,8 @@ ok('server: carta — tono amigo y despedida final', srv.includes('Con amor,') &
 ok('server: carta — firma literal', srv.includes('firma-posty.png'));
 ok('server: carta — sin pregunta, sin posdata, sin texto bajo la foto', !srv.includes('Una pregunta antes de firmar') && !srv.includes('P.D.: tu posteo del') && !srv.includes('Y detrás mío está Valentino'));
 ok('server: carta — link al sitio tras la firma', srv.includes('postyhacetodo.com</a>'));
+ok('server: carta — carrusel con posteos 2 y 3 (enmienda 11)', srv.includes('también son tuyos') && srv.includes('Y quedan'));
+ok('server: carta — evento carta_entregada (rescate 72 h)', srv.includes("'carta_entregada'"));
 ok('server: activos de la carta en el repo', fs.existsSync(path.join(__dirname, 'public', 'valentino-posty-fundador.jpg')) && fs.existsSync(path.join(__dirname, 'public', 'firma-posty.png')) && fs.existsSync(path.join(__dirname, 'public', 'posty-avatar-saludando.png')));
 
 (async () => {

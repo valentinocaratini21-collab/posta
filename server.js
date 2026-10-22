@@ -16398,10 +16398,12 @@ async function sendTrialGiftEmail(email, payload, lang) {
     if (/^https?:\/\//.test(s)) return s;
     return base + (s.startsWith('/') ? s : '/' + s);
   };
-  // Su mejor posteo (el héroe de la carta) y cuántos quedan en la semana.
+  // Su mejor posteo (el héroe de la carta), los dos siguientes para el
+  // carrusel (enmienda 11) y cuántos quedan en la semana.
   const imgPosts = payload.posts.filter(p => p && p.type !== 'video' && abs(p.image));
   const hero = imgPosts.find(p => p.headline && p.why) || imgPosts.find(p => p.headline) || imgPosts[0] || null;
-  const leftN = imgPosts.length - (hero ? 1 : 0);
+  const extra = imgPosts.filter(p => p !== hero).slice(0, 2);
+  const leftN = imgPosts.length - (hero ? 1 : 0) - extra.length;
   const hasReel = payload.posts.some(p => p && p.type === 'video') || !!payload.video_ok;
   // Su producto real, desde su fundamento/semana (sin dato → frase honesta).
   const dg = payload.digest || {};
@@ -16409,8 +16411,8 @@ async function sendTrialGiftEmail(email, payload, lang) {
   const catLabel = String(payload.category || '').trim();
   const moreLine = (leftN > 0 || hasReel)
     ? (en
-      ? `And there ${leftN === 1 ? 'is' : 'are'} ${leftN > 0 ? leftN + ' more' : ''}${leftN > 0 && hasReel ? ' and ' : ''}${hasReel ? 'a reel' : ''}${product ? `, all about ${product}` : ''} and in your way of speaking.`
-      : `Y hay ${leftN > 0 ? leftN + ' más' : ''}${leftN > 0 && hasReel ? ' y ' : ''}${hasReel ? 'un reel' : ''}${product ? `, todos sobre ${product}` : ''} y con tu forma de hablar.`)
+      ? `And there ${leftN === 1 ? 'is' : 'are'} ${leftN > 0 ? leftN + ' more' : ''}${leftN > 0 && hasReel ? ' and ' : ''}${hasReel ? 'a reel' : ''} waiting in your week${product ? `, all about ${product}` : ''} and in your way of speaking.`
+      : `Y quedan ${leftN > 0 ? leftN + ' más' : ''}${leftN > 0 && hasReel ? ' y ' : ''}${hasReel ? 'un reel' : ''} en tu semana${product ? `, todos sobre ${product}` : ''} y con tu forma de hablar.`)
     : '';
   // Su lectura de la cuenta (del dato LEÍDO: su cadencia real en días).
   const cl = payload.competition_line;
@@ -16443,6 +16445,7 @@ async function sendTrialGiftEmail(email, payload, lang) {
     ${P(en ? `I already started, actually: I was snooping around <b>${escH(handle)}</b> and prepared your whole week. Here's the first one:` : `Ya empecé, de hecho: estuve chusmeando <b>${escH(handle)}</b> y te preparé la semana entera. Mirá el primero:`)}
     ${hero ? `<img src="${abs(hero.image)}" alt="${escH(heroHead)}" style="width:100%;height:auto;border-radius:12px;display:block">
     <p style="font-size:15px;line-height:1.55;margin:10px 0 16px"><b>${escH(heroHead)}</b></p>` : ''}
+    ${extra.length ? `${P(en ? (extra.length === 2 ? 'And these two are yours too:' : 'And this one is yours too:') : (extra.length === 2 ? 'Y estos dos también son tuyos:' : 'Y este también es tuyo:'))}<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;margin:0 0 6px;padding-bottom:4px">${extra.map((p, i) => `<span style="display:inline-block;width:78%;margin-right:3%;vertical-align:top;white-space:normal"><img src="${abs(p.image)}" alt="${escH(String(p.headline || (p.caption || '').split('\n')[0] || '').trim().slice(0, 70))}" style="width:100%;height:auto;border-radius:12px;display:block"><span style="display:block;font-size:12.5px;color:#47617A;margin-top:6px">${extra.map((_, j) => j === i ? '●' : '○').join(' ')} · ${i + 1} ${en ? 'of' : 'de'} ${extra.length}</span></span>`).join('')}</div>` : ''}
     ${moreLine ? P(escH(moreLine)) : ''}
     ${P(escH(leader))}
     ${P(`<b>${en ? 'I truly believe I can help you sell more on Instagram. If you do well, we both win.' : 'De verdad creo que puedo ayudarte a vender más por Instagram. Si a vos te va bien, ganamos los dos.'}</b>`)}
@@ -16458,6 +16461,7 @@ async function sendTrialGiftEmail(email, payload, lang) {
     en ? 'Well, community manager is the serious title. Think of me as a friend who knows Instagram, works all day and is on your side.' : 'Bueno, community manager es el título serio. Pensame como un amigo que sabe de Instagram, trabaja todo el día y está de tu lado.',
     en ? "What I do is simple: I read your account, build your posts, publish them for you and keep learning what your people like. You keep running your business — that's your thing." : 'Lo que hago es simple: leo tu cuenta, armo tus posteos, los publico por vos y voy aprendiendo qué le gusta a tu gente. Vos seguí con tu negocio, que es lo tuyo.',
     en ? `I already started, actually: I was snooping around ${handle} and prepared your whole week. The first post: ${heroHead}` : `Ya empecé, de hecho: estuve chusmeando ${handle} y te preparé la semana entera. El primero: ${heroHead}`,
+    extra.length ? (en ? `And these are yours too: ${extra.map(p => String(p.headline || (p.caption || '').split('\n')[0] || '').trim().slice(0, 70)).join(' · ')}` : `Y estos también son tuyos: ${extra.map(p => String(p.headline || (p.caption || '').split('\n')[0] || '').trim().slice(0, 70)).join(' · ')}`) : '',
     moreLine,
     leader,
     en ? 'I truly believe I can help you sell more on Instagram. If you do well, we both win.' : 'De verdad creo que puedo ayudarte a vender más por Instagram. Si a vos te va bien, ganamos los dos.',
@@ -16512,7 +16516,17 @@ app.post('/api/trial/gift-email', express.json({ limit: '16kb' }), async (req, r
   } catch (e) { console.error('[trial gift] no se pudo enrolar en ideas:', e.message); }
   let sent = false;
   try { sent = await sendTrialGiftEmail(email, payload, lang); } catch (e) { console.error('[trial gift] envío falló:', e.message); }
-  if (sent) { try { db.prepare("UPDATE trial_cache SET gift_state = 'sent' WHERE ig = ?").run(igKey); } catch (e) {} }
+  if (sent) {
+    try { db.prepare("UPDATE trial_cache SET gift_state = 'sent' WHERE ig = ?").run(igKey); } catch (e) {}
+    // (nota pieza 5 · rescate del fundador a las 72 h) CARTA ENTREGADA:
+    // el timestamp de este evento es el reloj del toque de rescate; la
+    // clave es la identidad normalizada del candado (pieza 8). Los otros
+    // tres eventos del rescate ya existen: semana abierta = eventos del
+    // funnel con src=email-salida (origen v322), activación = registered
+    // con utm normalizado (v322); la respuesta llega a hola@ y la lee la
+    // tanda del sistema de email (sin lector automático todavía).
+    try { track(null, 'carta_entregada', igKey || trialLock.normalizeDomain((payload && payload.business) || '')); } catch (e) {}
+  }
   res.json({ ok: true, sent, queued: !sent });
 });
 
@@ -17032,7 +17046,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261022-v323';
+const BUILD_ID = '20261022-v324';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
