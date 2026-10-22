@@ -11,14 +11,17 @@ function emailConfigured() {
   return !!process.env.RESEND_API_KEY;
 }
 
-async function sendEmail({ to, subject, html, attachments }) {
+async function sendEmail({ to, subject, html, attachments, from: fromOverride, replyTo }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
     return { ok: false, skipped: true };
   }
-  const from = process.env.EMAIL_FROM || 'Posty <hola@postyhacetodo.com>';
+  const from = fromOverride || process.env.EMAIL_FROM || 'Posty <hola@postyhacetodo.com>';
   const payload = { from, to: [to], subject, html };
+  // Reply-to opcional (ej.: el newsletter de ideas sale de ideas@ pero se
+  // responde a hola@). Resend lo acepta como reply_to.
+  if (replyTo) payload.reply_to = [replyTo];
   // Adjuntos opcionales (formato Resend): [{ filename, content (base64), contentType?, contentId? }]
   // contentId permite referenciarlo inline en el HTML como <img src="cid:xxx">.
   if (Array.isArray(attachments) && attachments.length) {

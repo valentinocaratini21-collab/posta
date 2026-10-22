@@ -286,6 +286,28 @@ db.exec(`CREATE TABLE IF NOT EXISTS email_tokens (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at INTEGER NOT NULL
 )`);
+// Email "3 ideas para tu Instagram" (frente #2 del playbook): suscriptores
+// del newsletter semanal por rubro. La lógica vive en ideas-email.js
+// (captura simple e inmediata — decisión de Valentino 2026-10-21: SIN
+// doble opt-in; baja en un clic, job de lunes 9:00 ART). La migración de
+// la tabla legada idea_subscribers corre en ensureIdeasTables() del
+// módulo (al registrar las rutas en el boot y en cada alta/envío).
+db.exec(`CREATE TABLE IF NOT EXISTS ideas_subscribers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  rubro TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'landing',
+  business_name TEXT NOT NULL DEFAULT '',
+  ig_handle TEXT NOT NULL DEFAULT '',
+  token TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'confirmed',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  confirmed_at TEXT DEFAULT '',
+  unsubscribed_at TEXT DEFAULT '',
+  last_edition INTEGER NOT NULL DEFAULT 0,
+  last_sent_at TEXT DEFAULT ''
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_ideas_subs_status ON ideas_subscribers(status, rubro)`); } catch (e) {}
 try { db.exec(`ALTER TABLE users ADD COLUMN mp_preapproval_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN media_type TEXT DEFAULT 'image'`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN source_topic TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }

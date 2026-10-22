@@ -14142,36 +14142,19 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   }
 });
 
-// ---------- Gancho "3 ideas cada lunes" (cierre de /prueba) ----------
-// El frente posteaba a esta ruta desde su lanzamiento y NO EXISTÍA: cada
-// lead que se suscribía recibía error y se perdía en silencio.
-try { db.exec(`CREATE TABLE IF NOT EXISTS idea_subscribers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  email TEXT NOT NULL UNIQUE,
-  ig_handle TEXT DEFAULT '',
-  rubro TEXT DEFAULT '',
-  business_name TEXT DEFAULT '',
-  source TEXT DEFAULT '',
-  created_at INTEGER NOT NULL
-)`); } catch (e) { console.error('[ideas-subscribe] tabla:', e.message); }
-app.post('/api/ideas/subscribe', (req, res) => {
-  const b = req.body || {};
-  let email = String(b.email || '').trim().toLowerCase();
-  if (!email && req.session && req.session.userId) {
-    try { const u = db.prepare('SELECT email FROM users WHERE id = ?').get(req.session.userId); if (u) email = u.email; } catch (e) {}
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email))
-    return res.status(400).json({ ok: false, error: 'Necesito un email válido 📧' });
-  try {
-    db.prepare(`INSERT INTO idea_subscribers (email, ig_handle, rubro, business_name, source, created_at) VALUES (?,?,?,?,?,?)
-      ON CONFLICT(email) DO UPDATE SET ig_handle=excluded.ig_handle, rubro=excluded.rubro, business_name=excluded.business_name`)
-      .run(email, String(b.ig_handle || '').slice(0, 60), String(b.rubro || '').slice(0, 60), String(b.business_name || '').slice(0, 120), String(b.source || '').slice(0, 40), Date.now());
-  } catch (e) {
-    console.error('[ideas-subscribe]', e.message);
-    return res.status(500).json({ ok: false, error: 'No pudimos suscribirte 😅 Probá de nuevo' });
-  }
-  res.json({ ok: true, message: '¡Listo! Desde el lunes te llegan tus 3 ideas 💡' });
-});
+// ---------- Email "3 ideas cada lunes" (frente #2 del playbook) ----------
+// Sistema UNIFICADO (v321 — decisión de Valentino 2026-10-21): captura
+// simple al frente + maquinaria completa por detrás. Reemplaza al hotfix
+// inline que vivía acá (tabla idea_subscribers): ahora hay UN solo
+// endpoint (POST /api/ideas/subscribe) y UNA sola tabla
+// (ideas_subscribers). Quien deja el email queda activo EN EL ACTO
+// (sin doble opt-in, como el resto de Posty) y los leads ya capturados
+// en la tabla legada se migran solos al boot (ensureIdeasTables en
+// ideas-email.js) — ningún lead se pierde. Las ediciones por rubro las
+// envía el job de los lunes 9:00 ART (scheduler.js); la baja es en un
+// clic con token. La lógica vive en ideas-email.js (+ ideas-editions.js).
+try { require('./ideas-email').registerIdeasRoutes(app, db); }
+catch (e) { console.error('[ideas] no se pudieron registrar las rutas:', e.message); }
 
 // Alias de las legales sin extensión (los links compartidos sin .html
 // caían en el fallback SPA y mostraban la home).
@@ -16474,7 +16457,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261021-v320';
+const BUILD_ID = '20261021-v321';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

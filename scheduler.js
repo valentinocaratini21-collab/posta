@@ -500,6 +500,20 @@ function startScheduler(db) {
   } catch (e) {
     console.error('[email semanal] no se pudo programar:', e.message);
   }
+  // 💡 Email "3 ideas para tu Instagram" (frente #2 del playbook):
+  // lunes 9:00 (Buenos Aires). Newsletter por rubro para leads y
+  // suscriptores voluntarios (captura simple, v321: todos 'confirmed';
+  // no clientes: ellos tienen su reporte). Sin RESEND_API_KEY el job
+  // omite en silencio (patrón de email.js) y jamás rompe el scheduler.
+  try {
+    const { sendIdeasEmails } = require('./ideas-email');
+    cron.schedule('0 9 * * 1', () => {
+      sendIdeasEmails(db).catch((e) => console.error('[ideas] ', e.message));
+    }, { timezone: 'America/Argentina/Buenos_Aires' });
+    console.log('[posta] Email de ideas: lunes 09:00 (Buenos Aires)');
+  } catch (e) {
+    console.error('[ideas] no se pudo programar:', e.message);
+  }
   // 🧠 Resumen semanal de conocimiento de Posty: lunes 09:00 (Buenos Aires).
   // Cuenta lo que Posty aprendió de cada usuario en la semana y se lo cuenta
   // en el chat. Si no hay nada nuevo: silencio total.
