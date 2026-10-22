@@ -365,6 +365,59 @@ CREATE TABLE IF NOT EXISTS trial_cache (
 // ~24h, recibe UN solo aviso de que su semana sigue guardada.
 try { db.exec(`ALTER TABLE trial_cache ADD COLUMN email TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE trial_cache ADD COLUMN abandon_sent INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// Salida con regalo de /prueba (pieza 5, 2026-10-22): el visitante pide que
+// le mandemos SUS posteos por email. gift_state: '' sin pedido · 'queued'
+// capturado y en cola (el envío sale cuando haya RESEND_API_KEY) · 'sent'.
+try { db.exec(`ALTER TABLE trial_cache ADD COLUMN gift_state TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+
+// Candado de prueba (pieza 8, 2026-10-22 · módulo trial-lock.js): un mismo
+// negocio (@ o dominio normalizados) no regenera una prueba por 90 días.
+// Guarda el snapshot de la prueba para que la vuelta muestre "tu semana
+// sigue acá" sin gastar IA. ESTADO DE PRODUCTO anti-abuso: esta tabla y su
+// allowlist quedan EXENTAS del reseteo por época del analytics (la época
+// limpia medición, no reglas de producto — mismo criterio que el ledger
+// de costos de IA).
+db.exec(`
+CREATE TABLE IF NOT EXISTS trial_locks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ig TEXT,
+  domain TEXT,
+  business TEXT DEFAULT '',
+  lang TEXT DEFAULT 'es',
+  payload TEXT,
+  generated_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trial_locks_ig ON trial_locks(ig, generated_at);
+CREATE INDEX IF NOT EXISTS idx_trial_locks_domain ON trial_locks(domain, generated_at);
+CREATE TABLE IF NOT EXISTS trial_lock_allowlist (
+  value TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'ig',
+  note TEXT DEFAULT '',
+  created_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (kind, value)
+);
+`);
+// Semilla de la allowlist: las cuentas de marca (administrable: agregar
+// filas acá o por TRIAL_LOCK_ALLOWLIST; nunca se bloquean a sí mismas).
+try {
+  const seedLockAllow = db.prepare(`INSERT OR IGNORE INTO trial_lock_allowlist (value, kind, note, created_at) VALUES (?, ?, ?, ?)`);
+  seedLockAllow.run('posty.hacetodo', 'ig', 'cuenta de marca ES', Date.now());
+  seedLockAllow.run('posty.doeseverything', 'ig', 'cuenta de marca EN', Date.now());
+  seedLockAllow.run('postyhacetodo.com', 'domain', 'dominio propio', Date.now());
+} catch (e) { /* la allowlist también vive en código (trial-lock.js) */ }
+
+// Reel de muestra con compuerta (pieza 7, 2026-10-22): un reel con guión
+// (MOTION) por prueba, SOLO a pedido explícito del visitante. Cachea el
+// resultado por identidad de negocio para no regenerar (ni gastar) dos
+// veces; el tope diario de IA de la demo (costs.demoAiCapOk) gobierna.
+db.exec(`
+CREATE TABLE IF NOT EXISTS trial_sample_reels (
+  ig TEXT PRIMARY KEY,
+  video TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+`);
 
 // Eliminación de datos (requerido por Meta): solicitudes vía signed_request
 db.exec(`

@@ -579,12 +579,59 @@ html{scroll-behavior:smooth}
 .qcard{border-radius:24px;box-shadow:0 24px 60px rgba(10,30,51,.10)}
 .tstep{border-radius:16px}
 .nav{box-shadow:0 2px 14px rgba(10,30,51,.04)}
+/* (v323) Botón Entrar persistente en la nav de /prueba (pieza 15): mismo
+   patrón visual que el de la home; consciente de sesión por JS. */
+.nav-entrar{margin-left:auto;font-weight:800;font-size:15px;color:var(--cel);border:2px solid var(--cel);border-radius:999px;padding:8px 22px;text-decoration:none;background:#fff;white-space:nowrap}
+.nav-entrar:hover{background:var(--cel);color:#fff}
+/* (v323) Detalle opcional colapsado de las tarjetas de arranque (pieza 1) */
+.opt-detail{margin:12px 0 4px;border:1.5px dashed #BFE3F5;border-radius:14px;padding:12px 14px;background:#F7FCFE;text-align:left}
+.opt-detail summary{cursor:pointer;font-weight:700;font-size:14.5px;color:var(--cel);list-style:none}
+.opt-detail summary::-webkit-details-marker{display:none}
+.opt-detail textarea{width:100%;font-size:15px;padding:10px 12px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33;margin-top:10px}
+/* (v323) Tarjeta del candado de 90 días (pieza 8) */
+.lock-card{display:none;background:#EAF6FD;border:1.5px solid #2793C8;border-radius:16px;padding:18px;margin-top:14px;text-align:left}
+.lock-card h3{margin:0 0 6px;font-size:19px;color:#0A1E33}
+.lock-card p{margin:0 0 6px;font-size:15px;line-height:1.55;color:#33475C}
+.lock-card .lock-sub{font-size:13.5px;color:#47617A}
+/* (v323) Su mejor posteo vs el nuestro (pieza 12) */
+.vs-grid{display:flex;gap:14px;flex-wrap:wrap}
+.vs-card{flex:1 1 240px;background:#fff;border:1.5px solid #E2EDF5;border-radius:16px;overflow:hidden}
+.vs-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
+.vs-card .vs-tag{padding:10px 14px 2px;font-weight:800;font-size:14px;color:#0A1E33}
+.vs-card .vs-cap{padding:2px 14px 12px;font-size:13.5px;color:#47617A;line-height:1.5}
+/* (v323) Precio en el pico (pieza 17): tarjeta sobria, sin presión */
+.price-card{margin:20px auto 4px;max-width:440px;background:#fff;border:1.5px solid #E2EDF5;border-radius:16px;padding:18px;text-align:center}
+.price-card .pc-per{font-size:26px;font-weight:800;color:#0A1E33}
+.price-card .pc-per small{font-size:15px;font-weight:600;color:#47617A}
+.price-card .pc-anchor{font-size:14px;color:#47617A;margin:6px 0 0;line-height:1.5}
+.price-card .pc-trust{font-size:13.5px;color:#47617A;margin:12px 0 0;line-height:1.7;border-top:1px solid #E2EDF5;padding-top:12px}
+/* (v323 · pieza 20) Módulo de fundador: tarjeta clara, foto ENTERA en su
+   aspecto natural (jamás recortada), protagonista. */
+.founder-card{background:#F7FCFE;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:24px auto 4px;max-width:560px;text-align:left}
+.founder-card img{width:100%;max-width:480px;height:auto;display:block;margin:0 auto;border-radius:14px}
+.founder-card .fc-eye{margin:18px 0 4px;font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--cel)}
+.founder-card h3{margin:0 0 8px;font-size:24px;color:#0A1E33}
+.founder-card .fc-body{margin:0;font-size:16px;line-height:1.6;color:#33475C}
+/* (v323 · pieza 20, regla reafirmada) Los posteos de la prueba se muestran
+   ENTEROS en su aspecto natural dentro del teléfono: nada de fit-crop que
+   corte titulares (la vara es la foto completa, como en la Agenda). */
+.phone-feed .day .db{aspect-ratio:auto;background:transparent}
+.phone-feed .day .db img,.phone-feed .day .db video{height:auto;object-fit:contain}
+.phone-feed .day.feat .db{aspect-ratio:auto}
+/* (v323 · pieza 21) Bloque de beneficios: checklist de una línea por
+   beneficio, tarjeta limpia del sistema, etiquetas de plan en menor. */
+.benefits-card{background:#fff;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:16px auto 4px;max-width:560px;text-align:left}
+.benefits-card h3{margin:0 0 14px;font-size:20px;color:#0A1E33}
+.benefit{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid #F0F6FB;font-size:15px;line-height:1.5;color:#33475C}
+.benefit:last-child{border-bottom:none}
+.benefit .b-ic{flex:0 0 auto}
+.benefit .b-tag{flex:0 0 auto;margin-left:auto;font-size:11.5px;font-weight:700;color:#7A93A8;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;padding-left:10px}
 </style>
 </head>
 <body>
 <div class="nav"><div class="wrap">
   <a class="logo-posty" href="/"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-  <span class="pill">PROBALO GRATIS</span>
+  <a class="nav-entrar" id="btnEntrar" href="/#/login">Entrar</a>
 </div></div>
 <div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
 
@@ -623,6 +670,9 @@ html{scroll-behavior:smooth}
           <input type="file" id="optPhoto" accept="image/jpeg,image/png,image/webp" style="font-size:14px;max-width:100%">
           <p class="tiny" id="optPhotoName" style="margin-top:6px;min-height:18px"></p>
         </div>
+        <p style="text-align:center;margin-top:12px"><button type="button" class="linklike" id="btnShy">¿No querés poner tu @? Mirá un ejemplo primero 👀</button></p>
+        <p style="text-align:center;margin-top:6px"><button type="button" class="linklike" id="btnNoIg">¿Todavía no tenés Instagram? Empezá igual →</button></p>
+        <input type="text" id="hp_empresa" name="hp_empresa" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
       </div>
       <!-- Prefill OK: Posty encontró tu negocio -->
       <div id="prefillCard" style="display:none">
@@ -635,6 +685,12 @@ html{scroll-behavior:smooth}
           </div>
         </div>
         <p class="tiny" style="margin:10px 0 14px">Corregilo si hace falta — lo uso para armar tu semana.</p>
+        <details class="opt-detail">
+          <summary>¿Querés contarnos algo más? Es opcional 💬</summary>
+          <textarea id="pf_desc" rows="4" maxlength="600" placeholder="Un buen ejemplo: Somos una cafetería de especialidad en Palermo. Nuestro fuerte es el brunch del fin de semana y el café de origen. Queremos más reservas entre semana."></textarea>
+          <p class="tiny" id="pf_descTip" style="margin:6px 0 0;min-height:16px"></p>
+          <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="pf_descCount">0</span>/600</p>
+        </details>
         <button class="btn btn-primary btn-block" id="btnPrefillGo">Armar mi semana 👀</button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="pfBack">← No es mi negocio / usar otro @</button></p>
       </div>
@@ -651,6 +707,12 @@ html{scroll-behavior:smooth}
         <div class="field" style="margin-top:12px;margin-bottom:0"><label>Descripción (de tu web, editable)</label><textarea id="wf_desc" rows="3" maxlength="400"></textarea></div>
         <div id="wfMeta" style="margin-top:10px"></div>
         <p class="tiny" style="margin:10px 0 14px">Corregilo si hace falta — lo uso para armar tu semana.</p>
+        <details class="opt-detail">
+          <summary>¿Querés contarnos algo más? Es opcional 💬</summary>
+          <textarea id="wf_extra" rows="4" maxlength="600" placeholder="Un buen ejemplo: Además de lo que dice la web, nuestro fuerte es el brunch del fin de semana y queremos más reservas entre semana."></textarea>
+          <p class="tiny" id="wf_extraTip" style="margin:6px 0 0;min-height:16px"></p>
+          <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="wf_extraCount">0</span>/600</p>
+        </details>
         <button class="btn btn-primary btn-block" id="btnWebTrialGo">Armar mi semana 👀</button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="wfBack">← Volver</button></p>
       </div>
@@ -666,9 +728,15 @@ html{scroll-behavior:smooth}
       </div>
       <!-- Fallback: formulario detallado actual (si el prefill falla) -->
       <div id="detailForm" style="display:none">
-        <p class="tiny" style="margin:0 0 14px">No pudimos traer tu perfil de Instagram — completalo acá 👇</p>
+        <p class="tiny" id="dfIntro" style="margin:0 0 14px">No pudimos traer tu perfil de Instagram — completalo acá 👇</p>
         <div class="field"><label>Nombre de tu negocio *</label><input type="text" id="f_biz" placeholder="Ej: Café Martínez" maxlength="60" autocomplete="off"></div>
         <div class="field"><label>Rubro *</label><select id="f_cat"></select></div>
+        <details class="opt-detail">
+          <summary>¿Querés contarnos algo más? Es opcional 💬</summary>
+          <textarea id="f_desc" rows="4" maxlength="600" placeholder="Un buen ejemplo: Vendemos empanadas caseras en Caballito desde 2015. Nuestro público es de barrio y queremos que nos pidan más por Instagram."></textarea>
+          <p class="tiny" id="f_descTip" style="margin:6px 0 0;min-height:16px"></p>
+          <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="f_descCount">0</span>/600</p>
+        </details>
         <button class="btn btn-primary btn-block" id="btnGo2">Ver mi semana 👀</button>
         <p class="tiny" style="margin-top:10px">Tu semana lista en ~1 minuto.</p>
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
@@ -771,6 +839,45 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
+<!-- (v323 · pieza 16) VISTA: ejemplo navegable para el tímido — un perfil
+     de la pared en modo muestra: su semana, sus porqués y el chat en modo
+     muestra, sin gastar IA ni pedir registro. -->
+<div id="v-example" style="display:none">
+  <div class="wrap">
+    <p style="margin:6px 0 14px"><button type="button" class="linklike" id="exBack">← Volver</button></p>
+    <div class="res-hero">
+      <img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)">
+      <h2>Así le queda la semana a <span class="hl">Patitas</span> 🐾</h2>
+      <p class="sub">Una veterinaria y pet shop de barrio. Esto es una <b>muestra</b>: la tuya sale de tu negocio real, con tu producto exacto.</p>
+    </div>
+    <div class="sec">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-head">
+          <img src="gt-patitas-1.jpg" alt="Foto de perfil de Patitas" onerror="this.onerror=null;this.src='ai-avatar.png'">
+          <div><b>@patitas.petshop</b><small>Su semana · 5 posteos + 1 reel</small></div>
+        </div>
+        <div class="phone-feed" id="exWeek"></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>¿Querés cambiar algo? 💬</h3>
+      <p class="lede">En la prueba real, el chat edita tus posteos al instante. Probalo acá en modo muestra:</p>
+      <div class="chat">
+        <div class="chat-msgs" id="exChatMsgs"></div>
+        <div class="chat-input">
+          <input type="text" id="exChatIn" placeholder="Ej: el del miércoles, más divertido" maxlength="300" autocomplete="off">
+          <button id="exChatSend" title="Enviar">➤</button>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:22px">
+        <button class="btn btn-primary" id="exMine" style="font-size:18px;padding:16px 40px">Quiero la mía 👀</button>
+        <p class="tiny">Gratis · Sin registro · Sale de tu @ o tu web</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- VISTA: 3 preguntas rápidas antes de generar (para que los posteos salgan a medida) -->
 <div id="v-questions" style="display:none">
   <div class="wrap">
@@ -815,6 +922,15 @@ html{scroll-behavior:smooth}
       <h2 id="rTitle">¡Tu semana está lista, <span class="hl" id="rBiz">tu negocio</span>! 🎉</h2>
       <p class="sub" id="rSub"></p>
       <div id="rCached" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px"></div>
+      <div class="lock-card" id="lockCard">
+        <h3 id="lockTitle">Tu prueba ya fue usada 💛</h3>
+        <p id="lockMsg"></p>
+        <p class="lock-sub" id="lockSub"></p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button class="btn btn-primary btn-sm" id="lockCta">Crear mi cuenta</button>
+          <a class="btn btn-ghost btn-sm" href="/#/login" style="text-decoration:none">Ya tengo cuenta</a>
+        </div>
+      </div>
       <p class="tiny" id="rTime" style="display:none;margin-top:8px"></p>
       <div id="rStreamBar" style="display:none">
         <div class="pbar"><i id="rStreamFill" style="width:0%"></i></div>
@@ -826,6 +942,9 @@ html{scroll-behavior:smooth}
       </div>
     </div>
 
+    <!-- (v323 · pieza 19) Su competencia en una línea: solo con datos leídos -->
+    <div id="compLine" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:14px;padding:14px 18px;margin-bottom:14px;font-size:15.5px;line-height:1.55;color:#0A1E33"></div>
+
     <!-- Proyección de perfil (v184): se llena por JS si el perfil real llegó -->
     <div id="projBox" style="display:none"></div>
 
@@ -835,9 +954,18 @@ html{scroll-behavior:smooth}
     <!-- Análisis completo (2026-10-19): probada de mercado o plan de nacimiento -->
     <div id="analysisBox" style="display:none"></div>
 
+    <!-- (v323 · pieza 12) Su mejor posteo vs el nuestro: marco de oficio -->
+    <div id="versusBox" style="display:none" class="sec">
+      <h3>Tu producto, con oficio todos los días 💛</h3>
+      <p class="lede">Esto ya es tuyo. Lo que hace Posty es que salga así de bien, con constancia, toda la semana.</p>
+      <div class="vs-grid" id="versusGrid"></div>
+    </div>
+
     <div class="sec">
       <h3>Así se ve en tu feed 📱</h3>
       <p class="lede">Tus 5 posteos + 1 reel, ya creados: diseño + caption + hashtags. Tocá cada uno para verlo completo.</p>
+      <p class="lede" id="weekStartLine" style="display:none;font-weight:700;color:#0A1E33"></p>
+      <p class="lede" id="provLine" style="display:none"></p>
       <div class="phone">
         <div class="phone-notch"></div>
         <div class="phone-head">
@@ -846,13 +974,62 @@ html{scroll-behavior:smooth}
         </div>
         <div class="phone-feed" id="rWeek"></div>
       </div>
+      <!-- (v323 · pieza 20) Módulo de fundador: debajo de los posteos y
+           antes del bloque de pago/CTA. Texto fijo aprobado por Valentino. -->
+      <div class="founder-card" id="founderCard" style="display:none">
+        <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
+        <p class="fc-eye">FUNDADOR DE POSTY</p>
+        <h3>Soy Valentino, creé Posty.</h3>
+        <p class="fc-body">Armamos esta semana leyendo tu Instagram, porque ayudar a negocios como el tuyo es lo que sabemos hacer. Si algo no te gusta, lo ajustamos juntos.</p>
+      </div>
+      <!-- (v323 · pieza 21) Beneficios de la cuenta: solo verdades del
+           producto; lo que es de un plan superior lleva su etiqueta. -->
+      <div class="benefits-card" id="benefitsCard" style="display:none">
+        <h3>Todo esto viene con tu cuenta 👇</h3>
+        <div class="benefit"><span class="b-ic">📅</span><span>Posteos automáticos: tu semana se crea y se publica sola, sin que hagas nada.</span></div>
+        <div class="benefit"><span class="b-ic">🔔</span><span>Te aviso 30 minutos antes de cada publicación.</span></div>
+        <div class="benefit"><span class="b-ic">🎯</span><span>7 posteos y 1 reel por semana, pensados para vender: cada uno con su intención (reservas, consultas, ventas).</span></div>
+        <div class="benefit"><span class="b-ic">💬</span><span>Chat con Posty: pedís cambios hablando normal y se ajusta al toque.</span></div>
+        <div class="benefit"><span class="b-ic">🔍</span><span>Análisis de tu cuenta y tu competencia trabajando en silencio: cada semana nace mejor que la anterior.</span></div>
+        <div class="benefit"><span class="b-ic">💌</span><span>La Carta del domingo: el resumen de tu semana y lo que viene, sin que pidas nada.</span></div>
+        <div class="benefit"><span class="b-ic">📷</span><span>Fotos solo cuando querés: si no tenés material, Posty genera todo.</span></div>
+        <div class="benefit"><span class="b-ic">🛍️</span><span>Tu tienda conectada (Tiendanube): productos y stock reales en tus posteos.</span></div>
+        <div class="benefit"><span class="b-ic">📣</span><span>Pauta sin tocar Ads Manager: potenciás un posteo desde acá.</span><span class="b-tag">Pro y Total</span></div>
+        <div class="benefit"><span class="b-ic">✉️</span><span>Respuestas a comentarios y mensajes con tu aprobación.</span><span class="b-tag">Total</span></div>
+        <div class="benefit"><span class="b-ic">🚪</span><span>Sin permanencia: cancelás cuando quieras, desde tu panel.</span></div>
+      </div>
       <div id="weekDone" style="display:none">
         <div style="text-align:center;margin-top:22px">
           <button class="btn btn-primary" id="btnSave" style="font-size:19px;padding:18px 46px;max-width:100%">Guardá tu semana 👇</button>
-          <p class="tiny">Probalo gratis · Sin tarjeta · Tu semana queda guardada 72 horas 🙂</p>
+          <p class="tiny">Sin tarjeta para probar · Cancelás cuando quieras</p>
         </div>
         <div class="share-row"><button class="share-btn" id="btnShare">📤 Compartir mi semana</button></div>
         <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">¿Algo no te cierra? Pedilo por chat 👇</a></p>
+      <!-- (v323 · pieza 17) Precio en el pico, bien contado: el héroe por día,
+           desde los precios vigentes del código (nunca tipeados a mano). -->
+      <div class="price-card" id="priceCard" style="display:none">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#47617A">PLAN PRO · EL FAVORITO</p>
+        <p class="pc-per" id="pricePerDay"></p>
+        <p class="pc-anchor" id="priceAnchor"></p>
+        <p class="pc-trust">✓ Sin permanencia<br>✓ Cancelás desde tu panel cuando quieras<br>✓ El comprobante de pago te llega a tu email</p>
+      </div>
+      <!-- (v323 · pieza 7) Reel de muestra con compuerta: solo a pedido -->
+      <div id="reelRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
+        <button class="btn btn-ghost" id="reelGo" style="padding:13px 26px;font-size:15.5px;border-radius:999px">🎬 ¿Querés ver cómo sería tu reel?</button>
+        <p class="tiny" style="margin:8px 0 0">Un reel de muestra con tu material, con el guión de tu negocio. Tarda un ratito.</p>
+        <div id="reelBox" style="margin-top:10px"></div>
+      </div>
+      <!-- (v323 · pieza 5) Salida con regalo: tu semana por email -->
+      <div id="giftRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
+        <p style="font-size:15px;color:#0A1E33;margin:0 0 4px"><b>📩 ¿Te mando tus posteos por email?</b></p>
+        <p style="font-size:13.5px;color:#47617A;margin:0 0 10px">Tu semana completa, para verla tranquila y compartirla. Y cada lunes, 3 ideas nuevas para tu rubro.</p>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="giftEmail" placeholder="tu@email.com" autocomplete="email" inputmode="email"
+            style="flex:1;min-width:0;font-size:16px;padding:12px 14px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33">
+          <button id="giftGo" class="btn btn-primary" style="white-space:nowrap;padding:12px 20px">Mandame</button>
+        </div>
+        <p class="tiny" id="giftMsg" style="margin:8px 0 0;min-height:18px"></p>
+      </div>
       <div class="photocard">
         <h4>📷 Con TUS fotos, sale todavía mejor</h4>
         <p>Estos posteos los armé con fotos de catálogo. Cuando me pasás fotos y videos de tu negocio, tus posteos venden mucho más — y cuantas más me pases, mejores salen. ¿No tenés fotos? No pasa nada: las creo yo.</p>
@@ -921,6 +1098,8 @@ html{scroll-behavior:smooth}
         <div class="chat-chips" id="chatChips">
           <button data-m="Hacé los captions más cancheros">🔥 Más cancheros</button>
           <button data-m="Hacé los captions más divertidos">😂 Más divertidos</button>
+          <button data-m="Hacé los captions más elegantes">✨ Más elegantes</button>
+          <button data-m="Agregá una promo a los posteos">🏷️ Con una promo</button>
           <button data-m="Hacé los captions más profesionales">💼 Más profesionales</button>
           <button data-m="Acortá los captions, que sean más directos">✂️ Más directos</button>
           <button data-m="Agregales un llamado a la acción a todos los posteos">📣 Con llamado a la acción</button>
@@ -1126,6 +1305,26 @@ function show(id) {
   $('#f_cat').innerHTML = catOpts;
   $('#pf_cat').innerHTML = catOpts;
   $('#wf_cat').innerHTML = catOpts;
+  // (v323) Cableado de la tanda de /prueba (piezas 1, 11, 15 y 16)
+  wireEntrarBtn();
+  wireOptDetail('pf_desc', 'pf_descCount', 'pf_descTip');
+  wireOptDetail('wf_extra', 'wf_extraCount', 'wf_extraTip');
+  wireOptDetail('f_desc', 'f_descCount', 'f_descTip');
+  const bNoIg = $('#btnNoIg');
+  if (bNoIg) bNoIg.onclick = () => {
+    trk('prueba_step', { step: 'sin_instagram' });
+    // Sin IG pero CON web pegada: la ruta de la web ya cubre (nace de su
+    // web y su rubro). Sin nada: el formulario de nacimiento.
+    if (($('#f_web').value || '').trim()) { onWebSubmit(); return; }
+    showDetailForm('noig');
+  };
+  const bShy = $('#btnShy');
+  if (bShy) bShy.onclick = () => { trk('prueba_step', { step: 'ejemplo_primero' }); openExample(); };
+  const exB = $('#exBack'); if (exB) exB.onclick = closeExample;
+  const exM = $('#exMine'); if (exM) exM.onclick = () => { closeExample(); try { $('#f_ig').focus(); } catch (e) {} window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const exS = $('#exChatSend'); if (exS) exS.onclick = exChatReply;
+  const exI = $('#exChatIn'); if (exI) exI.addEventListener('keydown', (e) => { if (e.key === 'Enter') exChatReply(); });
+  const lkC = $('#lockCta'); if (lkC) lkC.onclick = () => openRegTrial();
   // Prueba en 1 campo: el primer paso es solo el @
   $('#btnGo').onclick = onIgSubmit;
   $('#btnWebGo').onclick = onWebSubmit;
@@ -1205,6 +1404,14 @@ function show(id) {
     } catch (e) {}
   }
   show('v-onboarding');
+  // (v323 · pieza 9) Deep link de ataque (?ig= desde nuestros DMs y
+  // emails, que ya conocen el @): la lectura y la generación arrancan
+  // sin que escriba nada. La pregunta de rubro, si hay duda, aparece EN
+  // LÍNEA (startTrialPrefill la respeta) y el candado de 90 días
+  // responde del lado del servidor. El src lo captura trk (v322).
+  if (DEEP_IG && !TEST_KEY_QS) {
+    try { onIgSubmit().then(() => { if (PREFILL) startTrialPrefill(); }); } catch (e) {}
+  }
   // ¿Llegó desde la landing con el link de su web? (?web=...) La leemos y
   // le mostramos la tarjeta con todo precargado y editable.
   if (DEEP_WEB) {
@@ -1292,9 +1499,17 @@ function showPrefillCard(j) {
   trk('prueba_step', { step: 'prefill_ok' });
   setTimeout(() => { try { $('#pf_name').focus({ preventScroll: true }); } catch (e) {} }, 300);
 }
-function showDetailForm() {
+const DF_INTRO_DEFAULT = 'No pudimos traer tu perfil de Instagram — completalo acá 👇';
+function showDetailForm(mode) {
   PREFILL = null; GEN_PREFILL = false; GEN_WEB = false;
   PENDING_RUBRO = null; RUBRO_ANS = null;
+  // (v323 · pieza 11) Entrada de NACIMIENTO: sin Instagram, la semana nace
+  // de su rubro (y su web si la trae) — copy honesto, sin prometer lectura
+  // de un perfil que no existe.
+  const di = $('#dfIntro');
+  if (di) di.textContent = mode === 'noig'
+    ? 'Sin Instagram también se arranca 💪 Contame tu negocio y te armo la vidriera inicial: cuando abras tu cuenta, tu primera semana ya está lista.'
+    : DF_INTRO_DEFAULT;
   $('#stepIg').style.display = 'none';
   $('#prefillCard').style.display = 'none';
   const wc = $('#webCard'); if (wc) wc.style.display = 'none';
@@ -1357,7 +1572,9 @@ function startTrialWeb() {
   GEN_PREFILL = false;
   GEN_WEB = true;
   TRIAL_BIZ = name;
-  TRIAL_DESC = $('#wf_desc').value.trim();
+  // (v323 · pieza 1) La descripción de su web + el detalle opcional que
+  // haya escrito: el fundamento nace de los dos, nunca bloquea.
+  TRIAL_DESC = [$('#wf_desc').value.trim(), ($('#wf_extra').value || '').trim()].filter(Boolean).join(' ');
   for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
   trk('prueba_step', { step: 'web_go' });
   runGeneration();
@@ -1374,13 +1591,26 @@ function startTrialFallback() {
   GEN_PREFILL = false;
   GEN_WEB = false;
   TRIAL_BIZ = biz;
-  TRIAL_DESC = '';
+  // (v323 · pieza 1) El detalle opcional alimenta el fundamento y, si es
+  // rico (100+), showQuestions ya saltea producto/diferencial (v-regla).
+  TRIAL_DESC = ($('#f_desc').value || '').trim();
   trk('prueba_step', { step: 'formulario' });
   showQuestions();
 }
+// (v323 · pieza 1) El nombre vacío ya no bloquea: si el prefill no trajo
+// nombre, nace del propio @ (limpio y en formato nombre).
+function bizNameFromIg(ig) {
+  const parts = String(ig || '').split(/[._]+/).map((s) => s.trim()).filter((s) => s && !/^\d+$/.test(s));
+  if (!parts.length) return '';
+  return parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ').slice(0, 60);
+}
 // Prefill OK: directo a generar, sin preguntas (el brief vive después del wow).
 function startTrialPrefill() {
-  const name = $('#pf_name').value.trim();
+  let name = $('#pf_name').value.trim();
+  if (!name) {
+    const derived = bizNameFromIg(cleanIg($('#f_ig').value));
+    if (derived) { name = derived; $('#pf_name').value = derived; }
+  }
   if (!name) { toast('Contanos el nombre de tu negocio 🙂'); try { $('#pf_name').focus(); } catch (e) {} return; }
   if (!$('#pf_cat').value) { toast('Elegí tu rubro así los posteos salen a medida 👇'); try { $('#pf_cat').focus(); } catch (e) {} return; }
   // (v235) LA PREGUNTA DE RUBRO VA ANTES DE GENERAR (ver startTrialWeb).
@@ -1388,7 +1618,7 @@ function startTrialPrefill() {
   GEN_PREFILL = true;
   GEN_WEB = false;
   TRIAL_BIZ = name;
-  TRIAL_DESC = '';
+  TRIAL_DESC = ($('#pf_desc').value || '').trim();
   for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
   trk('prueba_step', { step: 'prefill_go' });
   runGeneration();
@@ -1566,7 +1796,11 @@ function buildGenFormData() {
   }
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
-  fd.append('goal', '');
+  // (v323 · pieza 1) El detalle opcional viaja como objetivo libre: si el
+  // visitante no escribió nada, el fundamento nace del IG/web leídos.
+  fd.append('goal', TRIAL_DESC || '');
+  // (v323 · pieza 13) Honeypot silencioso anti-bots (invisible al humano).
+  fd.append('hp_empresa', ($('#hp_empresa') || {}).value || '');
   fd.append('competitors', '');
   // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
   fd.append('goal_key', TRIAL_ANS.goal_key || '');
@@ -1590,6 +1824,9 @@ async function runGeneration() {
     const t0 = GEN_T0;
     const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
     const data = await res.json();
+    // (v323 · pieza 8) Candado sin snapshot: el servidor responde 409 con
+    // el mensaje amable y la fecha exacta — no es un error, es la tarjeta.
+    if (data && data.trial_locked) { trackerStop(); showLockCard(data); return; }
     if (!res.ok) throw new Error(data.error || 'No pudimos armar tu prueba');
     // Que el tracker se vea completo aunque el backend haya sido rápido
     const wait = Math.max(0, 9000 - (Date.now() - t0));
@@ -1610,7 +1847,9 @@ async function runGeneration() {
 // Si el stream no existe o falla al conectar → false → fallback clásico.
 let STREAM_DONE = false;
 let STREAM_ERRORED = false;
+let STREAM_LOCKED = false;
 let STREAM_N = 0;
+let FIRST_POST_SENT = false;
 async function generateWithStream(fd) {
   let res;
   try {
@@ -1618,13 +1857,49 @@ async function generateWithStream(fd) {
   } catch (e) { return false; }
   const ct = (res.headers.get('content-type') || '').toLowerCase();
   if (!res.ok || !ct.includes('text/event-stream') || !res.body || typeof res.body.getReader !== 'function') return false;
-  STREAM_DONE = false; STREAM_ERRORED = false; STREAM_N = 0;
+  STREAM_DONE = false; STREAM_ERRORED = false; STREAM_LOCKED = false; STREAM_N = 0; FIRST_POST_SENT = false;
   enterStreamingMode();
   try {
-    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, done: onStreamDone, error: onStreamError });
+    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, done: onStreamDone, error: onStreamError, locked: onStreamLocked });
   } catch (e) { /* cae al chequeo de abajo */ }
-  if (!STREAM_DONE && !STREAM_ERRORED) onStreamError({ error: 'Se cortó la conexión.' });
+  if (!STREAM_DONE && !STREAM_ERRORED && !STREAM_LOCKED) onStreamError({ error: 'Se cortó la conexión.' });
   return true;
+}
+// (v323 · pieza 8) El servidor avisa que este negocio ya usó su prueba y
+// no quedó semana recuperable: tarjeta amable con la fecha exacta.
+function onStreamLocked(d) {
+  STREAM_LOCKED = true;
+  trackerStop();
+  showLockCard(d || {});
+}
+function fmtLockDate(ts) {
+  try { return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(ts)); }
+  catch (e) { return ''; }
+}
+function showLockCard(d) {
+  trackerStop();
+  show('v-results');
+  $('#rStreamBar').style.display = 'none';
+  $('#weekDone').style.display = 'none';
+  $('#rRest').style.display = 'none';
+  const sec = $('#rWeek') ? $('#rWeek').closest('.sec') : null;
+  if (sec) sec.style.display = 'none';
+  $('#rCached').style.display = 'none';
+  $('#rTitle').textContent = 'Tu semana ya fue armada 💛';
+  $('#rSub').textContent = '';
+  const card = $('#lockCard');
+  $('#lockTitle').textContent = 'Tu prueba ya fue usada 💛';
+  $('#lockMsg').textContent = d.message || 'Este negocio ya usó su prueba gratis. Si es tuyo, creá tu cuenta y Posty sigue armando tu semana cada semana, sin esperar.';
+  $('#lockSub').textContent = d.unlock_at ? ('Tu próxima prueba se habilita el ' + fmtLockDate(d.unlock_at) + '.') : '';
+  card.style.display = 'block';
+  trk('prueba_lock_view');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function resetLockUI() {
+  const card = $('#lockCard');
+  if (card) card.style.display = 'none';
+  const sec = $('#rWeek') ? $('#rWeek').closest('.sec') : null;
+  if (sec) sec.style.display = '';
 }
 // Parser SSE mínimo sobre ReadableStream: dispara handlers por cada event:.
 async function readSSE(body, handlers) {
@@ -1657,6 +1932,7 @@ async function readSSE(body, handlers) {
 }
 function enterStreamingMode() {
   trackerStop();
+  resetLockUI();
   // Proyección de perfil (v184): estado limpio; aparece solo si llega el
   // evento 'profile' del stream.
   PROJ = projFresh('live');
@@ -1700,9 +1976,12 @@ function onStreamPost(d) {
   const media = isV && p.video
     ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
     : (p.image ? `<img src="${p.image}" alt="${esc(day)}" loading="lazy">` : `<div style="aspect-ratio:4/5;background:#E8EDF2"></div>`);
+  // (v323 · pieza 1) Meta medida de la tanda: tiempo del arranque al
+  // primer posteo visible (objetivo <60 s en el camino feliz).
+  if (!FIRST_POST_SENT && GEN_T0) { FIRST_POST_SENT = true; trk('prueba_first_post', { ms: Date.now() - GEN_T0 }); }
   const el = document.createElement('div');
   el.className = 'day' + (isV ? ' feat' : '');
-  el.innerHTML = `<div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(day)}</b><small>${esc(d.date || '')}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0] || '…')}</div>`;
+  el.innerHTML = `<div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(day)}</b><small>${esc(d.date || '')}${d.hour ? ' · ' + esc(d.hour) : ''}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0] || '…')}</div>`;
   const feed = $('#rWeek');
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
@@ -2240,6 +2519,9 @@ function projFromTrial() {
 // Final común del clásico y del stream: guarda en idb y muestra resultados.
 function finishGeneration(data, genSecs) {
   trackerStop();
+  // (v323 · pieza 1) Sin stream (fallback clásico), el "primer posteo
+  // visible" es el render completo: se mide igual, con el total.
+  if (!FIRST_POST_SENT && GEN_T0) { FIRST_POST_SENT = true; trk('prueba_first_post', { ms: Date.now() - GEN_T0, via: 'full' }); }
   // Tiempo real de generación: lo mostramos y nos sirve de medición
   if (genSecs) data.genSecs = genSecs;
   TRIAL = data;
@@ -2271,7 +2553,17 @@ function renderResults() {
   trk('prueba_complete', { cached: !!(t && t.cached) });
   const rb = $('#rBiz');
   if (rb) rb.textContent = t.business;
-  if (t.cached) {
+  resetLockUI();
+  if (t.trial_locked) {
+    // (v323 · pieza 8) Vuelta dentro de los 90 días: su semana guardada,
+    // presentada como lo que es — sin el banner de caché encima.
+    $('#rTitle').textContent = 'Tu semana sigue acá 💛';
+    $('#rCached').style.display = 'none';
+    $('#lockTitle').textContent = 'Esta es la semana que ya habías armado 💛';
+    $('#lockMsg').textContent = 'La generaste el ' + fmtLockDate(t.trial_generated_at) + '. Tu próxima prueba gratis se habilita el ' + fmtLockDate(t.trial_unlock_at) + ' — pero con tu cuenta, Posty te arma una semana nueva cada semana, sin esperar.';
+    $('#lockSub').textContent = '';
+    $('#lockCard').style.display = 'block';
+  } else if (t.cached) {
     $('#rTitle').textContent = '¡Tu semana te estaba esperando! 🔥';
     const rc = $('#rCached');
     rc.style.display = 'block';
@@ -2336,6 +2628,18 @@ function renderResults() {
   initTrialChat();
   maybeShowLeadEmail();
   try { maybeShowIdeasHook(); } catch (e) {}
+  // (v323) Bloques de la tanda en resultados: competencia (19), versus
+  // (12), fechas reales (18), procedencia + fundador (20), beneficios
+  // (21), precio (17), regalo (5) y reel de muestra (7).
+  try { renderCompLine(); } catch (e) {}
+  try { renderVersus(); } catch (e) {}
+  try { renderWeekStart(); } catch (e) {}
+  try { renderProvLine(); } catch (e) {}
+  try { const fc = $('#founderCard'); if (fc) fc.style.display = 'block'; } catch (e) {}
+  try { renderBenefits(); } catch (e) {}
+  try { renderGiftRow(); } catch (e) {}
+  try { renderReelRow(); } catch (e) {}
+  try { renderPriceCard(); } catch (e) {}
 }
 
 // Gancho del email de ideas al cierre de la prueba (frente #2): se muestra
@@ -2457,7 +2761,7 @@ function renderWeek() {
     const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
-    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Por qué:</b> ${esc(p.why)}</div>` : ''}</div>`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Tu reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${w.hour ? ' · ' + esc(w.hour) : ''}${isV ? ' · listo para publicar' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Por qué:</b> ${esc(p.why)}</div>` : ''}</div>`;
   }).join('');
   $$('#rWeek .day').forEach((d) => {
     const open = () => openLb(parseInt(d.dataset.i, 10));
@@ -2499,10 +2803,14 @@ async function submitBrief() {
     const t0 = Date.now();
     const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
     const data = await res.json();
+    // (v323 · pieza 8) Candado sin snapshot: el 409 trae el mensaje amable
+    // (cae al catch y se lee en el brief, sin regenerar). Con snapshot, el
+    // server devuelve la semana guardada: el toast lo dice como es.
+    if (data && data.trial_locked && !data.posts) throw new Error(data.error || 'Tu prueba ya fue usada 💛');
     if (!res.ok) throw new Error(data.error || 'No pudimos regenerar tu semana');
     trk('prueba_step', { step: 'brief_refine' });
     finishGeneration(data, Math.max(1, Math.round((Date.now() - t0) / 1000)));
-    toast('Tu semana, afinada con tu detalle ✨');
+    toast(data.trial_locked ? 'Esta es tu semana guardada 💛 — las semanas nuevas llegan con tu cuenta.' : 'Tu semana, afinada con tu detalle ✨');
   } catch (e) {
     trackerStop();
     show('v-results');
@@ -2590,12 +2898,13 @@ function initTrialChat() {
     const inp = $('#chatIn');
     const v = inp.value.trim();
     if (!v || chatBusy) return;
+    window._chatVia = 'texto';
     sendTrialChat(v);
   };
   $('#chatSend').onclick = send;
   $('#chatIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
   document.querySelectorAll('#chatChips button[data-m]').forEach((b) => {
-    b.onclick = () => { if (!chatBusy) sendTrialChat(b.dataset.m); };
+    b.onclick = () => { if (!chatBusy) { window._chatVia = 'chip'; sendTrialChat(b.dataset.m); } };
   });
   $('#chipColors').onclick = () => {
     const p = $('#colorPanel');
@@ -2705,15 +3014,306 @@ async function trialRedesign(patch) {
   } finally { redesignBusy = false; }
 }
 
+/* ---------- (v323) TANDA /PRUEBA: helpers de las piezas 1–21 ---------- */
+// (pieza 15) Botón Entrar consciente de sesión: con sesión dice "Ir a mi
+// cuenta" y entra directo a la app (mismo criterio mobile que la app).
+async function wireEntrarBtn() {
+  const b = $('#btnEntrar');
+  if (!b) return;
+  try {
+    const me = await meCached();
+    if (me) {
+      b.textContent = 'Ir a mi cuenta';
+      b.href = window.innerWidth <= 820 ? '/#/app/inicio' : '/#/app/schedule';
+    }
+  } catch (e) {}
+}
+// (pieza 1) Detalle opcional: contador + tip si escribe muy poco.
+function wireOptDetail(taId, countId, tipId) {
+  const ta = document.getElementById(taId);
+  if (!ta) return;
+  const upd = () => {
+    const n = ta.value.length;
+    const c = document.getElementById(countId); if (c) c.textContent = n;
+    const tip = document.getElementById(tipId);
+    if (tip) tip.textContent = n > 0 && n < 30 ? 'Contame un poquito más y los posteos salen más tuyos 🙂' : '';
+  };
+  ta.addEventListener('input', upd);
+  upd();
+}
+const fmtRate = (n) => (Math.round(Number(n) * 10) / 10).toString().replace('.', ',');
+// (pieza 19) Su competencia en una línea — solo si el payload trae los
+// números LEÍDOS (competition_line); sin dato, la línea no sale.
+function renderCompLine() {
+  const box = $('#compLine');
+  if (!box) return;
+  const cl = TRIAL && TRIAL.competition_line;
+  if (!cl || cl.own_rate == null || cl.peer_rate == null) { box.style.display = 'none'; return; }
+  box.innerHTML = Number(cl.own_rate) < Number(cl.peer_rate)
+    ? `📊 <b>@${esc(cl.peer_handle)}</b> publica ~${fmtRate(cl.peer_rate)}× por semana; vos venís a ${fmtRate(cl.own_rate)}×. Ese hueco es exactamente el que esta semana viene a cerrar 💪`
+    : `📊 Venís publicando ${fmtRate(cl.own_rate)}× por semana, a la par de tu competencia más activa (<b>@${esc(cl.peer_handle)}</b>, ~${fmtRate(cl.peer_rate)}×). Esta semana sostiene ese ritmo sin que muevas un dedo 💪`;
+  box.style.display = 'block';
+}
+// (pieza 12) Su mejor posteo vs el nuestro: el de mejor rendimiento LEÍDO
+// (likes+comentarios del perfil); sin engagement legible, el más reciente
+// y la etiqueta lo dice. Marco de oficio, jamás burla.
+function renderVersus() {
+  const box = $('#versusBox');
+  if (!box) return;
+  const prof = TRIAL && TRIAL.profile;
+  const photos = (prof && prof.photos) || [];
+  const mine = TRIAL && (TRIAL.posts || []).find((p) => p && p.type !== 'video' && p.image);
+  if (!photos.length || !mine) { box.style.display = 'none'; return; }
+  const meta = prof.posts_meta || [];
+  let idx = -1, best = -1;
+  meta.forEach((m, i) => {
+    if (m && m.likes != null) { const s = m.likes + (m.comments || 0); if (s > best) { best = s; idx = i; } }
+  });
+  const hasEng = idx >= 0 && photos[idx];
+  if (!hasEng) idx = 0;
+  if (!photos[idx]) { box.style.display = 'none'; return; }
+  const theirTag = hasEng ? '❤️ Tu posteo con más reacciones' : '📌 Tu posteo más reciente';
+  const theirCap = (prof.captions && prof.captions[idx] ? String(prof.captions[idx]).split('\n')[0] : '') || '';
+  $('#versusGrid').innerHTML =
+    `<div class="vs-card"><img src="${esc(photos[idx])}" alt="Tu posteo" loading="lazy" onerror="this.closest('.vs-card').style.display='none'"><p class="vs-tag">${theirTag}</p><p class="vs-cap">${esc(theirCap.slice(0, 110))}</p></div>` +
+    `<div class="vs-card"><img src="${esc(mine.image)}" alt="El posteo que te armó Posty" loading="lazy"><p class="vs-tag">✨ El que te armó Posty</p><p class="vs-cap">${esc((mine.headline || (mine.caption || '').split('\n')[0] || '').slice(0, 110))}${mine.why ? '<br>💡 ' + esc(mine.why) : ''}</p></div>`;
+  box.style.display = 'block';
+}
+// (pieza 18) Semana con fechas reales: el arranque, con el día y la
+// fecha concretos que el servidor calculó para esta semana.
+function renderWeekStart() {
+  const el = $('#weekStartLine');
+  if (!el) return;
+  const w = TRIAL && TRIAL.week && TRIAL.week[0];
+  if (!w) { el.style.display = 'none'; return; }
+  const day = String(w.day || '');
+  el.textContent = '🗓️ Tu semana empezaría el ' + (day ? day.charAt(0).toLowerCase() + day.slice(1) : '') + ' ' + (w.date || '') + (w.hour ? ' · primer posteo a las ' + w.hour : '');
+  el.style.display = 'block';
+}
+// (pieza 20) Línea de procedencia sobre los posteos: solo afirma lo que
+// de verdad se leyó (su Instagram si hubo @, su web si vino web_info).
+function renderProvLine() {
+  const el = $('#provLine');
+  if (!el) return;
+  const t = TRIAL;
+  if (!t || (!t.ig && !t.business)) { el.style.display = 'none'; return; }
+  const reads = [];
+  if (t.ig) reads.push('tu Instagram');
+  if (t.web_info) reads.push('tu web');
+  const who = t.ig ? '@' + t.ig : t.business;
+  el.textContent = reads.length
+    ? (t.cached ? 'Armada para ' : 'Armada hoy para ') + who + ', leyendo ' + reads.join(' y ') + '.'
+    : (t.cached ? 'Armada para ' : 'Armada hoy para ') + who + ', desde tu rubro.';
+  el.style.display = 'block';
+}
+// (pieza 21) Beneficios: la vista del bloque queda instrumentada (es LA
+// pieza de conversión; su efecto se mide en el funnel).
+let _benefitsSeen = false;
+function renderBenefits() {
+  const card = $('#benefitsCard');
+  if (!card) return;
+  card.style.display = 'block';
+  if (_benefitsSeen || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((es) => {
+    if (es.some((e) => e.isIntersecting)) { _benefitsSeen = true; trk('prueba_benefits_view'); io.disconnect(); }
+  }, { threshold: 0.35 });
+  io.observe(card);
+}
+// (pieza 5) Salida con regalo: su semana por email, sobre la maquinaria
+// unificada de email (captura sin doble opt-in; el estado dice la verdad:
+// enviado o anotado/en cola si el envío todavía no puede salir).
+let _giftWired = false;
+function renderGiftRow() {
+  const row = $('#giftRow');
+  if (!row) return;
+  if (!(TRIAL && TRIAL.ig)) { row.style.display = 'none'; return; }
+  row.style.display = 'block';
+  if (_giftWired) return;
+  _giftWired = true;
+  const em = $('#giftEmail'), go = $('#giftGo'), msg = $('#giftMsg');
+  const lead = $('#leadEmail');
+  if (lead && lead.value && em && !em.value) em.value = lead.value;
+  const send = async () => {
+    const v = em.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { msg.textContent = 'Revisá el email, que no parece válido 😅'; return; }
+    go.disabled = true; msg.textContent = 'Mandando…';
+    try {
+      const r = await fetch('/api/trial/gift-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ig: TRIAL.ig, email: v, lang: 'es' }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || 'No pudimos anotarlo');
+      em.disabled = true; go.disabled = true;
+      msg.textContent = j.sent
+        ? '¡Enviada! Revisá tu casilla 📩 Tu semana va completa, con la firma de Valentino.'
+        : '¡Anotado! 📩 Tu semana queda guardada y te llega a ese email.';
+      trk('prueba_gift_email', { sent: !!j.sent });
+    } catch (e) {
+      go.disabled = false;
+      msg.textContent = e.message || 'No pudimos anotarlo. Probá de nuevo.';
+    }
+  };
+  if (go) go.onclick = send;
+  if (em) em.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+}
+// (pieza 7) Reel de muestra con compuerta: se pide con un toque y se
+// genera solo ahí (MOTION con guión, server-side); el tope diario de IA
+// responde con su estado honesto, sin prometer tiempos.
+let _reelWired = false;
+function renderReelRow() {
+  const row = $('#reelRow');
+  if (!row) return;
+  if (!(TRIAL && TRIAL.ig)) { row.style.display = 'none'; return; }
+  row.style.display = 'block';
+  if (_reelWired) return;
+  _reelWired = true;
+  const go = $('#reelGo'), box = $('#reelBox');
+  if (!go) return;
+  go.onclick = async () => {
+    go.disabled = true; go.textContent = '🎬 Cortando tu reel…';
+    box.innerHTML = '<p class="tiny">Esto tarda un ratito: nace de tu material y del guión de tu negocio.</p>';
+    trk('prueba_sample_reel_click');
+    try {
+      const r = await fetch('/api/trial/sample-reel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ig: TRIAL.ig, lang: 'es' }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'No se pudo cortar el reel');
+      if (j.video) {
+        box.innerHTML = `<video src="${esc(j.video)}" controls playsinline style="width:100%;max-width:300px;border-radius:14px"></video><p class="tiny" style="margin-top:8px">🎬 Tu reel de muestra: nace de tu material y tu fundamento. En tu plan, sale uno así cada semana, solo.</p>`;
+        trk('prueba_sample_reel_done', { scripted: !!j.scripted, cached: !!j.cached });
+      } else {
+        box.innerHTML = '<p class="tiny">' + esc(j.message || 'Hoy no se pudo cortar el reel de muestra 😅 Tu semana quedó guardada igual.') + '</p>';
+        go.style.display = 'none';
+      }
+    } catch (e) {
+      box.innerHTML = '<p class="tiny">' + esc(e.message || 'No se pudo cortar el reel ahora 😅') + '</p>';
+      go.disabled = false; go.textContent = '🎬 ¿Querés ver cómo sería tu reel?';
+    }
+  };
+}
+// (pieza 17) Precio en el pico, bien contado: el héroe (Pro) POR DÍA en
+// la moneda del visitante, calculado de los precios vigentes que sirve
+// el propio servidor — nunca tipeado a mano en esta página.
+async function renderPriceCard() {
+  const card = $('#priceCard');
+  if (!card) return;
+  try {
+    const r = await fetch('/api/billing/plans?country=' + encodeURIComponent(COUNTRY || 'AR'));
+    const j = await r.json();
+    const pro = j && (j.plans || []).find((p) => p.id === 'pro');
+    if (!pro || !pro.price) return;
+    const per = pro.price / 30;
+    const fmt = (n, dec) => n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    let perTxt, anchor;
+    if (j.country === 'US') {
+      perTxt = 'USD ' + fmt(per, 2) + ' <small>por día</small>';
+      anchor = 'Un community manager freelance cobra USD 25–50 la hora: el Pro cuesta por día menos que una hora de su trabajo. (Plan Pro: USD ' + fmt(pro.price, 0) + '/mes)';
+    } else if (j.country === 'UY') {
+      perTxt = '$U ' + fmt(Math.round(per), 0) + ' <small>por día</small>';
+      anchor = 'Menos que una hora de un community manager — y trabaja toda la semana. (Plan Pro: $U ' + fmt(pro.price, 0) + '/mes)';
+    } else {
+      perTxt = '$' + fmt(Math.round(per), 0) + ' <small>por día</small>';
+      anchor = 'Un community manager cobra ~$300.000 por mes: el Pro te sale por día menos de la mitad de su costo diario. (Plan Pro: $' + fmt(pro.price, 0) + '/mes)';
+    }
+    $('#pricePerDay').innerHTML = perTxt;
+    $('#priceAnchor').textContent = anchor;
+    card.style.display = 'block';
+  } catch (e) { /* sin precios del servidor, la tarjeta no sale */ }
+}
+// (pieza 6) Tarjeta compartible: su grilla en una imagen sobria (fondo
+// blanco, marca celeste), con las piezas ENTERAS (contain, sin recorte).
+async function buildShareCardFile(t) {
+  const imgs = (t.posts || []).filter((p) => p && p.type !== 'video' && p.image).slice(0, 4);
+  if (imgs.length < 2) return null;
+  const load = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  const loaded = [];
+  for (const p of imgs) { try { loaded.push(await load(p.image)); } catch (e) {} }
+  if (loaded.length < 2) return null;
+  const c = document.createElement('canvas');
+  c.width = 1080; c.height = 1350;
+  const x = c.getContext('2d');
+  x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, 1080, 1350);
+  x.fillStyle = '#2793C8'; x.fillRect(0, 0, 1080, 150);
+  x.fillStyle = '#FFFFFF'; x.font = '800 64px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+  x.fillText('posty.', 56, 98);
+  x.font = '700 40px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+  x.textAlign = 'right'; x.fillText(t.ig ? '@' + String(t.ig).replace(/^@/, '') : (t.business || ''), 1024, 94); x.textAlign = 'left';
+  const cell = 452, gap = 24, x0 = 56, y0 = 196;
+  loaded.forEach((im, i) => {
+    const cx = x0 + (i % 2) * (cell + gap), cy = y0 + Math.floor(i / 2) * (cell + gap);
+    x.fillStyle = '#F2F9FD'; x.fillRect(cx, cy, cell, cell);
+    const sc = Math.min(cell / im.width, cell / im.height);
+    const w = im.width * sc, h = im.height * sc;
+    x.drawImage(im, cx + (cell - w) / 2, cy + (cell - h) / 2, w, h);
+  });
+  x.fillStyle = '#0A1E33'; x.font = '700 42px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+  x.fillText('Mi semana de posteos, armada por Posty 🚀', 56, 1272);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+  if (!blob) return null;
+  return new File([blob], 'mi-semana-posty.png', { type: 'image/png' });
+}
+// (pieza 16) EL TÍMIDO PRIMERO: un perfil de la pared en modo muestra —
+// su semana, sus porqués y el chat en modo muestra, sin gastar IA.
+const EXAMPLE_WEEK = [
+  { img: 'gt-patitas-1.jpg', day: 'Lunes', hour: '12:30', cap: 'Control anual: el chequeo que previene 🐾', why: 'Educa y genera turnos: el posteo que más consultas trae en veterinarias.' },
+  { img: 'gt-patitas-2.jpg', day: 'Martes', hour: '19:00', cap: 'Baño + corte: salen felices, vuelven siempre', why: 'Muestra el servicio estrella con el resultado real: vende sin decir "vendemos".' },
+  { img: 'gt-patitas-3.jpg', day: 'Miércoles', hour: '20:30', cap: 'El alimento justo para cada etapa 🐶', why: 'Producto exacto de su góndola: pertenencia pura, nada de stock genérico.' },
+  { img: 'gt-patitas-4.jpg', day: 'Jueves', hour: '11:00', cap: 'Ella ya es de la familia 💛', why: 'Prueba social con una clienta real: la confianza se contagia.' },
+  { img: 'gt-patitas-5.jpg', day: 'Viernes', hour: '19:30', cap: 'Fin de semana de paseo: todo lo que necesitan', why: 'Cierra la semana con intención de venta y el gancho del finde.' },
+];
+let _exRendered = false;
+function openExample() {
+  document.getElementById('v-onboarding').style.display = 'none';
+  document.getElementById('v-example').style.display = 'block';
+  if (!_exRendered) {
+    _exRendered = true;
+    $('#exWeek').innerHTML = EXAMPLE_WEEK.map((p) =>
+      `<div class="day"><div class="dh"><b>${esc(p.day)}</b><small>· ${esc(p.hour)}</small></div><div class="db"><img src="${esc(p.img)}" alt="Posteo de ejemplo de Patitas" loading="lazy"></div><div class="dcap">${esc(p.cap)}</div><div class="dwhy">💡 <b>Por qué:</b> ${esc(p.why)}</div></div>`
+    ).join('');
+    chatAddMsgTo('exChatMsgs', 'hola! esta es la semana de patitas 🐾 si fuera la tuya, me pedís cambios así de simple y los aplico al instante. probá escribirme algo 👇', 'bot');
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function closeExample() {
+  document.getElementById('v-example').style.display = 'none';
+  document.getElementById('v-onboarding').style.display = 'block';
+}
+function chatAddMsgTo(boxId, text, who) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+function exChatReply() {
+  const inp = $('#exChatIn');
+  const v = (inp.value || '').trim();
+  if (!v) return;
+  chatAddMsgTo('exChatMsgs', v, 'user');
+  inp.value = '';
+  setTimeout(() => chatAddMsgTo('exChatMsgs', 'esto es una muestra 😊 en tu prueba real, me pedís así y lo aplico al instante a tus posteos. ¿armamos la tuya?', 'bot'), 450);
+}
+
 /* ---------- Compartir la semana ---------- */
 async function shareWeek() {
   const t = TRIAL;
   if (!t || !t.posts) return;
-  const url = location.origin + '/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) : '');
+  // (v323 · pieza 6) El link compartido lleva su src de atribución
+  // (prueba-compartida): aterriza en /prueba con el @ vacío y el origen
+  // correcto; la tanda analytics lo lee de ?src= y lo persiste.
+  const url = location.origin + '/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) + '&src=prueba-compartida' : '?src=prueba-compartida');
   const text = `Mirá la semana de posteos que me armó Posty para ${t.business} 🚀 Probalo gratis:`;
   try {
     const files = [];
-    for (let i = 0; i < t.posts.length; i++) {
+    // Primero la TARJETA compuesta (su grilla + su @ + marca); si el
+    // canvas falla, caen los archivos sueltos de siempre.
+    try { const cardFile = await buildShareCardFile(t); if (cardFile) files.push(cardFile); } catch (e) {}
+    if (!files.length) for (let i = 0; i < t.posts.length; i++) {
       const p = t.posts[i];
       const src = p.type === 'video' ? p.video : p.image;
       if (!src) continue;
@@ -2800,6 +3400,9 @@ function resetTrialChat() {
 }
 async function sendTrialChat(text) {
   const inp = $('#chatIn');
+  // (v323 · pieza 4) La primera edición es EL predictor de pago: queda
+  // instrumentada una sola vez por sesión (la consume la tanda analytics).
+  if (!window._firstEditDone) { window._firstEditDone = true; trk('prueba_first_edit', { via: window._chatVia || 'texto' }); }
   chatBusy = true;
   $('#chatSend').disabled = true;
   chatAddMsg(text, 'user');

@@ -14378,17 +14378,127 @@ function buildTrialWeek(n, lang) {
     ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     : ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   const now = new Date();
+  // (v323 · pieza 2) Horario PROPUESTO por posteo: la agenda mini de la
+  // prueba muestra día, fecha y hora. Son los horarios fuertes habituales
+  // de Instagram en rotación (propuesta de Posty, no un dato del visitante);
+  // con la cuenta conectada manda su mejor hora real, como siempre.
+  const hours = en
+    ? ['12:30 PM', '7:00 PM', '8:30 PM', '11:00 AM', '7:30 PM', '1:00 PM']
+    : ['12:30', '19:00', '20:30', '11:00', '19:30', '13:00'];
   return Array.from({ length: n }, (_, i) => {
     const d = new Date(now.getTime() + (i + 1) * 86400000);
     return {
       day: days[d.getDay()],
       date: en ? `${months[d.getMonth()]} ${d.getDate()}` : `${d.getDate()} ${months[d.getMonth()]}`,
+      hour: hours[i % hours.length],
       post: i,
     };
   });
 }
 
 const TRIAL_IMG_MIME = { jpeg: 'image/jpeg', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+
+// ---------- (v323 · piezas 8+13) CANDADO DE PRUEBA 90 DÍAS + ESCUDO ANTI-BOTS ----------
+// Pieza 8: un mismo negocio (@ o dominio normalizados) no regenera una
+// prueba por 90 días; la vuelta recibe su snapshot ("tu semana sigue acá")
+// o el mensaje amable con la fecha exacta. Módulo: trial-lock.js (la
+// allowlist interna/QA vive ahí + tabla trial_lock_allowlist).
+let trialLock = null;
+try { trialLock = require('./trial-lock'); } catch (e) { console.error('[init] trial-lock no disponible:', e.message); }
+
+// Identidad del negocio para el candado, desde los campos crudos del form
+// (la normalización robusta vive en el módulo: URL pegada, mayúsculas, @).
+function trialLockGate(fields, webData, testMode) {
+  try {
+    if (!trialLock || testMode) return null;
+    const igK = trialLock.normalizeIg((fields && fields.ig) || '');
+    let domK = trialLock.normalizeDomain((fields && fields.web) || '');
+    if (!domK && webData && webData.url) domK = trialLock.normalizeDomain(webData.url);
+    if (!igK && !domK) return null;
+    const lock = trialLock.findLock(db, igK, domK);
+    if (!lock) return null;
+    track(null, 'prueba_lock', (igK || domK) + '|' + (lock.payload ? 'snapshot' : 'mensaje'));
+    return { lock, igK, domK };
+  } catch (e) { return null; }
+}
+
+// Sirve el snapshot del candado decorado (banderas del candado + semana y
+// lugares frescos) y rehidrata el trial_cache: chat, rediseño y lead-email
+// vuelven a funcionar sobre la semana servida sin gastar IA.
+function trialLockServePayload(lock) {
+  if (!lock || !lock.payload) return null;
+  let out = null;
+  try { out = JSON.parse(lock.payload); } catch (e) { return null; }
+  out = trialLock.decorateSnapshot(lock, out, { spotsLeft, buildWeek: buildTrialWeek });
+  if (out && lock.ig) {
+    try {
+      db.prepare(`INSERT INTO trial_cache (ig, payload, created_at) VALUES (?, ?, ?)
+        ON CONFLICT(ig) DO UPDATE SET payload=excluded.payload, created_at=excluded.created_at`)
+        .run(lock.ig, JSON.stringify(out), Date.now());
+    } catch (e) { /* la semana se sirve igual */ }
+  }
+  return out;
+}
+
+// Nace el candado de una generación recién producida (junto al trial_cache).
+function trialLockRecordFor(fields, webData, business, lang, out) {
+  try {
+    if (!trialLock) return;
+    trialLock.recordLock(db, {
+      ig: trialLock.normalizeIg((fields && fields.ig) || ''),
+      domain: trialLock.normalizeDomain((fields && fields.web) || '') || (webData ? trialLock.normalizeDomain(webData.url || '') : ''),
+      business, lang, payloadStr: JSON.stringify(out),
+    });
+  } catch (e) { /* el candado nunca rompe la generación */ }
+}
+
+// Pieza 13 · ESCUDO INVISIBLE ANTI-BOTS (cero fricción visible, nada de
+// captchas — regla cero trabas): (a) honeypot silencioso: el form trae un
+// campo trampa que ningún humano ve ni completa; si viene lleno, es un bot
+// → se corta con un error genérico y el bloqueo queda como evento;
+// (b) tope por hora y por IP en el INICIO de generación (el de 5/día ya
+// existe): una IP sana jamás llega a 20 arranques por hora.
+try { db.exec('CREATE TABLE IF NOT EXISTS trial_gen_usage (ip TEXT, hour TEXT, count INTEGER DEFAULT 0, PRIMARY KEY (ip, hour))'); } catch (e) {}
+const TRIAL_GEN_HOURLY = 20;
+function trialGenHourlyAllowed(ip) {
+  const hour = new Date().toISOString().slice(0, 13);
+  try {
+    if (Math.random() < 0.05) db.exec(`DELETE FROM trial_gen_usage WHERE hour < strftime('%Y-%m-%dT%H', 'now', '-48 hours')`);
+    const row = db.prepare('SELECT count FROM trial_gen_usage WHERE ip = ? AND hour = ?').get(ip, hour);
+    if (row && row.count >= TRIAL_GEN_HOURLY) return false;
+    db.prepare('INSERT INTO trial_gen_usage (ip, hour, count) VALUES (?, ?, 1) ON CONFLICT(ip, hour) DO UPDATE SET count = count + 1').run(ip, hour);
+    return true;
+  } catch (e) { return true; }
+}
+function trialHoneypotHit(fields) {
+  return !!(fields && String(fields.hp_empresa || '').trim());
+}
+
+// (v323 · pieza 19) SU COMPETENCIA EN UNA LÍNEA: datos para UNA línea de
+// contraste REAL arriba de los resultados — cadencia propia vs la de los
+// pares LEÍDOS de su zona/rubro (los que el análisis ya leyó). Sin pares
+// con cadencia medida o sin cadencia propia, devuelve null y la línea NO
+// sale (regla de verdad: jamás un número inventado). El tono lo pone el
+// frontend: el hueco como oportunidad, nunca como reto.
+function trialCompetitionLine(rawAnalysis) {
+  try {
+    const m = rawAnalysis && rawAnalysis.market;
+    const own = rawAnalysis && rawAnalysis.signals ? rawAnalysis.signals.posts_per_week : null;
+    if (!m || !m.available || own == null) return null;
+    const peers = (m.peers || []).filter(p => p && p.posts_per_week != null && p.handle);
+    if (!peers.length) return null;
+    const rates = peers.map(p => p.posts_per_week).slice().sort((a, b) => a - b);
+    const median = rates[Math.floor(rates.length / 2)];
+    const top = peers.reduce((a, b) => (b.posts_per_week > a.posts_per_week ? b : a), peers[0]);
+    return {
+      own_rate: own,
+      peer_median: median,
+      peer_handle: top.handle,
+      peer_rate: top.posts_per_week,
+      peers_n: peers.length,
+    };
+  } catch (e) { return null; }
+}
 
 // La semana cacheada por @ solo vale si se generó para ESTE negocio y rubro.
 // Sin este chequeo, una prueba vieja de otro negocio con el mismo @ se servía
@@ -14419,6 +14529,12 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   } catch (e) {
     return res.status(400).json({ error: e.message || 'Formulario inválido' });
   }
+  // (v323 · pieza 13) Honeypot silencioso: si el campo trampa viene lleno,
+  // es un bot — corte genérico + evento, sin gastar ni un fetch más.
+  if (trialHoneypotHit(fields)) {
+    track(null, 'prueba_bot_block', 'honeypot');
+    return res.status(400).json({ error: 'No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.' });
+  }
   let business = String(fields.business || '').trim().slice(0, 60);
   const ig = String(fields.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
   // (v212) La web del negocio (si pegó su link): la extracción determinística
@@ -14434,6 +14550,23 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
   // Con lang 'en' el país efectivo es US (hashtags y calendario US).
   const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
   const effCountry = lang === 'en' ? 'US' : country;
+  // (v323 · pieza 8) CANDADO 90 DÍAS — chequeo TEMPRANO, antes de leer el
+  // IG/web y de validar el form: si este negocio ya produjo su prueba, la
+  // vuelta es su snapshot (o el 409 amable con la fecha exacta), sin
+  // gastar nada y sin depender de que el formulario venga completo.
+  if (!trialTestMode(req)) {
+    const gate = trialLockGate(fields, null, false);
+    if (gate) {
+      const snap = trialLockServePayload(gate.lock);
+      if (snap) return res.json(snap);
+      return res.status(409).json({
+        error: trialLock.lockMessage(gate.lock, lang),
+        trial_locked: true,
+        generated_at: gate.lock.generated_at,
+        unlock_at: gate.lock.unlock_at,
+      });
+    }
+  }
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   // Preguntas previas de /prueba (opcionales): objetivo + producto + diferencial.
@@ -14529,11 +14662,18 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
     } catch (e) { /* si falla el cache, se genera igual */ }
   }
+  // (El candado 90 días se chequea TEMPRANO, apenas parseado el form —
+  // ver más arriba en este mismo endpoint.)
   // Anti-spam honesto: 5 pruebas por día por IP. El intento se RESERVA al
   // arrancar (atómico: 2 requests simultáneos no pueden pasar de 5) y se
   // REEMBOLSA si la generación falla — un error nunca quita un intento.
   let charged = false;
   if (!testMode) {
+    // (v323 · pieza 13) Tope por hora en el inicio: 20 arranques/hora/IP.
+    if (!trialGenHourlyAllowed(ip)) {
+      track(null, 'prueba_bot_block', 'gen_hourly');
+      return res.status(429).json({ error: 'Muchas pruebas desde esta conexión. Probá en un rato 🚀' });
+    }
     const rl = demo.consumeTrialAttempt(ip);
     if (!rl.ok) {
       return res.status(429).json({ error: 'Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀' });
@@ -14589,6 +14729,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // datos del @ no llegan, el análisis queda ausente — jamás se afirma un
     // nacimiento sobre una cuenta que no se pudo leer.
     let trialAnalysisJson = null;
+    let trialCompetition = null;
     try {
       let dataJson = null;
       if (ig) {
@@ -14597,9 +14738,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       if (dataJson && dataJson.ok) {
         const peersJ = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
         const coldJ = analysisEngine.isColdStart({ hasIg: true, profile: dataJson.profile, posts: dataJson.posts || [] });
-        trialAnalysisJson = analysisEngine.gateForPlan(coldJ
+        const rawAJ = coldJ
           ? analysisEngine.analyzeColdStart({ business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: ig }, digest: trialDigest, peers: peersJ, reviews: null, ctx: { postsPerWeek: 7, plan: 'trial', lang } })
-          : analysisEngine.analyzeExisting({ profile: dataJson.profile, posts: dataJson.posts, ctx: { postsPerWeek: 7, plan: 'trial', peers: peersJ, source: 'instagram', lang } }), 'trial');
+          : analysisEngine.analyzeExisting({ profile: dataJson.profile, posts: dataJson.posts, ctx: { postsPerWeek: 7, plan: 'trial', peers: peersJ, source: 'instagram', lang } });
+        trialCompetition = trialCompetitionLine(rawAJ);
+        trialAnalysisJson = analysisEngine.gateForPlan(rawAJ, 'trial');
       } else if (!ig) {
         trialAnalysisJson = analysisEngine.gateForPlan(analysisEngine.analyzeColdStart({
           business: { name: business, category: effCategory, city: (trialDigest && trialDigest.ciudad) || '', ig_username: '' },
@@ -14635,6 +14778,7 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       digest: trialDigest, // (v229) FUNDAMENTO: viaja al trial_cache y a la cuenta al registrarse
       ig_pic: igPic, ig_name: igName,
       analysis: trialAnalysisJson,
+      competition_line: trialCompetition,
       ideas: (await ideasPromise).slice(0, 6),
       posts,
       design: spec, // spec de diseño guardado: permite recolor/cambio de fotos sin regenerar textos
@@ -14653,6 +14797,9 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
+    // (v323 · pieza 8) Nace el candado de 90 días de este negocio (@ o
+    // dominio): la próxima generación de esta identidad espera al día 91.
+    if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
     track(null, 'prueba_done', igKey);
     ok = true;
     res.json(out);
@@ -14870,6 +15017,11 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   } catch (e) {
     return fail(e.message || 'Formulario inválido');
   }
+  // (v323 · pieza 13) Honeypot silencioso, igual que /api/trial/generate.
+  if (trialHoneypotHit(fields)) {
+    track(null, 'prueba_bot_block', 'honeypot');
+    return fail('No pudimos armar tu prueba ahora. Probá de nuevo en unos minutos.');
+  }
   // Mismo parseo y sanitización que /api/trial/generate
   let business = String(fields.business || '').trim().slice(0, 60);
   const ig = String(fields.ig || '').trim().replace(/^@/, '').replace(/[^a-zA-Z0-9._]/g, '').slice(0, 40);
@@ -14884,6 +15036,24 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
   // (v274 · MODO EN) Mismo parseo de idioma que /api/trial/generate.
   const lang = String(fields.lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es';
   const effCountry = lang === 'en' ? 'US' : country;
+  // (v323 · pieza 8) CANDADO 90 DÍAS — chequeo TEMPRANO, igual que en
+  // /api/trial/generate: con snapshot se emite 'done' directo (la semana
+  // de siempre, sin gastar); sin snapshot, el evento 'locked' con el
+  // mensaje amable y las fechas exactas.
+  if (!trialTestMode(req)) {
+    const gate = trialLockGate(fields, null, false);
+    if (gate) {
+      const snap = trialLockServePayload(gate.lock);
+      if (snap) { send('done', { out: snap }); return finish(); }
+      send('locked', {
+        trial_locked: true,
+        generated_at: gate.lock.generated_at,
+        unlock_at: gate.lock.unlock_at,
+        message: trialLock.lockMessage(gate.lock, lang),
+      });
+      return finish();
+    }
+  }
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const competitors = String(fields.competitors || '').replace(/<[^>]*>/g, '').trim().slice(0, 200);
   const goal_key = ['vender', 'seguidores', 'lanzamiento', 'fidelizar'].includes(String(fields.goal_key || '').trim())
@@ -15043,11 +15213,18 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       if (Math.random() < 0.05) db.exec(`DELETE FROM trial_cache WHERE created_at < ${Date.now() - 72 * 3600 * 1000}`);
     } catch (e) { /* si falla el cache, se genera igual */ }
   }
+  // (El candado 90 días se chequea TEMPRANO, apenas parseado el form —
+  // ver más arriba en este mismo endpoint.)
   // Anti-spam honesto: igual que /api/trial/generate (reserva atómica +
   // reembolso si falla). Si el cliente corta el stream antes de recibir
   // 'done', tampoco se consume (doneSent=false → reembolso en finally).
   let charged = false;
   if (!testMode) {
+    // (v323 · pieza 13) Tope por hora en el inicio, igual que el clásico.
+    if (!trialGenHourlyAllowed(ip)) {
+      track(null, 'prueba_bot_block', 'gen_hourly');
+      return fail('Muchas pruebas desde esta conexión. Probá en un rato 🚀');
+    }
     const rl = demo.consumeTrialAttempt(ip);
     if (!rl.ok) {
       return fail('Llegaste al límite de 5 pruebas por día. Volvé mañana 🚀');
@@ -15253,7 +15430,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         style_name: specPosts[i].style_name,
         text_mode: specPosts[i].text_mode || 'text',
       };
-      send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
+      send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
     });
     runDir = streamed.runDir;
     const bufs = streamed.bufs;
@@ -15458,7 +15635,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
                   engine: pieceEngines[i] || null,
                   qa: pieceQa[i] || null,
                 };
-                send('post', { index: i, day: week[i].day, date: week[i].date, post: posts[i] });
+                send('post', { index: i, day: week[i].day, date: week[i].date, hour: week[i].hour, post: posts[i] });
               },
             });
             demoAiInfo.used = replaced.size > 0;
@@ -15573,7 +15750,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         ...(pieceEngines[videoIdx] ? { ai: true, engine: pieceEngines[videoIdx], qa: pieceQa[videoIdx] || null, ...(demoTreatments ? { treatment: demoTreatments[videoIdx] } : {}) } : {}),
       };
     }
-    send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, post: posts[videoIdx] });
+    send('post', { index: videoIdx, day: week[videoIdx].day, date: week[videoIdx].date, hour: week[videoIdx].hour, post: posts[videoIdx] });
 
     const videoOk = posts.some((p) => p && p.type === 'video' && p.video);
     if (!videoOk) console.error('[posta] ⚠️ TRIAL sin video para', business, '— revisar render de video');
@@ -15594,6 +15771,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // mercado, o plan de nacimiento si la cuenta recién arranca — y el porqué
     // de cada posteo de la prueba, atado a los hallazgos. Nunca frena la prueba.
     let trialAnalysis = null;
+    let competitionLine = null;
     try {
       const peers = await fetchPeersForAnalysis(peerHandlesFromText(competitors));
       const ctxA = { postsPerWeek: 7, plan: 'trial', peers, source: 'instagram', lang };
@@ -15606,6 +15784,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       } else {
         trialAnalysis = analysisEngine.analyzeExisting({ profile: trialData.profile, posts: trialData.posts, ctx: ctxA });
       }
+      // (v323 · pieza 19) La línea de competencia se calcula del análisis
+      // CRUDO (el gate de prueba vacía los pares): solo números leídos.
+      competitionLine = trialCompetitionLine(trialAnalysis);
       trialAnalysis = analysisEngine.gateForPlan(trialAnalysis, 'trial');
       if (Array.isArray(posts)) {
         for (const p of posts) {
@@ -15635,6 +15816,7 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       profile: trialProfile,
       audit: trialAudit,
       analysis: trialAnalysis,
+      competition_line: competitionLine,
       grid_extra: gridExtra,
       ideas: ideas.slice(0, 6),
       posts,
@@ -15661,6 +15843,8 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
         }
       } catch (e) { console.error('[posta] no se pudo cachear la prueba:', e.message); }
     }
+    // (v323 · pieza 8) Nace el candado de 90 días de este negocio.
+    if (!testMode) trialLockRecordFor(fields, webData, business, lang, out);
     track(null, 'prueba_done', igKey);
     if (!closed) { send('done', { out }); doneSent = true; }
     finish();
@@ -16123,6 +16307,18 @@ app.get('/api/trial/week', (req, res) => {
   const hit = db.prepare('SELECT payload, created_at FROM trial_cache WHERE ig = ?').get(igKey);
   if (!hit || Date.now() - hit.created_at >= 72 * 3600 * 1000) {
     if (hit) { try { db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey); } catch (e) {} }
+    // (v323 · pieza 8) El caché venció (72h) pero el candado guarda la
+    // semana 90 días: el link del email y la vuelta del dueño siguen
+    // viendo "tu semana sigue acá", sin regenerar nada.
+    if (trialLock) {
+      try {
+        const lock = trialLock.findLock(db, igKey, '');
+        if (lock && lock.payload) {
+          const snap = trialLockServePayload(lock);
+          if (snap) return res.json(snap);
+        }
+      } catch (e) { /* cae al 404 de siempre */ }
+    }
     return res.status(404).json({ error: qLang === 'en' ? 'Your week is no longer saved 😅 Build a new one at /en/prueba' : 'Tu semana ya no está guardada 😅 Generá una nueva en /prueba' });
   }
   let out;
@@ -16164,6 +16360,277 @@ function trialLogoAllowed(ip) {
     return true;
   } catch (e) { return true; }
 }
+// ---------- (v323 · pieza 5) SALIDA CON REGALO: "mandame mis posteos" ----------
+// El visitante que no sigue al pago pide su semana por email. Captura sin
+// doble opt-in (cero trabas), enrolamiento en el goteo de ideas con SU
+// material (maquinaria unificada v321, nada de sistemas paralelos) y un
+// intento de envío inmediato de SU semana. FAIL-CLOSED honesto: sin
+// RESEND_API_KEY, email.js no entrega y el pedido queda 'queued' en la
+// cola (gift_state), reportado como tal — la captura funciona desde ya.
+// (v323 · pieza 5, anatomía FINAL fijada por Valentino el 2026-10-22: el
+// email de salida es una CARTA ESCRITA POR POSTY, no una pieza de
+// marketing) Estructura cerrada: avatar oficial como membrete → apertura
+// en primera persona → su mejor posteo entero → "hay N más" con su
+// producto real → párrafo de líder motivacional nacido de SU radiografía
+// leída (sin dato, la frase se reordena y lo dice) → la creencia en
+// negrita → UN botón → firma de Posty → y ABAJO DE TODO la foto espalda
+// con espalda entera con su única línea. Asunto con el @ (enmienda 1);
+// remitente "Posty" a secas: la carta es suya.
+// (v323 · pieza 5 — FORMA FINAL cerrada por Valentino el 2026-10-22,
+// mock posty-email-carta-FINAL.jpg) El email de salida es una CARTA DE
+// POSTY en tono de AMIGO, no marketing: avatar saludando → carta (se
+// presenta, cuenta lo que hace, su posteo héroe entero, su lectura de la
+// cuenta celebrando primero con la constancia a su cargo, la creencia) →
+// UN botón + línea de confianza → "Con amor," → firma LITERAL →
+// postyhacetodo.com clickeable → foto del fundador ENTERA, último
+// elemento, con NADA debajo. Sin pregunta, sin posdata, sin lockup.
+async function sendTrialGiftEmail(email, payload, lang) {
+  if (!payload || !Array.isArray(payload.posts)) return false;
+  const en = lang === 'en';
+  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const igK = trialLock ? trialLock.normalizeIg(payload.ig || '') : '';
+  const handle = igK ? '@' + igK : (payload.business || '');
+  const link = base + (en ? '/en/prueba' : '/prueba') + (igK ? '?ig=' + encodeURIComponent(igK) + '&src=email-salida' : '?src=email-salida');
+  const escH = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const abs = (src) => {
+    const s = String(src || '');
+    if (!s || /^data:/.test(s)) return '';
+    if (/^https?:\/\//.test(s)) return s;
+    return base + (s.startsWith('/') ? s : '/' + s);
+  };
+  // Su mejor posteo (el héroe de la carta) y cuántos quedan en la semana.
+  const imgPosts = payload.posts.filter(p => p && p.type !== 'video' && abs(p.image));
+  const hero = imgPosts.find(p => p.headline && p.why) || imgPosts.find(p => p.headline) || imgPosts[0] || null;
+  const leftN = imgPosts.length - (hero ? 1 : 0);
+  const hasReel = payload.posts.some(p => p && p.type === 'video') || !!payload.video_ok;
+  // Su producto real, desde su fundamento/semana (sin dato → frase honesta).
+  const dg = payload.digest || {};
+  const product = String(dg.star_product || dg.producto_estrella || dg.hero_product || payload.star_product || '').trim();
+  const catLabel = String(payload.category || '').trim();
+  const moreLine = (leftN > 0 || hasReel)
+    ? (en
+      ? `And there ${leftN === 1 ? 'is' : 'are'} ${leftN > 0 ? leftN + ' more' : ''}${leftN > 0 && hasReel ? ' and ' : ''}${hasReel ? 'a reel' : ''}${product ? `, all about ${product}` : ''} and in your way of speaking.`
+      : `Y hay ${leftN > 0 ? leftN + ' más' : ''}${leftN > 0 && hasReel ? ' y ' : ''}${hasReel ? 'un reel' : ''}${product ? `, todos sobre ${product}` : ''} y con tu forma de hablar.`)
+    : '';
+  // Su lectura de la cuenta (del dato LEÍDO: su cadencia real en días).
+  const cl = payload.competition_line;
+  let leader;
+  if (cl && cl.own_rate != null && Number(cl.own_rate) > 0) {
+    const days = Math.max(1, Math.round(7 / Number(cl.own_rate)));
+    if (days >= 3) {
+      leader = en
+        ? `Want to know what I saw? Your product is beautiful. The only thing working against you is that you post every ${days} days — and it's not that you don't want to: life gets in the way. Don't worry, that's what I'm here for. Consistency is on me.`
+        : `¿Te digo lo que vi? Tu producto es hermoso. Lo único que te juega en contra es que publicás cada ${days} días — y no es que no quieras: es que no te da la vida. Tranqui, para eso estoy yo. La constancia la pongo yo.`;
+    } else {
+      leader = en
+        ? `Want to know what I saw? Your product is beautiful, and you already post often — that alone puts you ahead of most. I'll make sure it never slips: consistency is on me.`
+        : `¿Te digo lo que vi? Tu producto es hermoso y venís publicando seguido — eso ya te pone arriba de la mayoría. Yo me encargo de que no afloje nunca: la constancia la pongo yo.`;
+    }
+  } else {
+    leader = en
+      ? `Want to know what I saw?${catLabel ? ` From what I read about your ${catLabel} business, you` : ' You'} have everything it takes to grow on Instagram. The hardest part is consistency — and don't worry, that's what I'm here for: consistency is on me.`
+      : `¿Te digo lo que vi?${catLabel ? ` Por lo que leí de tu negocio de ${catLabel}, tenés` : ' Tenés'} todo para crecer en Instagram. Lo que más cuesta es la constancia — y tranqui, para eso estoy yo: la constancia la pongo yo.`;
+  }
+  const heroHead = hero ? String(hero.headline || (hero.caption || '').split('\n')[0] || '').trim().slice(0, 90) : '';
+  const preheader = en ? "I'm Posty — think of me as a friend who knows Instagram." : 'Soy Posty — pensame como un amigo que sabe de Instagram.';
+  const P = (inner) => `<p style="font-size:16px;line-height:1.65;margin:0 0 16px">${inner}</p>`;
+  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:600px;margin:0 auto;color:#0A1E33;background:#FFFFFF;padding:30px 26px">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escH(preheader)}</div>
+    <p style="text-align:center;margin:0 0 22px"><img src="${base}/posty-avatar-saludando.png" alt="Posty" style="width:150px;height:auto;display:inline-block"></p>
+    ${P(en ? `Hi — I'm <b>Posty</b>, your community manager.` : `Hola — soy <b>Posty</b>, tu community manager.`)}
+    ${P(en ? "Well, community manager is the serious title. Think of me as a friend who knows Instagram, works all day and is on your side." : 'Bueno, community manager es el título serio. Pensame como un amigo que sabe de Instagram, trabaja todo el día y está de tu lado.')}
+    ${P(en ? "What I do is simple: I read your account, build your posts, publish them for you and keep learning what your people like. You keep running your business — that's your thing." : 'Lo que hago es simple: leo tu cuenta, armo tus posteos, los publico por vos y voy aprendiendo qué le gusta a tu gente. Vos seguí con tu negocio, que es lo tuyo.')}
+    ${P(en ? `I already started, actually: I was snooping around <b>${escH(handle)}</b> and prepared your whole week. Here's the first one:` : `Ya empecé, de hecho: estuve chusmeando <b>${escH(handle)}</b> y te preparé la semana entera. Mirá el primero:`)}
+    ${hero ? `<img src="${abs(hero.image)}" alt="${escH(heroHead)}" style="width:100%;height:auto;border-radius:12px;display:block">
+    <p style="font-size:15px;line-height:1.55;margin:10px 0 16px"><b>${escH(heroHead)}</b></p>` : ''}
+    ${moreLine ? P(escH(moreLine)) : ''}
+    ${P(escH(leader))}
+    ${P(`<b>${en ? 'I truly believe I can help you sell more on Instagram. If you do well, we both win.' : 'De verdad creo que puedo ayudarte a vender más por Instagram. Si a vos te va bien, ganamos los dos.'}</b>`)}
+    <p style="text-align:center;margin:26px 0 8px"><a href="${link}" style="display:inline-block;background:#2793C8;color:#FFFFFF;font-weight:800;font-size:16.5px;padding:15px 38px;border-radius:999px;text-decoration:none">${en ? 'See my full week' : 'Ver mi semana completa'}</a></p>
+    <p style="font-size:13.5px;color:#47617A;text-align:center;margin:0 0 22px">${en ? 'Free for 3 days. No card. No commitment.' : 'Gratis por 3 días. Sin tarjeta. Sin compromiso.'}</p>
+    ${P(en ? 'With love,' : 'Con amor,')}
+    <p style="margin:0 0 6px"><img src="${base}/firma-posty.png" alt="Posty" style="width:190px;height:auto;display:block"></p>
+    <p style="margin:0 0 26px;font-size:15px"><a href="${base}" style="color:#2793C8;font-weight:700;text-decoration:underline">postyhacetodo.com</a></p>
+    <img src="${base}/valentino-posty-fundador.jpg" alt="Valentino, creador de Posty" style="width:100%;height:auto;border-radius:12px;display:block">
+  </div>`;
+  const text = [
+    en ? "Hi — I'm Posty, your community manager." : 'Hola — soy Posty, tu community manager.',
+    en ? 'Well, community manager is the serious title. Think of me as a friend who knows Instagram, works all day and is on your side.' : 'Bueno, community manager es el título serio. Pensame como un amigo que sabe de Instagram, trabaja todo el día y está de tu lado.',
+    en ? "What I do is simple: I read your account, build your posts, publish them for you and keep learning what your people like. You keep running your business — that's your thing." : 'Lo que hago es simple: leo tu cuenta, armo tus posteos, los publico por vos y voy aprendiendo qué le gusta a tu gente. Vos seguí con tu negocio, que es lo tuyo.',
+    en ? `I already started, actually: I was snooping around ${handle} and prepared your whole week. The first post: ${heroHead}` : `Ya empecé, de hecho: estuve chusmeando ${handle} y te preparé la semana entera. El primero: ${heroHead}`,
+    moreLine,
+    leader,
+    en ? 'I truly believe I can help you sell more on Instagram. If you do well, we both win.' : 'De verdad creo que puedo ayudarte a vender más por Instagram. Si a vos te va bien, ganamos los dos.',
+    en ? `See my full week: ${link}` : `Ver mi semana completa: ${link}`,
+    en ? 'Free for 3 days. No card. No commitment.' : 'Gratis por 3 días. Sin tarjeta. Sin compromiso.',
+    en ? 'With love,\nPosty\npostyhacetodo.com' : 'Con amor,\nPosty\npostyhacetodo.com',
+  ].filter(Boolean).join('\n\n');
+  const r = await sendEmail({
+    to: email,
+    from: 'Posty <hola@postyhacetodo.com>',
+    subject: en ? `Your posts are ready, ${handle}` : `Tus posteos ya están listos, ${handle}`,
+    html,
+    text,
+  });
+  return !!(r && r.ok);
+}
+
+
+app.post('/api/trial/gift-email', express.json({ limit: '16kb' }), async (req, res) => {
+  const b = req.body || {};
+  const lang = b.lang === 'en' ? 'en' : 'es';
+  const igKey = trialLock ? trialLock.normalizeIg(b.ig || '') : String(b.ig || '').trim().toLowerCase().replace(/^@/, '');
+  const email = String(b.email || '').trim().toLowerCase();
+  if (!igKey || !LEAD_EMAIL_RE.test(email) || email.length > 120) {
+    return res.status(400).json({ error: lang === 'en' ? 'Check your email and try again 🙂' : 'Revisá tu email y probá de nuevo 🙂' });
+  }
+  let row = null;
+  try { row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey); } catch (e) {}
+  if (!row && trialLock) {
+    // La semana puede vivir solo en el snapshot del candado (caché vencido).
+    try {
+      const lock = trialLock.findLock(db, igKey, '');
+      if (lock && lock.payload && trialLockServePayload(lock)) {
+        row = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
+      }
+    } catch (e) {}
+  }
+  if (!row) return res.status(404).json({ error: lang === 'en' ? 'We could not find your week 😅 Generate it again at /en/prueba' : 'No encontramos tu semana 😅 Generala de nuevo en /prueba' });
+  let payload = null;
+  try { payload = JSON.parse(row.payload); } catch (e) {}
+  // Captura + cola desde ya (aunque el envío esté fail-closed).
+  try { db.prepare("UPDATE trial_cache SET email = ?, gift_state = 'queued' WHERE ig = ?").run(email, igKey); } catch (e) {}
+  // Goteo de ideas con su material — la maquinaria v321 (ideas_subscribers).
+  try {
+    const ideasEmail = require('./ideas-email');
+    await ideasEmail.subscribe(db, {
+      email, source: 'prueba',
+      rubro: (payload && payload.category) || '',
+      ig_handle: igKey,
+      business_name: (payload && payload.business) || '',
+    }, {});
+  } catch (e) { console.error('[trial gift] no se pudo enrolar en ideas:', e.message); }
+  let sent = false;
+  try { sent = await sendTrialGiftEmail(email, payload, lang); } catch (e) { console.error('[trial gift] envío falló:', e.message); }
+  if (sent) { try { db.prepare("UPDATE trial_cache SET gift_state = 'sent' WHERE ig = ?").run(igKey); } catch (e) {} }
+  res.json({ ok: true, sent, queued: !sent });
+});
+
+// ---------- (v323 · pieza 7) REEL DE MUESTRA CON COMPUERTA ----------
+// Se genera SOLO ante el pedido explícito del visitante, por el camino
+// MOTION con guión (v309: reel-script + subtítulos cinéticos de
+// reel-engine; si el fundamento no alcanza, el propio motor degrada a su
+// render estándar — nunca a otro sistema). Guardarraíles: un reel por
+// prueba (queda cacheado por @) y el tope diario de IA de la demo
+// (costs.demoAiCapOk — perfiles ilustrados, feature demo-ai%): con el
+// tope alcanzado, estado honesto de espera sin prometer tiempos.
+app.post('/api/trial/sample-reel', express.json({ limit: '16kb' }), async (req, res) => {
+  const b = req.body || {};
+  const lang = b.lang === 'en' ? 'en' : 'es';
+  const igKey = trialLock ? trialLock.normalizeIg(b.ig || '') : String(b.ig || '').trim().toLowerCase().replace(/^@/, '');
+  if (!igKey) return res.status(400).json({ error: lang === 'en' ? 'Build your week first 🙂' : 'Primero armá tu semana 🙂' });
+  try {
+    const done = db.prepare('SELECT video FROM trial_sample_reels WHERE ig = ?').get(igKey);
+    if (done && done.video) return res.json({ ok: true, video: done.video, cached: true });
+  } catch (e) {}
+  let payload = null;
+  try {
+    const hit = db.prepare('SELECT payload FROM trial_cache WHERE ig = ?').get(igKey);
+    if (hit) payload = JSON.parse(hit.payload);
+  } catch (e) {}
+  if (!payload && trialLock) {
+    try {
+      const lock = trialLock.findLock(db, igKey, '');
+      if (lock && lock.payload) payload = JSON.parse(lock.payload);
+    } catch (e) {}
+  }
+  if (!payload || !Array.isArray(payload.posts)) {
+    return res.status(404).json({ error: lang === 'en' ? 'Build your week first 🙂' : 'Primero armá tu semana 🙂' });
+  }
+  // La compuerta de costo manda: sin cupo de demo hoy, no se genera.
+  if (!costs.demoAiCapOk()) {
+    return res.json({ ok: true, state: 'cap', message: lang === 'en'
+      ? "Today's sample reels are all booked 💛 Your week is saved — and with your account, your plan's reel comes included every week."
+      : 'Los reels de muestra de hoy ya se completaron 💛 Tu semana quedó guardada — y con tu cuenta, el reel de tu plan viene incluido cada semana.' });
+  }
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const localTrialFile = (img) => {
+      if (!img || /^data:/.test(String(img))) return null;
+      const f = path.join(MEDIA_DIR, path.basename(String(img)));
+      try { return fs.existsSync(f) ? f : null; } catch (e) { return null; }
+    };
+    const imgPosts = payload.posts.filter(p => p && p.type !== 'video' && p.image);
+    const photos = imgPosts.map(p => localTrialFile(p.image)).filter(Boolean);
+    const { pickStockPhoto, stockRubroFor } = require('./stock');
+    let guard = 0;
+    while (photos.length < 3 && payload.category && guard++ < 4) {
+      const sp = pickStockPhoto(payload.category, igKey + '-sample-' + photos.length);
+      if (!sp || photos.includes(sp)) break;
+      photos.push(sp);
+    }
+    if (photos.length < 2) {
+      return res.json({ ok: true, state: 'nomaterial', message: lang === 'en'
+        ? 'I still need a couple of photos of your business to cut your reel 🎬 With your account I use your real material.'
+        : 'Todavía me faltan un par de fotos de tu negocio para cortar tu reel 🎬 Con tu cuenta uso tu material real.' });
+    }
+    const { buildReelPro, moodForCategory } = require('./reel-engine');
+    const post0 = imgPosts[0] || payload.posts[0] || {};
+    const mood = moodForCategory(payload.category, stockRubroFor(payload.category));
+    let built = null;
+    let scripted = false;
+    if (process.env.POSTY_REEL_SCRIPT !== '0') {
+      try {
+        const { buildReelScript } = require('./reel-script');
+        const { planKineticCaptions, validateCaptionPlan } = require('./kinetic-captions');
+        const script = await buildReelScript({
+          digest: payload.digest || {},
+          post: { caption: post0.caption || '', sales_intent: post0.sales_intent || post0.salesIntent, intent: post0.intent },
+          durationSec: 15,
+          intent: post0.sales_intent || post0.salesIntent || undefined,
+        });
+        if (script && !script.degraded && script.source === 'ai') {
+          const captionPlan = planKineticCaptions(script);
+          if (validateCaptionPlan(captionPlan).ok) {
+            built = await buildReelPro({
+              mediaDir: MEDIA_DIR, photos: photos.slice(0, 5), videos: [],
+              script, captionPlan, template: script.intent,
+              hook: script.hook, mid: `${script.problem} ${script.solution}`.trim(), cta: script.cta,
+              handle: '@' + igKey, brandHex: payload.accent || '', mood,
+              rubro: payload.category || undefined, keywords: [],
+            });
+            scripted = true;
+          }
+        }
+      } catch (e) { console.error('[trial sample-reel] el guion MOTION degradó al render estándar:', e.message); }
+    }
+    if (!built) {
+      built = await buildReelPro({
+        mediaDir: MEDIA_DIR, photos: photos.slice(0, 5), videos: [],
+        hook: String((post0.caption || '').split('\n')[0] || '').slice(0, 90),
+        mid: '', cta: lang === 'en' ? 'Follow us!' : '¡Seguinos!',
+        handle: '@' + igKey, brandHex: payload.accent || '', mood,
+      });
+    }
+    const video = built && (built.url || (built.file ? '/media/' + path.basename(built.file) : ''));
+    if (!video) throw new Error('el motor no devolvió video');
+    try {
+      db.prepare('INSERT INTO trial_sample_reels (ig, video, created_at) VALUES (?, ?, ?) ON CONFLICT(ig) DO UPDATE SET video=excluded.video, created_at=excluded.created_at')
+        .run(igKey, video, Date.now());
+    } catch (e) {}
+    // El gasto del guión entra al mismo contador que gobierna la compuerta
+    // (estimación de tokens del llamado, feature demo-ai%).
+    try { costs.logApiCost({ feature: 'demo-ai-sample-reel', model: 'gpt-4o-mini', inTokens: scripted ? 1400 : 0, outTokens: scripted ? 260 : 0 }); } catch (e) {}
+    res.json({ ok: true, video, scripted });
+  } catch (e) {
+    console.error('[trial sample-reel]', e.message);
+    res.json({ ok: true, state: 'error', message: lang === 'en'
+      ? 'The sample reel could not be cut right now 😅 Your week is saved either way.'
+      : 'El reel de muestra no se pudo cortar ahora 😅 Tu semana quedó guardada igual.' });
+  }
+});
+
 app.post('/api/trial/logo-colors', express.json({ limit: '6mb' }), async (req, res) => {
   const ip = demo.clientIp(req);
   if (!trialLogoAllowed(ip)) return res.status(429).json({ error: 'Demasiados intentos por hoy' });
@@ -16565,7 +17032,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261022-v322';
+const BUILD_ID = '20261022-v323';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

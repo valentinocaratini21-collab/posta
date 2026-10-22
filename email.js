@@ -11,7 +11,7 @@ function emailConfigured() {
   return !!process.env.RESEND_API_KEY;
 }
 
-async function sendEmail({ to, subject, html, attachments, from: fromOverride, replyTo }) {
+async function sendEmail({ to, subject, html, text, attachments, from: fromOverride, replyTo }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
@@ -19,6 +19,9 @@ async function sendEmail({ to, subject, html, attachments, from: fromOverride, r
   }
   const from = fromOverride || process.env.EMAIL_FROM || 'Posty <hola@postyhacetodo.com>';
   const payload = { from, to: [to], subject, html };
+  // (v323) Versión texto plano digna cuando el llamador la trae: Resend la
+  // manda como alternativa multipart (mejor entrega y lectura sin HTML).
+  if (text) payload.text = text;
   // Reply-to opcional (ej.: el newsletter de ideas sale de ideas@ pero se
   // responde a hola@). Resend lo acepta como reply_to.
   if (replyTo) payload.reply_to = [replyTo];

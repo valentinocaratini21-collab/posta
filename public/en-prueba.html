@@ -579,12 +579,57 @@ html{scroll-behavior:smooth}
 .qcard{border-radius:24px;box-shadow:0 24px 60px rgba(10,30,51,.10)}
 .tstep{border-radius:16px}
 .nav{box-shadow:0 2px 14px rgba(10,30,51,.04)}
+/* (v323) Persistent Log in button in the /prueba nav (piece 15): same
+   visual pattern as the home one; session-aware via JS. */
+.nav-entrar{margin-left:auto;font-weight:800;font-size:15px;color:var(--cel);border:2px solid var(--cel);border-radius:999px;padding:8px 22px;text-decoration:none;background:#fff;white-space:nowrap}
+.nav-entrar:hover{background:var(--cel);color:#fff}
+/* (v323) Collapsed optional detail on the start cards (piece 1) */
+.opt-detail{margin:12px 0 4px;border:1.5px dashed #BFE3F5;border-radius:14px;padding:12px 14px;background:#F7FCFE;text-align:left}
+.opt-detail summary{cursor:pointer;font-weight:700;font-size:14.5px;color:var(--cel);list-style:none}
+.opt-detail summary::-webkit-details-marker{display:none}
+.opt-detail textarea{width:100%;font-size:15px;padding:10px 12px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33;margin-top:10px}
+/* (v323) The 90-day lock card (piece 8) */
+.lock-card{display:none;background:#EAF6FD;border:1.5px solid #2793C8;border-radius:16px;padding:18px;margin-top:14px;text-align:left}
+.lock-card h3{margin:0 0 6px;font-size:19px;color:#0A1E33}
+.lock-card p{margin:0 0 6px;font-size:15px;line-height:1.55;color:#33475C}
+.lock-card .lock-sub{font-size:13.5px;color:#47617A}
+/* (v323) Your best post vs ours (piece 12) */
+.vs-grid{display:flex;gap:14px;flex-wrap:wrap}
+.vs-card{flex:1 1 240px;background:#fff;border:1.5px solid #E2EDF5;border-radius:16px;overflow:hidden}
+.vs-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
+.vs-card .vs-tag{padding:10px 14px 2px;font-weight:800;font-size:14px;color:#0A1E33}
+.vs-card .vs-cap{padding:2px 14px 12px;font-size:13.5px;color:#47617A;line-height:1.5}
+/* (v323) Price at the peak, well told (piece 17): sober card, no pressure */
+.price-card{margin:20px auto 4px;max-width:440px;background:#fff;border:1.5px solid #E2EDF5;border-radius:16px;padding:18px;text-align:center}
+.price-card .pc-per{font-size:26px;font-weight:800;color:#0A1E33}
+.price-card .pc-per small{font-size:15px;font-weight:600;color:#47617A}
+.price-card .pc-anchor{font-size:14px;color:#47617A;margin:6px 0 0;line-height:1.5}
+.price-card .pc-trust{font-size:13.5px;color:#47617A;margin:12px 0 0;line-height:1.7;border-top:1px solid #E2EDF5;padding-top:12px}
+/* (v323 · piece 20) Founder module: light card, photo shown ENTIRE in
+   its natural aspect (never cropped), as the protagonist. */
+.founder-card{background:#F7FCFE;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:24px auto 4px;max-width:560px;text-align:left}
+.founder-card img{width:100%;max-width:480px;height:auto;display:block;margin:0 auto;border-radius:14px}
+.founder-card .fc-eye{margin:18px 0 4px;font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--cel)}
+.founder-card h3{margin:0 0 8px;font-size:24px;color:#0A1E33}
+.founder-card .fc-body{margin:0;font-size:16px;line-height:1.6;color:#33475C}
+/* (v323 · piece 20, reaffirmed rule) Trial posts render ENTIRE in their
+   natural aspect inside the phone: no fit-crop cutting headlines. */
+.phone-feed .day .db{aspect-ratio:auto;background:transparent}
+.phone-feed .day .db img,.phone-feed .day .db video{height:auto;object-fit:contain}
+.phone-feed .day.feat .db{aspect-ratio:auto}
+/* (v323 · piece 21) Benefits block: one line per benefit, clean card. */
+.benefits-card{background:#fff;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:16px auto 4px;max-width:560px;text-align:left}
+.benefits-card h3{margin:0 0 14px;font-size:20px;color:#0A1E33}
+.benefit{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid #F0F6FB;font-size:15px;line-height:1.5;color:#33475C}
+.benefit:last-child{border-bottom:none}
+.benefit .b-ic{flex:0 0 auto}
+.benefit .b-tag{flex:0 0 auto;margin-left:auto;font-size:11.5px;font-weight:700;color:#7A93A8;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;padding-left:10px}
 </style>
 </head>
 <body>
 <div class="nav"><div class="wrap">
   <a class="logo-posty" href="/en"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-  <span class="pill">TRY IT FREE</span>
+  <a class="nav-entrar" id="btnEntrar" href="/#/login">Log in</a>
 </div></div>
 <div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
 
@@ -623,6 +668,9 @@ html{scroll-behavior:smooth}
           <input type="file" id="optPhoto" accept="image/jpeg,image/png,image/webp" style="font-size:14px;max-width:100%">
           <p class="tiny" id="optPhotoName" style="margin-top:6px;min-height:18px"></p>
         </div>
+        <p style="text-align:center;margin-top:12px"><button type="button" class="linklike" id="btnShy">Don't want to share your @? See an example first 👀</button></p>
+        <p style="text-align:center;margin-top:6px"><button type="button" class="linklike" id="btnNoIg">Don't have Instagram yet? Start anyway →</button></p>
+        <input type="text" id="hp_empresa" name="hp_empresa" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">
       </div>
       <!-- Prefill OK: Posty encontró tu negocio -->
       <div id="prefillCard" style="display:none">
@@ -635,6 +683,12 @@ html{scroll-behavior:smooth}
           </div>
         </div>
         <p class="tiny" style="margin:10px 0 14px">Fix it if needed — I use it to build your week.</p>
+        <details class="opt-detail">
+          <summary>Want to tell us anything else? It's optional 💬</summary>
+          <textarea id="pf_desc" rows="4" maxlength="600" placeholder="A good example: We're a specialty coffee shop in Austin. Our thing is weekend brunch and single-origin coffee. We want more weekday bookings."></textarea>
+          <p class="tiny" id="pf_descTip" style="margin:6px 0 0;min-height:16px"></p>
+          <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="pf_descCount">0</span>/600</p>
+        </details>
         <button class="btn btn-primary btn-block" id="btnPrefillGo">Build my week 👀</button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="pfBack">← Not my business / use another @</button></p>
       </div>
@@ -651,6 +705,12 @@ html{scroll-behavior:smooth}
         <div class="field" style="margin-top:12px;margin-bottom:0"><label>Description (from your website, editable)</label><textarea id="wf_desc" rows="3" maxlength="400"></textarea></div>
         <div id="wfMeta" style="margin-top:10px"></div>
         <p class="tiny" style="margin:10px 0 14px">Fix it if needed — I use it to build your week.</p>
+        <details class="opt-detail">
+          <summary>Want to tell us anything else? It's optional 💬</summary>
+          <textarea id="wf_extra" rows="4" maxlength="600" placeholder="A good example: Beyond what the website says, our thing is weekend brunch and we want more weekday bookings."></textarea>
+          <p class="tiny" id="wf_extraTip" style="margin:6px 0 0;min-height:16px"></p>
+          <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="wf_extraCount">0</span>/600</p>
+        </details>
         <button class="btn btn-primary btn-block" id="btnWebTrialGo">Build my week 👀</button>
         <p style="text-align:center;margin-top:10px"><button type="button" class="linklike" id="wfBack">← Back</button></p>
       </div>
@@ -666,9 +726,15 @@ html{scroll-behavior:smooth}
       </div>
       <!-- Fallback: formulario detallado actual (si el prefill falla) -->
       <div id="detailForm" style="display:none">
-        <p class="tiny" style="margin:0 0 14px">We couldn't pull your Instagram profile — fill it in here 👇</p>
+        <p class="tiny" id="dfIntro" style="margin:0 0 14px">We couldn't pull your Instagram profile — fill it in here 👇</p>
         <div class="field"><label>Your business name *</label><input type="text" id="f_biz" placeholder="Ex: Café Martínez" maxlength="60" autocomplete="off"></div>
         <div class="field"><label>Industry *</label><select id="f_cat"></select></div>
+        <details class="opt-detail">
+          <summary>Want to tell us anything else? It's optional 💬</summary>
+          <textarea id="f_desc" rows="4" maxlength="600" placeholder="A good example: We sell handmade empanadas in the neighborhood since 2015. Our customers are locals and we want more orders through Instagram."></textarea>
+          <p class="tiny" id="f_descTip" style="margin:6px 0 0;min-height:16px"></p>
+          <p class="tiny" style="margin:2px 0 0;text-align:right"><span id="f_descCount">0</span>/600</p>
+        </details>
         <button class="btn btn-primary btn-block" id="btnGo2">See my week 👀</button>
         <p class="tiny" style="margin-top:10px">Your week, ready in ~1 minute.</p>
         <p class="tiny">No sign-up · No card · Your week stays saved for 3 days</p>
@@ -771,6 +837,45 @@ html{scroll-behavior:smooth}
   </div>
 </div>
 
+<!-- (v323 · piece 16) VIEW: browsable example for the shy visitor — a
+     wall profile in sample mode: its week, its whys and the chat in
+     sample mode, with no AI spend and no sign-up. -->
+<div id="v-example" style="display:none">
+  <div class="wrap">
+    <p style="margin:6px 0 14px"><button type="button" class="linklike" id="exBack">← Back</button></p>
+    <div class="res-hero">
+      <img src="ai-avatar.png" alt="Posty" style="width:46px;height:46px;border-radius:50%;box-shadow:0 4px 14px rgba(39,147,200,.4)">
+      <h2>This is how <span class="hl">Patitas'</span> week looks 🐾</h2>
+      <p class="sub">A neighborhood vet and pet shop. This is a <b>sample</b>: yours comes from your real business, with your exact product.</p>
+    </div>
+    <div class="sec">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-head">
+          <img src="gt-patitas-1.jpg" alt="Patitas profile photo" onerror="this.onerror=null;this.src='ai-avatar.png'">
+          <div><b>@patitas.petshop</b><small>Its week · 5 posts + 1 reel</small></div>
+        </div>
+        <div class="phone-feed" id="exWeek"></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Want to change something? 💬</h3>
+      <p class="lede">In the real trial, the chat edits your posts instantly. Try it here in sample mode:</p>
+      <div class="chat">
+        <div class="chat-msgs" id="exChatMsgs"></div>
+        <div class="chat-input">
+          <input type="text" id="exChatIn" placeholder="Ex: Wednesday's, but funnier" maxlength="300" autocomplete="off">
+          <button id="exChatSend" title="Send">➤</button>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:22px">
+        <button class="btn btn-primary" id="exMine" style="font-size:18px;padding:16px 40px">I want mine 👀</button>
+        <p class="tiny">Free · No sign-up · Built from your @ or your website</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- VISTA: 3 preguntas rápidas antes de generar (para que los posteos salgan a medida) -->
 <div id="v-questions" style="display:none">
   <div class="wrap">
@@ -815,6 +920,15 @@ html{scroll-behavior:smooth}
       <h2 id="rTitle">Your week is ready, <span class="hl" id="rBiz">your business</span>! 🎉</h2>
       <p class="sub" id="rSub"></p>
       <div id="rCached" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px"></div>
+      <div class="lock-card" id="lockCard">
+        <h3 id="lockTitle">Your trial was already used 💛</h3>
+        <p id="lockMsg"></p>
+        <p class="lock-sub" id="lockSub"></p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button class="btn btn-primary btn-sm" id="lockCta">Create my account</button>
+          <a class="btn btn-ghost btn-sm" href="/#/login" style="text-decoration:none">I already have an account</a>
+        </div>
+      </div>
       <p class="tiny" id="rTime" style="display:none;margin-top:8px"></p>
       <div id="rStreamBar" style="display:none">
         <div class="pbar"><i id="rStreamFill" style="width:0%"></i></div>
@@ -826,6 +940,9 @@ html{scroll-behavior:smooth}
       </div>
     </div>
 
+    <!-- (v323 · piece 19) Your competition in one line: only with data actually read -->
+    <div id="compLine" style="display:none;background:#FFF6E0;border:1px solid #FEC14D;border-radius:14px;padding:14px 18px;margin-bottom:14px;font-size:15.5px;line-height:1.55;color:#0A1E33"></div>
+
     <!-- Proyección de perfil (v184): se llena por JS si el perfil real llegó -->
     <div id="projBox" style="display:none"></div>
 
@@ -835,9 +952,18 @@ html{scroll-behavior:smooth}
     <!-- Análisis completo (2026-10-19): probada de mercado o plan de nacimiento -->
     <div id="analysisBox" style="display:none"></div>
 
+    <!-- (v323 · piece 12) Your best post vs ours: a craft frame, never a roast -->
+    <div id="versusBox" style="display:none" class="sec">
+      <h3>Your product, with craft, every day 💛</h3>
+      <p class="lede">This is already yours. What Posty does is make it come out this good, consistently, all week long.</p>
+      <div class="vs-grid" id="versusGrid"></div>
+    </div>
+
     <div class="sec">
       <h3>This is how it looks in your feed 📱</h3>
       <p class="lede">Your 5 posts + 1 reel, already created: design + caption + hashtags. Tap each one to see it in full.</p>
+      <p class="lede" id="weekStartLine" style="display:none;font-weight:700;color:#0A1E33"></p>
+      <p class="lede" id="provLine" style="display:none"></p>
       <div class="phone">
         <div class="phone-notch"></div>
         <div class="phone-head">
@@ -846,13 +972,62 @@ html{scroll-behavior:smooth}
         </div>
         <div class="phone-feed" id="rWeek"></div>
       </div>
+      <!-- (v323 · piece 20) Founder module: below the posts, before the
+           payment/CTA block. Fixed copy approved by Valentino. -->
+      <div class="founder-card" id="founderCard" style="display:none">
+        <img src="valentino-posty-fundador.jpg" alt="Valentino, founder of Posty, back to back with Posty">
+        <p class="fc-eye">FOUNDER OF POSTY</p>
+        <h3>I'm Valentino, I created Posty.</h3>
+        <p class="fc-body">We built this week of posts personalized for your Instagram, because helping businesses like yours is what we do best. We want to be your community managers — and if anything's not right, we'll adjust it together.</p>
+      </div>
+      <!-- (v323 · piece 21) Account benefits: product truths only; what
+           belongs to a higher plan carries its plan tag. -->
+      <div class="benefits-card" id="benefitsCard" style="display:none">
+        <h3>All of this comes with your account 👇</h3>
+        <div class="benefit"><span class="b-ic">📅</span><span>Automatic posts: your week is created and published on its own — you do nothing.</span></div>
+        <div class="benefit"><span class="b-ic">🔔</span><span>A heads-up 30 minutes before every post goes out.</span></div>
+        <div class="benefit"><span class="b-ic">🎯</span><span>7 posts and 1 reel every week, built to sell: each with its own intent (bookings, inquiries, sales).</span></div>
+        <div class="benefit"><span class="b-ic">💬</span><span>Chat with Posty: ask for changes in plain words and it's adjusted on the spot.</span></div>
+        <div class="benefit"><span class="b-ic">🔍</span><span>Your account and your competition, analyzed quietly in the background: every week is born better than the last.</span></div>
+        <div class="benefit"><span class="b-ic">💌</span><span>The Sunday Letter: your week in review and what's coming, without you asking.</span></div>
+        <div class="benefit"><span class="b-ic">📷</span><span>Photos only when you want: no material? Posty generates everything.</span></div>
+        <div class="benefit"><span class="b-ic">🛍️</span><span>Your store connected (Tiendanube): real products and stock in your posts.</span></div>
+        <div class="benefit"><span class="b-ic">📣</span><span>Boosting without touching Ads Manager: promote a post from right here.</span><span class="b-tag">Pro &amp; Total</span></div>
+        <div class="benefit"><span class="b-ic">✉️</span><span>Replies to comments and messages, with your approval.</span><span class="b-tag">Total</span></div>
+        <div class="benefit"><span class="b-ic">🚪</span><span>No lock-in: cancel anytime, from your panel.</span></div>
+      </div>
       <div id="weekDone" style="display:none">
         <div style="text-align:center;margin-top:22px">
           <button class="btn btn-primary" id="btnSave" style="font-size:19px;padding:18px 46px;max-width:100%">Save your week 👇</button>
-          <p class="tiny">Try it free · No card · Your week stays saved for 72 hours 🙂</p>
+          <p class="tiny">No card to try · Cancel anytime</p>
         </div>
         <div class="share-row"><button class="share-btn" id="btnShare">📤 Share my week</button></div>
         <p style="text-align:center;margin:4px 0 0"><a href="#" id="chatLink" style="color:var(--cel);font-weight:800;text-decoration:none;font-size:15px">Something off? Ask in the chat 👇</a></p>
+      <!-- (v323 · piece 17) Price at the peak, well told: the hero plan per
+           day, from the live prices the server serves — never hand-typed. -->
+      <div class="price-card" id="priceCard" style="display:none">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#47617A">PRO PLAN · THE FAVORITE</p>
+        <p class="pc-per" id="pricePerDay"></p>
+        <p class="pc-anchor" id="priceAnchor"></p>
+        <p class="pc-trust">✓ No lock-in<br>✓ Cancel anytime from your panel<br>✓ Your payment receipt arrives by email</p>
+      </div>
+      <!-- (v323 · piece 7) Sample reel behind a gate: only on request -->
+      <div id="reelRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
+        <button class="btn btn-ghost" id="reelGo" style="padding:13px 26px;font-size:15.5px;border-radius:999px">🎬 Want to see what your reel would look like?</button>
+        <p class="tiny" style="margin:8px 0 0">A sample reel with your material, scripted for your business. It takes a little while.</p>
+        <div id="reelBox" style="margin-top:10px"></div>
+      </div>
+      <!-- (v323 · piece 5) Exit with a gift: your week by email -->
+      <div id="giftRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
+        <p style="font-size:15px;color:#0A1E33;margin:0 0 4px"><b>📩 Want me to email you your posts?</b></p>
+        <p style="font-size:13.5px;color:#47617A;margin:0 0 10px">Your full week, to look at calmly and share. Plus 3 fresh ideas for your industry, every Monday.</p>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="giftEmail" placeholder="your@email.com" autocomplete="email" inputmode="email"
+            style="flex:1;min-width:0;font-size:16px;padding:12px 14px;border:1.5px solid #D7E6F2;border-radius:12px;background:#fff;color:#0A1E33">
+          <button id="giftGo" class="btn btn-primary" style="white-space:nowrap;padding:12px 20px">Send them</button>
+        </div>
+        <p class="tiny" id="giftMsg" style="margin:8px 0 0;min-height:18px"></p>
+      </div>
       <div class="photocard">
         <h4>📷 With YOUR photos, it comes out even better</h4>
         <p>I built these posts with catalog photos. When you share photos and videos of your business, your posts sell much more — and the more you share, the better they come out. No photos? No problem: I create them.</p>
@@ -920,6 +1095,8 @@ html{scroll-behavior:smooth}
         <div class="chat-chips" id="chatChips">
           <button data-m="Make the captions bolder">🔥 Bolder</button>
           <button data-m="Make the captions funnier">😂 Funnier</button>
+          <button data-m="Make the captions more elegant">✨ More elegant</button>
+          <button data-m="Add a promo to the posts">🏷️ With a promo</button>
           <button data-m="Make the captions more professional">💼 More professional</button>
           <button data-m="Shorten the captions, make them more direct">✂️ More direct</button>
           <button data-m="Add a call to action to all the posts">📣 With a call to action</button>
@@ -1126,6 +1303,24 @@ function show(id) {
   $('#f_cat').innerHTML = catOpts;
   $('#pf_cat').innerHTML = catOpts;
   $('#wf_cat').innerHTML = catOpts;
+  // (v323) Wiring for the /prueba batch (pieces 1, 11, 15 and 16)
+  wireEntrarBtn();
+  wireOptDetail('pf_desc', 'pf_descCount', 'pf_descTip');
+  wireOptDetail('wf_extra', 'wf_extraCount', 'wf_extraTip');
+  wireOptDetail('f_desc', 'f_descCount', 'f_descTip');
+  const bNoIg = $('#btnNoIg');
+  if (bNoIg) bNoIg.onclick = () => {
+    trk('prueba_step', { step: 'sin_instagram' });
+    if (($('#f_web').value || '').trim()) { onWebSubmit(); return; }
+    showDetailForm('noig');
+  };
+  const bShy = $('#btnShy');
+  if (bShy) bShy.onclick = () => { trk('prueba_step', { step: 'ejemplo_primero' }); openExample(); };
+  const exB = $('#exBack'); if (exB) exB.onclick = closeExample;
+  const exM = $('#exMine'); if (exM) exM.onclick = () => { closeExample(); try { $('#f_ig').focus(); } catch (e) {} window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const exS = $('#exChatSend'); if (exS) exS.onclick = exChatReply;
+  const exI = $('#exChatIn'); if (exI) exI.addEventListener('keydown', (e) => { if (e.key === 'Enter') exChatReply(); });
+  const lkC = $('#lockCta'); if (lkC) lkC.onclick = () => openRegTrial();
   // Prueba en 1 campo: el primer paso es solo el @
   $('#btnGo').onclick = onIgSubmit;
   $('#btnWebGo').onclick = onWebSubmit;
@@ -1205,6 +1400,14 @@ function show(id) {
     } catch (e) {}
   }
   show('v-onboarding');
+  // (v323 · piece 9) Attack deep link (?ig= from our DMs and emails,
+  // which already know the @): reading and generation start on their
+  // own, nothing to type. The industry question, if in doubt, appears
+  // INLINE (startTrialPrefill honors it) and the 90-day lock answers
+  // server-side. trk captures the src (v322).
+  if (DEEP_IG && !TEST_KEY_QS) {
+    try { onIgSubmit().then(() => { if (PREFILL) startTrialPrefill(); }); } catch (e) {}
+  }
   // ¿Llegó desde la landing con el link de su web? (?web=...) La leemos y
   // le mostramos la tarjeta con todo precargado y editable.
   if (DEEP_WEB) {
@@ -1292,9 +1495,17 @@ function showPrefillCard(j) {
   trk('prueba_step', { step: 'prefill_ok' });
   setTimeout(() => { try { $('#pf_name').focus({ preventScroll: true }); } catch (e) {} }, 300);
 }
-function showDetailForm() {
+const DF_INTRO_DEFAULT = "We couldn't pull your Instagram profile — fill it in here 👇";
+function showDetailForm(mode) {
   PREFILL = null; GEN_PREFILL = false; GEN_WEB = false;
   PENDING_RUBRO = null; RUBRO_ANS = null;
+  // (v323 · piece 11) BIRTH entry: with no Instagram, the week is born
+  // from the industry (and the website if they bring one) — honest copy,
+  // never promising a read of a profile that doesn't exist.
+  const di = $('#dfIntro');
+  if (di) di.textContent = mode === 'noig'
+    ? "You can start without Instagram too 💪 Tell me about your business and I'll build your opening storefront: when you open your account, your first week is already ready."
+    : DF_INTRO_DEFAULT;
   $('#stepIg').style.display = 'none';
   $('#prefillCard').style.display = 'none';
   const wc = $('#webCard'); if (wc) wc.style.display = 'none';
@@ -1357,7 +1568,9 @@ function startTrialWeb() {
   GEN_PREFILL = false;
   GEN_WEB = true;
   TRIAL_BIZ = name;
-  TRIAL_DESC = $('#wf_desc').value.trim();
+  // (v323 · piece 1) Their website description + the optional detail
+  // they wrote: the foundation is born from both, never blocking.
+  TRIAL_DESC = [$('#wf_desc').value.trim(), ($('#wf_extra').value || '').trim()].filter(Boolean).join(' ');
   for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
   trk('prueba_step', { step: 'web_go' });
   runGeneration();
@@ -1374,13 +1587,26 @@ function startTrialFallback() {
   GEN_PREFILL = false;
   GEN_WEB = false;
   TRIAL_BIZ = biz;
-  TRIAL_DESC = '';
+  // (v323 · piece 1) The optional detail feeds the foundation and, when
+  // rich (100+), showQuestions already skips product/differentiator.
+  TRIAL_DESC = ($('#f_desc').value || '').trim();
   trk('prueba_step', { step: 'formulario' });
   showQuestions();
 }
+// (v323 · piece 1) An empty name no longer blocks: if the prefill
+// brought no name, it is born from the @ itself (clean, name-shaped).
+function bizNameFromIg(ig) {
+  const parts = String(ig || '').split(/[._]+/).map((s) => s.trim()).filter((s) => s && !/^\d+$/.test(s));
+  if (!parts.length) return '';
+  return parts.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ').slice(0, 60);
+}
 // Prefill OK: directo a generar, sin preguntas (el brief vive después del wow).
 function startTrialPrefill() {
-  const name = $('#pf_name').value.trim();
+  let name = $('#pf_name').value.trim();
+  if (!name) {
+    const derived = bizNameFromIg(cleanIg($('#f_ig').value));
+    if (derived) { name = derived; $('#pf_name').value = derived; }
+  }
   if (!name) { toast('Tell us your business name 🙂'); try { $('#pf_name').focus(); } catch (e) {} return; }
   if (!$('#pf_cat').value) { toast('Pick your industry so the posts come out tailored 👇'); try { $('#pf_cat').focus(); } catch (e) {} return; }
   // (v235) LA PREGUNTA DE RUBRO VA ANTES DE GENERAR (ver startTrialWeb).
@@ -1388,7 +1614,7 @@ function startTrialPrefill() {
   GEN_PREFILL = true;
   GEN_WEB = false;
   TRIAL_BIZ = name;
-  TRIAL_DESC = '';
+  TRIAL_DESC = ($('#pf_desc').value || '').trim();
   for (const k of Object.keys(TRIAL_ANS)) delete TRIAL_ANS[k];
   trk('prueba_step', { step: 'prefill_go' });
   runGeneration();
@@ -1567,7 +1793,11 @@ function buildGenFormData() {
   fd.append('country', COUNTRY);
   fd.append('tone', TONE);
   fd.append('lang', LANG);
-  fd.append('goal', '');
+  // (v323 · piece 1) The optional detail travels as the free-text goal:
+  // if the visitor wrote nothing, the foundation is born from the IG/web.
+  fd.append('goal', TRIAL_DESC || '');
+  // (v323 · piece 13) Silent anti-bot honeypot (invisible to humans).
+  fd.append('hp_empresa', ($('#hp_empresa') || {}).value || '');
   fd.append('competitors', '');
   // Respuestas de las 3 preguntas previas (pueden venir vacías si las omitió)
   fd.append('goal_key', TRIAL_ANS.goal_key || '');
@@ -1591,6 +1821,9 @@ async function runGeneration() {
     const t0 = GEN_T0;
     const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
     const data = await res.json();
+    // (v323 · piece 8) Lock with no snapshot: the server answers 409
+    // with the kind message and the exact date — not an error, the card.
+    if (data && data.trial_locked) { trackerStop(); showLockCard(data); return; }
     if (!res.ok) throw new Error(data.error || 'We could not build your trial');
     // Que el tracker se vea completo aunque el backend haya sido rápido
     const wait = Math.max(0, 9000 - (Date.now() - t0));
@@ -1611,7 +1844,9 @@ async function runGeneration() {
 // Si el stream no existe o falla al conectar → false → fallback clásico.
 let STREAM_DONE = false;
 let STREAM_ERRORED = false;
+let STREAM_LOCKED = false;
 let STREAM_N = 0;
+let FIRST_POST_SENT = false;
 async function generateWithStream(fd) {
   let res;
   try {
@@ -1619,13 +1854,49 @@ async function generateWithStream(fd) {
   } catch (e) { return false; }
   const ct = (res.headers.get('content-type') || '').toLowerCase();
   if (!res.ok || !ct.includes('text/event-stream') || !res.body || typeof res.body.getReader !== 'function') return false;
-  STREAM_DONE = false; STREAM_ERRORED = false; STREAM_N = 0;
+  STREAM_DONE = false; STREAM_ERRORED = false; STREAM_LOCKED = false; STREAM_N = 0; FIRST_POST_SENT = false;
   enterStreamingMode();
   try {
-    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, done: onStreamDone, error: onStreamError });
+    await readSSE(res.body, { status: onStreamStatus, post: onStreamPost, profile: onStreamProfile, audit: onStreamAudit, done: onStreamDone, error: onStreamError, locked: onStreamLocked });
   } catch (e) { /* cae al chequeo de abajo */ }
-  if (!STREAM_DONE && !STREAM_ERRORED) onStreamError({ error: 'The connection dropped.' });
+  if (!STREAM_DONE && !STREAM_ERRORED && !STREAM_LOCKED) onStreamError({ error: 'The connection dropped.' });
   return true;
+}
+// (v323 · piece 8) The server says this business already used its trial
+// and no week could be recovered: kind card with the exact date.
+function onStreamLocked(d) {
+  STREAM_LOCKED = true;
+  trackerStop();
+  showLockCard(d || {});
+}
+function fmtLockDate(ts) {
+  try { return new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(ts)); }
+  catch (e) { return ''; }
+}
+function showLockCard(d) {
+  trackerStop();
+  show('v-results');
+  $('#rStreamBar').style.display = 'none';
+  $('#weekDone').style.display = 'none';
+  $('#rRest').style.display = 'none';
+  const sec = $('#rWeek') ? $('#rWeek').closest('.sec') : null;
+  if (sec) sec.style.display = 'none';
+  $('#rCached').style.display = 'none';
+  $('#rTitle').textContent = 'Your week was already built 💛';
+  $('#rSub').textContent = '';
+  const card = $('#lockCard');
+  $('#lockTitle').textContent = 'Your trial was already used 💛';
+  $('#lockMsg').textContent = d.message || "This business already used its free trial. If it's yours, create your account and Posty keeps building your week every week — no waiting.";
+  $('#lockSub').textContent = d.unlock_at ? ('Your next trial unlocks on ' + fmtLockDate(d.unlock_at) + '.') : '';
+  card.style.display = 'block';
+  trk('prueba_lock_view');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function resetLockUI() {
+  const card = $('#lockCard');
+  if (card) card.style.display = 'none';
+  const sec = $('#rWeek') ? $('#rWeek').closest('.sec') : null;
+  if (sec) sec.style.display = '';
 }
 // Parser SSE mínimo sobre ReadableStream: dispara handlers por cada event:.
 async function readSSE(body, handlers) {
@@ -1658,6 +1929,7 @@ async function readSSE(body, handlers) {
 }
 function enterStreamingMode() {
   trackerStop();
+  resetLockUI();
   // Proyección de perfil (v184): estado limpio; aparece solo si llega el
   // evento 'profile' del stream.
   PROJ = projFresh('live');
@@ -1703,7 +1975,10 @@ function onStreamPost(d) {
     : (p.image ? `<img src="${p.image}" alt="${esc(day)}" loading="lazy">` : `<div style="aspect-ratio:4/5;background:#E8EDF2"></div>`);
   const el = document.createElement('div');
   el.className = 'day' + (isV ? ' feat' : '');
-  el.innerHTML = `<div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(day)}</b><small>${esc(d.date || '')}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0] || '…')}</div>`;
+  // (v323 · piece 1) The batch's measured goal: time from start to
+  // first visible post (target <60 s on the happy path).
+  if (!FIRST_POST_SENT && GEN_T0) { FIRST_POST_SENT = true; trk('prueba_first_post', { ms: Date.now() - GEN_T0 }); }
+  el.innerHTML = `<div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(day)}</b><small>${esc(d.date || '')}${d.hour ? ' · ' + esc(d.hour) : ''}</small></div><div class="db">${media}</div><div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0] || '…')}</div>`;
   const feed = $('#rWeek');
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
@@ -2241,6 +2516,9 @@ function projFromTrial() {
 // Final común del clásico y del stream: guarda en idb y muestra resultados.
 function finishGeneration(data, genSecs) {
   trackerStop();
+  // (v323 · piece 1) Without streaming (classic fallback), the "first
+  // visible post" is the full render: measured the same way, with total.
+  if (!FIRST_POST_SENT && GEN_T0) { FIRST_POST_SENT = true; trk('prueba_first_post', { ms: Date.now() - GEN_T0, via: 'full' }); }
   // Tiempo real de generación: lo mostramos y nos sirve de medición
   if (genSecs) data.genSecs = genSecs;
   TRIAL = data;
@@ -2272,7 +2550,17 @@ function renderResults() {
   trk('prueba_complete', { cached: !!(t && t.cached) });
   const rb = $('#rBiz');
   if (rb) rb.textContent = t.business;
-  if (t.cached) {
+  resetLockUI();
+  if (t.trial_locked) {
+    // (v323 · piece 8) Back within the 90 days: their saved week,
+    // presented as what it is — without the cache banner on top.
+    $('#rTitle').textContent = 'Your week is still here 💛';
+    $('#rCached').style.display = 'none';
+    $('#lockTitle').textContent = 'This is the week you already built 💛';
+    $('#lockMsg').textContent = 'You generated it on ' + fmtLockDate(t.trial_generated_at) + '. Your next free trial unlocks on ' + fmtLockDate(t.trial_unlock_at) + ' — but with your account, Posty builds you a fresh week every week, no waiting.';
+    $('#lockSub').textContent = '';
+    $('#lockCard').style.display = 'block';
+  } else if (t.cached) {
     $('#rTitle').textContent = 'Your week was waiting for you! 🔥';
     const rc = $('#rCached');
     rc.style.display = 'block';
@@ -2337,6 +2625,18 @@ function renderResults() {
   initTrialChat();
   maybeShowLeadEmail();
   try { maybeShowIdeasHook(); } catch (e) {}
+  // (v323) The batch's results blocks: competition (19), versus (12),
+  // real dates (18), provenance + founder (20), benefits (21), price
+  // (17), gift (5) and sample reel (7).
+  try { renderCompLine(); } catch (e) {}
+  try { renderVersus(); } catch (e) {}
+  try { renderWeekStart(); } catch (e) {}
+  try { renderProvLine(); } catch (e) {}
+  try { const fc = $('#founderCard'); if (fc) fc.style.display = 'block'; } catch (e) {}
+  try { renderBenefits(); } catch (e) {}
+  try { renderGiftRow(); } catch (e) {}
+  try { renderReelRow(); } catch (e) {}
+  try { renderPriceCard(); } catch (e) {}
 }
 
 // Email del lead (abandono de trial): línea sutil bajo los resultados, SOLO
@@ -2458,7 +2758,7 @@ function renderWeek() {
     const media = isV
       ? `<video src="${p.video}" muted playsinline autoplay loop preload="metadata"></video><span class="vbadge">🎬 REEL</span>`
       : `<img src="${p.image}" alt="Posteo del ${esc(w.day)}" loading="lazy">`;
-    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${isV ? ' · ready to post' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Why:</b> ${esc(p.why)}</div>` : ''}</div>`;
+    return `<div class="day${isV ? ' feat' : ''}" data-i="${w.post}" tabindex="0" role="button" aria-label="Ver posteo del ${esc(w.day)}"><div class="dh"><b>${isV ? '🎬 Your reel — ' : ''}${esc(w.day)}</b><small>${esc(w.date)}${w.hour ? ' · ' + esc(w.hour) : ''}${isV ? ' · ready to post' : ''}</small></div><div class="db">${media}</div>${igrow}<div class="dcap">${esc(p.headline || (p.caption || '').split('\n')[0])}</div>${p.why ? `<div class="dwhy">💡 <b>Why:</b> ${esc(p.why)}</div>` : ''}</div>`;
   }).join('');
   $$('#rWeek .day').forEach((d) => {
     const open = () => openLb(parseInt(d.dataset.i, 10));
@@ -2501,10 +2801,14 @@ async function submitBrief() {
     const t0 = Date.now();
     const res = await fetch('/api/trial/generate' + TEST_KEY_QS, { method: 'POST', body: fd });
     const data = await res.json();
+    // (v323 · piece 8) Lock without snapshot: the 409 carries the kind
+    // message (the catch shows it in the brief, nothing regenerates).
+    // With a snapshot, the saved week comes back: the toast says so.
+    if (data && data.trial_locked && !data.posts) throw new Error(data.error || 'Your trial was already used 💛');
     if (!res.ok) throw new Error(data.error || 'We could not regenerate your week');
     trk('prueba_step', { step: 'brief_refine' });
     finishGeneration(data, Math.max(1, Math.round((Date.now() - t0) / 1000)));
-    toast('Your week, fine-tuned with your detail ✨');
+    toast(data.trial_locked ? 'This is your saved week 💛 — fresh weeks come with your account.' : 'Your week, fine-tuned with your detail ✨');
   } catch (e) {
     trackerStop();
     show('v-results');
@@ -2592,12 +2896,13 @@ function initTrialChat() {
     const inp = $('#chatIn');
     const v = inp.value.trim();
     if (!v || chatBusy) return;
+    window._chatVia = 'texto';
     sendTrialChat(v);
   };
   $('#chatSend').onclick = send;
   $('#chatIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
   document.querySelectorAll('#chatChips button[data-m]').forEach((b) => {
-    b.onclick = () => { if (!chatBusy) sendTrialChat(b.dataset.m); };
+    b.onclick = () => { if (!chatBusy) { window._chatVia = 'chip'; sendTrialChat(b.dataset.m); } };
   });
   $('#chipColors').onclick = () => {
     const p = $('#colorPanel');
@@ -2707,15 +3012,306 @@ async function trialRedesign(patch) {
   } finally { redesignBusy = false; }
 }
 
+/* ---------- (v323) /PRUEBA BATCH: helpers for pieces 1–21 ---------- */
+// (piece 15) Session-aware Log in button: with a session it reads "Go
+// to my account" and goes straight into the app (same mobile rule).
+async function wireEntrarBtn() {
+  const b = $('#btnEntrar');
+  if (!b) return;
+  try {
+    const me = await meCached();
+    if (me) {
+      b.textContent = 'Go to my account';
+      b.href = window.innerWidth <= 820 ? '/#/app/inicio' : '/#/app/schedule';
+    }
+  } catch (e) {}
+}
+// (piece 1) Optional detail: counter + tip when they write too little.
+function wireOptDetail(taId, countId, tipId) {
+  const ta = document.getElementById(taId);
+  if (!ta) return;
+  const upd = () => {
+    const n = ta.value.length;
+    const c = document.getElementById(countId); if (c) c.textContent = n;
+    const tip = document.getElementById(tipId);
+    if (tip) tip.textContent = n > 0 && n < 30 ? 'Tell me a little more and the posts come out more yours 🙂' : '';
+  };
+  ta.addEventListener('input', upd);
+  upd();
+}
+const fmtRate = (n) => (Math.round(Number(n) * 10) / 10).toString();
+// (piece 19) Your competition in one line — only when the payload
+// carries numbers actually READ (competition_line); no data, no line.
+function renderCompLine() {
+  const box = $('#compLine');
+  if (!box) return;
+  const cl = TRIAL && TRIAL.competition_line;
+  if (!cl || cl.own_rate == null || cl.peer_rate == null) { box.style.display = 'none'; return; }
+  box.innerHTML = Number(cl.own_rate) < Number(cl.peer_rate)
+    ? `📊 <b>@${esc(cl.peer_handle)}</b> posts ~${fmtRate(cl.peer_rate)}× a week; you're at ${fmtRate(cl.own_rate)}×. That gap is exactly what this week comes to close 💪`
+    : `📊 You've been posting ${fmtRate(cl.own_rate)}× a week, on par with your most active competitor (<b>@${esc(cl.peer_handle)}</b>, ~${fmtRate(cl.peer_rate)}×). This week keeps that rhythm without you lifting a finger 💪`;
+  box.style.display = 'block';
+}
+// (piece 12) Your best post vs ours: the best-performing post actually
+// READ (likes+comments from the profile); with no readable engagement,
+// the most recent one — and the label says so. A craft frame, never a roast.
+function renderVersus() {
+  const box = $('#versusBox');
+  if (!box) return;
+  const prof = TRIAL && TRIAL.profile;
+  const photos = (prof && prof.photos) || [];
+  const mine = TRIAL && (TRIAL.posts || []).find((p) => p && p.type !== 'video' && p.image);
+  if (!photos.length || !mine) { box.style.display = 'none'; return; }
+  const meta = prof.posts_meta || [];
+  let idx = -1, best = -1;
+  meta.forEach((m, i) => {
+    if (m && m.likes != null) { const s = m.likes + (m.comments || 0); if (s > best) { best = s; idx = i; } }
+  });
+  const hasEng = idx >= 0 && photos[idx];
+  if (!hasEng) idx = 0;
+  if (!photos[idx]) { box.style.display = 'none'; return; }
+  const theirTag = hasEng ? '❤️ Your most-loved post' : '📌 Your most recent post';
+  const theirCap = (prof.captions && prof.captions[idx] ? String(prof.captions[idx]).split('\n')[0] : '') || '';
+  $('#versusGrid').innerHTML =
+    `<div class="vs-card"><img src="${esc(photos[idx])}" alt="Your post" loading="lazy" onerror="this.closest('.vs-card').style.display='none'"><p class="vs-tag">${theirTag}</p><p class="vs-cap">${esc(theirCap.slice(0, 110))}</p></div>` +
+    `<div class="vs-card"><img src="${esc(mine.image)}" alt="The post Posty built for you" loading="lazy"><p class="vs-tag">✨ The one Posty built for you</p><p class="vs-cap">${esc((mine.headline || (mine.caption || '').split('\n')[0] || '').slice(0, 110))}${mine.why ? '<br>💡 ' + esc(mine.why) : ''}</p></div>`;
+  box.style.display = 'block';
+}
+// (piece 18) Week with real dates: the start, with the concrete day
+// and date the server computed for this week.
+function renderWeekStart() {
+  const el = $('#weekStartLine');
+  if (!el) return;
+  const w = TRIAL && TRIAL.week && TRIAL.week[0];
+  if (!w) { el.style.display = 'none'; return; }
+  el.textContent = '🗓️ Your week would start on ' + (w.day || '') + ', ' + (w.date || '') + (w.hour ? ' · first post at ' + w.hour : '');
+  el.style.display = 'block';
+}
+// (piece 20) Provenance line above the posts: it only claims what was
+// actually read (their Instagram if there was an @, their website if
+// web_info came back).
+function renderProvLine() {
+  const el = $('#provLine');
+  if (!el) return;
+  const t = TRIAL;
+  if (!t || (!t.ig && !t.business)) { el.style.display = 'none'; return; }
+  const reads = [];
+  if (t.ig) reads.push('your Instagram');
+  if (t.web_info) reads.push('your website');
+  const who = t.ig ? '@' + t.ig : t.business;
+  el.textContent = reads.length
+    ? (t.cached ? 'Built for ' : 'Built today for ') + who + ', reading ' + reads.join(' and ') + '.'
+    : (t.cached ? 'Built for ' : 'Built today for ') + who + ', from your industry.';
+  el.style.display = 'block';
+}
+// (piece 21) Benefits: the block's view is instrumented (it is THE
+// conversion piece; its effect gets measured in the funnel).
+let _benefitsSeen = false;
+function renderBenefits() {
+  const card = $('#benefitsCard');
+  if (!card) return;
+  card.style.display = 'block';
+  if (_benefitsSeen || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((es) => {
+    if (es.some((e) => e.isIntersecting)) { _benefitsSeen = true; trk('prueba_benefits_view'); io.disconnect(); }
+  }, { threshold: 0.35 });
+  io.observe(card);
+}
+// (piece 5) Exit with a gift: their week by email, on the unified
+// email machinery (capture with no double opt-in; the state tells the
+// truth: sent, or noted/queued if sending can't go out yet).
+let _giftWired = false;
+function renderGiftRow() {
+  const row = $('#giftRow');
+  if (!row) return;
+  if (!(TRIAL && TRIAL.ig)) { row.style.display = 'none'; return; }
+  row.style.display = 'block';
+  if (_giftWired) return;
+  _giftWired = true;
+  const em = $('#giftEmail'), go = $('#giftGo'), msg = $('#giftMsg');
+  const lead = $('#leadEmail');
+  if (lead && lead.value && em && !em.value) em.value = lead.value;
+  const send = async () => {
+    const v = em.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { msg.textContent = "Check the email, it doesn't look valid 😅"; return; }
+    go.disabled = true; msg.textContent = 'Sending…';
+    try {
+      const r = await fetch('/api/trial/gift-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ig: TRIAL.ig, email: v, lang: 'en' }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.error || "We couldn't note it down");
+      em.disabled = true; go.disabled = true;
+      msg.textContent = j.sent
+        ? "Sent! Check your inbox 📩 Your full week is in there, with Valentino's sign-off."
+        : 'Noted! 📩 Your week stays saved and it reaches that email.';
+      trk('prueba_gift_email', { sent: !!j.sent });
+    } catch (e) {
+      go.disabled = false;
+      msg.textContent = e.message || "We couldn't note it down. Try again.";
+    }
+  };
+  if (go) go.onclick = send;
+  if (em) em.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+}
+// (piece 7) Sample reel behind a gate: asked for with one tap and
+// generated only then (MOTION with a script, server-side); the daily
+// AI cap answers with its honest state, never promising times.
+let _reelWired = false;
+function renderReelRow() {
+  const row = $('#reelRow');
+  if (!row) return;
+  if (!(TRIAL && TRIAL.ig)) { row.style.display = 'none'; return; }
+  row.style.display = 'block';
+  if (_reelWired) return;
+  _reelWired = true;
+  const go = $('#reelGo'), box = $('#reelBox');
+  if (!go) return;
+  go.onclick = async () => {
+    go.disabled = true; go.textContent = '🎬 Cutting your reel…';
+    box.innerHTML = '<p class="tiny">This takes a little while: it is born from your material and the script of your business.</p>';
+    trk('prueba_sample_reel_click');
+    try {
+      const r = await fetch('/api/trial/sample-reel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ig: TRIAL.ig, lang: 'en' }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "The reel couldn't be cut");
+      if (j.video) {
+        box.innerHTML = `<video src="${esc(j.video)}" controls playsinline style="width:100%;max-width:300px;border-radius:14px"></video><p class="tiny" style="margin-top:8px">🎬 Your sample reel: born from your material and your foundation. On your plan, one like this comes out every week, on its own.</p>`;
+        trk('prueba_sample_reel_done', { scripted: !!j.scripted, cached: !!j.cached });
+      } else {
+        box.innerHTML = '<p class="tiny">' + esc(j.message || "Today's sample reel couldn't be cut 😅 Your week is saved either way.") + '</p>';
+        go.style.display = 'none';
+      }
+    } catch (e) {
+      box.innerHTML = '<p class="tiny">' + esc(e.message || "The reel couldn't be cut right now 😅") + '</p>';
+      go.disabled = false; go.textContent = '🎬 Want to see what your reel would look like?';
+    }
+  };
+}
+// (piece 17) Price at the peak, well told: the hero (Pro) PER DAY in
+// the visitor's currency, computed from the live prices the server
+// itself serves — never hand-typed on this page.
+async function renderPriceCard() {
+  const card = $('#priceCard');
+  if (!card) return;
+  try {
+    const r = await fetch('/api/billing/plans?country=' + encodeURIComponent(COUNTRY || 'US'));
+    const j = await r.json();
+    const pro = j && (j.plans || []).find((p) => p.id === 'pro');
+    if (!pro || !pro.price) return;
+    const per = pro.price / 30;
+    const fmt = (n, dec) => n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    let perTxt, anchor;
+    if (j.country === 'US') {
+      perTxt = 'USD ' + fmt(per, 2) + ' <small>per day</small>';
+      anchor = 'A freelance community manager charges USD 25–50 an hour: Pro costs less per day than a single hour of their work. (Pro plan: USD ' + fmt(pro.price, 0) + '/month)';
+    } else if (j.country === 'UY') {
+      perTxt = '$U ' + fmt(Math.round(per), 0) + ' <small>per day</small>';
+      anchor = 'Less than one hour of a community manager — and it works all week. (Pro plan: $U ' + fmt(pro.price, 0) + '/month)';
+    } else {
+      perTxt = '$' + fmt(Math.round(per), 0) + ' <small>per day</small>';
+      anchor = 'A community manager charges ~$300,000 a month: Pro costs you per day less than half of their daily cost. (Pro plan: $' + fmt(pro.price, 0) + '/month)';
+    }
+    $('#pricePerDay').innerHTML = perTxt;
+    $('#priceAnchor').textContent = anchor;
+    card.style.display = 'block';
+  } catch (e) { /* without server prices, the card does not show */ }
+}
+// (piece 6) Shareable card: their grid in one sober image (white
+// background, sky-blue brand), with the pieces ENTIRE (contain).
+async function buildShareCardFile(t) {
+  const imgs = (t.posts || []).filter((p) => p && p.type !== 'video' && p.image).slice(0, 4);
+  if (imgs.length < 2) return null;
+  const load = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  const loaded = [];
+  for (const p of imgs) { try { loaded.push(await load(p.image)); } catch (e) {} }
+  if (loaded.length < 2) return null;
+  const c = document.createElement('canvas');
+  c.width = 1080; c.height = 1350;
+  const x = c.getContext('2d');
+  x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, 1080, 1350);
+  x.fillStyle = '#2793C8'; x.fillRect(0, 0, 1080, 150);
+  x.fillStyle = '#FFFFFF'; x.font = '800 64px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+  x.fillText('posty.', 56, 98);
+  x.font = '700 40px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+  x.textAlign = 'right'; x.fillText(t.ig ? '@' + String(t.ig).replace(/^@/, '') : (t.business || ''), 1024, 94); x.textAlign = 'left';
+  const cell = 452, gap = 24, x0 = 56, y0 = 196;
+  loaded.forEach((im, i) => {
+    const cx = x0 + (i % 2) * (cell + gap), cy = y0 + Math.floor(i / 2) * (cell + gap);
+    x.fillStyle = '#F2F9FD'; x.fillRect(cx, cy, cell, cell);
+    const sc = Math.min(cell / im.width, cell / im.height);
+    const w = im.width * sc, h = im.height * sc;
+    x.drawImage(im, cx + (cell - w) / 2, cy + (cell - h) / 2, w, h);
+  });
+  x.fillStyle = '#0A1E33'; x.font = '700 42px -apple-system, Segoe UI, Roboto, Arial, sans-serif';
+  x.fillText('My week of posts, built by Posty 🚀', 56, 1272);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+  if (!blob) return null;
+  return new File([blob], 'my-week-posty.png', { type: 'image/png' });
+}
+// (piece 16) THE SHY ONE FIRST: a wall profile in sample mode — its
+// week, its whys and the chat in sample mode, with no AI spend.
+const EXAMPLE_WEEK = [
+  { img: 'gt-patitas-1.jpg', day: 'Monday', hour: '12:30 PM', cap: 'Annual check-up: the check that prevents 🐾', why: 'It teaches and books appointments: the post that brings the most inquiries at vets.' },
+  { img: 'gt-patitas-2.jpg', day: 'Tuesday', hour: '7:00 PM', cap: 'Bath + groom: they leave happy, they always come back', why: 'It shows the star service with the real result: it sells without saying "we sell".' },
+  { img: 'gt-patitas-3.jpg', day: 'Wednesday', hour: '8:30 PM', cap: 'The right food for every stage 🐶', why: "The exact product from their shelf: pure belonging, no generic stock." },
+  { img: 'gt-patitas-4.jpg', day: 'Thursday', hour: '11:00 AM', cap: "She's family already 💛", why: 'Social proof with a real customer: trust is contagious.' },
+  { img: 'gt-patitas-5.jpg', day: 'Friday', hour: '7:30 PM', cap: 'Walk weekend: everything they need', why: 'It closes the week with a selling intent and the weekend hook.' },
+];
+let _exRendered = false;
+function openExample() {
+  document.getElementById('v-onboarding').style.display = 'none';
+  document.getElementById('v-example').style.display = 'block';
+  if (!_exRendered) {
+    _exRendered = true;
+    $('#exWeek').innerHTML = EXAMPLE_WEEK.map((p) =>
+      `<div class="day"><div class="dh"><b>${esc(p.day)}</b><small>· ${esc(p.hour)}</small></div><div class="db"><img src="${esc(p.img)}" alt="Sample post from Patitas" loading="lazy"></div><div class="dcap">${esc(p.cap)}</div><div class="dwhy">💡 <b>Why:</b> ${esc(p.why)}</div></div>`
+    ).join('');
+    chatAddMsgTo('exChatMsgs', "hi! this is patitas' week 🐾 if it were yours, you'd ask me for changes just like this and I'd apply them instantly. try writing me something 👇", 'bot');
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function closeExample() {
+  document.getElementById('v-example').style.display = 'none';
+  document.getElementById('v-onboarding').style.display = 'block';
+}
+function chatAddMsgTo(boxId, text, who) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+function exChatReply() {
+  const inp = $('#exChatIn');
+  const v = (inp.value || '').trim();
+  if (!v) return;
+  chatAddMsgTo('exChatMsgs', v, 'user');
+  inp.value = '';
+  setTimeout(() => chatAddMsgTo('exChatMsgs', "this is a sample 😊 in your real trial, you ask me just like that and I apply it instantly to your posts. shall we build yours?", 'bot'), 450);
+}
+
 /* ---------- Compartir la semana ---------- */
 async function shareWeek() {
   const t = TRIAL;
   if (!t || !t.posts) return;
-  const url = location.origin + '/en/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) : '');
+  // (v323 · piece 6) The shared link carries its attribution src
+  // (prueba-compartida): it lands on /en/prueba with an empty @ field
+  // and the right origin; trk reads ?src= and persists it (v322).
+  const url = location.origin + '/en/prueba' + (t.ig ? '?ig=' + encodeURIComponent(String(t.ig).replace(/^@/, '')) + '&src=prueba-compartida' : '?src=prueba-compartida');
   const text = `Check out the week of posts Posty built for me for ${t.business} 🚀 Try it free:`;
   try {
     const files = [];
-    for (let i = 0; i < t.posts.length; i++) {
+    // First the composed CARD (their grid + their @ + brand); if the
+    // canvas fails, the loose files of always.
+    try { const cardFile = await buildShareCardFile(t); if (cardFile) files.push(cardFile); } catch (e) {}
+    if (!files.length) for (let i = 0; i < t.posts.length; i++) {
       const p = t.posts[i];
       const src = p.type === 'video' ? p.video : p.image;
       if (!src) continue;
@@ -2802,6 +3398,9 @@ function resetTrialChat() {
 }
 async function sendTrialChat(text) {
   const inp = $('#chatIn');
+  // (v323 · piece 4) The first edit is THE payment predictor: it is
+  // instrumented once per session (the analytics batch consumes it).
+  if (!window._firstEditDone) { window._firstEditDone = true; trk('prueba_first_edit', { via: window._chatVia || 'texto' }); }
   chatBusy = true;
   $('#chatSend').disabled = true;
   chatAddMsg(text, 'user');
