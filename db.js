@@ -743,6 +743,21 @@ CREATE TABLE IF NOT EXISTS grid_pattern_snapshots (
   data_json TEXT NOT NULL DEFAULT '',
   computed_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Dirección de feed (v332): la composición de cada semana contra la
+-- grilla real del cliente, decidida por el director de feed
+-- (feed-director.js, lógica pura; el cableado es composeWeekFeed en
+-- server.js). data_json lleva el orden de publicación compuesto, la
+-- familia/rol de cada pieza con su porqué, las decisiones de portada de
+-- los videos y las marcas de las piezas que pelean más allá de lo
+-- reparable por orden — para que la vista de posteos del fundador y el
+-- "por qué" del cliente lo puedan mostrar después.
+CREATE TABLE IF NOT EXISTS feed_compositions (
+  user_id INTEGER NOT NULL,
+  week_key TEXT NOT NULL,
+  data_json TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, week_key)
+);
 -- Medición de gasto de IA por función (palanca anti-quemado): cada llamada a
 -- OpenAI loguea tokens reales (usage.*), modelo y feature. Sirve para saber
 -- mañana el culpable exacto; no es facturación.
@@ -938,6 +953,12 @@ try { db.exec(`ALTER TABLE users ADD COLUMN trial_pause_notified INTEGER DEFAULT
 try { db.exec(`ALTER TABLE posts ADD COLUMN source TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN client_photo INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN image_prompt TEXT`); } catch (e) { /* ya existe */ } // prompt exacto que generó la imagen (medición prompt↔alcance)
+// (v330) Metadatos de generación por imagen: avatar_protagonist=1 cuando la
+// pieza nació con la referencia del avatar/protagonista efectivamente
+// viajando (concept-shot con CHARACTER LOCK). Lo escribe el generador al
+// producir la imagen y lo lee la historia gemela para NO estampar el
+// medallón con ese mismo avatar (Posty no se repite en la pieza).
+try { db.exec(`CREATE TABLE IF NOT EXISTS image_meta (media_path TEXT PRIMARY KEY, avatar_protagonist INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))`); } catch (e) { console.error('[db] image_meta:', e.message); }
 try { db.exec(`ALTER TABLE posts ADD COLUMN digest_hash TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // FUNDAMENTO (v229): hash del client_digest con el que nació la pieza (sufijo ':sin-ancla' si no pasó el chequeo de pertenencia) — el loop de calidad mide % de piezas con ancla por semana
 try { db.exec(`ALTER TABLE posts ADD COLUMN sales_intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // CEREBRO COMERCIAL (v232): intención de venta declarada con la que nació la pieza (venta/reserva/consulta/prueba/autoridad)
 try { db.exec(`ALTER TABLE posts ADD COLUMN sales_angle TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // CEREBRO COMERCIAL (v232): ángulo de venta de la pieza — el sistema de aprendizajes agrega rendimiento por ángulo y la semana siguiente prefiere los ganadores de ESTE negocio
@@ -998,6 +1019,7 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN user_stopped INTEGER DEFAULT 0`); } 
 // hasta que el dueño mismo reanude programando/aceptando.
 try { db.exec(`ALTER TABLE users ADD COLUMN publishing_stopped INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN caption_b TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE posts ADD COLUMN cover_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v332) portada elegida/graduada por el director de feed para posteos de video: el video no se toca, la portada es la superficie que toca la grilla
 try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 // FASE 1 (2026-10-05): una sola escalera de confianza — trust_level 0/1/2.

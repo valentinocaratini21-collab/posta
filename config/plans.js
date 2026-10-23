@@ -5,9 +5,9 @@
 // story-reel.js generateWeekExtras, idempotente por déficit, en cada semana).
 //
 // TECHO DE IA (vara de Valentino, 2026-10-02): el costo variable de IA por usuario/mes
-// no puede superar el 5% del precio del plan (Esencial: $3.495 ARS/mes). Se enforcea
+// no puede superar el 5% del precio del plan (Esencial: $5.000 ARS/mes). Se enforcea
 // con `monthlyCapUsd` en costs.js (calculado desde price × 0.05) + límites diarios `ai`.
-// ✅ PRECIOS UY CONFIRMADOS por Valentino (2026-10-21): UYU 1.490 / 2.990 / 4.990.
+// ✅ PRECIOS UY CONFIRMADOS por Valentino (2026-10-22): UYU 2.490 / 4.990 / 7.990.
 
 // Límites diarios de IA por plan. El cap mensual (5%) es el techo duro;
 // estos límites son el ritmo para que un usuario normal nunca lo note.
@@ -25,7 +25,7 @@ const PLANS_AR = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 69900,
+    price: 99999,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -44,7 +44,7 @@ const PLANS_AR = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 129900,
+    price: 189900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -68,7 +68,7 @@ const PLANS_AR = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 199900,
+    price: 289900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 5,
@@ -97,12 +97,12 @@ const PLANS_AR = {
   },
 };
 
-// ✅ UY CONFIRMADO por Valentino (2026-10-21) — misma arquitectura que AR: el Pro es el héroe (≈ $U 100/día).
+// ✅ UY CONFIRMADO por Valentino (2026-10-22, tercera escalera) — misma arquitectura que AR: el Pro es el héroe (≈ $U 166/día).
 const PLANS_UY = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 1490,
+    price: 2490,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -121,7 +121,7 @@ const PLANS_UY = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 2990,
+    price: 4990,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -145,7 +145,7 @@ const PLANS_UY = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 4990,
+    price: 7990,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 5,
@@ -175,14 +175,14 @@ const PLANS_UY = {
 };
 
 // Texto de ancla de precio por país (se muestra sobre las tarjetas de planes).
-// Valores confirmados por Valentino (2026-10-21).
+// Valores confirmados por Valentino (2026-10-22, tercera escalera).
 const PLAN_ANCHOR = {
-  AR: { cm: '$300.000+/mes', desde: '$69.900' },
-  UY: { cm: '$U 50.000+/mes', desde: '$U 1.490' },
+  AR: { cm: '$300.000 a $600.000 por mes — o más', desde: '$99.999' },
+  UY: { cm: 'más de $U 25.000 por mes', desde: '$U 2.490' },
 };
 
 // (v274 · MODO EN) Planes US — escalera definida por Valentino el
-// 2026-10-20: USD 59 / 119 / 179 (segunda suba de Valentino 2026-10-21; la escalera original del 2026-10-20 era 49 / 99 / 149), mismos roles que AR (Plan 1 = Community
+// 2026-10-20: USD 99.99 / 189.99 / 289.99 (tercera escalera de Valentino, 2026-10-22; anteriores: 59 / 119 / 179 el 2026-10-21 y 49 / 99 / 149 el 2026-10-20), mismos roles que AR (Plan 1 = Community
 // Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
 // ✅ COBRO US CONECTADO (v285, 2026-10-21): el checkout vive en
 // stripe-billing.js (Checkout Sessions + suscripciones, cuenta PERSONAL de
@@ -194,7 +194,7 @@ const PLANS_US = {
   esencial: {
     id: 'esencial',
     name: 'Essential',
-    price: 59,
+    price: 99.99,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -213,7 +213,7 @@ const PLANS_US = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 119,
+    price: 189.99,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -234,7 +234,7 @@ const PLANS_US = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 179,
+    price: 289.99,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -254,6 +254,21 @@ const PLANS_US = {
   },
 };
 
+// (Addendum 2026-10-22, consolidación M96) UK y Canadá — cobro SOLO Stripe:
+// la website EN los ofrece con la misma escalera de roles que US.
+// GBP \u00a379/149/229 · CAD C$139/259/399. Sin ancla de precio en esta pasada.
+const PLANS_GB = {
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 79, currency: 'GBP' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 149, currency: 'GBP' },
+  total: { ...PLANS_US.total, id: 'total', price: 229, currency: 'GBP' },
+};
+
+const PLANS_CA = {
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 139, currency: 'CAD' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 259, currency: 'CAD' },
+  total: { ...PLANS_US.total, id: 'total', price: 399, currency: 'CAD' },
+};
+
 // Plan por defecto para usuarios sin suscripción paga
 const TRIAL_PLAN = 'esencial';
 
@@ -263,6 +278,8 @@ const PLANS = PLANS_AR;
 function getPlans(country) {
   if (country === 'UY') return PLANS_UY;
   if (country === 'US') return PLANS_US;
+  if (country === 'GB') return PLANS_GB;
+  if (country === 'CA') return PLANS_CA;
   return PLANS_AR;
 }
 
@@ -284,7 +301,13 @@ function formatPrice(plan) {
   if ((plan.currency || 'ARS') === 'USD') {
     return '$' + Number(plan.price).toLocaleString('en-US');
   }
+  if ((plan.currency || 'ARS') === 'GBP') {
+    return '\u00a3' + Number(plan.price).toLocaleString('en-GB');
+  }
+  if ((plan.currency || 'ARS') === 'CAD') {
+    return 'C$' + Number(plan.price).toLocaleString('en-CA');
+  }
   return '$' + Number(plan.price).toLocaleString('es-AR');
 }
 
-module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice };
+module.exports = { PLANS, PLANS_AR, PLANS_UY, PLANS_US, PLANS_GB, PLANS_CA, PLAN_ANCHOR, TRIAL_PLAN, getPlan, getPlans, formatPrice };

@@ -123,7 +123,6 @@
     </form>
     <p class="lp-igform-note">Drop your Instagram handle and see <b>your</b> real week, with your brand 👆</p>
     <div class="hero-note">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
-    <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show" id="ejemplos">
       <p class="lp-show-eyebrow">✨ This is what your Instagram looks like with Posty</p>
       <div class="lp-wall" id="lpWall">
@@ -466,15 +465,13 @@
         </div>
         <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Next profiles" onclick="lpWallStep(1)">›</button>
       </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">36 industries · profiles built by Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 10</span></div>
+      <div class="lp-wall-meta"><span class="lp-wall-count" id="lpWallCount">1 / 10</span></div>
       <div class="lp-show-cta">
-        <p class="lp-show-bridge">This is an example. <b>Yours</b> is ready in 1 minute 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=lpCleanIg(this.querySelector('input').value);location.href=v?'/en/prueba?ig='+encodeURIComponent(v):'/en/prueba';return false">
           <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@your_business" aria-label="Your Instagram">
           <button class="btn btn-primary" type="submit">I want my profile like this →</button>
         </form>
         <p class="lp-show-cert">3 days free · no card · cancel anytime</p>
-        <p class="lp-spots" data-spots hidden></p>
       </div>
       <div class="lp-live" id="lpLive">
         <div class="lp-live-head"><span class="lp-live-dot"></span><b>Posty at work</b><span>this is how it works for this business, every day</span></div>
@@ -579,8 +576,26 @@
         <div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:#E2F2E4">H</i></span><b>petshop.huella</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="ig-mascotas.jpg" alt="Instagram post of a pet store made by Posty"><div class="lp-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"></path></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"></path></svg><svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"></path><path d="M10.7 13.5 21 3.5"></path></svg><span class="ig-save"><svg viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"></path></svg></span></div><div class="lp-day-meta"><b>Fri</b><span>Post</span></div><div class="lp-day-sched">📮 Scheduled · Fri 12:15 pm</div></div>
       </div>
       <p class="lp-week-note">This is what your week looks like: ideas, designs and copy with your brand, posted automatically at the best times.</p>
-      <p class="lp-week-bridge" id="lpWeekBridge">This is an example with businesses from several industries. <a href="#" onclick="return lpWeekToForm()">The week of <b>YOUR</b> business is ready in 1 minute →</a></p>
     </div>
+  </div></div>
+  <div class="section"><div class="wrap">
+    <h2>One premium video every week 🎬</h2>
+    <p class="lede">Posty creates a cinematic video of your product, ready to post — included in every plan.</p>
+    <style>
+    .vp-row{display:flex;gap:16px;overflow-x:auto;padding:24px 2px 10px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+    .vp-card{flex:0 0 auto;width:216px;margin:0;scroll-snap-align:start}
+    .vp-card video{display:block;width:216px;height:384px;object-fit:cover;border-radius:20px;border:1.5px solid #E3EDF4;box-shadow:0 14px 34px rgba(10,30,51,.12);background:#EAF6FC}
+    .vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:14.5px;margin-top:10px}
+    @media(max-width:560px){.vp-card{width:170px}.vp-card video{width:170px;height:302px}}
+    </style>
+    <div class="vp-row" aria-label="Premium videos made by Posty">
+      <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a coffee shop, made by Posty"></video><figcaption class="vp-tag">☕ Coffee shop</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a perfume brand, made by Posty"></video><figcaption class="vp-tag">🧴 Perfume</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a sneaker brand, made by Posty"></video><figcaption class="vp-tag">👟 Sneakers</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a bakery, made by Posty"></video><figcaption class="vp-tag">🧁 Bakery</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a nail studio, made by Posty"></video><figcaption class="vp-tag">💅 Nails</figcaption></figure>
+    </div>
+    <script>(function(){var vs=document.querySelectorAll('.vp-card video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>This is how I work 👇</h2>
@@ -609,7 +624,7 @@
       <div class="lp-cm-row" role="row"><div class="crit">Boosts what works with ads</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Plans each month's focus</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Is available</div><div>On their schedule</div><div class="win">Every day, around the clock</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Costs</div><div>$2,000+ per month</div><div class="win">From $1.97 per day</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Costs</div><div>$2,000+ per month</div><div class="win">From $3.33 per day</div></div>
     </div>
     <p class="lp-cm-close">The same job. No salary, no payroll taxes, no vacations.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:16px 36px">I want my community manager →</a></div>
@@ -813,7 +828,7 @@
     <p class="lede">Scheduling apps give you more work. Community managers run $2,000+ a month. Agencies sell you meetings. I hand you the finished week.</p>
     <div class="cmp-table" role="table" aria-label="Posty vs agency comparison">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Traditional agency</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>From $2,000</div><div class="win">From $59</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>From $2,000</div><div class="win">From $99.99</div></div>
       <div class="cmp-row" role="row"><div class="crit">Your week ready in</div><div>2 weeks</div><div class="win">1 minute</div></div>
       <div class="cmp-row" role="row"><div class="crit">Meetings</div><div>Several per month</div><div class="win">Zero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Try before you pay</div><div>Doesn't exist</div><div class="win">Try it free, no card</div></div>
@@ -821,7 +836,7 @@
       <div class="cmp-row" role="row"><div class="crit">Answers comments and messages</div><div>If it's in the contract</div><div class="win">Included — one tap away</div></div>
       <div class="cmp-row" role="row"><div class="crit">Ad spend</div><div>Extra fees</div><div class="win">Boosts your best post from the app</div></div>
     </div>
-    <p class="unico-line">A community manager costs <b>$2,000+/mo</b>. Posty starts at <b>$59</b>.</p>
+    <p class="unico-line">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$99.99</b>.</p>
     <p class="lp-trust">🔒 We publish through Meta's official API · You sign in with the official login, without giving us your password · You can pause any post before it goes out</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/en/prueba">Try it free</a></div>
   </div></div>
@@ -886,7 +901,7 @@
         <button type="button" class="lp-crate on" data-rate="25" onclick="lpCalcRate(this)">$25</button>
         <button type="button" class="lp-crate" data-rate="40" onclick="lpCalcRate(this)">$40</button>
       </div>
-      <div class="lp-calc-out" id="lpCalcOut">Your Instagram costs you today ≈ <b>$650</b> per month (<b>26 hours</b> of your time).<br>With Posty: from <b>$1.97 per day</b> and <b>0 hours of your time</b> — you get back <b>26 hours a month</b> for your business.</div>
+      <div class="lp-calc-out" id="lpCalcOut">Your Instagram costs you today ≈ <b>$650</b> per month (<b>26 hours</b> of your time).<br>With Posty: from <b>$3.33 per day</b> and <b>0 hours of your time</b> — you get back <b>26 hours a month</b> for your business.</div>
     </div>
     <p class="lp-calc-cm">And if you outsource it: a community manager to do it for you costs <b>$2,000+ per month</b>.</p>
   </div></div>
@@ -905,7 +920,7 @@
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minute</div><div class="lp-stat-t">to see your week, ready</div></div>
       <div class="lp-stat"><div class="lp-stat-n">7 posts + 1 reel</div><div class="lp-stat-t">per week · 0 minutes of your time posting</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$1.97<span class="lp-stat-per">/day</span></div><div class="lp-stat-t">from — a community manager costs $2,000+ per month</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$3.33<span class="lp-stat-per">/day</span></div><div class="lp-stat-t">from — a community manager costs $1,500–$3,000+ per month</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 days</div><div class="lp-stat-t">free trial, no card required</div></div>
     </div>
   </div></div>
@@ -935,13 +950,12 @@
     <p class="lede">Try it free for 3 days first. If you like your week, pick your plan here.</p>
     <div class="lp-offer"><b>The offer is simple:</b> you try 3 days free, you see your week ready before paying a cent and, if you don't love it, you pay nothing. No card, no contract, no fine print.</div>
     <div class="country-toggle"><button class="on" type="button">🇺🇸 United States · USD</button></div>
-    <div class="anchor-line" id="anchorLine">A community manager costs <b>$2,000+/mo</b>. Posty starts at <b>$59</b>.</div>
-    <div class="scarcity" id="scarcityLine">🔥 Only <b>50 spots</b> — we personally onboard every business that joins.</div>
+    <div class="anchor-line" id="anchorLine">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$99.99</b>.</div>
     <div class="plans-row" id="plansRow">
     <div class="price-card">
       <h3>Essential</h3>
-      <div class="price">$59<small>/mo</small></div>
-      <div class="pz-perday">≈ $1.97 per day</div>
+      <div class="price">$99.99<small>/mo</small></div>
+      <div class="pz-perday">≈ $3.33 per day</div>
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Stay present all week long</p>
       <ul><li>7 posts per week, automatic</li><li>1 reel per week</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Scheduled automatic posting</li></ul>
       <a class="btn btn-soft btn-block" href="/en/prueba">Try it free</a>
@@ -949,16 +963,16 @@
     <div class="price-card hot">
       <div class="tag">RECOMMENDED</div>
       <h3>Pro</h3>
-      <div class="price">$119<small>/mo</small></div>
-      <div class="pz-perday">≈ $3.97 per day</div>
+      <div class="price">$189.99<small>/mo</small></div>
+      <div class="pz-perday">≈ $6.33 per day</div>
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Built to actually grow</p>
       <ul><li>7 posts per week, automatic</li><li>3 reels per week</li><li>3 stories per week</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Scheduled automatic posting</li><li>A strategy to stand out from your competition</li><li>Managed ads (10% fee)</li><li>Weekly results report</li></ul>
       <a class="btn btn-primary btn-block" href="/en/prueba">Try it free</a>
     </div>
     <div class="price-card">
       <h3>Total</h3>
-      <div class="price">$179<small>/mo</small></div>
-      <div class="pz-perday">≈ $5.97 per day</div>
+      <div class="price">$289.99<small>/mo</small></div>
+      <div class="pz-perday">≈ $9.67 per day</div>
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">Your business looked after and selling — with your one-tap OK</p>
       <ul><li>7 posts per week, automatic</li><li>5 reels per week</li><li>Stories every day</li><li>Strategic ideas for your business</li><li>Designs + captions + hashtags</li><li>Scheduled automatic posting</li><li>A strategy to stand out from your competition</li><li>Managed ads (10% fee)</li><li>Weekly results report</li><li>Customer care on Instagram: Posty prepares every reply, you approve in one tap</li><li>Replies with your real prices and services</li><li>Books and confirms your appointments and reservations</li><li>Follows up with anyone who asked but didn't buy</li><li>Closes with a payment or deposit link</li><li>Comments answered (you approve each one in one tap)</li><li>Google reviews managed</li></ul>
       <a class="btn btn-soft btn-block" href="/en/prueba">Try it free</a>
@@ -1005,7 +1019,6 @@
     <p>Tell us about your business and see it in 1 minute. Free, no card.</p>
     <a class="btn btn-primary" href="/en/prueba" style="font-size:16px;padding:18px 44px">See my week, free 👀</a>
     <div class="hero-note" style="margin-top:18px">✓ No card required · ✓ 3 days free · ✓ Cancel anytime</div>
-    <p class="lp-spots" data-spots hidden></p>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
@@ -1040,21 +1053,6 @@ function lpGoAudit(e) {
   location.href = '/auditoria' + (v ? '?ig=' + encodeURIComponent(v) : '');
   return false;
 }
-// Live scarcity: the number comes from /api/capacity (same as ES). The
-// hardcoded "50 of 50" was a false claim — the lines stay hidden until
-// the real number arrives.
-function lpRefreshScarcity() {
-  fetch('/api/capacity').then(function (r) { return r.json(); }).then(function (c) {
-    if (!c || typeof c.spots_left !== 'number') return;
-    var el = document.getElementById('scarcityLine');
-    if (el) el.innerHTML = '🔥 Only <b>' + c.spots_left + ' spots</b> — we personally onboard every business that joins.';
-    document.querySelectorAll('[data-spots]').forEach(function (s) {
-      s.innerHTML = '🔥 Only <b>' + c.spots_left + ' of ' + c.spots_total + ' spots left</b> this month';
-      s.hidden = false;
-    });
-  }).catch(function () {});
-}
-lpRefreshScarcity();
 /* — Profile wall: ONE row of 4 with ‹ › arrows (same mechanics as the
    Spanish landing, v211): pages of 4, track sliding −100% per page,
    arrows .off at the ends, touch swipe. On ≤1023px the pages flatten
@@ -1228,7 +1226,7 @@ function lpCalcUpdate() {
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: from <b>$1.97 per day</b> and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
+  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: from <b>$3.33 per day</b> and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
 }
 function lpCalcRate(btn) {
   LP_CALC_RATE = parseInt(btn.getAttribute('data-rate'), 10) || 25;

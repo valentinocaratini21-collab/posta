@@ -17,6 +17,11 @@
 //   · El texto va en banda superior o inferior según las zonas tranquilas
 //     de la foto (brand-card.py --band auto): nunca en el centro, nunca
 //     sobre caras u ojos.
+//   · (v330) POSTY NO SE REPITE: si la imagen fuente nació con el avatar
+//     del negocio como protagonista (image_meta.avatar_protagonist), la
+//     gemela NO estampa el medallón con ese mismo avatar. Para fotos de
+//     producto del cliente y logos gráficos distintos del sujeto, el
+//     medallón va como siempre.
 //
 // Render: brand-card.py en modo story (paleta del cliente SIEMPRE, texto
 // grande y legible, safe areas de IG). Se guardan como posts con
@@ -144,6 +149,26 @@ function twinContextFor(db, uid) {
 }
 
 // ---------------------------------------------------------------------------
+// (v330) POSTY NO SE REPITE EN LA PIEZA — ¿la imagen fuente nació con el
+// avatar del negocio como protagonista? El motor lo sabe y lo registra al
+// generarla (image_meta.avatar_protagonist: concept-shot con la
+// referencia del avatar viajando, CHARACTER LOCK). Si la fuente ya trae
+// al avatar en grande, estamparle abajo el medallón con el MISMO avatar
+// lo duplica y se ve barato (visto en las destacadas propias de Posty,
+// cuyo avatar ES su logo y su protagonista). Para el resto de las piezas
+// — foto de producto del cliente, logo gráfico distinto del sujeto, sin
+// registro — el medallón va como siempre.
+// ---------------------------------------------------------------------------
+function sourceHasAvatarProtagonist(db, post) {
+  try {
+    if (!db || !post || !post.image_path) return false;
+    const row = db.prepare('SELECT avatar_protagonist FROM image_meta WHERE media_path = ?')
+      .get(String(post.image_path));
+    return !!(row && Number(row.avatar_protagonist) === 1);
+  } catch (e) { return false; }
+}
+
+// ---------------------------------------------------------------------------
 // createTwinStory({ db, post, brand, mediaDir, postImageAbs, scheduleAt })
 // La gemela completa (v231): chequea la fuente, y recién si pasa genera la
 // historia (tipo repost) marcada source='twin' la hace el llamador.
@@ -161,12 +186,21 @@ function createTwinStory({ db, post, brand, mediaDir, postImageAbs = null, sched
     } catch (e) { /* el registro nunca frena al scheduler */ }
     return { status: 'omitted', reason: chk.reason };
   }
+  // (v330) Si la fuente ya tiene al avatar de protagonista, la gemela
+  // sale SIN medallón (queda registrado en events, como las omisiones).
+  const avatarProtagonist = sourceHasAvatarProtagonist(db, post);
+  if (avatarProtagonist) {
+    try {
+      db.prepare(`INSERT INTO events (user_id, name, props) VALUES (?, 'twin_story_no_medallion', ?)`)
+        .run(uid, JSON.stringify({ post_id: post.id, reason: 'fuente_con_avatar_protagonista' }));
+    } catch (e) { /* el registro nunca frena al scheduler */ }
+  }
   const out = generateStory({
     db, uid, type: 'repost',
-    ctx: { postHeadline: chk.headline, postImageAbs },
+    ctx: { postHeadline: chk.headline, postImageAbs, avatarProtagonist },
     brand, mediaDir, scheduleAt,
   });
-  return { status: 'created', id: out.id, path: out.path, headline: chk.headline, band: out.band || null };
+  return { status: 'created', id: out.id, path: out.path, headline: chk.headline, band: out.band || null, medallion: !avatarProtagonist };
 }
 
 function daysUntil(ymd) {
@@ -223,18 +257,37 @@ function generateStory({ db, uid, type, ctx, brand, mediaDir, scheduleAt = null 
       photoAbs = pickStockPhoto(prof && prof.category, `${uid}:${type}:${new Date().toISOString().slice(0, 10)}`);
     } catch (e) {}
   }
+  // (v330) POSTY NO SE REPITE: en la gemela (repost), si la imagen fuente
+  // ya trae al avatar del negocio como protagonista, NO se estampa el
+  // medallón. La decisión llega de createTwinStory (ctx.avatarProtagonist)
+  // o se resuelve acá por la ruta de la imagen fuente (vías directas:
+  // /api/story-generate y dailyStories). Sin fuente avatar, el medallón
+  // va como siempre; las demás historias (foto stock) no cambian.
+  let suppressLogo = false;
+  if (type === 'repost' && photoAbs) {
+    if (ctx && typeof ctx.avatarProtagonist === 'boolean') {
+      suppressLogo = ctx.avatarProtagonist;
+    } else {
+      try {
+        const src = db.prepare('SELECT image_path FROM posts WHERE user_id = ? AND image_path = ? ORDER BY id DESC LIMIT 1')
+          .get(uid, '/media/' + path.basename(photoAbs));
+        suppressLogo = sourceHasAvatarProtagonist(db, src);
+      } catch (e) {}
+    }
+    if (suppressLogo) console.log(`[twin] sin medallón: la fuente ya trae al avatar de protagonista (uid ${uid})`);
+  }
   const meta = {};
   const mediaPath = renderStoryPng({
     headline: content.headline, sub: content.sub,
     business: b.business || '', bgHex: b.bgHex, textHex: b.textHex,
-    logoAbs: b.logoAbs || null, photoAbs, outDir: mediaDir, band: 'auto', meta,
+    logoAbs: suppressLogo ? null : (b.logoAbs || null), photoAbs, outDir: mediaDir, band: 'auto', meta,
   });
   const status = scheduleAt ? 'scheduled' : 'draft';
   const r = db.prepare(
     `INSERT INTO posts (user_id, image_path, caption, hashtags, scheduled_at, status, media_type, tipo)
      VALUES (?,?,?,?,?,?, 'story', 'story')`
   ).run(uid, mediaPath, content.headline, '', scheduleAt || null, status);
-  return { id: Number(r.lastInsertRowid), path: mediaPath, band: meta.band || null };
+  return { id: Number(r.lastInsertRowid), path: mediaPath, band: meta.band || null, medallion: !suppressLogo };
 }
 
 // ---------------------------------------------------------------------------
@@ -298,4 +351,4 @@ async function dailyStories(db, deps) {
   return out;
 }
 
-module.exports = { STORY_TYPES, STORIES_PER_DAY, buildStoryContent, renderStoryPng, generateStory, dailyStories, daysUntil, twinSourceCheck, twinContextFor, createTwinStory };
+module.exports = { STORY_TYPES, STORIES_PER_DAY, buildStoryContent, renderStoryPng, generateStory, dailyStories, daysUntil, twinSourceCheck, twinContextFor, createTwinStory, sourceHasAvatarProtagonist };

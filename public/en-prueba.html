@@ -624,6 +624,11 @@ html{scroll-behavior:smooth}
 .benefit:last-child{border-bottom:none}
 .benefit .b-ic{flex:0 0 auto}
 .benefit .b-tag{flex:0 0 auto;margin-left:auto;font-size:11.5px;font-weight:700;color:#7A93A8;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;padding-left:10px}
+/* (v328-web · premium videos addendum) Vertical video row in /en/prueba */
+.vp-row{display:flex;gap:12px;overflow-x:auto;padding:14px 2px 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.vp-card{flex:0 0 auto;width:148px;margin:0;scroll-snap-align:start}
+.vp-card video{display:block;width:148px;height:263px;object-fit:cover;border-radius:16px;border:1.5px solid #E3EDF4;box-shadow:0 10px 26px rgba(10,30,51,.10);background:#EAF6FC}
+.vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:13px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -740,7 +745,7 @@ html{scroll-behavior:smooth}
         <p class="tiny">No sign-up · No card · Your week stays saved for 3 days</p>
       </div>
     </div>
-    <p class="price-contrast">A community manager charges ~$2,000 a month. <b>Posty, from $59.</b></p>
+    <p class="price-contrast">A community manager charges ~$2,000 a month. <b>Posty, from $99.99.</b></p>
 
   <div class="work3">
     <h3>This is how I work 👇</h3>
@@ -1128,9 +1133,22 @@ html{scroll-behavior:smooth}
     </div>
 
     <div class="sec">
+      <h3>🎬 One premium video every week</h3>
+      <p class="lede">Posty creates a cinematic video of your product, ready to post — included in every plan.</p>
+      <div class="vp-row" aria-label="Premium videos made by Posty">
+        <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a coffee shop, made by Posty"></video><figcaption class="vp-tag">☕ Coffee shop</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a perfume brand, made by Posty"></video><figcaption class="vp-tag">🧴 Perfume</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a sneaker brand, made by Posty"></video><figcaption class="vp-tag">👟 Sneakers</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a bakery, made by Posty"></video><figcaption class="vp-tag">🧁 Bakery</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a nail studio, made by Posty"></video><figcaption class="vp-tag">💅 Nails</figcaption></figure>
+      </div>
+      <script>(function(){var vs=document.querySelectorAll('.vp-card video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
+    </div>
+
+    <div class="sec">
       <h3>What happens next? 👇</h3>
       <p class="lede">This was a sample. Now picture this <b>every week</b> — you just watch and approve.</p>
-        <p class="lede" style="font-weight:800;color:var(--navy)">Plans from $59/mo — Pro works out to $3.97 a day. And your first 3 days are free.</p>
+        <p class="lede" style="font-weight:800;color:var(--navy)">Plans from $99.99/mo — Pro works out to $6.33 a day. And your first 3 days are free.</p>
       <div class="wkstrip">
         <div class="wk now"><b>This week</b><span>✓ Ready</span></div>
         <div class="wk-arrow">→</div>
@@ -1146,7 +1164,6 @@ html{scroll-behavior:smooth}
         <div class="step3"><div class="n">3</div><div><b>You approve, we post</b><p>Nothing goes out without your OK.</p></div></div>
       </div>
       <div style="text-align:center;margin-top:26px">
-        <div><span id="capLine" style="display:none;font-size:15px;font-weight:800;color:#9A5B00;background:#FFF6E0;border:1.5px solid #FEC14D;border-radius:99px;padding:9px 22px;margin-bottom:16px"></span></div>
         <p class="tiny">Try it free · No card · Cancel anytime<br>Your week stays saved for 72 hours — you won't lose it 🙂</p>
       </div>
     </div>
@@ -1163,7 +1180,7 @@ html{scroll-behavior:smooth}
   <div class="field"><label>Email</label><input type="email" id="rg_email" placeholder="your@email.com" autocomplete="email"></div>
   <div class="err" id="rgErr"></div>
   <button class="btn btn-primary btn-block" id="btnReg">Send me my access link 📧</button>
-  <p class="tiny">No card · From $59/mo when it ends · Cancel anytime</p>
+  <p class="tiny">No card · From $99.99/mo when it ends · Cancel anytime</p>
   <p class="tiny" style="margin-top:6px">🔒 Your Instagram connects with Meta — no password sharing</p>
   <p class="tiny" style="margin-top:8px">Already have an account? <a href="/#/login" style="color:var(--cel);font-weight:700">Log in</a></p>
 </div></div>
@@ -2598,18 +2615,6 @@ function renderResults() {
     $('#phPic').src = t.ig_pic || (t.web_info && t.web_info.pic) || 'ai-avatar.png';
     $('#phIg').textContent = t.ig ? '@' + t.ig : (t.web_info ? (t.business || 'your business') : '@yourinstagram');
   } catch (e) {}
-  // Urgencia real: lugares restantes del mes
-  try {
-    fetch('/api/capacity').then((r) => r.json()).then((j) => {
-      if (j && j.ok && typeof j.spots_left === 'number') {
-        const el = $('#capLine');
-        if (el) {
-          el.style.display = 'inline-block';
-          el.innerHTML = `🔥 <b>Only ${j.spots_left} spots left</b> of ${j.spots_total} this month`;
-        }
-      }
-    }).catch(() => {});
-  } catch (e) {}
 
   $('#rStreamBar').style.display = 'none';
   $('#weekDone').style.display = 'block';
@@ -3202,19 +3207,20 @@ async function renderPriceCard() {
     const r = await fetch('/api/billing/plans?country=' + encodeURIComponent(COUNTRY || 'US'));
     const j = await r.json();
     const pro = j && (j.plans || []).find((p) => p.id === 'pro');
+    const base = (j && (j.plans || []).find((p) => p.id === 'esencial')) || pro;
     if (!pro || !pro.price) return;
     const per = pro.price / 30;
     const fmt = (n, dec) => n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
     let perTxt, anchor;
     if (j.country === 'US') {
       perTxt = 'USD ' + fmt(per, 2) + ' <small>per day</small>';
-      anchor = 'A freelance community manager charges USD 25–50 an hour: Pro costs less per day than a single hour of their work. (Pro plan: USD ' + fmt(pro.price, 0) + '/month)';
+      anchor = 'A community manager costs $1,500–$3,000+ a month. Posty from $' + fmt(base.price, 2) + '/month.';
     } else if (j.country === 'UY') {
       perTxt = '$U ' + fmt(Math.round(per), 0) + ' <small>per day</small>';
-      anchor = 'Less than one hour of a community manager — and it works all week. (Pro plan: $U ' + fmt(pro.price, 0) + '/month)';
+      anchor = 'A community manager costs more than $U 25,000 a month. Posty from $U ' + fmt(base.price, 0) + '/month.';
     } else {
       perTxt = '$' + fmt(Math.round(per), 0) + ' <small>per day</small>';
-      anchor = 'A community manager charges ~$300,000 a month: Pro costs you per day less than half of their daily cost. (Pro plan: $' + fmt(pro.price, 0) + '/month)';
+      anchor = 'A community manager costs $300,000–$600,000+ a month. Posty from $' + fmt(base.price, 0) + '/month.';
     }
     $('#pricePerDay').innerHTML = perTxt;
     $('#priceAnchor').textContent = anchor;
@@ -3515,14 +3521,14 @@ function closeReg() {
       <h2 style="margin-top:18px">You are in! 🎉</h2>
       <p class="msub">Your week is saved in your account and <b>posts by itself</b>. We also sent a link to your email so you can sign in from other devices.</p>
       <a class="btn btn-primary btn-block" href="/en" style="margin-top:14px">Go to my account →</a>
-      <p class="tiny">No card · From $59/mo when it ends · Cancel anytime</p>`;
+      <p class="tiny">No card · From $99.99/mo when it ends · Cancel anytime</p>`;
       $('#xReg').onclick = closeReg;
       return;
     }
     m.innerHTML = `<button class="x" id="xReg">✕</button>
       <h2 style="margin-top:18px">Check your email 👀</h2>
       <p class="msub">📧 <b>We sent a link to your email</b><br>Tap it and you are in, no password. It is valid for 15 minutes.</p>
-      <p class="tiny">No card · From $59/mo when it ends · Cancel anytime</p>`;
+      <p class="tiny">No card · From $99.99/mo when it ends · Cancel anytime</p>`;
     $('#xReg').onclick = closeReg;
   } catch (e) {
     fail(e.message);

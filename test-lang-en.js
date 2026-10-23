@@ -118,8 +118,8 @@ const ok = (cond, msg) => { if (cond) { okN++; console.log('  ✓', msg); } else
 
   // ---------- 10) Planes US ----------
   const plans = require('./config/plans.js');
-  ok(plans.getPlans('US').esencial.price === 59 && plans.getPlans('US').pro.price === 119 && plans.getPlans('US').total.price === 179, 'PLANS_US: USD 59/119/179');
-  ok(plans.getPlans('AR').esencial.price === 69900, 'PLANS_AR intacto');
+  ok(plans.getPlans('US').esencial.price === 99.99 && plans.getPlans('US').pro.price === 189.99 && plans.getPlans('US').total.price === 289.99, 'PLANS_US: USD 99.99/189.99/289.99');
+  ok(plans.getPlans('AR').esencial.price === 99999, 'PLANS_AR intacto');
 
   console.log(`\n== test-lang-en: ${okN} ok · ${failN} fallas ==`);
   process.exit(failN ? 1 : 0);

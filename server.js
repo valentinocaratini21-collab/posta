@@ -268,6 +268,7 @@ const demo = require('./demo');
 const feedAudit = require('./feed-audit');
 const ideasMod = require('./ideas');
 const gridPattern = require('./grid-pattern');
+const feedDirector = require('./feed-director');
 const clientDigest = require('./client-digest'); // FUNDAMENTO (v229): digest del cliente, anclas, pertenencia
 const analysisEngine = require('./analysis-engine'); // 🧠 Análisis (2026-10-19): radiografía + mercado + nacimiento + porqué + loop
 const postyQuestions = require('./posty-questions'); // POSTY PREGUNTA (v238): 1 pregunta/semana sobre los huecos del fundamento
@@ -7793,7 +7794,7 @@ function runGridStats(files) {
 async function computeGridPattern(uid) {
   let rows = [];
   try {
-    rows = db.prepare(`SELECT id, image_path, media_type, tipo, intent FROM posts
+    rows = db.prepare(`SELECT id, image_path, cover_path, media_type, tipo, intent FROM posts
       WHERE user_id = ? AND status = 'published' AND media_type IN ('image','carousel','video')
       AND COALESCE(image_path, '') != ''
       ORDER BY published_at DESC, id DESC LIMIT 18`).all(uid);
@@ -7801,7 +7802,11 @@ async function computeGridPattern(uid) {
   const files = [];
   const fileRowIdx = [];
   rows.forEach((r, i) => {
-    const base = path.basename(String(r.image_path || ''));
+    // (v332) un video se mide por su PORTADA (cover_path si el director de
+    // feed ya la eligió/graduó): es la superficie que toca la grilla; el
+    // mp4 no es medible por grid-stats y antes quedaba fuera del patrón.
+    const base = (r.media_type === 'video' && r.cover_path)
+      ? path.basename(String(r.cover_path)) : path.basename(String(r.image_path || ''));
     if (!base) return;
     const f = path.join(MEDIA_DIR, base);
     if (fs.existsSync(f)) { files.push(f); fileRowIdx.push(i); }
@@ -7815,6 +7820,7 @@ async function computeGridPattern(uid) {
       lum: s && s.ok ? s.lum : null,
       sat: s && s.ok ? s.sat : null,
       hueFam: s && s.ok ? s.hueFam : null,
+      hueShare: s && s.ok ? s.hueShare : null,
       media_type: r.media_type || 'image', tipo: r.tipo || '', intent: r.intent || '',
     };
   });
@@ -7824,8 +7830,26 @@ async function computeGridPattern(uid) {
     tiles: tiles.length,
     usable: pattern.usable,
     tilesDetail: tiles.map((t) => ({ lum: t.lum, hueFam: t.hueFam, type: gridPattern.typeKeyOf(t) })),
+    // (v332) medición COMPLETA de la cabeza real del feed, del más nuevo al
+    // más viejo: la materia prima del director de feed (familias + roles).
+    tilesFull: tiles.map((t, i) => ({
+      id: rows[i].id, lum: t.lum, sat: t.sat, hueFam: t.hueFam, hueShare: t.hueShare,
+      media_type: t.media_type, tipo: t.tipo, intent: t.intent,
+    })),
     at: new Date().toISOString(),
   };
+}
+
+// (v332) snapshots viejos no traen tilesFull: se deriva de tilesDetail
+// (sin hueShare/sat — la familia cálida queda conservadora, nunca inventada).
+function withTilesFull(snap) {
+  if (!snap || Array.isArray(snap.tilesFull) || !Array.isArray(snap.tilesDetail)) return snap;
+  snap.tilesFull = snap.tilesDetail.map((t) => ({
+    id: null, lum: t.lum, sat: null, hueFam: t.hueFam, hueShare: null,
+    media_type: t.type === 'video' ? 'video' : (t.type === 'carrusel' ? 'carousel' : 'image'),
+    tipo: '', intent: '',
+  }));
+  return snap;
 }
 
 // Patrón vigente de la cuenta: caché de 6 días; si venció, se remide.
@@ -7833,7 +7857,7 @@ async function gridPatternFor(uid) {
   const snap = readGridSnapshot(uid);
   if (snap && snap._computedAt) {
     const t = new Date(String(snap._computedAt).replace(' ', 'T') + 'Z').getTime();
-    if (Number.isFinite(t) && t > Date.now() - 6 * 86400000 && snap.pattern) return snap;
+    if (Number.isFinite(t) && t > Date.now() - 6 * 86400000 && snap.pattern) return withTilesFull(snap);
   }
   const fresh = await computeGridPattern(uid);
   if (snap && snap.applied) fresh.applied = snap.applied; // la marca de aplicado sobrevive a la remedición
@@ -7895,6 +7919,213 @@ function weekOccupancyRows(uid, weekKey) {
       AND (week_key = ? OR (scheduled_at IS NOT NULL AND date(scheduled_at) >= date(?) AND date(scheduled_at) < date(?, '+7 days')))`).all(uid, weekKey, weekKey, weekKey);
   } catch (e) { return []; }
 }
+// ================= DIRECCIÓN DE FEED (v332, 2026-10-22) =================
+// Mandato de Valentino: "todo lo que estás aprendiendo con el feed de
+// Posty, utilizalo para los feeds de nuestros clientes; tenemos que ser
+// expertos en que el feed quede excelente y que combine". La semana de
+// cada cliente se compone como UNA pieza contra su grilla real: medición
+// (grid-stats.py, números), composición por orden (feed-director.js,
+// lógica pura), compuerta de portadas para reels/video firma y registro
+// por semana (tabla feed_compositions). La paleta es la del feed DEL
+// CLIENTE: sus posteos recientes medidos definen el registro.
+// composeWeekFeed NUNCA lanza ni bloquea: si algo falla, la semana sigue
+// con el orden de siempre y el pipeline no se entera.
+const { execFile: execFileFd } = require('child_process');
+
+function videoDurationSec(file) {
+  return new Promise((resolve) => {
+    execFileFd('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file],
+      { timeout: 15000 }, (err, stdout) => {
+        const d = parseFloat(String(stdout || '').trim());
+        resolve(Number.isFinite(d) && d > 0 ? d : 0);
+      });
+  });
+}
+
+// Frames candidatos de un video (el primero ≈ la portada natural de hoy:
+// el pipeline saca la portada al inicio del video). Temporales: viven en
+// MEDIA_DIR/.fd-frames-* y el llamador los borra al terminar.
+async function extractVideoFrames(file, count) {
+  const dur = await videoDurationSec(file);
+  const dir = path.join(MEDIA_DIR, `.fd-frames-${process.pid}-${Date.now()}`);
+  try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { return null; }
+  const fracs = [0.04, 0.32, 0.58, 0.84].slice(0, count || 4);
+  const files = [];
+  for (let i = 0; i < fracs.length; i++) {
+    const t = dur > 0 ? Math.max(0.1, dur * fracs[i]) : 0.5 * (i + 1);
+    const out = path.join(dir, `f${i}.jpg`);
+    const ok = await new Promise((resolve) => {
+      execFileFd('ffmpeg', ['-y', '-ss', String(t), '-i', file, '-frames:v', '1', '-q:v', '3', out],
+        { timeout: 30000 }, (err) => resolve(!err && fs.existsSync(out)));
+    });
+    files.push(ok ? out : null);
+  }
+  if (!files.some(Boolean)) {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+    return null;
+  }
+  return { dir, files };
+}
+
+function runCoverGrade(srcAbs, outAbs, targetLum, tint) {
+  return new Promise((resolve) => {
+    execFileFd('python3', [path.join(__dirname, 'cover-grade.py'), srcAbs, outAbs, String(targetLum), tint || 'none'],
+      { timeout: 30000 }, (err, stdout) => {
+        if (err) return resolve({ ok: false });
+        try {
+          const j = JSON.parse(String(stdout || '').trim().split('\n').pop());
+          resolve(j && j.ok ? j : { ok: false });
+        } catch (e) { resolve({ ok: false }); }
+      });
+  });
+}
+
+async function composeWeekFeed(uid, weekKey, tag) {
+  const frameTempDirs = [];
+  try {
+    const rows = db.prepare(`SELECT id, image_path, cover_path, media_type, tipo, intent, status, scheduled_at, created_at
+      FROM posts WHERE user_id = ? AND week_key = ? AND media_type IN ('image','carousel','video')
+      AND COALESCE(image_path, '') != '' AND status IN ('draft','scheduled')
+      ORDER BY (status = 'scheduled') DESC, scheduled_at ASC, created_at ASC, id ASC`).all(uid, weekKey);
+    if (!rows.length) return { ok: true, pieces: 0, reason: 'sin piezas' };
+
+    // El protagonista lo marca la v330 en image_meta (el avatar/la persona
+    // ES la pieza): señal de rol para la alternancia.
+    const avatarIds = new Set();
+    try {
+      const metas = db.prepare('SELECT post_id, meta FROM image_meta WHERE user_id = ?').all(uid);
+      for (const m of metas) {
+        try { const j = JSON.parse(m.meta || '{}'); if (j && j.avatarProtagonist === true) avatarIds.add(m.post_id); } catch (e) {}
+      }
+    } catch (e) {}
+
+    // 1) MEDICIÓN de cada pieza candidata (números, nunca a ojo).
+    const pieces = [];
+    for (const r of rows) {
+      const piece = {
+        id: r.id, media_type: r.media_type || 'image', tipo: r.tipo || '', intent: r.intent || '',
+        fixed: r.status === 'scheduled', avatarProtagonist: avatarIds.has(r.id),
+        lum: null, sat: null, hueFam: null, hueShare: null, _frames: null, _prevCover: r.cover_path || '',
+      };
+      const imgAbs = path.join(MEDIA_DIR, path.basename(String(r.image_path || '')));
+      const coverAbs = r.cover_path ? path.join(MEDIA_DIR, path.basename(String(r.cover_path))) : null;
+      const isVidFile = /\.(mp4|mov|webm)$/i.test(String(r.image_path || ''));
+      if (piece.media_type === 'video' && isVidFile && fs.existsSync(imgAbs)) {
+        const fr = await extractVideoFrames(imgAbs, 4);
+        if (fr) {
+          frameTempDirs.push(fr.dir);
+          const realFiles = fr.files.filter(Boolean);
+          const stats = realFiles.length ? await runGridStats(realFiles) : [];
+          const statByFile = new Map();
+          realFiles.forEach((f, k) => statByFile.set(f, stats[k]));
+          piece._frames = fr.files.map((f) => {
+            const st = f ? statByFile.get(f) : null;
+            return {
+              file: f,
+              lum: st && st.ok ? st.lum : null, sat: st && st.ok ? st.sat : null,
+              hueFam: st && st.ok ? st.hueFam : null, hueShare: st && st.ok ? st.hueShare : null,
+            };
+          });
+          const nat = piece._frames[0];
+          if (nat && nat.lum != null) {
+            piece.lum = nat.lum; piece.sat = nat.sat; piece.hueFam = nat.hueFam; piece.hueShare = nat.hueShare;
+          }
+        }
+      }
+      if (piece.lum == null) {
+        const cand = (coverAbs && fs.existsSync(coverAbs)) ? coverAbs : (fs.existsSync(imgAbs) ? imgAbs : null);
+        if (cand) {
+          const st = (await runGridStats([cand]))[0];
+          if (st && st.ok) { piece.lum = st.lum; piece.sat = st.sat; piece.hueFam = st.hueFam; piece.hueShare = st.hueShare; }
+        }
+      }
+      pieces.push(piece);
+    }
+
+    // La grilla real del cliente: cabeza medida + patrón vigente (v224).
+    const g = await gridPatternFor(uid);
+    const existing = (g && Array.isArray(g.tilesFull)) ? g.tilesFull : [];
+    const pattern = g && g.pattern ? g.pattern : null;
+    let ahead = 0;
+    try { ahead = Math.max(0, gridAheadCount(uid, weekKey) - rows.length); } catch (e) {}
+
+    // 2) COMPOSICIÓN POR ORDEN (lógica pura del director).
+    const res = feedDirector.composeOrder({ pieces, existing, pattern, ahead });
+    const asgByIx = new Map(res.assignments.map((a) => [a.idx, a]));
+
+    // 3) COMPUERTA DE PORTADAS: la portada es la superficie que toca la
+    // grilla. Frame natural si ya combina; otro frame del mismo video si
+    // combina; si no, el GRADO va solo sobre el archivo de portada
+    // (posts.cover_path) — el video jamás se toca.
+    for (let ix = 0; ix < pieces.length; ix++) {
+      const piece = pieces[ix];
+      if (!piece._frames) continue;
+      const asg = asgByIx.get(ix);
+      const want = asg ? asg.family : feedDirector.familyOf(piece);
+      const gate = feedDirector.coverGate({ frames: piece._frames, wantFamily: want });
+      let coverPath = '';
+      let graded = null;
+      if ((gate.action === 'alt-frame' || gate.action === 'grade') && piece._frames[gate.frameIx] && piece._frames[gate.frameIx].file) {
+        const srcF = piece._frames[gate.frameIx].file;
+        const destName = `feedcover-${piece.id}.jpg`;
+        const destAbs = path.join(MEDIA_DIR, destName);
+        if (gate.action === 'grade') {
+          const gr = await runCoverGrade(srcF, destAbs, gate.targetLum, want === feedDirector.FAMILY.DARK ? 'navy' : 'none');
+          if (gr.ok) { coverPath = '/media/' + destName; graded = { lumBefore: gr.lumBefore, lumAfter: gr.lumAfter }; }
+        } else {
+          try { fs.copyFileSync(srcF, destAbs); coverPath = '/media/' + destName; } catch (e) {}
+        }
+      }
+      const decision = {
+        action: gate.action, frameIx: gate.frameIx, wantFamily: want,
+        targetLum: gate.targetLum || null, graded, reason: gate.reason, coverPath,
+      };
+      try { db.prepare('UPDATE posts SET cover_path = ? WHERE id = ?').run(coverPath, piece.id); } catch (e) {}
+      if (piece._prevCover && piece._prevCover !== coverPath && piece._prevCover.indexOf('/media/feedcover-') === 0) {
+        try { fs.unlinkSync(path.join(MEDIA_DIR, path.basename(piece._prevCover))); } catch (e) {}
+      }
+      piece._coverDecision = decision;
+    }
+
+    // 4) REGISTRO de la composición de la semana (familia asignada y por
+    // qué cada pieza va en su lugar; las que pelean quedan marcadas).
+    const record = {
+      v: 1, uid, weekKey, at: new Date().toISOString(),
+      pattern: pattern ? {
+        has: !!pattern.has, checker: !!pattern.checker,
+        columns: pattern.columns ? [0, 1, 2].map((c) => (pattern.columns[c] && pattern.columns[c].tone) || null) : null,
+      } : null,
+      ahead,
+      existingHead: existing.slice(0, 6).map((t) => ({
+        id: t.id != null ? t.id : null, lum: t.lum, sat: t.sat, hueFam: t.hueFam,
+        family: feedDirector.familyOf(t), media_type: t.media_type,
+      })),
+      beforeOrder: rows.map((r) => r.id),
+      order: res.order.map((ix) => pieces[ix].id),
+      assignments: res.assignments.map((a) => ({
+        postId: pieces[a.idx].id, pubRank: a.pubRank, family: a.family, role: a.role,
+        fixed: !!pieces[a.idx].fixed, why: a.why,
+        cover: pieces[a.idx]._coverDecision || null,
+      })),
+      flags: res.flags.map((f) => ({ postId: pieces[f.idx].id, reasons: f.reasons })),
+      remainingViolations: res.remainingViolations,
+      moves: res.moves,
+    };
+    try {
+      db.prepare(`INSERT INTO feed_compositions (user_id, week_key, data_json) VALUES (?,?,?)
+        ON CONFLICT(user_id, week_key) DO UPDATE SET data_json = excluded.data_json, created_at = datetime('now')`)
+        .run(uid, weekKey, JSON.stringify(record));
+    } catch (e) {}
+    console.log(`[feed-dir:${tag || 'auto'}] usuario ${uid} semana ${weekKey}: ${pieces.length} piezas compuestas contra su grilla (${res.moves} movimientos, ${record.flags.length} marcadas)`);
+    return { ok: true, pieces: pieces.length, moves: res.moves, flags: record.flags.length, record };
+  } catch (e) {
+    console.error(`[feed-dir] usuario ${uid} semana ${weekKey}:`, e && e.message);
+    return { ok: false, error: e && e.message };
+  } finally {
+    for (const d of frameTempDirs) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} }
+  }
+}
+
 async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
   // Kill-switch diario también para el pipeline en segundo plano: se aborta en
   // silencio (el usuario lo reintenta mañana; nada se rompe).
@@ -8496,6 +8727,13 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       console.error(`[pipeline:${tag}] extras historias/reels:`, e.message);
       try { recordSweepFailure(uid, weekKey, 'extras_error'); } catch (e2) {}
     }
+    // DIRECCIÓN DE FEED (v332): con la semana completa (posteos + extras
+    // historias/reels ya creados arriba), se compone el orden de
+    // publicación contra la grilla real del cliente y queda registrado.
+    // Nunca bloquea ni rompe la generación: adentro captura todo.
+    if (created > 0) {
+      try { await composeWeekFeed(uid, weekKey, tag); } catch (e) {}
+    }
     // 2026-10-08: si no se creó NADA, es un fallo (no un éxito vacío).
     // Antes retornaba ok:true con created:0 y el retry lo borraba como si
     // hubiera funcionado — por eso la semana de Valentino nunca se reintentó.
@@ -8905,6 +9143,40 @@ function scheduleDraftsPerWeek(uid, drafts, apply) {
   } catch (e) { /* no bloquea */ }
   const pools = weekQuotaPools(uid);
   const closedSet = closedDaysOf(uid);
+  // DIRECCIÓN DE FEED (v332): si el director compuso alguna de estas
+  // semanas, el orden de salida de las piezas FEED es el compuesto (las
+  // historias conservan el suyo). El mapa de slots no cambia — días y
+  // horas salen de las mismas reglas de siempre —: solo se permuta QUÉ
+  // pieza cae en cada slot, que es exactamente "el orden entre piezas de
+  // la misma semana". Sin registro compuesto, orden de creación, como
+  // siempre. El orden se agrupa por la semana de cada borrador: ninguna
+  // pieza salta de semana.
+  try {
+    const rankByPost = new Map();
+    const compRows = db.prepare('SELECT data_json FROM feed_compositions WHERE user_id = ?').all(uid);
+    for (const cr of compRows) {
+      try {
+        const rec = JSON.parse(cr.data_json || '{}');
+        if (rec && Array.isArray(rec.order)) {
+          rec.order.forEach((pid, ix) => { if (!rankByPost.has(pid)) rankByPost.set(pid, ix); });
+        }
+      } catch (e) {}
+    }
+    if (rankByPost.size) {
+      const feedPos = [];
+      drafts.forEach((d, i) => { if (d.media_type !== 'story') feedPos.push(i); });
+      const subset = feedPos.map((i) => drafts[i]);
+      const grpOf = (d) => (d.week_key ? mondayKeyOf(d.week_key) : curMonday);
+      subset.sort((a, b) => {
+        const ga = grpOf(a), gb = grpOf(b);
+        if (ga !== gb) return ga < gb ? -1 : 1;
+        const ra = rankByPost.has(a.id) ? rankByPost.get(a.id) : Number.MAX_SAFE_INTEGER;
+        const rb = rankByPost.has(b.id) ? rankByPost.get(b.id) : Number.MAX_SAFE_INTEGER;
+        return ra - rb;
+      });
+      feedPos.forEach((pos, k) => { drafts[pos] = subset[k]; });
+    }
+  } catch (e) { /* sin composición, orden de siempre */ }
   const scheduled = [];
   const waiting = [];
   for (const d of drafts) {
@@ -9032,6 +9304,13 @@ async function autoArmWeek(uid, tag) {
         await generateWeekExtras({ db, uid, weekKey, tag, mediaDir: MEDIA_DIR, feedDrafts, needsReview: needRev === 1 });
       }
     } catch (e) { console.error(`[auto-arm:${tag}] extras:`, e.message); }
+    // 1b) DIRECCIÓN DE FEED (v332): con posteos + extras ya creados, se
+    // compone el orden de la semana contra la grilla real antes de
+    // programar (scheduleDraftsPerWeek honra el registro compuesto).
+    try {
+      const wkArm = mondayKeyOf(tzToday(userTz(uid)));
+      await composeWeekFeed(uid, wkArm, tag);
+    } catch (e) {}
     // 2) Programar todo lo listo.
     const r = scheduleAllDrafts(uid);
     if (!r.ok) { console.log(`[auto-arm:${tag}] usuario ${uid}: ${r.reason}`); return r; }
@@ -9063,7 +9342,7 @@ function autoWeekEnabled(uid) {
   } catch (e) { return true; }
 }
 
-app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
+app.post('/api/posts/schedule-all', requireAuth, async (req, res) => {
   const uid = req.session.userId;
   const drafts = db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' ORDER BY created_at ASC`).all(uid);
   if (!drafts.length) {
@@ -9072,6 +9351,16 @@ app.post('/api/posts/schedule-all', requireAuth, (req, res) => {
     if (pending > 0) return res.status(400).json({ error: 'in_review', message: 'Tus primeros posteos están en el horno ✨ Te aviso cuando estén listos para programar.' });
     return res.status(400).json({ error: 'No hay borradores para programar' });
   }
+  // DIRECCIÓN DE FEED (v332): antes de programar, componer el orden de
+  // cada semana presente en estos borradores contra la grilla real del
+  // cliente (best-effort: si la composición falla, se programa en el
+  // orden de siempre; scheduleDraftsPerWeek honra el registro compuesto).
+  try {
+    const wks = [...new Set(drafts.map((d) => d.week_key).filter(Boolean))];
+    for (const wk of wks) {
+      try { await composeWeekFeed(uid, wk, 'manual'); } catch (e) {}
+    }
+  } catch (e) {}
   // Cupo POR SEMANA DEL POSTEO (fix v216): cada borrador se programa si el
   // cupo de SU semana (la de su week_key) lo admite; los que exceden el cupo
   // de su propia semana quedan borradores y se reportan en `waiting`
@@ -9276,6 +9565,164 @@ app.get('/api/ig/avatar', requireAuth, async (req, res) => {
     if (pic) db.prepare('INSERT OR REPLACE INTO ig_avatar_cache (username, pic_url, name, fetched_at) VALUES (?,?,?,datetime(\'now\'))').run(u, pic, nm);
     res.json({ username: u, pic_url: pic, name: nm });
   } catch (e) { res.json({ username: u, pic_url: null }); }
+});
+
+// ---------- 🏠 HOME (v331): el perfil literal del cliente ----------
+// La home de la app es el perfil de Instagram del cliente TAL CUAL es:
+// encabezado fiel (foto, @, nombre, bio, link, conteos) + sus posteos
+// reales recientes; las piezas de la semana las compone el cliente
+// sobre esta base. Fuente SIN conexión Meta: la lectura pública que
+// Posty ya hace del perfil (la misma del fundamento/radiografía:
+// feedAudit.fetchAuditData), guardada como snapshot por cuenta y
+// refrescada con cadencia de 24 h (la home nunca espera a Instagram:
+// snapshot vencido se sirve al instante y refresca en segundo plano).
+// REGLA DE VERDAD: lo que la lectura no trae queda null/vacío y la
+// home lo omite — jamás un conteo ni un posteo inventado. Las
+// destacadas reales NO viajan en la lectura pública (la superficie
+// conectada disponible tampoco las expone: getIgProfile solo trae
+// username), así que el snapshot las trae vacías y la fila aparece
+// solo si alguna fuente futura las puebla. Cuenta sin IG (o sin
+// lectura posible todavía): la home cae al kit de nacimiento
+// (analysisEngine.profileKit) — el perfil TAL COMO Posty lo propone,
+// marcado source:'kit', nunca disfrazado de lectura real.
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS ig_home_snapshot (
+    user_id INTEGER PRIMARY KEY,
+    username TEXT DEFAULT '',
+    payload TEXT DEFAULT '',
+    fetched_at INTEGER DEFAULT 0
+  )`);
+} catch (e) {}
+const HOME_SNAPSHOT_TTL_MS = 24 * 3600 * 1000;
+const homeSnapInFlight = new Map(); // uid -> Promise (un solo refresco por cuenta)
+
+function homeSnapshotGet(uid) {
+  try {
+    const r = db.prepare('SELECT username, payload, fetched_at FROM ig_home_snapshot WHERE user_id = ?').get(uid);
+    if (!r || !r.payload) return null;
+    const payload = JSON.parse(r.payload);
+    if (!payload || typeof payload !== 'object') return null;
+    // Contrato de la home: highlights/recents SIEMPRE arrays (la
+    // lectura real nunca trae destacadas; el cliente no adivina).
+    if (!Array.isArray(payload.highlights)) payload.highlights = [];
+    if (!Array.isArray(payload.recents)) payload.recents = [];
+    return { payload, fetched_at: Number(r.fetched_at) || 0 };
+  } catch (e) { return null; }
+}
+function homeSnapshotPut(uid, username, payload) {
+  try {
+    db.prepare(`INSERT INTO ig_home_snapshot (user_id, username, payload, fetched_at) VALUES (?,?,?,?)
+      ON CONFLICT(user_id) DO UPDATE SET username=excluded.username, payload=excluded.payload, fetched_at=excluded.fetched_at`)
+      .run(uid, String(username || ''), JSON.stringify(payload || {}), Date.now());
+  } catch (e) {}
+}
+// Proyección de la lectura cruda a la forma de la home: conteos TAL
+// CUAL (null si no vinieron), posteos recientes con tipo y fecha
+// reales, miniaturas y foto LOCALIZADAS en /media (las URLs de la CDN
+// de IG expiran y no se dejan hotlinkear: mismo criterio que /prueba).
+async function homeProfileFromRead(handle, data) {
+  if (!data || !data.ok || !data.profile) return null;
+  const prof = feedAudit.trialProfileFromAudit(data, null);
+  if (!prof) return null;
+  const posts = (data.posts || []).filter((x) => x && x.thumb);
+  const loc = { handle: prof.handle, photos: posts.map((x) => x.thumb) };
+  try { await feedAudit.localizeTrialPhotos(loc, MEDIA_DIR); } catch (e) { /* quedan las que haya */ }
+  let pic = prof.pic || null;
+  if (pic) {
+    const lp = { handle: prof.handle, pic };
+    try { await feedAudit.localizeTrialPic(lp, MEDIA_DIR); pic = lp.pic || pic; } catch (e) { /* foto como vino */ }
+  }
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  return {
+    source: 'read',
+    username: prof.handle || String(handle || '').replace(/^@/, ''),
+    name: prof.name || '',
+    pic,
+    bio: prof.bio || '',
+    bio_unread: !!prof.bio_unread,
+    link: prof.link || '',
+    followers: num(data.profile.followers),
+    posts_count: num(data.profile.posts_count),
+    following: num(data.profile.following),
+    highlights: [], // la lectura pública no las expone: jamás inventadas
+    recents: posts.map((x, i) => ({
+      img: (loc.photos && loc.photos[i]) || null,
+      type: x.type === 'GraphVideo' ? 'video' : x.type === 'GraphSidecar' ? 'carousel' : 'image',
+      taken_at: (typeof x.taken_at === 'number' && x.taken_at > 0) ? x.taken_at : null,
+      shortcode: x.shortcode || null,
+    })).filter((r) => r.img),
+    captured_at: Date.now(),
+  };
+}
+async function homeProfileReadAndStore(uid, handle) {
+  const data = await feedAudit.fetchAuditData(handle).catch(() => null);
+  const payload = await homeProfileFromRead(handle, data).catch(() => null);
+  if (payload) homeSnapshotPut(uid, handle, payload);
+  return payload;
+}
+function homeProfileRefreshOnce(uid, handle) {
+  if (homeSnapInFlight.has(uid)) return homeSnapInFlight.get(uid);
+  const pr = homeProfileReadAndStore(uid, handle)
+    .catch(() => null)
+    .finally(() => { homeSnapInFlight.delete(uid); });
+  homeSnapInFlight.set(uid, pr);
+  return pr;
+}
+function homeProfileKit(uid, prof) {
+  let kit = null;
+  try {
+    const digest = clientDigest.getDigest(db, uid);
+    kit = analysisEngine.profileKit({
+      business: { name: (prof && prof.business_name) || '', category: (prof && prof.category) || '', ig_username: (prof && prof.ig_username) || '' },
+      digest,
+      reviews: null,
+      lang: 'es',
+    });
+  } catch (e) { kit = null; }
+  return {
+    source: 'kit',
+    username: (prof && prof.ig_username || '').replace(/^@/, ''),
+    name: (kit && kit.display_name) || (prof && prof.business_name) || '',
+    pic: null,
+    bio: kit ? (kit.bio_lines || []).join('\n') : '',
+    bio_unread: false,
+    link: '',
+    followers: null, posts_count: null, following: null,
+    highlights: kit && Array.isArray(kit.highlights) ? kit.highlights.map((t) => ({ title: String(t), cover: null })) : [],
+    recents: [],
+    kit_note: kit ? (kit.note || '') : '',
+    captured_at: null,
+  };
+}
+app.get('/api/home/profile', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  try {
+    const prof = getProfile(uid) || {};
+    const handle = String(prof.ig_username || '').replace(/^@+/, '').trim().toLowerCase();
+    if (!handle) return res.json({ ok: true, ...homeProfileKit(uid, prof) });
+    const snap = homeSnapshotGet(uid);
+    if (snap && snap.payload && snap.payload.username === handle) {
+      if (Date.now() - snap.fetched_at < HOME_SNAPSHOT_TTL_MS) return res.json({ ok: true, ...snap.payload });
+      // Vencido: se sirve al instante y el refresco corre en segundo plano.
+      homeProfileRefreshOnce(uid, handle);
+      return res.json({ ok: true, ...snap.payload });
+    }
+    // Primera lectura de esta cuenta (o cambió el @): se intenta en
+    // línea con presupuesto corto; si Instagram no responde a tiempo,
+    // la home cae al kit (sin inventar nada) y la lectura sigue en
+    // segundo plano para la próxima entrada.
+    let payload = null;
+    try {
+      payload = await Promise.race([
+        homeProfileRefreshOnce(uid, handle),
+        new Promise((r) => setTimeout(() => r(null), 6000)),
+      ]);
+    } catch (e) { payload = null; }
+    if (payload) return res.json({ ok: true, ...payload });
+    return res.json({ ok: true, ...homeProfileKit(uid, prof), pending_read: true });
+  } catch (e) {
+    res.json({ ok: false, error: 'home_profile' });
+  }
 });
 // Prepara el OAuth de Instagram: valida la Embed URL, guarda state en sesión
 // y devuelve la URL de autorización de Meta.
@@ -10199,12 +10646,12 @@ async function maybeReferralNudge(referrerId, baseUrl) {
 
 // ---------- Facturación (Mercado Pago) ----------
 app.get('/api/billing/plans', (req, res) => {
-  const country = req.query.country === 'UY' ? 'UY' : (req.query.country === 'US' ? 'US' : 'AR');
+  const country = ['UY', 'US', 'GB', 'CA'].includes(req.query.country) ? req.query.country : 'AR';
   const plans = getPlans(country);
   const anchor = PLAN_ANCHOR[country];
   res.json({
     country,
-    currency: country === 'UY' ? 'UYU' : (country === 'US' ? 'USD' : 'ARS'),
+    currency: country === 'UY' ? 'UYU' : (country === 'US' ? 'USD' : (country === 'GB' ? 'GBP' : (country === 'CA' ? 'CAD' : 'ARS'))),
     plans: Object.values(plans).map((p) => ({ ...p, price_label: formatPrice(p) })),
     anchor,
     trial_plan: TRIAL_PLAN,
@@ -12686,6 +13133,18 @@ async function conceptShotGenerateInner({ uid, idea, tipo, intent = null, headli
     } catch (e) { console.error('[concept-shot] qa:', e.message); }
   })();
   try { rememberPrompt(`/media/${imgName}`, withStyle(prompt)); } catch (e) {}
+  // (v330) POSTY NO SE REPITE: queda registrado si esta imagen nació con
+  // el avatar/protagonista del negocio como sujeto (la referencia del
+  // CHARACTER LOCK efectivamente viajó y el QA de personaje no la
+  // rechazó). La historia gemela lee este registro (image_meta) y, si la
+  // fuente ya trae al avatar en grande, no estampa el medallón con el
+  // mismo avatar abajo. Sin registro (piezas viejas, fotos del cliente,
+  // renders por código) el comportamiento es el de siempre.
+  try {
+    const avProta = (characterSent && !(resultOut && resultOut.character === 'failed')) ? 1 : 0;
+    db.prepare('INSERT OR REPLACE INTO image_meta (media_path, avatar_protagonist) VALUES (?, ?)')
+      .run(`/media/${imgName}`, avProta);
+  } catch (e) {}
   return `/media/${imgName}`;
 }
 
@@ -15929,9 +16388,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
     'If the request applies to several posts, include all of them. If it is unclear, edits: [] and ask for clarification in reply. ' +
     'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
-    'Free 3-day trial, no card. Plans: Essential $59/month (community manager: 7 posts + 1 reel per week), Pro $119/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $3.97 a day), Total $179/month (adds customer care: daily stories, comment and message replies). ' +
+    'Free 3-day trial, no card. Plans: Essential $99.99/month (community manager: 7 posts + 1 reel per week), Pro $189.99/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $6.33 a day), Total $289.99/month (adds customer care: daily stories, comment and message replies). ' +
     'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
-    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $3.97 a day, and Essential starts at $59; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
+    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $6.33 a day, and Essential starts at $99.99; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
     '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
   const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
@@ -15948,9 +16407,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
     'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply. ' +
     'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
-    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $69.900/mes (Community Manager), Pro $129.900/mes (CM + Growth, el recomendado — $4.330 por día), Total $199.900/mes (CM + Growth + Atención al cliente). ' +
+    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $99.999/mes (Community Manager), Pro $189.900/mes (CM + Growth, el recomendado — $6.330 por día), Total $289.900/mes (CM + Growth + Atención al cliente). ' +
     'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
-    'Si dice que no, no insistas. Objeciones: "es caro" → el recomendado sale $4.330 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
+    'Si dice que no, no insistas. Objeciones: "es caro" → el recomendado sale $6.330 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
     // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
     (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
   const sys = en ? sysEn : sysEs;
@@ -16015,12 +16474,12 @@ const POSTY_CHAT_SYS = [
   '',
   'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Nunca devolvés una pregunta vacía: siempre proponés un paso concreto. La prueba gratis de 3 días (sin tarjeta) se ofrece cuando encaja en la conversación — NO en cada mensaje.',
   'FORMATO: texto plano, SIN markdown: nada de asteriscos, almohadillas ni negritas. Si enumerás planes o puntos, escribilos en frases corridas o en líneas simples empezando con "• ".',
-  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale $69.900 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
+  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale $99.999 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
   '',
   'QUÉ ES POSTY (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana (7 posteos + 1 reel en el plan Esencial), escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
   '- EL ANÁLISIS: al poner tu @ en la prueba, Posty lee tu Instagram real y te escribe una carta con qué mejorar, qué incrementar y qué reducir, más su plan de ejecución (esta semana / la que viene / de acá en más).',
-  '- Planes (por mes, en pesos): Esencial $69.900 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $129.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa (el recomendado — $4.330 por día). Total $199.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
+  '- Planes (por mes, en pesos): Esencial $99.999 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $189.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa (el recomendado — $6.330 por día). Total $289.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
   '- Prueba gratis completa de 3 días, sin tarjeta. Referidos: si 2 amigos se suman, 50% de descuento.',
   '',
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. La constancia y el trabajo los pone Posty; los resultados dependen de cada negocio. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba.',
@@ -16040,12 +16499,12 @@ const POSTY_CHAT_SYS_EN = [
   '',
   'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
   'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
-  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $59 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
+  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $99.99 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
   '',
   'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts + 1 reel on the Essential plan), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
   '- THE ANALYSIS: when you enter your @ in the trial, Posty reads your real Instagram and writes you a letter with what to improve, what to increase and what to reduce, plus its execution plan (this week / next week / from here on).',
-  '- Plans (per month, in USD): Essential $59 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $119 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $3.97 a day). Total $179 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
+  '- Plans (per month, in USD): Essential $99.99 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $189.99 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $6.33 a day). Total $289.99 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
   '- Full free 3-day trial, no card required. Referrals: if 2 friends join, 50% off.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
@@ -17046,7 +17505,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261022-v325';
+const BUILD_ID = '20261022-v332';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -17651,4 +18110,4 @@ async function refreshAnalysesSweep(opts = {}) {
   return summary;
 }
 
-module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep };
+module.exports = { nextWeekSweep, generateWeekDrafts, nextWeekEligible, maybeStartRebuild, revalidateReferralDiscount, maybeReferralNudge, conceptShotGenerate: conceptShotGenerateQueued, autoArmWeek, scheduleAllDrafts, autoWeekEnabled, assignScheduleSlots, acceptAllDrafts, retrySweepFailures, backfillThisWeek, albumRitualSweep, runWeeklyIdeasLoop, runIdeasForUser, gridPatternFor, computeGridPattern, composeWeekFeed, planWeekTextModes, weekTextModeFor, kindOfTipo, runWeeklyDigestRefresh: refreshDigestsSweep, runWeeklyAnalysisRefresh: refreshAnalysesSweep };

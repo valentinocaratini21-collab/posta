@@ -211,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261022-v325'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261022-v331'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -489,7 +489,7 @@ function refreshScarcity() {
     const el = document.getElementById('scarcityLine');
     if (el) el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
     document.querySelectorAll('[data-spots]').forEach(s => {
-      s.innerHTML = `🔥 Quedan <b>${c.spots_left} de ${c.spots_total} lugares</b> este mes`;
+      s.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> este mes`;
       s.hidden = false;
     });
   }).catch(() => {});
@@ -1210,7 +1210,7 @@ function lpCalcUpdate() {
   const fmt = (n) => Math.round(n).toLocaleString('es-AR');
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$2.330 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
+  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$3.333 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
 }
 
 /* ---------- v177: la semana de tu rubro ---------- */
@@ -1668,9 +1668,8 @@ function landingView(cfg) {
         </div>
         <button type="button" class="lp-wall-nav next" id="lpWallNext" aria-label="Perfiles siguientes" onclick="lpWallStep(1)">›</button>
       </div>
-      <div class="lp-wall-meta"><span class="lp-wall-note">29 rubros · perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 7</span></div>
+      <div class="lp-wall-meta"><span class="lp-wall-note">Perfiles armados por Posty</span><span class="lp-wall-count" id="lpWallCount">1 / 7</span></div>
       <div class="lp-show-cta">
-        <p class="lp-show-bridge">Este es un ejemplo. <b>El tuyo</b> se arma en 1 minuto 👇</p>
         <form class="lp-igform lp-show-form" onsubmit="var v=cleanIgHandle(this.querySelector('input').value);location.href=v?'/prueba?ig='+encodeURIComponent(v):'/prueba';return false">
           <input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@tu_negocio" aria-label="Tu Instagram">
           <button class="btn btn-primary" type="submit">Quiero mi perfil así →</button>
@@ -1735,6 +1734,25 @@ function landingView(cfg) {
       <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a></p>
     </div>
   </div></div>
+  <div class="section"><div class="wrap">
+    <h2>Un video premium cada semana 🎬</h2>
+    <p class="lede">Posty crea un video cinematográfico de tu producto, listo para publicar — incluido en todos los planes.</p>
+    <style>
+    .vp-row{display:flex;gap:16px;overflow-x:auto;padding:24px 2px 10px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+    .vp-card{flex:0 0 auto;width:216px;margin:0;scroll-snap-align:start}
+    .vp-card video{display:block;width:216px;height:384px;object-fit:cover;border-radius:20px;border:1.5px solid #E3EDF4;box-shadow:0 14px 34px rgba(10,30,51,.12);background:#EAF6FC}
+    .vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:14.5px;margin-top:10px}
+    @media(max-width:560px){.vp-card{width:170px}.vp-card video{width:170px;height:302px}}
+    </style>
+    <div class="vp-row" aria-label="Videos premium hechos por Posty">
+      <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una cafetería, hecho por Posty"></video><figcaption class="vp-tag">☕ Cafetería</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una perfumería, hecho por Posty"></video><figcaption class="vp-tag">🧴 Perfumería</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una marca de zapatillas, hecho por Posty"></video><figcaption class="vp-tag">👟 Zapatillas</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una pastelería, hecho por Posty"></video><figcaption class="vp-tag">🧁 Pastelería</figcaption></figure>
+      <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de un estudio de uñas, hecho por Posty"></video><figcaption class="vp-tag">💅 Uñas</figcaption></figure>
+    </div>
+    <script>(function(){var vs=document.querySelectorAll('.vp-card video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
+  </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así trabajo yo 👇</h2>
     <p class="lede">Vos seguí atendiendo tu negocio. Del resto me ocupo yo.</p>
@@ -1762,7 +1780,7 @@ function landingView(cfg) {
       <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>$300.000+ por mes</div><div class="win">Desde $2.330 por día</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>$300.000+ por mes</div><div class="win">Desde $3.333 por día</div></div>
     </div>
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
@@ -1804,7 +1822,7 @@ function landingView(cfg) {
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $69.900</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $99.999</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">Probalo gratis, sin tarjeta</div></div>
@@ -1812,7 +1830,7 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Si está en el contrato</div><div class="win">Incluido — con un toque</div></div>
       <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>Honorarios aparte</div><div class="win">Potencia tu mejor posteo desde la app</div></div>
     </div>
-    <p class="unico-line">Un community manager cuesta <b>$300.000+/mes</b>. Posty arranca en <b>$69.900</b>.</p>
+    <p class="unico-line">Un community manager cuesta <b>$300.000 a $600.000 por mes — o más</b>. Posty arranca en <b>$99.999</b>.</p>
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
@@ -1877,7 +1895,7 @@ function landingView(cfg) {
         <button type="button" class="lp-crate on" data-rate="5000" onclick="lpCalcRate(this)">$5.000</button>
         <button type="button" class="lp-crate" data-rate="10000" onclick="lpCalcRate(this)">$10.000</button>
       </div>
-      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$2.330 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
+      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$3.333 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
     </div>
     <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>$300.000+ por mes</b>.</p>
   </div></div>
@@ -1896,7 +1914,7 @@ function landingView(cfg) {
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
       <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$2.330<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$3.333<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>
@@ -2368,9 +2386,13 @@ function setupChecklistHtml(title, opts) {
   setupChecklistCelebrate(rows.length);
   // En Inicio, la línea fina de IG ya comunica la conexión: la fila de IG del
   // checklist se omite ahí para no pedir lo mismo dos veces en una pantalla.
+  // (v326) Pero el TÍTULO cuenta el total real de pasos pendientes: antes
+  // Inicio decía "2 pasos" y las demás pantallas "3" por el mismo estado —
+  // el número tiene que ser el mismo en toda la app.
+  const totalSteps = rows.length;
   if (opts && opts.omitIg) rows = rows.filter((r) => !r.includes('setupIgRow'));
   if (!rows.length) return '';
-  const n = rows.length;
+  const n = (opts && opts.omitIg) ? totalSteps : rows.length;
   const t = title || `🚀 Te ${n === 1 ? 'falta 1 paso' : `faltan ${n} pasos`}`;
   return `<div class="setup-card"><div class="setup-title">${t}</div>${rows.join('')}</div>`;
 }
@@ -2414,7 +2436,9 @@ function bindSetupRows() {
 function refreshSetupChecklist() {
   document.querySelectorAll('.setup-card').forEach(card => {
     const sec = card.closest('.setup-secondary');
-    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined);
+    // (v326) El refresh conserva el omitIg de Inicio: si no, la fila de IG
+    // (y el conteo) cambiaban solos a mitad de sesión.
+    const h = setupChecklistHtml(sec ? 'Para que la magia siga ✨' : undefined, (card.closest && card.closest('#inicioView')) ? { omitIg: true } : undefined);
     if (!h) { (sec || card).remove(); return; }
     const t = document.createElement('template');
     t.innerHTML = h.trim();
@@ -2431,7 +2455,7 @@ function refreshSetupChecklist() {
 function mzIsMobile() {
   try { return !!(window.matchMedia && window.matchMedia('(max-width: 820px)').matches); } catch (e) { return false; }
 }
-function mzHomeHash() { return mzIsMobile() ? '#/app/inicio' : '#/app/schedule'; }
+function mzHomeHash() { return '#/app/inicio'; } // (v331 addendum 22/10) decisión de Valentino: la home es el feed literal EN TODOS los tamaños — el aterrizaje por defecto es Inicio también en desktop; la Agenda queda a un toque (tab Semana).
 function mzTabsHTML(tab) {
   if (tab === 'chat') return ''; // el chat es pantalla completa con su input fijo: sin pestañas
   const on = tab === 'inicio' ? 'inicio'
@@ -2454,7 +2478,7 @@ function appShell(tab, content) {
       <img src="ai-avatar.png" alt="Posty" class="side-posty-ava">
       <span class="side-posty-txt"><b id="sidePostyName">Posty<span class="pdot">.</span></b></span>
     </div>
-    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Schedule<span class="sched-count" id="schedCount" style="display:none"></span></button>
+    <button class="drawer-link ${tab === 'schedule' ? 'on' : ''}" data-tab="schedule"><span class="di">📅</span>Semana<span class="sched-count" id="schedCount" style="display:none"></span></button>
     <button class="drawer-link ${tab === 'analisis' ? 'on' : ''}" data-tab="analisis"><span class="di">📊</span>Análisis</button>
     <button class="drawer-link ${tab === 'ajustes' ? 'on' : ''}" data-tab="ajustes"><span class="di">⚙️</span>Ajustes</button>
     <div class="drawer-grow"></div>
@@ -3606,13 +3630,9 @@ function pickRejectReason() {
   // Aceptar UN borrador: se programa con su día/hora y sale solo
   $$('[data-revaccept]').forEach(b => b.onclick = async () => {
     const id = +b.dataset.revaccept;
-    const m = $('#revMsg');
     // Sin Instagram conectado, "sale solo" es mentira: pedir conectar antes de aceptar
     if (!(PROFILE && PROFILE.ig_connected)) {
-      if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
-      const g = $('#revIgGo');
-      if (g) g.onclick = () => igConnectHere();
-      m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      igGateFeedback(b);
       return;
     }
     b.disabled = true;
@@ -3691,13 +3711,9 @@ function pickRejectReason() {
 // chip del chat. Sin salir de la pantalla: programa todo y festeja en modal.
 async function doScheduleAll(btn) {
   const b = btn || document.getElementById('btnScheduleAll');
-  const m = $('#revMsg');
   // Sin Instagram conectado, "sale solo" es mentira: mismo gate que el accept individual.
   if (!(PROFILE && PROFILE.ig_connected)) {
-    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
-    const g = $('#revIgGo');
-    if (g) g.onclick = () => igConnectHere();
-    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    igGateFeedback(b);
     return;
   }
   if (b) b.disabled = true;
@@ -3751,12 +3767,8 @@ function bindScheduleAll() {
 // horario automático los que no tengan hora. El tap ES la confirmación.
 async function doActivateWeek(btn) {
   const b = btn || document.getElementById('btnActivateWeek');
-  const m = $('#revMsg');
   if (!(PROFILE && PROFILE.ig_connected)) {
-    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
-    const g = $('#revIgGo');
-    if (g) g.onclick = () => igConnectHere();
-    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    igGateFeedback(b);
     return;
   }
   if (b) { b.disabled = true; b.innerHTML = '🚀 Activando tu semana…'; }
@@ -3817,15 +3829,46 @@ function bindActivateWeek() {
 
 // "✅ Aceptar todos": un tap aprueba TODOS los borradores pendientes y los deja
 // programados en la hora que muestra la tarjeta. El tap ES la confirmación.
+// (v326) Gate de Instagram al aceptar: el aviso tiene que aparecer DONDE el
+// cliente tocó. Antes se escribía en el primer #revMsg del DOM (hay uno por
+// vista) y en Agenda —pop y tarjetas— el botón parecía muerto: cero feedback.
+// Orden: 1) dentro del pop si el toque fue ahí; 2) el #revMsg DE ESTA VISTA;
+// 3) toast como último recurso. El tono es de paso amable, no de error.
+function igGateFeedback(anchorBtn) {
+  const html = `<div class="ig-gate-note">📸 <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
+  const wire = (root) => { const g = root && root.querySelector ? root.querySelector('.ig-gate-go') : null; if (g) g.onclick = () => igConnectHere(); };
+  try {
+    const pop = anchorBtn && anchorBtn.closest ? anchorBtn.closest('.scf-pop') : null;
+    if (pop) {
+      let note = pop.querySelector('.ig-gate-note');
+      if (!note) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        note = tmp.firstElementChild;
+        (pop.querySelector('.igmock') || pop).appendChild(note);
+      }
+      wire(pop);
+      try { note.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+      return;
+    }
+    const scope = anchorBtn && anchorBtn.closest
+      ? (anchorBtn.closest('#schedView') || anchorBtn.closest('#inicioView') || anchorBtn.closest('#chatView') || anchorBtn.closest('[id$="View"]') || document)
+      : document;
+    const m = scope && scope.querySelector ? scope.querySelector('#revMsg') : null;
+    if (m) {
+      m.innerHTML = html;
+      wire(m);
+      try { m.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+      return;
+    }
+  } catch (e) {}
+  toast('📸 <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.');
+}
 async function doAcceptAll(btn) {
   const b = btn || document.getElementById('btnAcceptAll');
-  const m = $('#revMsg');
   // Sin Instagram conectado, "sale solo" es mentira: mismo gate que los demás.
   if (!(PROFILE && PROFILE.ig_connected)) {
-    if (m) m.innerHTML = `<div class="err">📸 Conectá tu Instagram primero — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm" id="revIgGo">Conectar Instagram →</button></div>`;
-    const g = $('#revIgGo');
-    if (g) g.onclick = () => igConnectHere();
-    if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    igGateFeedback(b);
     return;
   }
   if (b) { b.disabled = true; b.textContent = 'Aceptando…'; }
@@ -6043,14 +6086,18 @@ function weekCardHTML(d, o) {
         ${acts}
         ${whyHTML}
       </div>`;
+  // (v326) En Día el encabezado de la pantalla ya dice el día: la etiqueta de
+  // la tarjeta va corta (solo la hora) para que no se peleé con el botón
+  // Aceptar en pantallas chicas ("jue 22 · 12:0…" cortado).
+  const whenTxt = o.dia ? String(prop.label || '').replace(/^(\S+)\s+[^·]*·\s*/, '$1 ') : prop.label;
   return `<div class="igmock igmock-fixed${o.dia ? ' igmock-dia' : ''}" data-post-id="${esc(String(d.id))}" data-sched-at="${esc(String(d.scheduled_at || ''))}" data-day-label="${esc(dayLabel)}">
       <div class="igmock-head"><span class="igmock-name">${esc(bizName)}</span>${o.count ? `
         <span class="igmock-count">${esc(o.count)}</span>` : ''}</div>
-      <div class="igmock-when-top"><span>${esc(prop.label)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
+      <div class="igmock-when-top"><span>${esc(whenTxt)}${isS ? ' · story' : ''}${isV ? ' · reel' : ''}</span>
         ${statusHTML}</div>
       ${isPending
         ? `<div class="igmock-media igmock-pending">${media}</div>`
-        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull)}" data-tags="${esc(String(d.hashtags || ''))}" aria-label="Ver posteo">${media}</button>`}
+        : `<button type="button" class="igmock-media" data-lightbox="${esc(d.image_path || '')}" data-video="${isV ? 1 : 0}" data-cap="${esc(capFull || '')}" data-tags="${esc(d.hashtags || '')}" data-post="${esc(String(d.id))}" data-postlabel="${isPub ? 'Ver posteo' : '✏️ Editar este posteo'}" aria-label="Ver posteo">${media}</button>`}
       ${foot}
     </div>`;
 }
@@ -6276,7 +6323,7 @@ function schedPlacements(all, tz) {
 // una resta de slots y la nota de "fuera de esta semana" contaba por
 // ubicación — y los tres números no reconciliaban a la vista del cliente.
 function schedWeekCounts(all, tz, proposals) {
-  const out = { thisWeek: 0, nextDrafts: 0 };
+  const out = { thisWeek: 0, nextDrafts: 0, thisDrafts: 0 };
   try {
     const posts = Array.isArray(all) ? all : [];
     const today = schedTodayYmd(tz);
@@ -6293,6 +6340,7 @@ function schedWeekCounts(all, tz, proposals) {
       const k = dayOf(p);
       if (!k) continue;
       if (k >= mon && k <= sun && (p.status === 'draft' || p.status === 'scheduled' || p.status === 'published')) out.thisWeek++;
+      if (k >= mon && k <= sun && p.status === 'draft') out.thisDrafts++;
       if (p.status === 'draft' && k >= nMon && k <= nSun) out.nextDrafts++;
     }
   } catch (e) {}
@@ -6312,10 +6360,17 @@ function schedQuotaHTML(list, quota, wk) {
   const nextLine = nd > 0
     ? `<div class="hs-quota-next">✨ Ya están armados <b>${Math.min(nd, qTotal)} de ${qTotal}</b> de la semana que viene${nd > qTotal ? ` · y <b>${nd - qTotal} más</b> en espera` : ''}</div>`
     : '';
+  // (v326) Nada de festejar "semana completa" con borradores esperando: si
+  // quedan por aceptar, la línea lo dice (es EL contador de la Agenda) y el
+  // festejo llega recién cuando no queda ninguno.
+  const drafts = wk ? (wk.thisDrafts || 0) : 0;
+  const quotaTxt = shown >= qTotal
+    ? (drafts > 0
+      ? `📋 <b>${shown} de ${qTotal}</b> posteos esta semana · te ${drafts === 1 ? 'queda' : 'quedan'} <b>${drafts}</b> por aceptar`
+      : `🎉 <b>¡Semana completa!</b> ${shown} de ${qTotal} posteos esta semana`)
+    : `📊 <b>${shown} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`;
   return `<div class="hs-quota">
-      <div class="hs-quota-txt">${shown >= qTotal
-        ? `🎉 <b>¡Semana completa!</b> ${shown} de ${qTotal} posteos esta semana`
-        : `📊 <b>${shown} de ${qTotal}</b> posteos esta semana · te ${qLeft === 1 ? 'queda' : 'quedan'} <b>${qLeft}</b>`}</div>
+      <div class="hs-quota-txt">${quotaTxt}</div>
       <div class="hs-quota-bar"><span style="width:${qPct}%"></span></div>
       ${nextLine}
     </div>`;
@@ -6583,7 +6638,7 @@ function schedFilterBlockHTML(all, quota, generating, noDna) {
       </div>
       ${navHTML}
     </div>
-    ${drafts.length ? `<div class="scf-remain">📝 Te ${drafts.length === 1 ? 'queda' : 'quedan'} <b>${drafts.length}</b> por aceptar</div>` : ''}
+    ${''/* (v326) un solo contador: los "por aceptar" ya viven en la línea de cupo (schedQuotaHTML) y en el botón Aceptar todo — esta tercera copia decía lo mismo y contradecía el festejo de arriba. */}
     ${body}
   </div>`;
 }
@@ -6678,7 +6733,7 @@ function feedPreviewHTML(all, tz, prof) {
       const pill = sched ? (dObj ? `${dObj.getUTCDate()} ${MESES[dObj.getUTCMonth()]}` : 'programado') : 'borrador';
       return `<button type="button" class="fp-tile up${extra}" data-feed-day="${t.ymd}" data-post-id="${esc(String(p.id))}" title="${esc((sched ? 'Programado: ' : 'Borrador: ') + when)}">${media}<span class="fp-pill">${esc(pill)}</span>${reel}</button>`;
     }
-    const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}"` : '';
+    const lb = p.image_path ? ` data-lightbox="${esc(p.image_path)}" data-video="${isV ? '1' : '0'}" data-cap="${esc(p.caption || '')}" data-tags="${esc(p.hashtags || '')}"` : '';
     return `<button type="button" class="fp-tile pub${extra}" data-post-id="${esc(String(p.id))}"${lb}>${media}${reel}</button>`;
   }).join('');
   const moreBtn = parts.length > VIS ? '<button type="button" class="fp-more" id="fpMore">Ver más posteos</button>' : '';
@@ -6714,24 +6769,15 @@ function schedJumpDay(ymd) {
   try { render(); } catch (e) {}
   setTimeout(() => { const el = document.getElementById('schedView'); if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} } }, 60);
 }
-function bindSchedFilter() {
-  SCF_POP = null; // el DOM se reconstruyó: ninguna capa queda abierta
-  SCF_PINNED = false;
-  $$('#schedView [data-scf-mode]').forEach(b => b.onclick = () => { if (b.dataset.scfMode !== SCHED_MODE) schedSetMode(b.dataset.scfMode); });
-  const pv = $('#scfNavPrev'), nx = $('#scfNavNext'), td = $('#scfNavToday');
-  if (pv) pv.onclick = () => schedNavStep(-1);
-  if (nx) nx.onclick = () => schedNavStep(1);
-  if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; SCHED_WEEK_OFFSET = 0; SCHED_MONTH_OFFSET = 0; try { render(); } catch (e) {} };
-  $$('#schedView [data-scf-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.scfDay));
-  // Semana: el posteo compacto se agranda al pasar el mouse (con una
-  // mini-espera para no parpadear al barrer la grilla) o al primer
-  // toque en pantallas táctiles. La ampliación va CENTRADA en la
-  // pantalla. v221 (corrección de Valentino): HOVER = vista previa que
-  // se cierra EN EL ACTO al sacar el mouse de la foto (sin esperas, sin
-  // depender de salir de la tarjeta grande); CLICK = capa FIJADA para
-  // poder usar Editar/Aceptar/Frenar, hasta ✕ o click afuera. En
-  // táctil el toque ya la fijaba: sin cambios.
-  $$('#schedView .scf-mini-x').forEach(w => {
+// (v331) El cableado de las minis .scf-mini-x (hover que agranda / click
+// que fija) y los cierres globales de la capa viven en funciones propias:
+// la Agenda (Semana) y la HOME nueva (el feed literal) comparten LA
+// MISMA interacción, sin duplicar la lógica. bindScfMinis(root) cablea
+// las minis dentro de root; scfWireGlobals() registra una sola vez los
+// listeners de documento (click afuera / Escape / rastreador geométrico).
+function bindScfMinis(root) {
+  if (!root) return;
+  root.querySelectorAll('.scf-mini-x').forEach(w => {
     let t = null;
     w.addEventListener('mouseenter', () => {
       if (SCF_PINNED) return; // hay una capa fijada: el hover no la roba
@@ -6765,6 +6811,9 @@ function bindSchedFilter() {
       } else scfOpenPop(w, true);
     });
   });
+  scfWireGlobals();
+}
+function scfWireGlobals() {
   // Cerrar la capa tocando afuera o con Escape (una sola vez global).
   if (!window.__scfPopDocWired) {
     window.__scfPopDocWired = true;
@@ -6789,6 +6838,27 @@ function bindSchedFilter() {
       scfClosePop();
     });
   }
+}
+function bindSchedFilter() {
+  SCF_POP = null; // el DOM se reconstruyó: ninguna capa queda abierta
+  SCF_PINNED = false;
+  $$('#schedView [data-scf-mode]').forEach(b => b.onclick = () => { if (b.dataset.scfMode !== SCHED_MODE) schedSetMode(b.dataset.scfMode); });
+  const pv = $('#scfNavPrev'), nx = $('#scfNavNext'), td = $('#scfNavToday');
+  if (pv) pv.onclick = () => schedNavStep(-1);
+  if (nx) nx.onclick = () => schedNavStep(1);
+  if (td) td.onclick = () => { SCHED_DAY_OFFSET = 0; SCHED_WEEK_OFFSET = 0; SCHED_MONTH_OFFSET = 0; try { render(); } catch (e) {} };
+  $$('#schedView [data-scf-day]').forEach(b => b.onclick = () => schedJumpDay(b.dataset.scfDay));
+  // Semana: el posteo compacto se agranda al pasar el mouse (con una
+  // mini-espera para no parpadear al barrer la grilla) o al primer
+  // toque en pantallas táctiles. La ampliación va CENTRADA en la
+  // pantalla. v221 (corrección de Valentino): HOVER = vista previa que
+  // se cierra EN EL ACTO al sacar el mouse de la foto (sin esperas, sin
+  // depender de salir de la tarjeta grande); CLICK = capa FIJADA para
+  // poder usar Editar/Aceptar/Frenar, hasta ✕ o click afuera. En
+  // táctil el toque ya la fijaba: sin cambios.
+  // (v331) El cableado vive en bindScfMinis/scfWireGlobals: la home
+  // (feed literal) comparte la misma interacción.
+  bindScfMinis(document.getElementById('schedView'));
   const rail = $('#hsWeekList');
   const rp = $('#scfRailPrev'), rn = $('#scfRailNext');
   if (rail && (rp || rn)) {
@@ -7149,7 +7219,7 @@ async function bindChatView() {
   // Home simple: tocar un posteo del carrusel lo abre en grande (patrón data-lightbox).
   $$('.hs-week [data-lightbox]').forEach(el => el.onclick = (e) => {
     e.stopPropagation();
-    if (el.dataset.lightbox) try { openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || ''); } catch (err) {}
+    try { lbOpenFrom(el); } catch (err) {}
   });
   bindScheduleAll();
   bindAcceptAll();
@@ -8131,7 +8201,7 @@ async function showWeekInChat() {
     .filter(x => !isNaN(x.d)).sort((a, b) => a.d - b.d);
   if (!items.length) { chatSayLocal('Todavía no tenés nada programado. ¿Te armo la semana? 👇'); return; }
   const todayK = K.dayKey(new Date()), tomorrowK = K.dayKey(new Date(Date.now() + 864e5));
-  const lines = ['📅 Schedule:'];
+  const lines = ['📅 Tu semana:'];
   items.slice(0, 10).forEach(x => lines.push(`• ${K.dayLabel(x.d, todayK, tomorrowK)} ${K.hour(x.d)} — ${K.title(x.p)}`));
   chatSayLocal(lines.join('\n'));
   try { track('chat_week_summary'); } catch (e) {}
@@ -8984,12 +9054,17 @@ function humanError(err) {
   if (/timeout|network|econn|fetch failed/i.test(e)) return 'Hubo un problema de conexión. Reintentá en unos minutos.';
   return 'No se pudo publicar en Instagram. Reintentá o reconectá tu cuenta.';
 }
-// Lightbox: ver el diseño en grande (tap en la miniatura). v325: si el
-// llamador pasa cap/tags (tarjetas del calendario), el pie de foto va
-// DEBAJO del media — en el celular tocar la foto es EL gesto de "ver el
-// posteo" y el caption no aparecía en ninguna parte de esa vista
-// (reporte de Valentino 2026-10-22). Sin cap: comportamiento idéntico.
-function openLightbox(src, isVideo, cap, tags) {
+// Lightbox: ver el diseño en grande (tap en la miniatura)
+// (v326) Abre el visor desde un elemento con data-lightbox, pasando caption,
+// hashtags y — si el origen es un posteo — su id y la etiqueta de la acción.
+function lbOpenFrom(el) {
+  if (!el || !el.dataset.lightbox) return;
+  const card = el.closest ? el.closest('[data-post-id]') : null;
+  const pid = el.dataset.post || el.dataset.postId || (card ? card.dataset.postId : '') || '';
+  const plabel = el.dataset.postlabel || (el.classList && el.classList.contains('pub') ? 'Ver posteo' : '');
+  openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || '', pid, plabel);
+}
+function openLightbox(src, isVideo, cap, tags, postId, postLabel) {
   let lb = $('#lightbox');
   if (!lb) {
     lb = document.createElement('div');
@@ -9003,21 +9078,34 @@ function openLightbox(src, isVideo, cap, tags) {
   const capT = String(cap || '').trim();
   const tagsT = String(tags || '').trim();
   const hasCap = !!(capT || tagsT);
+  // (v326) Si el origen es un posteo, el visor ofrece la salida a la acción:
+  // un botón que cierra el visor y abre el posteo (detalle). Sin id, visor puro.
+  const pid = postId ? String(postId).replace(/\D/g, '') : '';
   const mediaHTML = isVideo
-    ? `<video src="${esc(src)}" controls autoplay playsinline style="max-width:92vw;${hasCap ? '' : 'max-height:84vh;'}border-radius:12px"></video>`
-    : `<img src="${esc(src)}" alt="Diseño" style="max-width:92vw;${hasCap ? '' : 'max-height:84vh;'}border-radius:12px;object-fit:contain">`;
+    ? `<video src="${esc(src)}" controls autoplay playsinline style="max-width:92vw;${(hasCap || pid) ? '' : 'max-height:84vh;'}border-radius:12px"></video>`
+    : `<img src="${esc(src)}" alt="Diseño" style="max-width:92vw;${(hasCap || pid) ? '' : 'max-height:84vh;'}border-radius:12px;object-fit:contain">`;
   const capHTML = hasCap
     ? `<div class="lb-cap">${capT ? `<div class="lb-cap-txt">${esc(capT)}</div>` : ''}${tagsT ? `<div class="lb-cap-tags">${esc(tagsT)}</div>` : ''}</div>`
     : '';
+  const actHTML = pid
+    ? `<div class="lb-actions"><button type="button" class="lb-edit" id="lbEditBtn">${esc(postLabel || '✏️ Editar este posteo')}</button></div>`
+    : '';
   const content = lb.querySelector('.lb-content');
   content.classList.toggle('with-cap', hasCap);
-  content.innerHTML = mediaHTML + capHTML;
+  content.classList.toggle('with-act', !!pid);
+  content.innerHTML = mediaHTML + capHTML + actHTML;
+  const eb = document.getElementById('lbEditBtn');
+  if (eb) eb.onclick = () => {
+    closeLightbox();
+    const target = '#/app/post/' + pid;
+    if (location.hash !== target) location.hash = target;
+  };
   lb.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 function closeLightbox() {
   const lb = $('#lightbox');
-  if (lb) { lb.style.display = 'none'; const lc = lb.querySelector('.lb-content'); lc.innerHTML = ''; lc.classList.remove('with-cap'); }
+  if (lb) { lb.style.display = 'none'; const lc = lb.querySelector('.lb-content'); lc.innerHTML = ''; lc.classList.remove('with-cap'); lc.classList.remove('with-act'); }
   document.body.style.overflow = '';
 }
 function postItem(p, actions) {
@@ -11411,8 +11499,13 @@ function mzKindLabel(p) {
   return 'Posteo';
 }
 function mzTitleOf(p) {
+  // (v326) El título es el TEMA del posteo (source_topic, pensado como
+  // título); antes se usaba la primera línea del caption y las filas y el
+  // héroe de Inicio lo cortaban a mitad de frase ("...de limón y...").
+  const topic = String(p.source_topic || '').trim();
+  if (topic) return topic;
   const line = String(p.caption || '').split('\n').map(s => s.trim()).filter(Boolean)[0] || '';
-  return line || String(p.source_topic || '').trim() || 'Posteo';
+  return line || 'Posteo';
 }
 // Hora visible de un posteo, la misma que muestra la agenda: publicado →
 // published_at; programado → scheduled_at; borrador → su scheduled_at o
@@ -11460,6 +11553,110 @@ function mzMediaHTML(p, cls) {
   return `<img class="${cls}" src="${esc(p.image_path)}" alt="" loading="lazy">`;
 }
 
+/* ===== HOME_FEED (v331) — la home ES el perfil literal del cliente =====
+   Bloque PURO (testeable por extracción, patrón test-lp-week): compone
+   la grilla y el encabezado réplica SIN tocar DOM ni red (solo usa
+   esc/mv del propio bundle). Reglas de composición:
+   · Las piezas de la semana van primero, en su posición final: el
+     orden de publicación que ya calculó schedPlacements (el más
+     próximo arriba), mezclando borradores y programados.
+   · La marca NUEVO vive SOLO en los borradores pendientes de
+     revisión: al aceptar (programado) o al publicarse, la marca se
+     apaga sola porque la composición se deriva del estado — y un
+     posteo aceptado NUNCA desaparece: sigue en la grilla, sin marca.
+   · Debajo, los publicados por Posty (más nuevos primero) y al final
+     los posteos reales leídos de su Instagram, SOLO los anteriores
+     al primer publicado por Posty (si un posteo ya salió por Posty,
+     su copia leída no lo duplica; sin fecha leída no se puede
+     asegurar y se omite cuando hay publicados).
+   · El encabezado SOLO pinta datos reales: conteo que no vino (null)
+     no se dibuja, bio no leída no se dibuja, destacadas solo si el
+     payload las trae. Nada se completa ni se redondea. */
+const HOME_FEED_CAP = 24;
+function homeGridCompose(input) {
+  const o = input || {};
+  const upcoming = Array.isArray(o.upcoming) ? o.upcoming : [];
+  const published = Array.isArray(o.published) ? o.published : [];
+  const recents = Array.isArray(o.recents) ? o.recents : [];
+  const cap = Number(o.cap) > 0 ? Number(o.cap) : HOME_FEED_CAP;
+  const tiles = [];
+  const isStory = (p) => String((p && p.media_type) || '') === 'story';
+  for (const it of upcoming) {
+    const p = it && it.p;
+    if (!p || isStory(p) || p.status === 'failed') continue;
+    if (p.status !== 'draft' && p.status !== 'scheduled') continue;
+    tiles.push({ kind: 'post', post: p, ymd: it.ymd || null, day: it.ymd || null, isNew: p.status === 'draft' });
+  }
+  const pubs = published.filter((p) => p && !isStory(p) && p.status === 'published')
+    .slice().sort((a, b) => String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')));
+  let minPubMs = Infinity;
+  for (const p of pubs) {
+    tiles.push({ kind: 'post', post: p, ymd: null, day: null, isNew: false });
+    const t = Date.parse(p.published_at || p.scheduled_at || '');
+    if (Number.isFinite(t) && t < minPubMs) minPubMs = t;
+  }
+  for (const r of recents) {
+    if (!r || !r.img) continue;
+    if (minPubMs !== Infinity && (typeof r.taken_at !== 'number' || !(r.taken_at * 1000 < minPubMs))) continue;
+    tiles.push({ kind: 'ig', img: r.img, type: r.type || 'image', taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false });
+  }
+  return tiles.slice(0, cap);
+}
+const HOME_REEL_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z" fill="#fff" stroke="none"/></svg>';
+const HOME_CAR_SVG = '<svg class="hf-glyph" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M8.5 3.5h10A2 2 0 0 1 20.5 5.5v10a2 2 0 0 1-2 2H17v-11a1.5 1.5 0 0 0-1.5-1.5H8.5v-1.5z" opacity=".92"/><rect x="3.5" y="6.5" width="13" height="13" rx="2"/></svg>';
+function homeTileHTML(t, i) {
+  const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
+  if (t.kind === 'ig') {
+    const glyph = t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
+    return `<button type="button" class="hf-tile" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
+  }
+  const p = t.post;
+  const isV = String(p.media_type || '') === 'video';
+  const isCar = String(p.media_type || '') === 'carousel' || !!(p.carousel_paths && String(p.carousel_paths).length > 2);
+  const media = !p.image_path
+    ? '<span class="hf-tile-ph">✨</span>'
+    : isV
+      ? `<video src="${esc(p.image_path)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
+  const glyph = isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
+  const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
+  return `<span class="scf-mini-x hf-tile" data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" role="button" aria-label="Ver posteo">${media}${pill}${glyph}</span>`;
+}
+function homeHeadHTML(prof, bizName) {
+  const P = prof || {};
+  const user = String(P.username || '').replace(/^@/, '');
+  const name = String(P.name || bizName || '').trim();
+  const letter = esc((name || user || 'P').charAt(0).toUpperCase());
+  const pic = P.pic ? `<img src="${esc(P.pic)}" alt="" onerror="this.remove()">` : '';
+  const fmtN = (n) => Number(n).toLocaleString('es-AR');
+  const stats = [];
+  if (typeof P.posts_count === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.posts_count)}</b><span>${P.posts_count === 1 ? 'publicación' : 'publicaciones'}</span></div>`);
+  if (typeof P.followers === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.followers)}</b><span>${P.followers === 1 ? 'seguidor' : 'seguidores'}</span></div>`);
+  if (typeof P.following === 'number') stats.push(`<div class="hf-stat"><b>${fmtN(P.following)}</b><span>${P.following === 1 ? 'seguido' : 'seguidos'}</span></div>`);
+  const bio = String(P.bio || '').trim();
+  const bioHTML = bio && !P.bio_unread ? `<div class="hf-bio">${esc(bio)}</div>` : '';
+  const rawLink = String(P.link || '').trim();
+  const linkHTML = rawLink
+    ? `<a class="hf-link" href="${esc(rawLink)}" target="_blank" rel="noopener">${esc(rawLink.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</a>`
+    : user ? `<a class="hf-link" href="https://www.instagram.com/${esc(user)}/" target="_blank" rel="noopener">instagram.com/${esc(user)}</a>` : '';
+  const hls = (Array.isArray(P.highlights) ? P.highlights : []).filter((h) => h && h.title);
+  const hlHTML = hls.length ? `<div class="hf-hls">${hls.map((h) => `<div class="hf-hl"><div class="hf-hl-ring">${h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="hf-hl-letter">${esc(String(h.title).charAt(0).toUpperCase())}</span>`}</div><div class="hf-hl-t">${esc(h.title)}</div></div>`).join('')}</div>` : '';
+  return `<div class="hf-head">
+    ${user ? `<div class="hf-user">${esc(user)}</div>` : ''}
+    <div class="hf-prow">
+      <div class="hf-ava"><div class="hf-ava-in"><span class="hf-ava-letter">${letter}</span>${pic}</div></div>
+      ${stats.length ? `<div class="hf-stats">${stats.join('')}</div>` : ''}
+    </div>
+    ${name ? `<div class="hf-name">${esc(name)}</div>` : ''}
+    ${bioHTML}
+    ${linkHTML}
+    ${hlHTML}
+    <div class="hf-tabs" aria-hidden="true"><span class="hf-tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></span><span class="hf-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></span><span class="hf-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></span></div>
+  </div>`;
+}
+/* ===== /HOME_FEED ===== */
+
+let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica del perfil)
 async function inicioView() {
   const tz = pcTz();
   let allPosts = [];
@@ -11482,118 +11679,69 @@ async function inicioView() {
   } catch (e) {}
   let quota = null;
   try { quota = await api.get('/api/quota').catch(() => null); } catch (e) {}
-  // 🧠 La carta: peek (solo lectura) — el mismo dato que consume la
-  // vista Análisis. Sin análisis guardado, la línea no aparece.
-  let hasCarta = false;
-  try { const an = await api.get('/api/analysis?peek=1').catch(() => null); hasCarta = !!(an && an.analysis); } catch (e) {}
-
-  const todayYmd = schedTodayYmd(tz);
-  const monday = schedMondayOf(todayYmd);
-  const weekDays = [0, 1, 2, 3, 4, 5, 6].map(i => schedAddDays(monday, i));
-  const nextDays = [0, 1, 2, 3, 4, 5, 6].map(i => schedAddDays(monday, 7 + i));
-  const { byDay, proposals } = schedPlacements(allPosts, tz);
-  const flat = [];
-  for (const [ymd, arr] of byDay) for (const it of arr) flat.push({ p: it.p, ymd });
-  // HOY: el próximo a salir de hoy; si ya salieron todos, el último
-  // publicado; si hoy no hay nada, el próximo que viene (día real).
-  const nowMs = Date.now();
-  const todays = flat.filter(x => x.ymd === todayYmd);
-  let hero = null;
-  const upToday = todays.filter(x => x.p.status === 'scheduled' && (pcParseDate(x.p.scheduled_at) || new Date(0)).getTime() >= nowMs - 3600000);
-  if (upToday.length) hero = upToday[0];
-  if (!hero) { const pub = todays.filter(x => x.p.status === 'published'); if (pub.length) hero = pub[pub.length - 1]; }
-  if (!hero) { const dr = todays.filter(x => x.p.status === 'draft'); if (dr.length) hero = dr[0]; }
-  if (!hero) { const fut = flat.filter(x => x.ymd > todayYmd && x.p.status !== 'published'); if (fut.length) hero = fut[0]; }
-  if (!hero) { const past = flat.filter(x => x.p.status === 'published'); if (past.length) hero = past[past.length - 1]; }
-
-  const initial = (((ME && ME.email) || (PROFILE && PROFILE.business_name) || 'P').trim().charAt(0) || 'P').toUpperCase();
+  // 🏠 (v331) El perfil literal: réplica desde la lectura guardada de su
+  // Instagram (o el kit de nacimiento si la cuenta es nueva/vacía). El
+  // servidor nunca inventa: lo que no leyó, el encabezado lo omite.
+  let prof = HOME_PROF;
+  try {
+    const hp = await api.get('/api/home/profile').catch(() => null);
+    if (hp && hp.ok) { prof = hp; HOME_PROF = hp; }
+  } catch (e) {}
+  const bizName = (typeof PROFILE !== 'undefined' && PROFILE && PROFILE.business_name || '').trim() || 'Mi negocio';
+  // Composición de la grilla: la semana en su posición final (el orden
+  // de schedPlacements), publicados y posteos reales leídos (HOME_FEED).
+  const pl = schedPlacements(allPosts, tz);
+  const upcoming = [];
+  for (const ymd of [...pl.byDay.keys()].sort()) {
+    for (const it of (pl.byDay.get(ymd) || [])) {
+      if (it.p.status === 'draft' || it.p.status === 'scheduled') upcoming.push({ p: it.p, ymd });
+    }
+  }
+  const published = allPosts.filter(p => p.status === 'published');
+  const tiles = homeGridCompose({ upcoming, published, recents: (prof && prof.recents) || [] });
+  for (const t of tiles) {
+    if (t.kind === 'post' && !t.day) {
+      const dt = pcParseDate(t.post.published_at || t.post.scheduled_at);
+      if (dt) t.day = schedDayKeyOf(dt, tz);
+    }
+  }
+  // Cofre con las tarjetas completas (el detalle EXISTENTE: día/hora,
+  // caption, Aceptar/Editar/Frenar) — la ampliación de la home mueve la
+  // tarjeta acá, igual que Semana (patrón #scfVault).
+  const vaultCards = [];
+  const seenIds = new Set();
+  for (const t of tiles) {
+    if (t.kind !== 'post' || !t.post || seenIds.has(t.post.id)) continue;
+    seenIds.add(t.post.id);
+    const p = t.post;
+    const prop = p.status === 'published'
+      ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
+      : proposedLabelFor(p, pl.proposals, tz);
+    vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null }));
+  }
+  const gridHTML = tiles.length
+    ? `<div class="hf-grid">${tiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
+    : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
   const igLine = (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
     ? `<a class="mz-igbar" href="#/app/ajustes?ig=1">📸 <span><b>Instagram sin conectar</b> — tu semana no puede salir.</span><span class="mz-igbar-go">Conectar →</span></a>`
     : '';
-
-  let heroHTML = '';
-  if (hero) {
-    const hp = hero.p;
-    const hm = mzTimeOf(hp, proposals);
-    const heroDt = pcParseDate(hp.status === 'published' ? (hp.published_at || hp.scheduled_at) : hp.scheduled_at);
-    let prompt = 'Quiero editar ese posteo';
-    if (heroDt) prompt = apvEditPrompt(heroDt, tz);
-    else {
-      const dd = schedYmdToDate(hero.ymd);
-      let wd = '';
-      try { if (dd) wd = dd.toLocaleDateString('es-AR', { weekday: 'long', timeZone: 'UTC' }); } catch (e) {}
-      if (dd) prompt = `Quiero editar el posteo del ${wd} ${dd.getUTCDate()}${hm ? ' a las ' + hm : ''}`;
-    }
-    heroHTML = `
-  <div class="mz-lbl">${esc(mzDayHead(hero.ymd, todayYmd))}</div>
-  <div class="mz-hero">
-    ${mzMediaHTML(hp, 'mz-hero-img')}
-    <div class="mz-hero-b">
-      <div class="mz-chips"><span class="mz-chip sky">${esc(mzKindLabel(hp))}${hm ? ' · ' + esc(hm) : ''}</span>${mzHeroChip(hp)}</div>
-      <h1>${esc(mzTitleOf(hp))}</h1>
-      ${hp.strategy_why ? `<p class="mz-why">💡 <b>Por qué:</b> ${esc(hp.strategy_why)}</p>` : ''}
-      <div class="mz-hero-f"><button type="button" class="mz-btn pri" id="mzHeroVer" data-mzpost="${esc(String(hp.id))}">Ver posteo</button><button type="button" class="mz-btn gho" id="mzHeroCambiar" data-mzprompt="${esc(prompt)}">Cambiar</button></div>
-    </div>
-  </div>`;
-  }
-
-  const cartaLine = hasCarta
-    ? `<a class="mz-ana" href="#/app/analisis"><span class="mz-ana-ic">🧠</span> Tu carta de esta semana está lista<span class="mz-ana-go">Ver →</span></a>`
+  // Franja de revisión (mock aprobado): contador de piezas nuevas +
+  // Aceptar todo. Sin borradores pendientes, la franja no aparece.
+  const stripHTML = drafts.length
+    ? `<div class="hf-review">
+        <div class="hf-review-tx"><b>Tu semana nueva está lista</b><span>${drafts.length} pieza${drafts.length > 1 ? 's' : ''} para revisar · si las aceptás, Posty las programa y las publica por vos</span></div>
+        <button type="button" class="hf-accept" id="hfAcceptAll">Aceptar todo</button>
+      </div><div id="revMsg"></div>`
     : '';
-
-  // Tu semana: lista vertical lun→dom con UN contador y UNA barra.
-  const weekItems = [];
-  for (const ymd of weekDays) for (const it of (byDay.get(ymd) || [])) weekItems.push({ p: it.p, ymd });
-  let weekHTML = '';
-  if (weekItems.length) {
-    const wkDrafts = weekItems.filter(x => x.p.status === 'draft');
-    const wkMarcha = weekItems.filter(x => x.p.status === 'published' || x.p.status === 'scheduled').length;
-    const wkTotal = weekItems.length;
-    const pct = wkTotal ? Math.round((wkMarcha / wkTotal) * 100) : 0;
-    const rows = weekItems.map(({ p, ymd }) => {
-      const ds = mzDayShort(ymd);
-      const hm = mzTimeOf(p, proposals);
-      const propIso = p.status === 'draft' ? (proposals.get(p.id) || {}).iso : null;
-      return `<div class="mz-row" data-post-id="${esc(String(p.id))}"${p.status === 'draft' ? ` data-revaccept="${esc(String(p.id))}"${propIso ? ` data-proposed="${esc(propIso)}"` : ''}` : ''}>
-      <div class="mz-row-tap" data-pc-act="open" role="button" aria-label="Ver posteo">
-        <div class="mz-day"><div class="mz-day-d">${esc(ds.d)}</div><div class="mz-day-n">${esc(String(ds.n))}</div></div>
-        ${mzMediaHTML(p, 'mz-thumb')}
-        <div class="mz-row-mid"><div class="mz-row-t">${esc(mzTitleOf(p))}</div><div class="mz-row-s">${hm ? esc(hm) + ' · ' : ''}${esc(mzKindLabel(p))}</div></div>
-        ${mzRowChip(p)}
-      </div>
-    </div>`;
-    }).join('');
-    weekHTML = `
-  <div class="mz-week">
-    <div class="mz-week-h"><h2>Tu semana</h2>${wkDrafts.length ? `<button type="button" class="mz-accept" id="mzAcceptAll">✅ Aceptar todo (${wkDrafts.length})</button>` : ''}</div>
-    <div class="mz-prog"><i style="width:${pct}%"></i></div>
-    <div class="mz-prog-t"><b>${wkMarcha} de ${wkTotal}</b> en marcha · ${wkDrafts.length ? `te quedan <b>${wkDrafts.length}</b> borrador${wkDrafts.length > 1 ? 'es' : ''} por aceptar` : 'todo aceptado ✓'}</div>
-    <div id="revMsg"></div>
-    <div id="hsWeekList" class="mz-rows">${rows}</div>
-  </div>`;
-  } else {
-    // Semana vacía: los estados de siempre (armando / falta ADN /
-    // completa), con el MISMO bloque que pinta el home actual.
-    weekHTML = homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
-  }
-
-  // La que viene: UNA línea (la cuenta capeada al cupo, como en la agenda).
-  const nextCount = nextDays.reduce((n, ymd) => n + (byDay.get(ymd) || []).length, 0);
-  const qLim = quota && Number(quota.limit) > 0 ? Number(quota.limit) : 0;
-  const nextLine = nextCount
-    ? `<a class="mz-next" href="#/app/schedule">✨ <span>La que viene ya se está armando <span class="mz-next-sub">· ${qLim ? Math.min(nextCount, qLim) + ' de ' + qLim : nextCount + ' armados'}</span></span><span class="mz-next-go">Ver →</span></a>`
+  const kitHTML = prof && prof.source === 'kit'
+    ? `<div class="hf-kitnote">🌱 <span><b>Así va a nacer tu perfil</b> — es la propuesta de Posty desde tu negocio y tu rubro. Cuando salga tu primera semana, esta misma pantalla pasa a ser tu Instagram de verdad.</span></div>`
     : '';
-
-  return `<div id="inicioView" class="mz-wrap">
-  <div class="mz-hd">
-    <div class="mz-brand"><img src="ai-avatar.png" alt="Posty"><span>Posty<span class="mz-dot">.</span></span></div>
-    <button type="button" class="mz-uchip" id="mzUserChip" aria-label="Ajustes">${esc(initial)}</button>
-  </div>
+  return `<div id="inicioView" class="hf-wrap">
   ${igLine}
-  ${heroHTML}
-  ${cartaLine}
-  ${weekHTML}
-  ${nextLine}
+  ${homeHeadHTML(prof, bizName)}
+  ${kitHTML}
+  ${gridHTML}
+  ${stripHTML}
   <div id="mzIdeasSlot"></div>
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
@@ -11608,7 +11756,6 @@ async function inicioView() {
   </div>
 </div>`;
 }
-
 function mzOpenSheet(focus) {
   const sh = $('#mzSheet');
   if (!sh) return;
@@ -11638,24 +11785,19 @@ function mzCloseSheet() {
 }
 
 function bindInicio() {
-  const uc = $('#mzUserChip');
-  if (uc) uc.onclick = () => { location.hash = '#/app/ajustes'; };
-  const hv = $('#mzHeroVer');
-  if (hv) hv.onclick = () => { location.hash = '#/app/post/' + encodeURIComponent(hv.dataset.mzpost || ''); };
-  const hc = $('#mzHeroCambiar');
-  if (hc) hc.onclick = () => {
-    try { sessionStorage.setItem('posty-chat-prefill', hc.dataset.mzprompt || 'Quiero editar ese posteo'); } catch (e) {}
-    mzOpenSheet(true);
-  };
-  // "Aceptar todo (N)": el handler de siempre (doAcceptAll lee los
-  // data-revaccept/data-proposed de #hsWeekList — acá, las filas de la
-  // semana; en el bloque de respaldo, sus tarjetas).
-  const aa = $('#mzAcceptAll');
-  if (aa) aa.onclick = () => doAcceptAll(aa);
+  // (v331) La home es el feed literal: se cablea la MISMA ampliación de
+  // Semana sobre las minis de la grilla (hover agranda centrado, click
+  // fija; el detalle es la tarjeta existente del cofre #scfVault).
+  bindScfMinis(document.getElementById('inicioView'));
+  // Franja de revisión: "Aceptar todo" — el handler de siempre
+  // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que
+  // inicioView ya cargó con todos los borradores de la cuenta).
+  const ha = $('#hfAcceptAll');
+  if (ha) ha.onclick = () => doAcceptAll(ha);
   const hsA = $('#hsAcceptAll');
   if (hsA) hsA.onclick = () => doAcceptAll(hsA);
-  // Bloque de respaldo (semana vacía): flechas del carrusel + lightbox,
-  // el mismo cableado que hace bindSchedule en su vista.
+  // Bloque de respaldo (sin piezas todavía): flechas del carrusel, el
+  // mismo cableado que hace bindSchedule en su vista.
   const wl = document.querySelector('#inicioView #hsWeekList');
   const hp = $('#hsPrev'), hn = $('#hsNext');
   if (wl && (hp || hn)) {
@@ -11668,8 +11810,11 @@ function bindInicio() {
     if (hp) hp.onclick = () => wl.scrollBy({ left: -step(), behavior: 'smooth' });
     if (hn) hn.onclick = () => wl.scrollBy({ left: step(), behavior: 'smooth' });
   }
+  // Los posteos reales leídos (tiles sin tarjeta propia) abren el
+  // lightbox de siempre; las tarjetas del cofre traen su media con
+  // data-lightbox y comparten el mismo binding.
   $$('#inicioView [data-lightbox]').forEach(el => el.onclick = () => {
-    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || '');
+    lbOpenFrom(el);
   });
   // El chat de la hoja: EXACTAMENTE el cableado de Schedule (mismo
   // historial, mismo envío, misma subida). Una sola implementación.
@@ -11715,7 +11860,6 @@ function bindInicio() {
     }).catch(() => {});
   }
 }
-
 /* ---------- 🧠 ANÁLISIS (2026-10-19): la casa del cerebro de Posty ---------- */
 // Arriba: la radiografía de SU cuenta (todos los planes). Abajo: "Tu mercado"
 // — completo solo en Growth (Pro/Total); en Esencial, la probada con upsell.
@@ -11992,7 +12136,7 @@ function bindSchedule() {
     if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }, 480);
   });
   $$('#schedView [data-lightbox]').forEach(el => el.onclick = () => {
-    if (el.dataset.lightbox) openLightbox(el.dataset.lightbox, el.dataset.video === '1', el.dataset.cap || '', el.dataset.tags || '');
+    lbOpenFrom(el);
   });
   // Revisión de borradores (antes en Mi semana): carrusel, lightbox, aprobar/editar.
   bindReview();
@@ -12287,10 +12431,10 @@ async function dogfoodView(id) {
   if (!p || (id && String(p.id) !== String(id))) {
     return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">🤖 Sin propuesta pendiente</h3>
       <p class="hint">Cada mañana te propongo un posteo para @posty.hacetodo. Volvé mañana ☀️</p>
-      <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a Schedule</a></div>`;
+      <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a mi semana</a></div>`;
   }
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">← Schedule</a>
+    <a class="apv-back" href="#/app/schedule">← Semana</a>
     ${dogfoodCardHTML(p)}
   </div>`;
 }
@@ -12318,11 +12462,15 @@ async function approvalPostView(id) {
   const st = String(p.status || ''), ap = String(p.approval || '');
   // Acciones solo mientras todavía hay algo que decidir.
   const canAct = st === 'scheduled' && (ap === 'pending' || ap === 'approved');
+  // (v326) Los borradores también se deciden ACÁ: el detalle era un callejón
+  // sin salida (ni Aceptar, ni Editar, ni Rechazar) y es a donde llevan
+  // "Ver posteo" y las filas de la semana de Inicio.
+  const isDraft = st === 'draft';
   const isVideo = String(p.media_type || '') === 'video';
   const media = p.image_path
     ? `<div class="apv-media">${isVideo
       ? `<video src="${esc(p.image_path)}" controls playsinline preload="metadata"></video>`
-      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager">`}</div>`
+      : `<img src="${esc(p.image_path)}" alt="Posteo" loading="eager" data-lightbox="${esc(p.image_path)}" data-cap="${esc(String(p.caption || ''))}" data-tags="${esc(String(p.hashtags || ''))}" ${(isDraft || st === 'scheduled') ? `data-post="${esc(String(p.id))}" data-postlabel="✏️ Editar este posteo"` : ''}>`}</div>`
     : '';
   const cap = esc(String(p.caption || 'Sin texto todavía')).replace(/\n/g, '<br>');
   const tags = String(p.hashtags || '').trim();
@@ -12340,13 +12488,31 @@ async function approvalPostView(id) {
         <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
       </div>
     </div>` : '';
+  // (v326) Acciones del borrador: Aceptar lo programa en su horario propuesto
+  // (el mismo flujo PATCH que usa la Agenda), Editar va al chat con el
+  // prefill de siempre y Rechazar lo cancela con confirmación.
+  const draftActions = isDraft ? `
+    <div class="apv-actions" id="apvActions">
+      <button class="btn btn-primary" id="apvAcceptDraft" data-apvid="${esc(String(p.id))}" data-apvwhen="${esc(String(p.scheduled_at || ''))}">Aceptar ✅</button>
+      <button class="btn btn-soft" id="apvEdit" data-apvedit="${esc(editPrompt)}">Editar ✏️</button>
+      <button class="btn btn-danger" id="apvReject">Rechazar ❌</button>
+    </div>
+    <div id="apvGate"></div>
+    <div class="apv-confirm" id="apvConfirm" hidden>
+      <p><b>¿Seguro?</b> No se va a publicar.</p>
+      <div class="apv-actions">
+        <button class="btn btn-danger" id="apvCancelYes" data-apvid="${esc(String(p.id))}">Sí, rechazar</button>
+        <button class="btn btn-soft" id="apvRejectNo">Cancelar</button>
+      </div>
+    </div>` : '';
+  const whenTxt = dOk ? (isDraft ? apvWhenText(d, tz).replace(/^Sale /, 'Saldría ') + ' · si lo aceptás' : apvWhenText(d, tz)) : '';
   return `<div class="apv-wrap">
-    <a class="apv-back" href="#/app/schedule">← Schedule</a>
+    <a class="apv-back" href="#/app/schedule">← Semana</a>
     ${media}
     <div class="apv-pillrow">${apvPill(p, d, dOk)}</div>
-    ${dOk ? `<div class="apv-when">⏰ ${esc(apvWhenText(d, tz))}</div>` : ''}
+    ${dOk ? `<div class="apv-when">⏰ ${esc(whenTxt)}</div>` : ''}
     <div class="apv-caption">${cap}${tags ? `<div class="apv-tags">${esc(tags)}</div>` : ''}</div>
-    ${actions}
+    ${actions}${draftActions}
   </div>`;
 }
 function bindApprovalPost() {
@@ -12390,6 +12556,54 @@ function bindApprovalPost() {
     try { sessionStorage.setItem('posty-chat-prefill', ed.dataset.apvedit || 'Quiero editar ese posteo'); } catch (e) {}
     location.hash = '#/app/chat';
   };
+  // (v326) Aceptar un BORRADOR desde el detalle: mismo gate de Instagram y
+  // mismo flujo PATCH (programar en su horario) que el Aceptar de la Agenda.
+  const acd = document.getElementById('apvAcceptDraft');
+  if (acd) acd.onclick = async () => {
+    const id = acd.dataset.apvid;
+    if (!(PROFILE && PROFILE.ig_connected)) {
+      const g = document.getElementById('apvGate');
+      if (g) {
+        g.innerHTML = `<div class="ig-gate-note">📸 <b>Conectá tu Instagram primero</b> — si no, los posteos no pueden salir solos.<br><br><button class="btn btn-primary btn-sm ig-gate-go" type="button">Conectar Instagram →</button></div>`;
+        const go = g.querySelector('.ig-gate-go');
+        if (go) go.onclick = () => igConnectHere();
+        try { g.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+      }
+      return;
+    }
+    acd.disabled = true; acd.textContent = 'Programando…';
+    try {
+      const when = acd.dataset.apvwhen;
+      const pr = await api.patch('/api/posts/' + encodeURIComponent(id), { scheduled_at: when || undefined });
+      try { await api.post('/api/posts/' + encodeURIComponent(id) + '/signal', { signal: 'approved' }); } catch (e) {}
+      try { track('apv_accept_draft', { id }); } catch (e) {}
+      let wt = '';
+      try {
+        if (pr && pr.scheduled_at) {
+          const dt = pcParseDate(pr.scheduled_at);
+          if (dt) wt = pcFmtDayLong(dt, apvTz()) + ' a las ' + apvHM(dt, apvTz());
+        }
+      } catch (e) {}
+      toast(wt ? `✅ <b>¡Listo!</b> Sale el ${esc(wt)}` : '✅ <b>¡Listo!</b> Quedó programado 🙌');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo programar')); }
+    render();
+  };
+  // (v326) Rechazar un borrador = cancelarlo (el /reject es solo para
+  // programados pendientes; el PATCH action=cancel es el camino del borrador).
+  const cy = document.getElementById('apvCancelYes');
+  if (cy) cy.onclick = async () => {
+    cy.disabled = true; cy.textContent = 'Rechazando…';
+    try {
+      await api.patch('/api/posts/' + encodeURIComponent(cy.dataset.apvid), { action: 'cancel' });
+      try { track('apv_reject_draft', { id: cy.dataset.apvid }); } catch (e) {}
+      toast('❌ <b>Rechazado.</b> No se va a publicar.');
+    } catch (e) { toast('😅 ' + esc((e && e.message) || 'No se pudo rechazar')); }
+    render();
+  };
+  // (v326) La foto del detalle también abre el visor (con caption y salida
+  // a la acción, como en la Agenda).
+  const apm = document.querySelector('.apv-media [data-lightbox]');
+  if (apm) apm.onclick = () => lbOpenFrom(apm);
 }
 /* ---------- Pedido de permiso push oportuno: solo tras conectar IG ---------- */
 // Se muestra UNA vez (flag localStorage 'push-ask-ig'). Nunca en frío al abrir la app.

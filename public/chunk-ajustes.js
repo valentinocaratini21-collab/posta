@@ -106,7 +106,7 @@ function ajustesView() {
   return `<div class="page-head"><div class="ph-ico">⚙️</div><div class="ph-txt"><h1>Ajustes</h1><p class="sub">Tu negocio, tu Instagram, tu plan y tu marca.</p></div></div>
   ${igMsg}${ttMsg}${ggMsg}${tnMsg}${planMsg}${tokenWarn}
   <div class="card ajsec${openSec==='negocio' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🏪 Tu negocio</h3>${stBiz}<span class="ajsec-c">⌄</span></div><div class="ajsec-b">
-  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 La IA usa estos datos para crear tus posteos.</p>
+  <p style="color:var(--mut);font-size:12.5px;margin:-6px 0 14px">🤖 Uso estos datos para crear tus posteos.</p>
     <div class="field"><label>Nombre del negocio</label><input id="s_biz" value="${esc(p.business_name)}" placeholder="Mi Tienda"></div>
     <div class="row2">
       <div class="field"><label>Rubro</label><select id="s_cat">
@@ -954,7 +954,7 @@ function bindSettings() {
               ? v.slice(0, 6).map(dnaInfoLine).join('') + (v.length > 6 ? `<div class="hint">…y ${v.length - 6} más</div>` : '')
               : `<div style="font-size:12.5px">${esc(String(v))}</div>`}</div>
           </div>`).join('')}
-        <div class="hint">La IA usa estos datos para crear posteos que venden de verdad.</div>
+        <div class="hint">Uso estos datos para crear posteos que venden de verdad.</div>
       </div>`;
   };
   // Guardado del ADN (v282): lo invoca el botón Guardar único de la tarjeta
