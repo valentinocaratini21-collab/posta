@@ -588,6 +588,9 @@ html{scroll-behavior:smooth}
    visual pattern as the home one; session-aware via JS. */
 .nav-entrar{margin-left:auto;font-weight:800;font-size:15px;color:var(--cel);border:2px solid var(--cel);border-radius:999px;padding:8px 22px;text-decoration:none;background:#fff;white-space:nowrap}
 .nav-entrar:hover{background:var(--cel);color:#fff}
+.nav-right{display:flex;align-items:center;gap:16px}
+.nav-lang{font-weight:700;font-size:14.5px;color:var(--mut);text-decoration:none;white-space:nowrap}
+.nav-lang:hover{color:var(--cel)}
 /* (v323) Collapsed optional detail on the start cards (piece 1) */
 .opt-detail{margin:12px 0 4px;border:1.5px dashed #BFE3F5;border-radius:14px;padding:12px 14px;background:#F7FCFE;text-align:left}
 .opt-detail summary{cursor:pointer;font-weight:700;font-size:14.5px;color:var(--cel);list-style:none}
@@ -669,7 +672,7 @@ body.sfb-on{padding-bottom:88px}
 <body>
 <div class="nav"><div class="wrap">
   <a class="logo-posty" href="/en"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></a>
-  <a class="nav-entrar" id="btnEntrar" href="/#/login">Log in</a>
+  <span class="nav-right"><a class="nav-lang" href="/prueba" onclick="try{localStorage.setItem('posty-lang','es')}catch(e){}">Español</a><a class="nav-entrar" id="btnEntrar" href="/#/login">Log in</a></span>
 </div></div>
 <div id="campBanner" style="display:none;background:#EAF6FC;border-bottom:1px solid #E2EDF5;padding:10px 16px;text-align:center;font-weight:700;font-size:14.5px;color:#0A1E33"></div>
 

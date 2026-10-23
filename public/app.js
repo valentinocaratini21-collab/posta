@@ -211,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261023-v349'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261023-v350'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1431,10 +1431,10 @@ function lpCapSectionsHTML() {
     </div>
     <div class="cap-side">
       <div class="cap-sample">
-        <div class="cap-ig-head"><img src="ai-avatar.png" alt="Posty"><b>posty.hacetodo</b><span>•••</span></div>
+        <div class="cap-ig-head"><img src="ai-avatar.png" alt="Posty"><b>posty.communitymanager</b><span>•••</span></div>
         <img class="cap-ig-img" loading="lazy" src="lp-pieza.jpg" alt="Pieza real hecha por Posty: el robot celeste saludando, con el titular SOY POSTY.">
         <div class="cap-ig-act"><svg viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg><svg viewBox="0 0 24 24"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg><svg viewBox="0 0 24 24"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg><svg class="save" viewBox="0 0 24 24"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg></div>
-        <p class="cap-ig-cap"><b>posty.hacetodo</b> ¡Hola! Soy Posty. 👋 Soy tu community manager: analizo tu Instagram a fondo — tu ritmo, tus mejores posteos, tu vidriera y hasta tu competencia — y con ese análisis armo tu plan…</p>
+        <p class="cap-ig-cap"><b>posty.communitymanager</b> ¡Hola! Soy Posty. 👋 Soy tu community manager: analizo tu Instagram a fondo — tu ritmo, tus mejores posteos, tu vidriera y hasta tu competencia — y con ese análisis armo tu plan…</p>
       </div>
       <p class="cap-note">Una pieza real de Posty. Las tuyas salen con TU producto, tus fotos y tus colores.</p>
     </div>
@@ -1931,6 +1931,7 @@ function landingView(cfg) {
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
+    <p class="pc-founder" style="font-size:14px;color:#47617A;line-height:1.6;text-align:center;max-width:660px;margin:20px auto 0">⭐ <b style="color:#0A1E33">Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
 
     <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
          textos aprobados del módulo (el mismo de /prueba v341). -->
@@ -1982,7 +1983,7 @@ function landingView(cfg) {
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
-    <span>Posty, tu community manager con IA · Un producto de Posta · Hecho en Argentina 🇦🇷 · © 2026</span>
+    <span>Posty, tu community manager con IA · © 2026</span>
     <span style="margin-left:12px"><a href="/privacidad.html" style="color:var(--sky)">Privacidad</a> · <a href="/terminos.html" style="color:var(--sky)">Términos</a> · <a data-posty-chat role="button" tabindex="0" style="color:var(--sky);cursor:pointer">Soporte</a></span>
   </div></div>
   <div class="lp-sticky"><div class="wrap"><a class="btn btn-primary btn-block" href="/prueba">Probá gratis 3 días</a></div></div>`;
@@ -12400,7 +12401,7 @@ function dogfoodCardHTML(p) {
   return `<div class="card dogfood-card" id="dogfoodCard" style="border:2px solid #FEC14D;background:linear-gradient(135deg,#fffdf5,#fff)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:20px">🤖</span>
-      <div><b>Posty para @posty.hacetodo</b>
+      <div><b>Posty para @posty.communitymanager</b>
       <div class="hint">⏳ Pendiente de tu aprobación — propuesta de hoy</div></div>
     </div>
     ${p.image_path ? `<img src="${esc(p.image_path)}" alt="Propuesta de Posty" style="width:100%;border-radius:12px" loading="eager">` : ''}
@@ -12417,7 +12418,7 @@ async function dogfoodAction(id, action) {
   try {
     const r = await api.post(`/api/dogfood/${id}/${action}`, {});
     if (r && r.ok) {
-      if (action === 'approve') toast('🎉 ¡Publicado en @posty.hacetodo!');
+      if (action === 'approve') toast('🎉 ¡Publicado en @posty.communitymanager!');
       else toast('⏭️ Descartado. Mañana te propongo otro.');
       render();
     } else {
@@ -12436,7 +12437,7 @@ async function dogfoodView(id) {
   try { const r = await api.get('/api/dogfood/pending'); p = (r && r.post) || null; } catch (e) {}
   if (!p || (id && String(p.id) !== String(id))) {
     return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">🤖 Sin propuesta pendiente</h3>
-      <p class="hint">Cada mañana te propongo un posteo para @posty.hacetodo. Volvé mañana ☀️</p>
+      <p class="hint">Cada mañana te propongo un posteo para @posty.communitymanager. Volvé mañana ☀️</p>
       <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a mi semana</a></div>`;
   }
   return `<div class="apv-wrap">

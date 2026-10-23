@@ -793,7 +793,7 @@ async function anaShareWeek(btn) {
     anaWrap(x, String(prideIt.text), W - 180, 3).forEach((ln, i) => x.fillText(ln, W / 2, baseY + 196 + i * 60));
     x.fillStyle = subOnPrimary;
     x.font = '600 34px system-ui, Arial, sans-serif';
-    x.fillText(en ? 'with @posty.doeseverything' : 'con @posty.hacetodo', W / 2, H - 84);
+    x.fillText(en ? 'with @postycommunitymanager' : 'con @posty.communitymanager', W / 2, H - 84);
     const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
     if (!blob) throw new Error('sin blob');
     const file = new File([blob], 'mi-semana-posty.png', { type: 'image/png' });

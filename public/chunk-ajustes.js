@@ -2073,8 +2073,8 @@ async function pzFillBioSeal() {
     if (!st || !st.ok || !st.bio_seal || st.bio_seal.state !== '') return;
     const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
     const seals = en
-      ? ['📲 Content: @posty.doeseverything', '✨ My content is made by @posty.doeseverything']
-      : ['📲 Contenido: @posty.hacetodo', '✨ Mi contenido lo hace @posty.hacetodo'];
+      ? ['📲 Content: @postycommunitymanager', '✨ My content is made by @postycommunitymanager']
+      : ['📲 Contenido: @posty.communitymanager', '✨ Mi contenido lo hace @posty.communitymanager'];
     slot.innerHTML = `<div style="border:1px dashed var(--line);border-radius:14px;padding:14px;background:#F8FBFD;margin-top:18px">
       <div style="font-weight:800;margin-bottom:4px">${en ? '🏷️ Your Posty seal (optional)' : '🏷️ Tu sello Posty (opcional)'}</div>
       <p style="color:var(--mut);font-size:12.5px;margin:0 0 10px">${en ? 'Some businesses add a line like this to their Instagram bio so followers know their content is cared for. It is your profile: you paste it by hand, only if you like it.' : 'Algunos negocios suman una línea así a su bio de Instagram para que sus seguidores sepan que su contenido está cuidado. Es tu perfil: la pegás vos a mano, solo si te gusta.'}</p>
