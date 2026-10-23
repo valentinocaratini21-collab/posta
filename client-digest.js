@@ -290,6 +290,17 @@ function cleanSegment(seg) {
  * inventado a partir de prosa. */
 const OFFER_PROSE_VERBS = new Set(('es son esta estan tiene tienen hace hacen deja dejan sale salen abre abren presenta presentan significa significan trabaja trabajan contrate necesites quieras puedas quieres puedes somos era fue queda quedan parece resulta ofrece ofrecen brinda brindan incluye incluyen permite permiten llego llegaron anuncia sumamos vende venden').split(' '));
 const OFFER_PROSE_OPENERS = new Set(('su sus esta este esto estos estas nuestro nuestra nuestros nuestras colores personalidad simbolo todo toda todos todas').split(' '));
+/* (v348 · D4) La puerta v346 era ESTRUCTURAL: dejaba pasar basura con
+ * forma de frase nominal — sustantivos de AUDIENCIA sueltos ("Comercios",
+ * "Profesionales": el público del negocio, no su oferta) y frases en
+ * SEGUNDA PERSONA ("Aprende tu negocio una vez", "Vos aprobás lo
+ * sensible": copy dirigido AL dueño, no algo que el negocio vende).
+ * Ninguna de las dos clases puede ser un producto/servicio: se rechazan
+ * acá, en la única puerta de admisión, para que ningún camino (minería,
+ * catálogo, bio-link, ADN, unión de refresco) las vuelva a sembrar. */
+const OFFER_AUDIENCE_NOUNS = new Set(['comercios', 'negocios', 'profesionales', 'pymes', 'clientes', 'emprendedores', 'empresas', 'personas', 'usuarios', 'seguidores', 'emprendimientos']);
+const OFFER_SECOND_PERSON = new Set(['tu', 'tus', 'vos', 'te', 'ti', 'contigo', 'tuyo', 'tuya', 'tuyos', 'tuyas']);
+const OFFER_2P_VERBS = new Set(['aprende', 'aprendes', 'aprobas', 'aproba', 'descubre', 'descubri', 'empeza', 'empezas', 'mira', 'miras', 'suma', 'sumas', 'sumate', 'uni', 'unis', 'unite', 'gana', 'ganas', 'ahorra', 'ahorras', 'crece', 'creces', 'ordena', 'ordenas', 'organiza', 'organizas', 'delega', 'delegas', 'vende', 'vendes', 'elegi', 'elegis', 'elegilo', 'hace', 'haces', 'hacelo', 'tene', 'tenes', 'pode', 'podes', 'quere', 'queres', 'senti', 'sentis', 'pensa', 'pensas', 'cree', 'crees', 'segui', 'seguis', 'veni', 'venis', 'abri', 'abris', 'cerra', 'cerras', 'entra', 'entras', 'sali', 'salis', 'dormi', 'dormis', 'rei', 'reis']);
 function cleanOfferName(raw) {
   const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
   return String(v || '').replace(/\s+/g, ' ')
@@ -307,6 +318,14 @@ function isPlausibleOfferItem(raw) {
   if (OFFER_PROSE_OPENERS.has(nw[0])) return false;
   if (nw.some((w) => OFFER_PROSE_VERBS.has(w))) return false;
   if (nw.includes('muy') || nw.includes('tan')) return false;
+  // (v348 · D4) Audiencia suelta: "Comercios" nombra a QUIÉN vende el
+  // negocio, no QUÉ vende — como ítem standalone es basura del fundamento.
+  if (nw.length === 1 && OFFER_AUDIENCE_NOUNS.has(nw[0])) return false;
+  // (v348 · D4) Segunda persona: un ítem que le habla AL dueño ("tu
+  // negocio", "vos aprobás") es copy de venta del propio Posty o un
+  // fragmento de pitch — nunca la oferta del negocio.
+  if (nw.some((w) => OFFER_SECOND_PERSON.has(w))) return false;
+  if (nw.some((w) => OFFER_2P_VERBS.has(w))) return false;
   return true;
 }
 function cleanOfferRaw(x) {
@@ -474,6 +493,13 @@ function emptyDigest() {
     servicios: [], productos: [], promos: [], temas_feed: [],
     protagonista: '', paleta: [], registro: null, ciudad: '', diferencial: '',
     has_booking: false, fuentes: {},
+    // (v348 · D2) ETAPA del negocio: '' = operando; 'pre-lanzamiento' =
+    // todavía no abrió (fecha futura + léxico de lanzamiento en sus
+    // propios textos). La semana de un negocio que no lanzó PRESENTA y
+    // suma a la lista de espera: no vende stock, no reserva turnos, no
+    // corre sorteos — el caso Gesty: Posty le armó la semana de un
+    // negocio en operación y el negocio abre recién el 21/6/2027.
+    etapa: '', lanzamiento_fecha: null,
     // (v230) LECTURA PROFUNDA: bloques extendidos (ver sección al final).
     // null/vacío = todavía no leídos; el hash de anclas NO los cubre (la
     // trazabilidad de v229 no se invalida: el hash sigue siendo el de
@@ -736,7 +762,82 @@ function digestHashOf(digest) {
   });
   return crypto.createHash('sha1').update(core).digest('hex').slice(0, 12);
 }
+/* (v348 · D2) detectEtapa — ¿el negocio TODAVÍA NO LANZÓ? Señal doble
+ * y determinística sobre SUS propios textos (diferencial + descripción
+ * del formulario + descripción): léxico de lanzamiento ("lanzamiento",
+ * "todavía no lanzó", "abre el…", "muy pronto", "coming soon") Y una
+ * fecha FUTURA parseable (dd/mm/aaaa, "21 de junio de 2027", ISO).
+ * Sin las dos señales juntas no se marca: un negocio operando que
+ * anuncia "lanzamiento de línea nueva" sin fecha no se congela, y una
+ * fecha suelta ("desde el 21/6/2020") tampoco. Acepta un digest, un
+ * objeto {diferencial, description} o un string suelto. */
+/* Dos pisos de léxico: el FUERTE ("todavía no lanzó", "muy pronto",
+ * "coming soon") marca con cualquier fecha futura del texto; el DÉBIL
+ * ("lanzamiento", "apertura" — también es el horario de un negocio que
+ * YA opera) exige la fecha futura en su MISMO segmento. */
+const LAUNCH_LEX_STRONG_RE = /todav[ií]a\s+no|no\s+lanz|muy\s+pronto|pr[oó]ximamente|coming\s+soon|launching|en\s+construcci[oó]n|se\s+lanza/i;
+const LAUNCH_LEX_WEAK_RE = /lanzamiento|abre\s+el|apertura|gran\s+apertura|lanzo\s+el|launches\s+on|opens\s+on/i;
+const LAUNCH_MONTHS = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12, january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+function futureDateInText(text) {
+  const s = String(text || '');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const candidates = [];
+  const push = (y, m, d) => {
+    if (!(y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return;
+    const dt = new Date(y, m - 1, d);
+    if (dt > today) candidates.push(dt);
+  };
+  let m;
+  const reNum = /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/g;
+  while ((m = reNum.exec(s))) push(+m[3], +m[2], +m[1]);
+  const reIso = /\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/g;
+  while ((m = reIso.exec(s))) push(+m[1], +m[2], +m[3]);
+  const reName = /\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)\s+de\s+(20\d{2})\b/gi;
+  while ((m = reName.exec(s))) { const mo = LAUNCH_MONTHS[norm(m[2])]; if (mo) push(+m[3], mo, +m[1]); }
+  const reNameEn = /\b([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,\s*(20\d{2})\b/gi;
+  while ((m = reNameEn.exec(s))) { const mo = LAUNCH_MONTHS[norm(m[1])]; if (mo) push(+m[3], mo, +m[2]); }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a - b);
+  const dt = candidates[0];
+  const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  return iso;
+}
+function detectEtapa(input) {
+  let texts = [];
+  if (typeof input === 'string') texts = [input];
+  else if (input && typeof input === 'object') {
+    texts = [
+      input.diferencial || '',
+      input.description || '',
+      (input.fuentes && input.fuentes.form && input.fuentes.form.description) || '',
+      (input.fuentes && input.fuentes.web && input.fuentes.web.description) || '',
+    ];
+  }
+  const joined = texts.filter(Boolean).join('\n');
+  if (!joined.trim()) return { etapa: '', lanzamiento_fecha: null };
+  if (LAUNCH_LEX_STRONG_RE.test(joined)) {
+    const fecha = futureDateInText(joined);
+    if (fecha) return { etapa: 'pre-lanzamiento', lanzamiento_fecha: fecha };
+  }
+  for (const seg of joined.split(/[.;\n|·]+/)) {
+    if (LAUNCH_LEX_WEAK_RE.test(seg)) {
+      const fecha = futureDateInText(seg);
+      if (fecha) return { etapa: 'pre-lanzamiento', lanzamiento_fecha: fecha };
+    }
+  }
+  return { etapa: '', lanzamiento_fecha: null };
+}
+
 function finalizeDigest(d) {
+  // (v348 · D2) La etapa se RE-deriva de los textos vigentes en cada
+  // finalización: si el negocio ya lanzó (la fecha pasó), el digest
+  // vuelve solo a operar — sin migración ni intervención.
+  try {
+    const et = detectEtapa(d);
+    d.etapa = et.etapa;
+    d.lanzamiento_fecha = et.lanzamiento_fecha;
+  } catch (e) { /* la etapa nunca rompe el fundamento */ }
   d.hash = digestHashOf(d);
   // (v230) Los candidatos a pregunta (para "Posty pregunta") se derivan
   // del estrella inferido y de las contradicciones: determinísticos.
@@ -1069,16 +1170,25 @@ function applyDeepBlocks(stored, fresh) {
     }
     return res;
   };
+  // (v348 · D4) La unión TAMBIÉN pasa por la puerta de admisibilidad:
+  // un digest guardado con basura vieja (anterior a la puerta o de un
+  // camino sin filtrar) no la re-inyecta en cada refresco — productos y
+  // servicios que hoy no pasarían isPlausibleOfferItem quedan afuera.
+  const unionOfferItems = (freshList, storedList, cap) => unionItems(
+    (freshList || []).filter((it) => isPlausibleOfferItem(it)),
+    (storedList || []).filter((it) => isPlausibleOfferItem(it)),
+    cap,
+  );
   if (fresh.catalog && (fresh.catalog.items || []).length) {
     out.catalog = fresh.catalog;
-    out.productos = unionItems(fresh.productos, out.productos, 12);
-    out.servicios = unionItems(fresh.servicios, out.servicios, 10);
+    out.productos = unionOfferItems(fresh.productos, out.productos, 12);
+    out.servicios = unionOfferItems(fresh.servicios, out.servicios, 10);
     out.promos = (fresh.promos && fresh.promos.length) ? fresh.promos : out.promos;
     if (fresh.fuentes && fresh.fuentes.catalog) out.fuentes = { ...(out.fuentes || {}), catalog: fresh.fuentes.catalog };
   }
   if (fresh.bio_link) {
     out.bio_link = fresh.bio_link;
-    out.productos = unionItems(fresh.productos, out.productos, 12);
+    out.productos = unionOfferItems(fresh.productos, out.productos, 12);
     if (fresh.fuentes && fresh.fuentes.bio_link) out.fuentes = { ...(out.fuentes || {}), bio_link: fresh.fuentes.bio_link };
   }
   // El léxico se re-mina de los captions: solo reemplaza si la corrida
@@ -1242,11 +1352,65 @@ function deriveTopics(digest, opts) {
     return null;
   };
   const bizPh = '{BIZ}';
+  // (v348 · D1/D2) FAMILIA del rubro y ETAPA del negocio — los dos ejes
+  // que los frames históricos ignoraban: (D1) un negocio de SERVICIOS
+  // no tiene nada para "pasar a buscar" ni "recién llegado": sus frames
+  // hablan de consultar y delegar (la familia sale de `category`, NO
+  // del largo de la lista de servicios — la lectura web vuelca todo en
+  // `productos` y un servicio puro quedaba con frames de retail).
+  // (D2) Un negocio que TODAVÍA NO LANZÓ no vende ni reserva: presenta
+  // y suma a la lista de espera hasta su fecha.
+  const SERVICE_FAMILY_CATS = new Set(['profesionales', 'servicios', 'salud', 'belleza', 'barberia', 'fitness', 'educacion', 'fotografia', 'inmobiliaria', 'autos', 'turismo', 'viajes', 'eventos', 'arte']);
+  const serviceFamily = SERVICE_FAMILY_CATS.has(category) || SERVICE_FAMILY_CATS.has(String(digest.category || ''));
+  let etapaNow = (digest.etapa === 'pre-lanzamiento') ? digest.etapa : '';
+  let launchFecha = digest.lanzamiento_fecha || null;
+  if (!etapaNow) {
+    try { const et = detectEtapa(digest); if (et.etapa) { etapaNow = et.etapa; launchFecha = et.lanzamiento_fecha; } } catch (e) {}
+  }
+  const prelaunch = etapaNow === 'pre-lanzamiento';
+  const fechaTxt = (() => {
+    if (!launchFecha) return '';
+    const [y, m, d] = String(launchFecha).split('-').map(Number);
+    if (!y || !m || !d) return '';
+    return en ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${d}, ${y}` : `${d}/${m}/${y}`;
+  })();
+  // (v348 · D3) Posesivo que CONCUERDA: "Reservá tu agenda" pero
+  // "Reservá tus cobranzas" — el frame histórico clavaba `tu` y rompía
+  // con cada ancla plural (el lint de generator.captionPasses es la red).
+  const S_SINGULARS = new Set(['analisis', 'interes', 'pais', 'mes', 'cumpleanos', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'estres', 'crisis', 'tesis', 'dosis', 'tenis', 'dios', 'gas', 'bus', 'ingles', 'frances', 'portugues', 'atlas', 'tos', 'paraguas', 'rascacielos']);
+  const possFor = (phrase) => {
+    const last = norm(String(phrase || '')).split(' ').filter(Boolean).pop() || '';
+    return last.length > 2 && last.endsWith('s') && !S_SINGULARS.has(last) ? 'tus' : 'tu';
+  };
   // 1) NOVEDAD — el ítem real N.º 1.
   const it1 = pickItem(0);
   if (it1) {
     const A = name(it1);
-    const t = en ? mk('novedad', A, {
+    const t = prelaunch ? (en ? mk('novedad', A, {
+      tag: 'COMING SOON',
+      headline: (x) => x,
+      subline: () => (fechaTxt ? `Launching ${fechaTxt}` : 'Coming soon'),
+      cta: 'Keep me posted',
+      caption: (x) => `${x} is part of what's coming at ${bizPh} ✨\n\nWe're getting everything ready${fechaTxt ? `: launch day is ${fechaTxt}` : ' — we open very soon'}.\n\nSign up and be the first to know 📩`,
+    }) : mk('novedad', A, {
+      tag: 'MUY PRONTO',
+      headline: (x) => x,
+      subline: () => (fechaTxt ? `Llega el ${fechaTxt}` : 'Muy pronto'),
+      cta: 'Quiero enterarme',
+      caption: (x) => `${x} es parte de lo que se viene en ${bizPh} ✨\n\nEstamos preparando todo${fechaTxt ? `: el lanzamiento es el ${fechaTxt}` : ' — abrimos muy pronto'}.\n\nEscribinos por DM y sumate a los primeros 📩`,
+    })) : serviceFamily ? (en ? mk('novedad', A, {
+      tag: 'NEW',
+      headline: (x) => x,
+      subline: (x) => (it1.precio ? `${it1.precio}, just like you see it` : ''),
+      cta: 'Tell me more',
+      caption: (x) => `${x} is now at ${bizPh} ✨\n\n${it1.precio ? `Yours for ${it1.precio}. ` : ''}We handle it end to end, with our usual care.\n\nDM us and we'll walk you through how to start 📩`,
+    }) : mk('novedad', A, {
+      tag: 'NUEVO',
+      headline: (x) => x,
+      subline: (x) => (it1.precio ? `A ${it1.precio}, como lo ves` : ''),
+      cta: 'Quiero saber más',
+      caption: (x) => `${x} ya está en ${bizPh} ✨\n\n${it1.precio ? `Lo tenés a ${it1.precio}. ` : ''}Lo hacemos de principio a fin, con el detalle de siempre.\n\nEscribinos por DM y te contamos cómo empezamos 📩`,
+    })) : en ? mk('novedad', A, {
       tag: 'NEW',
       headline: (x) => x,
       subline: (x) => (it1.precio ? `${it1.precio}, just like you see it` : ''),
@@ -1269,7 +1433,28 @@ function deriveTopics(digest, opts) {
   // SIEMPRE del digest: sin número en el digest, la promo sale sin
   // número (candado de verdad, promoNumberGuard).
   const promo = (digest.promos || [])[0];
-  if (promo && (promo.titulo || promo)) {
+  if (prelaunch) {
+    // (v348 · D2) Sin operación no hay promo que empujar: el slot 2
+    // PRESENTA el segundo servicio y suma a la lista de espera.
+    const it2p = pickItem(1);
+    if (it2p) {
+      const A = name(it2p);
+      const t = en ? mk('novedad', A, {
+        tag: 'COMING SOON',
+        headline: (x) => x,
+        subline: () => (fechaTxt ? `Launching ${fechaTxt}` : 'Coming soon'),
+        cta: 'Join the list',
+        caption: (x) => `${x}, another service you'll be able to hand off ✨\n\n${bizPh} hasn't opened yet: we're signing up the first ones.\n\nSign up for the list and we'll let you know at launch 📩`,
+      }) : mk('novedad', A, {
+        tag: 'MUY PRONTO',
+        headline: (x) => x,
+        subline: () => (fechaTxt ? `Llega el ${fechaTxt}` : 'Muy pronto'),
+        cta: 'Sumarme a la lista',
+        caption: (x) => `${x}, otro de los servicios que vas a poder delegar ✨\n\n${bizPh} todavía no abrió: estamos sumando a los primeros.\n\nEscribinos por DM y te sumamos a la lista 📩`,
+      });
+      if (t) topics.push(t);
+    }
+  } else if (promo && (promo.titulo || promo)) {
     const A = String(promo.titulo || promo).trim();
     const promoPrice = (promo && typeof promo === 'object') ? String(promo.precio || '').trim() : '';
     const tituloWords = A.split(/\s+/).filter(Boolean).length;
@@ -1293,7 +1478,19 @@ function deriveTopics(digest, opts) {
     const it2 = pickItem(1);
     if (it2) {
       const A = name(it2);
-      const t = en ? mk('novedad', A, {
+      const t = serviceFamily ? (en ? mk('novedad', A, {
+        tag: 'NEW',
+        headline: (x) => x,
+        subline: (x) => (it2.precio ? `${it2.precio}` : ''),
+        cta: 'Ask us',
+        caption: (x) => `${x}, another service at ${bizPh} ✨\n\n${it2.precio ? `${it2.precio}. ` : ''}Tell us what you need and we'll reply with a clear proposal.\n\nMessage us to ask 📩`,
+      }) : mk('novedad', A, {
+        tag: 'NUEVO',
+        headline: (x) => x,
+        subline: (x) => (it2.precio ? `A ${it2.precio}` : ''),
+        cta: 'Consultar',
+        caption: (x) => `${x}, otro servicio de ${bizPh} ✨\n\n${it2.precio ? `A ${it2.precio}. ` : ''}Contanos qué necesitás y te respondemos con una propuesta clara.\n\nConsultanos por DM 📩`,
+      })) : en ? mk('novedad', A, {
         tag: 'NEW',
         headline: (x) => x,
         subline: (x) => (it2.precio ? `${it2.precio}` : ''),
@@ -1325,7 +1522,7 @@ function deriveTopics(digest, opts) {
       headline: () => `3 claves de ${short.toLowerCase()}`,
       subline: () => 'Lo que miramos antes de elegir',
       cta: 'Guardá este tip',
-      caption: (x) => `3 claves para elegir bien tu ${short.toLowerCase()} 👇\n\nCalidad, detalle y que sea de ${bizPh}: así trabajamos ${x.toLowerCase()}.\n\nGuardá este posteo para cuando lo necesites 🔖`,
+      caption: (x) => `3 claves para elegir bien en ${short.toLowerCase()} 👇\n\nCalidad, detalle y que sea de ${bizPh}: así trabajamos ${x.toLowerCase()}.\n\nGuardá este posteo para cuando lo necesites 🔖`,
     });
     if (t) topics.push(t);
   }
@@ -1352,7 +1549,25 @@ function deriveTopics(digest, opts) {
   // 5) RESERVA/CTA — servicio con turnos; si no hay señal de reservas,
   // cierra con el ítem estrella en clave de pedido directo.
   const bookItem = pickItem(0) || it1;
-  if (bookItem && digest.has_booking) {
+  if (prelaunch && (bookItem || it1)) {
+    // (v348 · D2) El cierre de la semana pre-lanzamiento es la LISTA DE
+    // ESPERA — jamás "reservá tu turno" de un negocio que no abrió.
+    const A = name(bookItem || it1);
+    const t = en ? mk('reserva', A, {
+      tag: 'WAITLIST',
+      headline: () => 'Join the first ones',
+      subline: () => (fechaTxt ? `Launching ${fechaTxt}` : 'Coming soon'),
+      cta: 'Join the list',
+      caption: (x) => `${bizPh}'s waitlist is now open 📩\n\n${fechaTxt ? `Launch day is ${fechaTxt} and ` : ''}${x} is part of what's coming.\n\nSign up now and we'll tell you on day one 📩`,
+    }) : mk('reserva', A, {
+      tag: 'LISTA DE ESPERA',
+      headline: () => 'Sumate a los primeros',
+      subline: () => (fechaTxt ? `Lanzamiento: ${fechaTxt}` : 'Muy pronto'),
+      cta: 'Sumarme',
+      caption: (x) => `La lista de espera de ${bizPh} ya está abierta 📩\n\n${fechaTxt ? `El lanzamiento es el ${fechaTxt} y ` : ''}${x.toLowerCase()} es parte de lo que llega.\n\nEscribinos por DM y te avisamos el día uno 📩`,
+    });
+    if (t) topics.push(t);
+  } else if (bookItem && digest.has_booking) {
     const A = name(bookItem);
     const t = en ? mk('reserva', A, {
       tag: 'BOOKINGS',
@@ -1362,7 +1577,7 @@ function deriveTopics(digest, opts) {
       caption: (x) => `Booking open for ${x.toLowerCase()} at ${bizPh} 📩\n\nThis week's spots fill up fast.\n\nBook yours by DM 📩`,
     }) : mk('reserva', A, {
       tag: 'TURNOS',
-      headline: (x) => `Reservá tu ${capWords(x, 3).toLowerCase()}`,
+      headline: (x) => `Reservá ${possFor(capWords(x, 3))} ${capWords(x, 3).toLowerCase()}`,
       subline: () => 'Los lugares de la semana vuelan',
       cta: 'Reservar ahora',
       caption: (x) => `Agenda abierta para ${x.toLowerCase()} en ${bizPh} 📩\n\nLos turnos de la semana se ocupan rápido.\n\nReservá el tuyo por DM 📩`,
@@ -1371,7 +1586,19 @@ function deriveTopics(digest, opts) {
   } else if (it1) {
     const A = name(it1);
     if (!topics.some((t) => t.kind === 'reserva')) {
-      const t = en ? mk('reserva', A, {
+      const t = serviceFamily ? (en ? mk('reserva', A, {
+        tag: '',
+        headline: (x) => `${capWords(x, 4)}: get a free quote`,
+        subline: () => '',
+        cta: 'Ask us',
+        caption: (x) => `${x} at ${bizPh} ✨\n\nTell us what you need and we'll reply with a clear proposal — no strings attached.\n\nComment INFO and we'll reach out 👇`,
+      }) : mk('reserva', A, {
+        tag: '',
+        headline: (x) => `${capWords(x, 4)}: consultá sin compromiso`,
+        subline: () => '',
+        cta: 'Consultar',
+        caption: (x) => `${x} en ${bizPh} ✨\n\nContanos qué necesitás y te respondemos con una propuesta clara, sin compromiso.\n\nComentá INFO y te contactamos 👇`,
+      })) : en ? mk('reserva', A, {
         tag: '',
         headline: (x) => `${capWords(x, 4)}: order today`,
         subline: () => '',
@@ -1419,6 +1646,20 @@ function getStoredDigest(db, userId) {
     if (r && r.digest_json) { const o = JSON.parse(r.digest_json); if (o && typeof o === 'object') return o; }
   } catch (e) {}
   return null;
+}
+/* (v348) deleteDigest — borra el fundamento persistido de una cuenta.
+ * Lo usa la remediación admin (POST /api/admin/digest/rebuild, modo
+ * purge): sin esta pieza no existía NINGÚN camino soportado para
+ * rehacer el fundamento de una cuenta cuyo digest nació envenenado —
+ * el refresco semanal une sobre lo guardado y la basura persistía.
+ * Devuelve true si había fila. El digest se reconstruye solo en el
+ * próximo build (prueba nueva o siembra al entrar). */
+function deleteDigest(db, userId) {
+  try {
+    ensureTable(db);
+    const r = db.prepare('DELETE FROM client_digest WHERE user_id = ?').run(userId);
+    return !!(r && r.changes);
+  } catch (e) { return false; }
 }
 /* getDigest: el guardado; si no hay, uno efímero desde ADN+perfil
  * (las cuentas viejas tienen fundamento sin haber pasado por la prueba
@@ -1469,6 +1710,8 @@ module.exports = {
   offeringsFromText, isPlausibleOfferItem, temasFromFreeText, temaForText,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
+  // (v348) Etapa pre-lanzamiento + remediación admin del fundamento
+  detectEtapa, deleteDigest,
   dnaFragmentFromDigest,
   // (2026-10-20) Posty conectado (Tiendanube)
   tnBlockOf, tnNameMatch, tnOutOfStockNames, tnQuietNames, effectiveStarOf,

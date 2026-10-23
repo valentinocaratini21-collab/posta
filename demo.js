@@ -1474,6 +1474,35 @@ function buildDemoSpec({ business, category, country, tone, photoPath, goal, goa
     if (!t) continue;
     if (!t._digest && !t.intent) { t.intent = 'autoridad'; t.angle = 'directo'; t.proof = ''; t._filler = 1; }
   }
+  // (v348 · D2) FILTRO DE RELLENO PRE-LANZAMIENTO: el fundamento ya
+  // derivó sus temas en clave de presentación/lista de espera, pero el
+  // RELLENO de pool trae captions de negocio operando ("Agenda abierta
+  // esta semana", "Sorteo: un servicio sin cargo"). Si el negocio
+  // todavía no lanzó, todo tema de relleno con kind de operación actual
+  // (reserva/promo/sorteo) se reescribe como presentación de marca
+  // (CLON: los objetos del pool son compartidos — jamás se mutan).
+  // Va ACÁ, con los temas ya cerrados: la selección con gate de foto
+  // re-elige desde allTopics y pisaría una reescritura anterior.
+  try {
+    const pre = digest && (digest.etapa === 'pre-lanzamiento'
+      || (clientDigest.detectEtapa && clientDigest.detectEtapa(digest).etapa === 'pre-lanzamiento'));
+    if (pre) {
+      const OPERATE_NOW = new Set(['reserva', 'promo', 'sorteo']);
+      const variants = en ? [
+        { headline: 'Coming soon', subline: 'We are getting ready.', cta: 'Keep me posted', caption: 'Coming soon ✨\n\nWe are getting everything ready at {BIZ}.\n\nSign up and be the first to know 📩' },
+        { headline: 'Almost there', subline: 'The final touches.', cta: 'Keep me posted', caption: 'Almost there ✨\n\nFinal touches at {BIZ} before opening day.\n\nSign up and be the first to know 📩' },
+      ] : [
+        { headline: 'Muy pronto', subline: 'Estamos llegando.', cta: 'Quiero enterarme', caption: 'Muy pronto ✨\n\nEstamos preparando todo para abrir en {BIZ}.\n\nEscribinos por DM y enterate antes que nadie 📩' },
+        { headline: 'Ya casi estamos', subline: 'Últimos detalles.', cta: 'Quiero enterarme', caption: 'Ya casi estamos ✨\n\nÚltimos detalles en {BIZ} antes de abrir.\n\nEscribinos por DM y enterate antes que nadie 📩' },
+      ];
+      let vi = 0;
+      topics = topics.map((t) => {
+        if (!t || t._digest || !OPERATE_NOW.has(t.kind)) return t;
+        const v = variants[vi++ % variants.length];
+        return { ...t, kind: 'social', tag: en ? 'COMING SOON' : 'MUY PRONTO', headline: v.headline, subline: v.subline, cta: v.cta, caption: v.caption, _prelaunchRewrite: 1 };
+      });
+    }
+  } catch (e) { /* el filtro nunca frena la prueba */ }
   const specPosts = topics.map((t, i) => {
     let headline = t.headline;
     let subline = t.subline;
@@ -1729,18 +1758,24 @@ async function generateDemo({ business, category, country, tone, photoPath, goal
     // Captions gateados por captionPasses (demo-captions.js): si una plantilla
     // no pasa el gate, se reintenta con otro tema del rubro. Nunca sale un
     // caption que el gate rechazaría.
+    // (v348 · D1) prevCaptions se acumula pieza a pieza: la resolución
+    // de captions de la prueba por fin alimenta las defensas intra-
+    // semana del gate (dedupe de cuerpos + rotación de aperturas).
+    const prevCaps = [];
     const made = topics.map((t, i) => {
       const r = captions.resolveTrialCaption(topics, cat, {
-        business, tone, country, idx: i, goalLine, lang,
+        business, tone, country, idx: i, goalLine, lang, prevCaptions: prevCaps,
       });
       // (v209) Pieza LIMPIA: sin titular ni botón en la imagen, el
       // caption carga la idea y CIERRA con el CTA — garantizado acá.
       const cleanPiece = specPosts[i].text_mode === 'clean';
+      const finalCaption = cleanPiece
+        ? closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
+        : r.caption;
+      prevCaps.push(finalCaption);
       return {
         image: 'data:image/jpeg;base64,' + bufs[i].toString('base64'),
-        caption: cleanPiece
-          ? closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
-          : r.caption,
+        caption: finalCaption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline, // titular del diseño (en piezas limpias vive solo en el caption)
         style: specPosts[i].style,

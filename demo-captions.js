@@ -1476,33 +1476,94 @@ const SAFE_FALLBACK_CAPTIONS_EN = {
   reserva: 'Your spot this week at {BIZ} 📩\n\nBook it before it fills up.\n\nBook by DM 📩',
 };
 
+// (v348 · D1) ¿Dos anclas hablan del MISMO ítem del digest? Espejo
+// local de sameItemName (client-digest): igualdad normalizada o solape
+// alto de palabras distintivas. Sin esto, el préstamo de captions de
+// abajo cruzaba anclas y la semana salía incoherente.
+function anchorNorm348(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function anchorsMatch348(a, b) {
+  const na = anchorNorm348(a); const nb = anchorNorm348(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const wa = new Set(na.split(' ').filter((w) => w.length >= 4));
+  const wb = new Set(nb.split(' ').filter((w) => w.length >= 4));
+  if (!wa.size || !wb.size) return false;
+  let inter = 0;
+  for (const w of wa) if (wb.has(w)) inter++;
+  return inter / Math.max(wa.size, wb.size) >= 0.6;
+}
+
 // Resuelve el caption de un posteo de la prueba, gateado por captionPasses.
 // Si el tema elegido no pasa, reintenta con los demás temas del rubro (mismo
 // orden de kind que ya traen). Nunca devuelve un caption que el gate rechace.
 // (v274) Con lang 'en' la puerta es captionPassesEn y el fallback el EN.
-function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang }) {
+// (v348 · D1) Tres candados nuevos, raíz del desastre Gesty:
+//  · PRÉSTAMO SOLO CON EL MISMO ANCLA: si la pieza tiene digest_anchor,
+//    un caption prestado tiene que ser del MISMO ítem — antes la pieza
+//    conservaba SU titular (del spec) con el caption de OTRO servicio.
+//    Sin candidato con su ancla, cae al fallback genérico de SU kind.
+//  · DEDUPE DE CUERPOS: dos piezas de la semana no comparten caption
+//    (el llamador pasa prevCaptions con los ya resueltos; el gate de
+//    generator también los recibe por primera vez en la prueba).
+//  · Las piezas SIN ancla (relleno de pool) conservan el préstamo
+//    histórico entre temas del rubro.
+function resolveTrialCaption(topics, cat, { business, tone, country, idx, goalLine, lang, prevCaptions }) {
   const en = lang === 'en';
   const list = Array.isArray(topics) ? topics : [];
-  const order = [];
-  if (list[idx]) order.push(idx);
-  for (let i = 0; i < list.length; i++) if (i !== idx) order.push(i);
-  for (const i of order) {
+  const piece = list[idx] || {};
+  const pieceAnchor = String(piece.digest_anchor || '').trim();
+  const bodyKey = (c) => anchorNorm348(c);
+  const usedBodies = new Set((Array.isArray(prevCaptions) ? prevCaptions : []).map(bodyKey).filter(Boolean));
+  // (v348 · D1) Intentos ordenados: primero el tema PROPIO de la pieza
+  // — con la línea de objetivo si es la primera pieza, y SIN ella como
+  // segundo intento del MISMO tema. La versión histórica pegaba el
+  // goalLine al CANDIDATO 0 en cualquier pieza que lo tomara prestado:
+  // caption propio + goalLine + hashtags pasaba los 320 caracteres del
+  // gate, el tema propio se rechazaba por largo y la pieza salía con
+  // el caption de otro — el mismatch titular↔caption en su forma pura.
+  const attempts = [];
+  if (list[idx]) {
+    if (idx === 0 && goalLine) attempts.push({ i: idx, gl: goalLine });
+    attempts.push({ i: idx, gl: '' });
+  }
+  for (let i = 0; i < list.length; i++) if (i !== idx) attempts.push({ i, gl: '' });
+  for (const at of attempts) {
+    const i = at.i;
     const t = list[i];
-    const caption = buildFinalCaption(t, { business, tone, goalLine: i === 0 ? goalLine : '' });
+    if (i !== idx && pieceAnchor) {
+      const candAnchor = String((t && t.digest_anchor) || '').trim();
+      if (!candAnchor || !anchorsMatch348(pieceAnchor, candAnchor)) continue;
+    }
+    const caption = buildFinalCaption(t, { business, tone, goalLine: at.gl });
+    if (usedBodies.has(bodyKey(caption))) continue;
     const hashtags = demoHashtags(cat, country, tone, lang);
+    const gateInput = { business, dna: topicDna(t), prevCaptions: Array.isArray(prevCaptions) ? prevCaptions : [] };
     const check = en
-      ? captionPassesEn(caption + '\n' + hashtags, { business, dna: topicDna(t) })
-      : captionPasses(caption + '\n' + hashtags, { business, dna: topicDna(t) });
+      ? captionPassesEn(caption + '\n' + hashtags, gateInput)
+      : captionPasses(caption + '\n' + hashtags, gateInput);
     if (check.ok) return { caption, hashtags, topicIndex: i, ok: true };
     try {
       console.error(`[posta] demo caption gate: tema "${t.headline}" rechazado (${check.reason})`);
     } catch (_) {}
   }
   const kind = (list[idx] && list[idx].kind) || 'novedad';
-  const caption = buildFinalCaption(
-    { caption: (en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS)[kind] || (en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS).novedad },
+  const fbTable = en ? SAFE_FALLBACK_CAPTIONS_EN : SAFE_FALLBACK_CAPTIONS;
+  let caption = buildFinalCaption(
+    { caption: fbTable[kind] || fbTable.novedad },
     { business, tone, goalLine: '' }
   );
+  // (v348 · D1) El fallback tampoco se duplica en la semana: si el
+  // cuerpo genérico de SU kind ya salió en otra pieza, rota al primer
+  // fallback genérico libre (siguen siendo textos de marca, sin ancla).
+  if (usedBodies.has(bodyKey(caption))) {
+    for (const k of [kind, 'social', 'novedad', 'tip', 'reserva', 'promo', 'sorteo']) {
+      if (!fbTable[k]) continue;
+      const alt = buildFinalCaption({ caption: fbTable[k] }, { business, tone, goalLine: '' });
+      if (!usedBodies.has(bodyKey(alt))) { caption = alt; break; }
+    }
+  }
   return { caption, hashtags: demoHashtags(cat, country, tone, lang), topicIndex: idx, ok: true, fallback: true };
 }
 

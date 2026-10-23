@@ -160,8 +160,18 @@ function digestSignals(digest, opts = {}) {
   if (d.ciudad) proofEvidence.push(`en ${String(d.ciudad).trim()}`);
   let numbers = new Set();
   try { numbers = cd().digestNumbers(d); } catch (e) {}
+  // (v348 · D2) PRE-LANZAMIENTO: el negocio todavía no abrió (etapa
+  // del digest; si el guardado es viejo y no la trae, se re-deriva de
+  // sus textos). Con esta señal, ninguna intención ni cuota vuelve a
+  // empujar operación actual ("Reservá tu turno", promos, stock) sobre
+  // un negocio que solo puede presentar y sumar a su lista de espera.
+  let prelaunch = d.etapa === 'pre-lanzamiento';
+  if (!prelaunch) {
+    try { prelaunch = cd().detectEtapa(d).etapa === 'pre-lanzamiento'; } catch (e) { /* sin detector, señales como siempre */ }
+  }
   return {
     hasBooking: !!d.has_booking,
+    prelaunch,
     category: String(d.category || ''),
     products: signalProducts, services, promos, star: effStar, quiet, priceByItem,
     diferencial: dif, ciudad: String(d.ciudad || ''),
@@ -218,6 +228,9 @@ function baseSalesIntent(idea, signals) {
     case 'sorteo':
       return { intent: 'venta', item };
     case 'reserva':
+      // (v348 · D2) Pre-lanzamiento: no hay turnos que reservar — la
+      // acción es consultar/sumarse a la lista de espera.
+      if (signals.prelaunch) return { intent: 'consulta', item };
       if (signals.hasBooking) return { intent: 'reserva', item };
       return { intent: signals.services.length ? 'consulta' : 'venta', item };
     case 'tip':
@@ -241,7 +254,9 @@ function salesQuotas(signals, n) {
   const q = { venta: 0, reserva: 0, consulta: 0, prueba: 0, autoridad: 0 };
   const total = Math.max(0, parseInt(n, 10) || 0);
   if (!total) return q;
-  if (signals.hasBooking) q.reserva = Math.min(3, Math.max(1, Math.round(total * 0.4)));
+  // (v348 · D2) Pre-lanzamiento: cuota de reserva en CERO — la semana
+  // no planifica turnos de un negocio que no abrió.
+  if (signals.hasBooking && !signals.prelaunch) q.reserva = Math.min(3, Math.max(1, Math.round(total * 0.4)));
   const sellable = !!(signals.star || signals.products.length || signals.promos.length);
   if (sellable) q.venta = Math.max(1, Math.round(total * 0.3));
   if (signals.proofEvidence.length || signals.star) q.prueba = 1;
@@ -434,6 +449,13 @@ function trialTopicSales(topic, digest, lang) {
   const ctx = { item: anchor, promo: matchedPromo(anchor, signals)
     || (kind === 'promo' ? (signals.promos[0] ? { ...signals.promos[0] } : null) : null) };
   const st = { scores: {}, counts: {} };
+  // (v348 · D2) Pre-lanzamiento: TODA acción comercial se degrada a
+  // CONSULTA — el cierre de intención jamás re-inyecta "Reservá tu
+  // turno" ni "Pedilo hoy" en la semana de un negocio que no abrió.
+  if (signals.prelaunch && (kind === 'promo' || kind === 'novedad' || kind === 'reserva')) {
+    const intent = 'consulta';
+    return { intent, angle: chooseAngle(intent, ctx, signals, st), proof: proofFor(intent, ctx, signals) };
+  }
   if (kind === 'promo' || kind === 'novedad') {
     const intent = 'venta';
     return { intent, angle: chooseAngle(intent, ctx, signals, st), proof: proofFor(intent, ctx, signals) };

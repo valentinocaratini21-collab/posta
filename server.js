@@ -4032,6 +4032,83 @@ app.post('/api/admin/generate-week', requireAdminToken, express.json(), (req, re
     res.json({ ok: true, started: true, user_id: uid, email: user.email, week_key: weekKey });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+// (v348) REHACER FUNDAMENTO — remediación admin del fundamento de una
+// cuenta (caso Gesty, dogfooding 2026-10-23: el digest nació envenenado
+// y NO existía camino soportado para rehacerlo — el candado de prueba
+// dura 90 días, el caché de prueba 72 h, generate-week solo crea el
+// déficit de posteos y el digest persistido no se podía borrar; el
+// refresco semanal unía sobre la basura y la semana salía rota para
+// siempre). Dos modos:
+//  · purge: borra candado(s) de prueba + caché de prueba + digest
+//    persistido y depura las listas del ADN por la puerta de
+//    admisibilidad — la próxima prueba (o la siembra al entrar) nace
+//    limpia desde las fuentes reales del negocio.
+//  · vaciar: vacía los borradores de la semana (quedan como rejected:
+//    la próxima tanda usa otros ángulos) y dispara la reconstrucción
+//    con el fundamento vigente — el mismo camino que el 🗑️ del cliente.
+// Body: { user_id | email, mode: 'purge'|'vaciar', ig?, domain?, week_key? }
+app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), (req, res) => {
+  try {
+    const body = req.body || {};
+    let uid = Number(body.user_id || 0) || 0;
+    if (!uid && body.email) {
+      const u = db.prepare('SELECT id FROM users WHERE email = ?').get(String(body.email).trim().toLowerCase());
+      if (u) uid = u.id;
+    }
+    if (!uid) return res.status(400).json({ ok: false, error: 'Falta user_id o email válido' });
+    const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(uid);
+    if (!user) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    const mode = String(body.mode || '');
+    if (mode === 'vaciar') {
+      const tz = userTz(uid);
+      const curWk = mondayKeyOf(tzToday(tz));
+      let wk = curWk;
+      const qwk = String(body.week_key || '');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(qwk)) wk = qwk;
+      const drafts = wk === curWk
+        ? db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' AND (week_key = '' OR week_key = ?) ORDER BY id ASC`).all(uid, curWk)
+        : db.prepare(`SELECT * FROM posts WHERE user_id = ? AND status = 'draft' AND COALESCE(needs_review,0)=0 AND COALESCE(image_path,'') != '' AND week_key = ? ORDER BY id ASC`).all(uid, wk);
+      if (drafts.length) vaciarYMarcar(uid, drafts, wk);
+      const r = maybeStartRebuild(uid, wk);
+      console.log(`[digest-rebuild] vaciar usuario ${uid} semana ${wk}: ${drafts.length} borradores → rebuilding=${r.rebuilding} (${r.reason || 'ok'})`);
+      return res.json({ ok: true, mode, user_id: uid, emptied: drafts.length, week_key: wk, ...r });
+    }
+    if (mode !== 'purge') return res.status(400).json({ ok: false, error: 'mode debe ser purge|vaciar' });
+    if (!trialLock) return res.status(500).json({ ok: false, error: 'trial-lock no disponible' });
+    const prof = getProfile(uid) || {};
+    const igKey = trialLock.normalizeIg(body.ig || prof.ig_username || '');
+    let domainKey = trialLock.normalizeDomain(body.domain || '');
+    if (igKey && !domainKey) {
+      try {
+        const lr = db.prepare('SELECT domain FROM trial_locks WHERE ig = ? AND domain IS NOT NULL LIMIT 1').get(igKey);
+        if (lr && lr.domain) domainKey = lr.domain;
+      } catch (e) { /* sin dominio derivado: el purge por @ alcanza */ }
+    }
+    const locksDeleted = trialLock.purgeLock(db, igKey, domainKey);
+    let cacheDeleted = 0;
+    if (igKey) {
+      const r = db.prepare('DELETE FROM trial_cache WHERE ig = ?').run(igKey);
+      cacheDeleted = (r && r.changes) || 0;
+    }
+    const digestDeleted = clientDigest.deleteDigest(db, uid);
+    // Depuración del ADN por la puerta de admisibilidad: las listas de
+    // oferta que hoy no pasarían (segunda persona, audiencia suelta,
+    // fragmentos de prosa) salen — eran la fuente del veneno histórico.
+    const dna = readDna(uid);
+    const countOf = (d) => (d.productos || []).length + (d.servicios || []).length + (d.promos_activas || []).length + (d.promos || []).length;
+    const dnaBefore = countOf(dna);
+    const scrubList = (arr) => (Array.isArray(arr) ? arr.filter((x) => clientDigest.isPlausibleOfferItem(x)) : arr);
+    dna.productos = scrubList(dna.productos);
+    dna.servicios = scrubList(dna.servicios);
+    dna.promos_activas = scrubList(dna.promos_activas);
+    dna.promos = scrubList(dna.promos);
+    if (dna.producto_estrella && !clientDigest.isPlausibleOfferItem(dna.producto_estrella)) dna.producto_estrella = '';
+    writeDna(uid, dna);
+    const dnaAfter = countOf(dna);
+    console.log(`[digest-rebuild] purge usuario ${uid} (@${igKey || '—'}): locks=${locksDeleted} cache=${cacheDeleted} digest=${digestDeleted} adn ${dnaBefore}→${dnaAfter} ítems`);
+    return res.json({ ok: true, mode, user_id: uid, ig: igKey, domain: domainKey, locks_deleted: locksDeleted, trial_cache_deleted: cacheDeleted, digest_deleted: digestDeleted, dna_items_before: dnaBefore, dna_items_after: dnaAfter });
+  } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
 // Inspección y freno de emergencia por usuario (2026-10-16): ver qué tiene
 // programado un usuario y frenar TODA su publicación (vuelve a borrador +
 // piloto automático apagado). Nació porque la cuenta propia de Posty se
@@ -15163,7 +15240,11 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
     // Las ideas (LLM) solo viajan en el payload final: NO alimentan ni el
     // spec ni los diseños ni los captions. Lanzarlas en paralelo con el
     // render en vez de esperarlas antes saca ~1-2s del camino crítico.
-    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang }, null)).catch(() => []);
+    // (v348 · D2) Etapa del negocio vía el detector exportado: si
+    // todavía no lanzó, las ideas de plantilla salen en clave de
+    // presentación/lista de espera (nada de promos ni testimonios).
+    const etapaTrial = (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
+    const ideasPromise = Promise.resolve(generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial }, null)).catch(() => []);
     // (v212) Web del negocio (2/2): su paleta manda si no hay otra fuente de
     // color (con @, manda el feed) y sus fotos entran como material gateado.
     let webExtraPhotos = [];
@@ -15715,7 +15796,9 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     // 1) Ideas (van en el payload final; el tracker muestra el progreso)
     send('status', { step: 'empezando', text: lang === 'en' ? "OK, I'm building your trial…" : 'Dale, estoy armando tu prueba…' });
     send('status', { step: 'ideas', text: lang === 'en' ? `I'm thinking up ideas for ${business}…` : `Estoy pensando ideas para ${business}…` });
-    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors, lang }, null);
+    // (v348 · D2) Etapa vía el detector exportado (ver endpoint clásico).
+    const etapaTrial = (() => { try { return clientDigest.detectEtapa({ description: richGoal, diferencial: (webData && webData.description) || '' }).etapa; } catch (e) { return ''; } })();
+    const ideas = await generateIdeas({ business, category, tone, description: richGoal, competitors, lang, etapa: etapaTrial }, null);
 
     // (v192) HERENCIA VISUAL DEL PERFIL: la semana sale de SU línea, no de
     // una plantilla genérica del rubro. Con el perfil ya en vuelo (la misma
@@ -15870,17 +15953,21 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
       (p.photo && typeof p.photo === 'object' && p.photo.userPhoto && photoPath) ? { ...p, photo: photoPath } : p
     ));
     // Captions gateados igual que en demo.generateDemo (mismo armado).
+    // (v348 · D1) prevCaptions acumulado, igual que en demo.generateDemo.
+    const prevCaps = [];
     const made = topics.map((t, i) => {
       const r = demo.resolveTrialCaption(topics, cat, {
-        business, tone, country: effCountry, idx: i, goalLine, lang,
+        business, tone, country: effCountry, idx: i, goalLine, lang, prevCaptions: prevCaps,
       });
       // (v209) Pieza LIMPIA (dosificación): el caption cierra con el CTA.
       // 🧠 (v232) Y el cierre es el de la INTENCIÓN DE VENTA del topic.
       const cleanPiece = specPosts[i].text_mode === 'clean';
+      const finalCaption = cleanPiece
+        ? demo.closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
+        : r.caption;
+      prevCaps.push(finalCaption);
       return {
-        caption: cleanPiece
-          ? demo.closeTrialCaption(r.caption, topics[r.topicIndex] || t, tone, lang)
-          : r.caption,
+        caption: finalCaption,
         hashtags: r.hashtags,
         headline: specPosts[i].headline,
       };
@@ -17515,7 +17602,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v347';
+const BUILD_ID = '20261023-v348';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

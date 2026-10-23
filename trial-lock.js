@@ -161,6 +161,25 @@ function lockMessage(lock, lang) {
     : `Este negocio ya usó su prueba gratis 💛 La próxima se habilita el ${fecha}. Si es tuyo, creá tu cuenta y Posty sigue armando tu semana cada semana, sin esperar.`;
 }
 
+// (v348) purgeLock — remediación admin: borra TODOS los candados que
+// matcheen por @ O por dominio (sin importar la edad). Es la única vía
+// soportada para que un negocio puntual pueda rehacer su prueba antes
+// de los 90 días cuando su fundamento nació mal (caso Gesty): sin esto
+// el candado servía la snapshot envenenada sin salida. Devuelve cuántas
+// filas se borraron. Solo lo invoca /api/admin/digest/rebuild (token).
+function purgeLock(db, igKey, domainKey) {
+  if (!db || (!igKey && !domainKey)) return 0;
+  try {
+    const r = db.prepare(
+      `DELETE FROM trial_locks WHERE (? <> '' AND ig = ?) OR (? <> '' AND domain = ?)`
+    ).run(igKey || '', igKey || '', domainKey || '', domainKey || '');
+    return (r && r.changes) || 0;
+  } catch (e) {
+    console.error('[posta] trial-lock: purgeLock falló:', e.message);
+    return 0;
+  }
+}
+
 module.exports = {
   LOCK_MS,
   normalizeIg,
@@ -168,6 +187,7 @@ module.exports = {
   isAllowlisted,
   findLock,
   recordLock,
+  purgeLock,
   decorateSnapshot,
   lockMessage,
 };

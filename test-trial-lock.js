@@ -158,6 +158,52 @@ const ok = (name, cond, extra) => {
       });
       ok('reel: sin semana → 404 honesto', r2.status === 404, r2.status);
     }
+
+    // (v348) REMEDIACIÓN ADMIN del fundamento: POST /api/admin/digest/rebuild
+    // — purge borra candado + caché + digest y depura el ADN por la
+    // puerta; sin esta vía, un negocio con el fundamento envenenado no
+    // tenía NINGUNA salida soportada (el candado dura 90 días).
+    {
+      const u = rw.prepare("INSERT INTO users (email, password_hash) VALUES ('purge@test.com', 'x')").run();
+      const uid = Number(u.lastInsertRowid);
+      rw.prepare("INSERT INTO profiles (user_id, business_name, category, ig_username) VALUES (?,?,?,?)").run(uid, 'Negocio Purga', 'servicios', 'purgetest');
+      rw.prepare("INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?,?,datetime('now'))").run(uid, JSON.stringify({
+        productos: ['Presupuestos', 'Aprende tu negocio una vez'],
+        servicios: ['Facturación', 'Vos aprobás lo sensible'],
+        promos_activas: ['Comercios'],
+        producto_estrella: 'Presupuestos',
+      }));
+      const cdMod = require('./client-digest');
+      const { DatabaseSync: DS2 } = require('node:sqlite');
+      const dbw = new DS2(dbPath);
+      cdMod.saveDigest(dbw, uid, cdMod.buildFromParts({ business: 'Negocio Purga', category: 'servicios', dna: { productos: [{ nombre: 'Presupuestos' }], servicios: [{ nombre: 'Facturación' }] } }));
+      dbw.close();
+      rw.prepare('INSERT INTO trial_cache (ig, payload, created_at) VALUES (?,?,?)').run('purgetest', JSON.stringify(payload), now);
+      const lk = tl.recordLock(rw, { ig: 'purgetest', domain: 'purgetest.com', business: 'Negocio Purga', lang: 'es', payloadStr: JSON.stringify(payload) }, now);
+      ok('purge: candado sembrado para la remediación', lk === true && !!tl.findLock(rw, 'purgetest', 'purgetest.com', now));
+
+      const adm = async (body, token) => {
+        const r = await fetch(BASE + '/api/admin/digest/rebuild' + (token ? '?token=' + token : ''), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        return { status: r.status, body: await r.json().catch(() => ({})) };
+      };
+      let a = await adm({ user_id: uid, mode: 'purge' }, '');
+      ok('purge: sin token → 403', a.status === 403, a.status);
+      a = await adm({ user_id: uid, mode: 'modo-malo' }, 'test-admin');
+      ok('purge: mode inválido → 400', a.status === 400, a.body);
+      a = await adm({ email: 'purge@test.com', mode: 'purge' }, 'test-admin');
+      ok('purge: ok con conteos', a.status === 200 && a.body.ok === true && a.body.locks_deleted >= 1 && a.body.trial_cache_deleted >= 1 && a.body.digest_deleted === true, a.body);
+      ok('purge: ADN depurado por la puerta (5→2 ítems)', a.body.dna_items_before === 5 && a.body.dna_items_after === 2, a.body);
+      ok('purge: candado eliminado', !tl.findLock(rw, 'purgetest', 'purgetest.com', now));
+      const dnaRow = JSON.parse(ro.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(uid).dna_json);
+      ok('purge: el ADN conserva SOLO la oferta real', JSON.stringify(dnaRow.productos) === '["Presupuestos"]' && JSON.stringify(dnaRow.servicios) === '["Facturación"]' && JSON.stringify(dnaRow.promos_activas) === '[]', dnaRow);
+      const dg = ro.prepare('SELECT COUNT(*) c FROM client_digest WHERE user_id = ?').get(uid);
+      ok('purge: digest persistido eliminado', dg.c === 0, dg);
+      a = await adm({ user_id: uid, mode: 'vaciar' }, 'test-admin');
+      ok('vaciar: ok sin borradores (emptied 0)', a.status === 200 && a.body.ok === true && a.body.emptied === 0, a.body);
+      ok('purgeLock: segunda pasada = 0 filas', tl.purgeLock(rw, 'purgetest', 'purgetest.com') === 0);
+    }
   } finally {
     child.kill('SIGKILL');
   }

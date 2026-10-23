@@ -175,6 +175,43 @@ console.log('== Pertenencia: el chequeo determinístico ==');
     srv.kill('SIGKILL');
   }
 
+  console.log('== D4/D2 (v348) Puerta semántica + etapa pre-lanzamiento ==');
+  {
+    const gate = clientDigest.isPlausibleOfferItem;
+    for (const j of ['Aprende tu negocio una vez', 'Vos aprobás lo sensible', 'Comercios', 'Profesionales', 'Pymes', 'Emprendedores']) {
+      ok(!gate(j), `puerta D4 rechaza la basura del fundamento: "${j}"`);
+    }
+    for (const g of ['Presupuestos', 'Facturación', 'Cobranzas', 'Agenda', 'Stock', 'Proveedores', 'Comprobantes', 'Reportes']) {
+      ok(gate(g), `puerta D4 admite el servicio real de Gesty: "${g}"`);
+    }
+    for (const g of ['Café de especialidad', 'Medialunas de manteca', 'Maquillaje social', 'Curso de maquillaje', 'Omakase', 'Rolls de salmón', 'Joyas de plata 925', 'Reparación de joyas']) {
+      ok(gate(g), `puerta D4 admite la oferta de otro rubro: "${g}"`);
+    }
+    // La unión del refresco profundo no re-inyecta basura guardada.
+    const storedDirty = clientDigest.buildFromParts({ business: 'X', category: 'servicios', dna: { servicios: [{ nombre: 'Facturación' }] } });
+    storedDirty.productos = [{ nombre: 'Comercios' }, { nombre: 'Presupuestos' }];
+    const freshOk = clientDigest.buildFromParts({ business: 'X', category: 'servicios', web: { services: ['Presupuestos'], description: 'Estudio contable.' }, catalog: { items: [{ nombre: 'Presupuestos' }], at: new Date().toISOString() } });
+    const merged = clientDigest.applyDeepBlocks(storedDirty, freshOk);
+    const mergedNames = (merged.productos || []).map((x) => x.nombre);
+    ok(!mergedNames.includes('Comercios') && mergedNames.includes('Presupuestos'), `applyDeepBlocks filtra la unión por la puerta: ${mergedNames.join(' · ')}`);
+    // Etapa: fecha futura + léxico (Gesty) vs negocio operando.
+    const etG = clientDigest.detectEtapa({ diferencial: 'Office manager para pymes. Lanzamiento 21/6/2027.' });
+    ok(etG.etapa === 'pre-lanzamiento' && etG.lanzamiento_fecha === '2027-06-21', `detectEtapa Gesty: ${JSON.stringify(etG)}`);
+    const etOp = clientDigest.detectEtapa({ diferencial: 'Panadería de barrio, apertura de 9 a 20. Desde el 3/3/2019 horneamos todos los días.' });
+    ok(etOp.etapa === '', 'detectEtapa: el negocio operando NO se marca');
+    const gestyD = clientDigest.buildFromParts({ business: 'Gesty', category: 'servicios', web: { name: 'Gesty', description: 'Gesty es tu office manager: presupuestos, facturación, cobranzas, agenda, stock, proveedores, comprobantes y reportes. Lanzamiento 21/6/2027.', services: ['Presupuestos', 'Facturación', 'Cobranzas'], url: 'https://gestyofficemanager.com' } });
+    ok(gestyD.etapa === 'pre-lanzamiento', 'el digest de Gesty nace con etapa pre-lanzamiento');
+    const gt = clientDigest.deriveTopics(gestyD, { count: 5, category: 'servicios' });
+    const gtext = gt.map((t) => `${t.headline} ${t.caption}`).join(' | ').toLowerCase();
+    ok(!/pasá a buscarlo|pedilo por dm|reservá tu|te esperamos/.test(gtext), 'temas de Gesty: CERO operación retail/reserva');
+    ok(/lista de espera|sumate|muy pronto/.test(gtext), 'temas de Gesty: presentación + lista de espera');
+    // Un servicio OPERANDO deriva frames de servicio, no de retail.
+    const srvD = clientDigest.buildFromParts({ business: 'Estudio Sur', category: 'servicios', web: { name: 'Estudio Sur', description: 'Estudio contable: liquidación de sueldos, facturación y presupuestos para pymes.', services: ['Liquidación de sueldos', 'Facturación'], url: 'https://estudiosur.example.com' } });
+    const st = clientDigest.deriveTopics(srvD, { count: 5, category: 'servicios' });
+    const stext = st.map((t) => `${t.headline} ${t.caption}`).join(' | ').toLowerCase();
+    ok(!/pasá a buscarlo|recién llegado|te esperamos/.test(stext), 'servicios operando: CERO frames de retail');
+  }
+
   console.log('== Cableado (contrato de fuentes) ==');
   {
     const srvSrc = fs.readFileSync('server.js', 'utf8');

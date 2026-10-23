@@ -226,6 +226,13 @@ async function bindAdmin() {
       <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
         <button class="btn btn-soft btn-sm" id="cliStop">🛑 Frenar publicación de este cliente</button>
         <span id="cliStopMsg" style="font-size:12px;margin-left:8px"></span>
+      </div>
+      <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px">
+        <h4 style="margin:0 0 8px">🧱 Fundamento</h4>
+        <button class="btn btn-soft btn-sm" id="cliRebuild">♻️ Rehacer fundamento</button>
+        <button class="btn btn-soft btn-sm" id="cliPurge" style="margin-left:6px">🧹 Purgar prueba y fundamento</button>
+        <div id="cliDigestMsg" style="font-size:12px;margin-top:8px"></div>
+        <div style="font-size:11.5px;color:var(--mut);margin-top:4px">Rehacer = vacía los borradores de la semana y reconstruye con el fundamento vigente. Purgar = borra candado de prueba (90 días), caché de prueba y digest guardado, y depura el ADN: la próxima prueba nace limpia.</div>
       </div>`;
     const back = $('#cliBack');
     if (back) back.onclick = showHome;
@@ -236,6 +243,22 @@ async function bindAdmin() {
         const rr = await adminApi('stop-publishing', 'POST', { user_id: uid });
         $('#cliStopMsg').innerHTML = `<span style="color:var(--green-d)">Frenado ✅ (${rr.unscheduled || 0} desprogramados)</span>`;
       } catch (e) { $('#cliStopMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo frenar.</span>`; }
+    };
+    const rebuild = $('#cliRebuild');
+    if (rebuild) rebuild.onclick = async () => {
+      if (!confirm('¿Rehacer el fundamento? Se vacían los borradores de esta semana y Posty reconstruye la semana con el fundamento vigente.')) return;
+      try {
+        const rr = await adminApi('digest/rebuild', 'POST', { user_id: uid, mode: 'vaciar' });
+        $('#cliDigestMsg').innerHTML = `<span style="color:var(--green-d)">Semana vaciada ✅ (${rr.emptied || 0} borradores) — reconstruyendo: ${rr.rebuilding ? 'sí' : 'no (' + esc(rr.reason || 'tope') + ')'}</span>`;
+      } catch (e) { $('#cliDigestMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo rehacer.</span>`; }
+    };
+    const purge = $('#cliPurge');
+    if (purge) purge.onclick = async () => {
+      if (!confirm('¿PURGAR la prueba y el fundamento? Se borra el candado de 90 días, el caché de la prueba y el digest guardado, y se depura el ADN. La cuenta queda como si nunca hubiera hecho la prueba.')) return;
+      try {
+        const rr = await adminApi('digest/rebuild', 'POST', { user_id: uid, mode: 'purge' });
+        $('#cliDigestMsg').innerHTML = `<span style="color:var(--green-d)">Purgado ✅ candados: ${rr.locks_deleted || 0} · caché: ${rr.trial_cache_deleted || 0} · digest: ${rr.digest_deleted ? 'borrado' : 'no había'} · ADN ${rr.dna_items_before}→${rr.dna_items_after} ítems</span>`;
+      } catch (e) { $('#cliDigestMsg').innerHTML = `<span style="color:var(--red-d)">No se pudo purgar.</span>`; }
     };
   }
   async function showFunnel() {

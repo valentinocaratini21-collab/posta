@@ -1185,6 +1185,26 @@ function captionPasses(caption, input) {
       return { ok: false, reason: 'genérico: no menciona nada concreto del negocio (ningún producto, servicio, promo, precio o diferencial del ADN)' };
     }
   }
+  // (v348 · D3) LINT DE CONCORDANCIA "tu + palabra en -s": el posesivo
+  // `tu` seguido de un plural ("tu cobranzas", "tu redes") es una
+  // ruptura gramatical — la semana dogfood de Gesty salió con "3 claves
+  // para elegir bien tu cobranzas" porque el frame clavaba el posesivo
+  // sin mirar el ancla. Se rechaza salvo singular legítimo en -s
+  // (análisis, interés, mes, lunes…) o forma verbal reconocible.
+  {
+    const plain = c.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const TU_S_SINGULARS = new Set(['analisis', 'interes', 'pais', 'mes', 'cumpleanos', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'estres', 'crisis', 'tesis', 'dosis', 'tenis', 'dios', 'gas', 'bus', 'ingles', 'frances', 'portugues', 'atlas', 'tos', 'paraguas', 'rascacielos']);
+    const TU_S_VERBS = new Set(['quieres', 'puedes', 'tienes', 'vienes', 'sabes', 'necesitas', 'buscas', 'encargas', 'ofreces', 'trabajas', 'llevas', 'elegis', 'preferis', 'pedis', 'decis', 'sentis', 'pensas', 'crees', 'seguis', 'venis', 'podes', 'tenes', 'queres', 'vivis', 'abris', 'cerras', 'entras', 'salis', 'dormis', 'reis', 'llamas', 'escribis', 'mandas', 'preguntas', 'respondes', 'empezas', 'comenzas']);
+    const mTu = plain.match(/\btu\s+[a-z]{3,}s\b/g);
+    if (mTu) {
+      for (const m of mTu) {
+        const w = m.replace(/^tu\s+/, '');
+        if (!TU_S_SINGULARS.has(w) && !TU_S_VERBS.has(w)) {
+          return { ok: false, reason: `concordancia: "tu ${w}" no concuerda — el posesivo sigue al sustantivo ("tus ${w}") o el frame se reformula sin posesivo` };
+        }
+      }
+    }
+  }
   return { ok: true, reason: '' };
 }
 
@@ -2116,7 +2136,7 @@ function sigWords(s) {
 /* (v274 · MODO EN) Gemela en inglés de templateIdeas: mismos esqueletos,
  * misma regla (sin datos reales no se fabrica: devuelve [] y el llamador
  * aplica su gate), títulos y ángulos en inglés US comercial. */
-function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description }) {
+function templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa }) {
   const biz = business || 'your business';
   const vs = competitors
     ? ` Stand out from ${competitors}: show what they don't have.`
@@ -2158,6 +2178,15 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
     });
     all.length = 7;
   }
+  // (v348 · D2) PRE-LAUNCH: the Promo becomes a WAITLIST idea and the
+  // Testimonial becomes PROCESS — a business that has not launched has
+  // no stock to push and no customers to quote yet.
+  if (etapa === 'pre-lanzamiento') {
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].formato === 'Promo') all[i] = { formato: 'Waitlist', tipo: 'novedad', titulo: 'join the first ones', angulo: 'The launch date is the news: invite followers to join the waitlist and hear it on day one. No stock, no fake urgency — it has not opened yet.' };
+      else if (all[i].formato === 'Testimonial') all[i] = { formato: 'Process', tipo: 'detras', titulo: r1 ? `how we're getting ${r1} ready` : 'how we are getting ready', angulo: 'No customers to quote yet: show the real work of getting ready — process builds trust without inventing opinions.' };
+    }
+  }
   let pool = all;
   if (excluded) {
     const bw = new Set(sigWords(excluded));
@@ -2170,14 +2199,17 @@ function templateIdeasEn({ business, category, competitors, goal, recentTopics, 
     if (fresh.length >= 4) pool = fresh;
   }
   if (ephemeris && pool.length) {
-    const themed = { formato: 'Promo', tipo: 'promo', titulo: `${ephemeris.name}: special deal`, angulo: `${ephemeris.angle}. A date that sells: don't let it pass.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
+    // (v348 · D2) Ephemeris + pre-launch: presentation, not a deal.
+    const themed = etapa === 'pre-lanzamiento'
+      ? { formato: 'Presentation', tipo: 'novedad', titulo: `${ephemeris.name}: coming soon`, angulo: `${ephemeris.angle}. The business has not launched yet: present it and invite people to the waitlist — no deals before opening day.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` }
+      : { formato: 'Promo', tipo: 'promo', titulo: `${ephemeris.name}: special deal`, angulo: `${ephemeris.angle}. A date that sells: don't let it pass.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
     return [themed, ...pool.slice(0, 6)];
   }
   return pool;
 }
 
-function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang }) {
-  if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description });
+function templateIdeas({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, lang, etapa }) {
+  if (lang === 'en') return templateIdeasEn({ business, category, competitors, goal, recentTopics, ephemeris, excluded, dna, description, etapa });
   const w = CAT_WORDS[category] || CAT_WORDS.otro;
   const ga = GOAL_LINES[goal] ? ' ' + GOAL_LINES[goal].split('. ')[1] : '';
   const biz = business || 'tu negocio';
@@ -2231,6 +2263,16 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
     });
     all.length = 7;
   }
+  // (v348 · D2) PRE-LANZAMIENTO: la Promo se vuelve LISTA DE ESPERA y
+  // el Testimonio se vuelve PROCESO — un negocio que todavía no lanzó
+  // no tiene stock que urgir ni clientes que opinen; inventarlos es el
+  // defecto que esta etapa viene a cerrar.
+  if (etapa === 'pre-lanzamiento') {
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].formato === 'Promo') all[i] = { formato: 'Lista de espera', tipo: 'novedad', titulo: 'sumate a los primeros', angulo: 'La fecha de lanzamiento es el dato: invitá a sumarse a la lista de espera y enterarse el día uno. Sin stock ni urgencia inventada: todavía no abrió.' + ga };
+      else if (all[i].formato === 'Testimonio') all[i] = { formato: 'Proceso', tipo: 'detras', titulo: r1 ? `cómo estamos preparando ${r1}` : 'cómo nos estamos preparando', angulo: 'Todavía no hay clientes que opinen: mostrá el trabajo real de preparación — el proceso da confianza sin inventar testimonios.' + ga };
+    }
+  }
   // Temas RECHAZADOS por el cliente (Track D): se filtran con el mismo mecanismo
   // que los ya publicados (2+ palabras significativas en común).
   let pool = all;
@@ -2249,7 +2291,10 @@ function templateIdeas({ business, category, competitors, goal, recentTopics, ep
   // La efeméride va primera y marcada, también en el fallback sin IA
   function withEphemeris(list) {
     if (ephemeris && list.length) {
-      const themed = { formato: 'Promo', tipo: 'promo', titulo: `${ephemeris.name}: promo especial`, angulo: `${ephemeris.angle}. Fecha que vende: no la dejes pasar.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
+      // (v348 · D2) Efeméride + pre-lanzamiento: presentación, no promo.
+      const themed = etapa === 'pre-lanzamiento'
+        ? { formato: 'Presentación', tipo: 'novedad', titulo: `${ephemeris.name}: muy pronto`, angulo: `${ephemeris.angle}. El negocio todavía no lanzó: presentalo e invitá a la lista de espera — nada de promos antes de abrir.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` }
+        : { formato: 'Promo', tipo: 'promo', titulo: `${ephemeris.name}: promo especial`, angulo: `${ephemeris.angle}. Fecha que vende: no la dejes pasar.`, ephemeris: `${ephemeris.emoji} ${ephemeris.name}` };
       return [themed, ...list.slice(0, 6)];
     }
     return list;
