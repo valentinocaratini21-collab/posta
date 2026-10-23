@@ -644,6 +644,17 @@ html{scroll-behavior:smooth}
 .vp-row.vp-top .vp-card{flex:0 0 148px;width:148px}
 .vp-row.vp-top .vp-card video{width:148px;height:263px;aspect-ratio:auto}
 }
+/* (v339) Microcopy de cero riesgo junto al botón del form, pasos
+   "Cómo sigue" bajo el formulario y barra fija móvil al formulario. */
+.form-micro{text-align:center;font-size:12.5px;color:var(--mut);margin:10px 0 0;line-height:1.5}
+.next3{margin:24px 0 42px}
+#formCard{scroll-margin-top:14px}
+.sticky-form-bar{display:none}
+@media(max-width:640px){
+.sticky-form-bar{display:flex;align-items:center;justify-content:center;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;background:var(--yl);color:var(--navy);border:none;font-family:inherit;font-weight:800;font-size:16px;padding:15px 18px;border-radius:999px;box-shadow:0 12px 30px rgba(10,30,51,.28);cursor:pointer;transition:opacity .25s ease,transform .25s ease}
+.sticky-form-bar.sfb-hide{opacity:0;pointer-events:none;transform:translateY(14px)}
+body.sfb-on{padding-bottom:88px}
+}
 </style>
 </head>
 <body>
@@ -714,6 +725,7 @@ html{scroll-behavior:smooth}
       <div id="stepIg">
         <div class="field"><label>Tu Instagram</label><input type="text" id="f_ig" placeholder="@tu_negocio" maxlength="40" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty trae tu nombre, tu rubro y tu foto de perfil.</div></div>
         <button class="btn btn-primary btn-block" id="btnGo">Ver mi semana 👀</button>
+        <p class="form-micro">Tu semana lista en ~2 minutos · Gratis · Sin tarjeta · Sin tu contraseña de Instagram</p>
         <div class="form-or"><span>o</span></div>
         <div id="webOptBox">
           <div class="field" style="margin-bottom:10px"><label>La web de tu negocio</label><input type="text" id="f_web" placeholder="www.tunegocio.com.ar" maxlength="200" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="hint">Posty lee tu web: nombre, servicios, colores y fotos.</div></div>
@@ -798,6 +810,11 @@ html{scroll-behavior:smooth}
         <p class="tiny">Sin registro · Sin tarjeta · Tu semana queda guardada 3 días</p>
       </div>
     </div>
+    <div class="steps3 next3" aria-label="Cómo sigue">
+      <div class="step3"><div class="n">1</div><div><b>Aprobás tu semana</b></div></div>
+      <div class="step3"><div class="n">2</div><div><b>Posty la publica solo</b></div></div>
+      <div class="step3"><div class="n">3</div><div><b>El domingo te llega tu carta</b></div></div>
+    </div>
     <p class="price-contrast">Un community manager cobra ~$300.000 por mes. <b>Posty, desde $99.999.</b></p>
 
   <div class="work3">
@@ -862,6 +879,26 @@ html{scroll-behavior:smooth}
 
   </div>
   </div>
+<button type="button" class="sticky-form-bar" id="stickyFormBar">Armá tu semana gratis</button>
+<script>
+(function(){
+  var bar=document.getElementById('stickyFormBar'), form=document.getElementById('formCard'), onb=document.getElementById('v-onboarding');
+  if(!bar||!form) return;
+  var formVisible=false;
+  function apply(){
+    var onbVisible=!onb||onb.getClientRects().length>0;
+    var show=onbVisible&&!formVisible;
+    bar.classList.toggle('sfb-hide',!show);
+    document.body.classList.toggle('sfb-on',show);
+  }
+  bar.addEventListener('click',function(){ form.scrollIntoView({behavior:'smooth',block:'start'}); });
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(function(es){ es.forEach(function(e){ formVisible=e.isIntersecting; apply(); }); },{threshold:.12}).observe(form);
+  }
+  if(onb&&'MutationObserver' in window){ new MutationObserver(apply).observe(onb,{attributes:true,attributeFilter:['style','class']}); }
+  apply();
+})();
+</script>
 </div>
 
 <!-- (v323 · pieza 16) VISTA: ejemplo navegable para el tímido — un perfil
