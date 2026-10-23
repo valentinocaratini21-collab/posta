@@ -277,6 +277,46 @@ function cleanSegment(seg) {
   s = s.replace(FIELD_LABEL_RE, '').replace(LEAD_VERBS_RE, '').trim();
   return s;
 }
+/* (v343) PUERTA DE ADMISIBILIDAD DE ÍTEMS — el caso Gesty (prueba
+ * real del 2026-10-23): la minería de prosa y la lista de "servicios"
+ * de la home admitían fragmentos de oración como si fueran servicios
+ * ("esta cuenta la present…", "Serena y muy ordenada", el slogan del
+ * hero como producto estrella) y la generación anclaba TODA la semana
+ * en ese fragmento. Un ítem entra al fundamento solo si es una frase
+ * nominal plausible respaldada por su fuente: sin puntuación de
+ * oración, sin verbos conjugados de prosa, sin aperturas de párrafo,
+ * ≤5 palabras. Lo que no pasa NO entra: la lista queda vacía y la
+ * generación ancla en temas del negocio — jamás en un servicio
+ * inventado a partir de prosa. */
+const OFFER_PROSE_VERBS = new Set(('es son esta estan tiene tienen hace hacen deja dejan sale salen abre abren presenta presentan significa significan trabaja trabajan contrate necesites quieras puedas quieres puedes somos era fue queda quedan parece resulta ofrece ofrecen brinda brindan incluye incluyen permite permiten llego llegaron anuncia sumamos vende venden').split(' '));
+const OFFER_PROSE_OPENERS = new Set(('su sus esta este esto estos estas nuestro nuestra nuestros nuestras colores personalidad simbolo todo toda todos todas').split(' '));
+function cleanOfferName(raw) {
+  const v = (raw && typeof raw === 'object') ? (raw.nombre || raw.titulo || raw.name || '') : raw;
+  return String(v || '').replace(/\s+/g, ' ')
+    .replace(/^[\u2713\u2714•·\-\u2013\u2014*\s]+/, '')
+    .replace(/[.\u3002]+$/, '').trim();
+}
+function isPlausibleOfferItem(raw) {
+  const s = cleanOfferName(raw);
+  if (s.length < 3 || s.length > 60) return false;
+  if (/[,;:!?\u00a1\u00bf]/.test(s)) return false; // puntuación de oración o de lista interna
+  const words = s.split(' ').filter(Boolean);
+  if (words.length < 1 || words.length > 5) return false;
+  const nw = words.map((w) => norm(w)).filter(Boolean);
+  if (!nw.length) return false;
+  if (OFFER_PROSE_OPENERS.has(nw[0])) return false;
+  if (nw.some((w) => OFFER_PROSE_VERBS.has(w))) return false;
+  if (nw.includes('muy') || nw.includes('tan')) return false;
+  return true;
+}
+function cleanOfferRaw(x) {
+  if (x && typeof x === 'object') {
+    const n = cleanOfferName(x);
+    return n ? { ...x, nombre: n } : x;
+  }
+  return cleanOfferName(x);
+}
+
 /* Extrae frases-oferta de un texto libre (bio, descripción del
  * formulario): segmentos cortos que nombran algo concreto que el
  * negocio vende/hace. Devuelve {items[], ciudad, hasBooking}. */
@@ -316,6 +356,9 @@ function offeringsFromText(text) {
     const key = norm(s);
     if (seen.has(key)) continue;
     seen.add(key);
+    // (v343) La puerta manda también acá: un segmento de prosa que no
+    // es una oferta plausible no se convierte en "servicio".
+    if (!isPlausibleOfferItem(s)) continue;
     items.push(s.charAt(0).toUpperCase() + s.slice(1));
     if (items.length >= 8) break;
   }
@@ -517,9 +560,16 @@ function buildFromParts(parts) {
   // fuentes y su resolución por frescura trabajan sobre estas listas.
   const dnaProds = dna ? itemListF([...(dna.productos || []), ...(dna.producto_estrella ? [{ nombre: dna.producto_estrella }] : [])], 12, 'dna') : [];
   const dnaServs = dna ? itemListF(dna.servicios || [], 10, 'dna') : [];
-  const webItems = p.web ? itemListF(p.web.services || [], 10, 'web') : [];
-  const catalogItems = (p.catalog && Array.isArray(p.catalog.items)) ? itemListF(p.catalog.items, 48, 'web-catalog') : [];
-  const bioItems = (p.bioLink && Array.isArray(p.bioLink.items)) ? itemListF(p.bioLink.items, 20, 'bio-link') : [];
+  // (v343) La lista de la home también pasa la puerta y se limpia
+  // (glifos ✓, punto final): un heading/slogan no es un servicio.
+  const webItems = p.web ? itemListF((p.web.services || []).filter(isPlausibleOfferItem).map(cleanOfferRaw), 10, 'web') : [];
+  // (v345) El catálogo profundo y el link de bio pasan por la MISMA
+  // puerta que la home: el crawler levanta headings enteros de cada
+  // página (slogans, "¿Para quién es…?") y nombres con el glifo ✓ —
+  // sin filtro, esos textos entraban como "productos" y anclaban las
+  // piezas (la misma clase de veneno que el fragmento minado).
+  const catalogItems = (p.catalog && Array.isArray(p.catalog.items)) ? itemListF(p.catalog.items.filter(isPlausibleOfferItem).map(cleanOfferRaw), 48, 'web-catalog') : [];
+  const bioItems = (p.bioLink && Array.isArray(p.bioLink.items)) ? itemListF(p.bioLink.items.filter(isPlausibleOfferItem).map(cleanOfferRaw), 20, 'bio-link') : [];
   // La web mezcla productos y servicios en una sola lista: todo entra
   // como ítem vendible; la distinción fina la hace el kind al derivar.
   // Prioridad de la lista principal (capada, higiene de prompts): ADN
@@ -533,7 +583,10 @@ function buildFromParts(parts) {
   // --- minería de textos (bio del feed + descripción del formulario) ---
   const bioOff = p.feed && p.feed.bio ? offeringsFromText(p.feed.bio) : { items: [], ciudad: '', hasBooking: false };
   const formOff = p.form && (p.form.description || p.form.goal) ? offeringsFromText(p.form.description || p.form.goal) : { items: [], ciudad: '', hasBooking: false };
-  const mined = [...bioOff.items, ...formOff.items];
+  // (v343) Si la WEB rindió servicios con evidencia, esa lista MANDA:
+  // lo minado de la prosa (bio/form) no se mezcla — fue la vía por la
+  // que un fragmento de oración terminó de "servicio" estrella.
+  const mined = webItems.length ? [] : [...bioOff.items, ...formOff.items];
   if (!d.servicios.length && mined.length) d.servicios = itemList(mined, 8);
   else if (mined.length) {
     // Completa servicios con lo minado que no esté ya (la bio suele
@@ -587,7 +640,15 @@ function buildFromParts(parts) {
   // --- fuentes con fecha por bloque ---
   if (p.web) d.fuentes.web = { at: now, url: String(p.web.url || '').slice(0, 200) };
   if (p.feed) d.fuentes.feed = { at: now, handle: String(p.feed.handle || '').slice(0, 40), posts: Array.isArray(p.feed.captions) ? p.feed.captions.length : 0 };
-  if (p.form) d.fuentes.form = { at: now };
+  if (p.form) {
+    d.fuentes.form = { at: now };
+    // (v343) El detalle del dueño viaja ENTERO en el digest: es su
+    // descripción con sus palabras y la cuenta la conserva al sembrar
+    // (antes el fundamento guardaba solo listas derivadas y el texto
+    // completo se perdía en la conversión).
+    const formDesc = String(p.form.description || p.form.goal || '').replace(/\s+/g, ' ').trim();
+    if (formDesc) d.fuentes.form.description = formDesc.slice(0, 1200);
+  }
   if (dna) d.fuentes.dna = { at: now };
 
   // ===== (v230) LECTURA PROFUNDA: los 6 bloques extendidos =====
@@ -1405,7 +1466,7 @@ function dnaFragmentFromDigest(digest) {
 module.exports = {
   DIGEST_VERSION,
   norm, distinctiveWords, wordForms, textWordSet, anchorsOf, anchorsFromTexts, pieceAnchored,
-  offeringsFromText, temasFromFreeText, temaForText,
+  offeringsFromText, isPlausibleOfferItem, temasFromFreeText, temaForText,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
   dnaFragmentFromDigest,

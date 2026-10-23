@@ -229,6 +229,12 @@ const TEXT_VOTES = [
   [/\bjoyer[ií]a\b|\bjoyas\b|\brelojer[ií]a\b|\bplater[ií]a\b|\banillos\b/i, 'joyeria', '', 2, 'joyería'],
   [/\bfotograf\w*\b|\bphotography\b|\bsesiones de fotos\b|\bestudio fotogr[aá]fico\b/i, 'fotografia', '', 2, 'fotografía'],
   [/\bcommunity manager\b|\bagencia de (marketing|contenido|publicidad|redes)\b|\bmarketing digital\b|\bmanejo de redes\b|\bcreaci[oó]n de contenido\b/i, 'profesionales', '', 3, 'contenido/CM'],
+  // (v343) Gestión/administración: el vocabulario de una oficina que
+  // administra (office manager, facturación, cobranzas, gestoría) no
+  // votaba NADA — candidatas vacías, pregunta imposible y caída a un
+  // genérico con activos de oficios. Es servicios profesionales.
+  [/\boffice manager\b|\bgesti[oó]n administrativa\b|\badministraci[oó]n de (empresas|negocios|pymes|consorcios)\b|\bgestor[ií]a\b|\bback\s?office\b/i, 'profesionales', '', 3, 'gestión/administración'],
+  [/\bfacturaci[oó]n\b|\bcobranzas\b|\bliquidaci[oó]n de sueldos\b|\btr[aá]mites impositivos\b|\basistencia administrativa\b|\bsecretar[ií]a administrativa\b/i, 'profesionales', '', 2, 'facturación/cobranzas'],
   [/\babogad\w*\b|\bcontad\w*\b|\bescriban\w*\b|\bestudio jur[ií]dico\b|\bestudio contable\b|\bconsultora\b|\barquitecto\b|\bingeniero\b/i, 'profesionales', '', 2, 'profesionales'],
   [/\bbar\b|\bpub\b|\bcervecer[ií]a\b|\bcocteler[ií]a\b|\bcocktails?\b|\btragos\b|\bvinoteca\b|\bbirra\b|\bvinos?\b/i, 'bar', '', 2, 'bar'],
   // --- boliche / vida nocturna: el local que ABRE de noche y vende la

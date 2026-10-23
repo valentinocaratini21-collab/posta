@@ -223,29 +223,84 @@ def white_fade(img, fade_start=0.38, fade_end=0.68):
     return Image.composite(Image.new("RGB", (W, H), WHITE), img, mask)
 
 
+def _wrap_words(draw, words, f, max_w):
+    lines, cur = [], ""
+    for wd in words:
+        t = (cur + " " + wd).strip()
+        if tw(draw, t, f) <= max_w or not cur:
+            cur = t
+        else:
+            lines.append(cur)
+            cur = wd
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _ellipsize(draw, words, f, max_w, max_lines):
+    """(v343) Recorte HONESTO: conserva max_lines líneas que entran y
+    la última cierra con '…' (regla de Valentino: lo cortado se
+    muestra cortado, jamás se corta a mitad de palabra en silencio)."""
+    kept = []
+    rest = list(words)
+    while rest and len(kept) < max_lines - 1:
+        cur = ""
+        while rest:
+            t = (cur + " " + rest[0]).strip()
+            if tw(draw, t, f) <= max_w or not cur:
+                cur = t
+                rest.pop(0)
+            else:
+                break
+        if cur:
+            kept.append(cur)
+        else:
+            break
+    if rest:
+        cur = ""
+        while rest:
+            t = (cur + " " + rest[0]).strip()
+            cand = (t + "…") if t else "…"
+            if tw(draw, cand, f) <= max_w:
+                cur = t
+                rest.pop(0)
+            else:
+                break
+        kept.append((cur + "…") if cur else "…")
+    return kept
+
+
 def wrap_fit(draw, fonts_dir, text, max_w, start_size, max_lines=3):
     """Envuelve el texto en lineas y ajusta el tamano para que entren.
-    Devuelve (font, lines)."""
+    Devuelve (font, lines). GARANTÍA (v343): ninguna línea devuelta
+    supera max_w — el fallback histórico unía todo el titular en UNA
+    línea y el borde del canvas lo cortaba a mitad de palabra (caso
+    real: "Esta cuenta la present" por "presentación"). Si ni al piso
+    entra completo, se elipsa con '…'."""
     words = str(text or "").split()
     if not words:
         return B(fonts_dir, start_size), []
     size = start_size
     while size > 18:
         f = B(fonts_dir, size)
-        lines, cur = [], ""
-        for wd in words:
-            t = (cur + " " + wd).strip()
-            if tw(draw, t, f) <= max_w or not cur:
-                cur = t
-            else:
-                lines.append(cur)
-                cur = wd
-        if cur:
-            lines.append(cur)
+        lines = _wrap_words(draw, words, f, max_w)
         if len(lines) <= max_lines and all(tw(draw, ln, f) <= max_w for ln in lines):
             return f, lines
         size -= 4
-    return B(fonts_dir, 18), [" ".join(words)]
+    f = B(fonts_dir, 18)
+    lines = _wrap_words(draw, words, f, max_w)
+    if all(tw(draw, ln, f) <= max_w for ln in lines):
+        if len(lines) <= max_lines:
+            return f, lines
+        return f, _ellipsize(draw, words, f, max_w, max_lines)
+    # Una palabra sola más ancha que la zona incluso a 18px: se baja
+    # al piso tipográfico y se envuelve igual; lo que no entre en
+    # max_lines se elipsa — nunca se dibuja fuera del canvas.
+    f = B(fonts_dir, 12)
+    lines = _wrap_words(draw, words, f, max_w)
+    if len(lines) <= max_lines and all(tw(draw, ln, f) <= max_w for ln in lines):
+        return f, lines
+    return f, _ellipsize(draw, words, f, max_w, max_lines)
 
 
 def grade_photo(p):

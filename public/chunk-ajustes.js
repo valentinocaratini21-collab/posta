@@ -124,9 +124,9 @@ function ajustesView() {
       <div class="field"><label>Objetivo</label><select id="s_goal">
         ${GOALS.map(([v, ico, t]) => `<option ${p.goal === v ? 'selected' : ''} value="${v}">${ico} ${t}</option>`).join('')}
       </select></div>
-      <div class="field"><label>🎯 Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más cortes los viernes" maxlength="120"><div class="hint">Lo que querés empujar ESTE mes. Posty inclina todos los posteos a esto — cambialo cuando quieras.</div></div>
+      <div class="field"><label>🎯 Foco de este mes</label><input id="s_mgoal" value="${esc(p.monthly_goal || '')}" placeholder="Ej.: vender más los viernes" maxlength="120"><div class="hint">Lo que querés empujar ESTE mes. Posty inclina todos los posteos a esto — cambialo cuando quieras.</div></div>
     </div>
-    <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Vendemos ropa urbana para jóvenes en Palermo...">${esc(p.description)}</textarea>
+    <div class="field"><label>Descripción (para que la IA te conozca)</label><textarea id="s_desc" maxlength="600" placeholder="Contanos qué vendés, para quién y qué te hace distinto...">${esc(p.description)}</textarea>
       <div class="hint"><span id="s_desc_n">${(p.description || '').length}</span>/600 · Mientras más nos cuentes, mejores ideas creamos por vos.</div>
       </div>
     <div class="field"><label>Tus competidores</label>
@@ -137,12 +137,12 @@ function ajustesView() {
       <label style="font-size:13px">🧬 Lo que la IA sabe de tu negocio</label>
       <div class="hint" style="margin:-6px 0 12px">Completá lo que quieras: la IA lo usa para crear posteos que venden de verdad.</div>
       <div class="field"><label>Productos <span id="dnaChip_productos"></span> <span style="color:var(--dim);font-weight:400">(uno por línea: nombre — precio)</span></label>
-        <textarea id="s_dna_productos" rows="3" placeholder="Remera oversize — $25.000&#10;Zapatillas retro — $89.900"></textarea></div>
+        <textarea id="s_dna_productos" rows="3" placeholder="Nombre del producto — precio (uno por línea)"></textarea></div>
       <div class="field"><label>Promos activas <span id="dnaChip_promos_activas"></span> <span style="color:var(--dim);font-weight:400">(una por línea)</span></label>
-        <textarea id="s_dna_promos" rows="2" placeholder="2x1 en remeras esta semana"></textarea></div>
+        <textarea id="s_dna_promos" rows="2" placeholder="Una promo por línea: qué ofrecés y hasta cuándo"></textarea></div>
       <div class="row2">
         <div class="field"><label>Horarios <span id="dnaChip_horarios"></span></label><input id="s_dna_horarios" placeholder="Lun a Sáb 10 a 20 hs" autocomplete="off"></div>
-        <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Palermo, CABA" autocomplete="off"></div>
+        <div class="field"><label>Ubicación <span id="dnaChip_ubicacion"></span></label><input id="s_dna_ubicacion" placeholder="Barrio y ciudad" autocomplete="off"></div>
       </div>
       <div class="field"><label>🚪 Días que cerrás</label>
         <div id="closedDaysRow" style="display:flex;gap:6px;flex-wrap:wrap"></div>

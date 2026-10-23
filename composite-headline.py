@@ -40,7 +40,18 @@ def wrap(draw, text, font, max_w, max_lines=3):
             cur = w
     if cur:
         lines.append(cur)
-    return lines[:max_lines]
+    if len(lines) <= max_lines:
+        return lines
+    # (v343) Recorte HONESTO: antes se descartaban las palabras que no
+    # entraban SIN señal y el titular salía incompleto como si nada.
+    # Ahora la última línea conservada cierra con '…' entrando en
+    # max_w (regla de Valentino: lo cortado se muestra cortado).
+    kept = lines[:max_lines]
+    last = kept[-1]
+    while last and draw.textlength(last + '…', font=font) > max_w:
+        last = last.rsplit(' ', 1)[0] if ' ' in last else ''
+    kept[-1] = (last + '…') if last else '…'
+    return kept
 
 
 def main():
