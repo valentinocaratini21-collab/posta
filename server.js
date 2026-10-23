@@ -1043,11 +1043,20 @@ function seedFromTrialDigest(userId, igRaw) {
       const mappedCat = catMap[digest.category] || '';
       if (mappedCat && mappedCat !== 'otro' && (!prof.category || prof.category === 'otro')) { sets.push('category = ?'); vals.push(mappedCat); }
       if (!prof.description || prof.description.trim().length < 20) {
-        const descParts = [];
-        if (digest.diferencial) descParts.push(digest.diferencial);
-        const items = [...(digest.productos || []), ...(digest.servicios || [])].map((x) => (x && (x.nombre || x)) || '').filter(Boolean);
-        if (items.length) descParts.push('Ofrece: ' + items.slice(0, 6).join(', ') + '.');
-        if (descParts.length) { sets.push('description = ?'); vals.push(descParts.join(' ').slice(0, 600)); }
+        // (v343) La descripción de la cuenta es el DETALLE DEL DUEÑO,
+        // con sus palabras (fuentes.form.description): antes se
+        // sembraba solo el "Ofrece: …" derivado y el texto completo
+        // que el dueño escribió en la prueba se perdía — si una lista
+        // salía mal, la cuenta nacía presentando ese error.
+        const ownerText = (digest.fuentes && digest.fuentes.form && digest.fuentes.form.description) || '';
+        if (ownerText) { sets.push('description = ?'); vals.push(String(ownerText).slice(0, 600)); }
+        else {
+          const descParts = [];
+          if (digest.diferencial) descParts.push(digest.diferencial);
+          const items = [...(digest.productos || []), ...(digest.servicios || [])].map((x) => (x && (x.nombre || x)) || '').filter(Boolean);
+          if (items.length) descParts.push('Ofrece: ' + items.slice(0, 6).join(', ') + '.');
+          if (descParts.length) { sets.push('description = ?'); vals.push(descParts.join(' ').slice(0, 600)); }
+        }
       }
       const handle = digest.fuentes && digest.fuentes.feed && digest.fuentes.feed.handle;
       if (handle && !prof.ig_username) { sets.push('ig_username = ?'); vals.push(String(handle).slice(0, 40)); }
@@ -9733,26 +9742,27 @@ app.get('/api/home/profile', requireAuth, async (req, res) => {
 // y vuelve solo a Posta. Vale también para desktop.
 function buildIgAuth(req) {
   const s = getSettings(req.session.userId);
-  const embedUrl = s.ig_embed_url || process.env.META_IG_EMBED_URL || process.env.IG_EMBED_URL;
+  // (v343) Precedencia GLOBAL primero: la Embed URL de entorno manda
+  // sobre la guardada por usuario — una ig_embed_url vieja (o el env
+  // con un dominio retirado) dejaba a TODOS sin poder conectar.
+  const embedUrl = process.env.META_IG_EMBED_URL || process.env.IG_EMBED_URL || s.ig_embed_url;
   if (!embedUrl)
     return { error: 'Configurá tu Instagram Embed URL en Ajustes' };
-  // redirect_uri para el intercambio del code: el de la Embed URL, o el de este host
-  let redirectUri = '';
+  // (v343) El redirect_uri se FUERZA al host actual de Posty: de la
+  // Embed URL solo se heredan client_id/scope/permisos. El valor en
+  // fuerza apuntaba a www.postahacetodo.com (dominio retirado) y el
+  // chequeo de host rechazaba el arranque para cada cliente; con el
+  // override, cualquier Embed URL vieja queda neutralizada y el
+  // callback vuelve siempre a ESTE host (ambos dominios vigentes
+  // están en la whitelist de Meta). La sesión guarda el mismo URI
+  // para el intercambio del code en /api/ig/callback.
+  const host = req.get('host');
+  const redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/callback`;
+  let authUrl = embedUrl;
   try {
-    redirectUri = new URL(embedUrl).searchParams.get('redirect_uri') || '';
-  } catch (e) { /* url inválida, se usa el fallback */ }
-  if (!redirectUri) {
-    const host = req.get('host');
-    redirectUri = `${host.startsWith('localhost') ? 'http' : 'https'}://${host}/api/ig/callback`;
-  }
-  // La redirect_uri tiene que volver a Posta: si apunta a otro lado,
-  // Instagram nunca regresa y el usuario "se queda en Instagram".
-  try {
-    const ru = new URL(redirectUri);
-    const thisHost = req.get('host');
-    if (ru.host !== thisHost) {
-      return { error: `Tu Embed URL redirige a ${ru.host}, pero tiene que volver a Posty. En el dashboard de Meta \u2192 tu app \u2192 caso de uso Instagram \u2192 "API setup with Instagram login", pon\u00e9 como redirect URI: https://${thisHost}/api/ig/callback` };
-    }
+    const u = new URL(embedUrl);
+    u.searchParams.set('redirect_uri', redirectUri);
+    authUrl = u.toString();
   } catch (e) {
     return { error: 'La Embed URL no es válida. Revisala en Ajustes \u2192 Integraciones.' };
   }
@@ -9763,7 +9773,7 @@ function buildIgAuth(req) {
   const nx = String(req.query.next || '');
   if (/^\/#\/[^\s"'\\<>]*$/.test(nx)) req.session.igNext = nx;
   else delete req.session.igNext;
-  return { url: getAuthUrl(embedUrl, state) };
+  return { url: getAuthUrl(authUrl, state) };
 }
 app.get('/api/ig/start', requireAuth, (req, res) => {
   const r = buildIgAuth(req);
@@ -17505,7 +17515,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v343';
+const BUILD_ID = '20261023-v344';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

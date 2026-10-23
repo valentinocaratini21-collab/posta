@@ -77,7 +77,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261021i">
+<link rel="stylesheet" href="/styles.css?v=20261023a">
 </head>
 <body>
 <div id="app">
@@ -981,6 +981,15 @@
     </div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Prices in USD · No long-term contract · Cancel anytime from your account</p>
+
+  <!-- (v344) Founder mini-block in Plans: whole photo, approved
+       texts (same block as /en/prueba v341). -->
+  <div class="founder-card mini" aria-label="Posty's founder">
+    <img src="valentino-posty-fundador.jpg" alt="Valentino, founder of Posty, back to back with Posty">
+    <p class="fc-eye">FOUNDER OF POSTY</p>
+    <h3>I'm Valentino, I created Posty.</h3>
+    <p class="fc-body">We built this week of posts personalized for your Instagram, because helping businesses like yours is what we do best. We want to be your community managers — and if anything's not right, we'll adjust it together.</p>
+  </div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Frequently asked questions</h2>
@@ -1287,6 +1296,31 @@ fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(f
   b.textContent = d.campaign.emoji + ' ' + f.charAt(0).toUpperCase() + f.slice(1) + ' — try free how yours would look 👇';
   b.style.display = 'block';
 }).catch(function(){});
+</script>
+
+<script>
+/* (v344) Medición — el pipeline propio del sitio (el mismo de /en/prueba):
+   cola → POST /api/track (tabla events). Fire-and-forget. */
+const _TQ = [];
+function _tsid() { try { let s = localStorage.getItem('posta_sid'); if (!s) { s = Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('posta_sid', s); } return s; } catch (e) { return 'nosid'; } }
+function _postySrc() { try { const q = new URLSearchParams(location.search).get('src'); if (q) { localStorage.setItem('posty_src', String(q).slice(0, 60)); const u = JSON.parse(localStorage.getItem('posta_utm') || 'null') || {}; if (!u.source) { u.source = String(q).slice(0, 40); localStorage.setItem('posta_utm', JSON.stringify(u)); } } return localStorage.getItem('posty_src'); } catch (e) { return null; } }
+function trk(name, props) { try { if (!/^[a-z0-9_]{2,40}$/.test(name)) return; const pp = Object.assign({}, props || {}); try { const s = _postySrc(); if (s && !pp.src) pp.src = s; if (!pp.lang) pp.lang = 'en'; } catch (e) {} _TQ.push({ name, props: pp, sid: _tsid() }); if (_TQ.length > 200) _TQ.splice(0, _TQ.length - 200); } catch (e) {} }
+async function _tflush() { if (!_TQ.length) return; const b = _TQ.splice(0, 60); try { await fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ events: b }), keepalive: true }); } catch (e) {} }
+setInterval(_tflush, 10000);
+try { window.addEventListener('pagehide', () => { try { if (_TQ.length && navigator.sendBeacon) navigator.sendBeacon('/api/track', new Blob([JSON.stringify({ events: _TQ.splice(0, 60) })], { type: 'application/json' })); } catch (e) {} }); } catch (e) {}
+</script>
+<script>
+/* (v344) Impresión del mini-bloque del fundador en Planes: una por visita
+   cuando entra en pantalla — mismo patrón que prueba_founder_view. */
+(function(){
+  var el=document.querySelector('.founder-card.mini'); if(!el) return;
+  var seen=false;
+  function fire(){ if(seen) return; seen=true; try{ trk('home_founder_view'); }catch(e){} }
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){ for(var i=0;i<es.length;i++){ if(es[i].isIntersecting){ fire(); io.disconnect(); break; } } },{threshold:.3});
+    io.observe(el);
+  }
+})();
 </script>
 </body>
 </html>

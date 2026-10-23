@@ -2878,3 +2878,15 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .relacion-bubble{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #DCEBF5;border-radius:16px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 4px rgba(10,30,51,.05)}
 .relacion-bubble .relacion-ava{width:34px;height:34px;border-radius:50%;flex:0 0 auto;background:#EAF5FB}
 .relacion-bubble p{margin:0;font-size:14.5px;line-height:1.45;color:#0A1E33}
+
+/* (v344) Mini-bloque del fundador (home, junto a los planes) — las mismas
+   reglas del bloque de /prueba (v341): foto entera, sin recorte. */
+.founder-card{background:#F7FCFE;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:24px auto 4px;max-width:560px;text-align:left}
+.founder-card img{width:100%;max-width:480px;height:auto;display:block;margin:0 auto;border-radius:14px}
+.founder-card .fc-eye{margin:18px 0 4px;font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--cel)}
+.founder-card h3{margin:0 0 8px;font-size:24px;color:#0A1E33}
+.founder-card .fc-body{margin:0;font-size:16px;line-height:1.6;color:#33475C}
+.founder-card.mini{max-width:460px;padding:18px;margin:26px auto 6px}
+.founder-card.mini img{max-width:320px}
+.founder-card.mini h3{font-size:20px}
+.founder-card.mini .fc-body{font-size:15px;line-height:1.55}

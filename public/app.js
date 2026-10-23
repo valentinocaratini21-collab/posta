@@ -211,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261022-v331'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261023-v343'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -814,6 +814,16 @@ let LP_LIVE_TIMER = null, LP_LIVE_IO = null;
 function lpInitHero() {
   lpInitCarousel();
   lpInitWall();
+  // — (v344) Medición del mini-bloque del fundador en Planes: una impresión
+  // por visita cuando entra en pantalla (pipeline track() → /api/track).
+  const fc = document.getElementById('homeFounderCard');
+  if (fc && !fc.dataset.viewWired) {
+    fc.dataset.viewWired = '1';
+    if ('IntersectionObserver' in window) {
+      const fio = new IntersectionObserver((es) => { es.forEach((en) => { if (en.isIntersecting) { trackOnce('home_founder', 'home_founder_view'); fio.disconnect(); } }); }, { threshold: 0.3 });
+      fio.observe(fc);
+    } else trackOnce('home_founder', 'home_founder_view');
+  }
   // — Actividad en vivo "Posty trabajando": rota líneas ilustrativas del negocio de ejemplo.
   const line = document.getElementById('lpLiveLine');
   if (line) {
@@ -1921,6 +1931,15 @@ function landingView(cfg) {
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
+
+    <!-- (v344) Mini-bloque del fundador en Planes: foto entera,
+         textos aprobados del módulo (el mismo de /prueba v341). -->
+    <div class="founder-card mini" id="homeFounderCard" aria-label="El fundador de Posty">
+      <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
+      <p class="fc-eye">FUNDADOR DE POSTY</p>
+      <h3>Soy Valentino, creé Posty.</h3>
+      <p class="fc-body">Armamos esta semana leyendo tu Instagram, porque ayudar a negocios como el tuyo es lo que sabemos hacer. Si algo no te gusta, lo ajustamos juntos.</p>
+    </div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
     <h2>Preguntas frecuentes</h2>
