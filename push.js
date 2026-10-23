@@ -60,7 +60,7 @@ function getWebPush() {
   if (!v) return null;
   try {
     webpush = require('web-push');
-    webpush.setVapidDetails('mailto:hola@postyhacetodo.com', v.pub, v.priv);
+    webpush.setVapidDetails('mailto:hola@postycommunitymanager.com', v.pub, v.priv);
   } catch (e) {
     console.error('[push] no se pudo inicializar web-push:', e.message);
     return null;
@@ -150,7 +150,7 @@ async function sendFcmBatch(subs, msg) {
   try { access = await fcmAccessToken(sa); }
   catch (e) { console.error('[push/fcm] no se pudo obtener token:', e.message); return { ok: false, reason: 'fcm_no_configurado', sent: 0 }; }
   const sendUrl = 'https://fcm.googleapis.com/v1/projects/' + encodeURIComponent(sa.project_id) + '/messages:send';
-  const fullUrl = /^https?:\/\//i.test(msg.url) ? msg.url : 'https://postyhacetodo.com' + msg.url;
+  const fullUrl = /^https?:\/\//i.test(msg.url) ? msg.url : 'https://postycommunitymanager.com' + msg.url;
   let sent = 0;
   for (const s of subs) {
     try {

@@ -106,7 +106,7 @@ function absoluteMediaUrl(imagePath, imageBaseUrl) {
   let base = imageBaseUrl || process.env.IMAGE_BASE_URL || '';
   // Sin base válida (localhost/dominio viejo), Instagram no puede descargar
   // la imagen: caer al dominio canónico (misma guarda que scheduler.js).
-  if (!base || /postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) base = 'https://postyhacetodo.com';
+  if (!base || /postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) base = 'https://postycommunitymanager.com';
   return `${String(base).replace(/\/$/, '')}/media/${file}`;
 }
 

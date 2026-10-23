@@ -1067,6 +1067,25 @@ function captionPasses(caption, input) {
       return { ok: false, reason: 'lenguaje corporativo (CUERPO-CORP): "potenciar" es palabra de folleto, no de un dueño hablando de su negocio — decí qué pasa en concreto (qué posteo se empuja, con qué pauta, para qué fecha) o sacá el verbo' };
     }
   }
+  // CUERPO-BINOMIO (Juli, 2026-10-22 — candidato del id 422, registrado el
+  // 21/10): el binomio vacío de folleto ("elegancia y funcionalidad")
+  // vivía SOLO en la vara del prompt (CUERPO-57 lo nombra textual) y en
+  // ningún gate: el id 422 reconstruido fiel pasó captionPasses con
+  // ok=true, verificado hoy 22/10 contra la función real — la misma clase
+  // de hueco que cerró CUERPO-CORP ayer con "potenciar". La puerta frena
+  // el PAR de sustantivos abstractos de marketing unidos por "y" (ambos
+  // de una lista cerrada): ningún dueño describe su producto así; dice el
+  // material, la medida o el uso concreto. Los pares CONCRETOS no se
+  // tocan: "mesas y sillas", "corte y barba", "entrada y plato principal"
+  // no matchean (ningún sustantivo concreto está en la lista).
+  {
+    const ABSTRACT_PAIR_NOUNS = ['elegancia', 'funcionalidad', 'calidad', 'estilo', 'confort', 'comodidad', 'diseno', 'modernidad', 'sofisticacion', 'exclusividad', 'innovacion', 'practicidad', 'versatilidad', 'excelencia', 'distincion', 'armonia', 'durabilidad', 'tradicion'];
+    const pairRe = new RegExp('\\b(' + ABSTRACT_PAIR_NOUNS.join('|') + ')\\s+y\\s+(' + ABSTRACT_PAIR_NOUNS.join('|') + ')\\b');
+    const pm = low.match(pairRe);
+    if (pm && pm[1] !== pm[2]) {
+      return { ok: false, reason: `binomio vacío (CUERPO-BINOMIO): "${pm[1]} y ${pm[2]}" es relleno de folleto — ningún dueño habla así de su producto; nombrá lo concreto que lo hace bueno (el material, la medida, el uso, el tiempo que dura) o sacá el par` };
+    }
+  }
   // ===== Verificación contra datos del negocio (tanda D, casos 92-100) =====
   // Precios del caption vs lista de precios del negocio: un precio desactualizado
   // o inventado se rechaza (se avisa y se corrige antes de publicar).

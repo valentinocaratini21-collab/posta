@@ -2375,7 +2375,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
       .run(tokenHash, em, payload, Date.now(), Date.now() + 15 * 60 * 1000);
     let emailSent = false;
     if (process.env.RESEND_API_KEY) {
-      const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+      const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
       const link = `${base}/api/auth/magic?token=${token}`;
       try { const mr = await magicLinkEmail(em, link); if (mr && mr.ok) emailSent = true; }
       catch (e) { console.error('[magic] email:', e.message); }
@@ -2525,7 +2525,7 @@ app.post('/api/auth/forgot', async (req, res) => {
         .run(user.id, tokenHash, Date.now() + 3600 * 1000);
       // BASE_URL canónica (antes: header Host — un proxy o un request armado
       // podía mandar el link a otro dominio; magic ya usaba BASE_URL).
-      const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+      const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
       const link = `${base}/#/reset?token=${token}`;
       const r = await sendEmail({
         to: user.email,
@@ -2815,7 +2815,7 @@ app.post('/api/push/unsubscribe', requireAuth, (req, res) => {
 });
 
 // ---------- Play Store (TWA): Digital Asset Links ----------
-// Valida que la app Android es dueña de postyhacetodo.com. El SHA-256 sale de
+// Valida que la app Android es dueña de postycommunitymanager.com. El SHA-256 sale de
 // Play App Signing cuando Valentino cree la app (ver STORES.md). Se puede pegar
 // el JSON completo en la env ASSETLINKS_JSON; si no, se sirve el placeholder.
 app.get('/.well-known/assetlinks.json', (req, res) => {
@@ -4813,7 +4813,7 @@ function absImageUrl(uid, imagePath) {
   const p = String(imagePath || '');
   if (!p) return '';
   // Migración de dominio: URLs absolutas viejas se reescriben al dominio nuevo.
-  if (/^https?:\/\//i.test(p)) return p.replace(/https?:\/\/(www\.)?postahacetodo\.com/i, 'https://postyhacetodo.com');
+  if (/^https?:\/\//i.test(p)) return p.replace(/https?:\/\/(www\.)?(postahacetodo|postyhacetodo)\.com/i, 'https://postycommunitymanager.com');
   try {
     const st = (typeof getSettings === 'function' && getSettings(uid)) || {};
     const base = String(process.env.IMAGE_BASE_URL || st.image_base_url || '').replace(/\/$/, '');
@@ -6260,7 +6260,7 @@ async function albumRitualSweep(opts = {}) {
           const urow = db.prepare('SELECT id, email, client_name AS name, created_at, COALESCE(email_opt_out, 0) AS oo, COALESCE(pwa_installed, 0) AS pwa FROM users WHERE id = ?').get(u.id);
           const ageOk = !!(urow && urow.created_at && (Date.parse(String(urow.created_at).replace(' ', 'T') + 'Z') < now.getTime() - 86400000));
           if (urow && urow.email && !urow.oo && ageOk && Number(urow.pwa) === 1) {
-            const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+            const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
             const r = opts.emailFn
               ? await opts.emailFn(urow, base, mission.mission_text)
               : await require('./email').photoRitualEmail(urow, base, mission.mission_text);
@@ -6632,7 +6632,7 @@ function ensureImageBaseUrl(db, userId, req) {
     const cur = `${proto}://${rawHost}`;
     const s = db.prepare('SELECT image_base_url FROM settings WHERE user_id = ?').get(userId);
     // Migración de dominio: si la base guardada apunta al dominio viejo, actualizarla.
-    if (s && s.image_base_url && /postahacetodo\.com/i.test(s.image_base_url) && s.image_base_url !== cur) {
+    if (s && s.image_base_url && /(postahacetodo|postyhacetodo)\.com/i.test(s.image_base_url) && s.image_base_url !== cur) {
       db.prepare(`UPDATE settings SET image_base_url = ?, updated_at = datetime('now') WHERE user_id = ?`).run(cur, userId);
       return;
     }
@@ -10104,7 +10104,7 @@ app.post('/api/tiktok/publish/:postId', requireAuth, async (req, res) => {
     if (!post.image_path) return res.status(400).json({ error: 'Ese posteo todavía no tiene imagen o video para compartir.' });
     const accessToken = await tiktok.getValidToken(db, req.session.userId);
     if (!accessToken) return res.status(400).json({ error: 'Tu conexión con TikTok venció. Reconectala en Ajustes 🎵' });
-    const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+    const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
     const abs = (p) => /^https?:\/\//i.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p);
     const cap = String(post.caption || '').trim();
     const tags = String(post.hashtags || '').trim();
@@ -10179,7 +10179,7 @@ app.post('/api/tiktok/inbox/:postId', requireAuth, async (req, res) => {
     if (!post.image_path || !isVideo) return res.status(400).json({ error: 'El borrador de TikTok es solo para reels 🎬 Ese posteo no es un video.' });
     const accessToken = await tiktok.getValidToken(db, req.session.userId);
     if (!accessToken) return res.status(400).json({ error: 'Tu conexión con TikTok venció. Reconectala en Ajustes 🎵' });
-    const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+    const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
     const abs = (p) => /^https?:\/\//i.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p);
     const out = await tiktok.publishVideoInbox({ accessToken, videoUrl: abs(post.image_path) });
     try { track(req.session.userId, 'tiktok_inbox'); } catch (e) {}
@@ -16567,7 +16567,7 @@ try {
 } catch (e) {}
 
 const POSTY_CHAT_SYS = [
-  'Sos Posty 🤖, el community manager robot de Posty (postyhacetodo.com). Hablás con visitantes de la web — dueños de negocios, en su mayoría de Argentina — en un chat público. Tu trabajo: resolver dudas y acercar a la persona a probar Posty gratis por 3 días, sin ser pesado.',
+  'Sos Posty 🤖, el community manager robot de Posty (postycommunitymanager.com). Hablás con visitantes de la web — dueños de negocios, en su mayoría de Argentina — en un chat público. Tu trabajo: resolver dudas y acercar a la persona a probar Posty gratis por 3 días, sin ser pesado.',
   '',
   'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Nunca devolvés una pregunta vacía: siempre proponés un paso concreto. La prueba gratis de 3 días (sin tarjeta) se ofrece cuando encaja en la conversación — NO en cada mensaje.',
   'FORMATO: texto plano, SIN markdown: nada de asteriscos, almohadillas ni negritas. Si enumerás planes o puntos, escribilos en frases corridas o en líneas simples empezando con "• ".',
@@ -16592,7 +16592,7 @@ const POSTY_CHAT_SYS = [
 // solo informa precios, nunca cobra). Se usa solo si el cliente manda
 // lang:'en' (website /en); el default sigue siendo el ES de arriba.
 const POSTY_CHAT_SYS_EN = [
-  'You are Posty 🤖, the robot community manager of Posty (postyhacetodo.com). You are talking with website visitors — business owners, mostly in the US — in a public chat. Your job: answer questions and move the person toward trying Posty free for 3 days, without being pushy.',
+  'You are Posty 🤖, the robot community manager of Posty (postycommunitymanager.com). You are talking with website visitors — business owners, mostly in the US — in a public chat. Your job: answer questions and move the person toward trying Posty free for 3 days, without being pushy.',
   '',
   'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
   'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
@@ -16938,12 +16938,12 @@ function trialLogoAllowed(ip) {
 // presenta, cuenta lo que hace, su posteo héroe entero, su lectura de la
 // cuenta celebrando primero con la constancia a su cargo, la creencia) →
 // UN botón + línea de confianza → "Con amor," → firma LITERAL →
-// postyhacetodo.com clickeable → foto del fundador ENTERA, último
+// postycommunitymanager.com clickeable → foto del fundador ENTERA, último
 // elemento, con NADA debajo. Sin pregunta, sin posdata, sin lockup.
 async function sendTrialGiftEmail(email, payload, lang) {
   if (!payload || !Array.isArray(payload.posts)) return false;
   const en = lang === 'en';
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const igK = trialLock ? trialLock.normalizeIg(payload.ig || '') : '';
   const handle = igK ? '@' + igK : (payload.business || '');
   const link = base + (en ? '/en/prueba' : '/prueba') + (igK ? '?ig=' + encodeURIComponent(igK) + '&src=email-salida' : '?src=email-salida');
@@ -17009,7 +17009,7 @@ async function sendTrialGiftEmail(email, payload, lang) {
     <p style="font-size:13.5px;color:#47617A;text-align:center;margin:0 0 22px">${en ? 'Free for 3 days. No card. No commitment.' : 'Gratis por 3 días. Sin tarjeta. Sin compromiso.'}</p>
     ${P(en ? 'With love,' : 'Con amor,')}
     <p style="margin:0 0 6px"><img src="${base}/firma-posty.png" alt="Posty" style="width:190px;height:auto;display:block"></p>
-    <p style="margin:0 0 26px;font-size:15px"><a href="${base}" style="color:#2793C8;font-weight:700;text-decoration:underline">postyhacetodo.com</a></p>
+    <p style="margin:0 0 26px;font-size:15px"><a href="${base}" style="color:#2793C8;font-weight:700;text-decoration:underline">postycommunitymanager.com</a></p>
     <img src="${base}/valentino-posty-fundador.jpg" alt="Valentino, creador de Posty" style="width:100%;height:auto;border-radius:12px;display:block">
   </div>`;
   const text = [
@@ -17023,11 +17023,11 @@ async function sendTrialGiftEmail(email, payload, lang) {
     en ? 'I truly believe I can help you sell more on Instagram. If you do well, we both win.' : 'De verdad creo que puedo ayudarte a vender más por Instagram. Si a vos te va bien, ganamos los dos.',
     en ? `See my full week: ${link}` : `Ver mi semana completa: ${link}`,
     en ? 'Free for 3 days. No card. No commitment.' : 'Gratis por 3 días. Sin tarjeta. Sin compromiso.',
-    en ? 'With love,\nPosty\npostyhacetodo.com' : 'Con amor,\nPosty\npostyhacetodo.com',
+    en ? 'With love,\nPosty\npostycommunitymanager.com' : 'Con amor,\nPosty\npostycommunitymanager.com',
   ].filter(Boolean).join('\n\n');
   const r = await sendEmail({
     to: email,
-    from: 'Posty <hola@postyhacetodo.com>',
+    from: 'Posty <hola@postycommunitymanager.com>',
     subject: en ? `Your posts are ready, ${handle}` : `Tus posteos ya están listos, ${handle}`,
     html,
     text,
@@ -17599,10 +17599,10 @@ function logGenError(where, err) {
 }
 // BUILD_ID: cambiar en cada zip consolidado. Sirve para verificar desde el
 // navegador que producción está corriendo el código nuevo:
-//   https://postyhacetodo.com/api/version  →  {"build":"..."}.
+//   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v350';
+const BUILD_ID = '20261023-v351';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -17712,7 +17712,7 @@ app.get('/p/:slug', (req, res) => {
        ORDER BY COALESCE(published_at, created_at) DESC, id DESC LIMIT 12`
     ).all(uid);
     const okMedia = (u) => typeof u === 'string' && (u.startsWith('/media/') || u.startsWith('https://'));
-    const host = req.get('host') || 'postyhacetodo.com';
+    const host = req.get('host') || 'postycommunitymanager.com';
     let ogImage = '';
     const cells = [];
     for (const post of posts) {

@@ -46,7 +46,7 @@ function vecesTxt(ratio) {
 }
 
 function appBaseUrl() {
-  return (process.env.APP_URL || process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  return (process.env.APP_URL || process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
 }
 
 // Línea discreta de referido para los momentos de dopamina (testeable).

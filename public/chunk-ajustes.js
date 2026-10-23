@@ -292,7 +292,7 @@ function ajustesView() {
     <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">Tu link para la <b>bio de Instagram</b>: una página linda con tu negocio y tus posteos ya publicados, con botón directo a tu WhatsApp. Cada persona que la visita conoce Posty 🐾</p>
     <div class="field"><label>Tu dirección</label>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:13.5px;color:var(--mut)">postyhacetodo.com/p/</span>
+        <span style="font-size:13.5px;color:var(--mut)">postycommunitymanager.com/p/</span>
         <input id="s_slug" value="${esc(p.page_slug || '')}" maxlength="40" style="flex:1;min-width:150px" autocomplete="off" autocapitalize="none">
         <button class="btn btn-ghost btn-sm" id="btnCopyPage" type="button" style="flex:none">📋 Copiar link</button>
       </div>
@@ -513,7 +513,7 @@ function bindSettings() {
   const btnCopyPage = $('#btnCopyPage');
   if (btnCopyPage) btnCopyPage.onclick = async () => {
     const slug = (($('#s_slug') && $('#s_slug').value.trim()) || (PROFILE && PROFILE.page_slug) || '');
-    const url = 'https://postyhacetodo.com/p/' + slug.replace(/^\/+/, '');
+    const url = 'https://postycommunitymanager.com/p/' + slug.replace(/^\/+/, '');
     try { await navigator.clipboard.writeText(url); btnCopyPage.textContent = '✅ ¡Copiado!'; setTimeout(() => { btnCopyPage.textContent = '📋 Copiar link'; }, 1800); }
     catch (e) { window.prompt('Copiá tu link:', url); }
   };

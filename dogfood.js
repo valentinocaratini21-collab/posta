@@ -40,7 +40,7 @@ const HOUSE = {
   sells: 'Tu community manager con IA: te arma la semana de Instagram (posteos, reels, stories, captions y hashtags con la onda de tu negocio). Vos solo aprobás; nada se publica sin tu OK.',
   audience: 'dueños de pymes y emprendedores (gastronomía, moda, belleza, servicios) que no tienen tiempo para Instagram pero saben que lo necesitan.',
   tone: 'cálido, directo, canchero, cero humo. Habla de igual a igual, nunca vende humo corporativo. Español rioplatense.',
-  cta: 'Probalo gratis 👇\npostyhacetodo.com/prueba', // variante 1 de 3; rotación diaria en HOUSE_CTA_VARIANTS
+  cta: 'Probalo gratis 👇\npostycommunitymanager.com/prueba', // variante 1 de 3; rotación diaria en HOUSE_CTA_VARIANTS
   palette: ['#2793C8', '#FEC14D', '#0A1E33'], // celeste, amarillo, navy (marca Posty)
   hashtags: '#communitymanager #marketingdigital #emprendedoresargentinos #pymes #instagramparanegocios', // bloque A de 3; rotación diaria en HOUSE_HASHTAG_BLOCKS
   mascotFile: 'posty-mascot.png', // opcional: data/media/posty-mascot.png → referencia visual
@@ -59,9 +59,9 @@ const HOUSE_HASHTAG_BLOCKS = [
   '#communitymanager #redessociales #instagramparanegocios #emprender #negociosdigitales',
 ];
 const HOUSE_CTA_VARIANTS = [
-  'Probalo gratis 👇\npostyhacetodo.com/prueba',
-  'Armá tu semana gratis 👇\npostyhacetodo.com/prueba',
-  'Mirá cómo quedaría tu Instagram 👇\npostyhacetodo.com/prueba',
+  'Probalo gratis 👇\npostycommunitymanager.com/prueba',
+  'Armá tu semana gratis 👇\npostycommunitymanager.com/prueba',
+  'Mirá cómo quedaría tu Instagram 👇\npostycommunitymanager.com/prueba',
 ];
 function houseDaySeed(date) {
   const t = date instanceof Date ? date.getTime() : new Date(date || Date.now()).getTime();
@@ -664,7 +664,7 @@ function absoluteDogfoodImage(imagePath, db, ownerId) {
     const s = db.prepare('SELECT image_base_url FROM settings WHERE user_id = ?').get(ownerId);
     if (s && s.image_base_url) base = String(s.image_base_url);
   } catch (e) {}
-  base = base || process.env.IMAGE_BASE_URL || 'https://postyhacetodo.com';
+  base = base || process.env.IMAGE_BASE_URL || 'https://postycommunitymanager.com';
   return `${base.replace(/\/$/, '')}/media/${path.basename(String(imagePath || ''))}`;
 }
 
@@ -837,7 +837,7 @@ async function sendDogfoodEmail(db, post, ownerId, { mediaDir, baseUrl, to, send
     }
     const dest = to || ownerEmail(db, ownerId);
     if (!dest) return { ok: false, reason: 'no_email' };
-    const base = (baseUrl || process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+    const base = (baseUrl || process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
     const approveToken = issueDogfoodToken(db, post.id, 'approve');
     const dismissToken = issueDogfoodToken(db, post.id, 'dismiss');
     if (!approveToken || !dismissToken) return { ok: false, reason: 'token_failed' };

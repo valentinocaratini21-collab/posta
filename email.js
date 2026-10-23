@@ -2,7 +2,7 @@
 //
 // Para que los emails salgan de verdad, configurar en Railway:
 //   RESEND_API_KEY = (clave de https://resend.com)
-//   EMAIL_FROM     = Posta <hola@postyhacetodo.com>   (opcional; el dominio debe estar verificado en Resend)
+//   EMAIL_FROM     = Posta <hola@postycommunitymanager.com>   (opcional; el dominio debe estar verificado en Resend)
 // Sin RESEND_API_KEY el envío se omite y solo queda registrado en el log (no rompe nada).
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -17,7 +17,7 @@ async function sendEmail({ to, subject, html, text, attachments, from: fromOverr
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
     return { ok: false, skipped: true };
   }
-  const from = fromOverride || process.env.EMAIL_FROM || 'Posty <hola@postyhacetodo.com>';
+  const from = fromOverride || process.env.EMAIL_FROM || 'Posty <hola@postycommunitymanager.com>';
   const payload = { from, to: [to], subject, html };
   // (v323) Versión texto plano digna cuando el llamador la trae: Resend la
   // manda como alternativa multipart (mejor entrega y lectura sin HTML).
@@ -95,7 +95,7 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
       Te llega este recordatorio porque tenés cuenta en Posty y todavía no instalaste la app en tu teléfono.
       Cuando la instales, estos mails se apagan solos.<br>
-      ¿No querés recibirlos más? Escribinos a <a href="mailto:hola@postyhacetodo.com" style="color:#2793C8">hola@postyhacetodo.com</a>.
+      ¿No querés recibirlos más? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
     </p>
   </div>
 </div>`;
@@ -112,7 +112,7 @@ function emailShell(inner) {
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
       Te avisamos porque tenés contenido pendiente en Posty.<br>
-      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postyhacetodo.com" style="color:#2793C8">hola@postyhacetodo.com</a>.
+      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
     </p>
   </div>
 </div>`;
@@ -167,7 +167,7 @@ function trialAbandonEmail(lead, baseUrl, bizName, link) {
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:0">
       Este es el único aviso que te mando: tu semana se borra sola en 72 horas.
       Dejaste tu email en la prueba gratuita de Posty.<br>
-      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postyhacetodo.com" style="color:#2793C8">hola@postyhacetodo.com</a>.
+      ¿No querés recibirlo? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
     </p>
   </div>
 </div>`;

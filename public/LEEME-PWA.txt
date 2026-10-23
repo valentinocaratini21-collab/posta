@@ -28,5 +28,5 @@ COMO SE VE:
 - El banner se puede cerrar con la X. Tambien esta en Mas -> Instalar app.
 - Una vez instalada no vuelve a aparecer.
 
-VERIFICAR: abrir https://postyhacetodo.com/manifest.json (tiene que
+VERIFICAR: abrir https://postycommunitymanager.com/manifest.json (tiene que
 mostrar el JSON) y en el celular ver el banner en la app.

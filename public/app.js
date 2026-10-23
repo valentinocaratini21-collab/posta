@@ -211,7 +211,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261023-v350'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261023-v351'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -1013,7 +1013,7 @@ function lpWallCardHTML(p) {
       <span class="ig-ava ig-ava-lg"><img loading="lazy" src="${ava}" alt="${avaAlt}"></span>
       <div class="igp-stats"><div><b>${p.stats[0]}</b><span>publicaciones</span></div><div><b>${p.stats[1]}</b><span>seguidores</span></div><div><b>${p.stats[2]}</b><span>seguidos</span></div></div>
     </div>
-    <div class="igp-bio"><b>${p.name}</b> <span class="igp-cat">${p.cat}</span><br><span class="igp-link">postyhacetodo.com/p/${p.link}</span></div>
+    <div class="igp-bio"><b>${p.name}</b> <span class="igp-cat">${p.cat}</span><br><span class="igp-link">postycommunitymanager.com/p/${p.link}</span></div>
     <div class="igp-grid">${lpCellsHTML(p, tiles)}</div>
     <div class="lp-wall-foot">${p.rubro}</div>
   </div>`;
@@ -1107,7 +1107,7 @@ function lpProfileHTML(p) {
       <span class="ig-ava ig-ava-lg"><img src="${ava}" alt="${avaAlt}"></span>
       <div class="igp-stats"><div><b>${p.stats[0]}</b><span>publicaciones</span></div><div><b>${p.stats[1]}</b><span>seguidores</span></div><div><b>${p.stats[2]}</b><span>seguidos</span></div></div>
     </div>
-    <div class="igp-bio"><b>${p.name}</b><span class="igp-cat">${p.cat}</span><p>${p.bio.join('<br>')}</p><span class="igp-link">postyhacetodo.com/p/${p.link}</span></div>
+    <div class="igp-bio"><b>${p.name}</b><span class="igp-cat">${p.cat}</span><p>${p.bio.join('<br>')}</p><span class="igp-link">postycommunitymanager.com/p/${p.link}</span></div>
     <div class="igp-btns"><span class="igp-btn primary">Seguir</span><span class="igp-btn">Mensaje</span></div>
     <div class="igp-hls">${hlPairs.map(([img, l]) => `<div class="igp-hl"><span class="igp-hl-ring"><img loading="lazy" src="${img}" alt="Historia destacada: ${l}"></span><small>${l}</small></div>`).join('')}</div>
     <div class="igp-grid">${cells}</div>

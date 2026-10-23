@@ -34,8 +34,8 @@ const { URLSearchParams } = require('url');
 const TN_AUTH_BASE = 'https://www.tiendanube.com/apps';
 const TN_TOKEN_URL = 'https://www.tiendanube.com/apps/authorize/token';
 const API_BASE = 'https://api.tiendanube.com/v1';
-const USER_AGENT = 'Posty (postyhacetodo.com)';
-const DEFAULT_REDIRECT_URI = 'https://postyhacetodo.com/api/connections/tiendanube/callback';
+const USER_AGENT = 'Posty (postycommunitymanager.com)';
+const DEFAULT_REDIRECT_URI = 'https://postycommunitymanager.com/api/connections/tiendanube/callback';
 
 function clientId() { return process.env.TIENDANUBE_CLIENT_ID || ''; }
 function clientSecret() { return process.env.TIENDANUBE_CLIENT_SECRET || ''; }

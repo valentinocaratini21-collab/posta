@@ -99,7 +99,7 @@ async function main() {
   ok('fetchProducts pega a /v1/{store}/products?per_page=200',
     apiCall.url.startsWith('https://api.tiendanube.com/v1/789/products?') && apiCall.url.includes('per_page=200'), apiCall.url);
   ok('header Authentication: bearer + User-Agent Posty',
-    apiCall.opts.headers.Authentication === 'bearer tok-abc' && apiCall.opts.headers['User-Agent'] === 'Posty (postyhacetodo.com)', apiCall.opts.headers);
+    apiCall.opts.headers.Authentication === 'bearer tok-abc' && apiCall.opts.headers['User-Agent'] === 'Posty (postycommunitymanager.com)', apiCall.opts.headers);
   await tn.fetchOrders(conn, 30);
   ok('fetchOrders filtra por created_at_min y pide products (campo real TN)',
     apiCall.url.includes('/orders?') && apiCall.url.includes('created_at_min=') && decodeURIComponent(apiCall.url).includes('fields=id,products,payment_status'), apiCall.url);

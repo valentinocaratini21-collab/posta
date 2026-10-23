@@ -405,6 +405,7 @@ try {
   seedLockAllow.run('posty.hacetodo', 'ig', 'cuenta de marca ES', Date.now());
   seedLockAllow.run('posty.doeseverything', 'ig', 'cuenta de marca EN', Date.now());
   seedLockAllow.run('postyhacetodo.com', 'domain', 'dominio propio', Date.now());
+  seedLockAllow.run('postycommunitymanager.com', 'domain', 'dominio propio (nuevo)', Date.now());
 } catch (e) { /* la allowlist también vive en código (trial-lock.js) */ }
 
 // Reel de muestra con compuerta (pieza 7, 2026-10-22): un reel con guión

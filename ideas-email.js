@@ -30,9 +30,9 @@
  *  - registerIdeasRoutes(app, db): POST /api/ideas/subscribe,
  *    GET /api/ideas/confirm, GET /api/ideas/unsubscribe.
  *
- * Remitente del newsletter: Posty <ideas@postyhacetodo.com> (dominio
+ * Remitente del newsletter: Posty <ideas@postycommunitymanager.com> (dominio
  * verificado en Resend; separa la reputación de marketing de la
- * transaccional de hola@). Reply-to: hola@postyhacetodo.com.
+ * transaccional de hola@). Reply-to: hola@postycommunitymanager.com.
  * ===================================================================== */
 
 const crypto = require('crypto');
@@ -53,12 +53,12 @@ for (const [parent, subs] of Object.entries(SUBRUBROS)) {
 }
 
 function baseUrl() {
-  return (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  return (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
 }
 function ideasFrom() {
-  return process.env.IDEAS_EMAIL_FROM || 'Posty <ideas@postyhacetodo.com>';
+  return process.env.IDEAS_EMAIL_FROM || 'Posty <ideas@postycommunitymanager.com>';
 }
-const IDEAS_REPLY_TO = 'hola@postyhacetodo.com';
+const IDEAS_REPLY_TO = 'hola@postycommunitymanager.com';
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -162,7 +162,7 @@ function ideasShell(inner, unsubUrl) {
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
-      Te llega los lunes porque te suscribiste en postyhacetodo.com · Posty, tu community manager.<br>
+      Te llega los lunes porque te suscribiste en postycommunitymanager.com · Posty, tu community manager.<br>
       ¿No lo querés más? <a href="${unsubUrl}" style="color:#2793C8;font-weight:700">Date de baja en un clic</a>, sin vueltas.
     </p>
   </div>
@@ -364,7 +364,7 @@ function registerIdeasRoutes(app, db) {
     const r = confirmByToken(db, req.query && req.query.token);
     if (!r.ok) {
       return res.status(404).send(resultPage('Ese link no va más', `
-        <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0">Ese link no es válido o ya venció. Si querés tus 3 ideas de cada lunes, suscribite de nuevo desde <a href="${baseUrl()}/" style="color:#2793C8;font-weight:700">postyhacetodo.com</a> — toma 10 segundos.</p>`));
+        <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0">Ese link no es válido o ya venció. Si querés tus 3 ideas de cada lunes, suscribite de nuevo desde <a href="${baseUrl()}/" style="color:#2793C8;font-weight:700">postycommunitymanager.com</a> — toma 10 segundos.</p>`));
     }
     return res.send(resultPage('¡Ya estás adentro! 💡', `
       <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0 0 16px">Desde el próximo <b>lunes a las 9:00</b> te llegan tus <b>3 ideas para tu Instagram</b>: posteos concretos para tu rubro, listos para copiar. Gratis, siempre.</p>
@@ -375,10 +375,10 @@ function registerIdeasRoutes(app, db) {
     const r = unsubscribeByToken(db, req.query && req.query.token);
     if (!r.ok) {
       return res.status(404).send(resultPage('Ese link no va más', `
-        <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0">El link de baja no es válido. Si te siguen llegando emails, escribinos a <a href="mailto:hola@postyhacetodo.com" style="color:#2793C8;font-weight:700">hola@postyhacetodo.com</a> y te damos de baja a mano.</p>`));
+        <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0">El link de baja no es válido. Si te siguen llegando emails, escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8;font-weight:700">hola@postycommunitymanager.com</a> y te damos de baja a mano.</p>`));
     }
     return res.send(resultPage('Listo, no te escribimos más 💛', `
-      <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0">Ya está: no recibís más el email de ideas ni ningún otro envío nuestro. Si algún día querés volver, las ideas te esperan en <a href="${baseUrl()}/" style="color:#2793C8;font-weight:700">postyhacetodo.com</a>.</p>`));
+      <p style="font-size:15px;line-height:1.6;color:#47617A;margin:0">Ya está: no recibís más el email de ideas ni ningún otro envío nuestro. Si algún día querés volver, las ideas te esperan en <a href="${baseUrl()}/" style="color:#2793C8;font-weight:700">postycommunitymanager.com</a>.</p>`));
   });
 }
 

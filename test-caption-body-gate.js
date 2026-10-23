@@ -144,5 +144,29 @@ ok('control: la versión concreta del 114 (sin "potenciar") pasa', () => {
   assert.strictEqual(chk.ok, true, chk.reason);
 });
 
+console.log('== (g) Binomio vacío de folleto (CUERPO-BINOMIO — id 422 real) ==');
+ok('id 422 real: "elegancia y funcionalidad" se rechaza', () => {
+  const cap = 'Nuevos muebles de oficina que combinan elegancia y funcionalidad. 🪑✨\n\nTransformá tu espacio de trabajo con escritorios a medida, en la madera que elijas.\n\nPasá por el taller y lo dibujamos sobre tus medidas.';
+  const chk = gen.captionPasses(cap, { business: 'De otro tiempo', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/binomio/i.test(chk.reason), chk.reason);
+});
+ok('variante: "calidad y diseño" también se rechaza', () => {
+  const cap = 'Trabajamos con calidad y diseño en cada mueble que sale del taller, uno por uno y a medida.\n\nPasá por el local y mirá los últimos terminados en persona.';
+  const chk = gen.captionPasses(cap, { business: 'De otro tiempo', dna: null });
+  assert.strictEqual(chk.ok, false);
+  assert.ok(/binomio/i.test(chk.reason), chk.reason);
+});
+ok('control par concreto: "mesas y sillas" NO es binomio vacío y pasa', () => {
+  const cap = 'Salieron las mesas y sillas nuevas del taller: roble macizo, patas reforzadas y listas para entregar esta semana.\n\nPasá por el local y probá la altura en persona.';
+  const chk = gen.captionPasses(cap, { business: 'De otro tiempo', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+ok('control: la versión concreta del 422 (material + medida) pasa', () => {
+  const cap = 'Nuevos escritorios de oficina: tapa de roble macizo de 4 cm y cajonera que se hace a tu medida. 🪑\n\nPasá por el taller y lo dibujamos sobre tus medidas.';
+  const chk = gen.captionPasses(cap, { business: 'De otro tiempo', dna: null });
+  assert.strictEqual(chk.ok, true, chk.reason);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

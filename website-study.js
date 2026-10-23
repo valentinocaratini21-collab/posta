@@ -71,7 +71,7 @@ async function fetchHtml(url) {
       signal: ctl.signal,
       redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PostaBot/1.0; +https://postyhacetodo.com)',
+        'User-Agent': 'Mozilla/5.0 (compatible; PostaBot/1.0; +https://postycommunitymanager.com)',
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'es-AR,es;q=0.9',
       },

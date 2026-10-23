@@ -10,7 +10,7 @@
 'use strict';
 
 const PLACES_TIMEOUT_MS = 15000; // 15s por llamada
-const UA = 'Mozilla/5.0 (compatible; PostyBot/1.0; +https://postyhacetodo.com)';
+const UA = 'Mozilla/5.0 (compatible; PostyBot/1.0; +https://postycommunitymanager.com)';
 const KEY_HELP = 'Falta la clave de Google Places API. Creá una en console.cloud.google.com ' +
   '(activá la API "Places API" y generá una API key) y pedinos que la configuremos.';
 

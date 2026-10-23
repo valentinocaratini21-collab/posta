@@ -128,7 +128,7 @@ await t('sendDogfoodEmail: asunto, foto adjunta y 2 links firmados', async () =>
   const post = await mkpending(db, uid);
   let payload = null;
   const r = await D.sendDogfoodEmail(db, post, uid, {
-    mediaDir: tmpMedia, baseUrl: 'https://postyhacetodo.com',
+    mediaDir: tmpMedia, baseUrl: 'https://postycommunitymanager.com',
     sendEmailStub: async (p) => { payload = p; return { ok: true }; },
   });
   assert.ok(r.ok, 'falló: ' + r.reason);
@@ -142,7 +142,7 @@ await t('sendDogfoodEmail: asunto, foto adjunta y 2 links firmados', async () =>
   assert.ok(att.content && att.content.length > 50, 'adjunto vacío');
   assert.ok(/image\/(png|jpeg|webp)/.test(att.contentType), 'mime=' + att.contentType);
   // caption + hashtags en el html
-  assert.ok(payload.html.includes('postyhacetodo.com/prueba'), 'sin CTA en el html');
+  assert.ok(payload.html.includes('postycommunitymanager.com/prueba'), 'sin CTA en el html');
   assert.ok(payload.html.includes('#communitymanager'), 'sin hashtags');
   // 2 links firmados distintos
   const mApprove = payload.html.match(/\/api\/dogfood\/email-approve\?token=([^"&\s]+)/);

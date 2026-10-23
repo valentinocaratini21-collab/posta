@@ -10,7 +10,7 @@
 const { sendEmail, emailConfigured } = require('./email');
 const { signAction, signWeekAction, absoluteMediaUrl, userHourLabel } = require('./approval');
 
-const BASE_URL = () => process.env.APP_URL || 'https://postyhacetodo.com';
+const BASE_URL = () => process.env.APP_URL || 'https://postycommunitymanager.com';
 
 function esc(s) {
   return String(s || '')
@@ -49,7 +49,7 @@ function emailShell(inner) {
     ${inner}
     <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
       Te avisamos porque tenés contenido pendiente en Posty.<br>
-      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postyhacetodo.com" style="color:#2793C8">hola@postyhacetodo.com</a>.
+      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
     </p>
   </div>
 </div>`;

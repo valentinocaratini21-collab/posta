@@ -56,7 +56,7 @@ await t('house brief: existe, CTA y paleta de Posty', () => {
   assert.strictEqual(D.HOUSE.igHandle, '@posty.hacetodo');
   assert.ok(D.HOUSE.sells.length > 20);
   assert.ok(D.HOUSE.audience.length > 10);
-  assert.ok(D.HOUSE.cta.includes('postyhacetodo.com/prueba'), 'CTA=' + D.HOUSE.cta);
+  assert.ok(D.HOUSE.cta.includes('postycommunitymanager.com/prueba'), 'CTA=' + D.HOUSE.cta);
   assert.ok(D.HOUSE.palette.includes('#2793C8'), 'falta #2793C8');
   assert.ok(D.HOUSE.palette.includes('#FEC14D'), 'falta #FEC14D');
   assert.ok(D.HOUSE.hashtags.includes('#communitymanager'));
@@ -106,7 +106,7 @@ await t('genera draft con imagen+caption+hashtags, sin asteriscos', async () => 
   assert.ok(p.image_path.startsWith('/media/'), 'image_path=' + p.image_path);
   assert.ok(p.caption.length > 50, 'caption corto');
   assert.ok(!/\*/.test(p.caption), 'asterisco en caption');
-  assert.ok(p.caption.includes('postyhacetodo.com/prueba'), 'sin CTA');
+  assert.ok(p.caption.includes('postycommunitymanager.com/prueba'), 'sin CTA');
   assert.ok(p.hashtags.includes('#'), 'sin hashtags');
   assert.ok(p.hook_id, 'sin hook_id');
   db.close();

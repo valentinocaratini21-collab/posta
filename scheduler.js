@@ -40,7 +40,7 @@ function publicImageUrl(imagePath, imageBaseUrl, reqHost) {
   // las dos, Instagram no puede descargar la imagen y la publicación falla
   // ("Only photo or video" / contenedor en ERROR). Caer al dominio canónico.
   if (!base || /postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) {
-    base = 'https://postyhacetodo.com';
+    base = 'https://postycommunitymanager.com';
   }
   return `${base.replace(/\/$/, '')}/media/${file}`;
 }
@@ -210,7 +210,7 @@ async function publishSinglePost(db, post, opts = {}) {
         const u = db.prepare('SELECT email, name, COALESCE(email_opt_out,0) AS oo FROM users WHERE id = ?').get(post.user_id);
         if (u && u.email && !u.oo) {
           const { publishedEmail } = require('./email');
-          const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+          const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
           // Referido en el pico de dopamina: bloque discreto SOLO si le falta
           // (<2 referidos activos; activo = referred_by con plan_status 'active').
           let referralLink = '';
@@ -1174,7 +1174,7 @@ async function sendWeeklyReminders(db) {
     console.log('[email semanal] sin RESEND_API_KEY: no se envía nada esta semana');
     return { sent: 0, skipped: 0, failed: 0, unconfigured: true };
   }
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
     SELECT id, email FROM users
     WHERE email IS NOT NULL AND email != ''
@@ -1223,7 +1223,7 @@ async function sendContentNudges(db) {
 console.log('[nudges] sin RESEND_API_KEY: <redacted>');
     return { sent: 0, skipped: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
     SELECT u.id, u.email, p.business_name FROM users u
     LEFT JOIN profiles p ON p.user_id = u.id
@@ -1286,7 +1286,7 @@ async function sendTrialAbandonEmails(db) {
     console.log('[abandono] sin RESEND_API_KEY: no se envía nada');
     return { sent: 0, skipped: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const now = Date.now();
   const lo = now - 30 * 3600 * 1000, hi = now - 24 * 3600 * 1000;
   let leads = [];
@@ -1354,7 +1354,7 @@ async function sendTrialExpiryEmails(db) {
     console.log('[vence-mañana] sin RESEND_API_KEY: no se envía nada');
     return { sent: 0, skipped: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const now = Date.now();
   const lo = now + 20 * 3600 * 1000, hi = now + 28 * 3600 * 1000;
   let users = [];
@@ -1402,7 +1402,7 @@ async function sendFirstPublishEmails(db) {
     console.log('[primer-posteo] sin RESEND_API_KEY: no se envía nada');
     return { sent: 0, skipped: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   let users = [];
   try {
     users = db.prepare(`
@@ -1451,7 +1451,7 @@ async function sendWeeklyReports(db) {
     console.log('[reporte semanal] sin RESEND_API_KEY: <redacted>');
     return { sent: 0 };
   }
-  const base = (process.env.BASE_URL || 'https://postyhacetodo.com').replace(/\/$/, '');
+  const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
   const users = db.prepare(`
     SELECT DISTINCT u.id, u.email, u.client_name AS name FROM users u
     JOIN posts p ON p.user_id = u.id
