@@ -1612,8 +1612,8 @@ function landingView(cfg) {
       <a href="#planes">Planes</a>
       <a href="#faq">Preguntas</a>
       <a data-posty-chat role="button" tabindex="0" style="cursor:pointer">Ayuda</a>
-      <a href="#/login">Entrar</a>
       <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
+      <a href="#/login">Entrar</a>
       <a class="btn btn-primary btn-sm" href="/prueba">Probar gratis</a>
     </div>
     <a class="lp-entrar" href="#/login">Entrar</a>
@@ -1627,8 +1627,8 @@ function landingView(cfg) {
     <a href="#planes">Planes</a>
     <a href="#faq">Preguntas</a>
     <a data-posty-chat role="button" tabindex="0" style="cursor:pointer" onclick="toggleMobileMenu()">Ayuda</a>
-    <a href="#/login">Entrar</a>
     <a href="/en" onclick="try{localStorage.setItem('posty-lang','en')}catch(e){}">English</a>
+    <a href="#/login">Entrar</a>
     <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
