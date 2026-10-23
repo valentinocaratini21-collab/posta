@@ -59,6 +59,8 @@ const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
 const { PLANS, TRIAL_PLAN, getPlan, getPlans, formatPrice, PLAN_ANCHOR } = require('./config/plans');
 const LA = require('./launch-analytics'); // (v322) analytics de lanzamiento: época, tablero, termómetro, alertas, carta
+const metaDeauth = require('./meta-deauthorize'); // (Frente 4b) Deauthorize callback de Meta: baja lógica IG + evento durable
+const holaInbox = require('./hola-inbox'); // (Frente 4b) Lector SOLO LECTURA de respuestas a hola@ (Carta/toque), clasificador por reglas
 // Plan del usuario (para techo mensual de IA y límites diarios por plan).
 // Un solo lugar: costs.js lo usa vía planFor para el techo 5%.
 function planForUid(uid) {
@@ -4258,6 +4260,37 @@ app.get('/api/admin/alerts', requireAdminToken, (req, res) => {
 app.get('/api/admin/founder-letter', requireAdminToken, (req, res) => {
   try { res.json({ ok: true, letter: LA.founderLetter(db, ANALYTICS_OPTS, req.query) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// (Frente 4b) EVENTOS de desautorización de Meta: registro durable del
+// callback /api/meta/deauthorize, consultable por el dueño.
+app.get('/api/admin/meta-deauthorize-events', requireAdminToken, (req, res) => {
+  try { res.json({ ok: true, events: metaDeauth.listEvents(db, { limit: req.query.limit, metaUserId: req.query.meta_user_id || '' }) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// (Frente 4b) RESPUESTAS A hola@: bandeja de gestión del lector (solo
+// lectura). Filtros: ?classification=interes|consulta|negativa|otro
+// &linked=carta|toque. Nada sale solo desde acá: no hay envío automático.
+app.get('/api/admin/hola-replies', requireAdminToken, (req, res) => {
+  try {
+    res.json({
+      ok: true,
+      inbound_configured: holaInbox.inboundConfigured(),
+      replies: holaInbox.listReplies(db, { classification: req.query.classification || '', linked_kind: req.query.linked || '', limit: req.query.limit }),
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// (Frente 4b) INGESTA del lector: punto de acople para el sistema que sí lee
+// la casilla hola@ (el repo no tiene credencial de lectura; ver hola-inbox.js).
+// Body: { messages: [{id?, from, subject, body|text, received_at}] } o un
+// mensaje suelto. Clasifica + asocia + dedupe. NUNCA marca leído en la
+// casilla real ni envía respuestas.
+app.post('/api/admin/hola-replies/ingest', requireAdminToken, express.json({ limit: '512kb' }), (req, res) => {
+  try {
+    const b = req.body || {};
+    const messages = Array.isArray(b.messages) ? b.messages : (b.from || b.subject ? [b] : []);
+    if (!messages.length) return res.status(400).json({ ok: false, error: 'messages requerido' });
+    res.json({ ok: true, ...holaInbox.ingestReplies(db, messages) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 // LOOP DE APRENDIZAJE (E): estado de la estructura (fail-closed sin métricas IG)
 app.get('/api/admin/learning', requireAdminToken, (req, res) => {
@@ -10580,6 +10613,20 @@ app.get('/api/data-deletion/status', (req, res) => {
   const r = db.prepare('SELECT code, status, created_at FROM deletion_requests WHERE code = ?').get(String(req.query.code || ''));
   if (!r) return res.status(404).json({ error: 'código no encontrado' });
   res.json({ confirmation_code: r.code, status: r.status, deleted_at: r.created_at });
+});
+
+// ---------- Desautorización de la app (Deauthorize callback de Meta) ----------
+// URL para el panel de Meta (Settings → Basic → Deauthorize callback URL):
+//   https://postycommunitymanager.com/api/meta/deauthorize
+// Meta hace POST form-encoded con `signed_request` cuando un usuario
+// desautoriza la app. La lógica vive en meta-deauthorize.js (mismo
+// verificador que data-deletion): firma válida → baja LÓGICA de la conexión
+// IG (sin borrar datos del cliente) + evento durable; firma inválida → 400
+// sin tocar nada; sin secreto en el entorno → fail-closed (503 controlado,
+// intento registrado, ninguna conexión tocada).
+app.post('/api/meta/deauthorize', express.urlencoded({ extended: false }), (req, res) => {
+  const out = metaDeauth.handleDeauthorize(db, req.body && req.body.signed_request, metaDeauth.metaAppSecret());
+  res.status(out.status).json(out.body);
 });
 
 // ---------- Config pública (landing, CTAs) ----------
@@ -17602,7 +17649,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v351';
+const BUILD_ID = '20261023-v352';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

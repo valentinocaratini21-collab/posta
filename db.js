@@ -316,6 +316,9 @@ try { db.exec(`ALTER TABLE settings ADD COLUMN brand_logo TEXT DEFAULT ''`); } c
 try { db.exec(`ALTER TABLE settings ADD COLUMN brand_colors TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN favorite_styles TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE settings ADD COLUMN last_ig_user_id TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+// (Frente 4b) Marca de revocación IG por desautorización de Meta (timestamp + motivo).
+try { db.exec(`ALTER TABLE settings ADD COLUMN ig_revoked_at TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE settings ADD COLUMN ig_revoked_reason TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS assets (
@@ -434,6 +437,35 @@ CREATE TABLE IF NOT EXISTS deletion_requests (
   status TEXT NOT NULL DEFAULT 'done',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- (Frente 4b) Desautorización de Meta: un evento por intento del callback
+-- /api/meta/deauthorize (meta-deauthorize.js) + marca de revocación en
+-- settings. Baja lógica: los datos del cliente nunca se borran acá.
+CREATE TABLE IF NOT EXISTS meta_deauthorize_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  meta_user_id TEXT DEFAULT '',
+  user_id INTEGER,
+  status TEXT NOT NULL DEFAULT '',
+  reason TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_meta_deauth_meta ON meta_deauthorize_events(meta_user_id, created_at);
+-- (Frente 4b) Respuestas a hola@ clasificadas por el lector (hola-inbox.js):
+-- interes/consulta/negativa/otro + envío asociado (carta|toque). Solo lectura.
+CREATE TABLE IF NOT EXISTS hola_replies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_key TEXT NOT NULL UNIQUE,
+  from_email TEXT DEFAULT '',
+  subject TEXT DEFAULT '',
+  received_at TEXT DEFAULT '',
+  excerpt TEXT DEFAULT '',
+  classification TEXT NOT NULL DEFAULT 'otro',
+  signals TEXT DEFAULT '',
+  linked_kind TEXT DEFAULT '',
+  linked_ref TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_hola_replies_cls ON hola_replies(classification, created_at);
 CREATE TABLE IF NOT EXISTS nudges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
