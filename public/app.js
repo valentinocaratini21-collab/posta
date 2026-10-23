@@ -481,19 +481,10 @@ function pzRefBandHTML() {
 }
 // Calculadora "cuánto te cuesta hacerlo vos" (global, la llama el botón)
 
-// Lugares reales: el estático del template ("50") es solo un fallback; el número
-// vivo baja de /api/capacity (spots_total = MONTHLY_SPOTS en server.js).
-function refreshScarcity() {
-  fetch('/api/capacity').then(r => r.json()).then(c => {
-    if (!c || typeof c.spots_left !== 'number') return;
-    const el = document.getElementById('scarcityLine');
-    if (el) el.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> — acompañamos personalmente a cada negocio que entra.`;
-    document.querySelectorAll('[data-spots]').forEach(s => {
-      s.innerHTML = `🔥 Quedan <b>${c.spots_left} lugares</b> este mes`;
-      s.hidden = false;
-    });
-  }).catch(() => {});
-}
+// (v334) ESCASEZ PÚBLICA ELIMINADA (decisión de Valentino, reafirmada el
+// 2026-10-23): ninguna superficie pública muestra líneas de escasez
+// ni variantes. El contador sigue existiendo como dato interno (/api/capacity,
+// admin); lo que salió es el TEXTO. No reintroducir render de escasez acá.
 // Tarjeta de reporte semanal (2026-10-17): hace VISIBLE el trabajo de
 // Posty — lo publicado la semana pasada con su engagement real, lo que ya
 // está en camino y la próxima fecha que vende. Se llena sola tras el render
@@ -1658,7 +1649,6 @@ function landingView(cfg) {
       </div>
     </form>
     <div class="hero-note">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
-    <p class="lp-spots" data-spots hidden></p>
     <div class="lp-show" id="ejemplos">
       <p class="lp-show-eyebrow">✨ Así queda tu Instagram con Posty</p>
       <div class="lp-wall" id="lpWall">
@@ -1675,7 +1665,6 @@ function landingView(cfg) {
           <button class="btn btn-primary" type="submit">Quiero mi perfil así →</button>
         </form>
         <p class="lp-show-cert">3 días gratis · sin tarjeta · cancelás cuando querés</p>
-        <p class="lp-spots" data-spots hidden></p>
       </div>
       <div class="lp-live" id="lpLive">
         <div class="lp-live-head"><span class="lp-live-dot"></span><b>Posty trabajando</b><span>así trabaja por este negocio, todos los días</span></div>
@@ -1929,7 +1918,6 @@ function landingView(cfg) {
       <button class="${country === 'UY' ? 'on' : ''}" data-country="UY" onclick="switchPlansCountry('UY')">🇺🇾 Uruguay</button>
     </div>
     <div class="anchor-line" id="anchorLine">${anchorHTML(cfg && cfg.anchor)}</div>
-    <div class="scarcity" id="scarcityLine">🔥 Solo <b>50 lugares</b> por mes — acompañamos personalmente a cada negocio que entra.</div>
     <div class="plans-row" id="plansRow">${planCards || '<p>Cargando planes...</p>'}</div>
     <div class="plan-dots" id="planDots"><span class="on"></span><span></span><span></span></div>
     <p class="lp-plans-note">Precios en pesos · Sin contrato de permanencia · Cancelás cuando quieras desde tu cuenta</p>
@@ -1972,7 +1960,6 @@ function landingView(cfg) {
     <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
     <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
     <div class="hero-note" style="margin-top:18px">✓ Sin tarjeta · ✓ 3 días gratis · ✓ Cancelá cuando quieras</div>
-    <p class="lp-spots" data-spots hidden></p>
   </div></div>
   <div class="footer"><div class="wrap">
     <span class="logo logo-posty" style="font-size:17.5px"><img src="ai-avatar.png" alt="posty.">posty<span class="pdot">.</span></span>
@@ -6241,7 +6228,7 @@ function homeWhenLabel(iso) {
    estado nuevo (📮 Programado / ✅ Publicado) en las tres vistas.
    Todo se pinta desde scheduled_at / día propuesto / estado — el
    mismo dato de siempre, sin estado paralelo. */
-let SCHED_MODE = 'semana';
+let SCHED_MODE = 'feed'; // (v334) la agenda abre en el Feed literal; Día/Semana/Mes quedan a un toque en el mismo filtro (decisión de Valentino 23/10)
 let FEED_PROFILE = null; // encabezado de la vista Feed: SOLO datos reales del IG (avatar público + seguidores)
 try { const m0 = localStorage.getItem('posty_sched_mode'); if (m0 === 'dia' || m0 === 'semana' || m0 === 'mes' || m0 === 'feed') SCHED_MODE = m0; } catch (e) {}
 let SCHED_WEEK_OFFSET = 0; // semanas desde la actual (vista Semana)
@@ -10930,8 +10917,6 @@ async function render() {
     root.innerHTML = landingView(PLANS_CACHE);
       LANDING_ON = true;
       lpInitHero();
-      // Lugares reales: bajan solos con cada cliente nuevo
-      refreshScarcity();
       // Puntitos del carrusel de planes
       const pr = document.getElementById('plansRow'), pd = document.getElementById('planDots');
       if (pr && pd) {
@@ -11086,7 +11071,6 @@ async function render() {
     root.innerHTML = landingView(PLANS_CACHE);
     LANDING_ON = true;
     lpInitHero();
-    refreshScarcity(); // número vivo de /api/capacity (fallback: 50 del template)
     return;
   }
 
@@ -11103,9 +11087,12 @@ async function render() {
   const tabRaw = path.split('/')[2] || '';
   // 🔔 Posty te avisa: #/app/post/:id → el id del posteo a aprobar
   const postId = decodeURIComponent(path.split('/')[3] || '').trim();
-  // FASE 4 (autopilot): sin pestaña explícita se abre la semana (Schedule).
-  // El chat sigue vivo en #/app/chat como escape hatch para retoques puntuales.
-  let tab = tabRaw || (mzIsMobile() ? 'inicio' : 'schedule');
+  // (v334) Sin pestaña explícita se abre Inicio — el feed literal — en
+  // TODOS los tamaños (decisión de Valentino 22/10, reafirmada 23/10:
+  // "no más calendario" como pantalla de entrada). La Agenda queda a un
+  // toque (tab Semana) como vista de planificación. El chat sigue vivo
+  // en #/app/chat como escape hatch para retoques puntuales.
+  let tab = tabRaw || 'inicio';
   let content = '';
   if (tab === 'chat') content = await chatView();
   else if (tab === 'inicio') content = await inicioView(); // 🏠 Rediseño mobile: la home "una pantalla, una respuesta"
@@ -11608,7 +11595,7 @@ function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
     const glyph = t.type === 'video' ? HOME_REEL_SVG : t.type === 'carousel' ? HOME_CAR_SVG : '';
-    return `<button type="button" class="hf-tile" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
+    return `<button type="button" class="hf-tile pub" data-lightbox="${esc(t.img)}" data-video="0" data-cap="" data-tags="" aria-label="Posteo de tu Instagram"><img src="${esc(t.img)}" loading="lazy" alt="" onerror="__imgFb(this)">${glyph}</button>`;
   }
   const p = t.post;
   const isV = String(p.media_type || '') === 'video';
@@ -11620,7 +11607,7 @@ function homeTileHTML(t, i) {
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
-  return `<span class="scf-mini-x hf-tile" data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" role="button" aria-label="Ver posteo">${media}${pill}${glyph}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}" data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" role="button" aria-label="Ver posteo">${media}${pill}${glyph}</span>`;
 }
 function homeHeadHTML(prof, bizName) {
   const P = prof || {};

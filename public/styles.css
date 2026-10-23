@@ -1892,6 +1892,8 @@ textarea.in{resize:vertical;min-height:96px}
 .hf-tile{position:relative;display:block;aspect-ratio:3/4;background:#eef1f4;overflow:hidden;border:0;padding:0;cursor:pointer;width:100%}
 .hf-tile img,.hf-tile video{width:100%;height:100%;object-fit:cover;display:block}
 .hf-tile-ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:30px;background:linear-gradient(140deg,#eaf6fd,#fdf3d7)}
+/* (v334) Publicados ATENUADOS en la home-feed: ya salieron — el ojo va a los que se vienen (brillo completo). Solo la media se oscurece; glifos y marcas quedan nítidos. */
+.hf-tile.pub img,.hf-tile.pub video{filter:brightness(.58) saturate(.85)}
 .hf-new{position:absolute;top:6px;left:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(10,30,51,.82);color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.6px;padding:3px 7px;border-radius:999px}
 .hf-new i{width:6px;height:6px;border-radius:50%;background:#fec14d;display:block}
 .hf-glyph{position:absolute;top:6px;right:6px;width:20px;height:20px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
@@ -2559,6 +2561,8 @@ textarea.in{resize:vertical;min-height:96px}
 .fp-tile{position:relative;display:block;width:100%;aspect-ratio:3/4;border:none;border-radius:0;overflow:hidden;background:#e9e9e9;padding:0;cursor:pointer;font-family:inherit;touch-action:manipulation;min-width:0}
 .fp-tile img,.fp-tile video{width:100%;height:100%;object-fit:cover;display:block}
 .fp-tile-ph{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:22px;background:linear-gradient(160deg,#EAF4FA,#FDF3D8)}
+/* (v334) Idem en la vista Feed de la agenda: publicados atenuados, por salir con brillo completo. */
+.fp-tile.pub img,.fp-tile.pub video{filter:brightness(.58) saturate(.85)}
 .fp-pill{position:absolute;left:5px;bottom:5px;z-index:2;font-size:10px;font-weight:700;line-height:1;color:#fff;background:rgba(0,0,0,.55);border-radius:4px;padding:3px 5px}
 .fp-reel{position:absolute;top:5px;right:5px;width:16px;height:16px;z-index:2;filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));pointer-events:none}
 .fp-extra{display:none}
