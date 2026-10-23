@@ -17505,7 +17505,7 @@ function logGenError(where, err) {
 //   https://postyhacetodo.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v341';
+const BUILD_ID = '20261023-v342';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -17695,7 +17695,10 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
   if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
   res.status(404);
-  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  // (v342) 404 con marca: página dedicada según el idioma del path
+  // (/en/* en inglés, el resto en español) — nunca más el loader de la app.
+  const notFoundPage = (req.path === '/en' || req.path.startsWith('/en/')) ? '404-en.html' : '404.html';
+  return res.sendFile(path.join(__dirname, 'public', notFoundPage));
 });
 
 // ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async
@@ -17747,7 +17750,10 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
   if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
   res.status(404);
-  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  // (v342) 404 con marca: página dedicada según el idioma del path
+  // (/en/* en inglés, el resto en español) — nunca más el loader de la app.
+  const notFoundPage = (req.path === '/en' || req.path.startsWith('/en/')) ? '404-en.html' : '404.html';
+  return res.sendFile(path.join(__dirname, 'public', notFoundPage));
 });
 
 // ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async

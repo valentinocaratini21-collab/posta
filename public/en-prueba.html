@@ -5,20 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Posty — Your Instagram week, built for free</title>
 <meta name="description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts your content. Try it free for 3 days, no card required.">
-<link rel="canonical" href="https://postyhacetodo.com/en/prueba">
-<link rel="alternate" hreflang="es" href="https://postyhacetodo.com/prueba">
-<link rel="alternate" hreflang="en" href="https://postyhacetodo.com/en/prueba">
-<link rel="alternate" hreflang="x-default" href="https://postyhacetodo.com/prueba">
+<link rel="canonical" href="https://postycommunitymanager.com/en/prueba">
+<link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/prueba">
+<link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/prueba">
+<link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/prueba">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://postyhacetodo.com/en/prueba">
+<meta property="og:url" content="https://postycommunitymanager.com/en/prueba">
 <meta property="og:title" content="Posty builds your week of posts — free">
 <meta property="og:description" content="Tell us about your business in 1 minute and we show you your ideas, designs, copy and hashtags, as if you were already a customer. Try it free, no card.">
-<meta property="og:image" content="https://postyhacetodo.com/og-prueba-en-v2.jpg">
+<meta property="og:image" content="https://postycommunitymanager.com/og-prueba-en-v2.jpg">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Posty builds your week of posts — free">
 <meta name="twitter:description" content="Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts your content. Try it free for 3 days, no card required.">
-<meta name="twitter:image" content="https://postyhacetodo.com/og-prueba-en-v2.jpg">
+<meta name="twitter:image" content="https://postycommunitymanager.com/og-prueba-en-v2.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -895,6 +895,7 @@ body.sfb-on{padding-bottom:88px}
       chips.forEach(function(c){c.classList.remove('on');});
       ch.classList.add('on');
       var f=ch.getAttribute('data-f');
+      try{ trk('prueba_rubro_chip',{rubro:f}); }catch(e){}
       build(f==='all'?allCards:allCards.filter(function(c){return c.getAttribute('data-rubro')===f;}));
     });
   });
@@ -944,7 +945,7 @@ body.sfb-on{padding-bottom:88px}
     bar.classList.toggle('sfb-hide',!show);
     document.body.classList.toggle('sfb-on',show);
   }
-  bar.addEventListener('click',function(){ form.scrollIntoView({behavior:'smooth',block:'start'}); });
+  bar.addEventListener('click',function(){ try{ trk('prueba_sticky_click'); }catch(e){} form.scrollIntoView({behavior:'smooth',block:'start'}); });
   if('IntersectionObserver' in window){
     new IntersectionObserver(function(es){ es.forEach(function(e){ formVisible=e.isIntersecting; apply(); }); },{threshold:.12}).observe(form);
   }
@@ -3665,6 +3666,21 @@ fetch('/api/campaign/current?lang=en').then(function(r){return r.json()}).then(f
   b.textContent = d.campaign.emoji + ' We are building ' + d.campaign.frame + ' — see yours free 👇';
   b.style.display = 'block';
 }).catch(function(){});
+</script>
+
+<script>
+/* (v342) Medición del mini-bloque del fundador: una impresión por visita
+   cuando entra en pantalla — mismo pipeline trk() → POST /api/track
+   (tabla events), misma convención que prueba_benefits_view. */
+(function(){
+  var el=document.querySelector('.founder-card.mini'); if(!el) return;
+  var seen=false;
+  function fire(){ if(seen) return; seen=true; try{ trk('prueba_founder_view'); }catch(e){} }
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(es){ for(var i=0;i<es.length;i++){ if(es[i].isIntersecting){ fire(); io.disconnect(); break; } } },{threshold:.3});
+    io.observe(el);
+  }
+})();
 </script>
 </body>
 </html>
