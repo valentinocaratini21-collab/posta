@@ -512,7 +512,7 @@ html{scroll-behavior:smooth}
 .hero .sub{font-size:16.5px}
 .hero .cta-row{margin-top:24px}
 .hero .cta-row .btn{font-size:18px;padding:17px 38px;border-radius:16px}
-.pres-video-wrap{width:min(320px,84vw);margin:26px auto 0}.pres-video{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:24px;border:3px solid #fff;box-shadow:0 16px 38px rgba(10,30,51,.18);background:#EAF4FA}
+.pres-video-wrap{width:min(320px,84vw);margin:2px auto 0}.pres-video{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:24px;border:3px solid #fff;box-shadow:0 16px 38px rgba(10,30,51,.18);background:#EAF4FA}
 /* Tira de producto en el hero: posteos REALES antes del formulario */
 .hero-strip{display:flex;gap:10px;justify-content:center;align-items:flex-start;max-width:500px;margin:28px auto 0;padding:0 2px}
 .hero-strip figure{flex:1;border-radius:14px;overflow:hidden;border:1.5px solid var(--line);box-shadow:0 12px 28px rgba(10,30,51,.13);background:#fff}
@@ -643,19 +643,56 @@ html{scroll-behavior:smooth}
 <div id="v-onboarding">
   <div class="wrap">
     <div class="hero">
-      <div class="hero-lockup"><img src="ai-avatar.png" alt="Posty" class="hero-ava"><span class="pill">YOUR COMMUNITY MANAGER</span></div>
+      <div class="pres-video-wrap"><video class="pres-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty introducing himself: this is how I work for your business"></video></div>
       <h1>Hi! I'm Posty</h1>
       <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Your complete community manager: I build your week of posts, publish it for you, answer your comments and messages, and look after your reviews.</p>
       <p class="sub">All with your business's vibe and your exact product. You just approve — drop your @ and see your week as if you were already a customer. No card.</p>
       <div class="cta-row"><a class="btn btn-primary" href="#formCard">Build my week 👇</a></div>
-      <div class="pres-video-wrap"><video class="pres-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty introducing himself: this is how I work for your business"></video></div>
-      <div class="hero-strip" aria-hidden="true">
-        <figure><img src="g2-moda-1.jpg" alt="" loading="lazy"></figure>
-        <figure class="mid"><img src="gt-patitas-1.jpg" alt="" loading="lazy"></figure>
-        <figure><img src="prueba-ej-inmobiliaria.jpg" alt="" loading="lazy"></figure>
-      </div>
-      <p class="hero-strip-cap">Real posts, made by Posty 👆</p>
     </div>
+  <div class="ejemplos">
+    <h3>Real weeks, made by Posty</h3>
+    <p class="lede">Real posts, from weeks I built for businesses like yours.</p>
+    <div class="ej-wrap">
+    <button type="button" class="ej-nav prev off" id="ejPrev" aria-label="Previous">‹</button>
+    <div class="ej-viewport" id="ejViewport">
+    <div class="ej-track" id="ejTrack">
+      <div class="ej-page">
+      <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Post made by Posty" loading="lazy"><p>🌸 Flower shop — fresh bouquets, made today</p></div>
+      <div class="ej-card"><img src="prueba-ej-taller.jpg" alt="Post made by Posty" loading="lazy"><p>🔧 Car detailing — the shine speaks for itself</p></div>
+      <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Post made by Posty" loading="lazy"><p>☕ Coffee shop — the house blend</p></div>
+      <div class="ej-card"><img src="prueba-ej-inmobiliaria.jpg" alt="Post made by Posty" loading="lazy"><p>🏠 Real estate — the listing takes the stage</p></div>
+      </div>
+      <div class="ej-page">
+      <div class="ej-card"><img src="prueba-ej-dental.jpg" alt="Post made by Posty" loading="lazy"><p>🦷 Dental clinic — smiles that sell</p></div>
+      <div class="ej-card"><img src="prueba-ej-boliche-en.jpg" alt="Party flyer made by Posty" loading="lazy"><p>🪩 Nightclub — the party flyer, ready to post</p></div>
+      <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Post made by Posty" loading="lazy"><p>💈 Barbershop — the full ritual</p></div>
+      <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Post made by Posty" loading="lazy"><p>💄 Makeup — the before and after</p></div>
+      </div>
+      <div class="ej-page">
+      <div class="ej-card"><img src="prueba-ej-n7.jpg" alt="Post made by Posty" loading="lazy"><p>🏋️ Gym — your trainer, your plan</p></div>
+      <div class="ej-card"><img src="prueba-ej-n6.jpg" alt="Post made by Posty" loading="lazy"><p>🍣 Sushi — nikkei, at the bar</p></div>
+      <div class="ej-card"><img src="prueba-ej-n5.jpg" alt="Post made by Posty" loading="lazy"><p>🥐 Bakery — fresh out of the oven</p></div>
+      <div class="ej-card"><img src="prueba-ej-n8.jpg" alt="Post made by Posty" loading="lazy"><p>🫘 Coffee — the house beans, at home</p></div>
+      </div>
+    </div>
+    </div>
+    <button type="button" class="ej-nav next" id="ejNext" aria-label="The one after">›</button>
+    </div>
+    <p class="ej-foot">Design + caption + hashtags, with each business's photos and colors.</p>
+  </div>
+
+    <div class="sec">
+      <h3>One premium video every week 🎬</h3>
+      <p class="lede">Posty creates a cinematic video of your product, ready to post — included in every plan.</p>
+      <div class="vp-row" aria-label="Premium videos made by Posty">
+        <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a coffee shop, made by Posty"></video><figcaption class="vp-tag">☕ Coffee shop</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a perfume brand, made by Posty"></video><figcaption class="vp-tag">🧴 Perfume</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a sneaker brand, made by Posty"></video><figcaption class="vp-tag">👟 Sneakers</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a bakery, made by Posty"></video><figcaption class="vp-tag">🧁 Bakery</figcaption></figure>
+        <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a nail studio, made by Posty"></video><figcaption class="vp-tag">💅 Nails</figcaption></figure>
+      </div>
+    </div>
+
     <p class="audit-hook">And as a bonus, the <span class="hl2">diagnosis of your Instagram</span>: what to improve, what to do more of and what to cut back.</p>
     <div class="card form-card" id="formCard">
       <div class="err" id="obErr"></div>
@@ -759,37 +796,6 @@ html{scroll-behavior:smooth}
     </div>
   </div>
 
-  <div class="ejemplos">
-    <h3>Real weeks, made by Posty</h3>
-    <p class="lede">Real posts, from weeks I built for businesses like yours.</p>
-    <div class="ej-wrap">
-    <button type="button" class="ej-nav prev off" id="ejPrev" aria-label="Previous">‹</button>
-    <div class="ej-viewport" id="ejViewport">
-    <div class="ej-track" id="ejTrack">
-      <div class="ej-page">
-      <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Post made by Posty" loading="lazy"><p>🌸 Flower shop — fresh bouquets, made today</p></div>
-      <div class="ej-card"><img src="prueba-ej-taller.jpg" alt="Post made by Posty" loading="lazy"><p>🔧 Car detailing — the shine speaks for itself</p></div>
-      <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Post made by Posty" loading="lazy"><p>☕ Coffee shop — the house blend</p></div>
-      <div class="ej-card"><img src="prueba-ej-inmobiliaria.jpg" alt="Post made by Posty" loading="lazy"><p>🏠 Real estate — the listing takes the stage</p></div>
-      </div>
-      <div class="ej-page">
-      <div class="ej-card"><img src="prueba-ej-dental.jpg" alt="Post made by Posty" loading="lazy"><p>🦷 Dental clinic — smiles that sell</p></div>
-      <div class="ej-card"><img src="prueba-ej-boliche-en.jpg" alt="Party flyer made by Posty" loading="lazy"><p>🪩 Nightclub — the party flyer, ready to post</p></div>
-      <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Post made by Posty" loading="lazy"><p>💈 Barbershop — the full ritual</p></div>
-      <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Post made by Posty" loading="lazy"><p>💄 Makeup — the before and after</p></div>
-      </div>
-      <div class="ej-page">
-      <div class="ej-card"><img src="prueba-ej-n7.jpg" alt="Post made by Posty" loading="lazy"><p>🏋️ Gym — your trainer, your plan</p></div>
-      <div class="ej-card"><img src="prueba-ej-n6.jpg" alt="Post made by Posty" loading="lazy"><p>🍣 Sushi — nikkei, at the bar</p></div>
-      <div class="ej-card"><img src="prueba-ej-n5.jpg" alt="Post made by Posty" loading="lazy"><p>🥐 Bakery — fresh out of the oven</p></div>
-      <div class="ej-card"><img src="prueba-ej-n8.jpg" alt="Post made by Posty" loading="lazy"><p>🫘 Coffee — the house beans, at home</p></div>
-      </div>
-    </div>
-    </div>
-    <button type="button" class="ej-nav next" id="ejNext" aria-label="The one after">›</button>
-    </div>
-    <p class="ej-foot">Design + caption + hashtags, with each business's photos and colors.</p>
-  </div>
 <script>
 (function(){
   var track=document.getElementById('ejTrack'),vp=document.getElementById('ejViewport'),prev=document.getElementById('ejPrev'),next=document.getElementById('ejNext');
