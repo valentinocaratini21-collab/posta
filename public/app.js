@@ -1632,7 +1632,7 @@ function landingView(cfg) {
     <a class="btn btn-primary btn-block" href="/prueba">Probar gratis</a>
   </div></div>
   <div class="hero"><div class="wrap">
-    <img class="hero-posty" src="ai-avatar.png" alt="Posty, tu community manager">
+    <video class="hero-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty, tu community manager, presentándose"></video>
     <div class="pill">🤖 Tu community manager</div>
     <h1>Tu Instagram trabajando<br><span class="hl">todos los días, con un solo clic</span></h1>
     <p class="sub">Posty crea las ideas, los diseños y los textos con <b>tu marca</b> — y los publica solo. Posteos, reels, historias, comentarios, mensajes y pauta — todo tu Instagram, hecho por Posty. Vos no hacés nada: solo frenás si algo no te cierra.</p>
@@ -1740,7 +1740,7 @@ function landingView(cfg) {
       <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de una pastelería, hecho por Posty"></video><figcaption class="vp-tag">🧁 Pastelería</figcaption></figure>
       <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Video premium de un estudio de uñas, hecho por Posty"></video><figcaption class="vp-tag">💅 Uñas</figcaption></figure>
     </div>
-    <script>(function(){var vs=document.querySelectorAll('.vp-card video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
+    <script>(function(){var vs=document.querySelectorAll('.vp-card video,.hero-video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
   </div></div>
   <div class="section" id="como-funciona"><div class="wrap">
     <h2>Así trabajo yo 👇</h2>

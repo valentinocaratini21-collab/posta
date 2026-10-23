@@ -512,6 +512,7 @@ html{scroll-behavior:smooth}
 .hero .sub{font-size:16.5px}
 .hero .cta-row{margin-top:24px}
 .hero .cta-row .btn{font-size:18px;padding:17px 38px;border-radius:16px}
+.pres-video-wrap{width:min(320px,84vw);margin:26px auto 0}.pres-video{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:24px;border:3px solid #fff;box-shadow:0 16px 38px rgba(10,30,51,.18);background:#EAF4FA}
 /* Tira de producto en el hero: posteos REALES antes del formulario */
 .hero-strip{display:flex;gap:10px;justify-content:center;align-items:flex-start;max-width:500px;margin:28px auto 0;padding:0 2px}
 .hero-strip figure{flex:1;border-radius:14px;overflow:hidden;border:1.5px solid var(--line);box-shadow:0 12px 28px rgba(10,30,51,.13);background:#fff}
@@ -647,6 +648,7 @@ html{scroll-behavior:smooth}
       <p class="sub" style="margin-top:-6px;font-size:19px;font-weight:600;color:var(--navy)">Your complete community manager: I build your week of posts, publish it for you, answer your comments and messages, and look after your reviews.</p>
       <p class="sub">All with your business's vibe and your exact product. You just approve — drop your @ and see your week as if you were already a customer. No card.</p>
       <div class="cta-row"><a class="btn btn-primary" href="#formCard">Build my week 👇</a></div>
+      <div class="pres-video-wrap"><video class="pres-video" src="/videos/posty-presentacion.mp4" poster="/videos/posty-presentacion-poster.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Posty introducing himself: this is how I work for your business"></video></div>
       <div class="hero-strip" aria-hidden="true">
         <figure><img src="g2-moda-1.jpg" alt="" loading="lazy"></figure>
         <figure class="mid"><img src="gt-patitas-1.jpg" alt="" loading="lazy"></figure>
@@ -1142,7 +1144,7 @@ html{scroll-behavior:smooth}
         <figure class="vp-card"><video src="/videos/video-premium-pasteleria.mp4" poster="/videos/poster-pasteleria.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a bakery, made by Posty"></video><figcaption class="vp-tag">🧁 Bakery</figcaption></figure>
         <figure class="vp-card"><video src="/videos/video-premium-unas.mp4" poster="/videos/poster-unas.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a nail studio, made by Posty"></video><figcaption class="vp-tag">💅 Nails</figcaption></figure>
       </div>
-      <script>(function(){var vs=document.querySelectorAll('.vp-card video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
+      <script>(function(){var vs=document.querySelectorAll('.vp-card video,.pres-video');if(!vs.length||!('IntersectionObserver' in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.play().catch(function(){})}else{e.target.pause()}})},{threshold:.3});vs.forEach(function(v){io.observe(v)});})();</script>
     </div>
 
     <div class="sec">
