@@ -1938,7 +1938,7 @@ function landingView(cfg) {
       <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
       <p class="fc-eye">FUNDADOR DE POSTY</p>
       <h3>Soy Valentino, creé Posty.</h3>
-      <p class="fc-body">Armamos esta semana leyendo tu Instagram, porque ayudar a negocios como el tuyo es lo que sabemos hacer. Si algo no te gusta, lo ajustamos juntos.</p>
+      <p class="fc-body">Analizamos tu Instagram y tu website para crear posteos de tu negocio de verdad: tus productos, tus colores, tu forma de hablar. Quiero ser tu community manager: vos solo monitoreás, y si algo no te gusta, lo ajustamos juntos.</p>
     </div>
   </div></div>
   <div class="section" id="faq" style="background:var(--bg2)"><div class="wrap" style="max-width:760px">
