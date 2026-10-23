@@ -341,6 +341,9 @@ html{scroll-behavior:smooth}
 .ejemplos{margin:44px 0 6px}
 .ejemplos h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
 .ejemplos .lede{text-align:center;color:var(--mut);margin-bottom:20px;font-size:15px}
+.ej-filters{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:2px auto 18px;max-width:880px}
+.ej-chip{border:1.5px solid var(--line);background:#fff;color:var(--navy);font-weight:700;font-size:13px;border-radius:999px;padding:7px 14px;cursor:pointer}
+.ej-chip.on{background:var(--cel);border-color:var(--cel);color:#fff}
 .ej-viewport{overflow:hidden}
 .ej-track{display:flex;transition:transform .3s ease}
 .ej-page{flex:0 0 100%;box-sizing:border-box;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:2px 2px 10px}
@@ -606,6 +609,8 @@ html{scroll-behavior:smooth}
 .price-card .pc-per{font-size:26px;font-weight:800;color:#0A1E33}
 .price-card .pc-per small{font-size:15px;font-weight:600;color:#47617A}
 .price-card .pc-anchor{font-size:14px;color:#47617A;margin:6px 0 0;line-height:1.5}
+.price-card .pc-founder{font-size:13.5px;color:#47617A;margin:10px 0 0;line-height:1.55}
+.price-card .pc-founder b{color:#0A1E33}
 .price-card .pc-trust{font-size:13.5px;color:#47617A;margin:12px 0 0;line-height:1.7;border-top:1px solid #E2EDF5;padding-top:12px}
 /* (v323 · pieza 20) Módulo de fundador: tarjeta clara, foto ENTERA en su
    aspecto natural (jamás recortada), protagonista. */
@@ -614,6 +619,11 @@ html{scroll-behavior:smooth}
 .founder-card .fc-eye{margin:18px 0 4px;font-size:13px;font-weight:800;letter-spacing:.12em;color:var(--cel)}
 .founder-card h3{margin:0 0 8px;font-size:24px;color:#0A1E33}
 .founder-card .fc-body{margin:0;font-size:16px;line-height:1.6;color:#33475C}
+/* (v341) mini-bloque de fundador junto al formulario: la foto entera, sin recorte */
+.founder-card.mini{max-width:460px;padding:18px;margin:26px auto 6px}
+.founder-card.mini img{max-width:320px}
+.founder-card.mini h3{font-size:20px}
+.founder-card.mini .fc-body{font-size:15px;line-height:1.55}
 /* (v323 · pieza 20, regla reafirmada) Los posteos de la prueba se muestran
    ENTEROS en su aspecto natural dentro del teléfono: nada de fit-crop que
    corte titulares (la vara es la foto completa, como en la Agenda). */
@@ -678,27 +688,42 @@ body.sfb-on{padding-bottom:88px}
   <div class="ejemplos">
     <h3>Semanas reales, hechas por Posty</h3>
     <p class="lede">Posteos de verdad, de semanas que armé para negocios como el tuyo.</p>
+    <div class="ej-filters" id="ejFilters" role="group" aria-label="Filtrar por rubro">
+      <button type="button" class="ej-chip on" data-f="all">Todos</button>
+      <button type="button" class="ej-chip" data-f="floreria">🌸 Florería</button>
+      <button type="button" class="ej-chip" data-f="detailing">🔧 Detailing</button>
+      <button type="button" class="ej-chip" data-f="cafeteria">☕ Cafetería</button>
+      <button type="button" class="ej-chip" data-f="inmobiliaria">🏠 Inmobiliaria</button>
+      <button type="button" class="ej-chip" data-f="dental">🦷 Clínica dental</button>
+      <button type="button" class="ej-chip" data-f="boliche">🪩 Boliche</button>
+      <button type="button" class="ej-chip" data-f="barberia">💈 Barbería</button>
+      <button type="button" class="ej-chip" data-f="makeup">💄 Makeup</button>
+      <button type="button" class="ej-chip" data-f="gym">🏋️ Gym</button>
+      <button type="button" class="ej-chip" data-f="sushi">🍣 Sushi</button>
+      <button type="button" class="ej-chip" data-f="panaderia">🥐 Panadería</button>
+      <button type="button" class="ej-chip" data-f="cafe">🫘 Café</button>
+    </div>
     <div class="ej-wrap">
     <button type="button" class="ej-nav prev off" id="ejPrev" aria-label="Anterior">‹</button>
     <div class="ej-viewport" id="ejViewport">
     <div class="ej-track" id="ejTrack">
       <div class="ej-page">
-      <div class="ej-card"><img src="prueba-ej-n1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🌸 Florería — ramos frescos, hechos hoy</p></div>
-      <div class="ej-card"><img src="prueba-ej-taller.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🔧 Detailing — el brillo habla solo</p></div>
-      <div class="ej-card"><img src="prueba-ej-n2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>☕ Cafetería — el blend de la casa</p></div>
-      <div class="ej-card"><img src="prueba-ej-inmobiliaria.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🏠 Inmobiliaria — la propiedad, protagonista</p></div>
+      <div class="ej-card" data-rubro="floreria"><img src="prueba-ej-n1.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🌸 Florería — ramos frescos, hechos hoy</p></div>
+      <div class="ej-card" data-rubro="detailing"><img src="prueba-ej-taller.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🔧 Detailing — el brillo habla solo</p></div>
+      <div class="ej-card" data-rubro="cafeteria"><img src="prueba-ej-n2.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>☕ Cafetería — el blend de la casa</p></div>
+      <div class="ej-card" data-rubro="inmobiliaria"><img src="prueba-ej-inmobiliaria.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🏠 Inmobiliaria — la propiedad, protagonista</p></div>
       </div>
       <div class="ej-page">
-      <div class="ej-card"><img src="prueba-ej-dental.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🦷 Clínica dental — sonrisas que venden</p></div>
-      <div class="ej-card"><img src="prueba-ej-boliche.jpg" alt="Flyer de fiesta hecho por Posty" loading="lazy"><p>🪩 Boliche — el flyer de la fiesta, listo</p></div>
-      <div class="ej-card"><img src="prueba-ej-n4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💈 Barbería — el ritual completo</p></div>
-      <div class="ej-card"><img src="prueba-ej-n3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💄 Makeup — el antes y el después</p></div>
+      <div class="ej-card" data-rubro="dental"><img src="prueba-ej-dental.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🦷 Clínica dental — sonrisas que venden</p></div>
+      <div class="ej-card" data-rubro="boliche"><img src="prueba-ej-boliche.jpg" alt="Flyer de fiesta hecho por Posty" loading="lazy"><p>🪩 Boliche — el flyer de la fiesta, listo</p></div>
+      <div class="ej-card" data-rubro="barberia"><img src="prueba-ej-n4.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💈 Barbería — el ritual completo</p></div>
+      <div class="ej-card" data-rubro="makeup"><img src="prueba-ej-n3.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>💄 Makeup — el antes y el después</p></div>
       </div>
       <div class="ej-page">
-      <div class="ej-card"><img src="prueba-ej-n7.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🏋️ Gym — tu entrenador, tu plan</p></div>
-      <div class="ej-card"><img src="prueba-ej-n6.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🍣 Sushi — nikkei, en la barra</p></div>
-      <div class="ej-card"><img src="prueba-ej-n5.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🥐 Panadería — recién salidas del horno</p></div>
-      <div class="ej-card"><img src="prueba-ej-n8.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🫘 Café — el grano de la casa, en tu cocina</p></div>
+      <div class="ej-card" data-rubro="gym"><img src="prueba-ej-n7.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🏋️ Gym — tu entrenador, tu plan</p></div>
+      <div class="ej-card" data-rubro="sushi"><img src="prueba-ej-n6.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🍣 Sushi — nikkei, en la barra</p></div>
+      <div class="ej-card" data-rubro="panaderia"><img src="prueba-ej-n5.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🥐 Panadería — recién salidas del horno</p></div>
+      <div class="ej-card" data-rubro="cafe"><img src="prueba-ej-n8.jpg" alt="Posteo hecho por Posty" loading="lazy"><p>🫘 Café — el grano de la casa, en tu cocina</p></div>
       </div>
     </div>
     </div>
@@ -818,6 +843,15 @@ body.sfb-on{padding-bottom:88px}
     </div>
     <p class="price-contrast">Un community manager cobra ~$300.000 por mes. <b>Posty, desde $99.999.</b></p>
 
+  <!-- (v341) Mini-bloque de fundador junto al formulario: foto entera,
+       textos aprobados del módulo (pieza 20). -->
+  <div class="founder-card mini" aria-label="El fundador de Posty">
+    <img src="valentino-posty-fundador.jpg" alt="Valentino, fundador de Posty, espalda con espalda con Posty">
+    <p class="fc-eye">FUNDADOR DE POSTY</p>
+    <h3>Soy Valentino, creé Posty.</h3>
+    <p class="fc-body">Armamos esta semana leyendo tu Instagram, porque ayudar a negocios como el tuyo es lo que sabemos hacer. Si algo no te gusta, lo ajustamos juntos.</p>
+  </div>
+
   <div class="work3">
     <h3>Así trabajo yo 👇</h3>
     <p class="lede">Tres pasos y tu Instagram anda solo.</p>
@@ -830,8 +864,7 @@ body.sfb-on{padding-bottom:88px}
 
 <script>
 (function(){
-  var track=document.getElementById('ejTrack'),vp=document.getElementById('ejViewport'),prev=document.getElementById('ejPrev'),next=document.getElementById('ejNext');
-  if(!track||!prev||!next)return;
+  var allCards=Array.prototype.slice.call(track.querySelectorAll('.ej-card'));
   var page=0,pages=track.children.length;
   function upd(){
     track.style.transform='translateX('+(-page*100)+'%)';
@@ -839,6 +872,18 @@ body.sfb-on{padding-bottom:88px}
     next.classList.toggle('off',page>=pages-1);
   }
   function go(d){var np=Math.max(0,Math.min(pages-1,page+d));if(np!==page){page=np;upd();}}
+  function build(list){
+    allCards.forEach(function(c){c.style.flex='';});
+    track.innerHTML='';
+    var short=list.length<4;
+    for(var i=0;i<list.length;i+=4){
+      var pg=document.createElement('div');pg.className='ej-page';
+      if(short){pg.style.display='flex';pg.style.justifyContent='center';}
+      list.slice(i,i+4).forEach(function(c){if(short){c.style.flex='0 1 250px';}pg.appendChild(c);});
+      track.appendChild(pg);
+    }
+    page=0;pages=track.children.length;upd();
+  }
   prev.addEventListener('click',function(){go(-1);});
   next.addEventListener('click',function(){go(1);});
   if(vp){
@@ -846,6 +891,15 @@ body.sfb-on{padding-bottom:88px}
     vp.addEventListener('touchstart',function(e){tx=e.changedTouches[0].clientX;},{passive:true});
     vp.addEventListener('touchend',function(e){if(tx===null)return;var dx=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(dx)>=40)go(dx<0?1:-1);},{passive:true});
   }
+  var chips=Array.prototype.slice.call(document.querySelectorAll('#ejFilters .ej-chip'));
+  chips.forEach(function(ch){
+    ch.addEventListener('click',function(){
+      chips.forEach(function(c){c.classList.remove('on');});
+      ch.classList.add('on');
+      var f=ch.getAttribute('data-f');
+      build(f==='all'?allCards:allCards.filter(function(c){return c.getAttribute('data-rubro')===f;}));
+    });
+  });
   upd();
 })();
 </script>
@@ -1074,6 +1128,7 @@ body.sfb-on{padding-bottom:88px}
         <p style="margin:0;font-size:14px;font-weight:700;color:#47617A">PLAN PRO · EL FAVORITO</p>
         <p class="pc-per" id="pricePerDay"></p>
         <p class="pc-anchor" id="priceAnchor"></p>
+        <p class="pc-founder">⭐ <b>Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
         <p class="pc-trust">✓ Sin permanencia<br>✓ Cancelás desde tu panel cuando quieras<br>✓ El comprobante de pago te llega a tu email</p>
       </div>
       <!-- (v323 · pieza 7) Reel de muestra con compuerta: solo a pedido -->
