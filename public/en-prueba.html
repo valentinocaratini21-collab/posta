@@ -630,6 +630,18 @@ html{scroll-behavior:smooth}
 .vp-card{flex:0 0 auto;width:148px;margin:0;scroll-snap-align:start}
 .vp-card video{display:block;width:148px;height:263px;object-fit:cover;border-radius:16px;border:1.5px solid #E3EDF4;box-shadow:0 10px 26px rgba(10,30,51,.10);background:#EAF6FC}
 .vp-tag{text-align:center;font-weight:800;color:#0A1E33;font-size:13px;margin-top:8px}
+/* (v338) Fila de reels alineada con la fila de Semanas reales: mismo span
+   (panel .ejemplos padding 18px + .ej-page padding 2px = 20px por lado)
+   y las 5 tiles repartidas parejas dentro de ese ancho. Solo la fila
+   superior (.vp-top); la tira de resultados no cambia. */
+.vp-row.vp-top{display:grid;grid-template-columns:repeat(5,1fr);overflow:visible;padding:14px 0 6px;margin:0 20px;scroll-snap-type:none}
+.vp-row.vp-top .vp-card{width:auto}
+.vp-row.vp-top .vp-card video{width:100%;height:auto;aspect-ratio:9/16}
+@media(max-width:760px){
+.vp-row.vp-top{display:flex;overflow-x:auto;padding:14px 0 6px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+.vp-row.vp-top .vp-card{flex:0 0 148px;width:148px}
+.vp-row.vp-top .vp-card video{width:148px;height:263px;aspect-ratio:auto}
+}
 </style>
 </head>
 <body>
@@ -684,7 +696,7 @@ html{scroll-behavior:smooth}
     <div class="sec">
       <h3>One premium video every week 🎬</h3>
       <p class="lede">Posty creates a cinematic video of your product, ready to post — included in every plan.</p>
-      <div class="vp-row" aria-label="Premium videos made by Posty">
+      <div class="vp-row vp-top" aria-label="Premium videos made by Posty">
         <figure class="vp-card"><video src="/videos/video-premium-cafe.mp4" poster="/videos/poster-cafe.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a coffee shop, made by Posty"></video><figcaption class="vp-tag">☕ Coffee shop</figcaption></figure>
         <figure class="vp-card"><video src="/videos/video-premium-perfume.mp4" poster="/videos/poster-perfume.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a perfume brand, made by Posty"></video><figcaption class="vp-tag">🧴 Perfume</figcaption></figure>
         <figure class="vp-card"><video src="/videos/video-premium-sneaker.mp4" poster="/videos/poster-sneaker.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Premium video for a sneaker brand, made by Posty"></video><figcaption class="vp-tag">👟 Sneakers</figcaption></figure>
@@ -1218,7 +1230,7 @@ html{scroll-behavior:smooth}
   </div>
 </div></div>
 
-<div class="footer"><span class="footer-posty"><img src="ai-avatar.png" alt="Posty">Posty 🤖</span> · A Posta product</div>
+<div class="footer"><span class="footer-posty"><img src="ai-avatar.png" alt="Posty">Posty</span></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
