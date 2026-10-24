@@ -7,6 +7,18 @@
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
+// (P0 2026-10-24) Registro durable de envíos: server.js registra al boot un
+// logger que escribe cada intento en la tabla email_send_log. Antes el
+// motivo del rechazo de Resend vivía solo en console.error (logs efímeros)
+// y un fallo de envío era invisible para el admin. El hook es opcional: sin
+// registrar, sendEmail se comporta exactamente como siempre.
+let _sendLogger = null;
+function setSendLogger(fn) { _sendLogger = typeof fn === 'function' ? fn : null; }
+function logSend(row) {
+  if (!_sendLogger) return;
+  try { _sendLogger(row); } catch (e) { /* el registro jamás rompe un envío */ }
+}
+
 function emailConfigured() {
   return !!process.env.RESEND_API_KEY;
 }
@@ -15,6 +27,7 @@ async function sendEmail({ to, subject, html, text, attachments, from: fromOverr
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
+    logSend({ to, subject, from: fromOverride || process.env.EMAIL_FROM || '', status: 'skipped', error: 'sin RESEND_API_KEY' });
     return { ok: false, skipped: true };
   }
   const from = fromOverride || process.env.EMAIL_FROM || 'Posty <hola@postycommunitymanager.com>';
@@ -37,7 +50,8 @@ async function sendEmail({ to, subject, html, text, attachments, from: fromOverr
   }
   let r;
   try {
-    r = await fetch(RESEND_URL, {
+    // RESEND_API_URL permite apuntar a un stub local en tests (default: Resend).
+    r = await fetch(process.env.RESEND_API_URL || RESEND_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -45,14 +59,22 @@ async function sendEmail({ to, subject, html, text, attachments, from: fromOverr
     });
   } catch (e) {
     console.error(`[email] error de red enviando a ${to}:`, e.message);
+    logSend({ to, subject, from, status: 'error', error: String(e.message || e).slice(0, 500) });
     return { ok: false, error: e.message };
   }
   if (!r.ok) {
     const body = await r.text().catch(() => '');
     console.error(`[email] Resend rechazó el envío a ${to} (HTTP ${r.status}):`, body.slice(0, 300));
-    return { ok: false, error: `HTTP ${r.status}` };
+    // (P0) El motivo literal del proveedor queda registrado: es lo que
+    // permite distinguir clave inválida de dominio sin verificar.
+    logSend({ to, subject, from, status: 'rejected', httpStatus: r.status, error: body.slice(0, 500) });
+    return { ok: false, error: `HTTP ${r.status}`, httpStatus: r.status, providerError: body.slice(0, 300) };
   }
-  return { ok: true };
+  // (P0) Capturar el id del proveedor: es la evidencia de aceptación.
+  let providerId = '';
+  try { const j = await r.json(); providerId = (j && j.id) || ''; } catch (e) { /* cuerpo no-JSON: igual fue aceptado */ }
+  logSend({ to, subject, from, status: 'sent', providerId });
+  return { ok: true, id: providerId };
 }
 
 // Recordatorio semanal: armar los posteos de la semana.
@@ -353,4 +375,4 @@ function photoRitualEmail(user, baseUrl, missionText) {
   return sendEmail({ to: user.email, subject, html });
 }
 
-module.exports = { emailConfigured, sendEmail, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };
+module.exports = { emailConfigured, sendEmail, setSendLogger, emailShell, weeklyReminderEmail, draftsNudgeEmail, emptyWeekEmail, publishedEmail, weeklyReportEmail, trialAbandonEmail, trialExpiryEmail, magicLinkEmail, firstPublishNudgeEmail, photoRitualEmail };

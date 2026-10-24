@@ -279,7 +279,16 @@ const rubroId = require('./rubro-id'); // (v235) IDENTIFICACIÓN ESPECIALISTA DE
 const refRoles = require('./ref-roles'); // (v231) referencias multimodales con roles etiquetados por índice
 const deepRead = require('./deep-read'); // LECTURA PROFUNDA (v230): catálogo completo, PDFs, link de bio, mapa foto→producto
 const webExtract = require('./web-extract');
-const { sendEmail, magicLinkEmail } = require('./email');
+const { sendEmail, magicLinkEmail, setSendLogger } = require('./email');
+// (P0 2026-10-24) Todo envío queda registrado en email_send_log (tabla en
+// db.js): el motivo literal del rechazo de Resend deja de vivir solo en los
+// logs efímeros de Railway. Lectura: GET /api/admin/email-log.
+try {
+  setSendLogger((row) => {
+    db.prepare('INSERT INTO email_send_log (ts, to_email, subject, from_addr, status, http_status, provider_id, error) VALUES (?,?,?,?,?,?,?,?)')
+      .run(Date.now(), row.to || '', row.subject || '', row.from || '', row.status || '', row.httpStatus != null ? row.httpStatus : null, row.providerId || '', row.error || '');
+  });
+} catch (e) { /* el registro es best-effort: nunca frena el boot */ }
 const os = require('os');
 const streaks = require('./streaks');
 const metaAds = require('./meta_ads');
@@ -2414,6 +2423,12 @@ app.post('/api/auth/magic-request', async (req, res) => {
   const { email, trial_ig, ref, utm, trial_profile } = req.body || {};
   const em = String(email || '').trim().toLowerCase();
   let sessionNow = false;
+  // (P0 2026-10-24) emailSent vive ACÁ ARRIBA, fuera del try: estaba declarado
+  // dentro del try y el chequeo final (`!sessionNow && !emailSent`) corría
+  // fuera → ReferenceError en CADA alta sin sesión inmediata → como el handler
+  // es async, Express nunca respondía y la request colgaba para siempre (el
+  // «Algo salió mal» tras >60 s del dogfooding de Gesty, v363).
+  let emailSent = false;
   let deviceDt = null; // (Frente 5) token por dispositivo si nace la sesión inmediata
   try {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return res.json({ ok: true });
@@ -2431,7 +2446,6 @@ app.post('/api/auth/magic-request', async (req, res) => {
     });
     db.prepare('INSERT INTO magic_tokens (token_hash, email, payload, created_at, expires_at, used) VALUES (?,?,?,?,?,0)')
       .run(tokenHash, em, payload, Date.now(), Date.now() + 15 * 60 * 1000);
-    let emailSent = false;
     if (process.env.RESEND_API_KEY) {
       const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
       const link = `${base}/api/auth/magic?token=${token}`;
@@ -2484,6 +2498,15 @@ app.post('/api/auth/magic-request', async (req, res) => {
     // El acceso de este email DEPENDE del correo (cuenta existente, o alta
     // sin prueba en curso) y el correo no salió: éxito falso jamás.
     console.error('[magic] request sin salida: el email no se envió (¿RESEND_API_KEY?) para', em);
+    // (P0) Si NO hay clave, sendEmail nunca corrió y no dejó su fila: el
+    // intento queda registrado igual (con clave, la fila 'rejected'/'error'
+    // la escribe el logger de email.js con el motivo del proveedor).
+    if (!process.env.RESEND_API_KEY) {
+      try {
+        db.prepare('INSERT INTO email_send_log (ts, to_email, subject, from_addr, status, http_status, provider_id, error) VALUES (?,?,?,?,?,?,?,?)')
+          .run(Date.now(), em, 'Entrá a Posty sin contraseña ✨', process.env.EMAIL_FROM || 'Posty <hola@postycommunitymanager.com>', 'not_attempted', null, '', 'RESEND_API_KEY ausente en el servidor: el envío ni se intentó');
+      } catch (e) { /* best-effort */ }
+    }
     return res.status(503).json({ ok: false, error: 'No pudimos enviar el email de acceso 😅 Probá de nuevo en un rato.' });
   }
   res.json({ ok: true, session: sessionNow, email: sessionNow ? em : undefined, device_token: deviceDt ? deviceDt.token : null, device_token_expires_at: deviceDt ? deviceDt.expiresAt : null });
@@ -4234,6 +4257,17 @@ app.post('/api/admin/home-profile/refresh', requireAdminToken, express.json(), a
     console.log(`[home-profile-refresh] user ${uid} (${user.email}) @${handle_before || '—'} -> @${handle_after || '—'} updated=${username_updated} read_ok=${!!payload} source=${payload ? (payload.source || '') : 'none'}${payload ? '' : ' (snapshot anterior conservado)'}`);
     return res.json({ ok: true, user_id: uid, email: user.email, business_name: prof.business_name || '', handle_before, handle_after, username_updated, read_ok: !!payload, snapshot });
   } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
+// (P0 2026-10-24) Registro durable de envíos de email: qué salió, qué rechazó
+// Resend y con qué motivo literal. Nació del alta rota en silencio (v363):
+// el rechazo del proveedor solo existía en los logs efímeros de Railway.
+app.get('/api/admin/email-log', requireAdminToken, (req, res) => {
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  try {
+    const rows = db.prepare('SELECT id, ts, to_email, subject, from_addr, status, http_status, provider_id, error FROM email_send_log ORDER BY id DESC LIMIT ?').all(limit);
+    const lastError = rows.find((r) => r.status === 'rejected' || r.status === 'error' || r.status === 'not_attempted') || null;
+    res.json({ ok: true, count: rows.length, last_error: lastError, rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // Inspección y freno de emergencia por usuario (2026-10-16): ver qué tiene
 // programado un usuario y frenar TODA su publicación (vuelve a borrador +
@@ -17900,7 +17934,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v364';
+const BUILD_ID = '20261024-v365';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

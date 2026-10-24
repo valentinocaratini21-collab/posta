@@ -1045,6 +1045,24 @@ db.exec(`CREATE TABLE IF NOT EXISTS magic_tokens (
 )`);
 try { db.exec(`CREATE INDEX IF NOT EXISTS idx_magic_tokens_email ON magic_tokens(email, created_at)`); } catch (e) { /* ya existe */ }
 
+// (P0 2026-10-24) Registro DURABLE de envíos de email: cada intento que pasa
+// por email.js sendEmail deja su fila (sent / rejected / skipped / error /
+// not_attempted) con el motivo literal del proveedor. Antes el rechazo de
+// Resend vivía solo en console.error (logs efímeros de Railway) y el alta
+// fallaba en silencio. Lectura: GET /api/admin/email-log.
+db.exec(`CREATE TABLE IF NOT EXISTS email_send_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL,
+  to_email TEXT DEFAULT '',
+  subject TEXT DEFAULT '',
+  from_addr TEXT DEFAULT '',
+  status TEXT DEFAULT '',
+  http_status INTEGER,
+  provider_id TEXT DEFAULT '',
+  error TEXT DEFAULT ''
+)`);
+try { db.exec(`CREATE INDEX IF NOT EXISTS idx_email_send_log_ts ON email_send_log(ts)`); } catch (e) { /* ya existe */ }
+
 // 4 PUNTOS (2026-10-02): autopiloto + proactivo + insights + resumen semanal.
 // Filtro de calidad: score 0-100 y detalle de checks en JSON.
 try { db.exec(`ALTER TABLE users ADD COLUMN autopilot_enabled INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
