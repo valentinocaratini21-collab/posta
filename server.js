@@ -15641,6 +15641,83 @@ app.get('/api/gesty/eventos', requireAuth, gesty.gestyMiddleware(db), (req, res)
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-03 COMPROBANTES (el motor de papeles)
+// Spec: gesty-build-spec.md §4/§7 + gesty-areas-detalle.md §7. El
+// módulo vive en gesty-comprobantes.js; acá solo se monta la API
+// detrás de requireAuth + gating de pack + capacidad «comprobantes»
+// EN EL SERVIDOR (sin la capacidad, 403: una pantalla oculta no es
+// barrera). El área corre en autopiloto (registrar/clasificar/
+// archivar NUNCA genera tarjeta — G-02 spec §4.2): lo que no se lee
+// con confianza queda necesita-revision con UNA pregunta por el dato
+// dudoso, que el dueño responde en /corregir. La lectura usa el
+// extractor de la casa (visión + texto de PDF de deep-read) con la
+// clave de IA de la cuenta (openaiKeyFor, el patrón de toda la app);
+// sin clave, el papel queda guardado en revisión, nunca perdido.
+// =====================================================================
+const gestyComprobantes = require('./gesty-comprobantes');
+try {
+  gestyComprobantes.configure({ mediaDir: MEDIA_DIR, apiKeyFor: (uid) => openaiKeyFor(uid) });
+} catch (e) { console.error('[gesty] comprobantes configure:', e.message); }
+
+app.post('/api/gesty/comprobantes', requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes'),
+  express.raw({ type: ['image/*', 'application/pdf'], limit: '15mb' }), async (req, res) => {
+  // Subida de un papel (foto o PDF, un toque, sin formulario): el body
+  // crudo es el archivo, como /api/media y /api/album/photo.
+  try {
+    if (!req.body || !req.body.length) return res.status(400).json({ ok: false, error: 'Archivo vacío' });
+    const r = await gestyComprobantes.ingestUpload(db, req.session.userId, {
+      buffer: req.body,
+      contentType: req.get('Content-Type') || '',
+      nombreArchivo: String((req.query || {}).nombre || ''),
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/comprobantes/manual', requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes'), express.json(), (req, res) => {
+  // Registro manual asistido (build-spec §7.4): lo que el dueño dicta
+  // entra con confianza plena; lo que falte lo pregunta Gesty.
+  try {
+    const r = gestyComprobantes.registrarManual(db, req.session.userId, req.body || {});
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/comprobantes/email', requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes'), express.json(), async (req, res) => {
+  // Ingesta por email (build-spec §7.1): el lector de la casilla
+  // entrega el mensaje normalizado con sus adjuntos en base64.
+  try {
+    const r = await gestyComprobantes.ingestEmail(db, req.session.userId, req.body || {});
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/comprobantes', requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes'), (req, res) => {
+  try {
+    const q = req.query || {};
+    const r = gestyComprobantes.listComprobantes(db, req.session.userId, {
+      estado: q.estado, tipo: q.tipo, clasificacion: q.clasificacion,
+      desde: q.desde, hasta: q.hasta, contraparte: q.contraparte, q: q.q,
+      incluir_duplicados: q.incluir_duplicados === '1' || q.incluir_duplicados === 'true',
+      limit: q.limit, offset: q.offset,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/comprobantes/:id', requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes'), (req, res) => {
+  try {
+    const r = gestyComprobantes.historialComprobante(db, req.session.userId, Number(req.params.id));
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/comprobantes/:id/corregir', requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'comprobantes'), express.json(), (req, res) => {
+  // La respuesta del dueño a la pregunta única (o su corrección libre):
+  // el comprobante se reevalúa y, si era lo que faltaba, queda leído.
+  try {
+    const b = req.body || {};
+    const r = gestyComprobantes.corregirComprobante(db, req.session.userId, Number(req.params.id), b.campos || b, { actor: 'dueno' });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19367,7 +19444,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v406';
+const BUILD_ID = '20261024-v407';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
