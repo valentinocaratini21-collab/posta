@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v396'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v397'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5645,6 +5645,8 @@ async function chatLoadHistory() {
     // Sugerencia de primera apertura: se cachea acá y se pinta en bindChatView
     // (este fetch también corre desde otras vistas, donde el slot no existe).
     try { CHAT_FIRST_PICK = (r && r.first_pick) || null; } catch (e) { CHAT_FIRST_PICK = null; }
+    // 🧠 Propuesta de gusto abierta: su barra con botones va al final del chat.
+    try { paintTasteProposal(r && r.taste_proposal); } catch (e) {}
     if (r && r.idea && r.idea.titulo) {
       CHAT_IDEA = r.idea;
       CHAT_STYLE_USED = [];
@@ -6550,6 +6552,8 @@ async function chatExchange({ text, display, extra, pushed }) {
     if (r.dna) chatSay('ya sé lo esencial de tu negocio! 🎉 ahora tocá de nuevo "⚡ Armemos tu semana" y la armamos en serio.');
     // Opciones tocables que propone la IA (ej: "¿vender o alcance?")
     if (r.options && Array.isArray(r.options) && r.options.length) renderChatOptions(r.options);
+    // 🧠 Propuesta de gusto (memoria de gustos): pintar/actualizar su barra.
+    if (r && 'taste_proposal' in r) { try { paintTasteProposal(r.taste_proposal); } catch (e) {} }
     // La IA editó un borrador directo → refrescar la revisión y mostrar la imagen en el chat
     if (r.edit && r.edit.ok) {
       try { render(); } catch (e) {}
@@ -8305,6 +8309,39 @@ async function pnVoiceSend(id, done) {
   } catch (e) {
     pnVoiceMsg(id, `<span style="color:#B3402E;font-size:11.5px">${esc((e && e.message) || 'No pudimos procesar la nota. Probá de nuevo.')}</span>`);
   }
+}
+
+// 🧠 MEMORIA DE GUSTOS: barra de confirmación de una propuesta por
+// patrón («anoto que los textos vayan siempre cortos?»). La pregunta
+// llega en el payload del chat (taste_proposal); los botones responden
+// por POST /api/gustos/propuestas/responder y el acuse entra como
+// mensaje del asistente. Sin propuesta, la barra no existe.
+function paintTasteProposal(p) {
+  const old = document.getElementById('tasteProposalBar');
+  if (old) old.remove();
+  if (!p || !p.texto) return;
+  const box = document.getElementById('chatBox');
+  if (!box) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  const wrap = document.createElement('div');
+  wrap.id = 'tasteProposalBar';
+  wrap.innerHTML = chatMsgHtml('assistant', p.texto)
+    + `<div style="margin:2px 0 10px;display:flex;gap:8px;flex-wrap:wrap">`
+    + `<button class="btn btn-primary btn-sm" id="tastePropYes">${en ? '📝 yes, note it' : '📝 sí, anotalo'}</button>`
+    + `<button class="btn btn-soft btn-sm" id="tastePropNo">${en ? 'no, thanks' : 'no, gracias'}</button></div>`;
+  box.appendChild(wrap);
+  const answer = async (accept) => {
+    try {
+      const r = await api.post('/api/gustos/propuestas/responder', { tipo: p.tipo, accept });
+      if (r && r.reply) chatSayLocal(r.reply);
+      if (r && 'taste_proposal' in r) { paintTasteProposal(r.taste_proposal); return; }
+    } catch (e) {}
+    const b = document.getElementById('tasteProposalBar'); if (b) b.remove();
+    if (typeof chatScroll === 'function') chatScroll();
+  };
+  const by = document.getElementById('tastePropYes'); if (by) by.onclick = () => answer(true);
+  const bn = document.getElementById('tastePropNo'); if (bn) bn.onclick = () => answer(false);
+  if (typeof chatScroll === 'function') chatScroll();
 }
 
 // Mensaje del asistente solo local: no se loguea al servidor (no ensucia el contexto de la IA).
