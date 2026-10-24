@@ -344,6 +344,12 @@ function evTrack(userId, name, props = null, sessionId = '') {
 // de oración (ej. "Tip: Cómo organizar tu contenido de"). Se chequea sin
 // puntuación ni mayúsculas.
 const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','una','unos','unas','y','e','o','u','ni','que','en','con','por','para','sin','sobre','entre','hasta','desde','durante','a','ante','bajo','contra','hacia','tras','mediante','segun','según','como','cómo','pero','mas','más','si','sí','no','tu','tus','su','sus','mi','mis','nuestro','nuestra','esta','este','esto','es','son','hay','se','le','les','lo','me','te']);
+// (MORA-6, 2026-10-24) Infinitivos que EXIGEN complemento: si un titular
+// declarativo cortado termina en uno de estos y la oración semilla sigue,
+// el titular es un fragmento ("Te voy a ser honesto: tener", id real 498)
+// y cierra con "…" (paso 9b de makeHeadline). Lista cerrada de Mora.
+// Espejo en generator.js.
+const HEADLINE_INFINITIVES = new Set(['tener','hacer','querer','poder','buscar','necesitar','lograr','conseguir','ofrecer','vender','comprar','pagar','pedir','armar','abrir','cerrar','crear','lanzar','empezar','seguir','dejar','poner','sacar','dar','ver','saber']);
 // Quita palabras "colgadas" del final (preposiciones, artículos, conjunciones).
 function sinColgada(words) {
   const w = words.slice();
@@ -552,7 +558,19 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     // adjunto opcional cortado ("hechos hoy EN el local", "$12.500
     // recién salida") deja un titular de estilo nominal completo y NO
     // lleva "…" (test-character-lock (f): no-pregunta intacta).
-    return ['de', 'del', 'para'].includes(seedWordsQ[ow.length]);
+    if (['de', 'del', 'para'].includes(seedWordsQ[ow.length])) return true;
+    // 9b) INFINITIVO COLGADO (MORA-6, 2026-10-24, id real 498 — 3ª
+    // ocurrencia de la clase TITULAR INCOMPLETO): la ÚLTIMA palabra
+    // conservada es un infinitivo que exige complemento
+    // (HEADLINE_INFINITIVES) y la oración sigue: "Te voy a ser
+    // honesto: tener" + el complemento que venía. El gatillo del
+    // paso 9 no lo cazaba — la primera palabra caída era el
+    // complemento mismo ("un…"), no de/del/para — y el fragmento
+    // salía disfrazado de frase completa. El prefijo propio ya está
+    // garantizado arriba (la oración semilla continúa): un titular
+    // que ES la oración entera jamás dispara esta regla, aunque
+    // termine en infinitivo. Espejo en generator.js.
+    return HEADLINE_INFINITIVES.has(ow[ow.length - 1]);
   };
   if (declarIsCut()) out = out.replace(/\s*[!….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
@@ -13141,7 +13159,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
 {"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
-- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. Si la imagen NO lleva texto → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. FRAGMENTO CON INFINITIVO (Mora 2026-10-24, id real 498): también es false si el titular termina en un INFINITIVO que pide complemento y el complemento NO está — "Te voy a ser honesto: tener" (id real 498) es INCOMPLETO: termina en infinitivo sin complemento y sin "…": headline_complete=false. Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
@@ -18961,7 +18979,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v401';
+const BUILD_ID = '20261024-v402';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
