@@ -1975,7 +1975,7 @@ function landingView(cfg) {
     <p class="lp-audit-note">Sin registrarte · El resultado llega en menos de un minuto</p>
   </div></div>
   <div class="lp-final"><div class="wrap">
-    <img class="hero-posty lp-final-ava" src="ai-avatar.png" alt="Posty, tu community manager">
+    <img class="hero-posty lp-final-ava" src="posty-disenando-hero.jpg" alt="Posty, tu community manager">
     <h2>Tu primera semana ya puede estar armada</h2>
     <p>Contanos de tu negocio y mirala en 1 minuto. Gratis, sin tarjeta.</p>
     <a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:18px 44px">Ver mi semana gratis 👀</a>
