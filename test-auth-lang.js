@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// test-auth-lang.js — (v398 · paridad) Login en español entrando desde el website EN.
+// test-auth-lang.js — (v399 · paridad) Login en español entrando desde el website EN.
 //
 // Bug (Valentino, 2026-10-24): desde la home EN y la /prueba EN, «Log in»
 // abría el login («Bienvenido de vuelta») en español. Causa: authView/
@@ -49,7 +49,7 @@ ok('app: forgot manda lang en el POST', app.includes("api.post('/api/auth/forgot
 ok('app: reset manda lang en el POST', app.includes("api.post('/api/auth/reset', { token, password, lang: authLang() })"));
 ok('app: doLogout estampa el lang de la cuenta', app.includes("localStorage.setItem('posty-lang', ME.lang)"));
 ok('app: la landing ES estampa es en «Entrar» (x3)', (app.match(/href="#\/login" onclick="try\{localStorage\.setItem\('posty-lang','es'\)/g) || []).length === 3);
-ok('shell ES: app.js?v=263 + «Entrar» estampado', idx.includes('/app.js?v=263') && idx.includes('href="#/login" onclick='));
+ok('shell ES: app.js?v=264 + «Entrar» estampado', idx.includes('/app.js?v=264') && idx.includes('href="#/login" onclick='));
 ok('home EN: 3 «Log in» estampan en', (enIdx.match(/href="\/#\/login" onclick="try\{localStorage\.setItem\('posty-lang','en'\)/g) || []).length === 3);
 ok('/prueba EN: entradas estampan en + doRegister manda lang en', (enPr.match(/onclick="try\{localStorage\.setItem\('posty-lang','en'\)/g) || []).length >= 3 && enPr.includes("const body = { email, lang: 'en' };"));
 ok('/prueba ES: entradas estampan es + doRegister manda lang es', (esPr.match(/onclick="try\{localStorage\.setItem\('posty-lang','es'\)/g) || []).length >= 3 && esPr.includes("const body = { email, lang: 'es' };"));

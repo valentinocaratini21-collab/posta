@@ -1620,7 +1620,7 @@ function recordTrialImport(userId, trialIg, nImp, hadPostsBefore) {
 
 app.post('/api/auth/register', (req, res) => {
   const { email, password, ref, trial_ig, utm, lang } = req.body || {};
-  // (v398 · paridad) El alta desde la superficie EN nace lang='en' y sus
+  // (v399 · paridad) El alta desde la superficie EN nace lang='en' y sus
   // errores salen en ese idioma; sin lang, el ES histórico exacto.
   const regEn = lang === 'en';
   if (!email || !password || password.length < 6)
@@ -1680,7 +1680,7 @@ app.post('/api/auth/register', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const { email, password, trial_ig, lang } = req.body || {};
-  const liEn = lang === 'en'; // (v398) errores en el idioma de la superficie
+  const liEn = lang === 'en'; // (v399) errores en el idioma de la superficie
   const emL = (email || '').trim().toLowerCase();
   const rlKey = 'login|' + emL + '|' + (req.ip || '');
   if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
@@ -2565,7 +2565,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     // (v369 · paridad de idioma) El email de acceso sale en el idioma de la
     // CUENTA si ya existe; si no, en el que trae el funnel (lang del body).
-    // (v398) Se resuelve ANTES de armar el payload: el idioma queda guardado
+    // (v399) Se resuelve ANTES de armar el payload: el idioma queda guardado
     // en el token y lo heredan el alta por canje (users.lang) y, si el link
     // vence, la página de error del canje.
     const acctLang = (db.prepare('SELECT lang FROM users WHERE email = ?').get(em) || {}).lang;
@@ -2652,7 +2652,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
 // Usuario existente → solo entra (+ importa la semana de /prueba si hay).
 app.get('/api/auth/magic', (req, res) => {
   const token = String((req.query && req.query.token) || '');
-  let magicRowLang = 'es'; // (v398) idioma en que nació el pedido, si la fila existe
+  let magicRowLang = 'es'; // (v399) idioma en que nació el pedido, si la fila existe
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const row = db.prepare('SELECT * FROM magic_tokens WHERE token_hash = ? AND used = 0').get(tokenHash);
@@ -2730,7 +2730,7 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
 // Siempre responde OK para no revelar si el email existe.
 app.post('/api/auth/forgot', async (req, res) => {
   const email = String((req.body && req.body.email) || '').trim().toLowerCase();
-  const foEn = !!(req.body && req.body.lang === 'en'); // (v398) errores en el idioma de entrada
+  const foEn = !!(req.body && req.body.lang === 'en'); // (v399) errores en el idioma de entrada
   // Sin proveedor de email configurado el link JAMÁS sale: responder ok era
   // el éxito falso del incidente 2026-10-21. Error honesto y visible.
   if (!process.env.RESEND_API_KEY) {
@@ -2753,7 +2753,7 @@ app.post('/api/auth/forgot', async (req, res) => {
       // BASE_URL canónica (antes: header Host — un proxy o un request armado
       // podía mandar el link a otro dominio; magic ya usaba BASE_URL).
       const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
-      const link = `${base}/#/reset?token=${token}&lang=${user.lang === 'en' ? 'en' : 'es'}`; // (v398) la pantalla de reset abre en el idioma de la cuenta
+      const link = `${base}/#/reset?token=${token}&lang=${user.lang === 'en' ? 'en' : 'es'}`; // (v399) la pantalla de reset abre en el idioma de la cuenta
       // (v369 · paridad de idioma) El email sale en el idioma de la cuenta.
       const fen = user.lang === 'en';
       const r = await sendEmail({
@@ -2784,7 +2784,7 @@ app.post('/api/auth/forgot', async (req, res) => {
 app.post('/api/auth/reset', (req, res) => {
   const token = String((req.body && req.body.token) || '');
   const password = String((req.body && req.body.password) || '');
-  // (v398 · paridad) Errores en el idioma de ENTRADA (body.lang, resuelto por
+  // (v399 · paridad) Errores en el idioma de ENTRADA (body.lang, resuelto por
   // el cliente desde la superficie o el link del email); si no viene, el de la
   // CUENTA dueña del token; si no, el ES histórico.
   let rsLang = (req.body && (req.body.lang === 'en' || req.body.lang === 'es')) ? req.body.lang : null;
@@ -18312,6 +18312,139 @@ app.get('/carta/:token/audio.json', (req, res) => {
   res.json({ ok: true, state: fresh.state, url: fresh.state === 'ready' ? fresh.audio_file : null });
 });
 
+// ---------- (v398) COMPARTIR MI SEMANA: link público firmado de SOLO LECTURA ----------
+// El dueño le muestra su semana a un socio o a la familia SIN dar su
+// contraseña: token HMAC (approval.signWeekShareLink) que ata (userId,
+// gen, exp). La página es una vista VIVA de la semana vigente — la misma
+// selección que el dueño ve en su home: semana actual en su zona,
+// posteos del feed (imagen/video/carrusel), sin cancelados ni piezas en
+// revisión — y de SOLO LECTURA: sin chat, sin botones de acción, sin
+// email, plan ni métricas. El control es del dueño: apagar el link
+// (week_share_on=0) o regenerarlo (week_share_gen+1) mata el anterior
+// al instante.
+function weekShareState(uid) {
+  const u = db.prepare('SELECT week_share_gen, week_share_on FROM users WHERE id = ?').get(uid) || {};
+  return { gen: Number(u.week_share_gen) || 0, on: Number(u.week_share_on) === 1 };
+}
+function weekSharePath(uid) {
+  const st = weekShareState(uid);
+  if (!st.on || !st.gen || !approval.signWeekShareLink) return null;
+  return '/semana/' + approval.signWeekShareLink(uid, st.gen);
+}
+app.get('/api/week-share', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const st = weekShareState(uid);
+  res.json({ ok: true, active: !!(st.on && st.gen > 0), url: weekSharePath(uid) });
+});
+app.post('/api/week-share/enable', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const st = weekShareState(uid);
+  const gen = st.gen > 0 ? st.gen : 1;
+  db.prepare('UPDATE users SET week_share_gen = ?, week_share_on = 1 WHERE id = ?').run(gen, uid);
+  res.json({ ok: true, active: true, url: weekSharePath(uid) });
+});
+app.post('/api/week-share/regenerate', requireAuth, (req, res) => {
+  const uid = req.session.userId;
+  const st = weekShareState(uid);
+  db.prepare('UPDATE users SET week_share_gen = ?, week_share_on = 1 WHERE id = ?').run(st.gen + 1, uid);
+  res.json({ ok: true, active: true, url: weekSharePath(uid) });
+});
+app.post('/api/week-share/revoke', requireAuth, (req, res) => {
+  db.prepare('UPDATE users SET week_share_on = 0 WHERE id = ?').run(req.session.userId);
+  res.json({ ok: true, active: false, url: null });
+});
+function weekSharePosts(uid) {
+  const tz = userTz(uid);
+  const curWeek = mondayKeyOf(tzToday(tz));
+  return db.prepare('SELECT * FROM posts WHERE user_id = ? AND status != ?').all(uid, 'cancelled')
+    .filter((p) => !Number(p.needs_review || 0)
+      && ['image', 'video', 'carousel'].includes(String(p.media_type || 'image'))
+      && postWeekKey(p, tz) === curWeek)
+    .sort((a, b) => String(a.scheduled_at || a.created_at).localeCompare(String(b.scheduled_at || b.created_at)));
+}
+function semanaEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function semanaMediaUrl(p) {
+  const raw = String(p || '');
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return '/media/' + raw.split('/').filter(Boolean).pop();
+}
+function semanaWhenLabel(p, tz, en) {
+  const raw = p.status === 'published' ? (p.published_at || p.scheduled_at) : p.scheduled_at;
+  if (!raw) return '';
+  try {
+    const ymd = ymdInTz(raw, tz);
+    if (!ymd) return '';
+    const [y, m, d] = ymd.split('-').map(Number);
+    const day = new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(y, m - 1, d, 12)));
+    const s = String(raw);
+    const dt = new Date(s.length === 16 ? s : s.replace(' ', 'T'));
+    const hm = isNaN(dt) ? '' : new Intl.DateTimeFormat(en ? 'en-US' : 'es-AR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz }).format(dt);
+    const verb = p.status === 'published' ? (en ? 'Posted' : 'Publicado') : (en ? 'Goes out' : 'Sale');
+    return `${verb} · ${day} ${d}/${m}${hm ? ' · ' + hm : ''}`;
+  } catch (e) { return ''; }
+}
+function semanaNotFound(res, en) {
+  return res.status(404).send(`<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Posty</title></head><body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;padding:60px 20px;color:#0A1E33"><h1>${en ? 'This link is no longer available' : 'Este link ya no está disponible'}</h1><p>${en ? 'The owner may have turned it off or created a new one.' : 'Puede que el dueño lo haya apagado o creado uno nuevo.'}</p></body></html>`);
+}
+function semanaPageHTML(data) {
+  const en = data.lang === 'en';
+  const head = `<p style="text-align:center;margin:0 0 10px"><img src="/posty-avatar-saludando.png" alt="Posty" style="width:84px;height:auto"></p>`
+    + `<h1 style="font-size:23px;line-height:1.25;text-align:center;margin:0 0 6px">${en ? 'The week of' : 'La semana de'} @${semanaEsc(data.handle)}</h1>`
+    + (data.business ? `<p style="text-align:center;font-size:15px;color:#47617A;margin:0 0 4px">${semanaEsc(data.business)}</p>` : '')
+    + `<p style="text-align:center;font-size:14.5px;color:#47617A;margin:0 0 22px">${en ? 'These are the posts Posty made for this week.' : 'Estos son los posteos que Posty armó para esta semana.'}</p>`;
+  let body = '';
+  if (!data.posts.length) {
+    body = `<p style="text-align:center;font-size:16px;color:#47617A;padding:26px 10px">${en ? 'No posts are ready for this week yet — Posty is on it.' : 'Todavía no hay posteos armados para esta semana — Posty está en eso.'}</p>`;
+  } else {
+    body = data.posts.map((p) => {
+      let media = '';
+      if (p.media_type === 'video') {
+        media = `<video src="${semanaEsc(p.media[0] || '')}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;display:block;background:#000"></video>`;
+      } else if (p.media.length > 1) {
+        media = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">${p.media.map((m) => `<img src="${semanaEsc(m)}" alt="" loading="lazy" style="width:82%;flex:none;border-radius:12px;display:block">`).join('')}</div>`;
+      } else if (p.media.length === 1) {
+        media = `<img src="${semanaEsc(p.media[0])}" alt="" loading="lazy" style="width:100%;height:auto;border-radius:12px;display:block">`;
+      }
+      const when = p.when ? `<p style="font-size:13px;font-weight:700;color:#2793C8;margin:12px 0 6px">${semanaEsc(p.when)}</p>` : '';
+      const cap = p.caption ? `<p style="font-size:15.5px;line-height:1.55;margin:0;white-space:pre-wrap">${semanaEsc(p.caption)}</p>` : '';
+      return `<article style="border:1px solid #E3EDF3;border-radius:16px;padding:14px;margin:0 0 20px">${media}${when}${cap}</article>`;
+    }).join('');
+  }
+  const foot = `<p style="text-align:center;font-size:13px;color:#8496A5;margin:26px 0 0">${en ? 'Made with' : 'Hecha con'} <a href="/" style="color:#2793C8;font-weight:700;text-decoration:none">Posty</a> · postycommunitymanager.com</p>`;
+  return `<!DOCTYPE html><html lang="${en ? 'en' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${en ? 'The week of' : 'La semana de'} @${semanaEsc(data.handle)} — Posty</title></head>
+<body style="margin:0;background:#F6F9FB;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0A1E33">
+<div style="max-width:600px;margin:0 auto;background:#FFFFFF;padding:30px 26px 36px">
+${head}
+${body}
+${foot}
+</div></body></html>`;
+}
+app.get('/semana/:token', (req, res) => {
+  const v = approval.verifyWeekShareLink ? approval.verifyWeekShareLink(req.params.token) : null;
+  if (!v) return semanaNotFound(res, false);
+  const u = db.prepare('SELECT id, lang FROM users WHERE id = ?').get(v.userId);
+  if (!u) return semanaNotFound(res, false);
+  const en = u.lang === 'en';
+  const st = weekShareState(u.id);
+  if (!st.on || st.gen !== v.gen) return semanaNotFound(res, en);
+  const prof = getProfile(u.id) || {};
+  const tz = userTz(u.id);
+  const posts = weekSharePosts(u.id).map((p) => {
+    let media = [];
+    if (String(p.media_type || 'image') === 'carousel' && p.carousel_paths) {
+      try { const arr = JSON.parse(p.carousel_paths); if (Array.isArray(arr)) media = arr.filter(Boolean).map(semanaMediaUrl); } catch (e) {}
+    }
+    if (!media.length && p.image_path) media = [semanaMediaUrl(p.image_path)];
+    const cap = [String(p.caption || '').trim(), String(p.hashtags || '').trim()].filter(Boolean).join('\n');
+    return { media_type: String(p.media_type || 'image'), media, caption: cap, when: semanaWhenLabel(p, tz, en) };
+  });
+  const handle = String(prof.ig_username || '').replace(/^@+/, '').trim() || (en ? 'this business' : 'este negocio');
+  res.set('Cache-Control', 'private, no-store');
+  res.send(semanaPageHTML({ lang: en ? 'en' : 'es', handle, business: String(prof.business_name || '').trim(), posts }));
+});
+
 // ---------- (v323 · pieza 7) REEL DE MUESTRA CON COMPUERTA ----------
 // Se genera SOLO ante el pedido explícito del visitante, por el camino
 // MOTION con guión (v309: reel-script + subtítulos cinéticos de
@@ -18828,7 +18961,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v398';
+const BUILD_ID = '20261024-v399';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

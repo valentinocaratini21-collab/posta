@@ -103,8 +103,8 @@ ok(appJs.includes('Posty trabaja completo por sí solo'), 'invariante v376: acla
 ok(enHtml.includes('Does Posty work on its own, or do I need to hire anything else?'), 'invariante v376: FAQ de autonomía EN entera');
 const av = fs.readFileSync(path.join(__dirname, 'public/ai-avatar.png'));
 ok(crypto.createHash('sha256').update(av).digest('hex').startsWith('c8feaff7'), 'invariante: avatar canónico con placa (sha c8feaff7…)');
-ok(idxHtml.includes('/app.js?v=263'), 'index: app.js ?v=258');
-ok(idxHtml.includes('/styles.css?v=20261024k') && enHtml.includes('/styles.css?v=20261024k'), 'styles.css ?v=20261024i en ES y EN');
+ok(idxHtml.includes('/app.js?v=264'), 'index: app.js ?v=263');
+ok(idxHtml.includes('/styles.css?v=20261024k') && enHtml.includes('/styles.css?v=20261024k'), 'styles.css ?v=20261024k en ES y EN');
 ok(/BUILD_ID = '202610\d\d-v\d+'/.test(serverJs), 'BUILD_ID presente (el exacto lo afirma el test de la tanda vigente)');
 
 console.log(`test-lp-v378: ${okN} ok / ${failN} fallas`);
