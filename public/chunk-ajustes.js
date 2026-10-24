@@ -20,6 +20,7 @@ function ajustesView() {
     : q.get('auto') ? 'auto'
     : q.get('avisos') ? 'avisos'
     : q.get('pagina') ? 'pagina'
+    : q.get('semana') ? 'semana'
     : (q.get('estilos') || q.get('marca')) ? 'marca'
     : q.get('referidos') ? 'referidos'
     : 'negocio';
@@ -310,6 +311,10 @@ function ajustesView() {
       <a href="/p/${esc(p.page_slug || '')}" target="_blank" rel="noopener" id="pagePreviewLink" style="font-size:13.5px;font-weight:700">Ver mi página →</a>
     </div>
   </div></div>
+  <div class="card ajsec${openSec==='semana' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🔗 ${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Share my week' : 'Compartir mi semana'}</h3><span class="ajsec-st" id="ajStSemana"></span><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
+    <p style="color:var(--mut);font-size:12.5px;margin-bottom:12px">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Show your week to your partner or your family before it goes out: a read-only link with your posts just as they are on your home. No password, no access to your account — they only see the week.' : 'Mostrale tu semana a tu socio o a tu familia antes de que salga: un link de solo lectura con tus posteos tal cual están en tu home. Sin tu contraseña y sin entrar a tu cuenta: solo ven la semana.'}</p>
+    <div id="weekShareZone"><p class="hint">${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Loading…' : 'Cargando…'}</p></div>
+  </div></div>
   ${IS_NATIVE ? '' : `<div class="card ajsec${openSec==='referidos' ? ' open' : ''}"><div class="ajsec-h" role="button" tabindex="0"><h3>🎁 Referidos · 50% off</h3><span class="ajsec-c">⌄</span></div><div class="ajsec-b">
     <div id="refZone"><p style="color:var(--dim)">Cargando...</p></div>
   </div></div>`}
@@ -531,6 +536,49 @@ async function styleGalleryLoad() {
   paint();
 }
 
+// --- Compartir mi semana (v398): link público firmado de solo lectura ---
+async function weekShareLoad() {
+  const zone = document.getElementById('weekShareZone');
+  if (!zone) return;
+  const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+  let st = null;
+  try { st = await api.get('/api/week-share'); } catch (e) {}
+  if (!st || !st.ok) { zone.innerHTML = '<p class="hint">' + (en ? 'Could not load right now — try again in a moment.' : 'No se pudo cargar ahora — probá de nuevo en un momento.') + '</p>'; return; }
+  const stEl = document.getElementById('ajStSemana');
+  if (st.active && st.url) {
+    const url = location.origin + st.url;
+    if (stEl) stEl.textContent = en ? 'Link on' : 'Link activo';
+    zone.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="wsUrl" readonly value="${url}" style="flex:1;min-width:200px" onclick="this.select()">
+        <button class="btn btn-ghost btn-sm" id="wsCopy" type="button">📋 ${en ? 'Copy link' : 'Copiar link'}</button>
+      </div>
+      <div class="hint">${en ? 'Anyone with the link sees your week (read-only). If you make a new one or turn it off, this one stops working right away.' : 'Quien tenga el link ve tu semana (solo lectura). Si generás uno nuevo o lo apagás, este deja de funcionar al instante.'}</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-ghost btn-sm" id="wsRegen" type="button">🔄 ${en ? 'Make a new link' : 'Generar uno nuevo'}</button>
+        <button class="btn btn-ghost btn-sm" id="wsRevoke" type="button">🚫 ${en ? 'Turn off link' : 'Apagar link'}</button>
+      </div>`;
+    const cp = document.getElementById('wsCopy');
+    if (cp) cp.onclick = async () => {
+      try { await navigator.clipboard.writeText(url); cp.textContent = en ? '✅ Copied!' : '✅ ¡Copiado!'; }
+      catch (e) { window.prompt(en ? 'Copy your link:' : 'Copiá tu link:', url); }
+    };
+    const rg = document.getElementById('wsRegen');
+    if (rg) rg.onclick = async () => { rg.disabled = true; try { await api.post('/api/week-share/regenerate'); } catch (e) {} weekShareLoad(); };
+    const rv = document.getElementById('wsRevoke');
+    if (rv) rv.onclick = async () => { rv.disabled = true; try { await api.post('/api/week-share/revoke'); } catch (e) {} weekShareLoad(); };
+  } else {
+    if (stEl) stEl.textContent = '';
+    zone.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" id="wsEnable" type="button">🔗 ${en ? 'Create my link' : 'Crear mi link'}</button>
+      </div>
+      <div class="hint">${en ? 'Your link shows your current week and updates as the week changes.' : 'Tu link muestra tu semana actual y se actualiza a medida que la semana cambia.'}</div>`;
+    const en2 = document.getElementById('wsEnable');
+    if (en2) en2.onclick = async () => { en2.disabled = true; try { await api.post('/api/week-share/enable'); } catch (e) {} weekShareLoad(); };
+  }
+}
+
 function bindSettings() {
   // Acordeón de secciones en móvil
   $$('.ajsec-h').forEach(h => {
@@ -541,6 +589,7 @@ function bindSettings() {
   try { ttZoneLoad(); } catch (e) {}
   try { ggZoneLoad(); } catch (e) {}
   try { tnZoneLoad(); } catch (e) {}
+  try { weekShareLoad(); } catch (e) {}
   try { styleGalleryLoad(); } catch (e) {}
   try { gustosZoneLoad(); } catch (e) {}
   // --- Página pública del negocio (v169) ---

@@ -1196,6 +1196,10 @@ try { db.exec(`ALTER TABLE users ADD COLUMN founder_price INTEGER DEFAULT 0`); }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_currency TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_plan TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE users ADD COLUMN founder_price_at INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (v398) Compartir mi semana: generación del link público firmado y su
+// interruptor. gen=0 = nunca se creó; subir gen revoca el link anterior.
+try { db.exec(`ALTER TABLE users ADD COLUMN week_share_gen INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+try { db.exec(`ALTER TABLE users ADD COLUMN week_share_on INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 // Backfill idempotente (corre en cada boot, solo sube de nivel): nadie regresa
 // de nivel por la migración — conserva lo ganado con los mecanismos viejos.
 try { db.exec(`UPDATE users SET trust_level = 2 WHERE COALESCE(autopilot_enabled, 0) = 1 AND COALESCE(trust_level, 0) < 2`); } catch (e) {}

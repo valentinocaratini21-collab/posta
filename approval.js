@@ -210,6 +210,37 @@ function verifyCartaLink(token) {
   } catch (e) { return null; }
 }
 
+// (v398) Enlaces firmados de COMPARTIR MI SEMANA: la página pública
+// /semana/:token no lleva sesión; el token ata (userId, gen, exp) con la
+// MISMA primitiva HMAC. `gen` es la generación del link guardada en la
+// cuenta (users.week_share_gen): regenerar la sube y el link viejo muere
+// al instante; apagar (week_share_on=0) también. TTL largo (1 año): es
+// un link para la familia/el socio; el control es la revocación, no el
+// vencimiento.
+function signWeekShareLink(userId, gen, expHours = 24 * 365) {
+  const exp = Math.floor(Date.now() / 1000) + Math.floor(Number(expHours) * 3600);
+  const payload = `semana:${String(userId)}:${String(gen)}:${exp}`;
+  const sig = hmacHex(payload);
+  return Buffer.from(`semana.${userId}.${gen}.${exp}.${sig}`).toString('base64url');
+}
+
+function verifyWeekShareLink(token) {
+  try {
+    const raw = Buffer.from(String(token || ''), 'base64url').toString('utf8');
+    const parts = raw.split('.');
+    if (parts.length !== 5 || parts[0] !== 'semana') return null;
+    const userId = Number(parts[1]);
+    const gen = Number(parts[2]);
+    const exp = Number(parts[3]);
+    const sig = parts[4];
+    if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(gen) || gen <= 0) return null;
+    if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return null;
+    const expected = hmacHex(`semana:${userId}:${gen}:${exp}`);
+    if (!timingSafeEq(sig, expected)) return null;
+    return { userId, gen };
+  } catch (e) { return null; }
+}
+
 module.exports = {
   approvalSecret,
   signAction,
@@ -218,6 +249,8 @@ module.exports = {
   verifyWeekAction,
   signCartaLink,
   verifyCartaLink,
+  signWeekShareLink,
+  verifyWeekShareLink,
   isFirstWeek,
   absoluteMediaUrl,
   userHourLabel,
