@@ -9,8 +9,11 @@
 // SQL independiente, no con las funciones del módulo) · cada total
 // con su desglose por fuente (ids) · las excluidas declaradas
 // (borrador no es venta; duplicado no suma; en revisión no entra)
-// · faltantes marcados sin inventar (en revisión, pagos del
-// período sin entidad, vencimientos fiscales sin monto) ·
+// · faltantes marcados sin inventar (en revisión, vencimientos
+// fiscales sin monto) · G-06b: los pagos reales de G-07 cableados
+// (la sección «pagos del período» del cierre con sus asientos, el
+// pronóstico descontando lo ya pagado por saldo, y la
+// degradación honesta si la fuente de pagos no responde) ·
 // impuestos solo desde lo discriminado · cobros por fecha del
 // pago · el cierre como entidad durable (regenerar crea otra
 // generación; la fila es la última) · la carpeta del mes con su
@@ -41,6 +44,7 @@ function lanza(fn) { try { fn(); return null; } catch (e) { return e; } }
 const gesty = require('./gesty.js');
 const fact = require('./gesty-facturacion.js');
 const comp = require('./gesty-comprobantes.js');
+const prov = require('./gesty-proveedores.js');
 const rep = require('./gesty-reportes.js');
 
 const CUIT_PROPIO = '20123456786';
@@ -102,6 +106,35 @@ function comprobanteRecibido(db, uid, datos) {
     concepto: datos.concepto || 'Insumos',
   });
   return r.comprobante;
+}
+
+// El comprobante de pago que respalda un asiento de G-07: un
+// papel de la cuenta (emitido por el propio negocio hacia el
+// proveedor), distinto de la obligación que salda.
+function papelPago(db, uid, datos) {
+  const r = comp.registrarManual(db, uid, {
+    tipo: 'recibo', direccion: 'emitida',
+    emisor_nombre: 'Refrigeración Sosa', emisor_cuit: CUIT_PROPIO,
+    receptor_nombre: datos.receptor, receptor_cuit: datos.receptor_cuit,
+    numero: datos.numero, fecha: datos.fecha,
+    moneda: 'ARS', monto_total: datos.total, monto_neto: datos.total,
+    impuestos: [], clasificacion: 'pago-proveedor',
+    concepto: 'Comprobante de pago a proveedor',
+  });
+  return r.comprobante;
+}
+
+// Un pago REAL por la vía verdadera de G-07: orden preparada →
+// tarjeta → OK del dueño (el ejecutor de la matriz) → asiento
+// con su comprobante de pago vinculado.
+function pagarObligacion(db, uid, compId, monto, fechaPago, papel) {
+  const orden = prov.prepararOrden(db, uid, { comprobante_ids: [compId] });
+  prov.pedirOKOrden(db, uid, orden.id);
+  const ordenLista = prov.getOrden(db, uid, orden.id);
+  const tarjeta = gesty.getCard(db, uid, ordenLista.tarjeta_id);
+  const ap = gesty.approveCard(db, uid, tarjeta.id, { version_documento: tarjeta.version_documento, usuario: 'dueno' });
+  assert(ap.ok, 'la aprobación de la orden de pago tiene que salir');
+  return prov.registrarPagoOrden(db, uid, orden.id, { comprobante_pago_id: papel.id, monto, fecha: fechaPago, medio: 'transferencia' });
 }
 
 (async () => {
@@ -170,10 +203,15 @@ ok('cierre: duplicado y en-revisión contados en el desglose',
   cierre.desglose.comprobantes.duplicados_en_periodo === 1 && cierre.desglose.comprobantes.en_revision.includes(c3.id));
 
 const clavesFaltantes = cierre.faltantes.map((f) => f.clave);
-ok('cierre: faltantes marcados sin inventar (revisión · pagos sin entidad · fiscal sin monto)',
-  clavesFaltantes.includes('comprobantes-en-revision') && clavesFaltantes.includes('pagos-del-periodo')
+ok('cierre: faltantes marcados sin inventar (revisión · fiscal sin monto)',
+  clavesFaltantes.includes('comprobantes-en-revision')
   && clavesFaltantes.includes('vencimientos-fiscales-sin-monto'),
   clavesFaltantes.join(','));
+ok('cierre G-06b: la fuente de pagos de G-07 responde y el faltante pagos-del-periodo NO aparece (esta siembra no tiene asientos: cero pagos es un dato, no un hueco)',
+  !clavesFaltantes.includes('pagos-del-periodo')
+  && cierre.totales.pagos_del_periodo !== null && cierre.totales.pagos_del_periodo.imputaciones === 0
+  && T.pagos.cantidad === 0 && T.pagos.total === 0 && cierre.desglose.pagos.ids.length === 0,
+  JSON.stringify(cierre.totales.pagos_del_periodo));
 ok('cierre: NO marca faltante de impuestos sin discriminar (C1/C2 los traen) ni de calendario (hay datos)',
   !clavesFaltantes.includes('impuestos-sin-discriminar') && !clavesFaltantes.includes('calendario-fiscal'));
 ok('cierre: el vencimiento fiscal estructurado quedó citado con su fecha y monto',
@@ -258,6 +296,90 @@ ok('pronóstico: la serie diaria cierra con el queda total',
   && P.dias.find((d) => d.fecha === '2026-10-03').acumulado === -202500);
 
 // ---------------------------------------------------------------------------
+console.log('— G-06b: pagos reales de G-07 cableados (cierre, carpeta, pronóstico, degradación)');
+const db2 = nuevaDb();
+gesty.setPack(db2, 1, 'completa', { origen: 'checkout', actor: 'sistema' });
+// Fundamento mínimo, SIN calendario fiscal a propósito: el
+// pronóstico de esta sección mide solo salidas a proveedores.
+gesty.setData(db2, 1, { grupo: 'datos-fiscales', campo: 'razon_social', valor: 'Refrigeración Sosa', origen: 'dueno', origen_ref: 'alta', cargado_por: 'dueno' });
+gesty.setData(db2, 1, { grupo: 'datos-fiscales', campo: 'cuit', valor: CUIT_PROPIO, origen: 'dueno', origen_ref: 'alta', cargado_por: 'dueno' });
+
+// Tres obligaciones de octubre con vencimiento en noviembre:
+// P1 se paga entera, P2 se paga parcial, P3 queda impaga.
+const p1 = comprobanteRecibido(db2, 1, { emisor: 'Repuestos del Sur', emisor_cuit: CUIT_PROV_A, numero: 'A0001-00000201', fecha: '2026-10-05', vencimiento: '2026-11-10', neto: 100000, total: 100000, impuestos: [] });
+const p2 = comprobanteRecibido(db2, 1, { emisor: 'Lubricantes Andina', emisor_cuit: CUIT_PROV_B, numero: 'A0002-00000077', fecha: '2026-10-06', vencimiento: '2026-11-15', neto: 80000, total: 80000, impuestos: [] });
+const p3 = comprobanteRecibido(db2, 1, { emisor: 'Repuestos del Sur', emisor_cuit: CUIT_PROV_A, numero: 'A0001-00000215', fecha: '2026-10-07', vencimiento: '2026-11-20', neto: 20000, total: 20000, impuestos: [] });
+ok('G-06b siembra: las tres obligaciones quedaron leídas',
+  [p1, p2, p3].every((c) => c.estado_lectura === 'leido'),
+  [p1, p2, p3].map((c) => c.estado_lectura).join('/'));
+const papel1 = papelPago(db2, 1, { receptor: 'Repuestos del Sur', receptor_cuit: CUIT_PROV_A, numero: 'PAGO-0001', fecha: '2026-10-12', total: 100000 });
+const pagoP1 = pagarObligacion(db2, 1, p1.id, 100000, '2026-10-12', papel1);
+const papel2 = papelPago(db2, 1, { receptor: 'Lubricantes Andina', receptor_cuit: CUIT_PROV_B, numero: 'PAGO-0002', fecha: '2026-10-20', total: 30000 });
+const pagoP2 = pagarObligacion(db2, 1, p2.id, 30000, '2026-10-20', papel2);
+ok('G-06b siembra: los asientos de G-07 quedaron imputados (P1 total · P2 parcial · P3 nada)',
+  prov.pagadoDeComprobante(db2, 1, p1.id) === 100000
+  && prov.pagadoDeComprobante(db2, 1, p2.id) === 30000
+  && prov.pagadoDeComprobante(db2, 1, p3.id) === 0,
+  `${prov.pagadoDeComprobante(db2, 1, p1.id)}/${prov.pagadoDeComprobante(db2, 1, p2.id)}/${prov.pagadoDeComprobante(db2, 1, p3.id)}`);
+
+const cierreB = rep.generarCierre(db2, 1, { periodo: '2026-10' });
+const TB = cierreB.totales.por_moneda.ARS;
+ok('cierre G-06b: la sección «pagos» trae los asientos reales del período (2 imputaciones · 130000)',
+  TB.pagos.cantidad === 2 && TB.pagos.total === 130000
+  && cierreB.totales.pagos_del_periodo.imputaciones === 2
+  && cierreB.totales.pagos_del_periodo.comprobantes_de_pago === 2,
+  JSON.stringify(cierreB.totales.pagos_del_periodo));
+ok('cierre G-06b: el desglose cita los ids de los asientos como fuente',
+  cierreB.desglose.pagos.ids.includes(pagoP1.pagos[0].id) && cierreB.desglose.pagos.ids.includes(pagoP2.pagos[0].id),
+  JSON.stringify(cierreB.desglose.pagos));
+const sqlPagos = db2.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(monto),0) AS s FROM gesty_pagos
+  WHERE user_id = 1 AND fecha >= '2026-10-01' AND fecha <= '2026-10-31'`).get();
+ok('cierre G-06b: los pagos coinciden con la suma manual (SQL sobre gesty_pagos)',
+  sqlPagos.n === 2 && sqlPagos.s === TB.pagos.total, `${sqlPagos.n}/${sqlPagos.s} vs ${TB.pagos.total}`);
+ok('cierre G-06b: con la fuente viva no hay faltante pagos-del-periodo y el resultado devengado no se contamina (pagos = caja, no resultado)',
+  !cierreB.faltantes.some((f) => f.clave === 'pagos-del-periodo')
+  && TB.resultado === TB.ventas.total - TB.gastos.total,
+  cierreB.faltantes.map((f) => f.clave).join(','));
+const carpetaB = rep.carpetaDelMes(db2, 1, '2026-10');
+ok('carpeta G-06b: el índice de pagos del período viaja en el JSON de la carpeta',
+  carpetaB.totales_carpeta.pagos_del_periodo
+  && carpetaB.totales_carpeta.pagos_del_periodo.por_moneda.ARS.total === 130000,
+  JSON.stringify(carpetaB.totales_carpeta.pagos_del_periodo));
+
+const pronB = rep.pronosticoCaja(db2, 1, { desde: '2026-11-01', dias: 30 });
+const PB = pronB.por_moneda.ARS;
+const movP1 = pronB.movimientos.find((m) => m.fuente.entidad === 'comprobante' && m.fuente.id === p1.id);
+const movP2 = pronB.movimientos.find((m) => m.fuente.entidad === 'comprobante' && m.fuente.id === p2.id);
+const movP3 = pronB.movimientos.find((m) => m.fuente.entidad === 'comprobante' && m.fuente.id === p3.id);
+ok('pronóstico G-06b: la obligación SALDADA por G-07 no aparece como salida futura', !movP1, JSON.stringify(movP1));
+ok('pronóstico G-06b: la parcial entra por su SALDO y su fuente lo dice (bruto 80000 · ya pagado 30000)',
+  !!movP2 && movP2.monto === 50000 && movP2.fuente.monto_bruto === 80000 && movP2.fuente.ya_pagado === 30000
+  && movP2.fuente.detalle.includes('ya pagado') && movP2.fuente.detalle.includes('entra el saldo'),
+  JSON.stringify(movP2));
+ok('pronóstico G-06b: la impaga entra completa (control)', !!movP3 && movP3.monto === 20000, JSON.stringify(movP3));
+ok('pronóstico G-06b: el «sale» de la ventana son solo saldos vivos (50000 + 20000)',
+  !!PB && PB.sale === 70000 && PB.entra === 0, JSON.stringify(PB && { sale: PB.sale, entra: PB.entra }));
+const cobProvB = pronB.cobertura.find((c) => c.fuente === 'comprobantes-proveedores');
+ok('pronóstico G-06b: la cobertura declara la saldada fuera y la parcial por su saldo',
+  cobProvB.estado === 'con-datos' && cobProvB.detalle.includes('ya pagada(s) por completo')
+  && cobProvB.detalle.includes('parcialmente pagados'),
+  cobProvB.detalle);
+
+// La degradación honesta: la fuente se simula caída sobre el
+// MISMO módulo que consume Reportes (acceso por objeto).
+const pagosReal = prov.pagosDelPeriodo;
+prov.pagosDelPeriodo = () => { throw new Error('fuente simulada no disponible'); };
+let cierreDeg = null;
+try { cierreDeg = rep.generarCierre(db2, 1, { periodo: '2026-10' }); } finally { prov.pagosDelPeriodo = pagosReal; }
+ok('degradación G-06b: sin fuente de pagos, vuelve el faltante y la sección queda null (nunca un cero disfrazado)',
+  cierreDeg.faltantes.some((f) => f.clave === 'pagos-del-periodo') && cierreDeg.totales.pagos_del_periodo === null,
+  JSON.stringify(cierreDeg.totales.pagos_del_periodo));
+const cierreRest = rep.generarCierre(db2, 1, { periodo: '2026-10' });
+ok('degradación G-06b: al volver la fuente, el faltante desaparece y la sección reaparece con los asientos',
+  !cierreRest.faltantes.some((f) => f.clave === 'pagos-del-periodo')
+  && cierreRest.totales.por_moneda.ARS.pagos.total === 130000);
+
+// ---------------------------------------------------------------------------
 console.log('— separación por cuenta y gating de capacidad');
 ok('cuenta 2: su cierre del mismo período NO existe hasta generarlo (no hereda el ajeno)',
   rep.getCierre(db, 2, '2026-09') === null);
@@ -284,6 +406,10 @@ console.log('— wiring estático');
   ok('wiring: el módulo no monta rutas propias (las monta server.js)', !modSrc.includes('app.post') && !modSrc.includes('app.get'));
   ok('wiring: Reportes no registra ejecutores ni tarjetas (solo lee, matriz §8)',
     !modSrc.includes('registerExecutor') && !modSrc.includes('createCard'));
+  ok('wiring G-06b: Reportes consume la fuente real de pagos de G-07 por el objeto del módulo',
+    modSrc.includes("require('./gesty-proveedores')") && modSrc.includes('proveedores.pagosDelPeriodo'));
+  ok('wiring G-06b: ya no queda lectura de la columna que nadie escribía (el descuento sale de los asientos de G-07)',
+    !modSrc.includes('asiento_vinculado'));
   ok('wiring: BUILD_ID presente con la convención vigente (el módulo no lo gestiona)', /const BUILD_ID = '20261024-v[0-9]+';/.test(serverSrc));
 }
 

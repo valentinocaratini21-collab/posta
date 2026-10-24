@@ -25,9 +25,12 @@
 // · Impuestos → los discriminados en esas facturas (débito) y en
 //   esos comprobantes (por concepto). Gesty NO liquida impuestos:
 //   prepara todo para el contador (áreas §7/§8).
-// · Pagos a proveedores → TODAVÍA NO EXISTE la entidad que los
-//   registra (llega con G-07): el cierre lo declara faltante en vez
-//   de disfrazar los gastos devengados de pagos.
+// · Pagos a proveedores → los asientos de G-07 (la tabla
+//   gesty_pagos, vía su pagosDelPeriodo): el cierre los muestra
+//   como su propia sección por la fecha del pago, y el
+//   pronóstico descuenta de cada obligación lo ya pagado. Si
+//   esa fuente no responde, el cierre vuelve a declarar el
+//   faltante pagos-del-periodo — nunca un cero disfrazado.
 //
 // Pronóstico (§13.2): entra / sale / queda a 30 días SOLO desde
 // registros reales — facturas a cobrar por su saldo y vencimiento
@@ -56,6 +59,7 @@ const gesty = require('./gesty');
 const facturacion = require('./gesty-facturacion');
 const comprobantes = require('./gesty-comprobantes');
 const cobranzas = require('./gesty-cobranzas');
+const proveedores = require('./gesty-proveedores');
 
 // ---------------------------------------------------------------------------
 // Utilidades (los patrones de la casa)
@@ -99,6 +103,7 @@ function ensureSchema(db) {
   facturacion.ensureSchema(db);
   comprobantes.ensureSchema(db);
   cobranzas.ensureSchema(db);
+  proveedores.ensureSchema(db);
   db.exec(`
   CREATE TABLE IF NOT EXISTS gesty_cierres (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,34 +258,72 @@ function pronosticoCaja(db, userId, opts) {
   });
 
   // --- SALE: comprobantes de proveedores por su vencimiento -------
-  // Sin G-07 no hay registro de pagos: un comprobante recibido
-  // leído con vencimiento es, para los registros, una salida
-  // comprometida. Los vinculados a un asiento no se cuentan (ya
-  // tienen su registro) y los que están en revisión no son un
-  // número confirmado: se cuentan aparte, no se suman.
+  // Un comprobante recibido leído con vencimiento es una salida
+  // comprometida POR SU SALDO: lo ya pagado según los asientos de
+  // G-07 no vuelve a salir de caja — la obligación saldada no
+  // entra, y la parcial entra neta (su fuente lo dice, con el
+  // bruto y el asiento que lo respalda). Los que están en
+  // revisión no son un número confirmado: se cuentan aparte.
+  //
+  // La fuente de pagos se lee UNA sola vez (todas las
+  // imputaciones de la cuenta) y se accede por el objeto del
+  // módulo: si no responde, ningún saldo descuenta pagos — la
+  // obligación bruta es el peor caso — y la cobertura lo declara.
+  let pagosPorComprobante = new Map();
+  let fuentePagosOk = true;
+  try {
+    const fuentePagos = proveedores.pagosDelPeriodo(db, userId, {});
+    for (const p of fuentePagos.pagos) {
+      if (p.comprobante_obligacion_id === null || p.comprobante_obligacion_id === undefined) continue;
+      const prev = pagosPorComprobante.get(p.comprobante_obligacion_id) || { monto: 0, asientos: [] };
+      prev.monto = round2(prev.monto + (Number(p.monto) || 0));
+      prev.asientos.push(p.id);
+      pagosPorComprobante.set(p.comprobante_obligacion_id, prev);
+    }
+  } catch (e) {
+    fuentePagosOk = false;
+    pagosPorComprobante = new Map();
+  }
   const comps = todosLosComprobantes(db, userId, {});
-  let nSale = 0, sinConfirmar = 0;
+  let nSale = 0, sinConfirmar = 0, nSaldadas = 0, nNetas = 0;
   for (const c of comps) {
     if (c.direccion !== 'recibida' || c.duplicado_de) continue;
     if (c.estado_lectura !== 'leido') { if (esFechaISO(c.vencimiento) && c.vencimiento <= hasta) sinConfirmar++; continue; }
-    if (c.asiento_vinculado) continue;
-    const monto = c.monto_total !== null && c.monto_total !== undefined ? c.monto_total : c.monto_neto;
-    if (monto === null || monto === undefined || !esFechaISO(c.vencimiento)) continue;
+    const montoBruto = c.monto_total !== null && c.monto_total !== undefined ? c.monto_total : c.monto_neto;
+    if (montoBruto === null || montoBruto === undefined || !esFechaISO(c.vencimiento)) continue;
     const vencida = c.vencimiento < desde;
     if (!vencida && c.vencimiento > hasta) continue;
+    const pag = pagosPorComprobante.get(c.id);
+    const pagado = pag ? pag.monto : 0;
+    const monto = round2(montoBruto - pagado);
+    if (monto <= 0) { nSaldadas++; continue; }
+    if (pagado > 0) nNetas++;
     movimientos.push({
       fecha: vencida ? desde : c.vencimiento, fecha_original: c.vencimiento, vencida,
-      tipo: 'sale', monto: round2(monto), moneda: monedaKey(c.moneda),
+      tipo: 'sale', monto, moneda: monedaKey(c.moneda),
       concepto: `Pago a ${c.emisor.nombre || 'proveedor'} — ${c.tipo} ${c.numero || ''}`.trim(),
-      fuente: { entidad: 'comprobante', id: c.id, detalle: `comprobante recibido de ${c.emisor.nombre || 'proveedor'}` },
+      fuente: pagado > 0
+        ? {
+          entidad: 'comprobante', id: c.id,
+          detalle: `comprobante recibido de ${c.emisor.nombre || 'proveedor'} — ya pagado ${monedaKey(c.moneda)} ${fmtMonto(pagado)} vía Proveedores (G-07, asiento${pag.asientos.length > 1 ? 's' : ''} ${pag.asientos.join(', ')}): entra el saldo`,
+          monto_bruto: round2(montoBruto), ya_pagado: pagado,
+        }
+        : { entidad: 'comprobante', id: c.id, detalle: `comprobante recibido de ${c.emisor.nombre || 'proveedor'}` },
     });
     nSale++;
   }
   cobertura.push({
-    fuente: 'comprobantes-proveedores', estado: nSale ? 'con-datos' : 'sin-datos',
-    detalle: nSale
-      ? `${nSale} comprobante(s) de proveedores con vencimiento en la ventana${sinConfirmar ? `; ${sinConfirmar} más están sin terminar de leer y NO entraron (no son un número confirmado)` : ''}.`
-      : 'No hay comprobantes de proveedores con vencimiento en la ventana.',
+    fuente: 'comprobantes-proveedores', estado: (nSale || nSaldadas) ? 'con-datos' : 'sin-datos',
+    detalle: (() => {
+      const partes = [nSale
+        ? `${nSale} comprobante(s) de proveedores con saldo y vencimiento en la ventana.`
+        : 'No hay comprobantes de proveedores con saldo con vencimiento en la ventana.'];
+      if (nNetas) partes.push(`${nNetas} entra(n) por su saldo: ya están parcialmente pagados vía Proveedores (G-07).`);
+      if (nSaldadas) partes.push(`${nSaldadas} obligación(es) ya pagada(s) por completo vía Proveedores (G-07) NO entraron: ese dinero ya salió de caja.`);
+      if (sinConfirmar) partes.push(`${sinConfirmar} más están sin terminar de leer y NO entraron (no son un número confirmado).`);
+      if (!fuentePagosOk) partes.push('La fuente de pagos de Proveedores (G-07) no respondió en esta corrida: ningún saldo descuenta pagos.');
+      return partes.join(' ');
+    })(),
   });
 
   // --- SALE: vencimientos fiscales SOLO con fecha y monto reales --
@@ -455,8 +498,34 @@ function calcularCierre(db, userId, periodo) {
     }
   }
 
+  // --- Pagos del período (G-07): por la fecha del PAGO ---------
+  // La fuente es pagosDelPeriodo de Proveedores: cada fila es
+  // una imputación asentada contra su obligación, con su
+  // comprobante de pago detrás. Cero pagos en el período es un
+  // DATO (la sección existe, en cero), no un faltante. Si la
+  // fuente no responde, la sección queda null y vuelve el
+  // faltante de abajo — nunca un cero disfrazado. Se accede por
+  // el objeto del módulo, como en el pronóstico.
+  let pagosPeriodo = null;
+  try {
+    pagosPeriodo = proveedores.pagosDelPeriodo(db, userId, { desde, hasta });
+  } catch (e) {
+    pagosPeriodo = null;
+  }
+  const pagosPorMoneda = {};
+  const pagosIds = [];
+  if (pagosPeriodo) {
+    for (const p of pagosPeriodo.pagos) {
+      const k = monedaKey(p.moneda);
+      const s = pagosPorMoneda[k] || (pagosPorMoneda[k] = { cantidad: 0, total: 0 });
+      s.cantidad++;
+      s.total = round2(s.total + (Number(p.monto) || 0));
+      pagosIds.push(p.id);
+    }
+  }
+
   // --- Impuestos y resultado por moneda ---------------------------
-  const monedas = new Set([...Object.keys(ventasPorMoneda), ...Object.keys(gastosPorMoneda), ...Object.keys(cobrosPorMoneda), ...Object.keys(impuestosComprobantes)]);
+  const monedas = new Set([...Object.keys(ventasPorMoneda), ...Object.keys(gastosPorMoneda), ...Object.keys(cobrosPorMoneda), ...Object.keys(impuestosComprobantes), ...Object.keys(pagosPorMoneda)]);
   const porMoneda = {};
   for (const k of monedas) {
     const v = ventasPorMoneda[k] || { cantidad: 0, neto: 0, iva: 0, otros_impuestos: [], total: 0 };
@@ -466,6 +535,7 @@ function calcularCierre(db, userId, periodo) {
       ventas: v,
       gastos: g,
       cobros: cobrosPorMoneda[k] || { cantidad: 0, total: 0 },
+      pagos: pagosPorMoneda[k] || { cantidad: 0, total: 0 },
       impuestos: {
         debito_iva: v.iva,
         otros_impuestos_venta: v.otros_impuestos,
@@ -500,10 +570,12 @@ function calcularCierre(db, userId, periodo) {
       detalle: `${recibidosSinImpuestos} comprobante(s) recibidos del período no traen impuestos discriminados: el total de impuestos de comprobantes puede estar incompleto.`,
     });
   }
-  faltantes.push({
-    clave: 'pagos-del-periodo', dato_que_falta: 'el registro de pagos a proveedores (llega con Proveedores y pagos, G-07)',
-    detalle: 'Todavía no hay una entidad que registre los pagos a proveedores: el cierre muestra los gastos DEVENGADOS por clasificación y los cobros reales del período; no afirma qué se pagó.',
-  });
+  if (!pagosPeriodo) {
+    faltantes.push({
+      clave: 'pagos-del-periodo', dato_que_falta: 'el registro de pagos a proveedores (Proveedores y pagos, G-07)',
+      detalle: 'La fuente de pagos del período no respondió: el cierre muestra los gastos DEVENGADOS por clasificación y los cobros reales del período; no afirma qué se pagó.',
+    });
+  }
   if (!fiscales.conMonto.length && !fiscales.sinMonto.length) {
     faltantes.push({
       clave: 'calendario-fiscal', dato_que_falta: 'los vencimientos fiscales en el fundamento (grupo calendario-fiscal)',
@@ -520,12 +592,16 @@ function calcularCierre(db, userId, periodo) {
   const totales = {
     periodo, desde, hasta, base: 'devengado',
     por_moneda: porMoneda,
+    pagos_del_periodo: pagosPeriodo
+      ? { imputaciones: pagosIds.length, comprobantes_de_pago: pagosPeriodo.total_pagos, por_moneda: pagosPorMoneda }
+      : null,
     vencimientos_fiscales_registrados: fiscales.conMonto,
   };
   const desglose = {
     ventas: { ids: ventasIds, excluidas_por_estado: excluidas },
     gastos: { ids_por_clasificacion: gastosIdsPorClase },
     cobros: { detalle: cobrosDetalle },
+    pagos: { ids: pagosIds },
     comprobantes: { duplicados_en_periodo: duplicadosPeriodo, en_revision: enRevision, sin_monto: sinMonto },
     fundamento_version: gesty.foundationVersion(db, userId),
   };
@@ -643,6 +719,10 @@ function carpetaDelMes(db, userId, periodo, opts) {
       leidos: indice.filter((c) => c.estado_lectura === 'leido').length,
       en_revision: indice.filter((c) => c.estado_lectura === 'necesita-revision').length,
       duplicados: indice.filter((c) => c.duplicado_de).length,
+      // Los pagos del período viajan en el JSON de la carpeta
+      // (el cierre embebido trae la sección completa con su
+      // desglose); el CSV sigue siendo el índice de papeles.
+      pagos_del_periodo: (cierre.totales && cierre.totales.pagos_del_periodo) || null,
     },
   };
 }
