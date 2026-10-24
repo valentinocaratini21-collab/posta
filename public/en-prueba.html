@@ -627,6 +627,18 @@ html{scroll-behavior:smooth}
 .price-card .pc-founder{font-size:13.5px;color:#47617A;margin:10px 0 0;line-height:1.55}
 .price-card .pc-founder b{color:#0A1E33}
 .price-card .pc-trust{font-size:13.5px;color:#47617A;margin:12px 0 0;line-height:1.7;border-top:1px solid #E2EDF5;padding-top:12px}
+/* (v390) Tap the price card: the full "for you" detail of all 3 plans expands in place */
+.price-card{cursor:pointer}
+.price-card .pc-more-hint{font-size:13.5px;font-weight:800;color:var(--cel);margin:12px 0 0}
+.price-card .pc-plans{text-align:left;margin-top:6px}
+.price-card .pc-plan{border-top:1px solid #E2EDF5;padding:14px 2px 4px}
+.price-card .pc-plan-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.price-card .pc-plan-h b{font-size:16px;color:#0A1E33}
+.price-card .pc-plan-h span{font-weight:800;color:#0A1E33;white-space:nowrap}
+.price-card .pc-plan-h span small{font-weight:600;color:#47617A}
+.price-card .pc-plan ul{list-style:none;margin:10px 0 12px;padding:0;color:#47617A;font-size:13.5px;line-height:1.75}
+.price-card .pc-plan ul li::before{content:"✓ ";color:var(--cel);font-weight:800}
+.price-card .pc-pick{width:100%;margin:0 0 8px}
 /* (v323 · piece 20) Founder module: light card, photo shown ENTIRE in
    its natural aspect (never cropped), as the protagonist. */
 .founder-card{background:#F7FCFE;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:24px auto 4px;max-width:560px;text-align:left}
@@ -1187,6 +1199,8 @@ body.sfb-on{padding-bottom:88px}
         <p class="pc-anchor" id="priceAnchor"></p>
         <p class="pc-founder">⭐ <b>The First 200:</b> your signup price stays fixed for 12 months: the price you joined at is what you pay through your first year, even if plan prices go up.</p>
         <p class="pc-trust">✓ No lock-in<br>✓ Cancel anytime from your panel<br>✓ Your payment receipt arrives by email</p>
+        <p class="pc-more-hint" id="priceMoreHint">Tap the card to see everything each plan does for you ▾</p>
+        <div class="pc-plans" id="pricePlans" style="display:none"></div>
       </div>
       <!-- (v323 · piece 7) Sample reel behind a gate: only on request -->
       <div id="reelRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
@@ -3442,10 +3456,38 @@ async function renderPriceCard() {
       anchor = 'A community manager costs more than $U 25,000 a month. Posty from $U ' + fmt(base.price, 0) + '/month.';
     } else {
       perTxt = '$' + fmt(Math.round(per), 0) + ' <small>per day</small>';
-      anchor = 'A community manager costs $300,000–$600,000+ a month. Posty from $' + fmt(base.price, 0) + '/month.';
+      anchor = 'A community manager costs from $1,000,000 a month. Posty from $' + fmt(base.price, 0) + '/month.';
     }
     $('#pricePerDay').innerHTML = perTxt;
     $('#priceAnchor').textContent = anchor;
+    // (v390) Full "for you" detail of all 3 plans: tap the card and it
+    // expands in place (no leaving the page, no scroll loss). Each plan
+    // has its own button: it stores the choice (posta_chosen_plan, the
+    // signup bridge) and opens registration.
+    const wrap = $('#pricePlans');
+    if (wrap && Array.isArray(j.plans) && j.plans.length) {
+      wrap.innerHTML = j.plans.map((p) => `
+        <div class="pc-plan">
+          <div class="pc-plan-h"><b>${esc(p.name)}</b><span>${esc(p.price_label || '')}<small>/mo</small></span></div>
+          <ul>${(p.detail || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+          <button type="button" class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} pc-pick" data-plan-pick="${esc(p.id)}">Start with the ${esc(p.name)} plan</button>
+        </div>`).join('');
+      wrap.querySelectorAll('[data-plan-pick]').forEach((b) => {
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          try { localStorage.setItem('posta_chosen_plan', b.getAttribute('data-plan-pick') || ''); } catch (e) {}
+          try { trk('prueba_plan_pick', { plan: b.getAttribute('data-plan-pick') || '' }); } catch (e) {}
+          openRegTrial();
+        });
+      });
+      card.addEventListener('click', () => {
+        const open = wrap.style.display === 'none';
+        wrap.style.display = open ? 'block' : 'none';
+        const hint = $('#priceMoreHint');
+        if (hint) hint.textContent = open ? 'Tap again to close ▴' : 'Tap the card to see everything each plan does for you ▾';
+        if (open) { try { trk('prueba_plans_detail_open'); } catch (e) {} }
+      });
+    }
     card.style.display = 'block';
   } catch (e) { /* without server prices, the card does not show */ }
 }

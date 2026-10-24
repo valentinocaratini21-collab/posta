@@ -468,6 +468,28 @@ details.int-advanced[open] summary::after{transform:rotate(90deg)}
 .price-card.hot{border-color:var(--cel);box-shadow:0 20px 60px rgba(39,147,200,.18)}
 .price-card.hot .tag{background:var(--yl);color:#0A1E33}
 
+/* (v401) Detalle «por vos»: tocar la tarjeta de un plan (sin tocar su
+   botón) despliega todo lo que el plan hace por el cliente, en el lugar. */
+.price-card{cursor:pointer}
+.pm-chev{display:inline-block;transition:transform .18s ease}
+.price-card.open .pm-chev,.plan-mini.open .pm-chev,.pz-exp-row.open .pm-chev{transform:rotate(180deg)}
+.plan-more{display:block;margin:0 auto 14px;background:none;border:0;color:var(--cel);font:inherit;font-size:13px;font-weight:800;cursor:pointer;padding:6px 4px}
+.plan-detail{border-top:1px solid var(--line);margin:2px 0 16px;padding-top:16px}
+.plan-detail[hidden]{display:none}
+.plan-detail .pd-title{font-weight:800;font-size:14.5px;color:var(--txt);margin-bottom:10px}
+.price-card .pd-list{margin:0 0 16px}
+.plan-mini{cursor:pointer}
+.pm-more{display:block;margin:10px auto 0;background:none;border:0;color:var(--cel);font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;padding:6px 4px}
+.pm-detail{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;text-align:left}
+.pm-detail[hidden]{display:none}
+.pm-detail-title{font-weight:800;font-size:13px;margin-bottom:8px}
+.pm-detail .btn{margin-top:10px}
+.pz-exp-more{display:block;margin:6px auto 0;background:none;border:0;color:var(--cel);font:inherit;font-size:12px;font-weight:800;cursor:pointer;padding:4px}
+.pz-exp-detail{text-align:left;border:1.5px solid var(--line);border-radius:14px;padding:14px;margin-top:8px}
+.pz-exp-detail[hidden]{display:none}
+.pz-exp-detail ul{list-style:none;margin:0 0 12px;padding:0;color:var(--mut);font-size:12.5px;line-height:1.9}
+.pz-exp-detail ul li::before{content:"✓ ";color:var(--cel);font-weight:800}
+
 /* FAQ */
 .faq details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 24px;margin-bottom:12px;box-shadow:var(--shadow);transition:box-shadow .15s}
 .faq details:hover{box-shadow:var(--shadow-lg)}

@@ -9,6 +9,90 @@
 // con `monthlyCapUsd` en costs.js (calculado desde price × 0.05) + límites diarios `ai`.
 // ✅ PRECIOS UY (escalera de familia Bambooty, 2026-10-24): UYU 4.990 / 7.490 / 9.990 — espejo $U 25 × USD con cierre en 90. (Anteriores, 2026-10-22: 2.490 / 4.990 / 7.990.)
 
+// (v390) DETALLE «POR VOS» de cada plan: lo que el plan hace POR el cliente,
+// en tareas y resultados concretos — es el texto que se despliega al tocar
+// la tarjeta de un plan sin tocar «suscribirte» (homes ES/EN, /prueba,
+// paywall y Mi plan). REGLA DE VERDAD: cada línea sale de las `features`
+// reales del plan o de sus campos (postsPerWeek/reelsPerWeek/storiesPerWeek/
+// carouselsPerWeek); nada que el plan no incluya. Si cambia una feature,
+// se actualiza su línea acá.
+const DETAIL_ES_COMUN = {
+  semana: 'Te armo la semana completa: 7 posteos con tus fotos, tus colores y tu producto exacto — nada de plantillas genéricas.',
+  carrusel: 'Cuando una idea lo pide, te la convierto en carrusel (hasta 2 por semana).',
+  captions: 'Te escribo cada pie de foto en tu tono, con su intención de venta y sus hashtags.',
+  publicacion: 'Publico todo solo, en el mejor horario — y te aviso 30 minutos antes por si querés frenar algo.',
+  control: 'Vos solo mirás: pausás lo que no te guste en un toque o me pedís el cambio por chat, como a tu CM de siempre.',
+};
+const DETAIL_ES = {
+  esencial: [
+    DETAIL_ES_COMUN.semana,
+    'Te produzco 1 reel por semana, con el guión pensado para tu negocio.',
+    DETAIL_ES_COMUN.carrusel,
+    DETAIL_ES_COMUN.captions,
+    DETAIL_ES_COMUN.publicacion,
+    'Analizo tu cuenta semana a semana y ajusto la que viene con lo que funcionó.',
+    DETAIL_ES_COMUN.control,
+  ],
+  pro: [
+    DETAIL_ES_COMUN.semana,
+    'Te produzco 3 reels por semana y 3 historias por semana: tu negocio está presente todos los días.',
+    DETAIL_ES_COMUN.carrusel,
+    DETAIL_ES_COMUN.captions,
+    DETAIL_ES_COMUN.publicacion,
+    'Te hago la radiografía completa de tu competencia y armo tu estrategia para diferenciarte.',
+    'Te gestiono la pauta de los posteos que mejor rinden (fee del 10% sobre lo pautado).',
+    'Cada semana te llega tu reporte de resultados: qué funcionó y qué sigue.',
+    DETAIL_ES_COMUN.control,
+  ],
+  total: [
+    DETAIL_ES_COMUN.semana,
+    'Te produzco 5 reels por semana e historias todos los días.',
+    DETAIL_ES_COMUN.carrusel,
+    DETAIL_ES_COMUN.captions,
+    DETAIL_ES_COMUN.publicacion,
+    'Te hago la radiografía completa de tu competencia y armo tu estrategia para diferenciarte.',
+    'Te gestiono la pauta de los posteos que mejor rinden (fee del 10% sobre lo pautado).',
+    'Cada semana te llega tu reporte de resultados: qué funcionó y qué sigue.',
+    'Te atiendo los mensajes y comentarios de Instagram las 24 horas: preparo cada respuesta al instante y vos la aprobás con un toque antes de que salga — nada sale sin tu OK.',
+    'Respondo con tus precios y servicios reales, no con frases genéricas.',
+    'Te agendo los turnos y reservas, y los confirmo.',
+    'Hago seguimiento a quien preguntó y no cerró, y cierro la venta con link de pago o seña.',
+    'Te gestiono las reseñas de Google: cada respuesta queda lista para tu OK.',
+    DETAIL_ES_COMUN.control,
+  ],
+};
+// EN mirrors PLANS_US features exactly (the US ladder's own sold truth).
+const DETAIL_EN = {
+  esencial: [
+    'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
+    'I produce 1 reel per week, scripted for your business.',
+    'When an idea calls for it, I turn it into a carousel (up to 2 per week).',
+    'I write every caption in your voice, with its selling angle and its hashtags.',
+    'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
+    'I analyze your account week by week and tune the next week with what worked.',
+    'You just keep an eye on things: pause anything in one tap, or ask me for the change in the chat.',
+  ],
+  pro: [
+    'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
+    'I produce 3 reels per week and 3 stories per week: your business shows up every day.',
+    'When an idea calls for it, I turn it into a carousel (up to 2 per week).',
+    'I write every caption in your voice, with its selling angle and its hashtags.',
+    'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
+    'I give you a full breakdown of your competition, so you know exactly where you stand.',
+    'You just keep an eye on things: pause anything in one tap, or ask me for the change in the chat.',
+  ],
+  total: [
+    'I build your whole week: 7 posts with your photos, your colors and your exact product — no cookie-cutter templates.',
+    'I produce 3 reels per week and stories every day.',
+    'When an idea calls for it, I turn it into a carousel (up to 2 per week).',
+    'I write every caption in your voice, with its selling angle and its hashtags.',
+    'I post everything on its own, at the best time — and I give you a heads-up 30 minutes before, in case you want to pause anything.',
+    'I give you a full breakdown of your competition, so you know exactly where you stand.',
+    'I answer your comments and messages: I prepare every reply, and you approve each one before it goes out.',
+    'You just keep an eye on things: pause anything in one tap, or ask me for the change in the chat.',
+  ],
+};
+
 // Límites diarios de IA por plan. El cap mensual (5%) es el techo duro;
 // estos límites son el ritmo para que un usuario normal nunca lo note.
 const AI_LIMITS = {
@@ -32,6 +116,7 @@ const PLANS_AR = {
     reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
+    detail: DETAIL_ES.esencial,
     ai: AI_LIMITS.esencial,
     features: [
       '7 posteos por semana, automáticos',
@@ -52,6 +137,7 @@ const PLANS_AR = {
     reelsPerWeek: 3,
     storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
+    detail: DETAIL_ES.pro,
     ai: AI_LIMITS.pro,
     features: [
       '7 posteos por semana, automáticos',
@@ -77,6 +163,7 @@ const PLANS_AR = {
     reelsPerWeek: 5,
     storiesPerWeek: 7,
     tagline: 'Tu negocio atendido y vendiendo, con tu OK en un toque',
+    detail: DETAIL_ES.total,
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
@@ -112,6 +199,7 @@ const PLANS_UY = {
     reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'Para estar presente toda la semana',
+    detail: DETAIL_ES.esencial,
     ai: AI_LIMITS.esencial,
     features: [
       '7 posteos por semana, automáticos',
@@ -132,6 +220,7 @@ const PLANS_UY = {
     reelsPerWeek: 3,
     storiesPerWeek: 3,
     tagline: 'Para crecer de verdad',
+    detail: DETAIL_ES.pro,
     ai: AI_LIMITS.pro,
     features: [
       '7 posteos por semana, automáticos',
@@ -157,6 +246,7 @@ const PLANS_UY = {
     reelsPerWeek: 5,
     storiesPerWeek: 7,
     tagline: 'Tu negocio atendido y vendiendo, con tu OK en un toque',
+    detail: DETAIL_ES.total,
     ai: AI_LIMITS.total,
     features: [
       '7 posteos por semana, automáticos',
@@ -207,6 +297,7 @@ const PLANS_US = {
     reelsPerWeek: 1,
     storiesPerWeek: 0,
     tagline: 'To be present all week long',
+    detail: DETAIL_EN.esencial,
     ai: AI_LIMITS.esencial,
     features: [
       '7 posts per week, automatic',
@@ -227,6 +318,7 @@ const PLANS_US = {
     reelsPerWeek: 3,
     storiesPerWeek: 3,
     tagline: 'To actually grow',
+    detail: DETAIL_EN.pro,
     ai: AI_LIMITS.pro,
     features: [
       '7 posts per week, automatic',
@@ -249,6 +341,7 @@ const PLANS_US = {
     reelsPerWeek: 3,
     storiesPerWeek: 7,
     tagline: 'Everything, handled for you',
+    detail: DETAIL_EN.total,
     ai: AI_LIMITS.total,
     features: [
       '7 posts per week, automatic',

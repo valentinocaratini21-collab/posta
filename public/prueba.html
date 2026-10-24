@@ -627,6 +627,18 @@ html{scroll-behavior:smooth}
 .price-card .pc-founder{font-size:13.5px;color:#47617A;margin:10px 0 0;line-height:1.55}
 .price-card .pc-founder b{color:#0A1E33}
 .price-card .pc-trust{font-size:13.5px;color:#47617A;margin:12px 0 0;line-height:1.7;border-top:1px solid #E2EDF5;padding-top:12px}
+/* (v390) La tarjeta de precio se toca y despliega el detalle «por vos» de los 3 planes, en el lugar */
+.price-card{cursor:pointer}
+.price-card .pc-more-hint{font-size:13.5px;font-weight:800;color:var(--cel);margin:12px 0 0}
+.price-card .pc-plans{text-align:left;margin-top:6px}
+.price-card .pc-plan{border-top:1px solid #E2EDF5;padding:14px 2px 4px}
+.price-card .pc-plan-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.price-card .pc-plan-h b{font-size:16px;color:#0A1E33}
+.price-card .pc-plan-h span{font-weight:800;color:#0A1E33;white-space:nowrap}
+.price-card .pc-plan-h span small{font-weight:600;color:#47617A}
+.price-card .pc-plan ul{list-style:none;margin:10px 0 12px;padding:0;color:#47617A;font-size:13.5px;line-height:1.75}
+.price-card .pc-plan ul li::before{content:"✓ ";color:var(--cel);font-weight:800}
+.price-card .pc-pick{width:100%;margin:0 0 8px}
 /* (v323 · pieza 20) Módulo de fundador: tarjeta clara, foto ENTERA en su
    aspecto natural (jamás recortada), protagonista. */
 .founder-card{background:#F7FCFE;border:1.5px solid #E2EDF5;border-radius:20px;padding:22px;margin:24px auto 4px;max-width:560px;text-align:left}
@@ -1189,6 +1201,8 @@ body.sfb-on{padding-bottom:88px}
         <p class="pc-anchor" id="priceAnchor"></p>
         <p class="pc-founder">⭐ <b>Los Primeros 200:</b> tu precio de alta queda fijo por 12 meses: el precio con el que entraste es el que pagás durante tu primer año, aunque los planes suban.</p>
         <p class="pc-trust">✓ Sin permanencia<br>✓ Cancelás desde tu panel cuando quieras<br>✓ El comprobante de pago te llega a tu email</p>
+        <p class="pc-more-hint" id="priceMoreHint">Tocá la tarjeta y mirá todo lo que hace cada plan por vos ▾</p>
+        <div class="pc-plans" id="pricePlans" style="display:none"></div>
       </div>
       <!-- (v323 · pieza 7) Reel de muestra con compuerta: solo a pedido -->
       <div id="reelRow" style="display:none;text-align:center;margin:18px auto 4px;max-width:440px">
@@ -3448,6 +3462,34 @@ async function renderPriceCard() {
     }
     $('#pricePerDay').innerHTML = perTxt;
     $('#priceAnchor').textContent = anchor;
+    // (v390) Detalle «por vos» de los 3 planes: la tarjeta se toca y se
+    // despliega en el lugar (sin salir de la página ni perder el scroll).
+    // Cada plan trae su botón: elige el plan (queda guardado como
+    // posta_chosen_plan, el puente al alta) y abre el registro.
+    const wrap = $('#pricePlans');
+    if (wrap && Array.isArray(j.plans) && j.plans.length) {
+      wrap.innerHTML = j.plans.map((p) => `
+        <div class="pc-plan">
+          <div class="pc-plan-h"><b>Plan ${esc(p.name)}</b><span>${esc(p.price_label || '')}<small>/mes</small></span></div>
+          <ul>${(p.detail || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+          <button type="button" class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} pc-pick" data-plan-pick="${esc(p.id)}">Empezar con el plan ${esc(p.name)}</button>
+        </div>`).join('');
+      wrap.querySelectorAll('[data-plan-pick]').forEach((b) => {
+        b.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          try { localStorage.setItem('posta_chosen_plan', b.getAttribute('data-plan-pick') || ''); } catch (e) {}
+          try { trk('prueba_plan_pick', { plan: b.getAttribute('data-plan-pick') || '' }); } catch (e) {}
+          openRegTrial();
+        });
+      });
+      card.addEventListener('click', () => {
+        const open = wrap.style.display === 'none';
+        wrap.style.display = open ? 'block' : 'none';
+        const hint = $('#priceMoreHint');
+        if (hint) hint.textContent = open ? 'Tocá de nuevo para cerrar ▴' : 'Tocá la tarjeta y mirá todo lo que hace cada plan por vos ▾';
+        if (open) { try { trk('prueba_plans_detail_open'); } catch (e) {} }
+      });
+    }
     card.style.display = 'block';
   } catch (e) { /* sin precios del servidor, la tarjeta no sale */ }
 }

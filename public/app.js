@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v400'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v401'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -462,18 +462,60 @@ function pzPerDayHTML(p) {
   const sym = p.currency === 'UYU' ? '$U ' : '$';
   return `<div class="pz-perday">≈ ${sym}${per.toLocaleString('es-AR')} por día</div>`;
 }
+function planDetailHTML(p) {
+  const lines = (p && p.detail) || [];
+  if (!lines.length) return '';
+  return `<div class="plan-detail" hidden>
+      <div class="pd-title">Todo lo que el plan ${esc(p.name)} hace por vos</div>
+      <ul class="pd-list">${lines.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+      <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
+    </div>`;
+}
 function planCardsHTML(plans) {
   return (plans || []).map(p => `
-    <div class="price-card${p.highlighted ? ' hot' : ''}">
+    <div class="price-card${p.highlighted ? ' hot' : ''}" data-plan-card="${esc(p.id)}">
       ${p.highlighted ? '<div class="tag">RECOMENDADO</div>' : ''}
       <h3>Plan ${esc(p.name)}</h3>
       <div class="price">${esc(p.price_label)}<small>/mes</small></div>
       ${pzPerDayHTML(p)}
       <p style="color:var(--mut);font-size:12.5px;margin-bottom:18px">${esc(p.tagline)}</p>
       <ul>${(p.features || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+      ${planDetailHTML(p)}
+      ${(p.detail && p.detail.length) ? '<button type="button" class="plan-more" data-plan-more aria-expanded="false">Ver todo lo que hace por vos <span class="pm-chev">▾</span></button>' : ''}
       <a class="btn ${p.highlighted ? 'btn-primary' : 'btn-soft'} btn-block" href="/prueba">Probar gratis</a>
     </div>`).join('');
 }
+// (v401) Toque en la tarjeta de un plan (sin tocar su botón): despliega el
+// detalle «por vos» EN EL LUGAR — sin navegar ni perder el scroll. El toque
+// en un enlace conserva su comportamiento (Probar gratis sigue a un toque).
+// Acordeón dentro de la fila: al abrir una tarjeta se cierran las demás.
+// Delegado en document porque la landing se re-renderiza (toggle de país).
+function togglePlanDetail(card) {
+  if (!card) return;
+  const det = card.querySelector('.plan-detail');
+  const btn = card.querySelector('[data-plan-more]');
+  if (!det) return;
+  const open = det.hidden;
+  const row = card.closest('.plans-row') || card.parentElement;
+  if (row) row.querySelectorAll('[data-plan-card]').forEach(c => {
+    if (c === card) return;
+    const d = c.querySelector('.plan-detail');
+    const b = c.querySelector('[data-plan-more]');
+    if (d && !d.hidden) { d.hidden = true; c.classList.remove('open'); if (b) { b.setAttribute('aria-expanded', 'false'); b.firstChild.textContent = 'Ver todo lo que hace por vos '; } }
+  });
+  det.hidden = !open;
+  card.classList.toggle('open', open);
+  if (btn) { btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.firstChild.textContent = open ? 'Ver menos ' : 'Ver todo lo que hace por vos '; }
+  if (open) { try { track('plan_detail_open', { plan: card.getAttribute('data-plan-card') || '' }); } catch (e) {} }
+}
+document.addEventListener('click', function (e) {
+  const t = e.target;
+  if (!t || !t.closest) return;
+  const card = t.closest('[data-plan-card]');
+  if (!card) return;
+  if (t.closest('a')) return; // los enlaces (Probar gratis) navegan como siempre
+  togglePlanDetail(card);
+});
 
 function anchorHTML(anchor) {
   if (!anchor) return '';
@@ -12194,10 +12236,17 @@ async function showExpiredModal() {
     return parts.length ? `<small class="pz-exp-mix">${parts.join(' + ')} por semana</small>` : '';
   };
   const rows = plans.map(p => `
-    <button class="pz-exp-plan" data-exp-plan="${p.id}">
-      <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
-      <span class="pz-exp-go">Elegir \u2192</span>
-    </button>`).join('');
+    <div class="pz-exp-row">
+      <button class="pz-exp-plan" data-exp-plan="${p.id}">
+        <span>${p.highlighted ? '<span class="pz-exp-tag">EL M\u00c1S ELEGIDO</span>' : ''}<b>${esc(p.name)}</b><small>${esc(p.price_label)}/mes \u00b7 ${perDay(p)}</small>${expMix(p)}</span>
+        <span class="pz-exp-go">Elegir \u2192</span>
+      </button>
+      ${(p.detail && p.detail.length) ? `<button type="button" class="pz-exp-more" data-exp-more="${p.id}" aria-expanded="false">Ver todo lo que hace por vos <span class="pm-chev">\u25be</span></button>
+      <div class="pz-exp-detail" hidden>
+        <ul>${p.detail.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+        <button class="btn btn-primary btn-block" data-exp-plan="${p.id}">Elegir el plan ${esc(p.name)}</button>
+      </div>` : ''}
+    </div>`).join('');
   const ov = document.createElement('div');
   ov.id = 'pzExpOverlay';
   ov.className = 'pz-exp-overlay';
@@ -12219,6 +12268,18 @@ async function showExpiredModal() {
   const goBtn = ov.querySelector('#pzExpGo');
   if (goBtn) goBtn.onclick = () => goPlan('');
   ov.querySelectorAll('[data-exp-plan]').forEach(b => b.onclick = () => goPlan(b.dataset.expPlan));
+  // (v401) Detalle «por vos» dentro del paywall: se despliega en el lugar,
+  // sin salir del modal; el botón Elegir del detalle va al mismo flujo.
+  ov.querySelectorAll('[data-exp-more]').forEach(b => b.onclick = () => {
+    const row = b.closest('.pz-exp-row');
+    const det = row && row.querySelector('.pz-exp-detail');
+    if (!det) return;
+    const open = det.hidden;
+    det.hidden = !open;
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    b.firstChild.textContent = open ? 'Ver menos ' : 'Ver todo lo que hace por vos ';
+    row.classList.toggle('open', open);
+  });
 }
 
 /* ---------- Banner persistente: trial vencido (tab Schedule / Mi semana) ---------- */

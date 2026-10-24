@@ -1554,6 +1554,12 @@ function bindSettings() {
             ${pmMixHTML(p)}
             <ul class="pm-feats">${feats.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
             <button class="btn ${p.id === cur && hasActive ? 'btn-ghost' : 'btn-primary'} btn-sm btn-block" data-sub="${p.id}" ${p.id === cur && hasActive ? 'disabled' : ''}>${p.id === cur && hasActive ? 'Plan actual' : 'Suscribirse'}</button>
+            ${(p.detail && p.detail.length) ? `<button type="button" class="pm-more" data-plan-more aria-expanded="false">${isUS ? 'See everything it does for you' : 'Ver todo lo que hace por vos'} <span class="pm-chev">▾</span></button>
+            <div class="pm-detail" hidden>
+              <div class="pm-detail-title">${isUS ? `Everything the ${esc(p.name)} plan does for you` : `Todo lo que el plan ${esc(p.name)} hace por vos`}</div>
+              <ul class="pm-feats">${p.detail.map(f => `<li><span class="tick">✓</span><span>${esc(f)}</span></li>`).join('')}</ul>
+              ${(p.id === cur && hasActive) ? '' : `<button class="btn btn-primary btn-sm btn-block" data-sub="${p.id}">${isUS ? 'Subscribe' : 'Suscribirse'}</button>`}
+            </div>` : ''}
           </div>`;
       };
       const bindSub = () => {
@@ -1634,6 +1640,27 @@ function bindSettings() {
         </div>
         <div id="planMsg" style="margin-top:10px"></div>`;
         bindSub();
+        // (v401) Tocar la tarjeta (sin tocar Suscribirse) despliega el detalle
+        // «por vos» en el lugar; el botón del detalle usa el mismo data-sub.
+        const pl = $('#planList');
+        if (pl) pl.addEventListener('click', (e) => {
+          if (e.target.closest('[data-sub]')) return;
+          const card = e.target.closest('.plan-mini');
+          if (!card) return;
+          const det = card.querySelector('.pm-detail');
+          if (!det) return;
+          const more = card.querySelector('[data-plan-more]');
+          const open = det.hidden;
+          pl.querySelectorAll('.plan-mini').forEach(c => {
+            if (c === card) return;
+            const d = c.querySelector('.pm-detail');
+            const m = c.querySelector('[data-plan-more]');
+            if (d && !d.hidden) { d.hidden = true; c.classList.remove('open'); if (m) m.setAttribute('aria-expanded', 'false'); }
+          });
+          det.hidden = !open;
+          card.classList.toggle('open', open);
+          if (more) more.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
         const bsp = $('#btnShowPlans');
         if (bsp) bsp.onclick = () => {
           const pa = $('#planAll');
