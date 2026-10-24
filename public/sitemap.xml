@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://postycommunitymanager.com/</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/en/</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/prueba</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/prueba"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/prueba"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/prueba"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/en/prueba</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/prueba"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/prueba"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/prueba"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/fundadores</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/fundadores"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/founders"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/fundadores"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/en/founders</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/fundadores"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/en/founders"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/fundadores"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/privacidad.html</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/privacidad.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/privacidad.html"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/privacy.html</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/privacidad.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/privacy.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/privacidad.html"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/terminos.html</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/terminos.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/terminos.html"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/terms.html</loc>
+    <xhtml:link rel="alternate" hreflang="es" href="https://postycommunitymanager.com/terminos.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://postycommunitymanager.com/terms.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://postycommunitymanager.com/terminos.html"/>
+  </url>
+  <url>
+    <loc>https://postycommunitymanager.com/auditoria</loc>
+  </url>
+</urlset>

@@ -670,6 +670,42 @@ html{scroll-behavior:smooth}
 body.sfb-on{padding-bottom:88px}
 }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://postycommunitymanager.com/prueba#app",
+  "name": "Posty",
+  "url": "https://postycommunitymanager.com/prueba",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "inLanguage": "es",
+  "description": "Posty es tu community manager completo: publica, responde comentarios y mensajes, cuida tus reseñas y potencia tu contenido. Probalo 3 días gratis, sin tarjeta.",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Esencial",
+      "price": "199999",
+      "priceCurrency": "ARS",
+      "url": "https://postycommunitymanager.com/prueba"
+    },
+    {
+      "@type": "Offer",
+      "name": "Pro",
+      "price": "299900",
+      "priceCurrency": "ARS",
+      "url": "https://postycommunitymanager.com/prueba"
+    },
+    {
+      "@type": "Offer",
+      "name": "Total",
+      "price": "399900",
+      "priceCurrency": "ARS",
+      "url": "https://postycommunitymanager.com/prueba"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 <div class="nav"><div class="wrap">
@@ -2470,7 +2506,7 @@ function buildExecPlan(a) {
   // Fase sin hallazgos: solo pasos del propio proceso de Posty (siempre
   // sostenibles: la semana del visitante existe y el loop semanal es real).
   if (!phases[0].length) phases[0].push({ step: 'Tu semana sale completa y pareja, armada y programada por mí.', fx: 'La constancia queda instalada desde la primera semana.' });
-  if (!phases[1].length) phases[1].push({ step: 'Reviso tu vidriera — nombre, bio y destacadas — con tu cuenta ya andando.', fx: 'Tu perfil queda vendiendo solo, las 24 horas.' });
+  if (!phases[1].length) phases[1].push({ step: 'Reviso tu vidriera — nombre, bio y destacadas — con tu cuenta ya andando.', fx: 'Tu perfil queda trabajando solo, las 24 horas.' });
   if (phases[2].length < 3) phases[2].push({ step: 'Cada semana te re-mido y ajusto la semana con lo nuevo que aprendo de tu cuenta.', fx: 'Lo que funciona se repite; lo que no, no vuelve.' });
   return phases;
 }

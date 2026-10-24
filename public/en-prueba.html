@@ -668,6 +668,42 @@ html{scroll-behavior:smooth}
 body.sfb-on{padding-bottom:88px}
 }
 </style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://postycommunitymanager.com/en/prueba#app",
+  "name": "Posty",
+  "url": "https://postycommunitymanager.com/en/prueba",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "inLanguage": "en",
+  "description": "Posty is your complete community manager: it posts, replies to comments and messages, looks after your reviews and boosts your content. Try it free for 3 days, no card required.",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Essential",
+      "price": "199.99",
+      "priceCurrency": "USD",
+      "url": "https://postycommunitymanager.com/en/prueba"
+    },
+    {
+      "@type": "Offer",
+      "name": "Pro",
+      "price": "299.99",
+      "priceCurrency": "USD",
+      "url": "https://postycommunitymanager.com/en/prueba"
+    },
+    {
+      "@type": "Offer",
+      "name": "Total",
+      "price": "399.99",
+      "priceCurrency": "USD",
+      "url": "https://postycommunitymanager.com/en/prueba"
+    }
+  ]
+}
+</script>
 </head>
 <body>
 <div class="nav"><div class="wrap">
@@ -2467,7 +2503,7 @@ function buildExecPlan(a) {
   // Fase sin hallazgos: solo pasos del propio proceso de Posty (siempre
   // sostenibles: la semana del visitante existe y el loop semanal es real).
   if (!phases[0].length) phases[0].push({ step: 'Your week goes out complete and even, built and scheduled by me.', fx: 'Consistency is installed from the first week.' });
-  if (!phases[1].length) phases[1].push({ step: 'I review your storefront — name, bio and highlights — with your account already running.', fx: 'Your profile keeps selling on its own, 24 hours a day.' });
+  if (!phases[1].length) phases[1].push({ step: 'I review your storefront — name, bio and highlights — with your account already running.', fx: 'Your profile keeps working on its own, 24 hours a day.' });
   if (phases[2].length < 3) phases[2].push({ step: 'Every week I re-measure you and adjust the week with what I newly learn from your account.', fx: 'What works gets repeated; what does not, never comes back.' });
   return phases;
 }

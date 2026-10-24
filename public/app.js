@@ -1521,7 +1521,7 @@ function lpAnalisisHTML() {
       <div class="lp-letter-plan">
         <p class="lp-lp-t">🚀 Mi plan para mejorar todo esto</p>
         <p><b>① Esta semana:</b> tu semana completa, sin un solo hueco — cada posteo programado en tu franja.</p>
-        <p><b>② La que viene:</b> tu vidriera queda vendiendo sola — nombre buscable, bio que vende y destacadas completas.</p>
+        <p><b>② La que viene:</b> tu vidriera queda trabajando sola — nombre buscable, bio que vende y destacadas completas.</p>
         <p><b>③ De acá en más:</b> te re-mido cada semana y ajusto: lo que funciona, se repite.</p>
       </div>
       <p class="lp-letter-banner">Tenés el negocio. La constancia la pongo yo.</p>
@@ -1901,6 +1901,13 @@ function landingView(cfg) {
       <div class="step"><div class="num">1</div><h3>Me contás tu negocio una vez</h3><p>Qué vendés, tu estilo, tus fotos. Te lleva 2 minutos y no te pido más nada.</p></div>
       <div class="step"><div class="num">2</div><h3>Yo creo todo por vos</h3><p>Pienso las ideas, diseño con tus fotos y tu marca, y escribo los captions y hashtags que venden.</p></div>
       <div class="step"><div class="num">3</div><h3>Se publica solo</h3><p>Tu semana sale en los mejores horarios sin que toques nada. ¿Algo no te cierra? Lo frenás en un toque.</p></div>
+    </div>
+    <h2>Y trabajo con tres reglas, siempre</h2>
+    <p class="lede">Son mi forma de trabajar, con cada negocio.</p>
+    <div class="steps">
+      <div class="step"><div class="num">🔍</div><h3>Entiendo tu rubro</h3><p>Leo tu Instagram y tu web antes de crear: tus productos reales, tus precios, tus colores y tu forma de hablar. Nada genérico — si una pieza podría salir igual en otra cuenta, no sale.</p></div>
+      <div class="step"><div class="num">🔌</div><h3>Me conecto a lo que ya usás</h3><p>Tu Instagram se conecta con el login oficial de Meta, sin contraseñas. Y si vendés por Tiendanube, lo conectás en un toque: lo que más vendés manda, y lo que no tiene stock no se publica.</p></div>
+      <div class="step"><div class="num">💬</div><h3>Pregunto solo lo que falta</h3><p>Una pregunta por semana como máximo, con opciones de un toque. Si no estoy seguro de tu rubro, te pregunto antes de generar — nunca adivino. Y tu respuesta queda guardada: no te la vuelvo a hacer.</p></div>
     </div>
     <p class="lp-steptotal">⏱️ Tu tiempo total: <b>2 minutos</b> para contarnos de tu negocio. Publicar: 0 minutos — sale solo.</p>
     <div style="text-align:center;margin-top:28px"><a class="btn btn-primary" href="/prueba">Empezar mi prueba gratis</a></div>
