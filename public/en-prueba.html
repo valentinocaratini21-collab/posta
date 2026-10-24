@@ -336,7 +336,6 @@ html{scroll-behavior:smooth}
 .logo-posty{display:inline-flex;align-items:center;gap:9px;font-weight:900;font-size:22px;color:var(--navy);text-decoration:none}
 .logo-posty .pdot{color:#FEC14D}
 .logo-posty img{width:34px;height:34px;border-radius:50%;box-shadow:0 3px 10px rgba(39,147,200,.35)}
-#formCard{scroll-margin-top:76px}
 .hero .cta-row{margin-top:22px}
 .work3{margin:44px 0 6px}
 .work3 h3{text-align:center;font-size:22px;font-weight:800;margin-bottom:6px}
@@ -673,7 +672,11 @@ html{scroll-behavior:smooth}
    "Cómo sigue" bajo el formulario y barra fija móvil al formulario. */
 .form-micro{text-align:center;font-size:12.5px;color:var(--mut);margin:10px 0 0;line-height:1.5}
 .next3{margin:24px 0 42px}
-#formCard{scroll-margin-top:14px}
+/* Family fix 2026-10-24 (anchors under the sticky header): the nav measures 68px in both
+   viewports and the form heading lands 13.8px above the card edge, so the single margin is
+   68+13.8+air = 90px. (This is THE #formCard declaration: the earlier 76px/14px ones were
+   removed because the last one in the cascade was the one biting the heading.) */
+#formCard{scroll-margin-top:90px}
 .sticky-form-bar{display:none}
 @media(max-width:640px){
 .sticky-form-bar{display:flex;align-items:center;justify-content:center;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:60;background:var(--yl);color:var(--navy);border:none;font-family:inherit;font-weight:800;font-size:16px;padding:15px 18px;border-radius:999px;box-shadow:0 12px 30px rgba(10,30,51,.28);cursor:pointer;transition:opacity .25s ease,transform .25s ease}

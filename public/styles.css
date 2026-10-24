@@ -43,6 +43,14 @@ button{font-family:inherit}
 .nav-links{display:flex;gap:28px;align-items:center;font-size:13px;color:var(--mut)}
 .nav-links a{font-weight:600;transition:color .15s}
 .nav-links a:hover{color:var(--txt)}
+/* Anclas bajo header sticky (fix de familia 2026-10-24): cada destino de ancla de la landing
+   aterriza con aire bajo la nav (alto medido: 73px desktop / 65px mobile, +17px de aire).
+   Va con scroll-margin en los destinos y NO con scroll-padding en html porque esta misma
+   CSS sirve a la app: el padding global correría los scrollIntoView internos del producto. */
+#como-funciona,#capacidades,#analisis,#ejemplos,#planes,#faq{scroll-margin-top:90px}
+@media(max-width:760px){
+  #como-funciona,#capacidades,#analisis,#ejemplos,#planes,#faq{scroll-margin-top:82px}
+}
 
 /* ---------- buttons ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;font-weight:700;font-size:14px;border-radius:999px;padding:12px 26px;transition:transform .14s ease,box-shadow .14s ease,background .14s ease,border-color .14s ease,filter .14s ease;font-family:inherit;letter-spacing:.01em}
