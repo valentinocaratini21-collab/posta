@@ -3272,3 +3272,31 @@ button.scf-cell-free.add{background:none;border:none;font-family:inherit;font-si
 .hf-fv-comments{font-size:14px;color:#8e8e8e;padding:4px 12px 0}
 .hf-fv-date{font-size:11px;color:#8e8e8e;padding:6px 12px 0;letter-spacing:.02em}
 .hf-fv-close{display:block;margin:14px auto 0;background:#fff;border:0;border-radius:999px;padding:10px 22px;font-weight:800;font-size:14px;cursor:pointer;color:#0A1E33}
+
+/* ===== (Tanda feed 6C) Portada de reel · arrastre · comentarios reales ===== */
+/* Ítem 6: la tile con portada es la imagen con su encuadre guardado */
+.hf-tile img[data-hf-cover]{object-fit:cover}
+/* Ítem 6: fila de portada en el detalle + selector */
+.hf-cover-row{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 0}
+.hf-cover-btn{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:8px 13px;font-size:13px;font-weight:700;cursor:pointer;color:var(--txt)}
+.hf-cover-back{position:fixed;inset:0;z-index:1400;background:rgba(10,30,51,.55);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:18px 12px}
+.hf-cover-card{background:#fff;border-radius:18px;width:min(94vw,360px);box-shadow:0 22px 60px rgba(10,30,51,.4);padding:16px 16px 14px}
+.hf-cover-title{font-weight:800;font-size:16px;color:var(--txt);margin-bottom:12px}
+.hf-cover-stage{background:#000;border-radius:12px;overflow:hidden;width:min(100%,270px);margin:0 auto;aspect-ratio:3/4}
+.hf-cover-stage video{display:block;width:100%;height:100%;object-fit:cover}
+.hf-cover-seek{width:100%;margin:12px 0 4px;accent-color:#2793C8}
+.hf-cover-lab{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#8e8e8e}
+.hf-cover-poslab{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--txt);margin-top:10px}
+.hf-cover-pos{flex:1;accent-color:#2793C8}
+.hf-cover-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.hf-cover-use{flex:1;background:#2793C8;color:#fff;border:0;border-radius:999px;padding:11px 16px;font-weight:800;font-size:14px;cursor:pointer;min-width:150px}
+.hf-cover-alt{background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;color:var(--txt)}
+.hf-cover-msg{font-size:13px;color:#c0392b;margin-top:8px;min-height:0}
+/* Ítem 9: arrastre de tiles de la semana */
+.hf-tile.hf-dragging{z-index:60;box-shadow:0 16px 38px rgba(10,30,51,.4);cursor:grabbing;position:relative}
+.hf-tile.hf-drag-over{outline:3px solid #FEC14D;outline-offset:-3px}
+/* Ítem 10: lista de comentarios reales en el detalle */
+.hf-cm-list{padding:2px 12px 0}
+.hf-cms{display:flex;flex-direction:column;gap:7px;padding-top:6px}
+.hf-cm{font-size:14px;line-height:1.45;color:var(--txt);overflow-wrap:anywhere}
+.hf-cm-at{color:#8e8e8e;font-size:12.5px;white-space:nowrap}

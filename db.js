@@ -1165,6 +1165,8 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN user_stopped INTEGER DEFAULT 0`); } 
 try { db.exec(`ALTER TABLE users ADD COLUMN publishing_stopped INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN caption_b TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN cover_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (v332) portada elegida/graduada por el director de feed para posteos de video: el video no se toca, la portada es la superficie que toca la grilla
+try { db.exec(`ALTER TABLE posts ADD COLUMN cover_origin TEXT DEFAULT ''`); } catch (e) { /* ya existe */ } // (Tanda feed 6C · ítem 6) origen de la portada: 'frame@<segundos>' cuando la eligió el dueño desde el selector (captura de SU video); el director de feed no pisa una portada con este origen
+try { db.exec(`ALTER TABLE posts ADD COLUMN cover_pos INTEGER DEFAULT 50`); } catch (e) { /* ya existe */ } // (Tanda feed 6C · ítem 6) encuadre vertical de la portada en la grilla: object-position vertical 0–100 (0=arriba, 50=centro, 100=abajo)
 try { db.exec(`ALTER TABLE posts ADD COLUMN ab_winner TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 
 // FASE 1 (2026-10-05): una sola escalera de confianza — trust_level 0/1/2.

@@ -56,7 +56,7 @@ const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
 const meliApi = require('./meli'); // MercadoLibre: API pública sin key (Track 4)
 const { analyzeFbPage, extractPageId } = require('./fb-page');
-const { mineComments, buildDnaPatch } = require('./ig-comments');
+const { mineComments, buildDnaPatch, fetchCommentsForMedia } = require('./ig-comments');
 const { analyzeGooglePlaces } = require('./google-places');
 const { renderVideo, ffmpegAvailable } = require('./video');
 const { postyLevel, LEVEL_UP_MSGS } = require('./posty-level'); // 🧠 Niveles de conocimiento de Posty
@@ -7757,6 +7757,179 @@ app.get('/api/posts/:id', requireAuth, (req, res) => {
   res.json({ ok: true, post });
 });
 
+/* ===== (Tanda feed 6C · ítems 6, 9 y 10) =====
+   Ítem 6: portada de reel elegida por el dueño — la captura nace en el
+   cliente (canvas sobre SU video, cero IA) y acá solo se guarda con el
+   MISMO almacenamiento de /api/media (MEDIA_DIR + /media/<name>) y se
+   anota en posts.cover_path/cover_origin/cover_pos (migración en db.js).
+   Ítem 9: intercambio atómico de horarios — el MISMO efecto final que
+   la danza de PATCH de «Mover» (hfSwapPosts), sin estados intermedios:
+   los dos scheduled_at se cruzan en una transacción. El cuerpo trae el
+   destino EXACTO de cada posteo (a_to/b_to + estado destino) porque un
+   borrador de la semana no tiene scheduled_at persistido: su día es la
+   propuesta que el cliente ve (schedPlacements), y «Deshacer» restaura
+   el estado anterior exacto (borrador vuelve a borrador sin fecha).
+   Ítem 10: comentarios reales del posteo publicado — ver el endpoint. */
+function hf6cCoverPos(v, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+function hf6cDropUserCoverFile(post) {
+  try {
+    if (post && String(post.cover_origin || '').indexOf('frame@') === 0 && post.cover_path) {
+      const base = path.basename(String(post.cover_path));
+      if (base && base.indexOf('feedcover-') !== 0) fs.unlinkSync(path.join(MEDIA_DIR, base));
+    }
+  } catch (e) { /* el archivo viejo nunca frena el cambio de portada */ }
+}
+
+app.post('/api/posts/:id/cover', requireAuth, express.raw({ type: 'image/*', limit: '15mb' }), (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (String(post.media_type || '') !== 'video') return res.status(400).json({ error: 'not_video', message: 'La portada a elección es solo para reels.' });
+  if (post.status === 'published' || post.status === 'publishing') return res.status(400).json({ error: 'already_published', message: 'Este reel ya salió: su portada es la de Instagram.' });
+  if (!req.body || !req.body.length) return res.status(400).json({ error: 'Imagen vacía' });
+  const ct = req.get('Content-Type') || '';
+  const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
+  const name = `cover-${post.id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
+  try { fs.writeFileSync(path.join(MEDIA_DIR, name), req.body); } catch (e) { return res.status(500).json({ error: 'No se pudo guardar la portada' }); }
+  hf6cDropUserCoverFile(post);
+  const atN = Number(req.query.at);
+  const at = Number.isFinite(atN) && atN >= 0 ? Math.round(atN * 10) / 10 : 0;
+  const pos = hf6cCoverPos(req.query.pos, (post.cover_pos === null || post.cover_pos === undefined) ? 50 : post.cover_pos);
+  const coverPath = `/media/${name}`;
+  db.prepare('UPDATE posts SET cover_path = ?, cover_origin = ?, cover_pos = ? WHERE id = ?')
+    .run(coverPath, `frame@${at}`, pos, post.id);
+  res.json({ ok: true, cover_path: coverPath, cover_origin: `frame@${at}`, cover_pos: pos });
+});
+
+app.post('/api/posts/:id/cover-pos', requireAuth, express.json(), (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (!post.cover_path) return res.status(400).json({ error: 'no_cover', message: 'Este posteo todavía no tiene portada elegida.' });
+  const pos = hf6cCoverPos((req.body || {}).pos, 50);
+  db.prepare('UPDATE posts SET cover_pos = ? WHERE id = ?').run(pos, post.id);
+  res.json({ ok: true, cover_pos: pos });
+});
+
+app.delete('/api/posts/:id/cover', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, req.session.userId);
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  hf6cDropUserCoverFile(post);
+  db.prepare(`UPDATE posts SET cover_path = '', cover_origin = '', cover_pos = 50 WHERE id = ?`).run(post.id);
+  res.json({ ok: true, cover_path: '', cover_origin: '', cover_pos: 50 });
+});
+
+app.post('/api/posts/swap', requireAuth, express.json(), (req, res) => {
+  const body = req.body || {};
+  const uid = req.session.userId;
+  const aId = Number(body.a), bId = Number(body.b);
+  if (!aId || !bId || aId === bId) return res.status(400).json({ error: 'swap_pair', message: 'El intercambio necesita dos posteos distintos.' });
+  const pa = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(aId, uid);
+  const pb = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(bId, uid);
+  if (!pa || !pb) return res.status(404).json({ error: 'Post no encontrado' });
+  const weekStatus = (s) => s === 'draft' || s === 'scheduled';
+  if (!weekStatus(pa.status) || !weekStatus(pb.status)) {
+    return res.status(400).json({ error: 'swap_status', message: 'Solo se intercambian posteos de la semana que todavía no salieron.' });
+  }
+  const normSide = (to, status) => {
+    if (status === 'draft') return { status: 'draft', at: null };
+    if (status !== 'scheduled') return null;
+    const d = new Date(String(to || ''));
+    if (isNaN(d)) return null;
+    return { status: 'scheduled', at: d.toISOString() };
+  };
+  const na = normSide(body.a_to, String(body.a_status || 'scheduled'));
+  const nb = normSide(body.b_to, String(body.b_status || 'scheduled'));
+  if (!na || !nb) return res.status(400).json({ error: 'swap_when', message: 'El intercambio necesita el día y la hora de destino de cada posteo.' });
+  if (na.status === 'draft' && nb.status === 'draft') return res.status(400).json({ error: 'swap_when', message: 'El intercambio necesita el día y la hora de destino de cada posteo.' });
+  // Un día por posteo del feed (la misma regla de integridad del PATCH):
+  // el destino de cada uno no puede chocar con un TERCERO (entre ellos se
+  // están cruzando los días, eso es el intercambio mismo). Las historias
+  // viven en su carril, como en scheduleDayTaken.
+  try {
+    const tz = userTz(uid);
+    const others = db.prepare(`SELECT id, scheduled_at, media_type FROM posts
+      WHERE user_id = ? AND status IN ('scheduled','published') AND scheduled_at IS NOT NULL AND id != ? AND id != ?`).all(uid, aId, bId);
+    const clash = (side, self) => {
+      if (side.status !== 'scheduled') return false;
+      const k = ymdInTz(side.at, tz);
+      if (!k) return false;
+      const selfStory = self && self.media_type === 'story';
+      return others.some((r) => ((r.media_type === 'story') === selfStory) && ymdInTz(r.scheduled_at, tz) === k);
+    };
+    if (clash(na, pa) || clash(nb, pb)) {
+      return res.status(409).json({ error: 'day_taken', message: 'Ese día ya tiene un posteo. El intercambio no se hizo.' });
+    }
+    if (na.status === 'scheduled' && nb.status === 'scheduled' && ymdInTz(na.at, tz) && ymdInTz(na.at, tz) === ymdInTz(nb.at, tz)) {
+      return res.status(409).json({ error: 'day_taken', message: 'Los dos posteos no pueden quedar el mismo día.' });
+    }
+  } catch (e) { /* ante la duda no se bloquea: la transacción de abajo es la autoridad */ }
+  // Cupo: solo consume quien PASA a programado (misma autoridad que el
+  // PATCH — quotaForWeek contra la semana destino). Entre programados
+  // el conteo no cambia y no se chequea nada.
+  for (const [p, n] of [[pa, na], [pb, nb]]) {
+    if (n.status === 'scheduled' && p.status !== 'scheduled' && p.status !== 'published' && p.status !== 'publishing') {
+      const q = quotaForWeek(uid, p.media_type, mondayKeyOf(String(n.at).slice(0, 10)));
+      if (q && q.left <= 0) {
+        return res.status(403).json({ error: 'plan_limit', plan_limit: true, limit: q.limit, used: q.used, plan_name: q.plan_name, week_key: q.week_key,
+          message: `Llegaste al límite de tu plan ${q.plan_name} (${q.limit} ${quotaUnitName(p.media_type)} por semana). Mejorá tu paquete para seguir posteando esa semana.` });
+      }
+    }
+  }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const upd = db.prepare(`UPDATE posts SET scheduled_at = ?, status = ?, error = '', user_stopped = 0 WHERE id = ?`);
+    upd.run(na.at, na.status, pa.id);
+    upd.run(nb.at, nb.status, pb.id);
+    db.exec('COMMIT');
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    return res.status(500).json({ error: 'No se pudo completar el intercambio' });
+  }
+  // Lint al programar, como en el PATCH: quien quedó programado por el
+  // intercambio pasa el mismo gate de captions.
+  if (na.status === 'scheduled') { try { scheduleLintForPost(uid, pa.id); } catch (e) {} }
+  if (nb.status === 'scheduled') { try { scheduleLintForPost(uid, pb.id); } catch (e) {} }
+  res.json({ ok: true,
+    a: { id: pa.id, scheduled_at: na.at, status: na.status },
+    b: { id: pb.id, scheduled_at: nb.at, status: nb.status } });
+});
+
+/* Ítem 10: comentarios REALES de un posteo publicado, para su detalle.
+   Contrato: SIEMPRE 200 con { ok:true, comments } — comments es la lista
+   [{author, text, at}] (orden de la fuente: la Graph API devuelve los
+   más recientes primero) SOLO si el posteo está published, tiene
+   ig_media_id y credenciales IG en settings, Y el plan de la cuenta
+   cubre Atención (feature 'comentarios' de plan-gate: Total/fundador).
+   En cualquier otro caso — sin plan, borrador, sin fuente, token vencido
+   o IG caído — comments: null y el detalle mantiene solo su línea de
+   conteo vigente, sin sección y sin error visible. Nada se responde
+   desde acá: responder vive en Atención (/api/comments). */
+app.get('/api/posts/:id/comments', requireAuth, async (req, res) => {
+  const uid = req.session.userId;
+  const none = () => res.json({ ok: true, comments: null });
+  let post = null;
+  try { post = db.prepare('SELECT id, status, ig_media_id FROM posts WHERE id = ? AND user_id = ?').get(req.params.id, uid); } catch (e) {}
+  if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+  if (post.status !== 'published') return none();
+  if (!post.ig_media_id) return none();
+  let gate = null;
+  try { gate = planGate(db, uid, 'comentarios'); } catch (e) { gate = null; }
+  if (!gate || !gate.ok) return none();
+  let s = null;
+  try { s = getSettings(uid); } catch (e) {}
+  if (!s || !s.ig_user_id || !s.ig_access_token) return none();
+  try {
+    const list = await fetchCommentsForMedia(post.ig_media_id, s.ig_access_token);
+    return res.json({ ok: true, comments: Array.isArray(list) ? list : [], source: 'ig' });
+  } catch (e) {
+    console.error('[hf6c-comments] post', post.id, ':', (e && e.message) || e);
+    return none();
+  }
+});
+
 // Descartar un posteo fallido: lo saca de la tarjeta de fallidos sin publicarlo.
 // Idempotente: si ya está cancelado/descartado, no hace nada.
 app.post('/api/posts/:id/dismiss-failed', requireAuth, (req, res) => {
@@ -8775,7 +8948,7 @@ function runCoverGrade(srcAbs, outAbs, targetLum, tint) {
 async function composeWeekFeed(uid, weekKey, tag) {
   const frameTempDirs = [];
   try {
-    const rows = db.prepare(`SELECT id, image_path, cover_path, media_type, tipo, intent, status, scheduled_at, created_at
+    const rows = db.prepare(`SELECT id, image_path, cover_path, cover_origin, media_type, tipo, intent, status, scheduled_at, created_at
       FROM posts WHERE user_id = ? AND week_key = ? AND media_type IN ('image','carousel','video')
       AND COALESCE(image_path, '') != '' AND status IN ('draft','scheduled')
       ORDER BY (status = 'scheduled') DESC, scheduled_at ASC, created_at ASC, id ASC`).all(uid, weekKey);
@@ -8798,6 +8971,7 @@ async function composeWeekFeed(uid, weekKey, tag) {
         id: r.id, media_type: r.media_type || 'image', tipo: r.tipo || '', intent: r.intent || '',
         fixed: r.status === 'scheduled', avatarProtagonist: avatarIds.has(r.id),
         lum: null, sat: null, hueFam: null, hueShare: null, _frames: null, _prevCover: r.cover_path || '',
+        _userCover: String(r.cover_origin || '').indexOf('frame@') === 0, // (6C · ítem 6) portada elegida por el dueño: el director no la pisa
       };
       const imgAbs = path.join(MEDIA_DIR, path.basename(String(r.image_path || '')));
       const coverAbs = r.cover_path ? path.join(MEDIA_DIR, path.basename(String(r.cover_path))) : null;
@@ -8852,6 +9026,7 @@ async function composeWeekFeed(uid, weekKey, tag) {
     for (let ix = 0; ix < pieces.length; ix++) {
       const piece = pieces[ix];
       if (!piece._frames) continue;
+      if (piece._userCover) { piece._coverDecision = { action: 'user-cover', reason: 'portada elegida por el dueño (ítem 6): el director no la pisa' }; continue; }
       const asg = asgByIx.get(ix);
       const want = asg ? asg.family : feedDirector.familyOf(piece);
       const gate = feedDirector.coverGate({ frames: piece._frames, wantFamily: want });
@@ -18979,7 +19154,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v402';
+const BUILD_ID = '20261024-v403';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

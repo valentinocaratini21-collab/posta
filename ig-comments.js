@@ -56,6 +56,29 @@ async function fetchCommentsBundle(igUserId, accessToken) {
   return { posts: bundle.length, comments: commentCount, items: bundle };
 }
 
+// (Tanda feed 6C · ítem 10) Comentarios de UN posteo puntual, por su
+// ig_media_id — la misma vía de lectura de arriba (GET /{media}/comments
+// con el token de la conexión IG de la cuenta), pero sin listar el feed
+// entero: el detalle del posteo publicado los muestra tal cual vinieron.
+// → [{ id, author, text, at }] en el ORDEN DE LA FUENTE (la Graph API
+// devuelve los más recientes primero). A diferencia de fetchCommentsBundle
+// (que nunca lanza porque minaba en lote), esta SÍ lanza ante un fallo de
+// la fuente (token vencido, IG caído): el endpoint del detalle lo captura
+// y responde «sin lista», nunca un 500.
+async function fetchCommentsForMedia(igMediaId, accessToken) {
+  if (!igMediaId || !accessToken) throw new Error('ig_comments_no_source');
+  const res = await fetch(`${IG_HOST}/${API_VERSION}/${encodeURIComponent(String(igMediaId))}/comments?` +
+    new URLSearchParams({ fields: 'id,text,username,timestamp', limit: String(COMMENTS_LIMIT), access_token: accessToken }).toString(),
+    { signal: AbortSignal.timeout(IG_FETCH_TIMEOUT_MS) });
+  if (!res.ok) throw new Error('ig_comments_' + res.status);
+  const data = await res.json().catch(() => null);
+  if (!data || data.error) throw new Error('ig_comments_error');
+  const rows = Array.isArray(data.data) ? data.data : [];
+  return rows
+    .map(r => ({ id: String(r.id || ''), author: String(r.username || ''), text: String(r.text || '').trim(), at: String(r.timestamp || '') }))
+    .filter(r => r.text);
+}
+
 // Una llamada a gpt-4o-mini que extrae de los comentarios:
 // preguntas_frecuentes[], objeciones[], deseos[].
 // PROHIBIDO inventar: solo lo que dicen los comentarios; pocos comentarios → arrays cortos.
@@ -156,4 +179,4 @@ async function mineComments(igUserId, accessToken, apiKey) {
   }
 }
 
-module.exports = { mineComments, fetchCommentsBundle, buildDnaPatch };
+module.exports = { mineComments, fetchCommentsBundle, buildDnaPatch, fetchCommentsForMedia };

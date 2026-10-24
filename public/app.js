@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v401'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v403'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -12819,6 +12819,7 @@ function hfLiveSnapshot(tiles, prof) {
       posts[String(p.id)] = {
         id: String(p.id), status: String(p.status || ''), scheduled_at: String(p.scheduled_at || ''),
         image_path: String(p.image_path || ''), pinned: p.pinned ? 1 : 0, published_at: String(p.published_at || ''),
+        cover_path: String(p.cover_path || ''), cover_pos: (p.cover_pos === null || p.cover_pos === undefined) ? 50 : Number(p.cover_pos),
       };
     } else if (t.kind === 'ig' && t.img) {
       posts['ig:' + String(t.img)] = { id: 'ig:' + String(t.img), status: 'ig', scheduled_at: '', image_path: String(t.img), pinned: t.pinned ? 1 : 0, published_at: '' };
@@ -12837,7 +12838,7 @@ function hfLiveDiff(prev, next) {
   for (const id of Object.keys(B)) {
     if (!(id in A)) { out.added.push(id); if (B[id].status === 'published') out.justPublished.push(id); continue; }
     const a = A[id], b = B[id];
-    if (a.status !== b.status || a.scheduled_at !== b.scheduled_at || a.image_path !== b.image_path || a.pinned !== b.pinned || a.published_at !== b.published_at) {
+    if (a.status !== b.status || a.scheduled_at !== b.scheduled_at || a.image_path !== b.image_path || a.pinned !== b.pinned || a.published_at !== b.published_at || a.cover_path !== b.cover_path || a.cover_pos !== b.cover_pos) {
       out.changed.push(id);
       if (a.status !== 'published' && b.status === 'published') out.justPublished.push(id);
     }
@@ -12883,10 +12884,11 @@ function hfPeekHTML(p, en, opts) {
   const o = opts || {};
   if (!p) return '';
   const isV = String(p.media_type || '') === 'video';
+  const covP = isV ? hfCoverState(p) : null;
   const media = !p.image_path
     ? '<span class="hf-tile-ph">✨</span>'
     : isV
-      ? `<video src="${esc(p.image_path)}" autoplay muted loop playsinline></video>`
+      ? `<video src="${esc(p.image_path)}"${covP.has ? ` poster="${esc(covP.path)}"` : ''} autoplay muted loop playsinline></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" alt="" onerror="__imgFb(this)">`;
   let stateLine = '';
   if (p.status === 'published') {
@@ -12938,10 +12940,11 @@ function hfFollowerHTML(p, opts) {
     ? `<img class="hf-d-ava" src="${esc(o.pic)}" alt="" onerror="this.remove()">`
     : `<span class="hf-d-ava hf-d-ava-l">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
   const isV = String(p.media_type || '') === 'video';
+  const covF = isV ? hfCoverState(p) : null;
   const media = !p.image_path
     ? '<span class="hf-tile-ph">✨</span>'
     : isV
-      ? `<video src="${esc(p.image_path)}" autoplay muted loop playsinline></video>`
+      ? `<video src="${esc(p.image_path)}"${covF.has ? ` poster="${esc(covF.path)}"` : ''} autoplay muted loop playsinline></video>`
       : `<img src="${esc(p.image_path)}" alt="" onerror="__imgFb(this)">`;
   const lk = (p.likes === null || p.likes === undefined || !Number.isFinite(Number(p.likes))) ? null : Number(p.likes);
   const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
@@ -12970,6 +12973,92 @@ function hfFollowerHTML(p, opts) {
     <button type="button" class="hf-fv-close" data-hf-fv-close>${en ? 'Close' : 'Cerrar'}</button>
   </div>`;
 }
+// ===== (Tanda feed 6C) Piezas puras de los ítems 6, 9 y 10 =====
+// Ítem 6 (portada de reel a elección): el estado de la portada sale de
+// los campos que el servidor persiste (cover_path/cover_origin/
+// cover_pos, vía /api/posts). cover_path también lo escribe el director
+// de feed (v332): `user` distingue la elegida por el dueño (origin
+// 'frame@<seg>') de la del director — solo la del dueño se puede quitar
+// desde el detalle y el director no la pisa.
+function hfCoverState(p) {
+  const path = String((p && p.cover_path) || '');
+  const origin = String((p && p.cover_origin) || '');
+  let pos = (p && p.cover_pos !== null && p.cover_pos !== undefined && p.cover_pos !== '') ? Number(p.cover_pos) : NaN;
+  if (!Number.isFinite(pos)) pos = 50;
+  pos = Math.max(0, Math.min(100, Math.round(pos)));
+  return { has: !!path, path, origin, pos, user: origin.indexOf('frame@') === 0 };
+}
+// Tamaño del canvas de captura: el frame completo del video, con el
+// ancho topeado a 1080 (la grilla jamás muestra más). Pura y testeable.
+function hfCoverGeom(vw, vh) {
+  let w = Number(vw) || 0, h = Number(vh) || 0;
+  if (!(w > 0 && h > 0)) return { w: 0, h: 0 };
+  if (w > 1080) { h = Math.round(h * 1080 / w); w = 1080; }
+  return { w, h };
+}
+// Origen persistido de la portada: el segundo del video del que salió.
+function hfCoverOriginAt(t) {
+  const n = Number(t);
+  return 'frame@' + (Number.isFinite(n) && n > 0 ? String(Math.round(n * 10) / 10) : '0');
+}
+// Ítem 9 (arrastrar para reordenar): solo posteos propios de la semana
+// que todavía no salieron (draft/scheduled). Publicados y tiles leídas
+// de IG no se arrastran jamás; las historias no viven en la grilla.
+function hfDragEligible(p) {
+  if (!p) return false;
+  if (String(p.media_type || '') === 'story') return false;
+  return p.status === 'draft' || p.status === 'scheduled';
+}
+// Tiempo efectivo de un posteo de la semana: su scheduled_at real o,
+// en borradores (que no lo tienen persistido), la propuesta que la
+// home ya calculó (HF_PROPS). Sin tiempo efectivo no hay intercambio.
+function hfDragEffectiveIso(p, propIso) {
+  const own = String((p && p.scheduled_at) || '');
+  if (own) return own;
+  const prop = String(propIso || '');
+  if (!prop) return '';
+  const d = new Date(prop);
+  return isNaN(d) ? '' : prop;
+}
+// Plan del intercambio: el cuerpo EXACTO de POST /api/posts/swap. El
+// destino de cada posteo es el tiempo efectivo del otro y ambos quedan
+// programados (un borrador que recibe el día del otro se programa en
+// ese día, igual que al aceptarlo). null si algo no cierra.
+function hfDragPlan(a, b, aIso, bIso) {
+  if (!a || !b || String(a.id) === String(b.id)) return null;
+  if (!hfDragEligible(a) || !hfDragEligible(b)) return null;
+  const ea = hfDragEffectiveIso(a, aIso), eb = hfDragEffectiveIso(b, bIso);
+  if (!ea || !eb) return null;
+  return { a: a.id, b: b.id, a_to: eb, b_to: ea, a_status: 'scheduled', b_status: 'scheduled' };
+}
+// Cuerpo de «Deshacer»: restaura el estado anterior EXACTO de cada
+// posteo (el borrador vuelve a borrador sin fecha; el programado, a
+// su horario). snap = {aId, aAt, aStatus, bId, bAt, bStatus} con los
+// valores guardados ANTES del intercambio.
+function hfDragRestoreBody(snap) {
+  if (!snap) return null;
+  return {
+    a: snap.aId, b: snap.bId,
+    a_to: snap.aStatus === 'scheduled' ? (snap.aAt || null) : null, a_status: snap.aStatus,
+    b_to: snap.bStatus === 'scheduled' ? (snap.bAt || null) : null, b_status: snap.bStatus,
+  };
+}
+// Ítem 10 (comentarios reales en el detalle): la lista tal como la
+// devuelve GET /api/posts/:id/comments ([{author, text, at}], orden de
+// la fuente). Autor en negrita + texto tal cual + tiempo relativo
+// localizado, como en Instagram. Sin lista (null/vacía) no hay sección.
+function hfCommentsListHTML(comments, en) {
+  if (!Array.isArray(comments) || !comments.length) return '';
+  const rows = comments.map((c) => {
+    if (!c) return '';
+    const author = String(c.author || '');
+    const text = String(c.text || '');
+    if (!text) return '';
+    const rel = c.at ? hfRelShort(c.at, en) : '';
+    return `<div class="hf-cm">${author ? `<b>${esc(author)}</b> ` : ''}<span class="hf-cm-tx">${esc(text)}</span>${rel ? ` <span class="hf-cm-at">${esc(rel)}</span>` : ''}</div>`;
+  }).filter(Boolean);
+  return rows.length ? `<div class="hf-cms">${rows.join('')}</div>` : '';
+}
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -12979,8 +13068,14 @@ function homeTileHTML(t, i) {
   const p = t.post;
   const isV = String(p.media_type || '') === 'video';
   const isCar = String(p.media_type || '') === 'carousel' || !!(p.carousel_paths && String(p.carousel_paths).length > 2);
+  // (Tanda feed 6C · ítem 6) Con portada, la tile del reel es la
+  // portada (imagen quieta con su encuadre guardado) y no el video
+  // pelado: el glyph de reel de abajo sigue marcando que es un reel.
+  const covT = isV ? hfCoverState(p) : null;
   const media = !p.image_path
     ? '<span class="hf-tile-ph">✨</span>'
+    : isV && covT.has
+      ? `<img src="${esc(covT.path)}" data-hf-cover="1" style="object-position:50% ${covT.pos}%" onerror="__imgFb(this)" loading="lazy" alt="">`
     : isV
       ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="${t.reelTab ? 'metadata' : 'none'}" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
@@ -13285,10 +13380,11 @@ function hfDetailHTML(p, opts) {
   const ava = o.pic
     ? `<img class="hf-d-ava" src="${esc(o.pic)}" alt="" onerror="this.remove()">`
     : `<span class="hf-d-ava hf-d-ava-l">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
+  const covD = isV ? hfCoverState(p) : null;
   const mediaInner = !slides.length
     ? '<span class="hf-tile-ph">✨</span>'
     : isV
-      ? `<video src="${esc(slides[0])}" autoplay muted loop playsinline></video>`
+      ? `<video src="${esc(slides[0])}"${covD.has ? ` poster="${esc(covD.path)}"` : ''} autoplay muted loop playsinline></video>`
       : isCar
         ? `<div class="hf-d-track">${slides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" onerror="__imgFb(this)"></span>`).join('')}</div><span class="hf-d-count">1/${slides.length}</span>`
         : `<img src="${esc(slides[0])}" alt="" onerror="__imgFb(this)">`;
@@ -13342,13 +13438,27 @@ function hfDetailHTML(p, opts) {
   const redoHTML = redoLeftD === null ? '' : (redoLeftD > 0
     ? `<div class="hf-redo">${hfRedoLineHTML(p, en)}<button type="button" class="hf-redo-btn" data-hfd-act="redo">🔁 ${en ? 'Redo' : 'Rehacer'}</button></div>`
     : `<div class="hf-redo hf-redo-0">${hfRedoLineHTML(p, en)}<div class="hf-redo-alt"><button type="button" class="hf-redo-altb" data-hfd-act="myphoto">📸 ${en ? 'My photo' : 'Mi foto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="retext">✏️ ${en ? 'Touch up the text' : 'Retocar el texto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="keep">✓ ${en ? 'Leave it as is' : 'Dejarlo así'}</button></div></div>`);
+  // (Tanda feed 6C · ítem 6) Portada a elección del reel todavía no
+  // publicado: la acción vive en el detalle (y en su menú •••). Con
+  // portada del dueño, «Volver al video» la quita. La del director
+  // (sin origen frame@) se puede cambiar pero no quitar desde acá.
+  const coverRow = (isV && !o.visitor && p.status !== 'published')
+    ? `<div class="hf-cover-row"><button type="button" class="hf-cover-btn" data-hfd-act="cover">🖼 ${covD.has ? (en ? 'Change the reel cover' : 'Cambiar la portada del reel') : (en ? 'Choose the reel cover' : 'Elegir la portada del reel')}</button>${covD.user ? `<button type="button" class="hf-cover-btn hf-cover-clear" data-hfd-act="cover-clear">${en ? 'Back to the video' : 'Volver al video'}</button>` : ''}</div>` : '';
+  // (Tanda feed 6C · ítem 10) Contenedor de la lista de comentarios
+  // reales: nace vacío y oculto; hfDetailWire lo carga lazy desde
+  // /api/posts/:id/comments y solo lo muestra si vino lista. Sin
+  // fuente o sin plan, el servidor responde null y esto no aparece.
+  const commentsBox = (!o.visitor && p.status === 'published')
+    ? `<div class="hf-cm-list" data-hfd-comments hidden></div>` : '';
   return `<div class="hf-d" data-post-id="${esc(String(p.id))}">
     <div class="hf-d-head">${ava}<div class="hf-d-names"><div class="hf-d-user">${esc(headName)}</div>${locLine}</div>${o.visitor ? '' : `<button type="button" class="hf-d-dots" data-hfd-act="menu" aria-label="${en ? 'More options' : 'Más opciones'}">•••</button>`}</div>
     ${media}
+    ${coverRow}
     ${bar}
     ${likesLine}
     ${capHTML}
     ${commentsLine}
+    ${commentsBox}
     ${whenLine}
     ${redoHTML}
     ${accept}
@@ -13603,6 +13713,11 @@ function hfIsEn() { return (typeof ME !== 'undefined' && ME && ME.lang === 'en')
 // espejo vivo (ítem 4) no parchea mientras un gesto vive.
 let HF_PEEK = null; // { post, tile, ov }
 let HF_GESTURE_ACTIVE = false;
+// (Tanda feed 6C · ítem 9) Estado del arrastre para reordenar:
+// { post, tile, root, sx, sy, target } mientras una tile de la semana
+// sigue al dedo/mouse. El espejo vivo lo trata como gesto en curso
+// (hfLiveBusy) y difiere su parcheo hasta que el arrastre termina.
+let HF_DRAG = null;
 function hfFeedGesturesBind(root) {
   if (!root) return;
   // Supresión del click post-hold (captura en el root: corre antes que
@@ -13619,6 +13734,10 @@ function hfFeedGesturesBind(root) {
     root.addEventListener('contextmenu', (e) => {
       if (e.target && e.target.closest && e.target.closest('.hf-tile')) e.preventDefault();
     });
+    // (6C · ítem 9) Esc cancela el arrastre en curso, sin cambios.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && HF_DRAG) { try { hfDragCancel(); } catch (err) {} }
+    });
   }
   root.querySelectorAll('.hf-tile[data-post-id]').forEach((tile) => {
     if (tile._hfBound) return;
@@ -13626,6 +13745,16 @@ function hfFeedGesturesBind(root) {
     const video = tile.querySelector('video[data-hf-reel]');
     const isFuture = tile.dataset.status === 'scheduled';
     let sx = 0, sy = 0, tSheet = null, tPrev = null, tPeek = null, previewing = false, peekOpen = false;
+    // (6C · ítem 9) Arrastre: nace SOBRE esta máquina. El hold (350ms)
+    // abre el peek como siempre; el primer movimiento >10px lo cierra
+    // como siempre y, si la tile es de la semana (hfDragEligible),
+    // ARMA el arrastre; si el dedo/mouse SIGUE apretado y se sigue
+    // moviendo, el gesto se convierte en arrastre de la tile.
+    let pDown = false, holdFired = false, dragArmed = false, dragging = false;
+    const dragPost = () => {
+      const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(tile.dataset.postId)) : null;
+      return (t && t.post && hfDragEligible(t.post) && !(typeof HF_VISITOR !== 'undefined' && HF_VISITOR)) ? t.post : null;
+    };
     const stopPreview = () => {
       if (!previewing) return;
       previewing = false;
@@ -13641,6 +13770,7 @@ function hfFeedGesturesBind(root) {
     tile.addEventListener('pointerdown', (e) => {
       if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 tiene su target propio
       sx = e.clientX || 0; sy = e.clientY || 0;
+      pDown = true; holdFired = false; dragArmed = false; dragging = false;
       HF_GESTURE_ACTIVE = true;
       if (isFuture) {
         tSheet = setTimeout(() => {
@@ -13668,24 +13798,283 @@ function hfFeedGesturesBind(root) {
       // en futuros, si el hold sigue hasta 600ms, la hoja de acciones
       // reemplaza al peek; en reels, la preview de la tile y el peek
       // (que trae su propio video en loop) nacen juntos.
-      // PUNTO DE EXTENSIÓN (Fase B2): sobre esta misma máquina, un
-      // arrastre posterior al hold moverá la tile; hoy el movimiento
-      // >10px tras el hold cierra el peek y libera el gesto.
+      // (6C · ítem 9) El hold también marca el punto desde el que un
+      // movimiento posterior puede convertirse en arrastre (ver el
+      // pointermove de abajo): el peek es la señal de «agarre».
       tPeek = setTimeout(() => {
         tPeek = null;
         tile._hfHoldAt = Date.now();
         peekOpen = true;
+        holdFired = true;
         try { hfPeekOpen(tile); } catch (err) { peekOpen = false; }
       }, 350);
     });
     tile.addEventListener('pointermove', (e) => {
+      const dx = (e.clientX || 0) - sx, dy = (e.clientY || 0) - sy;
+      if (dragging) { try { hfDragMove(e); } catch (err) {} return; }
+      if (pDown && dragArmed && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        const post = dragPost();
+        if (post) {
+          dragging = true;
+          try { hfDragStart(post, tile, root, sx, sy); hfDragMove(e); } catch (err) { dragging = false; }
+          return;
+        }
+        dragArmed = false;
+      }
       if (!tSheet && !tPrev && !tPeek && !previewing && !peekOpen) return;
-      if (Math.abs((e.clientX || 0) - sx) > 10 || Math.abs((e.clientY || 0) - sy) > 10) { clearTimers(); stopPreview(); closePeek(); HF_GESTURE_ACTIVE = false; }
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        const canArm = holdFired && !!dragPost();
+        clearTimers(); stopPreview(); closePeek(); HF_GESTURE_ACTIVE = false;
+        if (canArm) dragArmed = true;
+      }
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => {
-      tile.addEventListener(ev, () => { clearTimers(); stopPreview(); closePeek(); HF_GESTURE_ACTIVE = false; });
+      tile.addEventListener(ev, (e) => {
+        pDown = false; dragArmed = false;
+        if (dragging) {
+          dragging = false;
+          if (ev === 'pointerup') { try { hfDragDrop(e); } catch (err) { try { hfDragCancel(); } catch (e2) {} } }
+          else { try { hfDragCancel(); } catch (err) {} }
+          return;
+        }
+        clearTimers(); stopPreview(); closePeek(); HF_GESTURE_ACTIVE = false;
+      });
     });
   });
+}
+/* ===== (Tanda feed 6C · ítem 9) ARRASTRAR PARA REORDENAR =====
+   Gramática (declarada): hold ≥350ms (el peek es la señal de agarre)
+   → el primer movimiento >10px cierra el peek como siempre y arma el
+   arrastre → si el dedo/mouse sigue apretado y se sigue moviendo, la
+   tile sigue al puntero (transform) y la tile destino se resalta →
+   soltar sobre OTRA tile de la semana intercambia sus horarios por
+   POST /api/posts/swap (el mismo efecto de servidor que «Mover»: se
+   cruzan los scheduled_at; tras el intercambio manda la composición
+   del motor de equilibrio, homeGridCompose, en el render siguiente)
+   con toast «Deshacer» que restaura el estado anterior exacto.
+   Soltar fuera de objetivo, Esc o pointercancel = sin cambios.
+   Pointer events unificados (mouse+touch) sobre la máquina de B1. */
+function hfDragTargetAt(x, y) {
+  if (!HF_DRAG || !HF_DRAG.root) return null;
+  const tiles = HF_DRAG.root.querySelectorAll('.hf-tile[data-post-id]');
+  for (const el of tiles) {
+    if (!el || el === HF_DRAG.tile) continue;
+    const id = el.dataset ? el.dataset.postId : '';
+    if (!id || String(id) === String(HF_DRAG.post.id)) continue;
+    let r = null;
+    try { r = el.getBoundingClientRect ? el.getBoundingClientRect() : null; } catch (e) {}
+    if (r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((v) => v && v.kind === 'post' && String(v.post.id) === String(id)) : null;
+      if (t && t.post && hfDragEligible(t.post)) return { tile: el, post: t.post };
+      return null;
+    }
+  }
+  try {
+    const el = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
+    const tEl = el && el.closest ? el.closest('.hf-tile[data-post-id]') : null;
+    if (tEl && tEl !== HF_DRAG.tile) {
+      const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((v) => v && v.kind === 'post' && String(v.post.id) === String(tEl.dataset.postId)) : null;
+      if (t && t.post && hfDragEligible(t.post)) return { tile: tEl, post: t.post };
+    }
+  } catch (e) {}
+  return null;
+}
+function hfDragStart(post, tile, root, sx, sy) {
+  hfDragCancel();
+  HF_DRAG = { post, tile, root, sx, sy, target: null, targetPost: null };
+  HF_GESTURE_ACTIVE = true;
+  tile.classList.add('hf-dragging');
+  try { tile.style.touchAction = 'none'; } catch (e) {}
+  tile._hfHoldAt = Date.now();
+  // Red de seguridad: si el puntero se mueve más rápido que la tile,
+  // los eventos a nivel documento mantienen vivo el arrastre.
+  HF_DRAG._docMove = (e) => { try { hfDragMove(e); } catch (err) {} };
+  HF_DRAG._docUp = (e) => { try { hfDragDrop(e); } catch (err) { try { hfDragCancel(); } catch (e2) {} } };
+  try { document.addEventListener('pointermove', HF_DRAG._docMove); } catch (e) {}
+  try { document.addEventListener('pointerup', HF_DRAG._docUp); } catch (e) {}
+}
+function hfDragMove(e) {
+  if (!HF_DRAG) return;
+  const dx = (e.clientX || 0) - HF_DRAG.sx, dy = (e.clientY || 0) - HF_DRAG.sy;
+  try { HF_DRAG.tile.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`; } catch (err) {}
+  const hit = hfDragTargetAt(e.clientX || 0, e.clientY || 0);
+  const prev = HF_DRAG.target;
+  HF_DRAG.target = hit ? hit.tile : null;
+  HF_DRAG.targetPost = hit ? hit.post : null;
+  if (prev && prev !== HF_DRAG.target) { try { prev.classList.remove('hf-drag-over'); } catch (err) {} }
+  if (HF_DRAG.target) { try { HF_DRAG.target.classList.add('hf-drag-over'); } catch (err) {} }
+}
+function hfDragEnd() {
+  const D = HF_DRAG;
+  if (!D) return;
+  HF_DRAG = null;
+  HF_GESTURE_ACTIVE = false;
+  try { D.tile.classList.remove('hf-dragging'); } catch (e) {}
+  try { D.tile.style.transform = ''; } catch (e) {}
+  try { D.tile.style.touchAction = ''; } catch (e) {}
+  try { D.tile._hfHoldAt = Date.now(); } catch (e) {}
+  if (D.target) { try { D.target.classList.remove('hf-drag-over'); } catch (e) {} }
+  try { document.removeEventListener('pointermove', D._docMove); } catch (e) {}
+  try { document.removeEventListener('pointerup', D._docUp); } catch (e) {}
+  try { hfLiveFlush(); } catch (e) {} // un parcheo diferido por el arrastre se aplica al soltar
+}
+function hfDragCancel() { hfDragEnd(); }
+function hfDragDrop() {
+  const D = HF_DRAG;
+  if (!D) return;
+  const dst = D.targetPost;
+  const src = D.post;
+  hfDragEnd();
+  if (dst && String(dst.id) !== String(src.id)) hfDragPerform(src, dst);
+}
+async function hfDragPerform(srcPost, dstPost) {
+  const en = hfIsEn();
+  const propOf = (p) => (typeof HF_PROPS !== 'undefined' && HF_PROPS && HF_PROPS[p.id]) ? HF_PROPS[p.id].iso : null;
+  const plan = hfDragPlan(srcPost, dstPost, propOf(srcPost), propOf(dstPost));
+  if (!plan) { toast(en ? 'These two posts cannot swap days' : 'Esos dos posteos no pueden intercambiar el día'); return; }
+  const snap = {
+    aId: srcPost.id, aAt: srcPost.scheduled_at || null, aStatus: srcPost.status,
+    bId: dstPost.id, bAt: dstPost.scheduled_at || null, bStatus: dstPost.status,
+  };
+  try {
+    await api.post('/api/posts/swap', plan);
+  } catch (e) {
+    if (typeof isPlanLimitErr === 'function' && isPlanLimitErr(e)) { try { planLimitModal(e); } catch (e2) {} }
+    else toast((en ? 'Could not swap: ' : 'No se pudo intercambiar: ') + ((e && e.message) || ''));
+    try { render(); } catch (e2) {}
+    return;
+  }
+  try {
+    postToast({
+      text: '🔀 ' + (en ? 'Days swapped' : 'Días intercambiados'),
+      ms: 6000,
+      actions: [{ label: en ? 'Undo' : 'Deshacer', fn: async () => {
+        try { await api.post('/api/posts/swap', hfDragRestoreBody(snap)); }
+        catch (e) { toast((en ? 'Could not undo: ' : 'No se pudo deshacer: ') + ((e && e.message) || '')); }
+        try { render(); } catch (e2) {}
+      } }],
+    });
+  } catch (e) { toast('🔀 ' + (en ? 'Days swapped' : 'Días intercambiados')); }
+  try { render(); } catch (e) {}
+}
+/* ===== (Tanda feed 6C · ítem 6) SELECTOR DE PORTADA DEL REEL =====
+   El propio video del posteo, con seek por slider y encuadre vertical
+   sobre la vista 3:4 de la grilla. «Usar este cuadro» captura el frame
+   con canvas DEL LADO DEL CLIENTE (cero servidor de video, cero IA) y
+   lo sube crudo a POST /api/posts/:id/cover — el mismo almacenamiento
+   de las fotos del cliente (MEDIA_DIR). */
+function hfCoverOpen(post) {
+  if (!post) return;
+  hfCoverClose();
+  const en = hfIsEn();
+  const st = hfCoverState(post);
+  let pos = st.pos;
+  const ov = document.createElement('div');
+  ov.className = 'hf-cover-back';
+  ov.innerHTML = `<div class="hf-cover-card" role="dialog" aria-modal="true">
+    <div class="hf-cover-title">🖼 ${en ? 'Choose the reel cover' : 'Elegí la portada del reel'}</div>
+    <div class="hf-cover-stage"><video src="${esc(post.image_path)}" muted playsinline preload="auto"></video></div>
+    <input type="range" class="hf-cover-seek" min="0" max="10" value="0" step="1" aria-label="${en ? 'Video moment' : 'Momento del video'}">
+    <div class="hf-cover-lab"><span data-hf-cover-time>0.0s</span><span>${en ? 'Shown cropped 3:4, like the grid' : 'Se muestra recortado 3:4, como en la grilla'}</span></div>
+    <label class="hf-cover-poslab">${en ? 'Framing' : 'Encuadre'}<input type="range" class="hf-cover-pos" min="0" max="100" value="${pos}" step="1" aria-label="${en ? 'Vertical framing' : 'Encuadre vertical'}"></label>
+    <div class="hf-cover-acts">
+      <button type="button" class="hf-cover-use">${en ? 'Use this frame' : 'Usar este cuadro'}</button>
+      ${st.user ? `<button type="button" class="hf-cover-alt" data-hf-cover-clear>${en ? 'Back to the video' : 'Volver al video'}</button>` : ''}
+      <button type="button" class="hf-cover-alt" data-hf-cover-close>${en ? 'Close' : 'Cerrar'}</button>
+    </div>
+    <div class="hf-cover-msg"></div>
+  </div>`;
+  document.body.appendChild(ov);
+  const vid = ov.querySelector('video');
+  const seek = ov.querySelector('.hf-cover-seek');
+  const posInp = ov.querySelector('.hf-cover-pos');
+  const timeLab = ov.querySelector('[data-hf-cover-time]');
+  if (vid) {
+    try { vid.style.objectPosition = '50% ' + pos + '%'; } catch (e) {}
+    vid.addEventListener('loadedmetadata', () => {
+      if (seek && isFinite(vid.duration) && vid.duration > 0) seek.max = String(Math.max(1, Math.round(vid.duration * 10)));
+      try { vid.currentTime = Math.min(0.1, (vid.duration || 0) / 2); } catch (e) {}
+    });
+    vid.addEventListener('seeked', () => { if (timeLab) timeLab.textContent = (Math.round((vid.currentTime || 0) * 10) / 10) + 's'; });
+  }
+  if (seek) seek.addEventListener('input', () => { if (vid) { try { vid.currentTime = Number(seek.value) / 10; } catch (e) {} } });
+  if (posInp) posInp.addEventListener('input', () => { pos = Math.max(0, Math.min(100, Number(posInp.value) || 0)); if (vid) { try { vid.style.objectPosition = '50% ' + pos + '%'; } catch (e) {} } });
+  // Re-encuadre de una portada YA guardada: al soltar el slider se
+  // persiste el encuadre nuevo sin recapturar el cuadro (cover-pos).
+  if (posInp && st.has) posInp.addEventListener('change', async () => {
+    try {
+      const r = await api.post('/api/posts/' + encodeURIComponent(post.id) + '/cover-pos', { pos });
+      if (r && r.ok) { post.cover_pos = r.cover_pos; try { render(); } catch (e) {} }
+    } catch (e) { /* si falla, «Usar este cuadro» guarda el encuadre igual */ }
+  });
+  ov.addEventListener('click', (e) => { if (e.target === ov) hfCoverClose(); });
+  const closeBtn = ov.querySelector('[data-hf-cover-close]');
+  if (closeBtn) closeBtn.addEventListener('click', () => hfCoverClose());
+  const clearBtn = ov.querySelector('[data-hf-cover-clear]');
+  if (clearBtn) clearBtn.addEventListener('click', async () => { hfCoverClose(); await hfCoverClear(post); });
+  const useBtn = ov.querySelector('.hf-cover-use');
+  if (useBtn) useBtn.addEventListener('click', () => { hfCoverCapture(post, vid, pos, ov); });
+}
+function hfCoverClose() {
+  document.querySelectorAll('.hf-cover-back').forEach((el) => { try { el.remove(); } catch (e) {} });
+}
+async function hfCoverCapture(post, vid, pos, ov) {
+  const en = hfIsEn();
+  const msg = ov ? ov.querySelector('.hf-cover-msg') : null;
+  const fail = (m) => { if (msg) msg.textContent = m; else toast(m); };
+  if (!vid || !vid.videoWidth) { fail(en ? 'The video is still loading — try again in a second' : 'El video todavía está cargando — probá de nuevo en un segundo'); return; }
+  let blob = null;
+  try {
+    const g = hfCoverGeom(vid.videoWidth, vid.videoHeight);
+    const cv = document.createElement('canvas');
+    cv.width = g.w; cv.height = g.h;
+    const cx = cv.getContext('2d');
+    cx.drawImage(vid, 0, 0, g.w, g.h);
+    blob = await new Promise((r) => { try { cv.toBlob(r, 'image/jpeg', 0.85); } catch (e) { r(null); } });
+  } catch (e) { blob = null; }
+  if (!blob) { fail(en ? 'Could not capture that frame' : 'No se pudo capturar ese cuadro'); return; }
+  const at = Math.round((vid.currentTime || 0) * 10) / 10;
+  try {
+    const r = await fetch('/api/posts/' + encodeURIComponent(post.id) + '/cover?at=' + encodeURIComponent(at) + '&pos=' + encodeURIComponent(pos), {
+      method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) throw new Error(data.message || data.error || '');
+    post.cover_path = data.cover_path; post.cover_origin = data.cover_origin || hfCoverOriginAt(at); post.cover_pos = data.cover_pos;
+  } catch (e) {
+    fail((en ? 'Could not save the cover: ' : 'No se pudo guardar la portada: ') + ((e && e.message) || ''));
+    return;
+  }
+  hfCoverClose();
+  toast('🖼 ' + (en ? 'Cover saved' : 'Portada guardada'));
+  try { render(); } catch (e) {}
+}
+async function hfCoverClear(post) {
+  const en = hfIsEn();
+  try {
+    await api.delete('/api/posts/' + encodeURIComponent(post.id) + '/cover');
+    post.cover_path = ''; post.cover_origin = ''; post.cover_pos = 50;
+    toast('🎬 ' + (en ? 'Back to the video' : 'Volvimos al video'));
+  } catch (e) {
+    toast((en ? 'Could not remove the cover: ' : 'No se pudo quitar la portada: ') + ((e && e.message) || ''));
+  }
+  try { render(); } catch (e) {}
+}
+/* ===== (Tanda feed 6C · ítem 10) COMENTARIOS REALES EN EL DETALLE =====
+   Carga lazy al abrir el detalle de un PUBLICADO: sin bloquear el
+   render. Si el endpoint devuelve lista, se pinta bajo el caption
+   (hfCommentsListHTML); si devuelve null (sin plan Total, sin fuente
+   o fuente caída), el contenedor se va y el detalle queda como hoy:
+   solo su línea de conteo. */
+async function hfCommentsLoad(post, ov) {
+  if (!post || !ov || post.status !== 'published') return;
+  const box = ov.querySelector('[data-hfd-comments]');
+  if (!box) return;
+  let r = null;
+  try { r = await api.get('/api/posts/' + encodeURIComponent(post.id) + '/comments'); } catch (e) { r = null; }
+  if (!r || !Array.isArray(r.comments) || !r.comments.length) { try { box.remove(); } catch (e) {} return; }
+  box.innerHTML = hfCommentsListHTML(r.comments, hfIsEn());
+  if (box.innerHTML) box.hidden = false; else { try { box.remove(); } catch (e) {} }
 }
 // (Tanda feed 6B · ítem 5) Peek: tarjeta ampliada mientras dura el
 // hold. Soltar, tocar fuera o mover >10px la cierra (la máquina de
@@ -13825,6 +14214,7 @@ function hfLiveBusy() {
   try {
     if (typeof HF_DETAIL !== 'undefined' && HF_DETAIL) return true;
     if (HF_PEEK) return true;
+    if (typeof HF_DRAG !== 'undefined' && HF_DRAG) return true; // (6C · ítem 9) el arrastre difiere el parcheo
     if (HF_GESTURE_ACTIVE) return true;
     if (typeof HF_MOVE !== 'undefined' && HF_MOVE) return true;
     const ci = document.getElementById('chatInput');
@@ -14117,6 +14507,8 @@ function hfDetailClose() {
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && HF_DETAIL) hfDetailClose(); });
 function hfDetailWire(ov, post, tile) {
   const q = (s) => ov.querySelector(s);
+  // (6C · ítem 10) Comentarios reales: carga lazy, sin bloquear.
+  try { hfCommentsLoad(post, ov); } catch (e) {}
   const closeBtn = q('[data-hfd-close]');
   if (closeBtn) closeBtn.onclick = () => hfDetailClose();
   ov.addEventListener('click', (e) => { if (e.target === ov) hfDetailClose(); });
@@ -14200,6 +14592,18 @@ function hfDetailWire(ov, post, tile) {
       return;
     }
     if (name === 'keep') { hfDetailClose(); return; }
+    if (name === 'cover') {
+      // (6C · ítem 6) Selector de portada del reel sobre el detalle.
+      hfDetailClose();
+      hfCoverOpen(post);
+      return;
+    }
+    if (name === 'cover-clear') {
+      // (6C · ítem 6) «Volver al video»: limpia la portada del dueño.
+      hfDetailClose();
+      hfCoverClear(post);
+      return;
+    }
     if (name === 'share') { hfDetailShare(post); return; }
     if (name === 'followers') { hfFollowerOpen(post); return; } // (6B · ítem 8) lámina sobre el detalle
     if (name === 'menu') {
@@ -14223,6 +14627,7 @@ function hfDetailMenu(post) {
     <button type="button" class="pcsheet-opt" data-hfdm="pin">${post.pinned ? '📌 ' + (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : '📌 ' + (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
     <button type="button" class="pcsheet-opt" data-hfdm="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Open this post to edit it' : 'Abrí este posteo para editarlo'}</small></button>
     <button type="button" class="pcsheet-opt" data-hfdm="followers">👁 ${en ? 'See it in the feed' : 'Ver en el inicio'}<small>${en ? 'How your followers see this post' : 'Cómo ven este posteo tus seguidores'}</small></button>
+    ${(String(post.media_type || '') === 'video' && post.status !== 'published') ? `<button type="button" class="pcsheet-opt" data-hfdm="cover">🖼 ${en ? 'Reel cover' : 'Portada del reel'}<small>${en ? 'Pick the frame your grid shows' : 'Elegí el cuadro que muestra tu grilla'}</small></button>${hfCoverState(post).user ? `<button type="button" class="pcsheet-opt" data-hfdm="cover-clear">🎬 ${en ? 'Back to the video' : 'Volver al video'}<small>${en ? 'Remove your chosen cover' : 'Quitá la portada que elegiste'}</small></button>` : ''}` : ''}
     <button type="button" class="pcsheet-close" data-hfdm="close">${en ? 'Close' : 'Cerrar'}</button>
   </div>`;
   document.body.appendChild(bd);
@@ -14233,6 +14638,8 @@ function hfDetailMenu(post) {
     if (a === 'pin') { hfPinToggle(!post.pinned, String(post.id)); return; }
     if (a === 'edit') { pcCloseSheet(); location.hash = '#/app/post/' + encodeURIComponent(post.id); return; }
     if (a === 'followers') { pcCloseSheet(); hfFollowerOpen(post); return; } // (6B · ítem 8)
+    if (a === 'cover') { pcCloseSheet(); hfCoverOpen(post); return; } // (6C · ítem 6)
+    if (a === 'cover-clear') { pcCloseSheet(); hfCoverClear(post); return; } // (6C · ítem 6)
   }));
 }
 async function hfDetailShare(post) {
