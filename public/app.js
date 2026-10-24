@@ -11856,7 +11856,9 @@ function homeHeadHTML(prof, bizName, opts) {
   const user = String(P.username || '').replace(/^@/, '');
   const name = String(P.name || bizName || '').trim();
   const letter = esc((name || user || 'P').charAt(0).toUpperCase());
-  const pic = P.pic ? `<img src="${esc(P.pic)}" alt="" onerror="this.remove()">` : '';
+  let picSrc = P.pic || '';
+  if (!picSrc) { try { const lg = (typeof assetLogo === 'function') ? assetLogo() : null; if (lg && lg.file_path) picSrc = lg.file_path; } catch (e) {} }
+  const pic = picSrc ? `<img src="${esc(picSrc)}" alt="" onerror="this.remove()">` : '';
   // (Frente 3b) Conteos como los muestra Instagram: completos con
   // separador local hasta 9.999 (ES 1.234 · EN 1,234) y abreviados
   // desde 10 mil (ES 12,4 mil / 1,2 M · EN 12.4K / 1.2M).

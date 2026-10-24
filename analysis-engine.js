@@ -359,6 +359,26 @@ const HIGHLIGHT_NAMES_EN = {
   'como-comprar': 'How to buy', nosotros: 'About us',
 };
 
+// (v363) Corte por palabra: nunca amputa una palabra cuando existe un
+// límite razonable. Si el texto entra, pasa igual; si no, corta en el
+// ÚLTIMO límite de palabra (espacio o salto de línea) que deje el
+// resultado en <= max-1, limpia puntuación/espacios colgantes y agrega
+// '…'. Sin límite usable: corte duro en max-1 + '…'. Nunca supera max.
+function cutWords(text, max) {
+  const s = String(text == null ? '' : text);
+  const m = Math.floor(Number(max) || 0);
+  if (m <= 0) return '';
+  if (s.length <= m) return s;
+  if (m === 1) return '…';
+  const limit = m - 1;
+  let cut = s.slice(0, limit);
+  const idx = Math.max(cut.lastIndexOf(' '), cut.lastIndexOf('\n'), cut.lastIndexOf('\t'));
+  if (idx > 0) cut = cut.slice(0, idx);
+  cut = cut.replace(/[\s.,;:!?…·—–-]+$/u, '');
+  if (!cut) cut = s.slice(0, limit).replace(/\s+$/u, '');
+  return cut + '…';
+}
+
 function profileKit({ business = {}, digest = null, reviews = null, lang }) {
   const en = lang === 'en';
   const T = (es, enS) => (en ? enS : es);
@@ -366,13 +386,13 @@ function profileKit({ business = {}, digest = null, reviews = null, lang }) {
   const firstOffering = (d.productos && d.productos[0]) || (d.servicios && d.servicios[0]) || null;
   const star = (d.inferred_star && d.inferred_star.item) || (firstOffering && (firstOffering.nombre || firstOffering)) || null;
   const lines = [];
-  if (star) lines.push('⭐ ' + String(star).slice(0, 42));
-  else if (business.category) lines.push('✨ ' + String(business.category).slice(0, 42));
-  if (d.diferencial) lines.push('💛 ' + String(d.diferencial).slice(0, 42));
+  if (star) lines.push('⭐ ' + cutWords(star, 42));
+  else if (business.category) lines.push('✨ ' + cutWords(business.category, 42));
+  if (d.diferencial) lines.push('💛 ' + cutWords(d.diferencial, 42));
   if (reviews && reviews.rating) lines.push('⭐ ' + fmtRate(reviews.rating, lang) + T(' en Google', ' on Google') + (reviews.total ? ' (' + reviews.total + T(' reseñas)', ' reviews)') : ''));
-  if (business.city || d.ciudad) lines.push('📍 ' + String(business.city || d.ciudad).slice(0, 30));
+  if (business.city || d.ciudad) lines.push('📍 ' + cutWords(business.city || d.ciudad, 30));
   lines.push(T('👇 Tu semana de posteos, acá', '👇 Your week of posts, right here'));
-  const bio = lines.slice(0, 4).join('\n').slice(0, 150);
+  const bio = cutWords(lines.slice(0, 4).join('\n'), 150);
   const highlights = HIGHLIGHT_SETS.filter((h) => {
     if (h.key === 'promos') return Array.isArray(d.promos) && d.promos.length > 0;
     if (h.key === 'opiniones') return !!(reviews && reviews.total > 0);
@@ -380,7 +400,7 @@ function profileKit({ business = {}, digest = null, reviews = null, lang }) {
     return true;
   }).map((h) => (en ? (HIGHLIGHT_NAMES_EN[h.key] || h.name) : h.name));
   return {
-    display_name: String(business.name || '').slice(0, 30),
+    display_name: cutWords(business.name || '', 30),
     username: business.ig_username ? '@' + String(business.ig_username).replace(/^@/, '') : null,
     category_label: business.category || null,
     bio_lines: lines.slice(0, 4),
@@ -1313,6 +1333,7 @@ module.exports = {
   analyzeMarket,
   marketTeaser,
   profileKit,
+  cutWords,
   starterGrid,
   coldFindings,
   buildPredictions,

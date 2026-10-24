@@ -6,7 +6,7 @@
  * genérico de la casa (posteos 413/414 del 2026-10-19: visor LED en
  * vez de Posty), ni una mascota rediseñada, ni OTRA persona en el
  * feed de un cliente.
- *  (a) CASA (@posty.hacetodo): la planificación de transporte elige
+ *  (a) CASA (@posty.communitymanager): la planificación de transporte elige
  *      el avatar oficial (public/ai-avatar.png) por encima del logo y
  *      de las fotos del álbum; el prompt lleva la cláusula de
  *      identidad de personaje; con el QA de personaje OK la pieza
@@ -258,10 +258,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const logoBuf = solidPng(400, 400, [250, 200, 40]);
   const genericBuf = solidPng(1024, 1280, [120, 120, 200]);
 
-  /* ================= (a) LA CASA: @posty.hacetodo ================= */
+  /* ================= (a) LA CASA: @posty.communitymanager ================= */
   console.log('== (a) La casa: el avatar oficial viaja y manda ==');
   const avatarBuf = fs.readFileSync(path.join(__dirname, 'public', 'ai-avatar.png'));
-  const uidCasa = await seedUser('casa@test.local', { name: 'Posty.', category: 'profesionales', ig: 'posty.hacetodo' });
+  const uidCasa = await seedUser('casa@test.local', { name: 'Posty.', category: 'profesionales', ig: 'posty.communitymanager' });
   writeMedia('logo-casa.png', logoBuf);
   writeMedia('generica-casa.jpg', genericBuf);
   db.prepare(`INSERT INTO assets (user_id, file_path, kind, created_at) VALUES (?,?,?,?)`).run(uidCasa, '/media/logo-casa.png', 'logo', '2026-09-01 10:00:00');

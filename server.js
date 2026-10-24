@@ -4182,6 +4182,59 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), (req, r
     return res.json({ ok: true, mode, user_id: uid, ig: igKey, domain: domainKey, locks_deleted: locksDeleted, trial_cache_deleted: cacheDeleted, digest_deleted: digestDeleted, dna_items_before: dnaBefore, dna_items_after: dnaAfter });
   } catch (e) { res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
 });
+// (v363) REFRESCO DE SNAPSHOT DE PERFIL — remediación admin del
+// encabezado de la home (/api/home/profile). Caso cuenta 12
+// (2026-10-24): profiles.ig_username quedó en el handle viejo
+// 'posty.hacetodo' tras el renombre real a @posty.communitymanager;
+// el snapshot (TTL 24 h) no puede refrescarse porque la lectura
+// pública del handle muerto falla y la home cae al kit esqueleto.
+// Este endpoint permite corregir el handle guardado y forzar la
+// lectura+snapshot SIN TTL, con guarda de identidad opcional por
+// email exacto. Si la lectura falla, el snapshot viejo queda como
+// estaba (homeProfileReadAndStore solo escribe con payload) y el
+// endpoint responde read_ok:false — nunca 500 por Instagram.
+// Body: { user_id, ig_username?, expect_email? }
+app.post('/api/admin/home-profile/refresh', requireAdminToken, express.json(), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const uid = Number(body.user_id || 0) || 0;
+    const user = uid ? db.prepare('SELECT id, email FROM users WHERE id = ?').get(uid) : null;
+    if (!user) return res.status(404).json({ ok: false, error: 'user_not_found' });
+    if (body.expect_email && String(body.expect_email) !== String(user.email || '')) {
+      return res.status(409).json({ ok: false, error: 'identity_mismatch', user_id: uid, email: user.email });
+    }
+    const prof = getProfile(uid) || {};
+    const handle_before = String(prof.ig_username || '').replace(/^@+/, '').trim().toLowerCase();
+    let handle_after = handle_before;
+    let username_updated = false;
+    if (body.ig_username != null && String(body.ig_username).trim() !== '') {
+      const normalized = String(body.ig_username).replace(/^@+/, '').trim().toLowerCase();
+      handle_after = normalized;
+      if (normalized && normalized !== handle_before) {
+        db.prepare(`UPDATE profiles SET ig_username = ?, updated_at = datetime('now') WHERE user_id = ?`).run(normalized, uid);
+        username_updated = true;
+      }
+    }
+    const payload = await homeProfileReadAndStore(uid, handle_after);
+    const snapshot = payload ? {
+      source: payload.source,
+      username: payload.username,
+      name: payload.name,
+      pic: payload.pic || null,
+      bio: payload.bio,
+      bio_unread: payload.bio_unread,
+      link: payload.link,
+      followers: payload.followers,
+      posts_count: payload.posts_count,
+      following: payload.following,
+      highlights: (payload.highlights || []).length,
+      recents: (payload.recents || []).length,
+      captured_at: payload.captured_at,
+    } : null;
+    console.log(`[home-profile-refresh] user ${uid} (${user.email}) @${handle_before || '—'} -> @${handle_after || '—'} updated=${username_updated} read_ok=${!!payload} source=${payload ? (payload.source || '') : 'none'}${payload ? '' : ' (snapshot anterior conservado)'}`);
+    return res.json({ ok: true, user_id: uid, email: user.email, business_name: prof.business_name || '', handle_before, handle_after, username_updated, read_ok: !!payload, snapshot });
+  } catch (e) { return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) }); }
+});
 // Inspección y freno de emergencia por usuario (2026-10-16): ver qué tiene
 // programado un usuario y frenar TODA su publicación (vuelve a borrador +
 // piloto automático apagado). Nació porque la cuenta propia de Posty se
@@ -6046,10 +6099,10 @@ function desiredAlbumTag(tipo, texts) {
 function protagonistRefFor(uid) {
   try {
     const profile = getProfile(uid) || {};
-    // LA CASA: @posty.hacetodo ES un personaje — su referencia es el
+    // LA CASA: @posty.communitymanager ES un personaje — su referencia es el
     // avatar oficial, el mismo que usa dogfood.js (POSTY_LOOK).
     const handle = String(profile.ig_username || '').toLowerCase().replace(/^@/, '').trim();
-    if (handle === 'posty.hacetodo') {
+    if (handle === 'posty.communitymanager') {
       const candidates = [
         path.join(MEDIA_DIR, 'posty-mascot.png'),
         path.join(__dirname, 'public', 'ai-avatar.png'),
@@ -17847,7 +17900,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v362';
+const BUILD_ID = '20261024-v363';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

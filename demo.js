@@ -2309,6 +2309,23 @@ async function fetchIgEmbedHtml(ig) {
   return html;
 }
 
+// (v363) Corte por palabra (mismo criterio que analysis-engine.js):
+// nunca amputa una palabra cuando existe un límite razonable.
+function cutWords(text, max) {
+  const s = String(text == null ? '' : text);
+  const m = Math.floor(Number(max) || 0);
+  if (m <= 0) return '';
+  if (s.length <= m) return s;
+  if (m === 1) return '…';
+  const limit = m - 1;
+  let cut = s.slice(0, limit);
+  const idx = Math.max(cut.lastIndexOf(' '), cut.lastIndexOf('\n'), cut.lastIndexOf('\t'));
+  if (idx > 0) cut = cut.slice(0, idx);
+  cut = cut.replace(/[\s.,;:!?…·—–-]+$/u, '');
+  if (!cut) cut = s.slice(0, limit).replace(/\s+$/u, '');
+  return cut + '…';
+}
+
 // Extrae la biografía del HTML del embed (mismo patrón de JSON escapado que
 // full_name en fetchIgProfile). Solo acepta escapes conocidos (\n \r \t \/
 // \uXXXX) dentro del valor: así el match se detiene en el PRIMER cierre \" y
@@ -2316,14 +2333,14 @@ async function fetchIgEmbedHtml(ig) {
 function extractIgBiography(html) {
   const m = String(html || '').match(/\\"biography\\":\\"((?:\\[nrt\\/]|\\u[0-9a-fA-F]{4}|[^"\\])*)\\"/);
   if (!m) return '';
-  return m[1]
+  const decoded = m[1]
     .replace(/\\([nrt])/g, ' ')
     .replace(/\\\//g, '/')
     .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => {
       try { return String.fromCharCode(parseInt(h, 16)); } catch (e) { return ''; }
     })
-    .replace(/[\u0000-\u001F]/g, '')
-    .slice(0, 500);
+    .replace(/[\u0000-\u001F]/g, '');
+  return cutWords(decoded, 500);
 }
 
 // Keywords → una de las 25 CATEGORIES. Orden: primero las más específicas
@@ -2465,6 +2482,7 @@ module.exports = {
   // Prueba en 1 campo (prefill + streaming)
   fetchIgEmbedHtml,
   extractIgBiography,
+  cutWords,
   categoryFromText,
   renderSpecPngs,
   renderSpecPngsStream,
