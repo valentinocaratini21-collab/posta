@@ -43,14 +43,17 @@ ok('server: registra el logger durable (setSendLogger)', srv.includes('setSendLo
 ok('server: endpoint admin del registro', srv.includes("app.get('/api/admin/email-log'"));
 ok('email: exporta setSendLogger y captura el id del proveedor', eml.includes('setSendLogger') && eml.includes('providerId'));
 ok('email: RESEND_API_URL configurable para tests', eml.includes('RESEND_API_URL'));
+ok('email: guard del remitente (resolveFrom + canónico)', eml.includes('resolveFrom') && eml.includes('DEFAULT_FROM'));
 ok('db: tabla email_send_log', dbl.includes('CREATE TABLE IF NOT EXISTS email_send_log'));
 
 // ---------- Resend falso ----------
 let stubMode = 'ok';
+let stubLast = null;
 const stub = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
+    try { stubLast = JSON.parse(body); } catch (e) { stubLast = null; }
     if (stubMode === 'ok') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ id: 'stub-abc-123' }));
@@ -67,7 +70,7 @@ const emailLogUrl = (base) => base + '/api/admin/email-log?' + new URLSearchPara
 async function boot(port, extraEnv) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'posta-p0-'));
   const env = { ...process.env, PORT: String(port), DATA_DIR: dataDir, ADMIN_TOKEN: 'test-admin', SESSION_SECRET: 'test-secret', ...extraEnv };
-  delete env.RESEND_API_KEY; delete env.RESEND_API_URL;
+  delete env.RESEND_API_KEY; delete env.RESEND_API_URL; delete env.EMAIL_FROM;
   Object.assign(env, extraEnv || {});
   const child = spawn(process.execPath, ['server.js'], { cwd: __dirname, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let bootLog = '';
@@ -154,6 +157,36 @@ async function magic(base, body) {
       });
       const fgJ = await fg.json().catch(() => ({}));
       ok('D: forgot con email inexistente → 200 {ok:true} (vecino intacto)', fg.status === 200 && fgJ.ok === true, fg.status);
+    } finally { child.kill('SIGKILL'); }
+  }
+
+  // ---------- Boot C: EMAIL_FROM malformado (el typo real de producción) ----------
+  console.log('— boot C: EMAIL_FROM sin formato válido → guard');
+  {
+    const { child, base } = await boot(4319, { RESEND_API_KEY: 'stub-key', RESEND_API_URL: stubUrl, EMAIL_FROM: 'Posty.' });
+    try {
+      stubMode = 'ok'; stubLast = null;
+      const r = await magic(base, { email: 'p0-guard@example.com' });
+      ok('C: con EMAIL_FROM inválido el envío SALE igual (200)', r.status === 200 && r.j.ok === true, `status=${r.status}`);
+      ok('C: el proveedor recibió el remitente canónico', !!stubLast && stubLast.from === 'Posty <hola@postycommunitymanager.com>', stubLast && stubLast.from);
+      const logR = await fetch(emailLogUrl(base));
+      const logJ = await logR.json();
+      const cfg = (logJ.rows || []).find((x) => x.status === 'config_error');
+      ok("C: fila durable 'config_error' por el EMAIL_FROM inválido", !!cfg && /EMAIL_FROM/.test(cfg.error || ''), cfg && JSON.stringify(cfg).slice(0, 200));
+      const sent = (logJ.rows || []).find((x) => x.to_email === 'p0-guard@example.com');
+      ok("C: fila 'sent' con el remitente canónico", !!sent && sent.from_addr === 'Posty <hola@postycommunitymanager.com>', sent && sent.from_addr);
+    } finally { child.kill('SIGKILL'); }
+  }
+
+  // ---------- Boot D: EMAIL_FROM válido se respeta ----------
+  console.log('— boot D: EMAIL_FROM válido → se respeta');
+  {
+    const { child, base } = await boot(4320, { RESEND_API_KEY: 'stub-key', RESEND_API_URL: stubUrl, EMAIL_FROM: 'Posty <hola@postyhacetodo.com>' });
+    try {
+      stubMode = 'ok'; stubLast = null;
+      const r = await magic(base, { email: 'p0-env-ok@example.com' });
+      ok('D: envío 200 con EMAIL_FROM válido', r.status === 200 && r.j.ok === true, `status=${r.status}`);
+      ok('D: el proveedor recibió el remitente del entorno', !!stubLast && stubLast.from === 'Posty <hola@postyhacetodo.com>', stubLast && stubLast.from);
     } finally { child.kill('SIGKILL'); }
   }
 

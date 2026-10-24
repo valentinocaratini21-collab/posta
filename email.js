@@ -2,7 +2,7 @@
 //
 // Para que los emails salgan de verdad, configurar en Railway:
 //   RESEND_API_KEY = (clave de https://resend.com)
-//   EMAIL_FROM     = Posta <hola@postycommunitymanager.com>   (opcional; el dominio debe estar verificado en Resend)
+//   EMAIL_FROM     = Posty <hola@postycommunitymanager.com>   (opcional; el dominio debe estar verificado en Resend)
 // Sin RESEND_API_KEY el envío se omite y solo queda registrado en el log (no rompe nada).
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -23,14 +23,44 @@ function emailConfigured() {
   return !!process.env.RESEND_API_KEY;
 }
 
+// (P0 2026-10-24, capa 2) Guard del remitente: en producción EMAIL_FROM quedó
+// cargado como «Posty.» (solo el nombre, sin dirección) y Resend rechazaba
+// TODOS los envíos con 422 «Invalid `from` field». Un error de tipeo en el
+// panel no puede volver a matar el correo: si el valor del entorno no tiene
+// formato de email válido («email@example.com» o «Nombre <email@example.com>»),
+// se ignora, se usa el remitente canónico y el error queda registrado una vez
+// por proceso en email_send_log (status 'config_error').
+const DEFAULT_FROM = 'Posty <hola@postycommunitymanager.com>';
+let _fromConfigLogged = false;
+function validFrom(v) {
+  if (!v || typeof v !== 'string') return false;
+  const s = v.trim();
+  const m = s.match(/<([^<>]+)>\s*$/) || [null, s];
+  const addr = String(m[1] || '').trim();
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/.test(addr);
+}
+function resolveFrom(override) {
+  if (override) return override; // los remitentes forzados por código mandan (ej.: la Carta)
+  const envFrom = process.env.EMAIL_FROM;
+  if (envFrom && validFrom(envFrom)) return envFrom;
+  if (envFrom) {
+    console.error(`[email] EMAIL_FROM inválido («${envFrom}»): se ignora y se usa el remitente canónico`);
+    if (!_fromConfigLogged) {
+      _fromConfigLogged = true;
+      logSend({ to: '', subject: '', from: envFrom, status: 'config_error', error: 'EMAIL_FROM sin formato de email válido: Resend lo rechaza con 422. Se usa el remitente canónico hasta corregirlo en Railway.' });
+    }
+  }
+  return DEFAULT_FROM;
+}
+
 async function sendEmail({ to, subject, html, text, attachments, from: fromOverride, replyTo }) {
+  const from = resolveFrom(fromOverride);
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.log(`[email] sin RESEND_API_KEY: no se envía a ${to} (asunto: ${subject})`);
-    logSend({ to, subject, from: fromOverride || process.env.EMAIL_FROM || '', status: 'skipped', error: 'sin RESEND_API_KEY' });
+    logSend({ to, subject, from, status: 'skipped', error: 'sin RESEND_API_KEY' });
     return { ok: false, skipped: true };
   }
-  const from = fromOverride || process.env.EMAIL_FROM || 'Posty <hola@postycommunitymanager.com>';
   const payload = { from, to: [to], subject, html };
   // (v323) Versión texto plano digna cuando el llamador la trae: Resend la
   // manda como alternativa multipart (mejor entrega y lectura sin HTML).
