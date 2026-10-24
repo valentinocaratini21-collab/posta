@@ -15953,6 +15953,113 @@ app.get('/api/gesty/reportes/carpeta', ...gestyRepMW, (req, res) => {
   } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
 });
 
+// =====================================================================
+// GESTY · G-07 PROVEEDORES Y PAGOS
+// Spec: gesty-cola-builds.md G-07 + gesty-areas-detalle.md §6 +
+// gesty-sistema-operativo.md §5 (matriz) + build-spec §11
+// (interfaz Talenty → Gesty). El módulo vive en
+// gesty-proveedores.js; acá solo se monta la API detrás de
+// requireAuth + gating de pack + capacidad «proveedores» EN EL
+// SERVIDOR. Las fichas viven en el fundamento (grupo proveedores)
+// y se enriquecen desde los papeles; las obligaciones se DERIVAN
+// de los comprobantes recibidos de G-03 menos los pagos asentados;
+// la orden de pago se aprueba SOLO por su tarjeta `pago-proveedor`
+// (el ejecutor vive en el módulo: no hay ruta ni función que la
+// apruebe por fuera de ese acto) y pasa a «pagada» SOLO con su
+// comprobante de pago vinculado — Gesty no mueve plata. La
+// recepción de liquidaciones externas valida con lista blanca:
+// solo monto y fecha (regla de hierro de §11).
+// =====================================================================
+const gestyProveedores = require('./gesty-proveedores');
+
+const gestyProvMW = [requireAuth, gesty.gestyMiddleware(db), gesty.capacidadMiddleware(db, 'proveedores')];
+
+app.post('/api/gesty/proveedores/escanear', ...gestyProvMW, express.json(), (req, res) => {
+  // El vigía: enriquece fichas, sincroniza estados y prepara
+  // orden + tarjeta por cada obligación vencida o por vencer sin
+  // orden que la cubra. Nunca silencio.
+  try { res.json({ ok: true, escaneo: gestyProveedores.escanearObligaciones(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/proveedores/resumen', ...gestyProvMW, (req, res) => {
+  try { res.json({ ok: true, resumen: gestyProveedores.resumenProveedores(db, req.session.userId, req.query || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/proveedores/obligaciones', ...gestyProvMW, (req, res) => {
+  // Las obligaciones derivadas de los papeles: por proveedor,
+  // estado y vencimiento — la base de la pantalla, de G-09 y del
+  // pronóstico.
+  try {
+    const q = req.query || {};
+    const r = gestyProveedores.listObligaciones(db, req.session.userId, {
+      estado: q.estado, proveedor_cuit: q.proveedor_cuit, proveedor: q.proveedor,
+      con_saldo: q.con_saldo === '1' || q.con_saldo === 'true', hoy: q.hoy,
+      limit: q.limit, offset: q.offset,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/proveedores', ...gestyProvMW, (req, res) => {
+  // Los proveedores vivos: ficha del fundamento + sus números.
+  try { res.json({ ok: true, ...gestyProveedores.listProveedores(db, req.session.userId, req.query || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/pagos/periodo', ...gestyProvMW, (req, res) => {
+  // Los pagos asentados del período: LA fuente que el cierre de
+  // G-06 consume para dejar de declarar este dato como faltante.
+  try {
+    const q = req.query || {};
+    res.json({ ok: true, ...gestyProveedores.pagosDelPeriodo(db, req.session.userId, { desde: q.desde, hasta: q.hasta }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/pagos/ordenes', ...gestyProvMW, express.json(), (req, res) => {
+  // Preparar una orden de pago (sobre comprobantes, o un
+  // compromiso declarado por el dueño). Nace en borrador: el OK
+  // es otro acto, el de su tarjeta.
+  try { res.json({ ok: true, orden: gestyProveedores.prepararOrden(db, req.session.userId, { ...(req.body || {}), creado_por: 'dueno' }) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/pagos/liquidaciones', ...gestyProvMW, express.json(), (req, res) => {
+  // La interfaz de doble control con Talenty (§11): entra SOLO
+  // monto + fecha (+ referencia opaca). La validación de lista
+  // blanca vive en el módulo y rechaza cualquier dato de personas.
+  try { res.json({ ok: true, orden: gestyProveedores.recibirLiquidacionExterna(db, req.session.userId, req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/pagos/ordenes', ...gestyProvMW, (req, res) => {
+  try {
+    const q = req.query || {};
+    const r = gestyProveedores.listOrdenes(db, req.session.userId, {
+      estado: q.estado, tipo: q.tipo, proveedor_cuit: q.proveedor_cuit, limit: q.limit, offset: q.offset,
+    });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.get('/api/gesty/pagos/ordenes/:id', ...gestyProvMW, (req, res) => {
+  try {
+    const o = gestyProveedores.getOrden(db, req.session.userId, Number(req.params.id));
+    if (!o) return res.status(400).json({ ok: false, error: 'Esa orden de pago no es de esta cuenta.' });
+    res.json({ ok: true, orden: o, historial: gesty.listEvents(db, req.session.userId, { entidad_tipo: 'orden-pago', entidad_id: String(o.id) }) });
+  } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/pagos/ordenes/:id/pedir-ok', ...gestyProvMW, express.json(), (req, res) => {
+  // Nace la tarjeta «pago-proveedor» en «Para tu OK» con el
+  // documento completo: aprobarla (por la bandeja de la fundación)
+  // es el único camino a «aprobada».
+  try { res.json({ ok: true, orden: gestyProveedores.pedirOKOrden(db, req.session.userId, Number(req.params.id)) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/pagos/ordenes/:id/registrar-pago', ...gestyProvMW, express.json(), (req, res) => {
+  // El asiento del pago: exige la orden aprobada y el comprobante
+  // de pago vinculado. Sin papel, no hay pago (regla de verdad).
+  try { res.json({ ok: true, ...gestyProveedores.registrarPagoOrden(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+app.post('/api/gesty/pagos/ordenes/:id/anular', ...gestyProvMW, express.json(), (req, res) => {
+  try { res.json({ ok: true, orden: gestyProveedores.anularOrden(db, req.session.userId, Number(req.params.id), req.body || {}) }); }
+  catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
 // --- Seguimiento a no-cerradores (plan Total) ---
 // due: conversaciones vencidas (24–48 h) con su borrador YA armado con
 // datos reales del fundamento. El borrador NO se envió: el dueño lo
@@ -19679,7 +19786,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v410';
+const BUILD_ID = '20261024-v411';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
