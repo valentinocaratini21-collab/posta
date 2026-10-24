@@ -496,6 +496,8 @@ async function switchPlansCountry(c) {
     if (row) row.innerHTML = planCardsHTML(cfg.plans);
     const anchor = document.getElementById('anchorLine');
     if (anchor && cfg.anchor) anchor.innerHTML = anchorHTML(cfg.anchor);
+    /* v377: el comparador y la calculadora siguen al plan real del país elegido */
+    if (cfg.plans) lpCalcSetPlan(cfg.plans.find(p => p.id === 'esencial') || cfg.plans[0]);
   } catch (e) { /* mantiene los planes actuales */ }
 }
 
@@ -956,6 +958,10 @@ function lpInitHero() {
   lpInitCarousel();
   lpInitWall();
   lpShowcaseInit(); // 📣 v370: «Historias reales» — solo si hay casos activos
+  /* v377: la semana de muestra navegable — solo rubros con semana completa y
+     captions auditados; la grilla inicial (mixto) se re-renderiza con visor */
+  lpWeekFilterChips();
+  if (document.getElementById('lpWeekGrid') && !LP_WEEK_CUR.length) lpWeekSet('mixto', document.querySelector('.lp-wchip.on'));
   // — (v344) Medición del mini-bloque del fundador en Planes: una impresión
   // por visita cuando entra en pantalla (pipeline track() → /api/track).
   const fc = document.getElementById('homeFounderCard');
@@ -1338,9 +1344,42 @@ function lpGoAudit(e) {
   return false;
 }
 let LP_CALC_RATE = 5000;
+/* v377: calculadora del costo de no estar — dos controles (horas × valor de
+   la hora) y el contraste contra el plan real de /api/billing/plans. */
+let LP_CALC_PLAN = { label: '$199.999', perDay: 6667, sym: '$' };
+let LP_CALC_CFG = { sym: '$', min: 1000, max: 30000, step: 250 };
+let LP_ESENCIAL_OBJ = null;
+function lpCalcMoney(n) { return LP_CALC_CFG.sym + Math.round(n).toLocaleString('es-AR'); }
+function lpCalcPlanMoney(n) { return LP_CALC_PLAN.sym + Math.round(n).toLocaleString('es-AR'); }
+function lpCalcSetPlan(p) {
+  if (!p || !p.price_label) return;
+  LP_ESENCIAL_OBJ = p;
+  LP_CALC_PLAN = { label: p.price_label, perDay: Math.round(Number(p.price || 0) / 30), sym: p.currency === 'UYU' ? '$U ' : '$' };
+  const uy = p.currency === 'UYU';
+  LP_CALC_CFG = uy ? { sym: '$U ', min: 100, max: 2500, step: 50 } : { sym: '$', min: 1000, max: 30000, step: 250 };
+  const presets = uy ? [200, 350, 600] : [3000, 5000, 10000];
+  if (LP_CALC_RATE < LP_CALC_CFG.min || LP_CALC_RATE > LP_CALC_CFG.max) LP_CALC_RATE = uy ? 350 : 5000;
+  const r = document.getElementById('lpCalcR');
+  if (r) { r.min = LP_CALC_CFG.min; r.max = LP_CALC_CFG.max; r.step = LP_CALC_CFG.step; r.value = LP_CALC_RATE; }
+  document.querySelectorAll('.lp-crate').forEach((b, i) => {
+    if (presets[i] != null) { b.setAttribute('data-rate', presets[i]); b.textContent = lpCalcMoney(presets[i]); }
+    b.classList.toggle('on', parseInt(b.getAttribute('data-rate'), 10) === LP_CALC_RATE);
+  });
+  const pc = document.getElementById('cmpPostyPrice');
+  if (pc) pc.textContent = 'Desde ' + p.price_label;
+  lpCalcUpdate();
+}
 function lpCalcRate(btn) {
   LP_CALC_RATE = parseInt(btn.getAttribute('data-rate'), 10) || 5000;
+  const r = document.getElementById('lpCalcR');
+  if (r) r.value = LP_CALC_RATE;
   document.querySelectorAll('.lp-crate').forEach((b) => b.classList.toggle('on', b === btn));
+  lpCalcUpdate();
+}
+function lpCalcRateSlider() {
+  const r = document.getElementById('lpCalcR');
+  if (r) LP_CALC_RATE = parseInt(r.value, 10) || LP_CALC_RATE;
+  document.querySelectorAll('.lp-crate').forEach((b) => b.classList.toggle('on', parseInt(b.getAttribute('data-rate'), 10) === LP_CALC_RATE));
   lpCalcUpdate();
 }
 function lpCalcUpdate() {
@@ -1350,10 +1389,11 @@ function lpCalcUpdate() {
   const h = parseInt(inp.value, 10) || 6;
   const hv = document.getElementById('lpCalcHVal');
   if (hv) hv.textContent = h + ' h';
-  const fmt = (n) => Math.round(n).toLocaleString('es-AR');
+  const rv = document.getElementById('lpCalcRVal');
+  if (rv) rv.textContent = lpCalcMoney(LP_CALC_RATE);
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$6.667 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
+  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>${lpCalcMoney(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: <b>${esc(LP_CALC_PLAN.label)} por mes</b> (≈ ${lpCalcPlanMoney(LP_CALC_PLAN.perDay)} por día) y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
 }
 
 /* ---------- v177: la semana de tu rubro ---------- */
@@ -1450,8 +1490,312 @@ function lpWeekCards(key) {
   const pool = LP_WEEK_POOLS[key] || data.imgs;
   return data.imgs.map((img) => ({ u: data.u, l: data.l, c: data.c, img: take(img, pool), alt: data.alt }));
 }
-function lpWeekCardHTML(card, day) {
-  return `<div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Posteo</span></div><div class="${day.cls}">${day.t}</div></div>`;
+/* v377: banco de captions auditado por rubro — los mismos textos que sirve la
+   prueba (demo-captions), alineados por slot con lpWeekCards(key). Una clave
+   ausente = ese rubro no tiene semana completa con captions y NO se ofrece. */
+const LP_WEEK_CAPS = {
+ "cafeteria": [
+  {
+   "img": "ig-cafe.jpg",
+   "tag": "NUEVO",
+   "cap": "Nuevo blend de la casa ☕\n\nTostado esta semana, de origen único.\n\nPasá por el local y probalo hoy\n#cafedeespecialidad #cafeargentina #barista #merienda #cafe",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "g-tazas.jpg",
+   "tag": "MERIENDA",
+   "cap": "La merienda se respeta ☕\n\nCafé con leche + 2 medialunas a precio amigo, toda la tarde.\n\nComentá con quién la compartís 👇\n#barista #cafe #cafedeespecialidad #merienda #cafeargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "g-latte.jpg",
+   "tag": "TIP",
+   "cap": "Flat white o latte? ☕\n\nEl flat white lleva menos leche y más café: más intenso. El latte, más suave.\n\nGuardá este post 🔖\n#merienda #cafeargentina #barista #cafedeespecialidad #cafe",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "g-pasta.jpg",
+   "tag": "CLIENTES",
+   "cap": "El rincón favorito de la tarde ☕\n\nNuestros habitués ya tienen su mesa en Café Aurora.\n\nPasá por tu café de hoy\n#barista #cafe #merienda #cafedeespecialidad #cafeargentina",
+   "why": "Porque muestra prueba real de tu trabajo"
+  },
+  {
+   "img": "g-vaso.jpg",
+   "tag": "MESA",
+   "cap": "Tu mesa de la tarde te espera ☕\n\nTe la guardamos en Café Aurora: vení directo.\n\nReservá por DM 📩\n#barista #merienda #cafe #cafeargentina #cafedeespecialidad",
+   "why": "Porque está pensado para que te reserven"
+  }
+ ],
+ "barberia": [
+  {
+   "img": "ig-barber.jpg",
+   "tag": "NUEVO",
+   "cap": "Nuevo ritual de barba 💈\n\nToalla caliente, aceites y navaja: salís renovado.\n\nReservá tu turno por DM 📩\n#corte #barbero #fade #barbershop #barberiaargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-elcorte-2.jpg",
+   "tag": "TURNO",
+   "cap": "Turnos jueves y viernes 💈\n\nEn El Corte Barbería se ocupan rápido.\n\nReservá el tuyo por DM 📩\n#barbershop #corte #barbero #fade #barberiaargentina",
+   "why": "Porque está pensado para que te reserven"
+  },
+  {
+   "img": "gt-elcorte-4.jpg",
+   "tag": "TENDENCIA",
+   "cap": "El corte que todos piden 💈\n\nTextura arriba, degradado limpio: ya lo hacemos en El Corte Barbería.\n\nReservá tu turno 📩\n#fade #corte #barbero #barberiaargentina #barbershop",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-elcorte-6.jpg",
+   "tag": "TIP",
+   "cap": "Que tu corte dure más 👇\n\n1. Lavalo día por medio. 2. Cera, no gel. 3. Retoque cada 3 semanas.\n\nGuardá este post 🔖\n#fade #corte #barbero #barbershop #barberiaargentina",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-elcorte-8.jpg",
+   "tag": "COMBO",
+   "cap": "Combo corte + barba 💈\n\nPrecio especial esta semana en El Corte Barbería.\n\nComentá INFO y te pasamos todo 👇\n#barberiaargentina #barbero #corte #barbershop #fade",
+   "why": "Porque está pensado para vender"
+  }
+ ],
+ "belleza": [
+  {
+   "img": "ig-belleza.jpg",
+   "tag": "NUEVO",
+   "cap": "Balayage en 2 horas ✨\n\nColor natural, sin pasar todo el día en la pelu. Ideal si querés un cambio sin drama.\n\nReservá tu turno por DM 📩\n#makeup #skincare #peluqueria #bellezaargentina #estetica",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-esteticaalma-2.jpg",
+   "tag": "TURNO",
+   "cap": "Esta semana quedan turnos jueves y viernes 💇\n\nCorte, color o peinado: elegí tu horario antes de que se ocupen.\n\nReservá tu turno por DM 📩\n#estetica #skincare #peluqueria #makeup #bellezaargentina",
+   "why": "Porque está pensado para que te reserven"
+  },
+  {
+   "img": "gt-esteticaalma-4.jpg",
+   "tag": "TIP",
+   "cap": "Teñirse en casa: 3 errores típicos 👇\n\n1. Elegir el tono por la caja. 2. Dejarlo de más \"por las dudas\". 3. Saltarse el matizador.\n\nGuardá este post 💇\n#bellezaargentina #peluqueria #estetica #makeup #skincare",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-esteticaalma-6.jpg",
+   "tag": "COMBO",
+   "cap": "Combo corte + color 💇\n\nVení con una amiga: se atienden juntas y ahorran las dos.\n\nEscribinos por DM 📩\n#skincare #makeup #estetica #peluqueria #bellezaargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-esteticaalma-8.jpg",
+   "tag": "ANTES/DESPUÉS",
+   "cap": "De castaño apagado a rubio luminoso ✨\n\nUn día de trabajo, cero daño: así sale el color en Estética Alma.\n\nPedí tu diagnóstico por DM 📩\n#makeup #peluqueria #bellezaargentina #estetica #skincare",
+   "why": "Porque muestra prueba real de tu trabajo"
+  }
+ ],
+ "mascotas": [
+  {
+   "img": "ig-mascotas.jpg",
+   "tag": "NUEVO",
+   "cap": "Llegó alimento premium 🐶\n\nPara perros y gatos de todas las edades, con proteína de verdad.\n\nPedilo por DM 📩\n#petshop #veterinaria #gatos #doglover #mascotasargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-petshop-1.jpg",
+   "tag": "2X1",
+   "cap": "2x1 en juguetes esta semana 🧸\n\nPelotas, mordillos y peluches: llevate dos, pagá uno.\n\nPasá por el local hoy\n#mascotasargentina #veterinaria #petshop #gatos #doglover",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-petshop-4.jpg",
+   "tag": "TIP",
+   "cap": "3 señales para traerlo a control 👇\n\n1. Come menos de lo normal. 2. Duerme mucho más. 3. Se rasca sin parar.\n\nGuardá este post 🔖\n#mascotasargentina #veterinaria #petshop #doglover #gatos",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-petshop-6.jpg",
+   "tag": "LOS MIMADOS",
+   "cap": "Nivel de ternura: máximo 🐶\n\nLos mimados de Pet Shop Huella, divinos como siempre.\n\nReservá su turno de pelu por DM 📩\n#gatos #veterinaria #mascotasargentina #doglover #petshop",
+   "why": "Porque muestra prueba real de tu trabajo"
+  },
+  {
+   "img": "gt-petshop-8.jpg",
+   "tag": "TURNO",
+   "cap": "Baño y corte para tu mejor amigo 🛁\n\nTurnos de peluquería canina esta semana en Pet Shop Huella.\n\nReservá el suyo por DM 📩\n#petshop #doglover #mascotasargentina #veterinaria #gatos",
+   "why": "Porque está pensado para que te reserven"
+  }
+ ],
+ "fitness": [
+  {
+   "img": "ig-fitness.jpg",
+   "tag": "HOY",
+   "cap": "Nueva clase 7 AM: funcional 💪\n\n45 minutos intensos antes del trabajo. Sin excusas de horario.\n\nAnotate por DM 📩\n#personaltrainer #gymlife #entrenamiento #vidasana #fitnessargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-gymnorte-2.jpg",
+   "tag": "GRATIS",
+   "cap": "Tu primera clase es gratis 💪\n\nProbá funcional, boxeo o yoga sin pagar nada. Solo traé ganas.\n\nComentá INFO y te anotamos 👇\n#gymlife #entrenamiento #personaltrainer #vidasana #fitnessargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-gymnorte-4.jpg",
+   "tag": "TIP",
+   "cap": "3 errores que frenan tu progreso 👇\n\n1. Entrenar siempre igual. 2. Saltarse el calentamiento. 3. Dormir poco.\n\nGuardá este post y entrená mejor 🔖\n#fitnessargentina #gymlife #vidasana #personaltrainer #entrenamiento",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-gymnorte-6.jpg",
+   "tag": "COMUNIDAD",
+   "cap": "Los sábados entrenamos juntos 💪\n\nGrupal para todos los niveles en Gym Norte: vení solo o con amigos.\n\nSumate por DM 📩\n#fitnessargentina #gymlife #vidasana #personaltrainer #entrenamiento",
+   "why": "Porque muestra prueba real de tu trabajo"
+  },
+  {
+   "img": "gt-gymnorte-8.jpg",
+   "tag": "PLAN",
+   "cap": "Plan anual con 20% off 💪\n\nPagás 12 meses al precio de 9 y entrenás todo el año sin pensar en la cuota.\n\nPedilo por DM 📩\n#vidasana #entrenamiento #gymlife #personaltrainer #fitnessargentina",
+   "why": "Porque está pensado para vender"
+  }
+ ],
+ "detailing": [
+  {
+   "img": "gt-bustos-1.jpg",
+   "tag": "NUEVO",
+   "cap": "Nuevo: service de caja automática 🔧\n\nCon equipo de diagnóstico propio en Bustos Detailing.\n\nPedí tu turno por DM 📩\n#autos #mecanica #serviceautomotor #taller #autosargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-bustos-2.jpg",
+   "tag": "SERVICE",
+   "cap": "Service completo: 20 puntos de control 🚗\n\nAceite, filtros y revisión general en el día.\n\nReservá tu lugar por DM 📩\n#mecanica #autosargentina #autos #taller #serviceautomotor",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-bustos-4.jpg",
+   "tag": "TIP",
+   "cap": "Tu auto te avisa: escuchalo 👇\n\n1. Chillido al frenar. 2. Golpe al doblar. 3. Zumbido a velocidad.\n\nGuardá este post 🔖\n#mecanica #serviceautomotor #taller #autosargentina #autos",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-bustos-6.jpg",
+   "tag": "CUOTAS",
+   "cap": "Estrená tu próximo auto 🚗\n\nCuotas que se adaptan a tu bolsillo en Bustos Detailing.\n\nComentá INFO y te pasamos todo 👇\n#serviceautomotor #taller #mecanica #autos #autosargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-bustos-9.jpg",
+   "tag": "CLIENTES",
+   "cap": "Otro 0km en la calle 🚗\n\nFelicitaciones a la familia que retiró esta semana en Bustos Detailing.\n\nVení a verlo: escribinos por DM 📩\n#autosargentina #serviceautomotor #mecanica #taller #autos",
+   "why": "Porque muestra prueba real de tu trabajo"
+  }
+ ],
+ "inmobiliaria": [
+  {
+   "img": "gt-roca-1.jpg",
+   "tag": "NUEVO",
+   "cap": "Nuevo ingreso: 2 ambientes en Palermo 🏠\n\nAl frente, luminoso y con balcón al pulmón. Se muestra esta semana.\n\nPedí las fotos por DM 📩\n#ventadepropiedades #alquileres #realestateargentina #propiedades #inmobiliariaargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-roca-2.jpg",
+   "tag": "OPORTUNIDAD",
+   "cap": "Oportunidad de dueño directo 🏠\n\n2 ambientes por debajo del precio del barrio. Estas no duran.\n\nComentá INFO y te pasamos todo 👇\n#ventadepropiedades #inmobiliariaargentina #propiedades #realestateargentina #alquileres",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-roca-4.jpg",
+   "tag": "TIP",
+   "cap": "Antes de señar, preguntá esto 👇\n\n1. Expensas y qué incluyen. 2. Antigüedad de instalaciones. 3. Estado del consorcio.\n\nGuardá este post 🔖\n#realestateargentina #propiedades #alquileres #inmobiliariaargentina #ventadepropiedades",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-roca-5.jpg",
+   "tag": "VENDIDA",
+   "cap": "Vendida en 20 días 🏠\n\nOtra familia ya está en su casa gracias a Roca Propiedades.\n\nContanos qué buscás por DM 📩\n#inmobiliariaargentina #alquileres #ventadepropiedades #propiedades #realestateargentina",
+   "why": "Porque muestra prueba real de tu trabajo"
+  },
+  {
+   "img": "gt-roca-9.jpg",
+   "tag": "VISITA",
+   "cap": "Este finde se muestra 🏠\n\nVisitas sábado y domingo a la tarde en Roca Propiedades.\n\nCoordiná la tuya por DM 📩\n#inmobiliariaargentina #alquileres #propiedades #realestateargentina #ventadepropiedades",
+   "why": "Porque está pensado para que te reserven"
+  }
+ ],
+ "odontologia": [
+  {
+   "img": "gt-dentalprado-1.jpg",
+   "tag": "NUEVO",
+   "cap": "Limpieza dental con ultrasonido ✨\n\nMás rápida, sin molestias y con resultados que se notan en el espejo.\n\nPedí tu turno por DM 📩\n#habitossaludables #saludargentina #odontologia #bienestar #saluddental",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-dentalprado-2.jpg",
+   "tag": "TURNO",
+   "cap": "Tu control anual, sin vueltas 📋\n\nEn Dental Prado te atendemos a horario: reservá y listo.\n\nReservá tu turno por DM 📩\n#saludargentina #odontologia #bienestar #saluddental #habitossaludables",
+   "why": "Porque está pensado para que te reserven"
+  },
+  {
+   "img": "gt-dentalprado-4.jpg",
+   "tag": "TIP",
+   "cap": "3 hábitos, todos los días 👇\n\n1. Cepillado después de cada comida. 2. Hilo dental a la noche. 3. Control cada 6 meses.\n\nGuardá este post 🔖\n#odontologia #saluddental #saludargentina #habitossaludables #bienestar",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-dentalprado-5.jpg",
+   "tag": "CHEQUEO",
+   "cap": "Chequeo completo a precio especial 📋\n\nLimpieza y control en una sola visita, solo este mes.\n\nPedí tu turno por DM 📩\n#saludargentina #odontologia #bienestar #saluddental #habitossaludables",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-dentalprado-3.jpg",
+   "tag": "CONFIANZA",
+   "cap": "10 años cuidando sonrisas ✨\n\nGracias a cada paciente que confía en Dental Prado.\n\nPedí tu primera consulta por DM 📩\n#saluddental #bienestar #habitossaludables #odontologia #saludargentina",
+   "why": "Porque muestra prueba real de tu trabajo"
+  }
+ ],
+ "veterinaria": [
+  {
+   "img": "gt-vetnorte-1.jpg",
+   "tag": "NUEVO",
+   "cap": "Llegó alimento premium 🐶\n\nPara perros y gatos de todas las edades, con proteína de verdad.\n\nPedilo por DM 📩\n#mascotasargentina #veterinaria #doglover #petshop #gatos",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-vetnorte-2.jpg",
+   "tag": "2X1",
+   "cap": "2x1 en juguetes esta semana 🧸\n\nPelotas, mordillos y peluches: llevate dos, pagá uno.\n\nPasá por el local hoy\n#veterinaria #petshop #gatos #doglover #mascotasargentina",
+   "why": "Porque está pensado para vender"
+  },
+  {
+   "img": "gt-vetnorte-3.jpg",
+   "tag": "TIP",
+   "cap": "3 señales para traerlo a control 👇\n\n1. Come menos de lo normal. 2. Duerme mucho más. 3. Se rasca sin parar.\n\nGuardá este post 🔖\n#mascotasargentina #veterinaria #petshop #doglover #gatos",
+   "why": "Porque te posiciona como el que sabe de tu rubro"
+  },
+  {
+   "img": "gt-vetnorte-4.jpg",
+   "tag": "LOS MIMADOS",
+   "cap": "Nivel de ternura: máximo 🐶\n\nLos mimados de Clínica Veterinaria Norte, divinos como siempre.\n\nReservá su turno de pelu por DM 📩\n#mascotasargentina #veterinaria #gatos #doglover #petshop",
+   "why": "Porque muestra prueba real de tu trabajo"
+  },
+  {
+   "img": "gt-vetnorte-5.jpg",
+   "tag": "TURNO",
+   "cap": "Baño y corte para tu mejor amigo 🛁\n\nTurnos de peluquería canina esta semana en Clínica Veterinaria Norte.\n\nReservá el suyo por DM 📩\n#gatos #doglover #petshop #veterinaria #mascotasargentina",
+   "why": "Porque está pensado para que te reserven"
+  }
+ ]
+};
+const LP_WEEK_MIXKEY = { 'cafe.aurora': 'cafeteria', 'tiendacora': 'moda', 'elcorte.barberia': 'barberia', 'estetica.alma': 'belleza', 'petshop.huella': 'mascotas' };
+let LP_WEEK_CUR = [];
+function lpWeekFilterChips() {
+  document.querySelectorAll('.lp-wchip').forEach((ch) => {
+    const m = (ch.getAttribute('onclick') || '').match(/lpWeekSet\('([a-z]+)'/);
+    const k = m && m[1];
+    if (k && k !== 'mixto' && !(LP_WEEK_CAPS[k] && LP_WEEK_CAPS[k].length >= 5)) ch.remove();
+  });
+}
+function lpWeekCardHTML(card, day, i) {
+  const view = card.cap ? ` onclick="lpWeekView(${i})" role="button" tabindex="0" aria-label="Ver el posteo completo"` : '';
+  const hint = card.cap ? '<div class="lp-day-cap">💬 Ver el posteo completo</div>' : '';
+  return `<div class="lp-day"${view}><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Posteo</span></div><div class="${day.cls}">${day.t}</div>${hint}</div>`;
 }
 function lpWeekSet(key, btn) {
   const data = LP_WEEK[key] || LP_WEEK.mixto;
@@ -1460,13 +1804,77 @@ function lpWeekSet(key, btn) {
   const bridge = document.getElementById('lpWeekBridge');
   const apply = () => {
     if (grid) {
-      const cards = lpWeekCards(key).map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i]));
-      grid.innerHTML = cards.join('');
+      LP_WEEK_CUR = lpWeekCards(key).map((card, i) => {
+        const bankKey = key === 'mixto' ? LP_WEEK_MIXKEY[card.u] : key;
+        const bank = (bankKey && LP_WEEK_CAPS[bankKey] && LP_WEEK_CAPS[bankKey][i]) || null;
+        return { ...card, cap: bank ? bank.cap : '', why: bank ? bank.why : '', tag: bank ? bank.tag : '' };
+      });
+      grid.innerHTML = LP_WEEK_CUR.map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i], i)).join('');
       grid.classList.remove('lp-week-swap');
     }
-    if (bridge) bridge.innerHTML = `Esto es un ejemplo ${data.ejemplo}. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a>`;
+    if (bridge) bridge.innerHTML = `Esto es un ejemplo ${data.ejemplo}. Tocá cualquier posteo para verlo entero, con su pie de foto tal cual saldría. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a>`;
   };
   if (grid) { grid.classList.add('lp-week-swap'); setTimeout(apply, 170); } else apply();
+}
+/* v377: visor pieza por pieza de la semana de muestra */
+let LP_VIEW_I = 0;
+let LP_VIEW_KEYS = false;
+function lpWeekView(i) {
+  if (!LP_WEEK_CUR[i] || !LP_WEEK_CUR[i].cap) return;
+  const ov = document.getElementById('lpView');
+  if (!ov) return;
+  LP_VIEW_I = i;
+  lpViewRender();
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (!LP_VIEW_KEYS) {
+    LP_VIEW_KEYS = true;
+    document.addEventListener('keydown', (e) => {
+      const o = document.getElementById('lpView');
+      if (!o || !o.classList.contains('open')) return;
+      if (e.key === 'Escape') lpWeekClose();
+      if (e.key === 'ArrowLeft') lpWeekNav(-1);
+      if (e.key === 'ArrowRight') lpWeekNav(1);
+    });
+    let tx = null;
+    ov.addEventListener('touchstart', (e) => { tx = e.changedTouches[0].clientX; }, { passive: true });
+    ov.addEventListener('touchend', (e) => {
+      if (tx == null) return;
+      const dx = e.changedTouches[0].clientX - tx; tx = null;
+      if (Math.abs(dx) > 42) lpWeekNav(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  }
+}
+function lpViewRender() {
+  const c = LP_WEEK_CUR[LP_VIEW_I];
+  if (!c) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('lpViewU', '@' + c.u);
+  set('lpViewDay', LP_WEEK_DAYS[LP_VIEW_I].d + ' · ' + LP_WEEK_DAYS[LP_VIEW_I].t);
+  const av = document.getElementById('lpViewAv');
+  if (av) { av.textContent = c.l; av.style.background = c.c; }
+  const img = document.getElementById('lpViewImg');
+  if (img) { img.src = c.img; img.alt = c.alt; }
+  const tagEl = document.getElementById('lpViewTag');
+  if (tagEl) { tagEl.textContent = c.tag || ''; tagEl.style.display = c.tag ? '' : 'none'; }
+  set('lpViewCap', c.cap || '');
+  const why = document.getElementById('lpViewWhy');
+  if (why) { why.style.display = c.why ? '' : 'none'; why.innerHTML = c.why ? '<b>Por qué este posteo:</b> ' + esc(c.why) : ''; }
+  set('lpViewCount', (LP_VIEW_I + 1) + ' de ' + LP_WEEK_CUR.length);
+  const pv = document.getElementById('lpViewPrev'); if (pv) pv.disabled = LP_VIEW_I <= 0;
+  const nx = document.getElementById('lpViewNext'); if (nx) nx.disabled = LP_VIEW_I >= LP_WEEK_CUR.length - 1;
+}
+function lpWeekNav(d) {
+  let n = LP_VIEW_I + d;
+  while (n >= 0 && n < LP_WEEK_CUR.length && !LP_WEEK_CUR[n].cap) n += d;
+  if (n < 0 || n >= LP_WEEK_CUR.length) return;
+  LP_VIEW_I = n;
+  lpViewRender();
+}
+function lpWeekClose() {
+  const ov = document.getElementById('lpView');
+  if (ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
 }
 function lpWeekToForm() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1752,6 +2160,22 @@ function landingView(cfg) {
   const country = (cfg && cfg.country) || 'AR';
   PLANS_COUNTRY = country;
   const planCards = planCardsHTML(plans);
+  /* v377: comparador honesto + calculadora — el precio de Posty sale del plan real */
+  const lpEsencial = plans.find(p => p.id === 'esencial') || plans[0] || null;
+  const lpUy = country === 'UY';
+  const lpChips = lpUy ? [200, 350, 600] : [3000, 5000, 10000];
+  const lpDefRate = lpUy ? 350 : 5000;
+  const lpSym = lpUy ? '$U ' : '$';
+  const lpFmt = (n) => lpSym + Math.round(n).toLocaleString('es-AR');
+  const lpDefCost = Math.round(6 * 4.33 * lpDefRate);
+  const lpHorasMes = Math.round(6 * 4.33);
+  const lpPlanLabel = (lpEsencial && lpEsencial.price_label) || '$199.999';
+  const lpPerDay = lpEsencial ? Math.round(Number(lpEsencial.price || 0) / 30) : 6667;
+  const lpPerDaySym = lpEsencial && lpEsencial.currency === 'UYU' ? '$U ' : '$';
+  LP_CALC_RATE = lpDefRate;
+  LP_ESENCIAL_OBJ = lpEsencial;
+  LP_CALC_PLAN = { label: lpPlanLabel, perDay: lpPerDay, sym: lpPerDaySym };
+  LP_CALC_CFG = lpUy ? { sym: '$U ', min: 100, max: 2500, step: 50 } : { sym: '$', min: 1000, max: 30000, step: 250 };
   return `
   ${pzRefBandHTML()}
   <div class="nav nav-landing"><div class="wrap">
@@ -1861,6 +2285,7 @@ function landingView(cfg) {
         <button type="button" class="lp-wchip" onclick="lpWeekSet('moda', this)">👕 Moda</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('belleza', this)">💅 Belleza</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('mascotas', this)">🐶 Mascotas</button>
+        <button type="button" class="lp-wchip" onclick="lpWeekSet('veterinaria', this)">🩺 Veterinaria</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('fitness', this)">🏋️ Fitness</button>
         <button type="button" class="lp-wchip" onclick="lpWeekSet('boliche', this)">🪩 Boliche</button>
       </div>
@@ -1875,6 +2300,15 @@ function landingView(cfg) {
       <p class="lp-week-bridge" id="lpWeekBridge">Esto es un ejemplo con negocios de varios rubros. <a href="#" onclick="return lpWeekToForm()">La semana de <b>TU</b> negocio se arma en 1 minuto →</a></p>
     </div>
   </div></div>
+  <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Posteo de la semana de muestra" onclick="if(event.target===this)lpWeekClose()">
+    <div class="lp-view-card">
+      <button type="button" class="lp-view-x" onclick="lpWeekClose()" aria-label="Cerrar">✕</button>
+      <div class="lp-view-head"><span class="lp-view-av" id="lpViewAv"></span><div><b id="lpViewU"></b><span id="lpViewDay"></span></div></div>
+      <img class="lp-view-img" id="lpViewImg" alt="">
+      <div class="lp-view-nav"><button type="button" id="lpViewPrev" onclick="lpWeekNav(-1)" aria-label="Posteo anterior">‹</button><span class="lp-view-count" id="lpViewCount"></span><button type="button" id="lpViewNext" onclick="lpWeekNav(1)" aria-label="Posteo siguiente">›</button></div>
+      <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
+    </div>
+  </div>
   <div class="section"><div class="wrap">
     <h2>Un video premium cada semana 🎬</h2>
     <p class="lede">Posty crea un video cinematográfico de tu producto, listo para publicar — incluido en todos los planes.</p>
@@ -1968,16 +2402,19 @@ function landingView(cfg) {
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>El único que hace todo por vos</h2>
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
-    <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
-      <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $199.999</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">1 minuto</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">Probalo gratis, sin tarjeta</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>3 a 6 meses atado</div><div class="win">Mensual, cancelás cuando querés</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Si está en el contrato</div><div class="win">Incluido — con un toque</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>Honorarios aparte</div><div class="win">Potencia tu mejor posteo desde la app</div></div>
-    </div>
+    <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparación: hacerlo vos, un community manager freelance, una agencia o Posty">
+      <div class="cmp-row cmp-head" role="row"><div></div><div>Lo hacés vos</div><div>CM freelance</div><div>Agencia</div><div class="win">Posty</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>$0 de bolsillo — pero es tu tiempo</div><div>$300.000 a $600.000 *</div><div>Más que un CM freelance *</div><div class="win" id="cmpPostyPrice">Desde ${esc(lpPlanLabel)}</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Qué incluye</div><div>Lo que llegues a hacer</div><div>Posteos; reels e historias, según acuerdo</div><div>Posteos y estrategia</div><div class="win">7 posteos por semana en todos los planes; reels e historias según tu plan</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>Horas, cada semana</div><div>Días</div><div>1 a 2 semanas</div><div class="win">1 minuto</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>—</div><div>Coordinación y aprobaciones</div><div>Varias por mes</div><div class="win">Cero</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Vos, cuando podés</div><div>A veces está incluido</div><div>Si está en el contrato</div><div class="win">Plan Total: respuestas listas para tu OK en un toque</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Reseñas de Google</div><div>A mano, una por una</div><div>No suele incluirlas</div><div>Se cobra aparte</div><div class="win">Plan Total</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>La armás y la seguís vos</div><div>Honorarios aparte</div><div>Honorarios aparte</div><div class="win">Potencia tu mejor posteo desde la app</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>—</div><div>Rara vez</div><div>No existe</div><div class="win">3 días gratis, sin tarjeta</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Contrato</div><div>—</div><div>Mes a mes, informal</div><div>3 a 6 meses</div><div class="win">Mensual, cancelás cuando querés</div></div>
+    </div></div>
+    <p class="cmp-note">* Precios de referencia de mercado para un servicio equivalente. El precio de Posty es el real: el de los planes de acá abajo.</p>
     <p class="unico-line">Un community manager cuesta <b>$300.000 a $600.000 por mes — o más</b>. Posty arranca en <b>$199.999</b>.</p>
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
@@ -2037,13 +2474,12 @@ function landingView(cfg) {
     <div class="lp-calc-box">
       <label class="lp-calc-lab" for="lpCalcH">Horas que le dedicás por semana: <b id="lpCalcHVal">6 h</b></label>
       <input type="range" id="lpCalcH" min="1" max="20" step="1" value="6" oninput="lpCalcUpdate()" aria-label="Horas por semana que le dedicás a tu Instagram">
-      <label class="lp-calc-lab" style="margin-top:16px">¿Cuánto vale tu hora?</label>
+      <label class="lp-calc-lab" for="lpCalcR" style="margin-top:16px">¿Cuánto vale tu hora? <b id="lpCalcRVal">${lpFmt(lpDefRate)}</b></label>
+      <input type="range" id="lpCalcR" min="${lpUy ? 100 : 1000}" max="${lpUy ? 2500 : 30000}" step="${lpUy ? 50 : 250}" value="${lpDefRate}" oninput="lpCalcRateSlider()" aria-label="Cuánto vale tu hora">
       <div class="lp-calc-rates">
-        <button type="button" class="lp-crate" data-rate="3000" onclick="lpCalcRate(this)">$3.000</button>
-        <button type="button" class="lp-crate on" data-rate="5000" onclick="lpCalcRate(this)">$5.000</button>
-        <button type="button" class="lp-crate" data-rate="10000" onclick="lpCalcRate(this)">$10.000</button>
+        ${lpChips.map((v) => `<button type="button" class="lp-crate${v === lpDefRate ? ' on' : ''}" data-rate="${v}" onclick="lpCalcRate(this)">${lpFmt(v)}</button>`).join('')}
       </div>
-      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$6.667 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
+      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>${lpFmt(lpDefCost)}</b> por mes (<b>${lpHorasMes} horas</b> tuyas).<br>Con Posty: <b>${esc(lpPlanLabel)} por mes</b> (≈ ${lpPerDaySym}${lpPerDay.toLocaleString('es-AR')} por día) y <b>0 horas tuyas</b> — te quedan <b>${lpHorasMes} horas por mes</b> para tu negocio.</div>
     </div>
     <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>$300.000+ por mes</b>.</p>
   </div></div>

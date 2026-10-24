@@ -77,7 +77,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css?v=20261024d">
+<link rel="stylesheet" href="/styles.css?v=20261024e">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -747,6 +747,15 @@
       <p class="lp-week-note">This is what your week looks like: ideas, designs and copy with your brand, posted automatically at the best times.</p>
     </div>
   </div></div>
+  <div class="lp-view" id="lpView" role="dialog" aria-modal="true" aria-label="Sample week post" onclick="if(event.target===this)lpWeekClose()">
+    <div class="lp-view-card">
+      <button type="button" class="lp-view-x" onclick="lpWeekClose()" aria-label="Close">✕</button>
+      <div class="lp-view-head"><span class="lp-view-av" id="lpViewAv"></span><div><b id="lpViewU"></b><span id="lpViewDay"></span></div></div>
+      <img class="lp-view-img" id="lpViewImg" alt="">
+      <div class="lp-view-nav"><button type="button" id="lpViewPrev" onclick="lpWeekNav(-1)" aria-label="Previous post">‹</button><span class="lp-view-count" id="lpViewCount"></span><button type="button" id="lpViewNext" onclick="lpWeekNav(1)" aria-label="Next post">›</button></div>
+      <div class="lp-view-body"><span class="lp-view-tag" id="lpViewTag"></span><div class="lp-view-cap" id="lpViewCap"></div><div class="lp-view-why" id="lpViewWhy"></div></div>
+    </div>
+  </div>
   <div class="section"><div class="wrap">
     <h2>One premium video every week 🎬</h2>
     <p class="lede">Posty creates a cinematic video of your product, ready to post — included in every plan.</p>
@@ -1003,16 +1012,19 @@
   <div class="section" id="diferencia" style="background:var(--bg2)"><div class="wrap" style="max-width:860px">
     <h2>The only one that does it all for you</h2>
     <p class="lede">Scheduling apps give you more work. Community managers run $2,000+ a month. Agencies sell you meetings. I hand you the finished week.</p>
-    <div class="cmp-table" role="table" aria-label="Posty vs agency comparison">
-      <div class="cmp-row cmp-head" role="row"><div></div><div>Traditional agency</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>From $2,000</div><div class="win">From $199.99</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Your week ready in</div><div>2 weeks</div><div class="win">1 minute</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Meetings</div><div>Several per month</div><div class="win">Zero</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Try before you pay</div><div>Doesn't exist</div><div class="win">Try it free, no card</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Contract</div><div>Locked in for 3 to 6 months</div><div class="win">Monthly, cancel anytime</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Answers comments and messages</div><div>If it's in the contract</div><div class="win">Included — one tap away</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Ad spend</div><div>Extra fees</div><div class="win">Boosts your best post from the app</div></div>
-    </div>
+    <div class="cmp-scroll"><div class="cmp-table cmp4" role="table" aria-label="Comparison: doing it yourself, a freelance community manager, an agency, or Posty">
+      <div class="cmp-row cmp-head" role="row"><div></div><div>Do it yourself</div><div>Freelance CM</div><div>Agency</div><div class="win">Posty</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Price per month</div><div>$0 out of pocket — but it's your time</div><div>$1,500–$3,000+ *</div><div>More than a freelance CM *</div><div class="win">From $199.99</div></div>
+      <div class="cmp-row" role="row"><div class="crit">What's included</div><div>Whatever you get around to</div><div>Posts; reels and stories by arrangement</div><div>Posts and strategy</div><div class="win">7 posts a week on every plan; reels and stories by plan</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Your week ready in</div><div>Hours, every week</div><div>Days</div><div>1 to 2 weeks</div><div class="win">1 minute</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Meetings</div><div>—</div><div>Coordination and approvals</div><div>Several per month</div><div class="win">Zero</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Answers comments and messages</div><div>You, when you can</div><div>Sometimes included</div><div>If it's in the contract</div><div class="win">Total plan: replies ready for your one-tap OK</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Google reviews</div><div>By hand, one by one</div><div>Usually not included</div><div>Charged separately</div><div class="win">Total plan</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Ad spend</div><div>You build and babysit it</div><div>Extra fees</div><div>Extra fees</div><div class="win">Boosts your best post from the app</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Try before you pay</div><div>—</div><div>Rarely</div><div>Doesn't exist</div><div class="win">3 days free, no card</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Contract</div><div>—</div><div>Month to month, informal</div><div>Locked in for 3 to 6 months</div><div class="win">Monthly, cancel anytime</div></div>
+    </div></div>
+    <p class="cmp-note">* Market reference prices for an equivalent service. Posty's price is the real one: it's the plans right below.</p>
     <p class="unico-line">A community manager costs <b>$1,500–$3,000+ a month</b>. Posty from <b>$199.99</b>.</p>
     <p class="lp-trust">🔒 We publish through Meta's official API · You sign in with the official login, without giving us your password · You can pause any post before it goes out</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/en/prueba">Try it free</a></div>
@@ -1072,13 +1084,14 @@
     <div class="lp-calc-box">
       <label class="lp-calc-lab" for="lpCalcH">Hours you spend on it per week: <b id="lpCalcHVal">6 h</b></label>
       <input type="range" id="lpCalcH" min="1" max="20" step="1" value="6" oninput="lpCalcUpdate()" aria-label="Hours per week you spend on your Instagram">
-      <label class="lp-calc-lab" style="margin-top:16px">What's your hour worth?</label>
+      <label class="lp-calc-lab" for="lpCalcR" style="margin-top:16px">What's your hour worth? <b id="lpCalcRVal">$25</b></label>
+      <input type="range" id="lpCalcR" min="5" max="150" step="5" value="25" oninput="lpCalcRateSlider()" aria-label="What your hour is worth">
       <div class="lp-calc-rates">
         <button type="button" class="lp-crate" data-rate="15" onclick="lpCalcRate(this)">$15</button>
         <button type="button" class="lp-crate on" data-rate="25" onclick="lpCalcRate(this)">$25</button>
         <button type="button" class="lp-crate" data-rate="40" onclick="lpCalcRate(this)">$40</button>
       </div>
-      <div class="lp-calc-out" id="lpCalcOut">Your Instagram costs you today ≈ <b>$650</b> per month (<b>26 hours</b> of your time).<br>With Posty: from <b>$6.67 per day</b> and <b>0 hours of your time</b> — you get back <b>26 hours a month</b> for your business.</div>
+      <div class="lp-calc-out" id="lpCalcOut">Your Instagram costs you today ≈ <b>$650</b> per month (<b>26 hours</b> of your time).<br>With Posty: <b>$199.99 per month</b> (≈ $6.67 per day) and <b>0 hours of your time</b> — you get back <b>26 hours a month</b> for your business.</div>
     </div>
     <p class="lp-calc-cm">And if you outsource it: a community manager to do it for you costs <b>$2,000+ per month</b>.</p>
   </div></div>
@@ -1378,8 +1391,312 @@ function lpWeekCards(key) {
   const pool = LP_WEEK_POOLS[key] || data.imgs;
   return data.imgs.map((img) => ({ u: data.u, l: data.l, c: data.c, img: take(img, pool), alt: data.alt }));
 }
-function lpWeekCardHTML(card, day) {
-  return `<div class="lp-day"><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Post</span></div><div class="${day.cls}">${day.t}</div></div>`;
+/* v377: audited caption bank per trade — the same copy the trial serves
+   (demo-captions EN), aligned by slot with lpWeekCards(key). A missing key =
+   that trade has no complete captioned week and is NOT offered. */
+const LP_WEEK_CAPS = {
+ "cafeteria": [
+  {
+   "img": "ig-cafe.jpg",
+   "tag": "NEW",
+   "cap": "Single-origin of the month ☕\n\nA new bean at Café Aurora, roasted for espresso and filter.\n\nCome try it today 📍\n#specialtycoffee #coffee #coffeelovers #coffeeshop #barista",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "g-tazas.jpg",
+   "tag": "COMBO",
+   "cap": "The perfect pair ☕\n\nCoffee and pastry together at Café Aurora, every morning.\n\nOrder yours at the counter or by DM 📩\n#specialtycoffee #coffeelovers #barista #coffeeshop #coffee",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "g-latte.jpg",
+   "tag": "TIP",
+   "cap": "Café-level espresso at home 👇\n\nFresh beans, hot portafilter, 25 seconds. The rest is practice.\n\nSave this guide 🔖\n#coffeeshop #coffee #coffeelovers #barista #specialtycoffee",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "g-pasta.jpg",
+   "tag": "REGULARS",
+   "cap": "The morning crowd ☀️\n\nThe regulars who start their day at Café Aurora.\n\nJoin us tomorrow 📍\n#coffee #coffeeshop #specialtycoffee #barista #coffeelovers",
+   "why": "Because it shows real proof of your work"
+  },
+  {
+   "img": "g-vaso.jpg",
+   "tag": "BRUNCH",
+   "cap": "Brunch is back 🥐\n\nWeekends at Café Aurora: brunch from 10 AM.\n\nBook your table by DM 📩\n#barista #specialtycoffee #coffeeshop #coffeelovers #coffee",
+   "why": "Because it is built to get you bookings"
+  }
+ ],
+ "barberia": [
+  {
+   "img": "ig-barber.jpg",
+   "tag": "NEW",
+   "cap": "Fades done right ✂️\n\nSkin fades are the specialty at El Corte Barbería.\n\nBook your chair by DM 📩\n#menshair #barber #barberlife #barbershop #fade",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-elcorte-2.jpg",
+   "tag": "BOOK",
+   "cap": "Weekend chairs are open 💈\n\nEl Corte Barbería opened Saturday appointments.\n\nBook yours before Friday 📩\n#barbershop #barber #fade #menshair #barberlife",
+   "why": "Because it is built to get you bookings"
+  },
+  {
+   "img": "gt-elcorte-4.jpg",
+   "tag": "TREND",
+   "cap": "The most requested cut ✂️\n\nThis is the style walking out of El Corte Barbería all month.\n\nDM us to get yours 📩\n#barbershop #barber #barberlife #fade #menshair",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-elcorte-6.jpg",
+   "tag": "TIP",
+   "cap": "Keep the fade fresh 👇\n\nCold water, light product, and a cleanup every two weeks.\n\nSave this guide 🔖\n#barbershop #fade #menshair #barber #barberlife",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-elcorte-8.jpg",
+   "tag": "COMBO",
+   "cap": "Cut + beard, one visit 💈\n\nThe full combo at El Corte Barbería, in under an hour.\n\nBook the combo by DM 📩\n#barbershop #menshair #barberlife #barber #fade",
+   "why": "Because it is built to sell"
+  }
+ ],
+ "moda": [
+  {
+   "img": "ig-moda.jpg",
+   "tag": "NEW",
+   "cap": "Leather jackets just landed 🧥\n\nNew drop at Tienda Cora: the layer every outfit was missing.\n\nDM us to grab yours 📩\n#ootd #shoplocal #newarrivals #fashion #boutique",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-tiendacora-2.jpg",
+   "tag": "DEAL",
+   "cap": "Second item 50% off 👗\n\nThis week at Tienda Cora: take two, pay less.\n\nComment INFO and we send the catalog 👇\n#shoplocal #ootd #fashion #newarrivals #boutique",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-tiendacora-4.jpg",
+   "tag": "TIP",
+   "cap": "One jacket, three looks 👇\n\n1. With a dress. 2. With jeans and sneakers. 3. Over a hoodie.\n\nSave this for later 🔖\n#boutique #shoplocal #ootd #fashion #newarrivals",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-tiendacora-6.jpg",
+   "tag": "GIVEAWAY",
+   "cap": "Giveaway time 🎁\n\nWe're giving away a full outfit from Tienda Cora.\n\nComment I'M IN and you're in 👇\n#fashion #boutique #ootd #shoplocal #newarrivals",
+   "why": "Because it is built to bring you inquiries"
+  },
+  {
+   "img": "gt-tiendacora-8.jpg",
+   "tag": "COMMUNITY",
+   "cap": "Real customers, real looks ✨\n\nThis is how Tienda Cora looks out in the wild.\n\nTag us to be featured 📸\n#shoplocal #newarrivals #boutique #fashion #ootd",
+   "why": "Because it shows real proof of your work"
+  }
+ ],
+ "belleza": [
+  {
+   "img": "ig-belleza.jpg",
+   "tag": "NEW",
+   "cap": "Balayage season is open ✨\n\nSoft, lived-in color is what everyone is booking at Estética Alma.\n\nBook your chair by DM 📩\n#beauty #hairgoals #salonlife #balayage #hairsalon",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-esteticaalma-2.jpg",
+   "tag": "BOOK",
+   "cap": "Saturday slots just opened 💇\n\nA few chairs freed up this weekend at Estética Alma.\n\nBook yours before they're gone 📩\n#hairgoals #hairsalon #beauty #balayage #salonlife",
+   "why": "Because it is built to get you bookings"
+  },
+  {
+   "img": "gt-esteticaalma-4.jpg",
+   "tag": "TIP",
+   "cap": "Your hair is asking for protein 👇\n\n1. It stretches and breaks. 2. Color fades fast. 3. It feels mushy when wet.\n\nSave this post 🔖\n#salonlife #hairsalon #balayage #beauty #hairgoals",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-esteticaalma-6.jpg",
+   "tag": "COMBO",
+   "cap": "Cut + treatment, one visit ✂️\n\nThe combo that leaves your hair ready for the month, at Estética Alma.\n\nDM us to book yours 📩\n#hairsalon #balayage #hairgoals #beauty #salonlife",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-esteticaalma-8.jpg",
+   "tag": "BEFORE/AFTER",
+   "cap": "From dull to glossy ✨\n\nOne session at Estética Alma. Real client, real result.\n\nBook your transformation 📩\n#hairgoals #hairsalon #beauty #salonlife #balayage",
+   "why": "Because it shows real proof of your work"
+  }
+ ],
+ "mascotas": [
+  {
+   "img": "ig-mascotas.jpg",
+   "tag": "NEW",
+   "cap": "Puppy's first groom 🐶\n\nA gentle first bath-and-cut package for puppies at Pet Shop Huella.\n\nBook it by DM 📩\n#dogsofinstagram #petlovers #petcare #doggrooming #petshop",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-petshop-1.jpg",
+   "tag": "COMBO",
+   "cap": "Bath + nail trim combo 🛁\n\nOne visit, full refresh for your dog at Pet Shop Huella.\n\nDM us to book 📩\n#petcare #petshop #doggrooming #petlovers #dogsofinstagram",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-petshop-4.jpg",
+   "tag": "TIP",
+   "cap": "How often should you bathe your dog? 👇\n\nMost breeds: every 4-6 weeks. Over-bathing dries the skin.\n\nSave this guide 🔖\n#dogsofinstagram #doggrooming #petcare #petshop #petlovers",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-petshop-6.jpg",
+   "tag": "HAPPY PUPS",
+   "cap": "This week's happiest clients 🐾\n\nFresh from the tub at Pet Shop Huella.\n\nBook your pup's turn 📩\n#dogsofinstagram #doggrooming #petlovers #petshop #petcare",
+   "why": "Because it shows real proof of your work"
+  },
+  {
+   "img": "gt-petshop-8.jpg",
+   "tag": "GROOMING",
+   "cap": "Weekend grooming slots are open ✂️\n\nBath, cut and nails at Pet Shop Huella.\n\nBook by DM before Friday 📩\n#petcare #dogsofinstagram #petshop #petlovers #doggrooming",
+   "why": "Because it is built to get you bookings"
+  }
+ ],
+ "fitness": [
+  {
+   "img": "ig-fitness.jpg",
+   "tag": "NEW",
+   "cap": "New morning classes 🌅\n\nTrain before work at Gym Norte: 6 and 7 AM slots are live.\n\nDM us to start this week 📩\n#personaltrainer #fitness #healthylifestyle #gymlife #training",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-gymnorte-2.jpg",
+   "tag": "BUDDY FRIDAYS",
+   "cap": "Buddy Fridays 💪\n\nBring a friend to train free every Friday at Gym Norte.\n\nTag your training partner 👇\n#training #fitness #healthylifestyle #personaltrainer #gymlife",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-gymnorte-4.jpg",
+   "tag": "TIP",
+   "cap": "Desk workers, read this 👇\n\n3 stretches for you: neck rolls, hip openers, and a two-minute walk every hour.\n\nSave this routine 🔖\n#fitness #gymlife #training #healthylifestyle #personaltrainer",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-gymnorte-6.jpg",
+   "tag": "COMMUNITY",
+   "cap": "The 6 AM crew shows up 🌅\n\nRain or shine, the morning crew at Gym Norte gets it done.\n\nJoin us tomorrow 📍\n#fitness #gymlife #training #healthylifestyle #personaltrainer",
+   "why": "Because it shows real proof of your work"
+  },
+  {
+   "img": "gt-gymnorte-8.jpg",
+   "tag": "NO SIGN-UP FEE",
+   "cap": "No sign-up fee this month 🏋️\n\nStart at Gym Norte today and skip the enrollment fee.\n\nDM us to claim your spot 📩\n#fitness #personaltrainer #training #healthylifestyle #gymlife",
+   "why": "Because it is built to sell"
+  }
+ ],
+ "detailing": [
+  {
+   "img": "gt-bustos-1.jpg",
+   "tag": "NEW",
+   "cap": "Full diagnostic, same day 🔧\n\nBustos Detailing now scans every system before quoting.\n\nBook your check by DM 📩\n#autorepair #mechanic #carlovers #carcare #autoshop",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-bustos-2.jpg",
+   "tag": "DEAL",
+   "cap": "Oil change day 🛢️\n\nEvery oil change at Bustos Detailing includes a free full inspection.\n\nBook yours today 📩\n#autorepair #carlovers #mechanic #autoshop #carcare",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-bustos-4.jpg",
+   "tag": "TIP",
+   "cap": "Don't ignore these noises 👇\n\n1. Squeal when braking. 2. Click when turning. 3. A hum that grows with speed.\n\nSave this post 🔖\n#autoshop #autorepair #carcare #carlovers #mechanic",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-bustos-6.jpg",
+   "tag": "BRAKES",
+   "cap": "Brake check week 🚗\n\nStopping distance is safety. Bustos Detailing checks your brakes this week.\n\nDM us to book 📩\n#carlovers #autorepair #mechanic #carcare #autoshop",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-bustos-9.jpg",
+   "tag": "ON THE ROAD",
+   "cap": "Back on the road 🚗\n\nIn by morning, out by evening. That is how Bustos Detailing works.\n\nVisit us for your next service 📍\n#autorepair #carcare #autoshop #mechanic #carlovers",
+   "why": "Because it shows real proof of your work"
+  }
+ ],
+ "inmobiliaria": [
+  {
+   "img": "gt-roca-1.jpg",
+   "tag": "JUST LISTED",
+   "cap": "Just listed 🏡\n\n3 beds, bright living room, ready to move in. Listed by Roca Propiedades.\n\nDM us for the tour 📩\n#househunting #justlisted #realtor #realestate #homesforsale",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-roca-2.jpg",
+   "tag": "OPEN HOUSE",
+   "cap": "Open house this Saturday 🔑\n\nCome walk through it with Roca Propiedades, no appointment needed.\n\nDM us for the address 📩\n#househunting #realtor #homesforsale #justlisted #realestate",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-roca-4.jpg",
+   "tag": "TIP",
+   "cap": "Buyers check these first 👇\n\n1. Light. 2. Noise. 3. Water pressure.\n\nSave this before your next tour 🔖\n#realtor #househunting #realestate #justlisted #homesforsale",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-roca-5.jpg",
+   "tag": "SOLD",
+   "cap": "Keys handed over 🔑\n\nAnother family home, sold with Roca Propiedades.\n\nThinking of selling? DM us 📩\n#homesforsale #justlisted #househunting #realtor #realestate",
+   "why": "Because it shows real proof of your work"
+  },
+  {
+   "img": "gt-roca-9.jpg",
+   "tag": "TOURS",
+   "cap": "Tour it this weekend 🏠\n\nPrivate tours with Roca Propiedades are open for Saturday and Sunday.\n\nBook yours by DM 📩\n#justlisted #realtor #househunting #realestate #homesforsale",
+   "why": "Because it is built to get you bookings"
+  }
+ ],
+ "odontologia": [
+  {
+   "img": "gt-dentalprado-1.jpg",
+   "tag": "NEW",
+   "cap": "Same-week appointments 🩺\n\nNo more waiting a month: Dental Prado opened new slots.\n\nBook yours by DM 📩\n#checkup #dentist #healthyliving #wellness #health",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-dentalprado-2.jpg",
+   "tag": "CHECKUP",
+   "cap": "When was your last checkup? 📅\n\nA yearly visit catches things early. We make it easy at Dental Prado.\n\nBook by DM 📩\n#wellness #checkup #dentist #health #healthyliving",
+   "why": "Because it is built to get you bookings"
+  },
+  {
+   "img": "gt-dentalprado-4.jpg",
+   "tag": "TIP",
+   "cap": "A healthier smile starts here 👇\n\n1. Brush two minutes. 2. Floss daily. 3. Water after coffee.\n\nSave this reminder 🔖\n#wellness #health #checkup #dentist #healthyliving",
+   "why": "Because it positions you as the one who knows your trade"
+  },
+  {
+   "img": "gt-dentalprado-5.jpg",
+   "tag": "FIRST VISIT",
+   "cap": "First visit special 🦷\n\nNew patients at Dental Prado get the full first check this month.\n\nDM us to book 📩\n#healthyliving #dentist #checkup #wellness #health",
+   "why": "Because it is built to sell"
+  },
+  {
+   "img": "gt-dentalprado-3.jpg",
+   "tag": "TEAM",
+   "cap": "Meet the team 👋\n\nThe people who take care of you at Dental Prado, up close.\n\nVisit us this week 📍\n#dentist #wellness #checkup #healthyliving #health",
+   "why": "Because it shows real proof of your work"
+  }
+ ]
+};
+const LP_WEEK_MIXKEY = { 'cafe.aurora': 'cafeteria', 'tiendacora': 'moda', 'elcorte.barberia': 'barberia', 'estetica.alma': 'belleza', 'petshop.huella': 'mascotas' };
+let LP_WEEK_CUR = [];
+function lpWeekFilterChips() {
+  document.querySelectorAll('.lp-wchip').forEach((ch) => {
+    const m = (ch.getAttribute('onclick') || '').match(/lpWeekSet\('([a-z]+)'/);
+    const k = m && m[1];
+    if (k && k !== 'mixto' && !(LP_WEEK_CAPS[k] && LP_WEEK_CAPS[k].length >= 5)) ch.remove();
+  });
+}
+function lpWeekCardHTML(card, day, i) {
+  const view = card.cap ? ` onclick="lpWeekView(${i})" role="button" tabindex="0" aria-label="See the full post"` : '';
+  const hint = card.cap ? '<div class="lp-day-cap">💬 See the full post</div>' : '';
+  return `<div class="lp-day"${view}><div class="lp-ig-head"><span class="lp-ig-ava"><i style="background:${card.c}">${card.l}</i></span><b>${card.u}</b><span class="lp-ig-dots">•••</span></div><img loading="lazy" src="${card.img}" alt="${card.alt}"><div class="lp-ig-act">${LP_WEEK_ICONS}</div><div class="lp-day-meta"><b>${day.d}</b><span>Post</span></div><div class="${day.cls}">${day.t}</div>${hint}</div>`;
 }
 function lpWeekToForm() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1393,15 +1710,82 @@ function lpWeekSet(key, btn) {
   const bridge = document.getElementById('lpWeekBridge');
   const apply = () => {
     if (grid) {
-      const cards = lpWeekCards(key).map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i]));
-      grid.innerHTML = cards.join('');
+      LP_WEEK_CUR = lpWeekCards(key).map((card, i) => {
+        const bankKey = key === 'mixto' ? LP_WEEK_MIXKEY[card.u] : key;
+        const bank = (bankKey && LP_WEEK_CAPS[bankKey] && LP_WEEK_CAPS[bankKey][i]) || null;
+        return { ...card, cap: bank ? bank.cap : '', why: bank ? bank.why : '', tag: bank ? bank.tag : '' };
+      });
+      grid.innerHTML = LP_WEEK_CUR.map((card, i) => lpWeekCardHTML(card, LP_WEEK_DAYS[i], i)).join('');
       grid.classList.remove('lp-week-swap');
     }
-    if (bridge) bridge.innerHTML = `This is an example ${data.ejemplo}. <a href="#" onclick="return lpWeekToForm()">The week of <b>YOUR</b> business is ready in 1 minute →</a>`;
+    if (bridge) bridge.innerHTML = `This is an example ${data.ejemplo}. Tap any post to see it in full, with its caption exactly as it would go out. <a href="#" onclick="return lpWeekToForm()">The week of <b>YOUR</b> business is ready in 1 minute →</a>`;
   };
   if (grid) { grid.classList.add('lp-week-swap'); setTimeout(apply, 170); } else apply();
 }
-/* — Cost calculator (USD) — */
+/* v377: sample-week viewer, post by post */
+let LP_VIEW_I = 0;
+let LP_VIEW_KEYS = false;
+function lpWeekView(i) {
+  if (!LP_WEEK_CUR[i] || !LP_WEEK_CUR[i].cap) return;
+  const ov = document.getElementById('lpView');
+  if (!ov) return;
+  LP_VIEW_I = i;
+  lpViewRender();
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  if (!LP_VIEW_KEYS) {
+    LP_VIEW_KEYS = true;
+    document.addEventListener('keydown', (e) => {
+      const o = document.getElementById('lpView');
+      if (!o || !o.classList.contains('open')) return;
+      if (e.key === 'Escape') lpWeekClose();
+      if (e.key === 'ArrowLeft') lpWeekNav(-1);
+      if (e.key === 'ArrowRight') lpWeekNav(1);
+    });
+    let tx = null;
+    ov.addEventListener('touchstart', (e) => { tx = e.changedTouches[0].clientX; }, { passive: true });
+    ov.addEventListener('touchend', (e) => {
+      if (tx == null) return;
+      const dx = e.changedTouches[0].clientX - tx; tx = null;
+      if (Math.abs(dx) > 42) lpWeekNav(dx < 0 ? 1 : -1);
+    }, { passive: true });
+  }
+}
+function lpViewRender() {
+  const c = LP_WEEK_CUR[LP_VIEW_I];
+  if (!c) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('lpViewU', '@' + c.u);
+  set('lpViewDay', LP_WEEK_DAYS[LP_VIEW_I].d + ' · ' + LP_WEEK_DAYS[LP_VIEW_I].t);
+  const av = document.getElementById('lpViewAv');
+  if (av) { av.textContent = c.l; av.style.background = c.c; }
+  const img = document.getElementById('lpViewImg');
+  if (img) { img.src = c.img; img.alt = c.alt; }
+  const tagEl = document.getElementById('lpViewTag');
+  if (tagEl) { tagEl.textContent = c.tag || ''; tagEl.style.display = c.tag ? '' : 'none'; }
+  set('lpViewCap', c.cap || '');
+  const why = document.getElementById('lpViewWhy');
+  if (why) { why.style.display = c.why ? '' : 'none'; why.innerHTML = c.why ? '<b>Why this post:</b> ' + c.why : ''; }
+  set('lpViewCount', (LP_VIEW_I + 1) + ' of ' + LP_WEEK_CUR.length);
+  const pv = document.getElementById('lpViewPrev'); if (pv) pv.disabled = LP_VIEW_I <= 0;
+  const nx = document.getElementById('lpViewNext'); if (nx) nx.disabled = LP_VIEW_I >= LP_WEEK_CUR.length - 1;
+}
+function lpWeekNav(d) {
+  let n = LP_VIEW_I + d;
+  while (n >= 0 && n < LP_WEEK_CUR.length && !LP_WEEK_CUR[n].cap) n += d;
+  if (n < 0 || n >= LP_WEEK_CUR.length) return;
+  LP_VIEW_I = n;
+  lpViewRender();
+}
+function lpWeekClose() {
+  const ov = document.getElementById('lpView');
+  if (ov) ov.classList.remove('open');
+  document.body.style.overflow = '';
+}
+/* v377: only trades with a complete captioned week stay selectable */
+lpWeekFilterChips();
+if (document.getElementById('lpWeekGrid')) lpWeekSet('mixto', document.querySelector('.lp-wchip.on'));
+/* — Cost calculator (USD) — v377: two controls (hours × your rate) against the real plan */
 let LP_CALC_RATE = 25;
 function lpCalcUpdate() {
   const inp = document.getElementById('lpCalcH');
@@ -1410,14 +1794,24 @@ function lpCalcUpdate() {
   const h = parseInt(inp.value, 10) || 6;
   const hv = document.getElementById('lpCalcHVal');
   if (hv) hv.textContent = h + ' h';
+  const rv = document.getElementById('lpCalcRVal');
+  if (rv) rv.textContent = '$' + LP_CALC_RATE;
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: from <b>$6.67 per day</b> and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
+  out.innerHTML = `Your Instagram costs you today ≈ <b>$${fmt(costo)}</b> per month (<b>${horasMes} hours</b> of your time).<br>With Posty: <b>$199.99 per month</b> (≈ $6.67 per day) and <b>0 hours of your time</b> — you get <b>${horasMes} hours a month</b> back for your business.`;
 }
 function lpCalcRate(btn) {
   LP_CALC_RATE = parseInt(btn.getAttribute('data-rate'), 10) || 25;
+  const r = document.getElementById('lpCalcR');
+  if (r) r.value = LP_CALC_RATE;
   document.querySelectorAll('.lp-crate').forEach((b) => b.classList.toggle('on', b === btn));
+  lpCalcUpdate();
+}
+function lpCalcRateSlider() {
+  const r = document.getElementById('lpCalcR');
+  if (r) LP_CALC_RATE = parseInt(r.value, 10) || LP_CALC_RATE;
+  document.querySelectorAll('.lp-crate').forEach((b) => b.classList.toggle('on', parseInt(b.getAttribute('data-rate'), 10) === LP_CALC_RATE));
   lpCalcUpdate();
 }
 /* — Before/after drag (HOY / CON POSTY) + live activity line — */
