@@ -5401,7 +5401,12 @@ function absImageUrl(uid, imagePath) {
   if (/^https?:\/\//i.test(p)) return p.replace(/https?:\/\/(www\.)?(postahacetodo|postyhacetodo)\.com/i, 'https://postycommunitymanager.com');
   try {
     const st = (typeof getSettings === 'function' && getSettings(uid)) || {};
-    const base = String(process.env.IMAGE_BASE_URL || st.image_base_url || '').replace(/\/$/, '');
+    let base = String(process.env.IMAGE_BASE_URL || st.image_base_url || '').replace(/\/$/, '');
+    // Bases muertas (dominio viejo postahacetodo.com o localhost): caer al
+    // canónico — misma guarda que scheduler.js y approval.js. Sin esto, la
+    // cola de revisión y las listas de posteos salían con URLs que no
+    // resuelven (www.postahacetodo.com no sirve la app). Fix v405.
+    if (base && (/postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base))) base = 'https://postycommunitymanager.com';
     if (base) return base + (p.startsWith('/') ? p : '/' + p);
   } catch (e) {}
   return p;
@@ -19259,7 +19264,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v404';
+const BUILD_ID = '20261024-v405';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

@@ -665,6 +665,9 @@ function absoluteDogfoodImage(imagePath, db, ownerId) {
     if (s && s.image_base_url) base = String(s.image_base_url);
   } catch (e) {}
   base = base || process.env.IMAGE_BASE_URL || 'https://postycommunitymanager.com';
+  // Base muerta (dominio viejo/localhost): caer al canónico, misma guarda que
+  // el resto de los funnels (fix v405).
+  if (/postahacetodo\.com/i.test(base) || /localhost|127\.0\.0\.1/i.test(base)) base = 'https://postycommunitymanager.com';
   return `${base.replace(/\/$/, '')}/media/${path.basename(String(imagePath || ''))}`;
 }
 
