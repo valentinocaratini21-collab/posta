@@ -12439,7 +12439,7 @@ function homeTileHTML(t, i) {
   const media = !p.image_path
     ? '<span class="hf-tile-ph">✨</span>'
     : isV
-      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="none" data-hf-reel="1"></video>`
+      ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="${t.reelTab ? 'metadata' : 'none'}" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = p.pinned ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
   const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
@@ -12453,7 +12453,7 @@ function homeTileHTML(t, i) {
   // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
   const fallCls = t.fall ? ' hf-fall' : '';
   const fallStyle = t.fall ? ` style="--hfd:${Math.max(0, Number(t.fallDelay) || 0)}ms"` : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${pill}${chip}${glyph}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${pill}${chip}${glyph}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -12508,6 +12508,10 @@ function homeHeadHTML(prof, bizName, opts) {
   // vivas o por salir), 'past' = gris (todas pasaron o ya se vieron en
   // la sesión), '' = sin anillo. Con anillo, el avatar es botón y abre
   // el visor de historias existente.
+  // (Tanda feed 5 · ítem 2) Pestaña activa del perfil (Publicaciones ·
+  // Reels · Etiquetados): las tabs son botones reales que filtran la
+  // grilla — el mismo cromo de IG, con su estado.
+  const tabA = (opts && (opts.tab === 'reels' || opts.tab === 'tagged')) ? opts.tab : 'posts';
   const ringCls = opts && opts.storyRing === 'past' ? ' story seen' : opts && opts.storyRing ? ' story' : '';
   const avaInner = `<div class="hf-ava-in${ringCls}"><span class="hf-ava-letter">${letter}</span>${pic}</div>`;
   const avaHTML = (opts && opts.storyRing)
@@ -12526,7 +12530,7 @@ function homeHeadHTML(prof, bizName, opts) {
     ${bioHTML}
     ${linkHTML}
     ${hlHTML}
-    <div class="hf-tabs" aria-hidden="true"><span class="hf-tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></span><span class="hf-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></span><span class="hf-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></span></div>
+    <div class="hf-tabs" role="tablist" aria-label="${en ? 'Profile sections' : 'Secciones del perfil'}"><button type="button" role="tab" aria-selected="${tabA === 'posts'}" class="hf-tab${tabA === 'posts' ? ' on' : ''}" data-hf-tab="posts" aria-label="${en ? 'Posts' : 'Publicaciones'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'reels'}" class="hf-tab${tabA === 'reels' ? ' on' : ''}" data-hf-tab="reels" aria-label="Reels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3.2 9.4h17.6M8.2 3.4l2.1 5.8M13.9 3.4l2.1 5.8" stroke-linecap="round"/><path d="M10.4 12.7v4.6c0 .55.62.9 1.1.64l3.9-2.3c.46-.28.46-1 0-1.28l-3.9-2.3c-.48-.26-1.1.09-1.1.63z" fill="currentColor" stroke="none"/></svg></button><button type="button" role="tab" aria-selected="${tabA === 'tagged'}" class="hf-tab${tabA === 'tagged' ? ' on' : ''}" data-hf-tab="tagged" aria-label="${en ? 'Tagged' : 'Etiquetados'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></button></div>
   </div>`;
 }
 /* ===== (Tanda 4 del feed) BANDEJA DE HISTORIAS + PORQUÉ DE LA GRILLA =====
@@ -12639,9 +12643,157 @@ function hfGridWhyLine(tiles, opts) {
     return '';
   } catch (e) { return ''; }
 }
+/* ===== (Tanda feed 5) PESTAÑAS · VISITANTE · DETALLE IG =====
+   Funciones puras del bloque: solo usan esc/mv y los helpers de fecha
+   del bundle (pcParseDate/pcTz, hfChipText), igual que el resto del
+   bloque. Regla de verdad: ningún número sin fuente real se dibuja;
+   lo que el producto no leyó, el detalle lo omite y la pestaña lo
+   muestra vacío como lo muestra Instagram. */
+const HF_D_HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg>';
+const HF_D_HEART_FULL = '<svg viewBox="0 0 24 24" fill="#ed4956" stroke="#ed4956" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.5C6.4 16.9 3 13.6 3 9.9 3 7.2 5 5 7.7 5c1.7 0 3.3.9 4.3 2.4C13 5.9 14.6 5 16.3 5 19 5 21 7.2 21 9.9c0 3.7-3.4 7-9 10.6z"/></svg>';
+const HF_D_COMMENT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M12 4c4.7 0 8.2 3.2 8.2 7.3 0 4.1-3.5 7.3-8.2 7.3-1 0-1.9-.15-2.8-.45L5.6 19.8l.8-3C5 15.3 3.8 13.6 3.8 11.3 3.8 7.2 7.3 4 12 4z"/></svg>';
+const HF_D_SHARE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M21 3.5 4 10.6l6.7 2.9L13.6 20z"/><path d="M10.7 13.5 21 3.5"/></svg>';
+const HF_D_SAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg>';
+const HF_D_SAVE_FULL = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.8 3.8h10.4V20L12 16.4 6.8 20z"/></svg>';
+function hfTabTiles(tiles, tab, prof) {
+  const list = Array.isArray(tiles) ? tiles : [];
+  if (tab === 'reels') {
+    return list.filter((t) => t && ((t.kind === 'post' && String(t.post.media_type || '') === 'video') || (t.kind === 'ig' && t.type === 'video')));
+  }
+  if (tab === 'tagged') {
+    // Etiquetados: SOLO posteos reales de una fuente tagged del
+    // perfil. Hoy el producto no tiene esa fuente (la lectura pública
+    // no la expone y no hay otra ingesta): llega [] y la pestaña
+    // muestra el estado vacío de Instagram. Jamás se rellena.
+    const tg = (prof && Array.isArray(prof.tagged)) ? prof.tagged : [];
+    return tg.filter((r) => r && r.img).map((r) => ({
+      kind: 'ig', img: r.img, type: r.type || 'image',
+      taken_at: (typeof r.taken_at === 'number' ? r.taken_at : null), isNew: false,
+      pinned: r.pinned === true,
+      likes: (typeof r.likes === 'number' ? r.likes : null),
+      comments: (typeof r.comments === 'number' ? r.comments : null),
+    }));
+  }
+  return list;
+}
+function hfVisitorTiles(tiles) {
+  // La vista del visitante: SOLO lo que ya está en Instagram
+  // (publicados por Posty + leídos de su cuenta), en su orden de
+  // grilla. Los borradores y programados no existen para un visitante.
+  return (Array.isArray(tiles) ? tiles : []).filter((t) => t && (t.kind === 'ig' || (t.kind === 'post' && t.post && t.post.status === 'published')));
+}
+function hfTaggedEmptyHTML(en) {
+  return `<div class="hf-empty"><span class="hf-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 19.4c1-2.8 3.2-4.2 5.8-4.2s4.8 1.4 5.8 4.2"/></svg></span><b>${en ? 'No tagged posts yet' : 'Sin publicaciones etiquetadas todavía'}</b><span>${en ? "When people tag you in photos and videos, they'll appear here." : 'Cuando las personas te etiqueten en fotos y videos, aparecerán acá.'}</span></div>`;
+}
+function hfReelsEmptyHTML(en) {
+  return `<div class="hf-empty"><span class="hf-empty-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3.4" width="18" height="17.2" rx="3.2"/><path d="M3.2 9.2h17.6" stroke-linecap="round"/><path d="M10.1 12.5v4.9c0 .5.6.8 1 .5l4.1-2.45c.4-.24.4-.78 0-1.02l-4.1-2.45c-.4-.24-1 .06-1 .52z"/></svg></span><b>${en ? 'No reels yet' : 'Todavía no hay reels'}</b><span>${en ? 'The reels Posty makes for you will show up here.' : 'Los reels que Posty arme para vos van a aparecer acá.'}</span></div>`;
+}
+function hfVisitorEmptyHTML(en) {
+  return `<div class="hf-empty"><b>${en ? 'Nothing published yet' : 'Todavía no hay nada publicado'}</b><span>${en ? 'This is how the profile looks to a visitor today.' : 'Así se ve el perfil para un visitante hoy.'}</span></div>`;
+}
+function hfRelShort(iso, en) {
+  // Tiempo relativo estilo IG desde una fecha ISO real (publicado).
+  try {
+    const d = pcParseDate(iso);
+    if (!d) return '';
+    const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+    const m = Math.floor(s / 60), h = Math.floor(s / 3600), dd = Math.floor(s / 86400), w = Math.floor(dd / 7);
+    if (en) return m < 60 ? Math.max(1, m) + 'm' : h < 24 ? h + 'h' : dd < 7 ? dd + 'd' : w + 'w';
+    return m < 60 ? 'hace ' + Math.max(1, m) + ' min' : h < 24 ? 'hace ' + h + ' h' : dd < 7 ? 'hace ' + dd + (dd === 1 ? ' día' : ' días') : 'hace ' + w + ' sem';
+  } catch (e) { return ''; }
+}
+/* El detalle del posteo pantalla completa, forma Instagram:
+   encabezado (foto + @ + ubicación/audio + •••), media a ancho
+   completo (carrusel con swipe + puntitos + contador; reel en loop),
+   barra de acciones QUE TRABAJA (en el modo dueño), «Me gusta» y
+   comentarios SOLO con números reales, caption con el @ en negrita
+   TAL CUAL se escribió (nunca mayúsculas forzadas), línea de fecha
+   real y, en borradores, el ✅ Aceptar por el camino vigente.
+   opts = { en, user, pic, name, location, propIso, visitor }.
+   La media lleva la clase igmock-media: el doble toque con corazón
+   (aprobar en modo manual) del visor vigente funciona igual acá. */
+function hfDetailHTML(p, opts) {
+  const o = opts || {};
+  const en = !!o.en;
+  const isV = String(p.media_type || '') === 'video';
+  let paths = [];
+  try { const cp = JSON.parse(p.carousel_paths || '[]'); if (Array.isArray(cp)) paths = cp.map(String).filter(Boolean); } catch (e) { paths = []; }
+  const slides = [];
+  if (p.image_path) slides.push(String(p.image_path));
+  for (const x of paths) { if (!slides.includes(x)) slides.push(x); }
+  const isCar = slides.length > 1;
+  const user = String(o.user || '').replace(/^@/, '');
+  const headName = user || String(o.name || '');
+  const locLine = isV
+    ? `<div class="hf-d-sub">🎵 ${en ? 'Original audio' : 'Audio original'}</div>`
+    : (o.location ? `<div class="hf-d-sub">${esc(o.location)}</div>` : '');
+  const ava = o.pic
+    ? `<img class="hf-d-ava" src="${esc(o.pic)}" alt="" onerror="this.remove()">`
+    : `<span class="hf-d-ava hf-d-ava-l">${esc((headName || 'P').charAt(0).toUpperCase())}</span>`;
+  const mediaInner = !slides.length
+    ? '<span class="hf-tile-ph">✨</span>'
+    : isV
+      ? `<video src="${esc(slides[0])}" autoplay muted loop playsinline></video>`
+      : isCar
+        ? `<div class="hf-d-track">${slides.map((s) => `<span class="hf-d-slide"><img src="${esc(s)}" alt="" loading="lazy" onerror="__imgFb(this)"></span>`).join('')}</div><span class="hf-d-count">1/${slides.length}</span>`
+        : `<img src="${esc(slides[0])}" alt="" onerror="__imgFb(this)">`;
+  const media = `<div class="igmock-media hf-d-media${isV ? ' is-v' : ''}">${mediaInner}</div>${isCar ? `<div class="hf-d-dots">${slides.map((_, k) => `<i class="${k === 0 ? 'on' : ''}"></i>`).join('')}</div>` : ''}`;
+  // Números SOLO reales: likes/comments llegan de post_metrics (vía
+  // /api/posts) — null sin fuente: la línea no se dibuja. Un 0 real
+  // (métricas leídas con cero) sí es un dato: IG muestra su variante.
+  const lk = (p.likes === null || p.likes === undefined || !Number.isFinite(Number(p.likes))) ? null : Number(p.likes);
+  const cc = (p.comments_count === null || p.comments_count === undefined || !Number.isFinite(Number(p.comments_count))) ? null : Number(p.comments_count);
+  const likesLine = lk === null ? ''
+    : lk > 0 ? `<div class="hf-d-likes">${lk.toLocaleString(en ? 'en-US' : 'es-AR')} ${en ? (lk === 1 ? 'like' : 'likes') : 'Me gusta'}</div>`
+    : `<div class="hf-d-likes">${en ? 'Be the first to like this' : 'Sé el primero en indicar que te gusta'}</div>`;
+  const commentsLine = (cc !== null && cc > 0)
+    ? `<div class="hf-d-comments">${en ? (cc === 1 ? 'View 1 comment' : `View all ${cc.toLocaleString('en-US')} comments`) : (cc === 1 ? 'Ver el comentario' : `Ver los ${cc.toLocaleString('es-AR')} comentarios`)}</div>` : '';
+  const capFull = String(p.caption || '');
+  const tags = String(p.hashtags || '').trim();
+  const capText = (capFull + (tags ? (capFull ? '\n' : '') + tags : '')).trim();
+  const capHTML = capText ? `<div class="hf-d-cap">${user ? `<b>${esc(user)}</b> ` : ''}${esc(capText)}</div>` : '';
+  let whenLine = '';
+  if (p.status === 'published') {
+    const rel = hfRelShort(p.published_at || p.scheduled_at, en);
+    whenLine = rel ? `<div class="hf-d-when">${esc(rel)}</div>` : '';
+  } else if (p.status === 'scheduled') {
+    const chip = hfChipText(p.scheduled_at);
+    whenLine = chip ? `<div class="hf-d-when">🕐 ${en ? 'Goes out' : 'Sale el'} ${esc(chip)}</div>` : '';
+  } else if (p.status === 'draft') {
+    const chip = o.propIso ? hfChipText(o.propIso) : '';
+    whenLine = `<div class="hf-d-when">📝 ${en ? 'Draft' : 'Borrador'}${chip ? (en ? ' · planned for ' : ' · pensado para el ') + esc(chip) : ''}</div>`;
+  }
+  const bar = o.visitor ? '' : `<div class="hf-d-bar">
+      <button type="button" class="hf-d-act${p.owner_liked ? ' on' : ''}" data-hfd-act="like" aria-label="${en ? 'Like' : 'Me gusta'}">${p.owner_liked ? HF_D_HEART_FULL : HF_D_HEART}</button>
+      <button type="button" class="hf-d-act" data-hfd-act="comment" aria-label="${en ? 'Ask Posty for a change' : 'Pedirle un cambio a Posty'}">${HF_D_COMMENT}</button>
+      <button type="button" class="hf-d-act" data-hfd-act="share" aria-label="${en ? 'Share' : 'Compartir'}">${HF_D_SHARE}</button>
+      <span class="hf-d-sp"></span>
+      <button type="button" class="hf-d-act${p.owner_saved ? ' on' : ''}" data-hfd-act="save" aria-label="${en ? 'Save' : 'Guardar'}">${p.owner_saved ? HF_D_SAVE_FULL : HF_D_SAVE}</button>
+    </div>`;
+  const accept = (!o.visitor && p.status === 'draft')
+    ? `<button type="button" class="hf-d-accept" data-revaccept="${esc(String(p.id))}"${o.propIso ? ` data-proposed="${esc(o.propIso)}"` : ''}>✅ ${en ? 'Accept' : 'Aceptar'}</button>` : '';
+  return `<div class="hf-d" data-post-id="${esc(String(p.id))}">
+    <div class="hf-d-head">${ava}<div class="hf-d-names"><div class="hf-d-user">${esc(headName)}</div>${locLine}</div>${o.visitor ? '' : `<button type="button" class="hf-d-dots" data-hfd-act="menu" aria-label="${en ? 'More options' : 'Más opciones'}">•••</button>`}</div>
+    ${media}
+    ${bar}
+    ${likesLine}
+    ${capHTML}
+    ${commentsLine}
+    ${whenLine}
+    ${accept}
+  </div>`;
+}
 /* ===== /HOME_FEED ===== */
 
 let HOME_PROF = null; // v331: último payload de /api/home/profile (réplica del perfil)
+// (Tanda feed 5) Estado de la home: pestaña activa del perfil
+// (Publicaciones · Reels · Etiquetados), espejo «Ver como visitante»,
+// la composición vigente y las propuestas por posteo (para el detalle).
+let HF_TAB = 'posts';
+let HF_VISITOR = false;
+let HF_TILES = [];
+let HF_CUR_PROF = null;
+let HF_PROPS = {};
 async function inicioView() {
   const tz = pcTz();
   let allPosts = [];
@@ -12703,6 +12855,7 @@ async function inicioView() {
   // tarjeta acá, igual que Semana (patrón #scfVault).
   const vaultCards = [];
   const seenIds = new Set();
+  HF_PROPS = {};
   for (const t of tiles) {
     if (t.kind !== 'post' || !t.post || seenIds.has(t.post.id)) continue;
     seenIds.add(t.post.id);
@@ -12710,8 +12863,13 @@ async function inicioView() {
     const prop = p.status === 'published'
       ? { label: '✅ ' + homeWhenLabel(p.published_at || p.scheduled_at), iso: null }
       : proposedLabelFor(p, pl.proposals, tz);
+    HF_PROPS[p.id] = prop;
     vaultCards.push(weekCardHTML(p, { bizName, tz, prop, count: null, user: (prof && prof.username) || '', pic: (prof && prof.pic) || '' }));
   }
+  // (Tanda feed 5) La composición completa queda a mano para el
+  // detalle IG y las pestañas (que filtran sin recomponer).
+  HF_TILES = tiles;
+  HF_CUR_PROF = prof;
   // (Tanda 4) Bandeja de historias de la semana + el porqué de la
   // grilla: ambos nacen de datos reales ya cargados (los posteos de la
   // cuenta y la composición final de tiles). Sin historias no hay
@@ -12720,23 +12878,39 @@ async function inicioView() {
   const weekStories = hfStoriesOfWeek(allPosts, tz);
   HOME_STORIES = weekStories;
   const storiesHTML = homeStoriesTrayHTML(weekStories, { en: enHome });
-  const whyLine = tiles.length ? hfGridWhyLine(tiles, { en: enHome }) : '';
+  const whyLine = (tiles.length && !HF_VISITOR && HF_TAB === 'posts') ? hfGridWhyLine(tiles, { en: enHome }) : '';
   const whyHTML = whyLine ? `<div class="hf-why">${esc(whyLine)}</div>` : '';
+  // (Tanda feed 5 · ítems 2 y 7) La grilla que se ve: en modo
+  // visitante solo lo publicado (sin atenuar); la pestaña activa
+  // filtra sin recomponer; en Reels las tiles de video piden su
+  // duración real (metadata del archivo) para la chapita de duración.
+  const baseTiles = HF_VISITOR ? hfVisitorTiles(tiles) : tiles;
+  const displayTiles = hfTabTiles(baseTiles, HF_TAB, prof).map((t) => {
+    const c = Object.assign({}, t);
+    if (HF_VISITOR) c.visitor = true;
+    if (HF_TAB === 'reels') c.reelTab = true;
+    return c;
+  });
+  const tabEmptyHTML = HF_TAB === 'tagged' ? hfTaggedEmptyHTML(enHome)
+    : HF_TAB === 'reels' ? hfReelsEmptyHTML(enHome)
+    : HF_VISITOR ? hfVisitorEmptyHTML(enHome) : '';
   const gridHTML = tiles.length
-    ? `<div class="hf-grid">${tiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
-    : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
-  const igLine = (typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
+    ? (displayTiles.length
+      ? `<div class="hf-grid">${displayTiles.map((t, i) => homeTileHTML(t, i)).join('')}</div><div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`
+      : `${tabEmptyHTML}<div class="scf-vault" id="scfVault" hidden>${vaultCards.join('')}</div>`)
+    : HF_VISITOR ? hfVisitorEmptyHTML(enHome) : homeWeekHTML(allPosts, quota, weekGenerating, weekNoDna);
+  const igLine = (!HF_VISITOR && typeof PROFILE !== 'undefined' && PROFILE && !PROFILE.ig_connected)
     ? `<a class="mz-igbar" href="#/app/ajustes?ig=1">📸 <span><b>Instagram sin conectar</b> — tu semana no puede salir.</span><span class="mz-igbar-go">Conectar →</span></a>`
     : '';
   // Franja de revisión (mock aprobado): contador de piezas nuevas +
   // Aceptar todo. Sin borradores pendientes, la franja no aparece.
-  const stripHTML = drafts.length
+  const stripHTML = (!HF_VISITOR && drafts.length)
     ? `<div class="hf-review">
         <div class="hf-review-tx"><b>Tu semana nueva está lista</b><span>${drafts.length} pieza${drafts.length > 1 ? 's' : ''} para revisar · si las aceptás, Posty las programa y las publica por vos</span></div>
         <button type="button" class="hf-accept" id="hfAcceptAll">Aceptar todo</button>
       </div><div id="revMsg"></div>`
     : '';
-  const kitHTML = prof && prof.source === 'kit'
+  const kitHTML = (!HF_VISITOR && prof && prof.source === 'kit')
     ? `<div class="hf-kitnote">🌱 <span><b>Así va a nacer tu perfil</b> — es la propuesta de Posty desde tu negocio y tu rubro. Cuando salga tu primera semana, esta misma pantalla pasa a ser tu Instagram de verdad.</span></div>`
     : '';
   let storiesSeen = false;
@@ -12746,17 +12920,24 @@ async function inicioView() {
   // para cuentas de negocio): lleva al Análisis. SIN número de alcance:
   // no existe fuente de alcance de cuenta en el producto — jamás se
   // inventa una métrica para llenar la tira.
-  const prodashHTML = `<a class="hf-prodash" href="#/app/analisis"><span class="hf-prodash-t">📊 ${enHome ? 'Professional dashboard' : 'Panel profesional'}</span><span class="hf-prodash-s">${enHome ? 'See how your account is doing' : 'Mirá cómo viene tu cuenta'}</span><span class="hf-prodash-go" aria-hidden="true">›</span></a>`;
-  return `<div id="inicioView" class="hf-wrap">
+  const prodashHTML = HF_VISITOR ? '' : `<a class="hf-prodash" href="#/app/analisis"><span class="hf-prodash-t">📊 ${enHome ? 'Professional dashboard' : 'Panel profesional'}</span><span class="hf-prodash-s">${enHome ? 'See how your account is doing' : 'Mirá cómo viene tu cuenta'}</span><span class="hf-prodash-go" aria-hidden="true">›</span></a>`;
+  // (Tanda feed 5 · ítem 7) «Ver como visitante»: el espejo puro de
+  // Instagram — sin marcas de Posty ni gestión. La salida es una
+  // píldora fija que devuelve la vista del dueño.
+  const visitorHTML = HF_VISITOR
+    ? `<button type="button" class="hf-vpill" data-hf-visitor="0">👁 ${enHome ? 'You are seeing your profile as a visitor' : 'Estás viendo tu perfil como visitante'} · <b>${enHome ? 'Back to your view' : 'Volver a tu vista'}</b></button>`
+    : `<div class="hf-vrow"><button type="button" class="hf-vtoggle" data-hf-visitor="1">👁 ${enHome ? 'View as visitor' : 'Ver como visitante'}</button></div>`;
+  return `<div id="inicioView" class="hf-wrap${HF_VISITOR ? ' hf-visitor' : ''}">
   ${igLine}
-  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing })}
+  ${homeHeadHTML(prof, bizName, { en: (typeof ME !== 'undefined' && ME && ME.lang === 'en'), storyRing, tab: HF_TAB })}
   ${prodashHTML}
   ${storiesHTML}
   ${kitHTML}
   ${whyHTML}
   ${gridHTML}
   ${stripHTML}
-  <div id="mzIdeasSlot"></div>
+  ${visitorHTML}
+  ${HF_VISITOR ? '' : `<div id="mzIdeasSlot"></div>`}
   <div class="mz-chatbar" id="mzChatBar">
     <button type="button" class="mz-plus" id="mzPlus" aria-label="Subir fotos o video">+</button>
     <button type="button" class="mz-ph" id="mzChatOpen">Escribile a Posty…</button>
@@ -13020,6 +13201,206 @@ async function hfReschedule(id, tile, bd) {
   toast('🗓️ ' + (hfIsEn() ? 'Rescheduled — ' : 'Reprogramado — ') + hfChipText(iso));
   try { render(); } catch (e) {}
 }
+/* ===== (Tanda feed 5) DETALLE IG: capa y acciones que trabajan =====
+   El toque (táctil) sobre una tile del feed abre el posteo como en
+   Instagram (hfDetailHTML). En escritorio manda el flujo vigente
+   (hover que agranda + click que fija la tarjeta del cofre), y la
+   hoja de acciones sigue siendo el camino de gestión. Los botones del
+   detalle TRABAJAN: ♡/🔖 pegan al PATCH del servidor (Push A), 💬 es
+   el editar-comentando vigente y ➤ comparte de verdad. */
+let HF_DETAIL = null; // { post, tile, ov }
+function hfDetailOpts(post) {
+  const prof = HF_CUR_PROF || {};
+  const prop = HF_PROPS[post.id] || {};
+  return {
+    en: hfIsEn(),
+    user: prof.username || '',
+    pic: prof.pic || '',
+    name: prof.name || '',
+    location: prof.location || null,
+    propIso: prop.iso || null,
+    visitor: HF_VISITOR,
+  };
+}
+function hfDetailOpen(post, tile) {
+  if (!post) return;
+  hfDetailClose();
+  try { scfClosePop(); } catch (e) {}
+  const ov = document.createElement('div');
+  ov.className = 'hf-dback';
+  ov.innerHTML = `<div class="hf-dcard" role="dialog" aria-modal="true">
+    <div class="hf-d-top"><button type="button" class="hf-d-back" data-hfd-close aria-label="${hfIsEn() ? 'Back' : 'Volver'}">‹</button><span class="hf-d-title">${hfIsEn() ? 'Post' : 'Publicación'}</span><span class="hf-d-topsp"></span></div>
+    ${hfDetailHTML(post, hfDetailOpts(post))}
+  </div>`;
+  document.body.appendChild(ov);
+  try { document.body.classList.add('hf-d-open'); } catch (e) {}
+  HF_DETAIL = { post, tile: tile || null, ov };
+  hfDetailWire(ov, post, tile);
+}
+function hfDetailClose() {
+  if (HF_DETAIL && HF_DETAIL.ov) { try { HF_DETAIL.ov.remove(); } catch (e) {} }
+  HF_DETAIL = null;
+  try { document.body.classList.remove('hf-d-open'); } catch (e) {}
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && HF_DETAIL) hfDetailClose(); });
+function hfDetailWire(ov, post, tile) {
+  const q = (s) => ov.querySelector(s);
+  const closeBtn = q('[data-hfd-close]');
+  if (closeBtn) closeBtn.onclick = () => hfDetailClose();
+  ov.addEventListener('click', (e) => { if (e.target === ov) hfDetailClose(); });
+  // Carrusel: puntitos y contador siguen el scroll del track.
+  const track = q('.hf-d-track');
+  if (track) {
+    track.addEventListener('scroll', () => {
+      const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      ov.querySelectorAll('.hf-d-dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+      const cnt = q('.hf-d-count');
+      if (cnt) { const n = track.children.length; cnt.textContent = Math.min(n, Math.max(0, i) + 1) + '/' + n; }
+    }, { passive: true });
+  }
+  // Reel: tocar el video lo pausa o lo sigue (como IG), sin cerrar.
+  const vid = q('.hf-d-media video');
+  if (vid) vid.addEventListener('click', () => { try { if (vid.paused) vid.play(); else vid.pause(); } catch (e) {} });
+  // ✅ Aceptar (borradores): el camino vigente (data-revaccept). Si
+  // bindReview no lo cableó en esta superficie, réplica mínima del
+  // núcleo (gate IG + PATCH con la propuesta + señal + render).
+  const acc = q('[data-revaccept]');
+  if (acc && typeof acc.onclick !== 'function') {
+    acc.onclick = async () => {
+      if (!(typeof PROFILE !== 'undefined' && PROFILE && PROFILE.ig_connected)) {
+        try { igGateFeedback(acc); } catch (e) { toast(hfIsEn() ? 'Connect your Instagram first 📸' : 'Conectá tu Instagram primero 📸'); }
+        return;
+      }
+      acc.disabled = true;
+      try {
+        const proposed = acc.dataset.proposed;
+        const when = proposed ? new Date(proposed).toISOString() : null;
+        await api.patch('/api/posts/' + encodeURIComponent(post.id), { scheduled_at: when });
+        try { await api.post('/api/posts/' + encodeURIComponent(post.id) + '/signal', { signal: 'approved' }); } catch (e) {}
+        try { track('draft_accept', { id: post.id }); } catch (e) {}
+      } catch (e) { toast('😅 ' + esc((e && e.message) || '')); acc.disabled = false; return; }
+      hfDetailClose();
+      toast('✅ ' + (hfIsEn() ? 'Scheduled — it goes out on its own' : 'Programado — sale solo'));
+      try { render(); } catch (e) {}
+    };
+  }
+  const act = async (name, btn) => {
+    if (name === 'like' || name === 'save') {
+      const key = name === 'like' ? 'owner_liked' : 'owner_saved';
+      const on = !post[key];
+      btn.disabled = true;
+      try { await api.patch('/api/posts/' + encodeURIComponent(post.id), { action: on ? name : (name === 'like' ? 'unlike' : 'unsave') }); }
+      catch (e) { toast((hfIsEn() ? 'Could not update: ' : 'No se pudo actualizar: ') + ((e && e.message) || '')); btn.disabled = false; return; }
+      post[key] = on ? 1 : 0;
+      btn.disabled = false;
+      btn.classList.toggle('on', on);
+      btn.innerHTML = name === 'like' ? (on ? HF_D_HEART_FULL : HF_D_HEART) : (on ? HF_D_SAVE_FULL : HF_D_SAVE);
+      return;
+    }
+    if (name === 'comment') {
+      // Editar comentando: el flujo vigente de edición en el feed.
+      const t = tile; const id = post.id;
+      hfDetailClose();
+      if (t) { try { hfActionsAct('edit', String(id), t, null); return; } catch (e) {} }
+      location.hash = '#/app/post/' + encodeURIComponent(id);
+      return;
+    }
+    if (name === 'share') { hfDetailShare(post); return; }
+    if (name === 'menu') {
+      const t = tile;
+      hfDetailClose();
+      if (t && post.status === 'scheduled') { try { hfOpenActionsSheet(t); return; } catch (e) {} }
+      hfDetailMenu(post);
+      return;
+    }
+  };
+  ov.querySelectorAll('[data-hfd-act]').forEach((b) => {
+    b.addEventListener('click', (e) => { e.stopPropagation(); act(b.dataset.hfdAct, b); });
+  });
+}
+function hfDetailMenu(post) {
+  const en = hfIsEn();
+  const bd = document.createElement('div');
+  bd.className = 'pcsheet-backdrop';
+  bd.innerHTML = `<div class="pcsheet hf-actions" data-post-id="${esc(String(post.id))}" role="dialog" aria-modal="true">
+    <div class="pcsheet-handle"></div>
+    <button type="button" class="pcsheet-opt" data-hfdm="pin">${post.pinned ? '📌 ' + (en ? 'Unpin from your profile' : 'Desfijar de tu perfil') : '📌 ' + (en ? 'Pin to your profile' : 'Fijar en tu perfil')}<small>${en ? 'Pinned posts show first in your grid' : 'Los fijados se ven primeros en tu grilla'}</small></button>
+    <button type="button" class="pcsheet-opt" data-hfdm="edit">✏️ ${en ? 'Edit' : 'Editar'}<small>${en ? 'Open this post to edit it' : 'Abrí este posteo para editarlo'}</small></button>
+    <button type="button" class="pcsheet-close" data-hfdm="close">${en ? 'Close' : 'Cerrar'}</button>
+  </div>`;
+  document.body.appendChild(bd);
+  bd.addEventListener('click', (e) => { if (e.target === bd) pcCloseSheet(); });
+  bd.querySelectorAll('[data-hfdm]').forEach((b) => b.addEventListener('click', () => {
+    const a = b.dataset.hfdm;
+    if (a === 'close') { pcCloseSheet(); return; }
+    if (a === 'pin') { hfPinToggle(!post.pinned, String(post.id)); return; }
+    if (a === 'edit') { pcCloseSheet(); location.hash = '#/app/post/' + encodeURIComponent(post.id); return; }
+  }));
+}
+async function hfDetailShare(post) {
+  const en = hfIsEn();
+  const cap = String(post.caption || '').trim();
+  const url = (post.status === 'published' && post.ig_permalink) ? String(post.ig_permalink) : '';
+  try {
+    if (navigator.share) {
+      if (url) { await navigator.share({ url, text: cap || undefined }); return; }
+      // Sin permalink (todavía no salió): compartir la imagen misma.
+      try {
+        const resp = await fetch(post.image_path);
+        const blob = await resp.blob();
+        const file = new File([blob], 'posty-post.jpg', { type: blob.type || 'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: cap || undefined }); return; }
+      } catch (e) { /* cae a copiar */ }
+      await navigator.share({ text: cap });
+      return;
+    }
+    throw new Error('no-share');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // el dueño canceló: nada
+    try {
+      await navigator.clipboard.writeText(url || cap);
+      toast(url ? (en ? '🔗 Link copied' : '🔗 Link copiado') : (en ? '📋 Caption copied — ready to share' : '📋 Pie de foto copiado — listo para compartir'));
+    } catch (e2) { toast(en ? 'Could not share this post' : 'No se pudo compartir este posteo'); }
+  }
+}
+function hfDetailBind(root) {
+  if (!root || root._hfDetailBound) return;
+  root._hfDetailBound = true;
+  root.addEventListener('click', (e) => {
+    const tile = e.target && e.target.closest ? e.target.closest('.hf-tile[data-post-id]') : null;
+    if (!tile) return;
+    // Solo táctil: en escritorio manda el flujo vigente (hover que
+    // agranda + click que fija la tarjeta del cofre). La supresión
+    // del click tras un press-and-hold corre antes (captura previa).
+    if (!(window.matchMedia && window.matchMedia('(hover: none)').matches)) return;
+    const t = HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(tile.dataset.postId));
+    if (!t) return;
+    e.stopPropagation();
+    e.preventDefault();
+    hfDetailOpen(t.post, tile);
+  }, true);
+}
+function hfDurBind(root) {
+  if (!root) return;
+  root.querySelectorAll('video[data-hf-dur]').forEach((v) => {
+    const paint = () => {
+      try {
+        const d = v.duration;
+        if (!Number.isFinite(d) || d <= 0) return;
+        const tile = v.closest('.hf-tile');
+        if (!tile || tile.querySelector('.hf-dur')) return;
+        const s = Math.round(d);
+        const el = document.createElement('span');
+        el.className = 'hf-dur';
+        el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+        tile.appendChild(el);
+      } catch (e) {}
+    };
+    if (v.readyState >= 1) paint();
+    else v.addEventListener('loadedmetadata', paint, { once: true });
+  });
+}
+
 // (Tanda feed 5 · ítem 3) Fijar/desfijar desde la hoja de acciones: el
 // servidor manda (tope 3, como IG); la grilla re-renderiza con los
 // fijados primero (homeGridCompose).
@@ -13292,6 +13673,19 @@ function bindInicio() {
   $$('#inicioView [data-hf-ava]').forEach((el) => {
     el.onclick = () => hfStoryOpen(0);
   });
+  // (Tanda feed 5 · ítem 2) Pestañas del perfil: filtran la grilla
+  // (re-render de la vista, el patrón de la casa).
+  $$('#inicioView [data-hf-tab]').forEach((el) => {
+    el.onclick = () => { if (HF_TAB !== el.dataset.hfTab) { HF_TAB = el.dataset.hfTab; try { render(); } catch (e) {} } };
+  });
+  // (Tanda feed 5 · ítem 7) «Ver como visitante» y su vuelta.
+  $$('#inicioView [data-hf-visitor]').forEach((el) => {
+    el.onclick = () => { HF_VISITOR = el.dataset.hfVisitor === '1'; try { render(); } catch (e) {} };
+  });
+  // (Tanda feed 5 · ítem 1) El detalle IG de las piezas + la duración
+  // real en las tiles de la pestaña Reels.
+  hfDetailBind(document.getElementById('inicioView'));
+  hfDurBind(document.getElementById('inicioView'));
   // Franja de revisión: "Aceptar todo" — el handler de siempre
   // (doAcceptAll completa los ítems desde REVIEW_DRAFTS, que
   // inicioView ya cargó con todos los borradores de la cuenta).
