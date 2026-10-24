@@ -1990,6 +1990,124 @@ function landingView(cfg) {
 }
 
 /* ---------- AUTH ---------- */
+/* ---------- (Frente 5) Cuentas guardadas en ESTE dispositivo ----------
+   Tras un login/registro OK, el servidor emite un token por dispositivo
+   (device-tokens.js: hash en el server, rotación en cada uso, ~60 días).
+   Acá guardamos SOLO { email, token } en localStorage — la contraseña
+   NUNCA se persiste en ninguna forma. La pantalla de entrada lista las
+   cuentas de ESTE navegador como "Continuar como <email>": un toque
+   intercambia el token por una sesión, sin contraseña. La × quita la
+   cuenta de este dispositivo Y revoca el token en el servidor. */
+const SAVED_ACCOUNTS_KEY = 'posty_saved_accounts';
+function savedAccountsLang() {
+  try { const p = localStorage.getItem('posty-lang'); if (p === 'en' || p === 'es') return p; } catch (e) {}
+  try { if (/^en/i.test(navigator.language || '')) return 'en'; } catch (e) {}
+  return 'es';
+}
+const SAVED_STR = {
+  es: { cont: 'Continuar como', other: 'Usar otra cuenta', remove: 'Quitar', savedTitle: 'Tus cuentas en este dispositivo', soft: 'Esa entrada ya no sirve en este dispositivo 😅 Entrá con tu contraseña y queda guardada de nuevo.', net: 'Sin conexión justo ahora 😅 Probá de nuevo en un toque.' },
+  en: { cont: 'Continue as', other: 'Use another account', remove: 'Remove', savedTitle: 'Your accounts on this device', soft: 'That sign-in no longer works on this device 😅 Log in with your password and it will be saved again.', net: 'No connection right now 😅 Try again in a sec.' },
+};
+function savedStr() { return SAVED_STR[savedAccountsLang()] || SAVED_STR.es; }
+function savedAccountsList() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SAVED_ACCOUNTS_KEY) || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((a) => a && a.email && a.token).map((a) => ({ email: String(a.email), token: String(a.token) }));
+  } catch (e) { return []; }
+}
+function savedAccountsSave(email, token) {
+  const em = String(email || '').trim().toLowerCase();
+  if (!em || !token) return;
+  try {
+    const list = savedAccountsList().filter((a) => a.email !== em);
+    list.unshift({ email: em, token: String(token), saved_at: Date.now() });
+    localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(list.slice(0, 10)));
+  } catch (e) { /* sin storage no hay cuentas guardadas: el login sigue igual */ }
+}
+function savedAccountsRemove(email) {
+  const em = String(email || '').trim().toLowerCase();
+  try { localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(savedAccountsList().filter((a) => a.email !== em))); } catch (e) {}
+}
+function savedAccountsHTML() {
+  const list = savedAccountsList();
+  if (!list.length) return '';
+  const S = savedStr();
+  const rows = list.map((a) => {
+    const initial = esc((a.email.trim()[0] || '?').toUpperCase());
+    return `<div class="saved-acct">
+      <button type="button" class="saved-acct-main" data-saved-email="${esc(a.email)}">
+        <span class="saved-acct-ava">${initial}</span>
+        <span class="saved-acct-txt"><span class="saved-acct-cta">${S.cont}</span><span class="saved-acct-email">${esc(a.email)}</span></span>
+      </button>
+      <button type="button" class="saved-acct-x" data-saved-remove="${esc(a.email)}" aria-label="${S.remove} ${esc(a.email)}" title="${S.remove}">×</button>
+    </div>`;
+  }).join('');
+  return `<p class="saved-title">${S.savedTitle}</p><div id="savedMsg"></div>${rows}
+    <button type="button" class="saved-other" id="btnSavedOther">${S.other}</button>`;
+}
+function savedShowForm(prefillEmail, softMsg) {
+  const wrap = document.getElementById('authFormFields');
+  if (wrap) wrap.style.display = '';
+  const em = document.getElementById('f_email');
+  if (em && prefillEmail) { em.value = prefillEmail; }
+  if (softMsg) { const fe = document.getElementById('formErr'); if (fe) fe.innerHTML = `<div class="saved-note">${esc(softMsg)}</div>`; }
+  const pw = document.getElementById('f_pass');
+  if (pw && prefillEmail) { try { pw.focus(); } catch (e) {} }
+}
+function paintSavedAccounts() {
+  const box = document.getElementById('savedAccounts');
+  if (!box) return;
+  box.innerHTML = savedAccountsHTML();
+  const wrap = document.getElementById('authFormFields');
+  if (wrap) wrap.style.display = savedAccountsList().length ? 'none' : '';
+}
+function bindSavedAccounts() {
+  const box = document.getElementById('savedAccounts');
+  if (!box || box.dataset.bound) return;
+  box.dataset.bound = '1';
+  paintSavedAccounts();
+  box.addEventListener('click', async (ev) => {
+    const S = savedStr();
+    const rm = ev.target.closest('[data-saved-remove]');
+    if (rm) {
+      const email = rm.getAttribute('data-saved-remove');
+      const acct = savedAccountsList().find((a) => a.email === email);
+      savedAccountsRemove(email); // quita de ESTE dispositivo al instante
+      paintSavedAccounts();
+      if (acct && acct.token) { try { await api.post('/api/auth/device-revoke', { token: acct.token }); } catch (e) { /* local ya quitó; la revocación reintenta nunca: el token sin uso vence solo */ } }
+      return;
+    }
+    if (ev.target.closest('#btnSavedOther')) { savedShowForm(''); return; }
+    const main = ev.target.closest('[data-saved-email]');
+    if (!main) return;
+    const email = main.getAttribute('data-saved-email');
+    const acct = savedAccountsList().find((a) => a.email === email);
+    if (!acct) { paintSavedAccounts(); return; }
+    if (main.disabled) return;
+    main.disabled = true;
+    try {
+      const r = await api.post('/api/auth/device-exchange', { token: acct.token });
+      if (r && r.device_token) savedAccountsSave(email, r.device_token); // rotación: guardamos el token NUEVO
+      await refreshSession();
+      if (ME) { postAuthLanding(); return; }
+      throw new Error('no-session');
+    } catch (e) {
+      main.disabled = false;
+      if (e && e.status === 401) {
+        // Token vencido/revocado/reutilizado: caída suave al formulario con
+        // el email precargado, sin error traumático. La entrada muerta se va.
+        savedAccountsRemove(email);
+        paintSavedAccounts();
+        savedShowForm(email, S.soft);
+      } else {
+        const m = document.getElementById('savedMsg');
+        if (m) m.innerHTML = `<div class="saved-note">${esc(S.net)}</div>`;
+      }
+    }
+  });
+}
+
 function authView(mode) {
   const isLogin = mode === 'login';
   return `
@@ -2000,6 +2118,8 @@ function authView(mode) {
   <div class="wrap"><div class="form-card">
     <h2>${isLogin ? 'Bienvenido de vuelta 👋' : 'Creá tu cuenta 🚀'}</h2>
     <p class="sub">${isLogin ? 'Entrá para seguir automatizando.' : 'Probalo gratis, sin tarjeta.'}</p>
+    ${isLogin ? '<div id="savedAccounts"></div>' : ''}
+    <div id="authFormFields">
     <div id="formErr"></div>
     <div class="field"><label>Email</label><input id="f_email" type="email" placeholder="vos@tunegocio.com"${isLogin ? ' autocomplete="email"' : ' autocomplete="off" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
     <div class="field"><label>Contraseña</label><input id="f_pass" type="password" placeholder="Mínimo 6 caracteres"${isLogin ? ' autocomplete="current-password"' : ' autocomplete="new-password" readonly onfocus="this.removeAttribute(\'readonly\')"'}></div>
@@ -2007,6 +2127,7 @@ function authView(mode) {
     <p style="text-align:center;margin-top:18px;font-size:12.5px;color:var(--dim)">
       ${isLogin ? '¿No tenés cuenta? <a href="#/registro" style="color:var(--cel)">Registrate</a> · <a href="#/forgot" style="color:var(--cel)">Olvidé mi contraseña</a>' : '¿Ya tenés cuenta? <a href="#/login" style="color:var(--cel)">Entrá</a>'}
     </p>
+    </div>
   </div></div>`;
 }
 
@@ -10960,6 +11081,7 @@ async function render() {
     if (ME) { postAuthLanding(); return; }
     if (mySeq !== RENDER_SEQ) return;
     root.innerHTML = authView(path.slice(2));
+    if (path === '#/login') bindSavedAccounts(); // (Frente 5) cuentas guardadas en este dispositivo
     const btnAuthEl = $('#btnAuth');
     ['#f_email', '#f_pass'].forEach((sel) => { const inp = $(sel); if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); btnAuthEl.click(); } }); });
     btnAuthEl.onclick = async () => {
@@ -10987,7 +11109,10 @@ async function render() {
             if (tp && tp.ig_username) body.trial_ig = tp.ig_username;
           } catch (e) {}
         }
-        await api.post(isReg ? '/api/auth/register' : '/api/auth/login', body);
+        const authResp = await api.post(isReg ? '/api/auth/register' : '/api/auth/login', body);
+        // (Frente 5) Guardar la cuenta en ESTE dispositivo (email + token del
+        // servidor; la contraseña jamás se persiste).
+        savedAccountsSave((authResp && authResp.email) || email, authResp && authResp.device_token);
         if (!isReg) { try { localStorage.removeItem('posta_trial_profile'); } catch (e) {} }
         await refreshSession();
         if (isReg) localStorage.removeItem('posta_ref');
@@ -11061,7 +11186,10 @@ async function render() {
       btnResetEl.disabled = true;
       const password = $('#f_pass').value || '';
       try {
-        await api.post('/api/auth/reset', { token, password });
+        const resetResp = await api.post('/api/auth/reset', { token, password });
+        // (Frente 5) El reset revoca los tokens viejos y emite uno fresco:
+        // este dispositivo guarda la cuenta con el token nuevo.
+        savedAccountsSave(resetResp && resetResp.email, resetResp && resetResp.device_token);
         await refreshSession();
         postAuthLanding();
       } catch (e) {

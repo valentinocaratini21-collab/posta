@@ -3632,6 +3632,17 @@ function closeReg() {
     const resp = await pj('/api/auth/magic-request', body);
     try { localStorage.removeItem('posta_ref'); } catch (e) {}
     const m = document.querySelector('#ovReg .modal');
+    if (resp && resp.session && resp.device_token && resp.email) {
+      // (Front 5) Account saved on THIS device (email + per-device token; no
+      // password): the sign-in screen offers it as "Continue as". Same key
+      // the app uses (public/app.js).
+      try {
+        const key = 'posty_saved_accounts';
+        const list = (JSON.parse(localStorage.getItem(key) || '[]') || []).filter((a) => a && a.email !== resp.email);
+        list.unshift({ email: resp.email, token: resp.device_token, saved_at: Date.now() });
+        localStorage.setItem(key, JSON.stringify(list.slice(0, 10)));
+      } catch (e) {}
+    }
     if (resp && resp.session) {
       // Sesión inmediata: la cuenta ya quedó abierta en este navegador.
       m.innerHTML = `<button class="x" id="xReg">✕</button>

@@ -48,6 +48,7 @@ const creator = require('./creator.js');
 const { getAuthUrl, exchangeCodeForTokens, getIgUsername, getIgProfile } = require('./instagram');
 const { startScheduler, publishSinglePost } = require('./scheduler');
 const approval = require('./approval'); // "Posty te avisa": firmas y avisos de aprobación
+const deviceTokens = require('./device-tokens'); // (Frente 5) tokens por dispositivo: cuentas guardadas en la entrada, hash + rotación + revocación
 const { reconcileUser } = require('./billing-sync');
 const { startTokenRefresh } = require('./tokenrefresh');
 const { analyzeWebsite } = require('./website-study');
@@ -1605,7 +1606,14 @@ app.post('/api/auth/register', (req, res) => {
     track(newUserId, 'registered');
     evTrack(newUserId, 'account_created', {});
     // Sesión regenerada al crear la cuenta (anti fijación de sesión).
-    req.session.regenerate(() => { req.session.userId = newUserId; res.json({ ok: true }); });
+    // (Frente 5) Token por dispositivo: este navegador guarda la cuenta
+    // (email + token; la contraseña NUNCA) para "Continuar como" de un toque.
+    req.session.regenerate(() => {
+      req.session.userId = newUserId;
+      let dt = null;
+      try { dt = deviceTokens.issue(db, newUserId); } catch (e) { console.error('[posta] device token (register):', e.message); }
+      res.json({ ok: true, email: email.trim().toLowerCase(), device_token: dt ? dt.token : null, device_token_expires_at: dt ? dt.expiresAt : null });
+    });
   } catch (e) {
     // Solo el duplicado real es "ya tiene cuenta": disfrazar cualquier error
     // de DB con ese mensaje dejaba al usuario entrando a una cuenta que
@@ -1648,8 +1656,55 @@ app.post('/api/auth/login', (req, res) => {
         setTimeout(() => { autoArmWeek(uidL, 'login').catch(() => {}); }, 5000);
       }
     } catch (e) { console.error('[posta] importTrialWeek:', e.message); }
-    res.json({ ok: true });
+    // (Frente 5) Token por dispositivo (mismo patrón que en register).
+    let dt = null;
+    try { dt = deviceTokens.issue(db, user.id); } catch (e) { console.error('[posta] device token (login):', e.message); }
+    res.json({ ok: true, email: user.email, device_token: dt ? dt.token : null, device_token_expires_at: dt ? dt.expiresAt : null });
   });
+});
+
+// ---------- (Frente 5) Cuentas guardadas en este dispositivo ----------
+// Registrado en la ZONA DE AUTH (junto a register/login), muy lejos del
+// catch-all comodín del final del archivo: no depende de ese fix.
+// Intercambio token→sesión: el cliente manda el token guardado en SU
+// localStorage; si sirve, nace la sesión (regenerada, anti fijación) y el
+// token ROTA — la respuesta trae SOLO el token nuevo (y la sesión por
+// cookie). Sin datos de la cuenta, sin lista de dispositivos, sin nada más.
+// Rate-limit espejo del login (authHit*, el limiter vigente del auth):
+// 10 fallos por 15 min por IP+huella del token; el acierto limpia el contador.
+app.post('/api/auth/device-exchange', (req, res) => {
+  const token = String((req.body && req.body.token) || '');
+  // La clave es la IP (espejo del login, que usa email+IP): un atacante que
+  // prueba tokens al azar cambia de huella en cada intento, así que la
+  // huella no puede ser la clave — 10 fallos por IP cada 15 min, como login.
+  const rlKey = 'device|' + (req.ip || '');
+  if (authHitCount(rlKey, 15 * 60 * 1000) >= 10)
+    return res.status(429).json({ error: 'device_rate_limited' });
+  let out = null;
+  try { out = deviceTokens.exchange(db, token); } catch (e) { console.error('[posta] device exchange:', e.message); }
+  if (!out) {
+    authHitRecord(rlKey);
+    return res.status(401).json({ error: 'device_token_invalid' });
+  }
+  authHitClear(rlKey);
+  req.session.regenerate(() => {
+    req.session.userId = out.userId;
+    res.json({ ok: true, device_token: out.token, device_token_expires_at: out.expiresAt });
+  });
+});
+
+// Revocación: la × de "quitar cuenta de este dispositivo". La posesión del
+// token ES la credencial (igual que un logout): no exige sesión, porque la
+// fila se quita justamente desde la pantalla de entrada, sin estar adentro.
+// Responde siempre ok:true — no revela si el token existía.
+app.post('/api/auth/device-revoke', (req, res) => {
+  const token = String((req.body && req.body.token) || '');
+  const rlKey = 'device-revoke|' + (req.ip || '');
+  if (authHitCount(rlKey, 15 * 60 * 1000) >= 30)
+    return res.status(429).json({ error: 'device_rate_limited' });
+  authHitRecord(rlKey);
+  try { deviceTokens.revoke(db, token); } catch (e) { console.error('[posta] device revoke:', e.message); }
+  res.json({ ok: true });
 });
 
 // ---------- Reporte semanal + oportunidad (tarjeta en Schedule, 2026-10-17) ----------
@@ -2359,6 +2414,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
   const { email, trial_ig, ref, utm, trial_profile } = req.body || {};
   const em = String(email || '').trim().toLowerCase();
   let sessionNow = false;
+  let deviceDt = null; // (Frente 5) token por dispositivo si nace la sesión inmediata
   try {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return res.json({ ok: true });
     // Rate limit: máx 5 tokens por hora por email
@@ -2417,6 +2473,10 @@ app.post('/api/auth/magic-request', async (req, res) => {
         evTrack(userId, 'account_created', {});
         await new Promise((resolve) => req.session.regenerate(() => { req.session.userId = userId; resolve(); }));
         sessionNow = true;
+        // (Frente 5) La sesión inmediata también guarda la cuenta en ESTE
+        // navegador: la respuesta lleva el token y prueba.html lo persiste
+        // (email + token; sin contraseña — esta cuenta ni siquiera tiene).
+        try { deviceDt = deviceTokens.issue(db, userId); } catch (e) { console.error('[posta] device token (magic):', e.message); }
       }
     } catch (e) { console.error('[magic] sesión inmediata:', e.message); }
   } catch (e) { console.error('[magic] request:', e.message); }
@@ -2426,7 +2486,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
     console.error('[magic] request sin salida: el email no se envió (¿RESEND_API_KEY?) para', em);
     return res.status(503).json({ ok: false, error: 'No pudimos enviar el email de acceso 😅 Probá de nuevo en un rato.' });
   }
-  res.json({ ok: true, session: sessionNow });
+  res.json({ ok: true, session: sessionNow, email: sessionNow ? em : undefined, device_token: deviceDt ? deviceDt.token : null, device_token_expires_at: deviceDt ? deviceDt.expiresAt : null });
 });
 
 // Canjea el magic link: token de un solo uso, 15 min de vida.
@@ -2587,9 +2647,20 @@ app.post('/api/auth/reset', (req, res) => {
         } catch (e) {}
       }
     } catch (e) { console.error('[posta] reset: no pude revocar sesiones:', e.message); }
+    // (Frente 5) El reset también revoca TODOS los tokens por dispositivo de
+    // la cuenta: si el cambio fue por compromiso, ninguna "cuenta guardada"
+    // puede reabrir la puerta. Este navegador recibe uno fresco abajo.
+    try { deviceTokens.revokeAllForUser(db, row.user_id); } catch (e) { console.error('[posta] reset: no pude revocar device tokens:', e.message); }
     authHitClear(rlKey);
     // Sesión regenerada tras autenticar (anti fijación de sesión).
-    req.session.regenerate(() => { req.session.userId = row.user_id; res.json({ ok: true }); });
+    req.session.regenerate(() => {
+      req.session.userId = row.user_id;
+      let dt = null;
+      try { dt = deviceTokens.issue(db, row.user_id); } catch (e) { console.error('[posta] device token (reset):', e.message); }
+      let emR = '';
+      try { const uR = db.prepare('SELECT email FROM users WHERE id = ?').get(row.user_id); emR = (uR && uR.email) || ''; } catch (e) {}
+      res.json({ ok: true, email: emR, device_token: dt ? dt.token : null, device_token_expires_at: dt ? dt.expiresAt : null });
+    });
   } catch (e) {
     res.status(400).json({ error: 'No pude cambiarla 😅 Probá de nuevo' });
   }
@@ -17718,7 +17789,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v355';
+const BUILD_ID = '20261023-v356';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
