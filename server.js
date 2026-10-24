@@ -2429,6 +2429,7 @@ app.post('/api/auth/magic-request', async (req, res) => {
   // es async, Express nunca respondía y la request colgaba para siempre (el
   // «Algo salió mal» tras >60 s del dogfooding de Gesty, v363).
   let emailSent = false;
+  let magicLang = 'es'; // (v369) se resuelve dentro del try; vive afuera por la misma lección del P0
   let deviceDt = null; // (Frente 5) token por dispositivo si nace la sesión inmediata
   try {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return res.json({ ok: true });
@@ -2446,10 +2447,15 @@ app.post('/api/auth/magic-request', async (req, res) => {
     });
     db.prepare('INSERT INTO magic_tokens (token_hash, email, payload, created_at, expires_at, used) VALUES (?,?,?,?,?,0)')
       .run(tokenHash, em, payload, Date.now(), Date.now() + 15 * 60 * 1000);
+    // (v369 · paridad de idioma) El email de acceso sale en el idioma de la
+    // CUENTA si ya existe; si no, en el que trae el funnel (lang del body).
+    const acctLang = (db.prepare('SELECT lang FROM users WHERE email = ?').get(em) || {}).lang;
+    magicLang = acctLang === 'en' || acctLang === 'es' ? acctLang
+      : (String((req.body || {}).lang || '').trim().toLowerCase() === 'en' ? 'en' : 'es');
     if (process.env.RESEND_API_KEY) {
       const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
       const link = `${base}/api/auth/magic?token=${token}`;
-      try { const mr = await magicLinkEmail(em, link); if (mr && mr.ok) emailSent = true; }
+      try { const mr = await magicLinkEmail(em, link, magicLang); if (mr && mr.ok) emailSent = true; }
       catch (e) { console.error('[magic] email:', e.message); }
     }
     // Sesión inmediata (2026-10-16, auditoría #3): si el email NO tiene
@@ -2504,10 +2510,10 @@ app.post('/api/auth/magic-request', async (req, res) => {
     if (!process.env.RESEND_API_KEY) {
       try {
         db.prepare('INSERT INTO email_send_log (ts, to_email, subject, from_addr, status, http_status, provider_id, error) VALUES (?,?,?,?,?,?,?,?)')
-          .run(Date.now(), em, 'Entrá a Posty sin contraseña ✨', process.env.EMAIL_FROM || 'Posty <hola@postycommunitymanager.com>', 'not_attempted', null, '', 'RESEND_API_KEY ausente en el servidor: el envío ni se intentó');
+          .run(Date.now(), em, magicLang === 'en' ? 'Sign in to Posty — no password needed ✨' : 'Entrá a Posty sin contraseña ✨', process.env.EMAIL_FROM || 'Posty <hola@postycommunitymanager.com>', 'not_attempted', null, '', 'RESEND_API_KEY ausente en el servidor: el envío ni se intentó');
       } catch (e) { /* best-effort */ }
     }
-    return res.status(503).json({ ok: false, error: 'No pudimos enviar el email de acceso 😅 Probá de nuevo en un rato.' });
+    return res.status(503).json({ ok: false, error: magicLang === 'en' ? "We couldn't send the sign-in email 😅 Please try again in a bit." : 'No pudimos enviar el email de acceso 😅 Probá de nuevo en un rato.' });
   }
   res.json({ ok: true, session: sessionNow, email: sessionNow ? em : undefined, device_token: deviceDt ? deviceDt.token : null, device_token_expires_at: deviceDt ? deviceDt.expiresAt : null });
 });
@@ -2601,7 +2607,7 @@ app.post('/api/auth/forgot', async (req, res) => {
     return res.status(429).json({ error: 'Ya pediste varios links 😅 Esperá una hora y probá de nuevo.' });
   authHitRecord(rlKey);
   try {
-    const user = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email);
+    const user = db.prepare('SELECT id, email, lang FROM users WHERE email = ?').get(email);
     if (user) {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -2612,17 +2618,19 @@ app.post('/api/auth/forgot', async (req, res) => {
       // podía mandar el link a otro dominio; magic ya usaba BASE_URL).
       const base = (process.env.BASE_URL || 'https://postycommunitymanager.com').replace(/\/$/, '');
       const link = `${base}/#/reset?token=${token}`;
+      // (v369 · paridad de idioma) El email sale en el idioma de la cuenta.
+      const fen = user.lang === 'en';
       const r = await sendEmail({
         to: user.email,
-        subject: 'Recuperá tu contraseña 🔑',
+        subject: fen ? 'Reset your password 🔑' : 'Recuperá tu contraseña 🔑',
         html: `<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
           <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
             <div style="font-size:22px;font-weight:800;color:#fff">posty<span style="color:#FEC14D">.</span></div>
           </div>
           <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
-            <p style="font-size:16px;line-height:1.6">¡Hola! Soy Posty 🤖 Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:</p>
-            <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">Cambiar mi contraseña</a></p>
-            <p style="font-size:13px;line-height:1.6;color:#47617A">El link vence en 1 hora. Si no fuiste vos, ignorá este mail 😊</p>
+            <p style="font-size:16px;line-height:1.6">${fen ? "Hi! I'm Posty 🤖 You asked to reset your password. Tap the button and choose a new one:" : '¡Hola! Soy Posty 🤖 Me pediste cambiar tu contraseña. Tocá el botón y elegí una nueva:'}</p>
+            <p style="text-align:center;margin:26px 0"><a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 34px;border-radius:999px;text-decoration:none">${fen ? 'Reset my password' : 'Cambiar mi contraseña'}</a></p>
+            <p style="font-size:13px;line-height:1.6;color:#47617A">${fen ? "The link expires in 1 hour. If it wasn't you, just ignore this email 😊" : 'El link vence en 1 hora. Si no fuiste vos, ignorá este mail 😊'}</p>
           </div></div>`,
       });
       if (!r || !r.ok) {
@@ -15092,10 +15100,10 @@ app.post('/api/demo/generate', express.raw({ type: 'multipart/form-data', limit:
   const goal = String(fields.goal || '').replace(/<[^>]*>/g, '').trim().slice(0, 400);
   const accent = String(fields.accent || '').trim().slice(0, 7);
   const btn = String(fields.btn || '').trim().slice(0, 7);
-  if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
-  if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
-  if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
-  if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
+  if (!business) return res.status(400).json({ error: lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio' });
+  if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: lang === 'en' ? 'Invalid industry' : 'Rubro inválido' });
+  if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: lang === 'en' ? 'Invalid country' : 'País inválido' });
+  if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: lang === 'en' ? 'Invalid tone' : 'Tono inválido' });
 
   const ip = demo.clientIp(req);
   // Anti-spam honesto: el intento se RESERVA al arrancar (atómico: 2 requests
@@ -15491,10 +15499,10 @@ app.post('/api/trial/generate', express.raw({ type: 'multipart/form-data', limit
       if (wl.length) richGoal = [richGoal, ...wl].filter(Boolean).join('\n');
     }
   }
-  if (!business) return res.status(400).json({ error: 'Contanos el nombre de tu negocio' });
-  if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: 'Rubro inválido' });
-  if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: 'País inválido' });
-  if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: 'Tono inválido' });
+  if (!business) return res.status(400).json({ error: lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio' });
+  if (!demo.CATEGORIES.includes(category)) return res.status(400).json({ error: lang === 'en' ? 'Invalid industry' : 'Rubro inválido' });
+  if (!demo.COUNTRIES.includes(country)) return res.status(400).json({ error: lang === 'en' ? 'Invalid country' : 'País inválido' });
+  if (!['vos', 'tu'].includes(tone)) return res.status(400).json({ error: lang === 'en' ? 'Invalid tone' : 'Tono inválido' });
 
   // (v196) Medallón de los pósters de marca: la foto de perfil localizada
   // en MEDIA_DIR (mismo archivo que usa el stream). Sin @ o sin foto, los
@@ -16036,10 +16044,10 @@ app.post('/api/trial/generate-stream', express.raw({ type: 'multipart/form-data'
     webData = await Promise.race([webCtxPromise, new Promise((r) => setTimeout(() => r(null), 4000))]).catch(() => null);
     if (webData && webData.name) business = webData.name;
   }
-  if (!business) return fail('Contanos el nombre de tu negocio');
-  if (!demo.CATEGORIES.includes(category)) return fail('Rubro inválido');
-  if (!demo.COUNTRIES.includes(country)) return fail('País inválido');
-  if (!['vos', 'tu'].includes(tone)) return fail('Tono inválido');
+  if (!business) return fail(lang === 'en' ? 'Tell us your business name' : 'Contanos el nombre de tu negocio');
+  if (!demo.CATEGORIES.includes(category)) return fail(lang === 'en' ? 'Invalid industry' : 'Rubro inválido');
+  if (!demo.COUNTRIES.includes(country)) return fail(lang === 'en' ? 'Invalid country' : 'País inválido');
+  if (!['vos', 'tu'].includes(tone)) return fail(lang === 'en' ? 'Invalid tone' : 'Tono inválido');
 
   const ip = demo.clientIp(req);
   const testMode = trialTestMode(req);
@@ -17342,7 +17350,7 @@ async function sendTrialGiftEmail(email, payload, lang) {
     ${P(en ? 'With love,' : 'Con amor,')}
     <p style="margin:0 0 6px"><img src="${base}/firma-posty.png" alt="Posty" style="width:190px;height:auto;display:block"></p>
     <p style="margin:0 0 26px;font-size:15px"><a href="${base}" style="color:#2793C8;font-weight:700;text-decoration:underline">postycommunitymanager.com</a></p>
-    <img src="${base}/valentino-posty-fundador.jpg" alt="Valentino, creador de Posty" style="width:100%;height:auto;border-radius:12px;display:block">
+    <img src="${base}/valentino-posty-fundador.jpg" alt="${en ? 'Valentino, creator of Posty' : 'Valentino, creador de Posty'}" style="width:100%;height:auto;border-radius:12px;display:block">
   </div>`;
   const text = [
     en ? "Hi — I'm Posty, your community manager." : 'Hola — soy Posty, tu community manager.',
@@ -17934,7 +17942,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v368';
+const BUILD_ID = '20261024-v369';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

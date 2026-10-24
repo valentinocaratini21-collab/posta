@@ -154,7 +154,12 @@ function weeklyReminderEmail(user, baseUrl, streak, mission) {
   return sendEmail({ to: user.email, subject, html });
 }
 
-function emailShell(inner) {
+function emailShell(inner, lang) {
+  const foot = lang === 'en' ? `
+      We're writing because you have content pending in Posty.<br>
+      Don't want these notices? Write to us at <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.` : `
+      Te avisamos porque tenés contenido pendiente en Posty.<br>
+      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.`;
   return `
 <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#0A1E33">
   <div style="background:#2793C8;padding:24px 28px;border-radius:14px 14px 0 0">
@@ -162,9 +167,7 @@ function emailShell(inner) {
   </div>
   <div style="background:#F2F9FD;padding:28px;border-radius:0 0 14px 14px">
     ${inner}
-    <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">
-      Te avisamos porque tenés contenido pendiente en Posty.<br>
-      ¿No querés recibir estos avisos? Escribinos a <a href="mailto:hola@postycommunitymanager.com" style="color:#2793C8">hola@postycommunitymanager.com</a>.
+    <p style="font-size:12px;line-height:1.6;color:#47617A;margin:20px 0 0">${foot}
     </p>
   </div>
 </div>`;
@@ -359,7 +362,22 @@ function firstPublishNudgeEmail(user, baseUrl) {
 }
 
 // Magic link: entrar sin contraseña (vale 15 minutos, un solo uso).
-function magicLinkEmail(email, link) {
+// (v369 · paridad de idioma) lang='en' → el email sale en inglés: la cuenta
+// creada desde el funnel EN guarda users.lang='en' y el acceso no puede
+// llegarle en español. Default histórico: 'es'.
+function magicLinkEmail(email, link, lang) {
+  if (lang === 'en') {
+    const subject = 'Sign in to Posty — no password needed ✨';
+    const html = emailShell(`
+    <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
+      Tap it and you're in — no password needed 👇 (valid for 15 minutes)<br>
+      <span style="font-size:13px">Sent to you by <b>Posty</b> 🤖</span>
+    </p>
+    <p style="text-align:center;margin:0 0 8px">
+      <a href="${link}" style="display:inline-block;background:#FEC14D;color:#0A1E33;font-weight:800;font-size:16px;padding:14px 32px;border-radius:999px;text-decoration:none">Sign in to Posty ✨</a>
+    </p>`, 'en');
+    return sendEmail({ to: email, subject, html });
+  }
   const subject = 'Entrá a Posty sin contraseña ✨';
   const html = emailShell(`
     <p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#47617A">
