@@ -117,6 +117,9 @@ try { db.exec(`ALTER TABLE posts ADD COLUMN style_reason TEXT DEFAULT ''`); } ca
 try { db.exec(`ALTER TABLE posts ADD COLUMN intent TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN needs_image INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN img_redos INTEGER DEFAULT 0`); } catch (e) { /* ya existe */ }
+// (Tanda feed 6A · ítem 3) Rehaces de imagen con IA por posteo: cada posteo
+// nace con 3 (las filas existentes también, por el DEFAULT de la migración).
+try { db.exec(`ALTER TABLE posts ADD COLUMN redo_left INTEGER NOT NULL DEFAULT 3`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN prev_image_path TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 try { db.exec(`ALTER TABLE posts ADD COLUMN product_ref TEXT DEFAULT ''`); } catch (e) { /* ya existe */ }
 // Hook engine (hooks.js): hook usado en cada borrador + rotación 8 semanas.

@@ -2034,6 +2034,33 @@ body.hf-d-open{overflow:hidden}
    neutra, discreta, abajo a la izquierda — la ÚNICA señal de estado en
    las tiles futuras programadas. Sin colores de marca ni de estado. */
 .hf-chip{position:absolute;left:6px;bottom:6px;z-index:2;display:inline-flex;align-items:center;background:rgba(0,0,0,.55);color:#fff;font-size:10.5px;font-weight:600;line-height:1;padding:4px 6px;border-radius:6px;letter-spacing:.1px;white-space:nowrap}
+/* (Tanda feed 6A) Botoncito de chat por tile: circular, abajo a la
+   derecha (la chapita vive abajo a la izquierda y el glyph arriba a la
+   derecha: no se pisan), fondo semitransparente como el cromo IG,
+   target táctil de 34px. */
+.hf-tile-chat{position:absolute;right:6px;bottom:6px;z-index:3;width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+.hf-tile-chat:active{background:rgba(0,0,0,.75)}
+/* (Tanda feed 6A) Barra de anclaje del chat: miniatura + texto +
+   contador + chips rápidos + ✕. Vive dentro de #chatAnchor, sobre el
+   input del chat del home. */
+#chatAnchor:empty{display:none}
+.hf-anchor{display:flex;gap:10px;align-items:flex-start;background:#F1F8FD;border:1.5px solid #D6EAF6;border-radius:14px;padding:10px;margin:10px 0}
+.hf-anchor-thumb{width:44px;height:55px;object-fit:cover;border-radius:8px;flex:none;background:#eef1f4}
+.hf-anchor-ph{display:flex;align-items:center;justify-content:center;font-size:20px}
+.hf-anchor-main{flex:1;min-width:0}
+.hf-anchor-t{font-size:13.5px;font-weight:700}
+.hf-anchor-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.hf-chipq{border:1.5px solid #BFDDF0;background:#fff;color:#0A1E33;border-radius:999px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer}
+.hf-chipq:disabled{opacity:.45;cursor:default}
+.hf-anchor-x{border:0;background:transparent;font-size:15px;color:#737373;cursor:pointer;padding:2px 4px;flex:none}
+.hf-redo-line{font-size:12.5px;color:#52606d;margin-top:2px}
+.hf-redo-line.hf-redo-zero{color:#8a5a00;font-weight:600}
+/* (Tanda feed 6A) Contador de rehaces en el detalle del posteo. */
+.hf-redo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px 0}
+.hf-redo .hf-redo-line{margin-top:0;font-size:13px}
+.hf-redo-btn{border:0;background:#2793C8;color:#fff;border-radius:999px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.hf-redo-alt{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+.hf-redo-altb{border:1.5px solid #D6EAF6;background:#F1F8FD;color:#0A1E33;border-radius:999px;padding:6px 11px;font-size:12.5px;font-weight:600;cursor:pointer}
 /* (Frente 3 · suma 2) Gestos del feed: el scroll vertical manda
    (pan-y: el navegador toma el gesto y dispara pointercancel, que
    detiene la preview / cancela la hoja). */

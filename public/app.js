@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v388'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v393'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -5768,7 +5768,7 @@ function chatCardHTML(compact, noEditChip, bareWrap, schedMode) {
     ${title}${desc}
     <div class="chat-box" id="chatBox">
       ${msgs || `<div class="chat-msg ai">hola! 👋 qué hacemos hoy?</div>`}
-    </div>${upRow}${chips}
+    </div><div id="chatAnchor"></div>${upRow}${chips}
     <div id="chatProposal">${proposalHTML()}</div>
     <div id="chatPhotos" class="chat-photos"></div>
     <div class="chat-input-row">
@@ -6538,7 +6538,8 @@ async function chatExchange({ text, display, extra, pushed }) {
   try {
     const r = await api.post('/api/ideas/chat', Object.assign(
       { messages: CHAT.map(m => ({ role: m.role, text: chatStripMcMarker(m.text) })), photos: unsentPhotos, library: libThumbs, drafts: chatDraftsCtx(),
-        photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean) }, extra || {}));
+        photoPaths: CHAT_PHOTOS.map(p => p && p.file_path).filter(Boolean),
+        anchor_post_id: (typeof HF_CHAT_ANCHOR !== 'undefined' && HF_CHAT_ANCHOR && HF_CHAT_ANCHOR.id) ? HF_CHAT_ANCHOR.id : undefined }, extra || {}));
     const t = $('#chatTyping'); if (t) { stopPostyThinking(t); t.remove(); }
     CHAT_PHOTOS.forEach(p => { if (p.aiUrl && unsentPhotos.includes(p.aiUrl)) p.sent = true; });
     CHAT.push({ role: 'assistant', text: r.reply || '…' });
@@ -6764,6 +6765,7 @@ function bindChat() {
     });
   }
   chatScroll();
+  try { hfPaintAnchor(); } catch (e) {}
   const mkP = $('#chatMkPost'), mkR = $('#chatMkReel');
   if (mkP) mkP.onclick = () => { track('chat_idea_accepted', { reel: false }); chatMakePost(false); };
   if (mkR) mkR.onclick = () => { track('chat_idea_accepted', { reel: true }); chatMakePost(true); };
@@ -7675,6 +7677,7 @@ function bindScfMinis(root) {
       // El CIERRE al salir lo maneja el rastreador geométrico global.
     });
     w.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 es target propio
       if (e.target.closest('.scf-pop')) {
         // Click sobre la propia capa: queda FIJADA.
         SCF_PINNED = true;
@@ -8748,13 +8751,17 @@ function pcOpenImageSheet(id) {
       const post = r && r.post;
       if (!post || !document.body.contains(bd)) return;
       const note = sheet.querySelector('.pcsheet-note');
-      if ((post.img_redos || 0) >= 1) {
+      // (6A) El contador vigente es redo_left (3 por posteo); img_redos
+      // quedó como dato legado y ya no gatea nada.
+      const rl = (post.redo_left === null || post.redo_left === undefined) ? 3 : Math.max(0, Math.min(3, Number(post.redo_left) || 0));
+      const enS = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+      if (rl <= 0) {
         sheet.querySelectorAll('[data-pc-act="img-style"], [data-pc-act="img-enhance"]').forEach(b => {
           b.disabled = true; b.classList.add('pcsheet-off');
         });
-        if (note) note.textContent = 'Ya usaste el rehacer de este posteo. Podés volver a la anterior o usar una foto tuya.';
+        if (note) note.textContent = enS ? 'You already used the 3 redos for this post. You can go back to the previous image or use your own photo.' : 'Ya usaste los 3 rehaces de este posteo. Podés volver a la anterior o usar una foto tuya.';
       } else if (note) {
-        note.textContent = 'Te queda 1 rehacer con IA para este posteo.';
+        note.textContent = enS ? `You have ${rl} of 3 AI redos left for this post.` : `Te quedan ${rl} de 3 rehaces con IA para este posteo.`;
       }
       if (post.prev_image_path) {
         const rb = sheet.querySelector('[data-pc-act="img-revert"]');
@@ -8773,6 +8780,7 @@ async function pcRestyle(id, style) {
   try {
     const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-restyle', { style }, { timeout: 180000 });
     if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Imagen actualizada'); }
+    else if (r && (r.error === 'redo_exhausted' || r.redo_exhausted)) toast((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
     else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
   } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
   pcSetLoading(id, false);
@@ -8783,6 +8791,7 @@ async function pcEnhance(id) {
   try {
     const r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-enhance', {}, { timeout: 180000 });
     if (r && r.ok && r.path) { pcSetImage(id, r.path); toast('✅ Foto mejorada'); }
+    else if (r && (r.error === 'redo_exhausted' || r.redo_exhausted)) toast((typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
     else toast('No se pudo: ' + esc((r && r.error) || 'probá de nuevo'));
   } catch (e) { toast('No se pudo: ' + esc((e && e.message) || 'probá de nuevo')); }
   pcSetLoading(id, false);
@@ -12549,6 +12558,93 @@ function hfChipText(scheduledAt) {
     return `${wd} ${dm} · ${hh}`;
   } catch (e) { return ''; }
 }
+// (Tanda feed 6A · ítem 1) Chapita ÚNICA de salida en formato relativo:
+// «Hoy · 18:30» si cae hoy en la zona de la cuenta, «Mañana · 9:00» si
+// cae mañana, si no «Mar · 18:30» (día corto localizado, primera en
+// mayúscula en ES; EN: 'Today · 6:30 PM' / 'Tomorrow · 9:00 AM' /
+// 'Tue · 6:30 PM', con el formato horario del locale EN). Función pura
+// (post, now): now se inyecta en los tests. Sin scheduled_at real o con
+// fecha inválida devuelve '' (sin chapita, jamás una fecha inventada).
+// Acepta el posteo o directamente el string de scheduled_at.
+function hfWhenChip(post, now) {
+  try {
+    const schedAt = (post && typeof post === 'object') ? post.scheduled_at : post;
+    if (!schedAt) return '';
+    let d = null;
+    if (typeof pcParseDate === 'function') d = pcParseDate(schedAt);
+    if (!d) {
+      const s = String(schedAt).replace(' ', 'T');
+      d = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z');
+    }
+    if (!d || isNaN(d)) return '';
+    const en = (typeof ME !== 'undefined' && ME && ME.lang === 'en');
+    const loc = en ? 'en-US' : 'es-AR';
+    const tz = (typeof pcTz === 'function') ? pcTz() : undefined;
+    const zo = tz ? { timeZone: tz } : {};
+    const nowD = now ? (now instanceof Date ? now : new Date(now)) : new Date();
+    if (isNaN(nowD)) return '';
+    const keyOf = (x) => x.toLocaleDateString('en-CA', Object.assign({ year: 'numeric', month: '2-digit', day: '2-digit' }, zo));
+    const tKey = keyOf(d), todayKey = keyOf(nowD);
+    const tomKey = keyOf(new Date(nowD.getTime() + 86400000));
+    let hh = en
+      ? d.toLocaleTimeString('en-US', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: true }, zo))
+      : d.toLocaleTimeString('es-AR', Object.assign({ hour: 'numeric', minute: '2-digit', hour12: false }, zo));
+    if (!en) hh = hh.replace(/^0(\d:)/, '$1'); // es-AR rellena «09:00»: la chapita va «9:00», como el ejemplo del dueño
+    if (!hh) return '';
+    if (tKey === todayKey) return `${en ? 'Today' : 'Hoy'} · ${hh}`;
+    if (tKey === tomKey) return `${en ? 'Tomorrow' : 'Mañana'} · ${hh}`;
+    let wd = d.toLocaleDateString(loc, Object.assign({ weekday: 'short' }, zo)).replace(/\./g, '');
+    if (!wd) return '';
+    wd = wd.charAt(0).toUpperCase() + wd.slice(1);
+    return `${wd} · ${hh}`;
+  } catch (e) { return ''; }
+}
+// (Tanda feed 6A · ítem 3) Rehaces que le quedan a un posteo: null si el
+// contador no lo alcanza (publicado o reel — los reels van por su flujo
+// propio). Sin dato (payload viejo), el posteo nace con 3 por defecto.
+function hfRedoLeft(p) {
+  try {
+    if (!p) return null;
+    if (String(p.status || '') === 'published') return null;
+    if (String(p.media_type || '') === 'video') return null;
+    let v = (p.redo_left === null || p.redo_left === undefined) ? 3 : Number(p.redo_left);
+    if (!Number.isFinite(v)) v = 3;
+    return Math.max(0, Math.min(3, Math.floor(v)));
+  } catch (e) { return null; }
+}
+// Línea del contador («Te quedan 2 de 3 rehaces» / a 0, el aviso amable):
+// la usan el detalle del posteo y la barra de anclaje del chat.
+function hfRedoLineHTML(p, en) {
+  const left = hfRedoLeft(p);
+  if (left === null) return '';
+  if (left > 0) return `<div class="hf-redo-line">${en ? `You have ${left} of 3 redos left` : `Te quedan ${left} de 3 rehaces`}</div>`;
+  return `<div class="hf-redo-line hf-redo-zero">${en ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo'}</div>`;
+}
+// (Tanda feed 6A · ítem 2) Barra de contexto del chat anclado a un
+// posteo: miniatura + «Estás hablando de este posteo» + ✕ + chips
+// rápidos (foto · texto · día y hora · rehacer) + la línea del contador.
+function hfAnchorBarHTML(p, en) {
+  if (!p || p.id === null || p.id === undefined) return '';
+  const thumb = p.image_path ? `<img class="hf-anchor-thumb" src="${esc(mv(p.image_path, 240))}" alt="" onerror="__imgFb(this)">` : '<span class="hf-anchor-thumb hf-anchor-ph">✨</span>';
+  const redo = hfRedoLineHTML(p, en);
+  const redoBtn = (hfRedoLeft(p) === 0)
+    ? `<button type="button" class="hf-chipq" data-hf-chipq="redo" disabled>${en ? 'Redo' : 'Rehacer'}</button>`
+    : `<button type="button" class="hf-chipq" data-hf-chipq="redo">${en ? 'Redo' : 'Rehacer'}</button>`;
+  return `<div class="hf-anchor" data-anchor-id="${esc(String(p.id))}">
+    ${thumb}
+    <div class="hf-anchor-main">
+      <div class="hf-anchor-t">${en ? "You're talking about this post" : 'Estás hablando de este posteo'}</div>
+      ${redo}
+      <div class="hf-anchor-chips">
+        <button type="button" class="hf-chipq" data-hf-chipq="photo">${en ? 'Change the photo' : 'Cambiar la foto'}</button>
+        <button type="button" class="hf-chipq" data-hf-chipq="text">${en ? 'Change the text' : 'Cambiar el texto'}</button>
+        <button type="button" class="hf-chipq" data-hf-chipq="when">${en ? 'Change the day/time' : 'Cambiar el día y hora'}</button>
+        ${redoBtn}
+      </div>
+    </div>
+    <button type="button" class="hf-anchor-x" data-hf-anchor-x aria-label="${en ? 'Remove anchor' : 'Quitar el anclaje'}">✕</button>
+  </div>`;
+}
 function homeTileHTML(t, i) {
   const popCls = i % 3 === 0 ? 'pl' : i % 3 === 2 ? 'pr' : 'pc';
   if (t.kind === 'ig') {
@@ -12564,18 +12660,24 @@ function homeTileHTML(t, i) {
       ? `<video src="${esc(p.image_path)}" muted playsinline loop preload="${t.reelTab ? 'metadata' : 'none'}" data-hf-reel="1"${t.reelTab ? ' data-hf-dur="1"' : ''}></video>`
       : `<img src="${esc(mv(p.image_path, 640))}" data-full="${esc(p.image_path)}" onerror="__imgFb(this)" loading="lazy" alt="">`;
   const glyph = p.pinned ? HOME_PIN_SVG : isV ? HOME_REEL_SVG : isCar ? HOME_CAR_SVG : '';
-  const pill = t.isNew ? '<span class="hf-new"><i></i>NUEVO</span>' : '';
-  // (Frente 3 · suma 2) Chapita de programación: SOLO en posteos futuros
-  // programados (status 'scheduled' con fecha real) — es la ÚNICA señal
-  // de estado sobre esas tiles (sin badges de colores ni estados extra).
-  // Publicados/pasados y borradores: sin chapita.
-  const chipTxt = p.status === 'scheduled' ? hfChipText(p.scheduled_at) : '';
+  // (Tanda feed 6A · ítem 1) La píldora «NUEVO» se eliminó: la ÚNICA
+  // señal de las tiles que vienen es la chapita relativa de hfWhenChip
+  // (Hoy/Mañana/día corto + hora), en la misma posición y familia
+  // visual de la chapita 🕐 de siempre. Vale para draft Y scheduled
+  // con scheduled_at real; sin fecha, sin chapita. Publicados: ninguna.
+  const chipTxt = (p.status === 'draft' || p.status === 'scheduled') ? hfWhenChip(p) : '';
   const chip = chipTxt ? `<span class="hf-chip">🕐 ${esc(chipTxt)}</span>` : '';
+  // (Tanda feed 6A · ítem 2) Botoncito de chat por posteo propio: abajo
+  // a la derecha, target propio (data-hf-chat) — no abre el detalle ni
+  // cuenta para el doble toque ni para el long-press (su handler vive
+  // desacoplado en hfChatBtnBind). Nunca en tiles leídas (kind 'ig',
+  // que retornan antes) ni en modo visitante.
+  const chatBtn = t.visitor ? '' : `<button type="button" class="hf-tile-chat" data-hf-chat="${esc(String(p.id))}" aria-label="${(typeof ME !== 'undefined' && ME && ME.lang === 'en') ? 'Talk to Posty about this post' : 'Hablar con Posty de este posteo'}">💬</button>`;
   // (Frente 3 · suma 2) La semana «cae» en la grilla: inicioView marca
   // t.fall/t.fallDelay una única vez por generación (ver hfFallMark).
   const fallCls = t.fall ? ' hf-fall' : '';
   const fallStyle = t.fall ? ` style="--hfd:${Math.max(0, Number(t.fallDelay) || 0)}ms"` : '';
-  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${pill}${chip}${glyph}</span>`;
+  return `<span class="scf-mini-x hf-tile${p.status === 'published' && !t.visitor ? ' pub' : ''}${fallCls}"${fallStyle} data-post-id="${esc(String(p.id))}" data-day="${esc(t.day || '')}" data-pop-cls="${popCls}" data-status="${esc(String(p.status || ''))}" data-media="${esc(String(p.media_type || ''))}" data-sched-at="${esc(String(p.scheduled_at || ''))}" data-pinned="${p.pinned ? '1' : '0'}" role="button" aria-label="Ver posteo">${media}${chip}${glyph}${chatBtn}</span>`;
 }
 function homeHeadHTML(prof, bizName, opts) {
   const P = prof || {};
@@ -12894,6 +12996,14 @@ function hfDetailHTML(p, opts) {
     </div>`;
   const accept = (!o.visitor && p.status === 'draft')
     ? `<button type="button" class="hf-d-accept" data-revaccept="${esc(String(p.id))}"${o.propIso ? ` data-proposed="${esc(o.propIso)}"` : ''}>✅ ${en ? 'Accept' : 'Aceptar'}</button>` : '';
+  // (Tanda feed 6A · ítem 3) Contador de rehaces en el detalle: línea +
+  // botón Rehacer mientras quedan; a 0, el aviso y los caminos gratis
+  // (Mi foto · Retocar el texto · Dejarlo así). Solo no publicados
+  // alcanzados por el contador y fuera del modo visitante.
+  const redoLeftD = o.visitor ? null : hfRedoLeft(p);
+  const redoHTML = redoLeftD === null ? '' : (redoLeftD > 0
+    ? `<div class="hf-redo">${hfRedoLineHTML(p, en)}<button type="button" class="hf-redo-btn" data-hfd-act="redo">🔁 ${en ? 'Redo' : 'Rehacer'}</button></div>`
+    : `<div class="hf-redo hf-redo-0">${hfRedoLineHTML(p, en)}<div class="hf-redo-alt"><button type="button" class="hf-redo-altb" data-hfd-act="myphoto">📸 ${en ? 'My photo' : 'Mi foto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="retext">✏️ ${en ? 'Touch up the text' : 'Retocar el texto'}</button><button type="button" class="hf-redo-altb" data-hfd-act="keep">✓ ${en ? 'Leave it as is' : 'Dejarlo así'}</button></div></div>`);
   return `<div class="hf-d" data-post-id="${esc(String(p.id))}">
     <div class="hf-d-head">${ava}<div class="hf-d-names"><div class="hf-d-user">${esc(headName)}</div>${locLine}</div>${o.visitor ? '' : `<button type="button" class="hf-d-dots" data-hfd-act="menu" aria-label="${en ? 'More options' : 'Más opciones'}">•••</button>`}</div>
     ${media}
@@ -12902,6 +13012,7 @@ function hfDetailHTML(p, opts) {
     ${capHTML}
     ${commentsLine}
     ${whenLine}
+    ${redoHTML}
     ${accept}
   </div>`;
 }
@@ -13149,6 +13260,7 @@ function hfFeedGesturesBind(root) {
   if (!root._hfCapBound) {
     root._hfCapBound = true;
     root.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no es toque de la tile
       const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
       if (t && t._hfHoldAt && Date.now() - t._hfHoldAt < 800) { e.stopPropagation(); e.preventDefault(); }
     }, true);
@@ -13427,6 +13539,29 @@ function hfDetailWire(ov, post, tile) {
       location.hash = '#/app/post/' + encodeURIComponent(id);
       return;
     }
+    if (name === 'redo') {
+      // (6A) Rehacer desde el detalle: el mismo flujo del chip del chat.
+      const idR = post.id;
+      hfDetailClose();
+      hfRedoPost(idR);
+      return;
+    }
+    if (name === 'myphoto') {
+      // (6A) A 0 rehaces: «Mi foto» abre la hoja de imagen vigente.
+      const idM = post.id;
+      hfDetailClose();
+      try { pcOpenImageSheet(idM); } catch (e) {}
+      return;
+    }
+    if (name === 'retext') {
+      // (6A) A 0 rehaces: retocar el texto = el editar-comentando vigente.
+      const t2 = tile; const idT = post.id;
+      hfDetailClose();
+      if (t2) { try { hfActionsAct('edit', String(idT), t2, null); return; } catch (e) {} }
+      location.hash = '#/app/post/' + encodeURIComponent(idT);
+      return;
+    }
+    if (name === 'keep') { hfDetailClose(); return; }
     if (name === 'share') { hfDetailShare(post); return; }
     if (name === 'menu') {
       const t = tile;
@@ -13489,6 +13624,7 @@ function hfDetailBind(root) {
   if (!root || root._hfDetailBound) return;
   root._hfDetailBound = true;
   root.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no abre el detalle
     const tile = e.target && e.target.closest ? e.target.closest('.hf-tile[data-post-id]') : null;
     if (!tile) return;
     // Solo táctil: en escritorio manda el flujo vigente (hover que
@@ -13695,6 +13831,7 @@ function hfMoveBind(root) {
   // Captura: corre ANTES que el click de siempre de las tiles
   // (bindScfMinis) y lo suprime solo mientras el modo Mover está activo.
   root.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest('[data-hf-chat]')) return; // (6A) el 💬 no participa del modo Mover
     if (!HF_MOVE) return;
     const t = e.target && e.target.closest ? e.target.closest('.hf-tile') : null;
     if (!t) return; // toques fuera de las tiles no cancelan ni disparan
@@ -13773,11 +13910,120 @@ async function hfSwapPosts(aTile, bTile) {
 }
 /* ===== /(Frente 3 · suma 2) FEED VIVO ===== */
 
+// (Tanda feed 6A · ítem 2) ANCLAJE DEL CHAT A UN POSTEO: el botón 💬
+// de cada tile fija ese posteo como contexto del chat del home. El
+// estado vive en HF_CHAT_ANCHOR; chatExchange lo manda como
+// anchor_post_id y el servidor pone ese posteo primero en el contexto
+// de borradores (los edits del modelo caen sobre él). Handler
+// desacoplado a propósito: no toca el detalle, el doble toque de
+// aprobación ni el long-press (fase B).
+let HF_CHAT_ANCHOR = null;
+function hfPaintAnchor() {
+  const mount = document.getElementById('chatAnchor');
+  if (!mount) return;
+  const en = hfIsEn();
+  mount.innerHTML = HF_CHAT_ANCHOR ? hfAnchorBarHTML(HF_CHAT_ANCHOR, en) : '';
+  if (!HF_CHAT_ANCHOR) return;
+  const x = mount.querySelector('[data-hf-anchor-x]');
+  if (x) x.onclick = (e) => { e.stopPropagation(); hfSetAnchor(null); };
+  mount.querySelectorAll('[data-hf-chipq]').forEach((b) => {
+    b.onclick = (e) => { e.stopPropagation(); hfAnchorChip(b.dataset.hfChipq); };
+  });
+}
+function hfSetAnchor(post) {
+  HF_CHAT_ANCHOR = post ? {
+    id: post.id, image_path: post.image_path || '', caption: post.caption || '',
+    redo_left: (post.redo_left === null || post.redo_left === undefined) ? 3 : post.redo_left,
+    status: post.status || '', media_type: post.media_type || '',
+  } : null;
+  try { hfPaintAnchor(); } catch (e) {}
+}
+function hfAnchorChip(kind) {
+  if (!HF_CHAT_ANCHOR) return;
+  const en = hfIsEn();
+  if (kind === 'redo') { hfRedoPost(HF_CHAT_ANCHOR.id); return; }
+  const texts = {
+    photo: en ? 'I want to change the photo of this post' : 'Quiero cambiar la foto de este posteo',
+    text: en ? 'I want to change the text of this post' : 'Quiero cambiar el texto de este posteo',
+    when: en ? 'I want to change the day and time of this post' : 'Quiero cambiar el día y hora de este posteo',
+  };
+  const inp = document.getElementById('chatInput');
+  if (inp && texts[kind]) {
+    inp.value = texts[kind];
+    try { chatUpdateSendBtn(); } catch (e) {}
+    try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} }
+  }
+}
+async function hfRedoPost(id) {
+  const en = hfIsEn();
+  try { toast(en ? '⏳ Redoing this post…' : '⏳ Rehaciendo este posteo…'); } catch (e) {}
+  let r = null;
+  try {
+    r = await api.post('/api/drafts/' + encodeURIComponent(id) + '/photo-restyle', {}, { timeout: 180000 });
+  } catch (e) {
+    const raw = String((e && e.message) || '');
+    if (/redo_exhausted/.test(raw)) {
+      if (HF_CHAT_ANCHOR && String(HF_CHAT_ANCHOR.id) === String(id)) { HF_CHAT_ANCHOR.redo_left = 0; try { hfPaintAnchor(); } catch (e2) {} }
+      toast(en ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
+      return;
+    }
+    toast((en ? 'Could not redo it: ' : 'No se pudo rehacer: ') + raw);
+    return;
+  }
+  if (r && r.ok && r.path) {
+    if (HF_CHAT_ANCHOR && String(HF_CHAT_ANCHOR.id) === String(id)) {
+      const cur = hfRedoLeft(HF_CHAT_ANCHOR);
+      if (cur !== null) HF_CHAT_ANCHOR.redo_left = Math.max(0, cur - 1);
+      HF_CHAT_ANCHOR.image_path = r.path;
+    }
+    toast('✅ ' + (en ? 'New image ready' : 'Imagen nueva lista'));
+    try { render(); } catch (e) {}
+    return;
+  }
+  if (r && (r.error === 'redo_exhausted' || r.redo_exhausted)) {
+    if (HF_CHAT_ANCHOR && String(HF_CHAT_ANCHOR.id) === String(id)) { HF_CHAT_ANCHOR.redo_left = 0; try { hfPaintAnchor(); } catch (e) {} }
+    toast(en ? 'You already used the 3 redos for this post' : 'Ya usaste los 3 rehaces de este posteo');
+    return;
+  }
+  toast((en ? 'Could not redo it: ' : 'No se pudo rehacer: ') + ((r && r.error) || ''));
+}
+function hfOpenChatForPost(post) {
+  if (!post) return;
+  hfSetAnchor(post);
+  const sheet = document.getElementById('mzSheet');
+  if (sheet && typeof mzOpenSheet === 'function') {
+    mzOpenSheet(true);
+    try { hfPaintAnchor(); } catch (e) {}
+    return;
+  }
+  const card = document.getElementById('chatCard');
+  if (card) { try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+  try { hfPaintAnchor(); } catch (e) {}
+  const inp = document.getElementById('chatInput');
+  if (inp) setTimeout(() => { try { inp.focus({ preventScroll: true }); } catch (e) {} }, 350);
+}
+// Delegado en captura sobre el root de la home: corre ANTES que el
+// detalle táctil, el hover del cofre y el supresor post-hold.
+function hfChatBtnBind(root) {
+  if (!root || root._hfChatBound) return;
+  root._hfChatBound = true;
+  root.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-hf-chat]') : null;
+    if (!b) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const id = b.dataset.hfChat;
+    const t = (typeof HF_TILES !== 'undefined' && Array.isArray(HF_TILES)) ? HF_TILES.find((x) => x && x.kind === 'post' && String(x.post.id) === String(id)) : null;
+    if (t && t.post) hfOpenChatForPost(t.post);
+  }, true);
+}
+
 function bindInicio() {
   // (v331) La home es el feed literal: se cablea la MISMA ampliación de
   // Semana sobre las minis de la grilla (hover agranda centrado, click
   // fija; el detalle es la tarjeta existente del cofre #scfVault).
   bindScfMinis(document.getElementById('inicioView'));
+  try { hfChatBtnBind(document.getElementById('inicioView')); } catch (e) {}
   // (Frente 3 · suma 2) Gestos del feed vivo (preview de reels con
   // press-and-hold + hoja de acciones en futuros): capa extra sobre el
   // cableado de siempre, sin reemplazarlo.

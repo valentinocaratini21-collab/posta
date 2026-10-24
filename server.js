@@ -343,12 +343,6 @@ function evTrack(userId, name, props = null, sessionId = '') {
 // de oración (ej. "Tip: Cómo organizar tu contenido de"). Se chequea sin
 // puntuación ni mayúsculas.
 const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','una','unos','unas','y','e','o','u','ni','que','en','con','por','para','sin','sobre','entre','hasta','desde','durante','a','ante','bajo','contra','hacia','tras','mediante','segun','según','como','cómo','pero','mas','más','si','sí','no','tu','tus','su','sus','mi','mis','nuestro','nuestra','esta','este','esto','es','son','hay','se','le','les','lo','me','te']);
-// (MORA-6, 2026-10-24) Infinitivos que EXIGEN complemento: si un titular
-// declarativo cortado termina en uno de estos y la oración semilla sigue,
-// el titular es un fragmento ("Te voy a ser honesto: tener", id real 498)
-// y cierra con "…" (paso 9b de makeHeadline). Lista cerrada de Mora.
-// Espejo en generator.js.
-const HEADLINE_INFINITIVES = new Set(['tener','hacer','querer','poder','buscar','necesitar','lograr','conseguir','ofrecer','vender','comprar','pagar','pedir','armar','abrir','cerrar','crear','lanzar','empezar','seguir','dejar','poner','sacar','dar','ver','saber']);
 // Quita palabras "colgadas" del final (preposiciones, artículos, conjunciones).
 function sinColgada(words) {
   const w = words.slice();
@@ -557,19 +551,7 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     // adjunto opcional cortado ("hechos hoy EN el local", "$12.500
     // recién salida") deja un titular de estilo nominal completo y NO
     // lleva "…" (test-character-lock (f): no-pregunta intacta).
-    if (['de', 'del', 'para'].includes(seedWordsQ[ow.length])) return true;
-    // 9b) INFINITIVO COLGADO (MORA-6, 2026-10-24, id real 498 — 3ª
-    // ocurrencia de la clase TITULAR INCOMPLETO): la ÚLTIMA palabra
-    // conservada es un infinitivo que exige complemento
-    // (HEADLINE_INFINITIVES) y la oración sigue: "Te voy a ser
-    // honesto: tener" + el complemento que venía. El gatillo del
-    // paso 9 no lo cazaba — la primera palabra caída era el
-    // complemento mismo ("un…"), no de/del/para — y el fragmento
-    // salía disfrazado de frase completa. El prefijo propio ya está
-    // garantizado arriba (la oración semilla continúa): un titular
-    // que ES la oración entera jamás dispara esta regla, aunque
-    // termine en infinitivo. Espejo en generator.js.
-    return HEADLINE_INFINITIVES.has(ow[ow.length - 1]);
+    return ['de', 'del', 'para'].includes(seedWordsQ[ow.length]);
   };
   if (declarIsCut()) out = out.replace(/\s*[!….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
@@ -3603,7 +3585,7 @@ function fixPublishReply(reply, publishApplied) {
   return String(reply || '') + (inR ? ' (uno quedó en revisión, te aviso cuando salga)' : ' (uno no pudo salir, lo reviso y te aviso)');
 }
 app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => {
-  const { messages, photos, library, drafts, audio } = req.body || {};
+  const { messages, photos, library, drafts, audio, anchor_post_id } = req.body || {};
   const uidChat = req.session.userId;
   // Kill-switch de gasto diario: mensaje amable de Posty, nunca un error robótico.
   try { costs.assertAiOk(uidChat); }
@@ -3723,6 +3705,14 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
       media_type: r.media_type || 'image',
       needs_review: !!r.needs_review,
     }));
+    // (6A · ítem 2) Posteo anclado desde la tile (botón 💬): pasa a ser el
+    // borrador #1 del contexto, así los edits del modelo (que referencian
+    // el índice) caen sobre ESE posteo sin inventar un chat paralelo.
+    const anchorId = Number(anchor_post_id || 0);
+    if (anchorId > 0) {
+      const ai = cleanDrafts.findIndex(d => Number(d.id) === anchorId);
+      if (ai > 0) { const [anch] = cleanDrafts.splice(ai, 1); cleanDrafts.unshift(anch); }
+    }
   } catch (e) { console.error('[chat] drafts ctx:', e.message); }
   try {
     const settings = getSettings(req.session.userId);
@@ -3925,14 +3915,24 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         // FM #2: las regens NO van secuenciales dentro del loop — se juntan los
         // trabajos y corren en paralelo después, para no multiplicar la latencia por N.
         if (captionChanged && !textOnlyEdit && !pickedOwnPhoto) {
+          // (6A) Sin rehaces disponibles no se genera: el edit de texto
+          // igual se aplica (es gratis); solo se salta la regeneración.
+          const redoGatePost = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(post.id, uid);
+          if (redoLeftOf(redoGatePost) !== null && redoLeftOf(redoGatePost) <= 0) {
+            // sin rehaces: no se empuja trabajo de regeneración
+          } else {
           const capForImg = String(newCaption);
           const tipoForImg = post.tipo || '';
+          const postIdForRedo = post.id;
           regenJobs.push((async () => {
             try {
               const headline = makeHeadline(capForImg.split('\n')[0], 6, 70, rubroOf(uid)) || makeHeadline(capForImg, 5, 70, rubroOf(uid));
               const newPath = await conceptShotGenerateQueued({ uid, idea: capForImg, tipo: tipoForImg, headline, refs: [] });
               if (newPath) {
-                db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), post.id);
+                // Punto de compromiso (6A): imagen nueva entregada.
+                const cur = db.prepare('SELECT redo_left, media_type FROM posts WHERE id = ? AND user_id = ?').get(postIdForRedo, uid);
+                if (redoLeftOf(cur) !== null && !consumeRedo(uid, postIdForRedo)) return false;
+                db.prepare('UPDATE posts SET image_path = ? WHERE id = ?').run(String(newPath), postIdForRedo);
                 return true;
               }
             } catch (e) {
@@ -3941,6 +3941,7 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
             }
             return false;
           })());
+          }
         }
         // Reprogramar: "AAAA-MM-DD HH:MM" en hora local del cliente → UTC. Solo futuro.
         if (typeof ed.when === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(ed.when.trim())) {
@@ -4009,6 +4010,14 @@ app.post('/api/ideas/chat', requireAuth, requireTrialValid, async (req, res) => 
         if (!post || (post.status !== 'draft' && post.status !== 'scheduled')) continue;
         const prev = db.prepare(`SELECT * FROM post_versions WHERE post_id = ? ORDER BY id DESC LIMIT 1`).get(post.id);
         if (!prev) continue;
+        // (6A) «Volver a la anterior» = INTERCAMBIO, gratis y sin consumir
+        // rehaces: la versión vigente queda guardada como la última de
+        // post_versions y la restaurada pasa a vigente (caption, hashtags
+        // E imagen). Otro «volvé» deshace el intercambio. No se borra historial.
+        try {
+          db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
+            .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''));
+        } catch (e) {}
         db.prepare(`UPDATE posts SET caption = ?, hashtags = ?, image_path = ? WHERE id = ?`)
           .run(prev.caption, prev.hashtags, prev.image_path, post.id);
         db.prepare(`DELETE FROM post_versions WHERE id = ?`).run(prev.id);
@@ -12993,7 +13002,7 @@ async function qaImageB64(b64, { headline, paletteHex, dnaFacts }, apiKey) {
 `Sos el control de calidad de una agencia de publicidad. Mirás una imagen generada para el Instagram de un negocio y la evaluás contra el brief. Esta imagen se va a ver en un CELULAR. Respondé SOLO con JSON, sin explicaciones:
 {"brand_ok":true,"texto_ok":true,"colores_ok":true,"claims_ok":true,"mobile_ok":true,"headline_complete":true,"headline_clear":true,"detalle":"...","anatomia_ok":true,"contraste_ok":true,"elementos_ok":true}
 - texto_ok: el texto en español DENTRO de la imagen está bien escrito (sin palabras garbled, truncadas o inventadas; tildes aceptables). Si la imagen NO lleva texto → true.
-- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. FRAGMENTO CON INFINITIVO (Mora 2026-10-24, id real 498): también es false si el titular termina en un INFINITIVO que pide complemento y el complemento NO está — "Te voy a ser honesto: tener" (id real 498) es INCOMPLETO: termina en infinitivo sin complemento y sin "…": headline_complete=false. Si la imagen NO lleva texto → true.
+- headline_complete: el titular visible en la imagen está COMPLETO — no termina a mitad de oración, no termina en preposición/artículo/conjunción (de, del, la, el, en, con, y, que…), y ninguna palabra se ve cortada a la mitad. FRAGMENTO SEMÁNTICO (TITULAR-36, ids reales 52/55/56): también es incompleto si corta una locución con nombre propio a mitad ("Día de la Madre" visible solo como "Día", "Feria del Libro" como "Feria del") o si termina en una cláusula relativa abierta que pide continuación ("…que tanto pidieron" sin cerrar la idea): el titular tiene que entenderse SOLO, sin el caption. SIGNOS DE CIERRE (Mora 2026-10-18, ids reales 458/461/459): si el titular abre con ¿ DEBE cerrar con ? (y si abre con ¡, cerrar con !) — abrir sin cerrar es headline_complete=false; también es false si termina en un verbo que pide complemento y el complemento NO está ("El día de mamá se merece" sin decir QUÉ se merece). FRAGMENTO DECLARATIVO (Mora 2026-10-19, ids reales 482/473): también es false si el titular termina en un sintagma nominal o un adjetivo que pedía complemento ("Halloween: tu Instagram, el alma" — falta "de la fiesta"; "Llegó Muebles a medida, ideales" — falta "para…") y NO cierra con "…": un titular cortado solo pasa si termina en "…" (la señal honesta de corte, regla de Valentino); sin "…", todo fragmento = false. Si la imagen NO lleva texto → true.
 - headline_clear (2026-10-04, fallas reales: antenas, copas, calendarios y confeti tapando el titular): el tercio superior de la imagen —la zona donde se compone el titular por código— está DESPEJADO: ningún sujeto, prop, antena, mano, copa, cartel, calendario, confeti ni elemento nítido de la escena invade esa zona ni tocaría/competiría con el texto. Si algo de la escena se mete en el tercio superior → false. Si la imagen NO lleva titular → true. VARA LETRA POR LETRA (TITULAR-33, falso real 2026-10-11: una antena pisando la palabra sola fue marcada true): un elemento FINO o DIFUSO que cruza, roza o pisa UNA SOLA letra (antena, cable, pelo, mano levantada, vapor, humo, confeti suelto) también es headline_clear=false — si una letra del titular no se lee 100% limpia, es false, aunque el resto de la imagen sea perfecta.
 - mobile_ok: el diseño funciona en celular — el titular (si hay) es GRANDE y legible a simple vista, hay alto contraste, y lo importante NO está pegado a los bordes (zona segura). Si algo clave se ve chico, apretado o cortado → false.
 - colores_ok: aparecen los colores de la marca en la escena (props, vestuario, packaging, ambiente), no solo como fondo plano. Colores de marca: ${hexes.join(', ') || 'no definidos'}. Si no hay paleta definida → true.
@@ -14669,6 +14678,30 @@ app.get('/api/style-sample', requireAuth, async (req, res) => {
 
 // Regenerar SOLO la foto de un borrador con un estilo elegido (picker "✨ Estilo").
 // Mantiene caption, hashtags y horario: solo cambia la imagen.
+// (Tanda feed 6A · ítem 3) Contador de rehaces de imagen con IA por posteo.
+// redo_left viaja en posts (DEFAULT 3 al nacer). Los reels quedan FUERA
+// (su flujo propio): redoLeftOf devuelve null para media_type 'video'.
+// El descuento es ATÓMICO y ocurre SOLO cuando la imagen nueva ya se
+// entregó (generación exitosa que reemplaza a la vigente): consumeRedo
+// verifica changes===1; reintentos internos y rechazos de QA no llegan
+// hasta acá porque los caminos solo lo llaman tras el éxito final.
+function redoLeftOf(post) {
+  if (!post) return 0;
+  if (String(post.media_type || '') === 'video') return null;
+  let v = (post.redo_left === null || post.redo_left === undefined) ? 3 : Number(post.redo_left);
+  if (!Number.isFinite(v)) v = 3;
+  return Math.max(0, Math.min(3, Math.floor(v)));
+}
+function redoExhausted(res) {
+  return res.json({ ok: false, error: 'redo_exhausted', redo_exhausted: true, redo_left: 0, message: 'Ya usaste los 3 rehaces de este posteo. Podés usar una foto tuya, retocar el texto o volver a la imagen anterior.' });
+}
+function consumeRedo(uid, postId) {
+  try {
+    const r = db.prepare('UPDATE posts SET redo_left = redo_left - 1 WHERE id = ? AND user_id = ? AND redo_left > 0').run(postId, uid);
+    return r.changes === 1;
+  } catch (e) { return false; }
+}
+
 app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.json(), async (req, res) => {
   try {
     const uid = req.session.userId;
@@ -14683,14 +14716,16 @@ app.post('/api/drafts/:id/photo-style', requireAuth, requireTrialValid, express.
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
-    if ((post.img_redos || 0) >= 1)
-      return res.json({ ok: false, redo_used: true, error: 'Ya usaste el rehacer de este posteo. Podés volver a la imagen anterior o usar una foto tuya 📷' });
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
     const headline = makeHeadline(String(post.caption || '').split('\n')[0], 6, 70, rubroOf(uid)) || '';
     const styleOut = {};
     const newPath = await conceptShotGenerateQueued({
       uid, idea: String(post.caption || ''), tipo: post.tipo || '', headline, refs: [], style: st.code, styleOut,
     });
     if (!newPath) throw new Error('sin imagen');
+    // Punto de compromiso (6A): la imagen nueva ya existe y pasó los
+    // controles internos de conceptShot — recién acá se descuenta, atómico.
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
     db.prepare('UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?')
       .run(String(newPath), st.code, String(styleOut.reason || ''), String(styleOut.intent || ''), String(post.image_path || ''), postId);
     res.json({ ok: true, path: newPath, style: st.code, reason: styleOut.reason || '' });
@@ -14725,8 +14760,7 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
-    if ((post.img_redos || 0) >= 1)
-      return res.json({ ok: false, redo_used: true, error: 'Ya usaste el rehacer de este posteo. Podés volver a la imagen anterior o usar una foto tuya 📷' });
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
     const basePath = String(post.image_path || '');
     const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absBase || !fs.existsSync(absBase))
@@ -14766,6 +14800,9 @@ app.post('/api/drafts/:id/photo-restyle', requireAuth, requireTrialValid, expres
     // foto original con composite: la pieza va a revisión humana.
     const fid = genOut.fidelity || 'n/a';
     const needRev = fid === 'fallback' ? 1 : (post.needs_review ? 1 : 0);
+    // Punto de compromiso (6A): el restyle ya se generó y se entrega
+    // (incluido el fallback fiel, que reemplaza a la vigente) — descuento atómico.
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
     db.prepare(`UPDATE posts SET image_path = ?, style_code = ?, style_reason = ?, intent = ?, needs_review = ?,
       source_topic = COALESCE(NULLIF(source_topic,''), 'restyle'), prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?`)
       .run(String(newPath), st.code, `restyle de tu foto con ${st.code}${manual ? '' : ' (elegido por Posty)'}`, String(styleOut.intent || ''), needRev, String(post.image_path || ''), postId);
@@ -14792,8 +14829,7 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
     const post = db.prepare('SELECT * FROM posts WHERE id = ? AND user_id = ?').get(postId, uid);
     if (!post || (post.status !== 'draft' && post.status !== 'scheduled'))
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
-    if ((post.img_redos || 0) >= 1)
-      return res.json({ ok: false, redo_used: true, error: 'Ya usaste el rehacer de este posteo. Podés volver a la imagen anterior o usar una foto tuya 📷' });
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
     const basePath = String(post.image_path || '');
     const absBase = basePath.startsWith('/media/') ? path.join(MEDIA_DIR, path.basename(basePath)) : null;
     if (!absBase || !fs.existsSync(absBase))
@@ -14807,6 +14843,8 @@ app.post('/api/drafts/:id/photo-enhance', requireAuth, requireTrialValid, expres
       // esta única referencia y la nota dice exactamente eso.
       [absBase], refRoles.buildRefNote(['restyle']), uid);
     const newPath = `/media/${saveImageB64(b64)}`;
+    // Punto de compromiso (6A): mejora generada y lista para entregar.
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, postId)) return redoExhausted(res);
     db.prepare('UPDATE posts SET image_path = ?, prev_image_path = ?, img_redos = COALESCE(img_redos,0)+1 WHERE id = ?').run(String(newPath), String(post.image_path || ''), postId);
     res.json({ ok: true, path: newPath });
   } catch (e) {
@@ -15170,6 +15208,8 @@ app.post('/api/carousel-generate', requireAuth, requireTrialValid, express.json(
       return res.status(404).json({ ok: false, error: 'Borrador no encontrado' });
     if (post.media_type === 'carousel')
       return res.json({ ok: true, already: true, paths: JSON.parse(post.carousel_paths || '[]') });
+    // (6A) La portada IA del carrusel SÍ cuenta como rehacer del posteo.
+    if (redoLeftOf(post) !== null && redoLeftOf(post) <= 0) return redoExhausted(res);
     const usedStyles = [];
     const gen = await generateCarouselSet({
       uid,
@@ -15177,6 +15217,13 @@ app.post('/api/carousel-generate', requireAuth, requireTrialValid, express.json(
       tipo: post.tipo || '', caption: post.caption || '', key: openaiKeyFor(uid), usedStyles,
     });
     const paths = [gen.coverPath, ...gen.slidePaths].slice(0, 6);
+    // Punto de compromiso (6A): portada generada; se guarda la versión
+    // anterior en post_versions (como el resto de los flujos) y se descuenta.
+    if (redoLeftOf(post) !== null && !consumeRedo(uid, pid)) return redoExhausted(res);
+    try {
+      db.prepare(`INSERT INTO post_versions (post_id, caption, hashtags, image_path) VALUES (?,?,?,?)`)
+        .run(post.id, String(post.caption || ''), String(post.hashtags || ''), String(post.image_path || ''));
+    } catch (e) {}
     db.prepare(`UPDATE posts SET media_type = 'carousel', carousel_paths = ?, image_path = ?,
       caption = ?, needs_review = ?, style_code = 'carousel' WHERE id = ?`)
       .run(JSON.stringify(paths), gen.coverPath, gen.caption, gen.needsReview ? 1 : 0, pid);
