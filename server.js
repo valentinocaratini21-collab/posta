@@ -31,7 +31,7 @@ try {
   const r = db.prepare(`UPDATE assets SET kind='design' WHERE kind='photo' AND file_path IN (SELECT image_path FROM posts WHERE image_path LIKE '/media/%')`).run();
   if (r.changes) console.log(`[migracion] kind=design: ${r.changes} diseños reclasificados`);
 } catch (e) { console.error('[migracion] kind=design:', e.message); }
-const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses } = require('./generator');
+const { generateContent, generateCaptions, generateIdeas, chatIdea, suggestReply, performanceBrief, bestHoursLine, generatePillars, voiceExamples, captionPasses, captionBodyKey } = require('./generator');
 // ---------- ATENCIÓN AL CLIENTE (plan Total) — cableado 2026-10-21 ----------
 // Los módulos se construyeron el 2026-10-20 (build-atencion-total) y
 // quedaron sin conectar: este es el cableado. Regla FIJA del producto:
@@ -772,12 +772,44 @@ function getSettings(userId) {
   return s;
 }
 // ADN del negocio (dna_json): lectura/escritura con merge (nunca pisar campos como series o pausas).
+// (2026-10-24 — Fix 2, auditoría de Juli) El ADN que llega a
+// GENERACIÓN nunca lleva un ítem de oferta implausible (placeholder o
+// prosa truncada): la lectura filtra las listas de oferta y la
+// estrella con la misma puerta del fundamento (isPlausibleOfferItem).
+// El caso: el «Esta cuenta la present» guardado como estrella de la
+// cuenta 80 entraba crudo a businessContext en cada prompt. Lo
+// persistido no se reescribe acá — la limpieza en storage la hacen
+// purge/reparar — pero ningún prompt vuelve a ver ese ítem.
+function scrubDnaOffers(o) {
+  try {
+    const ok = (x) => clientDigest.isPlausibleOfferItem(x);
+    for (const k of ['productos', 'servicios', 'promos', 'promos_activas']) {
+      if (Array.isArray(o[k])) o[k] = o[k].filter(ok);
+    }
+    if (o.producto_estrella && !ok(o.producto_estrella)) o.producto_estrella = '';
+  } catch (e) {}
+  return o;
+}
 function readDna(userId) {
   try {
     const r = db.prepare('SELECT dna_json FROM business_dna WHERE user_id = ?').get(userId);
-    if (r && r.dna_json) { const o = JSON.parse(r.dna_json); return (o && typeof o === 'object') ? o : {}; }
+    if (r && r.dna_json) { const o = JSON.parse(r.dna_json); return (o && typeof o === 'object') ? scrubDnaOffers(o) : {}; }
   } catch (e) {}
   return {};
+}
+// DEDUP-EXACTA (Juli, 2026-10-24): los captions que la semana de una
+// cuenta YA tiene — el insumo que captionPasses necesita para frenar
+// duplicados EN GENERACIÓN. El mismo criterio que scheduleLintForPost
+// usa al programar (draft/scheduled de la misma week_key), pero en la
+// puerta de entrada: hasta hoy la generación de la semana corría sin
+// pasarle prevs a captionPasses en NINGUNA ruta y los duplicados
+// exactos (444=451, 430=437, 425=426) solo podían cazarse tarde.
+function weekPrevCaptions(uid, weekKey, excludeId) {
+  try {
+    return db.prepare(`SELECT caption FROM posts WHERE user_id = ? AND id != ? AND COALESCE(caption, '') != ''
+      AND status IN ('draft', 'scheduled') AND COALESCE(week_key, '') = COALESCE(?, '')
+      ORDER BY id DESC LIMIT 12`).all(uid, excludeId || 0, weekKey || '').map((r) => r.caption);
+  } catch (e) { return []; }
 }
 function writeDna(userId, obj) {
   db.prepare(`INSERT INTO business_dna (user_id, dna_json, updated_at) VALUES (?, ?, datetime('now'))
@@ -1034,6 +1066,10 @@ function seedFromTrialDigest(userId, igRaw) {
       });
     }
     if (!digest || (!clientDigest.hasFoundation(digest) && !digest.business)) return false;
+    // (2026-10-24 — Fix 2) El digest de la prueba también pasa la
+    // puerta ANTES de sembrar descripción/ADN: la siembra derivada
+    // («Ofrece: …») se construye de estos ítems tal cual.
+    digest = clientDigest.scrubDigestItems(digest);
     clientDigest.saveDigest(db, userId, digest);
     // ADN: merge respetando lo ya cargado (convención del ADN).
     try {
@@ -2050,7 +2086,12 @@ async function makeIdeaDraft(uid, idea) {
     : idea.format === 'reel' ? 'novedad'
     : idea.source === 'winner' ? 'social' : 'detras';
   const topic = [idea.title, idea.brief].filter(Boolean).join('. ');
-  const content = await generateContent(contentInputFor(uid, topic, tipo, 0), key);
+  // DEDUP-EXACTA (Juli, 2026-10-24): el borrador de la idea cae en la
+  // semana corriente — genera contra los captions que esa semana ya
+  // tiene, como toda ruta que crea posteos de semana.
+  const ideaInput = contentInputFor(uid, topic, tipo, 0);
+  try { ideaInput.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+  const content = await generateContent(ideaInput, key);
   let caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId);
@@ -2144,7 +2185,12 @@ async function regenDirectedDraft(uid, post, { title, brief }) {
   try { costs.assertAiOk(uid); } catch (e) { return { ok: false, reason: 'ai_cap' }; }
   const tipo = post.tipo || 'social';
   const topic = [title, brief].filter(Boolean).join('. ');
-  const content = await generateContent(contentInputFor(uid, topic, tipo, 0), key);
+  // DEDUP-EXACTA (Juli, 2026-10-24): el reemplazo 1-a-1 genera contra
+  // los demás captions de SU semana (él mismo excluido: su texto
+  // anterior no cuenta como previo).
+  const directedInput = contentInputFor(uid, topic, tipo, 0);
+  directedInput.prevCaptions = weekPrevCaptions(uid, post.week_key || '', post.id);
+  const content = await generateContent(directedInput, key);
   let caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId);
@@ -3418,6 +3464,10 @@ app.post('/api/generate', requireAuth, requireTrialValid, async (req, res) => {
   try {
     const input = contentInputFor(req.session.userId, topic, tipo, seed);
     input.strict = true; // endpoint interactivo del cliente: error honesto, nunca plantilla silenciosa
+    // DEDUP-EXACTA (Juli, 2026-10-24): lo que se genera acá termina
+    // como posteo de la semana corriente — tampoco puede repetir
+    // exacto un caption que esa semana ya tiene.
+    try { input.prevCaptions = weekPrevCaptions(req.session.userId, mondayKeyOf(tzToday(userTz(req.session.userId))), 0); } catch (e) {}
     const key = openaiKeyFor(req.session.userId);
     if (count > 1) {
       const out = await generateCaptions(input, count, key);
@@ -4222,7 +4272,7 @@ app.post('/api/admin/generate-week', requireAdminToken, express.json(), (req, re
 //    la próxima tanda usa otros ángulos) y dispara la reconstrucción
 //    con el fundamento vigente — el mismo camino que el 🗑️ del cliente.
 // Body: { user_id | email, mode: 'purge'|'vaciar', ig?, domain?, week_key? }
-app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), (req, res) => {
+app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), async (req, res) => {
   try {
     const body = req.body || {};
     let uid = Number(body.user_id || 0) || 0;
@@ -4248,7 +4298,97 @@ app.post('/api/admin/digest/rebuild', requireAdminToken, express.json(), (req, r
       console.log(`[digest-rebuild] vaciar usuario ${uid} semana ${wk}: ${drafts.length} borradores → rebuilding=${r.rebuilding} (${r.reason || 'ok'})`);
       return res.json({ ok: true, mode, user_id: uid, emptied: drafts.length, week_key: wk, ...r });
     }
-    if (mode !== 'purge') return res.status(400).json({ ok: false, error: 'mode debe ser purge|vaciar' });
+    if (mode === 'reparar') {
+      // (2026-10-24 — Fix 2, auditoría de Juli) REPARACIÓN DE
+      // FUNDAMENTO: para una cuenta cuyo fundamento nació corrupto
+      // (un ítem placeholder/prosa truncada sembrado como oferta — el
+      // «Esta cuenta la present» de la cuenta 80). A diferencia de
+      // purge (que solo limpia), reparar RECONSTRUYE el fundamento
+      // desde las fuentes reales de la cuenta: su website (extracto
+      // determinístico, USD 0) y su feed de Instagram (best-effort),
+      // con el ADN ya depurado como tercera fuente. La descripción
+      // del perfil solo se reescribe si está CONTAMINADA por los
+      // ítems eliminados; los posteos NO se tocan en esta palanca.
+      const prof = getProfile(uid) || {};
+      const dnaRaw = readDna(uid);
+      const countOf = (d) => (d.productos || []).length + (d.servicios || []).length + (d.promos_activas || []).length + (d.promos || []).length;
+      const dnaBefore = countOf(dnaRaw);
+      const removedItems = [];
+      const keepOrNote = (x) => {
+        if (clientDigest.isPlausibleOfferItem(x)) return true;
+        removedItems.push(String((x && (x.nombre || x.titulo || x.name)) || x || ''));
+        return false;
+      };
+      const dna = { ...dnaRaw };
+      dna.productos = (dnaRaw.productos || []).filter(keepOrNote);
+      dna.servicios = (dnaRaw.servicios || []).filter(keepOrNote);
+      dna.promos_activas = (dnaRaw.promos_activas || []).filter(keepOrNote);
+      dna.promos = (dnaRaw.promos || []).filter(keepOrNote);
+      if (dna.producto_estrella && !clientDigest.isPlausibleOfferItem(dna.producto_estrella)) { removedItems.push(String(dna.producto_estrella)); dna.producto_estrella = ''; }
+      writeDna(uid, dna);
+      const digestDeleted = clientDigest.deleteDigest(db, uid);
+      const webUrl = String(body.website || dna.website_url || '').trim();
+      let web = null, webOk = false;
+      if (webUrl) {
+        try {
+          const wd = await webExtract.fetchBusinessSite(webUrl);
+          if (wd && wd.ok) { web = { name: wd.name, description: wd.description, services: wd.services || [], city: wd.city, palette: wd.palette || [], url: wd.url, categoryHint: wd.categoryHint }; webOk = true; }
+        } catch (e) { /* web caída: se reconstruye con el resto y queda asentado */ }
+      }
+      let feed = null, feedOk = false;
+      if (prof.ig_username) {
+        try {
+          const data = await feedAudit.fetchAuditData(prof.ig_username);
+          if (data && data.ok && data.profile) {
+            feed = { bio: data.profile.bio || '', captions: (data.posts || []).map((x) => String((x && x.caption) || '').slice(0, 240)).filter(Boolean).slice(0, 12), name: data.profile.name || '', handle: data.profile.handle || prof.ig_username };
+            feedOk = true;
+          }
+        } catch (e) { /* feed no disponible: queda asentado en la respuesta */ }
+      }
+      const digest = clientDigest.buildFromParts({
+        business: prof.business_name || '',
+        category: prof.category || '',
+        dna,
+        web,
+        feed,
+        // La descripción guardada puede ser la corrupta: NO realimentarla.
+        form: { description: '' },
+        webCopy: web ? String(web.description || '') : '',
+      });
+      if (!digest) return res.status(500).json({ ok: false, error: 'rebuild_failed' });
+      clientDigest.saveDigest(db, uid, digest);
+      // Fragmento digest→ADN solo en campos VACÍOS (convención de siembra).
+      try {
+        const frag = clientDigest.dnaFragmentFromDigest(digest) || {};
+        const cur = readDna(uid);
+        const merged = { ...cur };
+        for (const k of ['productos', 'servicios', 'promos_activas']) {
+          if ((!Array.isArray(cur[k]) || !cur[k].length) && Array.isArray(frag[k]) && frag[k].length) merged[k] = frag[k];
+        }
+        if (!cur.producto_estrella && frag.producto_estrella) merged.producto_estrella = frag.producto_estrella;
+        writeDna(uid, merged);
+      } catch (e) {}
+      // Descripción del perfil: se reescribe SOLO si está contaminada
+      // (contiene textual un ítem que la puerta eliminó).
+      const descBefore = String(prof.description || '');
+      let descAfter = descBefore, descRepaired = false;
+      const descLow = descBefore.toLowerCase();
+      const contaminated = removedItems.some((it) => it && it.trim().length >= 8 && descLow.includes(it.trim().toLowerCase()));
+      if (contaminated) {
+        const itemNames = (arr) => (arr || []).map((x) => String((x && (x.nombre || x.titulo || x.name)) || x || '')).filter(Boolean);
+        const items = [...itemNames(digest.productos), ...itemNames(digest.servicios)];
+        descAfter = String(digest.diferencial || '').trim()
+          || (items.length ? `Ofrece: ${items.slice(0, 6).join(', ')}.` : descBefore);
+        if (descAfter && descAfter !== descBefore) {
+          db.prepare(`UPDATE profiles SET description = ?, updated_at = datetime('now') WHERE user_id = ?`).run(descAfter, uid);
+          descRepaired = true;
+        }
+      }
+      const namesOf = (arr) => (arr || []).map((x) => String((x && (x.nombre || x.titulo || x.name)) || x || '')).filter(Boolean);
+      console.log(`[digest-rebuild] reparar usuario ${uid}: digest_borrado=${digestDeleted} adn ${dnaBefore}→${countOf(dna)} web=${webOk} feed=${feedOk} descripcion_reparada=${descRepaired}`);
+      return res.json({ ok: true, mode, user_id: uid, digest_deleted: digestDeleted, dna_items_before: dnaBefore, dna_items_after: countOf(dna), removed_items: removedItems, web_ok: webOk, feed_ok: feedOk, productos: namesOf(digest.productos), servicios: namesOf(digest.servicios), diferencial: String(digest.diferencial || ''), description_before: descBefore, description_after: descAfter, description_repaired: descRepaired });
+    }
+    if (mode !== 'purge') return res.status(400).json({ ok: false, error: 'mode debe ser purge|vaciar|reparar' });
     if (!trialLock) return res.status(500).json({ ok: false, error: 'trial-lock no disponible' });
     const prof = getProfile(uid) || {};
     const igKey = trialLock.normalizeIg(body.ig || prof.ig_username || '');
@@ -5191,7 +5331,12 @@ async function regenerateOneDraft(uid, weekKey, rejectedTopic) {
   const rej = String(rejectedTopic || '').toLowerCase().slice(0, 24);
   const idea = ((ideas || []).find(i => !rej || !String(i.titulo || '').toLowerCase().includes(rej)) || (ideas || [])[0]);
   if (!idea) return { ok: false, reason: 'no_ideas' };
-  const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, 0), key);
+  // DEDUP-EXACTA (Juli, 2026-10-24): el reemplazo del rechazado genera
+  // contra los captions vivos de su semana (el rechazado ya se borró:
+  // no cuenta como previo, los demás sí).
+  const regenInput = contentInputFor(uid, idea.titulo, idea.tipo, 0);
+  regenInput.prevCaptions = weekPrevCaptions(uid, weekKey, 0);
+  const content = await generateContent(regenInput, key);
   let caption = String((content && content.caption) || '').trim();
   if (!caption) return { ok: false, reason: 'no_caption' };
   recordHookUse(uid, content && content.hookId); // hook engine: rotación 8 semanas
@@ -6308,7 +6453,11 @@ async function celebratePhotoPost(uid, assetId, filePath) {
     } catch (e) { /* si el gate no puede medir, no bloquea el festejo */ }
     const profile = getProfile(uid) || {};
     const titulo = 'Lo nuevo de mi negocio, en foto real';
-    const content = await generateContent(contentInputFor(uid, titulo, 'foto', 0), key);
+    // DEDUP-EXACTA (Juli, 2026-10-24): el festejo también crea un
+    // posteo de la semana corriente — genera contra sus captions.
+    const albumInput = contentInputFor(uid, titulo, 'foto', 0);
+    try { albumInput.prevCaptions = weekPrevCaptions(uid, mondayKeyOf(tzToday(userTz(uid))), 0); } catch (e) {}
+    const content = await generateContent(albumInput, key);
     const caption = String((content && content.caption) || '').trim();
     if (!caption) return;
     const hashtags = String((content && content.hashtags) || '');
@@ -7784,6 +7933,34 @@ app.post('/api/posts/:id/variants', requireAuth, requireTrialValid, express.json
     }));
     const variants = results.filter(r => r.status === 'fulfilled').map(r => r.value);
     results.filter(r => r.status === 'rejected').forEach(r => console.error('[variants] variante falló:', r.reason && r.reason.message));
+    // DEDUP-EXACTA (Juli, 2026-10-24): las 3 variantes nacen EN
+    // PARALELO del mismo tema — dos pueden salir con el mismo caption
+    // sin que ninguna puerta intra-tanda lo vea. Post-pase: la
+    // duplicada se regenera una vez contra la que quedó (con su
+    // imagen nueva); si sigue igual o la regeneración falla, se
+    // descarta la copia y quedan las distintas.
+    {
+      const seen = new Map();
+      for (let vi = 0; vi < variants.length; vi++) {
+        const k = captionBodyKey(variants[vi].caption);
+        if (!k) continue;
+        if (!seen.has(k)) { seen.set(k, vi); continue; }
+        let replaced = false;
+        try {
+          const out2 = await generateCaptions({ ...baseInput, feedback: angles[vi] + ' IMPORTANTE: este texto ya salió en otra variante — escribí uno distinto, con otra apertura, otro ángulo y otro cierre.', seedBase: vi * 7 + 101, prevCaptions: [variants[seen.get(k)].caption] }, 1, key);
+          const cap2 = (out2.captions && out2.captions[0]) || '';
+          const k2 = captionBodyKey(cap2);
+          if (cap2.trim() && k2 && !seen.has(k2)) {
+            const headline2 = makeHeadline(String(cap2).split('\n')[0], 6, 70, (profile && profile.category) || null);
+            const imagePath2 = await conceptShotGenerateQueued({ uid, idea: { titulo: topic, porque: angles[vi] }, tipo, headline: headline2, refs, apiKey: key });
+            variants[vi] = { image_path: imagePath2, caption: cap2, hashtags: out2.hashtags || '' };
+            seen.set(k2, vi);
+            replaced = true;
+          }
+        } catch (e) { console.error('[variants] re-dedup falló:', e.message); }
+        if (!replaced) { console.log(`[variants] variante ${vi} descartada: caption duplicado exacto de la variante ${seen.get(k)}`); variants.splice(vi, 1); vi--; }
+      }
+    }
     if (!variants.length)
       return res.status(502).json({ error: 'Las variantes no me salieron 😅 Probá de nuevo en un minuto' });
     console.log(`[variants] borrador ${post.id}: ${variants.length}/3 variantes para usuario ${uid}`);
@@ -8733,6 +8910,15 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
       console.log(`[pipeline:${tag}] usuario ${uid}: limpieza — ${nText} con texto / ${Math.max(0, deficit - nText)} limpias en la tanda${tm.carouselIdx >= 0 ? ` (carousel exento: pick ${tm.carouselIdx})` : ''}`);
     } catch (e) { console.error(`[pipeline:${tag}] limpieza (dosificación):`, e.message); }
     const dupStmt = db.prepare(`SELECT id FROM posts WHERE user_id = ? AND status != 'cancelled' AND LOWER(TRIM(caption)) = LOWER(?) AND created_at > datetime('now', '-1 day')`);
+    // DEDUP-EXACTA (Juli, 2026-10-24): acumulador de captions de la
+    // semana para deduplicar EN GENERACIÓN — esta ruta corría sin
+    // pasarle prevs a captionPasses en ninguna de sus generaciones y
+    // solo cazaba el duplicado al insertar (cadena exacta, ventana de
+    // 24 h): así nacieron los pares 444=451, 430=437 y 425=426. Se
+    // siembra con los captions que la semana ya tiene; cada worker lo
+    // lee al generar y lo alimenta en el bloque sincrónico posterior
+    // al chequeo de duplicado, así los 5 workers del pool no se pisan.
+    const runPrevCaptions = weekPrevCaptions(uid, weekKey, 0);
     const insStmt = db.prepare(`INSERT INTO posts (user_id, image_path, caption, hashtags, status, media_type, source_topic, source_angle, tipo, strategy_why, week_key, needs_review, style_code, style_reason, intent, product_ref, hook_id, image_prompt, sales_intent, sales_angle) VALUES (?,?,?,?, 'draft','image',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     // FASE 1: la escalera de confianza decide la revisión — nivel 0 pasa por
     // revisión humana; nivel ≥1 sale directo (el qualityGate de Fase 0 en
@@ -8881,7 +9067,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           if (carouselSet.has(i) && carouselCount < carouselQuota) { carouselCount++; isCarousel = true; }
         } catch (e) {}
         try {
-          const content = await generateContent(contentInputFor(uid, idea.titulo, idea.tipo, i, idea._sales), key);
+          const cinput = contentInputFor(uid, idea.titulo, idea.tipo, i, idea._sales);
+          cinput.prevCaptions = runPrevCaptions.slice();
+          const content = await generateContent(cinput, key);
           let caption = String((content && content.caption) || '').trim();
           const hashtags = String((content && content.hashtags) || '');
           if (!caption) throw new Error('caption vacío');
@@ -8900,6 +9088,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
           }
           // Anti-duplicados 24h (mismo criterio que POST /api/posts).
           if (dupStmt.get(uid, caption)) { console.log(`[pipeline:${tag}] duplicado 24h, skip: ${idea.titulo}`); noteSlotFail('dup', 'caption duplicado en 24h'); claimed--; continue; }
+          // DEDUP-EXACTA: este caption queda reservado para el resto de
+          // la corrida — los workers vecinos lo ven como previo.
+          runPrevCaptions.push(caption);
           // Titular COMPLETO para la imagen (makeHeadline: jamás cortado a mitad de oración).
           // Pieza limpia: headline vacío — la generación no reserva zona
           // de titular, no se compone titular y el salvavidas stock
@@ -9099,6 +9290,9 @@ async function generateWeekDrafts(uid, { weekKey, tag, quiet }) {
                 'carousel', `carousel automático (${carouselReason[i] || 'estrategia'} · ${paths.length} placas)`,
                 finalIntent || 'tips', finalProductRef, finalHookId, salesIntent, salesAngle);
             if (carInfo && carInfo.lastInsertRowid) { runCreatedIds.add(carInfo.lastInsertRowid); stampPostDigest(carInfo.lastInsertRowid, uid, content && content._anchored === false); }
+            // DEDUP-EXACTA: el caption del carousel (distinto del
+            // chequeado arriba) también entra al acumulador.
+            if (carouselGen && carouselGen.caption) runPrevCaptions.push(carouselGen.caption);
           }
           // 🧹 Vigilancia de limpieza: modo y largo final de la pieza creada.
           if (isCarousel) runCleanStats.carousel++;
@@ -18389,7 +18583,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v389';
+const BUILD_ID = '20261024-v390';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

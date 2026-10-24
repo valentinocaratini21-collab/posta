@@ -660,6 +660,32 @@ function truncatedClosedQuestion(headline, sourceText) {
   return hw.every((w, i) => qw[i] === w);
 }
 
+// DEDUP-EXACTA (Juli, 2026-10-24 — route breach de deduplicación): la
+// auditoría encontró captions BYTE-IDÉNTICOS dentro de la misma semana
+// (posts 444=451, 430=437, 425=426). Las compuertas intra-semana que ya
+// existían (ROTACION-45, M79 dispositivos, CUERPO-57) comparan la
+// APERTURA — un duplicado con apertura de 2 palabras, o en inglés vía
+// captionPassesEn (que ni siquiera miraba prevs), pasaba entero. Y en la
+// ruta de la semana los prevs ni llegaban (ver server.js). Clave de
+// cuerpo: la MISMA normalización que usa la prueba para deduplicar
+// (demo-captions anchorNorm348): minúsculas, sin tildes, sin puntuación
+// ni emojis — dos captions que solo difieren en eso SON el mismo.
+function captionBodyKey(caption) {
+  return String(caption || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+// ¿Este caption es un duplicado EXACTO de alguno de los anteriores?
+// input.prevCaptions (array) e input.prevCaption (string), como ya
+// consumen las demás compuertas intra-semana.
+function exactDupOf(caption, input) {
+  const key = captionBodyKey(caption);
+  if (!key) return false;
+  const prevs = [];
+  if (input && Array.isArray(input.prevCaptions)) prevs.push(...input.prevCaptions);
+  if (input && input.prevCaption) prevs.push(input.prevCaption);
+  return prevs.some((p) => captionBodyKey(p) === key);
+}
+
 // Puerta de calidad automática: el cliente nunca ve un caption mediocre.
 // Devuelve { ok, reason }.
 // `input` (opcional) aporta { dna, business } para el chequeo de grounding:
@@ -709,6 +735,12 @@ function captionPasses(caption, input) {
     }
   }
   if (hasPlaceholders(c)) return { ok: false, reason: 'contiene texto inventado o de ejemplo (tipo "XYZ")' };
+  // DEDUP-EXACTA (Juli, 2026-10-24): si el llamador pasa los captions
+  // anteriores de la tanda/semana, un duplicado EXACTO (misma clave de
+  // cuerpo) se rechaza acá — no depende de la apertura ni del idioma.
+  if (exactDupOf(c, input)) {
+    return { ok: false, reason: 'caption duplicado exacto en la misma semana (DEDUP): este mismo texto ya salió en otro posteo de la tanda — reescribilo con otra apertura, otro ángulo y otro cierre' };
+  }
   const hasCta = CTA_SIGNALS.some(s => low.includes(s)) || /\bdm\b/.test(low);
   if (!hasCta) return { ok: false, reason: 'le falta un llamado a la acción claro (DM, comentario, guardado…)' };
   // Hashtag spam: más de 10 es spam (lo ideal es 5 a 8).
@@ -1320,6 +1352,12 @@ function captionPassesEn(caption, input) {
   if (emojiTotal > 4) return { ok: false, reason: `${emojiTotal} emojis (max 4)` };
   if (captionOpenIsGarbledEn(c)) return { ok: false, reason: 'spliced opening: a block opening stitches two fragments or leaves a dangling article — rewrite it as one clean sentence' };
   if (hasPlaceholders(c)) return { ok: false, reason: 'contains placeholder/example text (like "XYZ")' };
+  // DEDUP-EXACTA (Juli, 2026-10-24): same exact-duplicate gate as the
+  // Spanish door — this door never looked at prevs before, so an exact
+  // repeat of a caption from the same week always passed.
+  if (exactDupOf(c, input)) {
+    return { ok: false, reason: 'exact duplicate caption in the same week (DEDUP): this same text already went out in another post of this batch — rewrite it with a different opening, angle and close' };
+  }
   // CTA: al menos UNA señal concreta (las hashtags no cuentan).
   const bodyLow = c.split('\n').filter((l) => !l.trim().startsWith('#')).join('\n').toLowerCase();
   const hasCta = CTA_SIGNALS_EN.some((s) => bodyLow.includes(s)) || /\bdm\b/.test(bodyLow);
@@ -2021,6 +2059,33 @@ async function generateContent(input, apiKey) {
       if (fixed && fixed !== hooked.caption && captionPasses(fixed, input).ok) hooked.caption = fixed;
     }
   } catch (e) {}
+  // DEDUP-EXACTA (Juli, 2026-10-24): garantía de SALIDA — si el llamador
+  // pasó los captions anteriores de la semana (input.prevCaptions), lo
+  // que generateContent devuelve NUNCA es un duplicado exacto de uno de
+  // ellos. El loop de IA reintenta con feedback vía captionPasses, pero
+  // su salida "mejor candidato" y la vía de plantillas podían entregar
+  // el duplicado igual (así salieron los posts 444=451, 430=437,
+  // 425=426). Acá se regenera acotado y, si ni así, se lanza: el
+  // llamador de semana lo cuenta como slot fallido y el barrido
+  // reintenta — antes que guardar dos posteos idénticos.
+  if (exactDupOf(hooked.caption, input)) {
+    let recovered = null;
+    if (apiKey && !(input && input._dedupRetry)) {
+      try {
+        recovered = await generateContent({ ...input, _dedupRetry: 1, feedback: 'Ese caption ya salió en esta misma semana: generá uno DISTINTO, con otra apertura, otro ángulo y otro cierre, sin cambiar el tema.' }, apiKey);
+      } catch (e) { recovered = null; }
+    }
+    if (!recovered && !(input && input.strict)) {
+      for (let t = 0; t < 2 && !recovered; t++) {
+        try {
+          const hookedAlt = applyPostyHook(templateGenerate(input), input);
+          if (!exactDupOf(hookedAlt.caption, input)) recovered = hookedAlt;
+        } catch (e) {}
+      }
+    }
+    if (recovered && !exactDupOf(recovered.caption, input)) return recovered;
+    throw new Error('caption duplicado exacto en la misma semana (DEDUP): la regeneración no produjo un texto distinto');
+  }
   return hooked;
 }
 
@@ -2068,32 +2133,59 @@ async function openaiCaptions({ business, category, description, dna, tone, topi
 }
 
 async function generateCaptions(input, n, apiKey) {
+  // DEDUP-EXACTA (Juli, 2026-10-24): los previos EXTERNOS que traiga el
+  // llamador (input.prevCaptions — p. ej. los captions de la semana) se
+  // FUSIONAN con los acumulados de esta tanda en cada chequeo: antes el
+  // acumulador local los pisaba y la puerta no veía la semana.
+  const extPrevs = (input && Array.isArray(input.prevCaptions)) ? input.prevCaptions : [];
   if (apiKey) {
     try {
       const out = await openaiCaptions(input, n, apiKey);
       // Puerta de calidad por caption: los que fallen se regeneran individualmente (1 intento c/u).
       const fixedCaps = [];
       const fixedOvs = [];
+      // (DEDUP-EXACTA) Forma FINAL (con hook) de cada caption aceptado:
+      // generateContent devuelve captions ya enganchados y su garantía
+      // compara forma final contra forma final — los previos que se le
+      // pasan llevan AMBAS formas de cada aceptado (cruda y final).
+      const fixedHooked = [];
       for (let i = 0; i < out.captions.length; i++) {
         const cap = out.captions[i];
-        const check = captionPasses(cap, { ...input, prevCaptions: fixedCaps });
+        const check = captionPasses(cap, { ...input, prevCaptions: [...extPrevs, ...fixedCaps] });
         if (check.ok) {
           fixedCaps.push(cap);
+          try { fixedHooked.push(applyPostyHook({ caption: cap }, input).caption); } catch (e2) { fixedHooked.push(cap); }
           fixedOvs.push(out.overlays[i] || '');
           continue;
         }
         try {
           const one = await generateContent({
             ...input,
+            prevCaptions: [...extPrevs, ...fixedCaps, ...fixedHooked],
             topic: `${input.topic} (variante ${i + 1})`,
             feedback: `El caption anterior no pasó el control de calidad: ${check.reason}. Regeneralo corrigiendo eso, sin cambiar el tema.`,
           }, apiKey);
           fixedCaps.push(one.caption);
+          fixedHooked.push(one.caption);
           fixedOvs.push(one.overlay || '');
         } catch (e) {
-          console.error('Regeneración individual falló, va el original:', e.message);
-          fixedCaps.push(cap);
-          fixedOvs.push(out.overlays[i] || '');
+          // DEDUP-EXACTA (Juli, 2026-10-24): el fallback histórico ("va
+          // el original") reinsertaba el caption que la puerta acababa
+          // de rechazar — si el rechazo era por duplicado, la tanda
+          // salía con el duplicado puesto. Ahora: en modo estricto el
+          // error sube; si no, cae a plantilla GATEADA contra los
+          // previos (generateContent sin clave), y si ni eso produce un
+          // texto distinto, sube el error — nunca el duplicado.
+          if (input && input.strict) throw e;
+          console.error('Regeneración individual falló, cae a plantilla gateada:', e.message);
+          const alt = await generateContent({
+            ...input,
+            prevCaptions: [...extPrevs, ...fixedCaps, ...fixedHooked],
+            topic: `${input.topic} (variante ${i + 1})`,
+          }, null);
+          fixedCaps.push(alt.caption);
+          fixedHooked.push(alt.caption);
+          fixedOvs.push(alt.overlay || '');
         }
       }
       // Hook engine: cada caption abre con hook (rotación por cliente).
@@ -2109,6 +2201,26 @@ async function generateCaptions(input, n, apiKey) {
         } catch (e) {}
         return h;
       });
+      // DEDUP-EXACTA post-hook (Juli, 2026-10-24): el caption FINAL
+      // (ya con el hook puesto) tampoco puede igualar a un previo
+      // externo ni a otro de la misma tanda — se regenera una vez y,
+      // si el llamador pasó previos o es estricto, la colisión
+      // persistente sube como error en vez de salir duplicada.
+      {
+        const seen = new Set(extPrevs.map(captionBodyKey).filter(Boolean));
+        for (let i = 0; i < hooked.length; i++) {
+          const k = captionBodyKey(hooked[i].caption);
+          if (k && seen.has(k)) {
+            let rep = null;
+            try {
+              rep = await generateContent({ ...input, prevCaptions: [...extPrevs, ...hooked.slice(0, i).map(h => h.caption)], topic: `${input.topic} (variante ${i + 1})`, feedback: 'Ese caption ya salió en esta misma tanda/semana: generá uno distinto, con otra apertura y otro ángulo.' }, apiKey);
+            } catch (e) {}
+            if (rep && rep.caption && !seen.has(captionBodyKey(rep.caption))) hooked[i] = rep;
+            else if (input.strict || extPrevs.length) throw new Error('caption duplicado exacto en la misma semana (DEDUP)');
+          }
+          seen.add(captionBodyKey(hooked[i].caption));
+        }
+      }
       return { captions: hooked.map(h => h.caption), overlays: fixedOvs, hashtags: out.hashtags, hookIds: hooked.map(h => h.hookId || null) };
     } catch (e) {
       console.error('OpenAI captions falló, usando plantillas:', e.message);
@@ -2127,12 +2239,34 @@ async function generateCaptions(input, n, apiKey) {
     let chosen = null, okAny = false, reason = '';
     for (const extra of [0, 7, 13]) {
       const cand = templateCaption({ ...input, seed: seedBase + i * 20 + extra });
-      const chk = captionPasses(cand, { ...input, prevCaptions: captions });
+      const chk = captionPasses(cand, { ...input, prevCaptions: [...extPrevs, ...captions] });
       if (!chosen) { chosen = cand; reason = chk.reason; }
       if (chk.ok) { chosen = cand; okAny = true; break; }
     }
     if (!okAny) console.error('[plantilla] caption sin seed válido:', reason);
     captions.push(chosen); overlays.push(ovFb);
+  }
+  // DEDUP-EXACTA (Juli, 2026-10-24): la vía de plantillas tampoco
+  // devuelve un duplicado exacto de un previo externo ni de la propia
+  // tanda: el candidato que colisiona se re-tira con semillas nuevas
+  // y, si el llamador pasó previos (o es estricto), la colisión
+  // persistente sube como error en vez de salir duplicada.
+  {
+    const seen = new Set(extPrevs.map(captionBodyKey).filter(Boolean));
+    for (let i = 0; i < captions.length; i++) {
+      const key = captionBodyKey(captions[i]);
+      if (key && seen.has(key)) {
+        let fixed = null;
+        for (let k = 0; k < 6 && !fixed; k++) {
+          const cand = templateCaption({ ...input, seed: seedBase + 5000 + i * 97 + k * 31 });
+          const ck = captionBodyKey(cand);
+          if (ck && !seen.has(ck) && captionPasses(cand, { ...input, prevCaptions: [...extPrevs, ...captions.slice(0, i)] }).ok) fixed = cand;
+        }
+        if (fixed) captions[i] = fixed;
+        else if (input.strict || extPrevs.length) throw new Error('caption duplicado exacto en la misma semana (DEDUP): la plantilla no produjo un texto distinto');
+      }
+      seen.add(captionBodyKey(captions[i]));
+    }
   }
   const tags = [...nicheTags(input.category), ...GENERIC_TAGS]
     .sort(() => Math.random() - 0.5)
@@ -4762,4 +4896,4 @@ async function generatePhotoMission(input, apiKey) {
   return templateMission();
 }
 
-module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };
+module.exports = { generateContent, generateIdeas, generateCaptions, chatIdea, generatePhotoMission, suggestReply, suggestReplyDetailed, replyIntent, foundationFacts, foundationBlock, foundationGaps, generatePillars, performanceBrief, bestHoursLine, voiceExamples, HASHTAGS, BANNED_PHRASES, captionPasses, captionPassesEn, captionBodyKey, repairCaptionLength, mergeHookBlock, BANNED_PHRASES_EN, truncatedClosedQuestion, TIPO_LINES, tipoLine, TIPOS, CONCEPT_FAMILIES, applyPostyHook, titleBleed, makeHeadline, templateIdeas };

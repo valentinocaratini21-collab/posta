@@ -584,8 +584,12 @@ function buildFromParts(parts) {
   // --- productos / servicios / promos ---
   // (v230) Cada ítem conserva su FUENTE: las contradicciones entre
   // fuentes y su resolución por frescura trabajan sobre estas listas.
-  const dnaProds = dna ? itemListF([...(dna.productos || []), ...(dna.producto_estrella ? [{ nombre: dna.producto_estrella }] : [])], 12, 'dna') : [];
-  const dnaServs = dna ? itemListF(dna.servicios || [], 10, 'dna') : [];
+  // (2026-10-24 — Fix 2) La ingesta de ADN pasa la MISMA puerta que la
+  // web/catálogo/bio: antes itemListF tomaba las listas del ADN crudas
+  // y un ítem de prosa truncada guardado en el ADN (el «Esta cuenta la
+  // present» de la cuenta 80) entraba al fundamento sin filtro.
+  const dnaProds = dna ? itemListF([...(dna.productos || []).filter(isPlausibleOfferItem), ...(dna.producto_estrella && isPlausibleOfferItem(dna.producto_estrella) ? [{ nombre: dna.producto_estrella }] : [])], 12, 'dna') : [];
+  const dnaServs = dna ? itemListF((dna.servicios || []).filter(isPlausibleOfferItem), 10, 'dna') : [];
   // (v343) La lista de la home también pasa la puerta y se limpia
   // (glifos ✓, punto final): un heading/slogan no es un servicio.
   const webItems = p.web ? itemListF((p.web.services || []).filter(isPlausibleOfferItem).map(cleanOfferRaw), 10, 'web') : [];
@@ -603,7 +607,7 @@ function buildFromParts(parts) {
   // El catálogo COMPLETO vive en el bloque catalog (abajo).
   d.productos = itemList([...dnaProds, ...catalogItems, ...bioItems, ...webItems], 12);
   d.servicios = itemList([...dnaServs], 10);
-  const dnaPromos = dna ? [...(dna.promos_activas || []), ...(dna.promos || [])] : [];
+  const dnaPromos = dna ? [...(dna.promos_activas || []), ...(dna.promos || [])].filter((x) => isPlausibleOfferItem(x)) : [];
   d.promos = itemList(dnaPromos, 5).map((x) => ({ titulo: x.nombre, ...(x.precio ? { precio: x.precio } : {}) }));
 
   // --- minería de textos (bio del feed + descripción del formulario) ---
@@ -1629,9 +1633,32 @@ function ensureTable(db) {
     )`);
   } catch (e) { /* la crea db.js igual; defensivo */ }
 }
+/* (2026-10-24 — Fix 2, auditoría de Juli) PUERTA DE ADMISIBILIDAD AL
+ * GUARDAR: un fundamento con un ítem placeholder/prosa truncada NO se
+ * persiste. El caso: la cuenta 80 (Gesty) nació con el ítem «Esta cuenta
+ * la present» — un fragmento de oración cortado a mitad de palabra —
+ * como producto estrella, y contaminó su descripción y 10 posteos. La
+ * puerta isPlausibleOfferItem ya rechazaba ese ítem en TODAS las
+ * ingestas desde fuentes (web/catálogo/bio/form), pero el circuito
+ * ADN⇄digest no la aplicaba: buildFromParts tomaba las listas del ADN
+ * sin filtrar y dnaFragmentFromDigest devolvía los ítems sin filtrar,
+ * así que un ítem malo circulaba para siempre entre el ADN, el digest
+ * guardado y cada refresco. Este scrub es el corte: corre en saveDigest
+ * (el choke point de TODA persistencia del fundamento), en la ingesta
+ * de ADN de buildFromParts y en el fragmento digest→ADN. */
+function scrubDigestItems(digest) {
+  const d = (digest && typeof digest === 'object') ? digest : {};
+  try {
+    if (Array.isArray(d.productos)) d.productos = d.productos.filter((x) => isPlausibleOfferItem(x));
+    if (Array.isArray(d.servicios)) d.servicios = d.servicios.filter((x) => isPlausibleOfferItem(x));
+    if (Array.isArray(d.promos)) d.promos = d.promos.filter((x) => isPlausibleOfferItem(x && (x.titulo || x.nombre || x)));
+    if (d.inferred_star && d.inferred_star.item && !isPlausibleOfferItem(d.inferred_star.item)) d.inferred_star = null;
+  } catch (e) { /* el scrub jamás rompe un guardado */ }
+  return d;
+}
 function saveDigest(db, userId, digest) {
   ensureTable(db);
-  const d = finalizeDigest(digest);
+  const d = finalizeDigest(scrubDigestItems(digest));
   db.prepare(`INSERT INTO client_digest (user_id, digest_json, hash, version, updated_at)
     VALUES (?, ?, ?, ?, datetime('now'))
     ON CONFLICT(user_id) DO UPDATE SET digest_json=excluded.digest_json, hash=excluded.hash,
@@ -1683,13 +1710,17 @@ function getDigest(db, userId) {
 function dnaFragmentFromDigest(digest) {
   if (!digest) return {};
   const frag = {};
-  if ((digest.productos || []).length) frag.productos = digest.productos;
-  if ((digest.servicios || []).length) frag.servicios = digest.servicios;
-  if ((digest.promos || []).length) frag.promos_activas = digest.promos.map((pr) => ({ nombre: pr.titulo, ...(pr.precio ? { precio: pr.precio } : {}) }));
-  const first = (digest.productos || [])[0] || (digest.servicios || [])[0];
+  // (2026-10-24 — Fix 2) El fragmento digest→ADN también pasa la
+  // puerta: un digest viejo/guardado con un ítem implausible no lo
+  // re-siembra en el ADN (era la otra mitad del circuito que mantuvo
+  // vivo el «Esta cuenta la present» de la cuenta 80).
+  if ((digest.productos || []).length) frag.productos = digest.productos.filter((x) => isPlausibleOfferItem(x));
+  if ((digest.servicios || []).length) frag.servicios = digest.servicios.filter((x) => isPlausibleOfferItem(x));
+  if ((digest.promos || []).length) frag.promos_activas = digest.promos.filter((pr) => isPlausibleOfferItem(pr && (pr.titulo || pr.nombre))).map((pr) => ({ nombre: pr.titulo, ...(pr.precio ? { precio: pr.precio } : {}) }));
+  const first = (frag.productos || [])[0] || (frag.servicios || [])[0];
   // (v230) El estrella INFERIDO con confianza le gana al "primer ítem
   // de la lista": viene de su feed, su web y su rendimiento medidos.
-  const starInf = (digest.inferred_star && (digest.inferred_star.confidence || 0) >= 0.5) ? digest.inferred_star.item : '';
+  const starInf = (digest.inferred_star && (digest.inferred_star.confidence || 0) >= 0.5 && isPlausibleOfferItem(digest.inferred_star.item)) ? digest.inferred_star.item : '';
   // (Posty conectado) La estrella por VENTAS reales (Tiendanube) pisa a
   // la inferida al sembrar el ADN: viene de la caja, no de los likes.
   const tnFrag = tnBlockOf(digest);
@@ -1707,7 +1738,7 @@ function dnaFragmentFromDigest(digest) {
 module.exports = {
   DIGEST_VERSION,
   norm, distinctiveWords, wordForms, textWordSet, anchorsOf, anchorsFromTexts, pieceAnchored,
-  offeringsFromText, isPlausibleOfferItem, temasFromFreeText, temaForText,
+  offeringsFromText, isPlausibleOfferItem, scrubDigestItems, temasFromFreeText, temaForText,
   buildFromParts, emptyDigest, finalizeDigest, digestHashOf, hasFoundation,
   deriveTopics, ensureTable, saveDigest, getStoredDigest, getDigest,
   // (v348) Etapa pre-lanzamiento + remediación admin del fundamento
