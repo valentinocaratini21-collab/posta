@@ -17,8 +17,8 @@
 //    ataque con TODOS sus frenos (sin RESEND_API_KEY no sale nada, topes
 //    diarios y calentamiento). La cola queda visible en el admin.
 //  · Follow a clientes pagos (mecanismo 11): cuando una cuenta pasa a PAGA,
-//    Posty la sigue en Instagram — el "siguiendo" de @posty.hacetodo /
-//    @posty.doeseverything es prueba social pública de los negocios reales
+//    Posty la sigue en Instagram — el "siguiendo" de @posty.communitymanager /
+//    @postycommunitymanager es prueba social pública de los negocios reales
 //    que trabajan con Posty, y el follow-back viene solo. CAPACIDAD REAL
 //    (verificado 2026-10-21): el conector de Instagram NO puede seguir
 //    cuentas (CONNECTOR.md: "cannot follow, unfollow…"; el CLI responde
@@ -329,9 +329,9 @@ async function sweepNewPaidUsers(db) {
 
 /* ---------------- mecanismo 11: follow a clientes pagos ------------------ */
 // La cuenta de Posty que sigue depende del idioma del cliente: ES →
-// @posty.hacetodo · EN → @posty.doeseverything (su "siguiendo" es la
+// @posty.communitymanager · EN → @postycommunitymanager (su "siguiendo" es la
 // vidriera pública de clientes de cada mercado).
-const POSTY_IG_ACCOUNTS = { es: '@posty.hacetodo', en: '@posty.doeseverything' };
+const POSTY_IG_ACCOUNTS = { es: '@posty.communitymanager', en: '@postycommunitymanager' };
 // Tope anti-spam por cuenta y por día. El volumen esperado hacia la meta
 // es ~2 altas/día: el tope NO debería morder nunca en operación normal;
 // existe para que una activación masiva no dispare 30 follows en una hora.

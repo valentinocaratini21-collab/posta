@@ -53,7 +53,7 @@ const stubImage = ({ angle }) => Promise.resolve({
 // ================= 1. HOUSE BRIEF =================
 await t('house brief: existe, CTA y paleta de Posty', () => {
   assert.ok(D.HOUSE);
-  assert.strictEqual(D.HOUSE.igHandle, '@posty.hacetodo');
+  assert.strictEqual(D.HOUSE.igHandle, '@posty.communitymanager');
   assert.ok(D.HOUSE.sells.length > 20);
   assert.ok(D.HOUSE.audience.length > 10);
   assert.ok(D.HOUSE.cta.includes('postycommunitymanager.com/prueba'), 'CTA=' + D.HOUSE.cta);

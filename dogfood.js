@@ -1,5 +1,5 @@
 // dogfood.js — Posty dogfood: Posty como su propio primer cliente.
-// La house account (@posty.hacetodo) publica lun–vie en DOGFOOD_POST_TIME
+// La house account (@posty.communitymanager) publica lun–vie en DOGFOOD_POST_TIME
 // (default 18:00, DOGFOOD_TZ). El draft del día se genera a la mañana con
 // `scheduled_for`; la notificación (push → email → badge) sale 1 minuto antes
 // del horario; si a las 2 horas no hubo respuesta, se publica solo.
@@ -35,7 +35,7 @@ const { qualityGate, saveQualityResult } = require('./autopilot');
 // 1. House account: el brief unificado de Posty.
 // ---------------------------------------------------------------------------
 const HOUSE = {
-  igHandle: '@posty.hacetodo',
+  igHandle: '@posty.communitymanager',
   businessName: 'Posty',
   sells: 'Tu community manager con IA: te arma la semana de Instagram (posteos, reels, stories, captions y hashtags con la onda de tu negocio). Vos solo aprobás; nada se publica sin tu OK.',
   audience: 'dueños de pymes y emprendedores (gastronomía, moda, belleza, servicios) que no tienen tiempo para Instagram pero saben que lo necesitan.',
@@ -127,7 +127,7 @@ const ANGLES = [
     intent: 'testimonio', theme: 'dueños que ya no piensan en Instagram',
     visual: 'the cute blue robot mascot celebrating with confetti next to a phone showing happy customer comments and likes',
     bodies: [
-      'Sin testimonios inventados: mirá esta cuenta.\n\nCada posteo de @posty.hacetodo lo armó Posty y lo aprobó un humano. Eso mismo hace por tu negocio: arma, vos aprobás.',
+      'Sin testimonios inventados: mirá esta cuenta.\n\nCada posteo de @posty.communitymanager lo armó Posty y lo aprobó un humano. Eso mismo hace por tu negocio: arma, vos aprobás.',
       'El mejor marketing es el que no te quita tiempo.\n\nPosty arma tu semana mientras vos vendés. Nada se publica sin tu OK. Así de simple.',
     ],
   },

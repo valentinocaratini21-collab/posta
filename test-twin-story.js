@@ -185,7 +185,7 @@ CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER,
   console.log('== 5) createTwinStory end-to-end (DB temporal) ==');
   const db = new DatabaseSync(path.join(TMP, 'twin.db'));
   db.exec(DDL);
-  db.prepare(`INSERT INTO profiles (user_id, business_name, category, ig_username) VALUES (1, 'Posty', 'tecnologia', 'posty.hacetodo')`).run();
+  db.prepare(`INSERT INTO profiles (user_id, business_name, category, ig_username) VALUES (1, 'Posty', 'tecnologia', 'posty.communitymanager')`).run();
   const mkPost = (caption) => {
     const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, status, media_type) VALUES (1, '/media/fuente.png', ?, 'published', 'image')`).run(caption);
     return db.prepare('SELECT * FROM posts WHERE id = ?').get(Number(r.lastInsertRowid));

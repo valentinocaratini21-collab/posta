@@ -29,7 +29,7 @@ const ok = (name, cond, extra) => {
   ok('normalizeIg: vacío', tl.normalizeIg('') === '' && tl.normalizeIg(null) === '');
   ok('normalizeDomain: esquema + www + path', tl.normalizeDomain('https://www.MiNegocio.com/tienda?x=1') === 'minegocio.com');
   ok('normalizeDomain: sin esquema', tl.normalizeDomain('minegocio.com') === 'minegocio.com');
-  ok('allowlist: marca propia', tl.isAllowlisted(null, 'posty.hacetodo', '') === true && tl.isAllowlisted(null, '', 'postyhacetodo.com') === true);
+  ok('allowlist: marca propia', tl.isAllowlisted(null, 'posty.communitymanager', '') === true && tl.isAllowlisted(null, '', 'postyhacetodo.com') === true);
   ok('allowlist: negocio común NO', tl.isAllowlisted(null, 'minegocio', 'minegocio.com') === false);
 
   // ── Boot con DATA_DIR propio ───────────────────────────────────────────
@@ -65,7 +65,7 @@ const ok = (name, cond, extra) => {
     rw.prepare('INSERT INTO trial_locks (ig, domain, business, lang, payload, generated_at, created_at) VALUES (?,?,?,?,?,?,?)')
       .run('viejolock', '', 'Viejo', 'es', JSON.stringify({ ...payload, ig: 'viejolock' }), now - 91 * DAY, now - 91 * DAY);
     rw.prepare('INSERT INTO trial_locks (ig, domain, business, lang, payload, generated_at, created_at) VALUES (?,?,?,?,?,?,?)')
-      .run('posty.hacetodo', '', 'Posty', 'es', JSON.stringify({ ...payload, ig: 'posty.hacetodo' }), now - 1 * DAY, now - 1 * DAY);
+      .run('posty.communitymanager', '', 'Posty', 'es', JSON.stringify({ ...payload, ig: 'posty.communitymanager' }), now - 1 * DAY, now - 1 * DAY);
     rw.prepare('INSERT INTO trial_locks (ig, domain, business, lang, payload, generated_at, created_at) VALUES (?,?,?,?,?,?,?)')
       .run('sinpayload', '', 'Sin', 'es', null, now - 5 * DAY, now - 5 * DAY);
     rw.prepare('INSERT INTO trial_sample_reels (ig, video, created_at) VALUES (?,?,?)')
@@ -95,7 +95,7 @@ const ok = (name, cond, extra) => {
     ok('candado: 91 días ya no bloquea', g.body.trial_locked !== true, { status: g.status, keys: Object.keys(g.body || {}) });
 
     // Allowlist: aunque tenga candado, pasa
-    g = await gen({ ig: 'posty.hacetodo', business: 'Posty', category: 'cafeteria', lang: 'es' });
+    g = await gen({ ig: 'posty.communitymanager', business: 'Posty', category: 'cafeteria', lang: 'es' });
     ok('candado: allowlist pasa siempre', g.body.trial_locked !== true, { status: g.status });
 
     // Sin snapshot recuperable → 409 amable con fecha exacta

@@ -19,7 +19,7 @@ const ok = (name, fn) => { if (fn) fn(); passed++; console.log('  ✓', name); }
 
 console.log('== 1) Competidores: parseo y normalización ==');
 ok('separa por coma/espacio/punto y coma, baja a minúsculas, saca la propia', () => {
-  const r = ideas.parseCompetitorHandles('@predis.ai, Hootsuite; @metricool\n@posty.hacetodo', 'posty.hacetodo');
+  const r = ideas.parseCompetitorHandles('@predis.ai, Hootsuite; @metricool\n@posty.communitymanager', 'posty.communitymanager');
   assert.deepStrictEqual(r, ['predis.ai', 'hootsuite', 'metricool']);
 });
 ok('dedup y tope de 5', () => {

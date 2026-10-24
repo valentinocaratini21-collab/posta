@@ -12447,7 +12447,7 @@ El prompt DEBE exigir:
 - "sin marca de agua".
 - Si el brief trae un ángulo estratégico, la escena tiene que EXPRESARLO visualmente (no describirlo con texto).
 - IDENTIDAD PROPIA (draft 76, revisión 2026-09-29): la estética es del RUBRO del cliente con SU paleta — NUNCA imites el estilo visual de marcas famosas (nada de estética "Netflix"/streaming, Spotify, McDonald's, Apple...). Prohibido el fondo negro-rojo cinematográfico genérico y cualquier look que parezca otra marca.
-- IDENTIDAD-RUBRO (Mora, revisión 2026-10-07, id 13 — fallo REAL: "personaje animado que no refleja la identidad del rubro"): el personaje animado / mascota de dibujos solo se usa cuando refleja la identidad REAL del rubro. JAMÁS metas un personaje de dibujitos en una escena de un rubro que vende lo real (cafetería, panadería, gastronomía, estética...): ahí la escena es fotográfica del producto/lugar real, sin dibujitos. La mascota solo aparece en escenas donde el rubro la admite (la marca @posty.hacetodo sí la admite para hablar de sí misma; el cliente que vende café, no).
+- IDENTIDAD-RUBRO (Mora, revisión 2026-10-07, id 13 — fallo REAL: "personaje animado que no refleja la identidad del rubro"): el personaje animado / mascota de dibujos solo se usa cuando refleja la identidad REAL del rubro. JAMÁS metas un personaje de dibujitos en una escena de un rubro que vende lo real (cafetería, panadería, gastronomía, estética...): ahí la escena es fotográfica del producto/lugar real, sin dibujitos. La mascota solo aparece en escenas donde el rubro la admite (la marca @posty.communitymanager sí la admite para hablar de sí misma; el cliente que vende café, no).
 - Anti-estética de stock corporativo: prohibida la estética de stock corporativo — la imagen tiene que poder pasar por el negocio real del cliente (su local, sus productos, su gente), nunca por un banco de imágenes genérico.
 - MOMENTO, NO BODEGÓN (2026-10-10, Uma — datos de engagement): en gastronomía, cafetería y moda, la escena por DEFECTO es ACCIÓN/PERSONA/MOMENTO, no bodegón estático. El bodegón perfecto no vende; el momento real sí. Preferir: manos en acción (cocinando, sirviendo, cortando), POV en primera persona desde la cocina o el mostrador, cliente usando el producto, behind-the-scenes del local en movimiento, el dueño hablando a cámara. El plato/producto solo, quieto y perfecto sobre fondo lindo es la VARIANTE, no el default. En los demás rubros, mismo principio: si hay una persona que pueda protagonizar el momento, que lo protagonice.
 - ESPECIFICIDAD TOTAL: el prompt nombra elementos CONCRETOS del brief — nombres reales de productos, los hex exactos de la paleta aplicados a objetos de la escena (props, vestuario, packaging, detalles del local), rasgos del local o del negocio — en vez de descripciones vagas ("un café", "un producto", "una tienda"). Si el brief trae productos reales, son los PROTAGONISTAS de la escena, con su nombre y su aspecto descriptos.
@@ -17900,7 +17900,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v363';
+const BUILD_ID = '20261024-v364';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {

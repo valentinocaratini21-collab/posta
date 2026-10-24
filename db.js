@@ -438,8 +438,8 @@ CREATE TABLE IF NOT EXISTS trial_lock_allowlist (
 // filas acá o por TRIAL_LOCK_ALLOWLIST; nunca se bloquean a sí mismas).
 try {
   const seedLockAllow = db.prepare(`INSERT OR IGNORE INTO trial_lock_allowlist (value, kind, note, created_at) VALUES (?, ?, ?, ?)`);
-  seedLockAllow.run('posty.hacetodo', 'ig', 'cuenta de marca ES', Date.now());
-  seedLockAllow.run('posty.doeseverything', 'ig', 'cuenta de marca EN', Date.now());
+  seedLockAllow.run('posty.communitymanager', 'ig', 'cuenta de marca ES', Date.now());
+  seedLockAllow.run('postycommunitymanager', 'ig', 'cuenta de marca EN', Date.now());
   seedLockAllow.run('postyhacetodo.com', 'domain', 'dominio propio', Date.now());
   seedLockAllow.run('postycommunitymanager.com', 'domain', 'dominio propio (nuevo)', Date.now());
 } catch (e) { /* la allowlist también vive en código (trial-lock.js) */ }

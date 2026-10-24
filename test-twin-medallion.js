@@ -87,7 +87,7 @@ const BRAND = { business: 'Posty', bgHex: '#0A1E33', textHex: '#FFFFFF', logoAbs
 (async () => {
   const db = new DatabaseSync(path.join(TMP, 'medallion.db'));
   db.exec(DDL);
-  db.prepare(`INSERT INTO profiles (user_id, business_name, category, ig_username) VALUES (1, 'Posty', 'tecnologia', 'posty.hacetodo')`).run();
+  db.prepare(`INSERT INTO profiles (user_id, business_name, category, ig_username) VALUES (1, 'Posty', 'tecnologia', 'posty.communitymanager')`).run();
   db.prepare(`INSERT INTO profiles (user_id, business_name, category, ig_username) VALUES (2, 'Panadería Sol', 'gastronomia', 'panaderiasol')`).run();
   const mkPost = (uid, imagePath) => {
     const r = db.prepare(`INSERT INTO posts (user_id, image_path, caption, status, media_type) VALUES (?, ?, ?, 'published', 'image')`).run(uid, imagePath, CAP_CLEAN);

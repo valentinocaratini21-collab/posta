@@ -2205,7 +2205,7 @@ async function extractFeedPaletteFromBuffers(buffers) {
 // La luminancia media de hasta 3 fotos del feed (las mismas que ya se
 // leyeron para la paleta — cero fetches nuevos) decide el registro de
 // las piezas gráficas de la semana: un feed luminoso (crema, amarillo,
-// pastel — como el de @posty.hacetodo, que mide ~0,62) produce fondos
+// pastel — como el de @posty.communitymanager, que mide ~0,62) produce fondos
 // CLAROS; un feed oscuro mantiene el registro oscuro. Devuelve la
 // luminancia 0..1 o null si no se pudo medir (sin perfil → el llamador
 // conserva el comportamiento de siempre). El umbral vive en el

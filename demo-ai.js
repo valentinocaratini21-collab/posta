@@ -8,7 +8,7 @@
 //
 // Decisión de Valentino (2026-10-18): en /prueba, si el Instagram del
 // visitante es una marca ILUSTRADA (avatar/mascota/personaje dibujado —
-// como @posty.hacetodo), las piezas de su semana se generan con el motor
+// como @posty.communitymanager), las piezas de su semana se generan con el motor
 // de IA real del producto: el personaje en escena, siguiendo la línea de
 // su feed. Para perfiles de FOTO REAL (la mayoría) no cambia nada: el
 // demo de plantillas actual, costo cero.

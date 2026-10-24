@@ -7842,7 +7842,7 @@ async function scheduleView() {
   const slots = suggestSlots(drafts.length, schedPosts);
   const { expBanner } = xpStripHTML(sk, st, drafts.length); // (el xpStrip del nivel se eliminó: vive en el avatar del chat)
   const trialBanner = await trialExpiredBannerHTML(); // trial vencido → banner de reactivación (solo web)
-  // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
+  // Posty dogfood: la propuesta de hoy para @posty.communitymanager, primero que todo.
   let dogfoodPost = null;
   try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
   const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
@@ -8261,7 +8261,7 @@ function dogfoodCardHTML(p) {
   return `<div class="card dogfood-card" id="dogfoodCard" style="border:2px solid #FEC14D;background:linear-gradient(135deg,#fffdf5,#fff)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:20px">🤖</span>
-      <div><b>Posty para @posty.hacetodo</b>
+      <div><b>Posty para @posty.communitymanager</b>
       <div class="hint">⏳ Pendiente de tu aprobación — propuesta de hoy</div></div>
     </div>
     ${p.image_path ? `<img src="${esc(p.image_path)}" alt="Propuesta de Posty" style="width:100%;border-radius:12px" loading="eager">` : ''}
@@ -8278,7 +8278,7 @@ async function dogfoodAction(id, action) {
   try {
     const r = await api.post(`/api/dogfood/${id}/${action}`, {});
     if (r && r.ok) {
-      if (action === 'approve') toast('🎉 ¡Publicado en @posty.hacetodo!');
+      if (action === 'approve') toast('🎉 ¡Publicado en @posty.communitymanager!');
       else toast('⏭️ Descartado. Mañana te propongo otro.');
       render();
     } else {
@@ -8297,7 +8297,7 @@ async function dogfoodView(id) {
   try { const r = await api.get('/api/dogfood/pending'); p = (r && r.post) || null; } catch (e) {}
   if (!p || (id && String(p.id) !== String(id))) {
     return `<div class="card" style="text-align:center"><h3 style="margin:0 0 6px">🤖 Sin propuesta pendiente</h3>
-      <p class="hint">Cada mañana te propongo un posteo para @posty.hacetodo. Volvé mañana ☀️</p>
+      <p class="hint">Cada mañana te propongo un posteo para @posty.communitymanager. Volvé mañana ☀️</p>
       <a class="btn btn-soft" href="#/app/schedule" style="margin-top:10px">Ir a Schedule</a></div>`;
   }
   return `<div class="apv-wrap">

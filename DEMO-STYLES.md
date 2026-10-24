@@ -123,7 +123,7 @@ estudio de selección (`prompt-selection-map.json`, vía
   paleta) clasifica el registro: ≥0,55 → `light` y las piezas gráficas
   (el póster) salen CLARAS — fondo crema/tinte claro de su paleta
   (`posterBgLightFor`) con textos en el color oscuro de su paleta
-  (`poster_dark`); el feed de @posty.hacetodo mide ~0,62. Feed oscuro →
+  (`poster_dark`); el feed de @posty.communitymanager mide ~0,62. Feed oscuro →
   registro oscuro de siempre; sin perfil → comportamiento actual.
 - La pieza muestra el estilo con etiqueta discreta abajo a la izquierda:
   `ESTILO · {nombre}`. El `style_code` viaja en el spec y, al importar la

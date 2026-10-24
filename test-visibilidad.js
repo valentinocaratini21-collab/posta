@@ -89,8 +89,8 @@ const stubDiscover = async () => ([
   const frow = (uid) => db.prepare('SELECT * FROM client_follows WHERE client_user_id = ?').get(uid);
   const ftrig = (uid) => db.prepare('SELECT * FROM follow_triggers WHERE user_id = ?').get(uid);
   ok(fproc >= 4, 'follow sweep: procesa las cuentas pagas sin trigger (' + fproc + ')');
-  ok(frow(20) && frow(20).ig_handle === 'taller.lopez' && frow(20).posty_account === '@posty.hacetodo' && frow(20).status === 'pendiente', 'follow: cliente ES encolado para @posty.hacetodo con su @ normalizado');
-  ok(frow(21) && frow(21).ig_handle === 'miamidental' && frow(21).posty_account === '@posty.doeseverything', 'follow: cliente EN encolado para @posty.doeseverything');
+  ok(frow(20) && frow(20).ig_handle === 'taller.lopez' && frow(20).posty_account === '@posty.communitymanager' && frow(20).status === 'pendiente', 'follow: cliente ES encolado para @posty.communitymanager con su @ normalizado');
+  ok(frow(21) && frow(21).ig_handle === 'miamidental' && frow(21).posty_account === '@postycommunitymanager', 'follow: cliente EN encolado para @postycommunitymanager');
   ok(frow(1) && frow(1).ig_handle === 'cafeuno', 'follow: detecta también al cliente procesado por FOMO antes de que existiera el mecanismo');
   ok(!frow(22) && ftrig(22) && ftrig(22).note === 'sin_ig_identificado', 'follow: sin @ identificado no se encola nada y queda asentado');
   ok(!ftrig(23) && !frow(23), 'follow: una cuenta en trial NO genera follow');
@@ -106,7 +106,7 @@ const stubDiscover = async () => ([
   }
   await V.sweepFollowQueue(db);
   const hoyCap = V.followTasksForToday(db, 2);
-  ok(hoyCap['@posty.hacetodo'].tasks.length === 2 && hoyCap['@posty.hacetodo'].deferred >= 3, 'follow: el tope diario recorta las tareas de hoy y difiere el resto sin perderlas');
+  ok(hoyCap['@posty.communitymanager'].tasks.length === 2 && hoyCap['@posty.communitymanager'].deferred >= 3, 'follow: el tope diario recorta las tareas de hoy y difiere el resto sin perderlas');
   ok(V.markFollowDone(db, frow(30).id, 'test', 2).ok === true, 'follow: marcar hecho dentro del tope');
   ok(V.markFollowDone(db, frow(31).id, 'test', 2).ok === true, 'follow: segundo hecho dentro del tope');
   const over = V.markFollowDone(db, frow(32).id, 'test', 2);
@@ -119,7 +119,7 @@ const stubDiscover = async () => ([
   const rowsDespues = db.prepare('SELECT COUNT(*) AS n FROM client_follows').get().n;
   ok(frow(20).status === 'hecho' && rowsDespues === rowsAntes && typeof V.unfollowClient === 'undefined', 'follow: al cancelar NO se deja de seguir (sin tarea ni función de unfollow)');
   const seg = V.followedClients(db);
-  ok(seg.some(s => s.ig === '@taller.lopez' && s.seguido_por === '@posty.hacetodo'), 'follow: la lista de seguidos alimenta la página de fundadores');
+  ok(seg.some(s => s.ig === '@taller.lopez' && s.seguido_por === '@posty.communitymanager'), 'follow: la lista de seguidos alimenta la página de fundadores');
 
   // --- Mecanismo 5 + endpoints (HTTP smoke con express) ---
   const express = require('express');
@@ -156,7 +156,7 @@ const stubDiscover = async () => ([
   resp = await post('/api/admin/visibility/follow-done', { id: 99999 });
   ok(resp.ok === false && resp.error === 'not_found', 'admin follows: id inexistente rechazado');
   const csv = await fetch(base + '/api/admin/visibility/follows.csv').then(r => r.text());
-  ok(csv.includes('taller.lopez') && csv.includes('@posty.hacetodo'), 'admin follows: CSV exporta el registro completo');
+  ok(csv.includes('taller.lopez') && csv.includes('@posty.communitymanager'), 'admin follows: CSV exporta el registro completo');
   srv.close();
 
   console.log(`\n${total - fails}/${total} OK`);

@@ -21,7 +21,7 @@
 // tabla trial_lock_allowlist (administrable sin deploy).
 
 const LOCK_MS = 90 * 24 * 3600 * 1000; // 90 días exactos
-const BUILTIN_ALLOW_IG = ['posty.hacetodo', 'posty.doeseverything'];
+const BUILTIN_ALLOW_IG = ['posty.communitymanager', 'postycommunitymanager'];
 const BUILTIN_ALLOW_DOMAIN = ['postyhacetodo.com', 'postycommunitymanager.com'];
 
 // --- Normalización -------------------------------------------------------

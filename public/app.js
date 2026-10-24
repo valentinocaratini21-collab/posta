@@ -11528,7 +11528,7 @@ async function scheduleView() {
         <a class="btn btn-primary btn-sm" style="margin-top:10px" href="#/app/ajustes?ig=1">Reconectar Instagram</a>
       </div>`
     : '';
-  // Posty dogfood: la propuesta de hoy para @posty.hacetodo, primero que todo.
+  // Posty dogfood: la propuesta de hoy para @posty.communitymanager, primero que todo.
   let dogfoodPost = null;
   try { const r = await api.get('/api/dogfood/pending'); dogfoodPost = (r && r.post) || null; } catch (e) {}
   const dogfoodBlock = dogfoodPost ? dogfoodCardHTML(dogfoodPost) : '';
