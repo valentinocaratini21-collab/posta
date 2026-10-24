@@ -33,6 +33,11 @@ function cortar(t, max) {
 }
 // Palabras en las que un titular JAMÁS debe terminar (se vería cortado a mitad de oración).
 const HEADLINE_DANGLING = new Set(['de','del','al','el','la','los','las','un','una','unos','unas','y','e','o','u','ni','que','en','con','por','para','sin','sobre','entre','hasta','desde','durante','a','ante','bajo','contra','hacia','tras','mediante','segun','según','como','cómo','pero','mas','más','si','sí','no','tu','tus','su','sus','mi','mis','nuestro','nuestra','esta','este','esto','es','son','hay','se','le','les','lo','me','te']);
+// (MORA-6, 2026-10-24) Infinitivos que EXIGEN complemento: si un titular
+// declarativo cortado termina en uno de estos y la oración semilla sigue,
+// el titular es un fragmento ("Te voy a ser honesto: tener", id real 498)
+// y cierra con "…" (paso 9b de makeHeadline). Lista cerrada de Mora.
+const HEADLINE_INFINITIVES = new Set(['tener','hacer','querer','poder','buscar','necesitar','lograr','conseguir','ofrecer','vender','comprar','pagar','pedir','armar','abrir','cerrar','crear','lanzar','empezar','seguir','dejar','poner','sacar','dar','ver','saber']);
 function sinColgada(words) {
   const w = words.slice();
   while (w.length > 1 && HEADLINE_DANGLING.has(String(w[w.length - 1]).toLowerCase().replace(/[.,;:!?¿¡()"“”'']/g, ''))) w.pop();
@@ -211,7 +216,19 @@ function makeHeadline(text, maxWords = 6, maxChars = 70, rubro = null) {
     // adjunto opcional cortado ("hechos hoy EN el local", "$12.500
     // recién salida") deja un titular de estilo nominal completo y NO
     // lleva "…" (test-character-lock (f): no-pregunta intacta).
-    return ['de', 'del', 'para'].includes(seedWordsQ[ow.length]);
+    if (['de', 'del', 'para'].includes(seedWordsQ[ow.length])) return true;
+    // 9b) INFINITIVO COLGADO (MORA-6, 2026-10-24, id real 498 — 3ª
+    // ocurrencia de la clase TITULAR INCOMPLETO): la ÚLTIMA palabra
+    // conservada es un infinitivo que exige complemento
+    // (HEADLINE_INFINITIVES) y la oración sigue: "Te voy a ser
+    // honesto: tener" + el complemento que venía. El gatillo del
+    // paso 9 no lo cazaba — la primera palabra caída era el
+    // complemento mismo ("un…"), no de/del/para — y el fragmento
+    // salía disfrazado de frase completa. El prefijo propio ya está
+    // garantizado arriba (la oración semilla continúa): un titular
+    // que ES la oración entera jamás dispara esta regla, aunque
+    // termine en infinitivo. Espejo en server.js.
+    return HEADLINE_INFINITIVES.has(ow[ow.length - 1]);
   };
   if (declarIsCut()) out = out.replace(/\s*[!….]+$/, '').trim() + '…';
   return out.replace(/\u0001/g, '.');
