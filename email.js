@@ -53,6 +53,20 @@ function resolveFrom(override) {
   return DEFAULT_FROM;
 }
 
+// (v375 · endurecimiento del envío) Cota dura por intento y pausa acotada
+// entre intentos. La cota se puede bajar por entorno (los tests de cuelgue
+// la llevan a ~1 s); el default de producción es 10 s por intento.
+const SEND_RETRY_PAUSE_MS = 800;
+function sendTimeoutMs() {
+  const n = parseInt(process.env.EMAIL_SEND_TIMEOUT_MS || '', 10);
+  return Number.isFinite(n) && n >= 250 ? n : 10000;
+}
+function isTimeoutErr(e) {
+  if (!e) return false;
+  if (e.name === 'TimeoutError' || e.name === 'AbortError') return true;
+  return /timeout|aborted/i.test(String(e.message || ''));
+}
+
 async function sendEmail({ to, subject, html, text, attachments, from: fromOverride, replyTo }) {
   const from = resolveFrom(fromOverride);
   const key = process.env.RESEND_API_KEY;
@@ -78,33 +92,57 @@ async function sendEmail({ to, subject, html, text, attachments, from: fromOverr
       return o;
     });
   }
-  let r;
-  try {
-    // RESEND_API_URL permite apuntar a un stub local en tests (default: Resend).
-    r = await fetch(process.env.RESEND_API_URL || RESEND_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(20000),
-    });
-  } catch (e) {
-    console.error(`[email] error de red enviando a ${to}:`, e.message);
-    logSend({ to, subject, from, status: 'error', error: String(e.message || e).slice(0, 500) });
-    return { ok: false, error: e.message };
+  // (v375) El envío propiamente dicho, endurecido. TODA salida de email
+  // del sistema pasa por este único punto (magic link, forgot, la Carta,
+  // los operativos, referidos, win-back): ningún llamador habla con Resend
+  // por su cuenta. Reglas:
+  //  - Timeout duro por intento (AbortSignal): cubre conexión, espera de
+  //    la respuesta y lectura del cuerpo. El handler que espera este envío
+  //    SIEMPRE vuelve.
+  //  - Ante timeout o error de red: A LO SUMO 1 reintento acotado. Una
+  //    respuesta HTTP del proveedor (4xx incluido) es final y jamás se
+  //    reintenta: es una respuesta válida y rápida.
+  //  - Desenlace durable SIEMPRE: cada envío termina en UNA fila de
+  //    email_send_log con su motivo literal — 'timeout' cuando el
+  //    proveedor no respondió — aunque el proveedor nunca conteste.
+  const timeoutMs = sendTimeoutMs();
+  const url = process.env.RESEND_API_URL || RESEND_URL; // stub local en tests
+  let lastErr = null;
+  let lastWasTimeout = false;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!r.ok) {
+        const body = await r.text().catch(() => '');
+        console.error(`[email] Resend rechazó el envío a ${to} (HTTP ${r.status}):`, body.slice(0, 300));
+        // (P0) El motivo literal del proveedor queda registrado: es lo que
+        // permite distinguir clave inválida de dominio sin verificar.
+        logSend({ to, subject, from, status: 'rejected', httpStatus: r.status, error: body.slice(0, 500) });
+        return { ok: false, error: `HTTP ${r.status}`, httpStatus: r.status, providerError: body.slice(0, 300) };
+      }
+      // (P0) Capturar el id del proveedor: es la evidencia de aceptación.
+      let providerId = '';
+      try { const j = await r.json(); providerId = (j && j.id) || ''; } catch (e) { /* cuerpo no-JSON: igual fue aceptado */ }
+      if (attempt > 1) console.log(`[email] el envío a ${to} salió en el reintento`);
+      logSend({ to, subject, from, status: 'sent', providerId });
+      return { ok: true, id: providerId };
+    } catch (e) {
+      lastErr = e;
+      lastWasTimeout = isTimeoutErr(e);
+      console.error(`[email] ${lastWasTimeout ? 'timeout' : 'error de red'} enviando a ${to} (intento ${attempt}/2):`, e.message);
+      if (attempt < 2) await new Promise((res) => setTimeout(res, SEND_RETRY_PAUSE_MS));
+    }
   }
-  if (!r.ok) {
-    const body = await r.text().catch(() => '');
-    console.error(`[email] Resend rechazó el envío a ${to} (HTTP ${r.status}):`, body.slice(0, 300));
-    // (P0) El motivo literal del proveedor queda registrado: es lo que
-    // permite distinguir clave inválida de dominio sin verificar.
-    logSend({ to, subject, from, status: 'rejected', httpStatus: r.status, error: body.slice(0, 500) });
-    return { ok: false, error: `HTTP ${r.status}`, httpStatus: r.status, providerError: body.slice(0, 300) };
-  }
-  // (P0) Capturar el id del proveedor: es la evidencia de aceptación.
-  let providerId = '';
-  try { const j = await r.json(); providerId = (j && j.id) || ''; } catch (e) { /* cuerpo no-JSON: igual fue aceptado */ }
-  logSend({ to, subject, from, status: 'sent', providerId });
-  return { ok: true, id: providerId };
+  const finalError = lastWasTimeout
+    ? `timeout: el proveedor no respondió en ${timeoutMs} ms (2 intentos)`
+    : String((lastErr && lastErr.message) || lastErr).slice(0, 500);
+  logSend({ to, subject, from, status: 'error', error: finalError.slice(0, 500) });
+  return { ok: false, error: finalError };
 }
 
 // Recordatorio semanal: armar los posteos de la semana.

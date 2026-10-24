@@ -27,6 +27,7 @@ function makeDb() {
   db.exec(`
     CREATE TABLE users (
       id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, created_at TEXT,
+      lang TEXT DEFAULT 'es',
       plan_status TEXT DEFAULT 'trial', trial_ends_at INTEGER,
       trial_extended_until INTEGER, email_opt_out INTEGER DEFAULT 0,
       client_name TEXT DEFAULT '', first_publish_nudged INTEGER DEFAULT 0,
