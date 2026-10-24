@@ -6284,6 +6284,9 @@ async function albumRitualSweep(opts = {}) {
       if (wd !== 'Mon' || hr !== 10) continue;
       const mission = albumMission(u.id);
       if (!mission || mission.done_at) continue; // ya nos pasó fotos esta semana
+      // (Jugadas rojo→verde) Semana 100% IA por 'sin material': a esta
+      // cuenta esta semana NO se le piden fotos — Posty genera todo.
+      try { if (require('./health-plays').aiOnlyWeekActive(db, u.id, mission.week_key)) continue; } catch (e) {}
       // --- Push: el pedido, con la idea de la semana como sugerencia.
       if (!mission.pushed_at) {
         try {
@@ -6565,6 +6568,18 @@ async function buildAccountAnalysis(uid, opts = {}) {
       digest, peers, reviews, ctx,
     });
   }
+  // (Jugadas rojo→verde, 2026-10-22) Si la cuenta está en rojo por CALIDAD,
+  // su próxima Carta abre con el ajuste concreto: el opener que guardó la
+  // jugada se antepone al cuerpo de la carta y se consume (una sola vez).
+  try {
+    const hp = require('./health-plays');
+    const opener = hp.cartaOpenerFor(db, uid);
+    if (opener && analysis && analysis.letter && Array.isArray(analysis.letter.body)) {
+      analysis.letter.body.unshift({ t: 'p', kind: 'ajuste-salud', text: opener });
+      analysis.letter.health_opener = opener;
+      hp.consumeCartaOpener(db, uid);
+    }
+  } catch (e) { /* la carta sale como siempre */ }
   if (opts.save !== false) {
     const saved = analysisEngine.saveAnalysis(db, uid, analysis);
     if (saved && saved.analysis) analysis = saved.analysis;
@@ -10942,6 +10957,8 @@ app.post('/api/billing/webhook', async (req, res) => {
     } else if (['cancelled', 'paused'].includes(sub.status)) {
       db.prepare(`UPDATE users SET plan_status='cancelled' WHERE id=? AND mp_preapproval_id=?`)
         .run(Number(userId), String(mpId));
+      // (Jugadas rojo→verde) Pregunta de salida de un toque + 30 días.
+      try { require('./health-plays').handleCancellation(db, Number(userId)); } catch (e) {}
       console.log(`[posta] Plan cancelado para el usuario ${userId} (MP ${mpId}, estado ${sub.status})`);
       // Referidos: si este usuario vino por referido, revalidar el descuento del referidor
       try {
@@ -10972,6 +10989,9 @@ app.post('/api/billing/cancel', requireAuth, async (req, res) => {
   }
   db.prepare(`UPDATE users SET plan_status='cancelled', mp_preapproval_id=NULL, cancel_reason=? WHERE id=?`)
     .run(String((req.body && req.body.reason) || '').slice(0, 60), req.session.userId);
+  // (Jugadas rojo→verde) Si cancela: pregunta de salida de un toque +
+  // cuenta guardada 30 días (health-plays; idempotente).
+  try { require('./health-plays').handleCancellation(db, req.session.userId); } catch (e) {}
   // Referidos: si este usuario vino por referido, revalidar el descuento del referidor
   try { if (user && user.referred_by) revalidateReferralDiscount(user.referred_by).catch(() => {}); } catch (e) { console.error('[referral-discount] hook cancel:', e.message); }
   res.json({ ok: true });
@@ -17698,7 +17718,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261023-v354';
+const BUILD_ID = '20261023-v355';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
@@ -17880,19 +17900,26 @@ try {
   });
 } catch (e) { console.error('[flyer] no se pudo montar:', e && e.message); }
 
-// SPA fallback con 404 real: las rutas de la app viven en el hash
-// (#/app/...) y nunca llegan al servidor — un path desconocido acá NO es
-// una ruta válida. Antes se servía la home con 200 para todo: /api/*
-// inexistentes, assets rotos y páginas fantasma devolvían la landing.
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
-  if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
-  res.status(404);
-  // (v342) 404 con marca: página dedicada según el idioma del path
-  // (/en/* en inglés, el resto en español) — nunca más el loader de la app.
-  const notFoundPage = (req.path === '/en' || req.path.startsWith('/en/')) ? '404-en.html' : '404.html';
-  return res.sendFile(path.join(__dirname, 'public', notFoundPage));
-});
+// ---------- JUGADAS ROJO→VERDE (2026-10-22): ejecución automática ----------
+// El termómetro de v322 asigna la jugada; health-plays.js la ejecuta contra
+// los sistemas reales y lo escribe en health_interventions (fail-closed:
+// lo que no puede correr queda pendiente con motivo, jamás ejecutado).
+// La relectura de fundamento de la jugada de calidad marca el digest
+// vencido en el módulo y acá se dispara el barrido real que lo re-lee.
+try {
+  const healthPlays = require('./health-plays');
+  healthPlays.ensurePlaysSchema(db);
+  healthPlays.registerHealthPlays(app, db, { requireAdminToken });
+  healthPlays.startHealthPlayJobs(db, {
+    refreshDigest: async (db2, uid) => {
+      const stale = healthPlays._internal.markDigestStale(db2, uid);
+      if (!stale.ok) return stale;
+      try { await refreshDigestsSweep(); } catch (e) { /* el barrido reintenta el lunes 06:30 */ }
+      return { ok: true, via: 'relectura_barrido_fundamento' };
+    },
+  });
+} catch (e) { console.error('[health-plays] no se pudo montar:', e && e.message); }
+
 
 // ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async
 // sin try/catch = unhandled rejection = el proceso MUERE para todos los usuarios.
@@ -17935,19 +17962,6 @@ try {
   });
 } catch (e) { console.error('[talking-reel] no se pudo montar:', e && e.message); }
 
-// SPA fallback con 404 real: las rutas de la app viven en el hash
-// (#/app/...) y nunca llegan al servidor — un path desconocido acá NO es
-// una ruta válida. Antes se servía la home con 200 para todo: /api/*
-// inexistentes, assets rotos y páginas fantasma devolvían la landing.
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
-  if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
-  res.status(404);
-  // (v342) 404 con marca: página dedicada según el idioma del path
-  // (/en/* en inglés, el resto en español) — nunca más el loader de la app.
-  const notFoundPage = (req.path === '/en' || req.path.startsWith('/en/')) ? '404-en.html' : '404.html';
-  return res.sendFile(path.join(__dirname, 'public', notFoundPage));
-});
 
 // ANTI-CRASH (2026-10-02): en Express 4 + Node 24, un throw en un handler async
 // sin try/catch = unhandled rejection = el proceso MUERE para todos los usuarios.
@@ -18011,6 +18025,31 @@ try {
   followupsMod.ensureTable(db);
   paymentCloseMod.ensureTable(db);
 } catch (e) { console.error('[atencion] no se pudieron crear las tablas:', e && e.message); }
+
+// ---------- CATCH-ALL FINAL (fix v355, 2026-10-23) ----------
+// Este fallback va AL FINAL del registro de rutas, a propósito: en v352
+// había DOS app.get('*') ubicados ANTES de los registros de
+// visibility/talking-reel/relacion, y el primero respondía 404 JSON a
+// todo GET /api/* que le llegaba — esas rutas GET quedaron muertas
+// (visibility/state, admin visibility fomo/follows + .csv,
+// talking-reel/:id, relacion/entry, admin relacion/state).
+// Comportamiento intacto: /api/* desconocida → 404 JSON
+// {ok:false,error:'not_found'}; asset con extensión → 404 texto;
+// resto → 404 de marca (404.html / 404-en.html). Solo GET: los demás
+// métodos nunca pasaron por este handler.
+// SPA fallback con 404 real: las rutas de la app viven en el hash
+// (#/app/...) y nunca llegan al servidor — un path desconocido acá NO es
+// una ruta válida. Antes se servía la home con 200 para todo: /api/*
+// inexistentes, assets rotos y páginas fantasma devolvían la landing.
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (/\.[A-Za-z0-9]{2,5}$/.test(req.path)) return res.status(404).type('text').send('No encontrado');
+  res.status(404);
+  // (v342) 404 con marca: página dedicada según el idioma del path
+  // (/en/* en inglés, el resto en español) — nunca más el loader de la app.
+  const notFoundPage = (req.path === '/en' || req.path.startsWith('/en/')) ? '404-en.html' : '404.html';
+  return res.sendFile(path.join(__dirname, 'public', notFoundPage));
+});
 
 app.listen(PORT, () => {
   console.log(`[posta] Corriendo en http://localhost:${PORT} (${NODE_ENV})`);

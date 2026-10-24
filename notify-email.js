@@ -22,7 +22,12 @@ function esc(s) {
 
 function getUser(db, userId) {
   try {
-    const r = db.prepare('SELECT email, name FROM users WHERE id = ?').get(userId);
+    // FIX RAÍZ (2026-10-22, hallazgo de producción): la columna se llama
+    // client_name — pedir 'name' reventaba la query en silencio dentro de
+    // este try/catch y TODOS los emails del módulo devolvían "usuario sin
+    // email" sin enviar jamás (aprobaciones y posteos perdidos muertos
+    // desde su origen).
+    const r = db.prepare('SELECT email, client_name AS name FROM users WHERE id = ?').get(userId);
     return r || null;
   } catch (e) {
     return null;
@@ -248,4 +253,57 @@ async function sendWeekPreview(db, userId, weekKey, drafts) {
   }
 }
 
-module.exports = { sendApprovalEmail, sendMissedEmail, sendWeekReady, sendWeekPreview };
+// Aviso "sale en 30 minutos" por EMAIL — el respaldo de la cascada
+// push → email (upcoming-notice.js). Nunca tira. Devuelve:
+//   { ok:true }                                   → email enviado
+//   { ok:false, reason:'no_config' }              → sin RESEND_API_KEY
+//   { ok:false, reason:'no_email' }               → la cuenta no tiene email
+//   { ok:false, reason:'send_failed', transient:true } → Resend/red: reintentar
+// Modos: 'manual' (asunto exacto de aprobación + link firmado de un toque,
+// sin login) y 'autopilot' (informativo, espejo del push).
+async function sendUpcomingEmail(db, post, opts) {
+  const mode = (opts && opts.mode) === 'manual' ? 'manual' : 'autopilot';
+  try {
+    if (!emailConfigured()) return { ok: false, reason: 'no_config' };
+    const user = getUser(db, post.user_id);
+    if (!user || !String(user.email || '').trim()) return { ok: false, reason: 'no_email' };
+    const base = BASE_URL();
+    const when = dayHourLabel(db, post.user_id, post.scheduled_at);
+    const firstLine = String(post.caption || '').split('\n')[0].trim().slice(0, 120);
+    const img = absoluteMediaUrl(post.image_path, getImageBaseUrl(db, post.user_id));
+    const subject = mode === 'manual'
+      ? '⏰ Sale en 30 minutos: ¿lo publicamos?'
+      : '⏰ Tu posteo sale en 30 minutos';
+    let actionHtml = '';
+    if (mode === 'manual') {
+      const a = signAction(post.id, 'approve', 4);
+      const approveUrl = `${base}/api/posts/${post.id}/approve?sig=${a.sig}&exp=${a.exp}`;
+      actionHtml = `
+    <p style="text-align:center;margin:0 0 12px">
+      <a href="${approveUrl}" style="display:inline-block;min-width:200px;background:#2793C8;color:#fff;font-weight:800;font-size:17px;padding:16px 40px;border-radius:999px;text-decoration:none">✅ Sí, publicalo</a>
+    </p>
+    <p style="font-size:13px;line-height:1.6;color:#47617A;margin:0;text-align:center">Un toque y sale. Si no hacés nada, no se publica sin tu OK.</p>`;
+    } else {
+      actionHtml = `
+    <p style="font-size:14px;line-height:1.6;color:#47617A;margin:0;text-align:center">Sale solo, como siempre. Si querés frenarlo o cambiarlo, entrá a tu semana 👇</p>
+    <p style="text-align:center;margin:12px 0 0">
+      <a href="${base}/#/app/semana?post=${post.id}" style="display:inline-block;min-width:200px;background:#fff;color:#47617A;font-weight:800;font-size:15px;padding:12px 32px;border-radius:999px;text-decoration:none;border:2px solid #B9CBD9">Ver el posteo</a>
+    </p>`;
+    }
+    const html = emailShell(`
+    <p style="font-size:16px;margin:0 0 16px">${mode === 'manual' ? 'Este posteo sale en 30 minutos y todavía no me diste tu ok 👇' : 'En 30 minutos publico este posteo 👇'}</p>
+    ${img && post.image_path ? `<img src="${esc(img)}" alt="Posteo" style="width:100%;border-radius:12px;display:block;margin:0 0 16px">` : ''}
+    ${firstLine ? `<p style="font-size:15px;line-height:1.6;margin:0 0 12px;color:#0A1E33">${esc(firstLine)}</p>` : ''}
+    ${when ? `<p style="font-size:15px;line-height:1.6;margin:0 0 20px;color:#0A1E33"><b>Sale el ${esc(when)}</b> (hora de tu cuenta)</p>` : ''}
+    ${actionHtml}`);
+    const r = await sendEmail({ to: user.email, subject, html });
+    if (r && r.ok) return { ok: true };
+    if (r && r.skipped) return { ok: false, reason: 'no_config' };
+    return { ok: false, reason: 'send_failed', transient: true, error: (r && r.error) || '' };
+  } catch (e) {
+    console.error(`[notify-email] upcoming post #${post && post.id}:`, e.message);
+    return { ok: false, reason: 'send_failed', transient: true, error: e.message };
+  }
+}
+
+module.exports = { sendApprovalEmail, sendMissedEmail, sendWeekReady, sendWeekPreview, sendUpcomingEmail, _internal: { getUser, dayHourLabel } };

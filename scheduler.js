@@ -1966,57 +1966,31 @@ async function proactiveIdeas(db) {
 // FASE 1: en nivel 1 es el freno de emergencia del usuario (siempre); en
 // nivel 2 es opt-in (users.autopilot_prenotify).
 async function autopilotPreNotify(db) {
-  let posts = [];
+  // (2026-10-22) La cascada vive en upcoming-notice.js: push primero; si
+  // no llega (no_subs/no_vapid/fallo), EMAIL de respaldo con miniatura y
+  // hora; sin canal externo, el aviso queda en el chat con evento honesto.
+  // Un solo aviso por posteo (autopilot_notified). En modo piloto
+  // automático el chat además espeja el aviso, como siempre hizo esta
+  // función; en la cascada el chat es el último recurso, no un duplicado.
   try {
-    posts = db.prepare(`
-      SELECT p.id, p.user_id, p.caption, p.image_path, p.scheduled_at
-      FROM posts p
-      JOIN users u ON u.id = p.user_id
-      WHERE p.auto_published = 1
-      AND p.status = 'scheduled'
-      AND COALESCE(p.autopilot_notified, 0) = 0
-      AND p.scheduled_at > datetime('now', '+25 minutes')
-      AND p.scheduled_at <= datetime('now', '+35 minutes')
-      AND (
-        COALESCE(u.trust_level, 0) = 1
-        OR (COALESCE(u.trust_level, 0) >= 2 AND COALESCE(u.autopilot_prenotify, 0) = 1)
-      )
-    `).all();
-  } catch (e) { return; }
-
-  for (const p of posts) {
-    try {
-      const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
-
-      // El aviso sale por la función REAL (sendPushToUser no existe: este
-      // aviso — el freno de emergencia del autopiloto — NUNCA llegaba, y la
-      // marca previa lo daba por enviado). Marcar SOLO si el push salió o si
-      // el canal no está disponible (sin suscripciones/VAPID no hay nada que
-      // reintentar); ante un fallo real de envío queda sin marcar y el
-      // próximo tick reintenta.
-      const { sendPush } = require('./push');
-      const pr = await sendPush(p.user_id, {
-        title: '🚀 Publico en 30 min',
-        body: `"${cap}..." — tocá para verlo o frenarlo`,
-        url: `/#/app/semana?post=${p.id}`,
-      });
-      const pushOk = pr && (pr.ok || pr.reason === 'no_subs' || pr.reason === 'no_vapid');
-      if (!pushOk) {
-        console.error(`[autopilot-notify] push no entregado para post ${p.id}:`, pr && pr.reason);
-        continue;
+    const r = await require('./upcoming-notice').processUpcomingNotices(db);
+    if (r && r.detalle) {
+      for (const d of r.detalle) {
+        if (d.channel !== 'push' || d.mode !== 'autopilot') continue;
+        try {
+          const p = db.prepare('SELECT user_id, caption FROM posts WHERE id = ?').get(d.post_id);
+          if (p) {
+            const cap = String(p.caption || '').split('\n')[0].slice(0, 60);
+            db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
+              .run(p.user_id, `🚀 En 30 minutos publico este posteo:\n\n"${cap}..."\n\nSi querés frenarlo o cambiarlo, tocá acá 👆`);
+          }
+        } catch (e) {}
       }
-      db.prepare(`UPDATE posts SET autopilot_notified = 1 WHERE id = ?`).run(p.id);
-
-      // También en el chat.
-      try {
-        db.prepare(`INSERT INTO chat_messages (user_id, role, text) VALUES (?, 'assistant', ?)`)
-          .run(p.user_id, `🚀 En 30 minutos publico este posteo:\n\n"${cap}..."\n\nSi querés frenarlo o cambiarlo, tocá acá 👆`);
-      } catch (e) {}
-
-      console.log(`[autopilot-notify] aviso enviado para post ${p.id} (usuario ${p.user_id})`);
-    } catch (e) {
-      console.error(`[autopilot-notify] post ${p.id}:`, e.message);
     }
+    return r;
+  } catch (e) {
+    console.error('[autopilot-notify]', e.message);
+    return null;
   }
 }
 
@@ -2111,4 +2085,4 @@ async function postyWeeklyDigest(db) {
   }
 }
 
-module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };
+module.exports = { startScheduler, processDuePosts, processApprovalNotifications, publishSinglePost, autopilotPreNotify, sweepOverduePosts: publishWatchdog.sweep, sendWeeklyReminders, sendContentNudges, sendTrialAbandonEmails, sendTrialExpiryEmails, sendFirstPublishEmails, sendWeeklyReports, syncAllComments, refreshBestHours, refreshContentLearnings, refreshIgComments, syncStoriesDna, postyNudgesDaily, postyWeeklyDigest, activationNudge, firstPublishNudge, celebrateWinsChat };

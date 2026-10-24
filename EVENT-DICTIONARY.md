@@ -30,6 +30,11 @@ Reglas:
 | `post_failed` | publicación | Alertas: publicación fallida · termómetro (causa culpa nuestra) |
 | `payment_ok` | billing | Tablero: pagos · alertas · rumbo a los 200 |
 | `payment_failed` | billing | Alertas: pago fallido · termómetro (causa comercial) |
+| `post_upcoming_notice` | publicación | Avisos 30 min: canal real por posteo (push/email/chat) · respaldo email del aviso pre-publicación |
+| `health_play_executed` | salud | Termómetro: jugadas rojo→verde ejecutadas por causa |
+| `health_play_pending` | salud | Termómetro: jugadas que no pudieron correr (fail-closed, con motivo) |
+| `health_exit_question` | salud | Bajas: pregunta de salida enviada (canal y ventana de guardado) |
+| `health_exit_answer` | salud | Bajas: motivo de salida de un toque por causa |
 | `account_created` | auth | Funnel legacy: registro |
 | `ref_click` | growth | Referidos: clicks por código |
 | `schedule_all` | producto | Funnel legacy: semana aceptada completa |
