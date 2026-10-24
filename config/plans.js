@@ -5,9 +5,9 @@
 // story-reel.js generateWeekExtras, idempotente por déficit, en cada semana).
 //
 // TECHO DE IA (vara de Valentino, 2026-10-02): el costo variable de IA por usuario/mes
-// no puede superar el 5% del precio del plan (Esencial: $5.000 ARS/mes). Se enforcea
+// no puede superar el 5% del precio del plan (Esencial: $10.000 ARS/mes). Se enforcea
 // con `monthlyCapUsd` en costs.js (calculado desde price × 0.05) + límites diarios `ai`.
-// ✅ PRECIOS UY CONFIRMADOS por Valentino (2026-10-22): UYU 2.490 / 4.990 / 7.990.
+// ✅ PRECIOS UY (escalera de familia Bambooty, 2026-10-24): UYU 4.990 / 7.490 / 9.990 — espejo $U 25 × USD con cierre en 90. (Anteriores, 2026-10-22: 2.490 / 4.990 / 7.990.)
 
 // Límites diarios de IA por plan. El cap mensual (5%) es el techo duro;
 // estos límites son el ritmo para que un usuario normal nunca lo note.
@@ -25,7 +25,7 @@ const PLANS_AR = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 99999,
+    price: 199999,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -44,7 +44,7 @@ const PLANS_AR = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 189900,
+    price: 299900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -68,7 +68,7 @@ const PLANS_AR = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 289900,
+    price: 399900,
     currency: 'ARS',
     postsPerWeek: 7,
     reelsPerWeek: 5,
@@ -97,12 +97,12 @@ const PLANS_AR = {
   },
 };
 
-// ✅ UY CONFIRMADO por Valentino (2026-10-22, tercera escalera) — misma arquitectura que AR: el Pro es el héroe (≈ $U 166/día).
+// ✅ UY (escalera de familia Bambooty, 2026-10-24) — misma arquitectura que AR: el Pro es el héroe (≈ $U 250/día).
 const PLANS_UY = {
   esencial: {
     id: 'esencial',
     name: 'Esencial',
-    price: 2490,
+    price: 4990,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -121,7 +121,7 @@ const PLANS_UY = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 4990,
+    price: 7490,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -145,7 +145,7 @@ const PLANS_UY = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 7990,
+    price: 9990,
     currency: 'UYU',
     postsPerWeek: 7,
     reelsPerWeek: 5,
@@ -175,14 +175,14 @@ const PLANS_UY = {
 };
 
 // Texto de ancla de precio por país (se muestra sobre las tarjetas de planes).
-// Valores confirmados por Valentino (2026-10-22, tercera escalera).
+// Valores confirmados por Valentino (2026-10-22, tercera escalera); el «desde» sigue a la escalera vigente (familia Bambooty, 2026-10-24). El cm (el costo del humano) NO cambia.
 const PLAN_ANCHOR = {
-  AR: { cm: '$300.000 a $600.000 por mes — o más', desde: '$99.999' },
-  UY: { cm: 'más de $U 25.000 por mes', desde: '$U 2.490' },
+  AR: { cm: '$300.000 a $600.000 por mes — o más', desde: '$199.999' },
+  UY: { cm: 'más de $U 25.000 por mes', desde: '$U 4.990' },
 };
 
 // (v274 · MODO EN) Planes US — escalera definida por Valentino el
-// 2026-10-20: USD 99.99 / 189.99 / 289.99 (tercera escalera de Valentino, 2026-10-22; anteriores: 59 / 119 / 179 el 2026-10-21 y 49 / 99 / 149 el 2026-10-20), mismos roles que AR (Plan 1 = Community
+// 2026-10-20: USD 199.99 / 299.99 / 399.99 (escalera de familia Bambooty, 2026-10-24 — Posty es el piso de la familia; anteriores: 99.99 / 189.99 / 289.99 (tercera escalera, 2026-10-22), 59 / 119 / 179 el 2026-10-21 y 49 / 99 / 149 el 2026-10-20), mismos roles que AR (Plan 1 = Community
 // Manager, Plan 2 = + Growth, Plan 3 = + Customer care).
 // ✅ COBRO US CONECTADO (v285, 2026-10-21): el checkout vive en
 // stripe-billing.js (Checkout Sessions + suscripciones, cuenta PERSONAL de
@@ -194,7 +194,7 @@ const PLANS_US = {
   esencial: {
     id: 'esencial',
     name: 'Essential',
-    price: 99.99,
+    price: 199.99,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 1,
@@ -213,7 +213,7 @@ const PLANS_US = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 189.99,
+    price: 299.99,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -234,7 +234,7 @@ const PLANS_US = {
   total: {
     id: 'total',
     name: 'Total',
-    price: 289.99,
+    price: 399.99,
     currency: 'USD',
     postsPerWeek: 7,
     reelsPerWeek: 3,
@@ -256,17 +256,17 @@ const PLANS_US = {
 
 // (Addendum 2026-10-22, consolidación M96) UK y Canadá — cobro SOLO Stripe:
 // la website EN los ofrece con la misma escalera de roles que US.
-// GBP \u00a379/149/229 · CAD C$139/259/399. Sin ancla de precio en esta pasada.
+// GBP \u00a3159/239/319 · CAD C$279/409/549 (2026-10-24: misma proporción por tramo de la escalera anterior — GB ≈0,79× el USD de su tramo, CA ≈1,39/1,36/1,38× — redondeada al precio cerrado en 9, como los viejos 79/149/229 y 139/259/399). Sin ancla de precio en esta pasada.
 const PLANS_GB = {
-  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 79, currency: 'GBP' },
-  pro: { ...PLANS_US.pro, id: 'pro', price: 149, currency: 'GBP' },
-  total: { ...PLANS_US.total, id: 'total', price: 229, currency: 'GBP' },
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 159, currency: 'GBP' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 239, currency: 'GBP' },
+  total: { ...PLANS_US.total, id: 'total', price: 319, currency: 'GBP' },
 };
 
 const PLANS_CA = {
-  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 139, currency: 'CAD' },
-  pro: { ...PLANS_US.pro, id: 'pro', price: 259, currency: 'CAD' },
-  total: { ...PLANS_US.total, id: 'total', price: 399, currency: 'CAD' },
+  esencial: { ...PLANS_US.esencial, id: 'esencial', price: 279, currency: 'CAD' },
+  pro: { ...PLANS_US.pro, id: 'pro', price: 409, currency: 'CAD' },
+  total: { ...PLANS_US.total, id: 'total', price: 549, currency: 'CAD' },
 };
 
 // Plan por defecto para usuarios sin suscripción paga

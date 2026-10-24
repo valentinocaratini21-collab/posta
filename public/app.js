@@ -1211,7 +1211,7 @@ function lpCalcUpdate() {
   const fmt = (n) => Math.round(n).toLocaleString('es-AR');
   const horasMes = Math.round(h * 4.33);
   const costo = h * 4.33 * LP_CALC_RATE;
-  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$3.333 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
+  out.innerHTML = `Tu Instagram hoy te cuesta ≈ <b>$${fmt(costo)}</b> por mes (<b>${horasMes} horas</b> tuyas).<br>Con Posty: desde <b>$6.667 por día</b> y <b>0 horas tuyas</b> — te quedan <b>${horasMes} horas por mes</b> para tu negocio.`;
 }
 
 /* ---------- v177: la semana de tu rubro ---------- */
@@ -1779,7 +1779,7 @@ function landingView(cfg) {
       <div class="lp-cm-row" role="row"><div class="crit">Potencia lo que anda con pauta</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Piensa el foco de cada mes</div><div>✓</div><div class="win">✓</div></div>
       <div class="lp-cm-row" role="row"><div class="crit">Está disponible</div><div>En su horario</div><div class="win">Todos los días, a toda hora</div></div>
-      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>$300.000+ por mes</div><div class="win">Desde $3.333 por día</div></div>
+      <div class="lp-cm-row" role="row"><div class="crit">Cuesta</div><div>$300.000+ por mes</div><div class="win">Desde $6.667 por día</div></div>
     </div>
     <p class="lp-cm-close">El mismo trabajo. Sin sueldos, sin cargas sociales, sin vacaciones.</p>
     <div style="text-align:center"><a class="btn btn-primary" href="/prueba" style="font-size:16px;padding:16px 36px">Quiero mi community manager →</a></div>
@@ -1821,7 +1821,7 @@ function landingView(cfg) {
     <p class="lede">Las apps para programar te dan más trabajo. Los community managers salen $300.000+ por mes. Las agencias te venden reuniones. Yo te entrego la semana hecha.</p>
     <div class="cmp-table" role="table" aria-label="Comparación Posty vs agencia">
       <div class="cmp-row cmp-head" role="row"><div></div><div>Agencia tradicional</div><div class="win">Posty</div></div>
-      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $99.999</div></div>
+      <div class="cmp-row" role="row"><div class="crit">Precio por mes</div><div>Desde $300.000</div><div class="win">Desde $199.999</div></div>
       <div class="cmp-row" role="row"><div class="crit">Tu semana lista en</div><div>2 semanas</div><div class="win">1 minuto</div></div>
       <div class="cmp-row" role="row"><div class="crit">Reuniones</div><div>Varias por mes</div><div class="win">Cero</div></div>
       <div class="cmp-row" role="row"><div class="crit">Probar antes de pagar</div><div>No existe</div><div class="win">Probalo gratis, sin tarjeta</div></div>
@@ -1829,7 +1829,7 @@ function landingView(cfg) {
       <div class="cmp-row" role="row"><div class="crit">Responde comentarios y mensajes</div><div>Si está en el contrato</div><div class="win">Incluido — con un toque</div></div>
       <div class="cmp-row" role="row"><div class="crit">Pauta publicitaria</div><div>Honorarios aparte</div><div class="win">Potencia tu mejor posteo desde la app</div></div>
     </div>
-    <p class="unico-line">Un community manager cuesta <b>$300.000 a $600.000 por mes — o más</b>. Posty arranca en <b>$99.999</b>.</p>
+    <p class="unico-line">Un community manager cuesta <b>$300.000 a $600.000 por mes — o más</b>. Posty arranca en <b>$199.999</b>.</p>
     <p class="lp-trust">🔒 Publicamos con la API oficial de Meta · Entrás con el login oficial, sin darnos tu contraseña · Podés frenar cualquier posteo antes de que salga</p>
     <div style="text-align:center;margin-top:18px"><a class="btn btn-primary" href="/prueba">Probar gratis</a></div>
   </div></div>
@@ -1894,7 +1894,7 @@ function landingView(cfg) {
         <button type="button" class="lp-crate on" data-rate="5000" onclick="lpCalcRate(this)">$5.000</button>
         <button type="button" class="lp-crate" data-rate="10000" onclick="lpCalcRate(this)">$10.000</button>
       </div>
-      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$3.333 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
+      <div class="lp-calc-out" id="lpCalcOut">Tu Instagram hoy te cuesta ≈ <b>$129.900</b> por mes (<b>26 horas</b> tuyas).<br>Con Posty: desde <b>$6.667 por día</b> y <b>0 horas tuyas</b> — te quedan <b>26 horas por mes</b> para tu negocio.</div>
     </div>
     <p class="lp-calc-cm">Y si lo tercerizás: un community manager que lo haga por vos cuesta <b>$300.000+ por mes</b>.</p>
   </div></div>
@@ -1913,7 +1913,7 @@ function landingView(cfg) {
     <div class="lp-stats-grid">
       <div class="lp-stat"><div class="lp-stat-n">1 minuto</div><div class="lp-stat-t">para ver tu semana armada</div></div>
       <div class="lp-stat"><div class="lp-stat-n">7 posteos + 1 reel</div><div class="lp-stat-t">por semana · 0 minutos tuyos publicando</div></div>
-      <div class="lp-stat"><div class="lp-stat-n">$3.333<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
+      <div class="lp-stat"><div class="lp-stat-n">$6.667<span class="lp-stat-per">/día</span></div><div class="lp-stat-t">desde — un community manager cuesta $300.000+ por mes</div></div>
       <div class="lp-stat"><div class="lp-stat-n">3 días</div><div class="lp-stat-t">de prueba gratis, sin tarjeta</div></div>
     </div>
   </div></div>

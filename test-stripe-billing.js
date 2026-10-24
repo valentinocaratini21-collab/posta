@@ -83,7 +83,7 @@ async function partA() {
   ok(cat1.esencial && cat1.pro && cat1.total, 'ensureCatalog devuelve los 3 price ids');
   ok(fake._calls.productsCreate === 3 && fake._calls.pricesCreate === 3, 'primer bootstrap: crea 3 productos y 3 precios');
   const amounts = ['esencial', 'pro', 'total'].map((p) => fake._prices.get(sb.lookupKeyFor(p)).unit_amount);
-  ok(JSON.stringify(amounts) === JSON.stringify([9999, 18999, 28999]), `montos USD correctos (9999/18999/28999): ${amounts}`);
+  ok(JSON.stringify(amounts) === JSON.stringify([19999, 29999, 39999]), `montos USD correctos (19999/29999/39999): ${amounts}`);
   ok(['esencial', 'pro', 'total'].every((p) => fake._prices.get(sb.lookupKeyFor(p)).currency === 'usd'
     && fake._prices.get(sb.lookupKeyFor(p)).recurring.interval === 'month'), 'los 3 precios son USD mensuales');
   const cat2 = await sb.ensureCatalog(fake);
@@ -212,7 +212,7 @@ async function partA() {
     sb._clearPriceCache();
     const catM = await sb.ensureCatalog(fake2);
     const amountsM = ['esencial', 'pro', 'total'].map((x) => fake2._prices.get(sb.lookupKeyFor(x)).unit_amount);
-    ok(JSON.stringify(amountsM) === JSON.stringify([9999, 18999, 28999]), `migración: los lookup_keys resuelven a los montos nuevos: ${amountsM}`);
+    ok(JSON.stringify(amountsM) === JSON.stringify([19999, 29999, 39999]), `migración: los lookup_keys resuelven a los montos nuevos: ${amountsM}`);
     ok(fake2._calls.pricesCreate === 3 && fake2._calls.productsCreate === 0, 'migración: 3 precios nuevos y 0 productos nuevos (reusa el producto)');
     ok(catM.pro !== 'price_old_pro' && fake2._prices.get(sb.lookupKeyFor('pro')).product === 'prod_pro', 'migración: el precio nuevo cuelga del mismo producto');
     ok([...fake2._prices.values()].every((x) => x.transfer_lookup_key === true), 'migración: los precios nuevos piden transfer_lookup_key');
@@ -284,7 +284,7 @@ async function partB() {
     ok(home.status === 200, 'la home responde 200, intacta');
     const plans = await (await fetch(base + '/api/billing/plans?country=US')).json();
     ok(plans.currency === 'USD' && plans.stripe_configured === false, 'planes US en USD con stripe_configured=false');
-    ok(JSON.stringify(plans.plans.map((p) => p.price)) === JSON.stringify([99.99, 189.99, 289.99]), 'precios US 99.99/189.99/289.99 desde PLANS_US');
+    ok(JSON.stringify(plans.plans.map((p) => p.price)) === JSON.stringify([199.99, 299.99, 399.99]), 'precios US 199.99/299.99/399.99 desde PLANS_US');
     const plansAr = await (await fetch(base + '/api/billing/plans')).json();
     ok(plansAr.currency === 'ARS' && plansAr.mp_configured !== undefined, 'el flujo AR/MP no cambió');
 

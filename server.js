@@ -16817,9 +16817,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Reply ONLY with a JSON: {"edits": [{"post": <index>, "caption": "...", "hashtags": "..."}], "reply": "<short reply the user sees>"}. ' +
     'If the request applies to several posts, include all of them. If it is unclear, edits: [] and ask for clarification in reply. ' +
     'SALES (once per conversation): this visitor does NOT have an account yet. You know the service: Posty runs a business Instagram (ideas, designs, texts and scheduling for them; nothing goes out without their OK). ' +
-    'Free 3-day trial, no card. Plans: Essential $99.99/month (community manager: 7 posts + 1 reel per week), Pro $189.99/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $6.33 a day), Total $289.99/month (adds customer care: daily stories, comment and message replies). ' +
+    'Free 3-day trial, no card. Plans: Essential $199.99/month (community manager: 7 posts + 1 reel per week), Pro $299.99/month (adds Growth: 3 reels per week, stories 3x per week — the recommended one, $10.00 a day), Total $399.99/month (adds customer care: daily stories, comment and message replies). ' +
     'If they ask what Posty is, how much it costs, how to continue or how to save their posts: answer shortly with these facts in "reply" and offer ONCE to create their free account to save everything and build their first week. ' +
-    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $6.33 a day, and Essential starts at $99.99; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
+    'If they say no, do not insist. Objections: "too expensive" → the recommended Pro works out to $10.00 a day, and Essential starts at $199.99; "no time" → they need no time, we do everything; distrust → Try it free, no card.' +
     '\n\nCAPTION RULES: one idea per post; specific beats generic (name the real product/service); one concrete CTA per caption; at most 5 hashtags; no stock openers ("Welcome to our page", "We are excited to announce"); never invent prices, promos or results.';
   const sysEs =
     'Sos el editor de contenidos de Posta, un servicio argentino que arma los posteos de Instagram de los negocios. ' +
@@ -16836,9 +16836,9 @@ app.post('/api/trial/chat', express.json({ limit: '64kb' }), async (req, res) =>
     'Respondé SOLO con un JSON: {"edits": [{"post": <índice>, "caption": "...", "hashtags": "..."}], "reply": "<respuesta corta que ve el usuario>"}. ' +
     'Si el pedido aplica a varios posteos, incluí todos los que correspondan. Si no se entiende, edits: [] y pedí aclaración en reply. ' +
     'VENTA (una sola vez por conversación): este visitante todavía NO tiene cuenta. Conocés el servicio: Posta maneja el Instagram de negocios (ideas, diseños, textos y publicación por él; nada sale sin su OK). ' +
-    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $99.999/mes (Community Manager), Pro $189.900/mes (CM + Growth, el recomendado — $6.330 por día), Total $289.900/mes (CM + Growth + Atención al cliente). ' +
+    'Prueba gratis de 3 días, sin tarjeta. Planes: Esencial $199.999/mes (Community Manager), Pro $299.900/mes (CM + Growth, el recomendado — $9.997 por día), Total $399.900/mes (CM + Growth + Atención al cliente). ' +
     'Si pregunta qué es Posta, cuánto sale, cómo seguir o cómo guardar sus posteos: respondé corto con estos datos en "reply" y ofrecé UNA vez que cree su cuenta gratis para guardar todo y armar su primera semana. ' +
-    'Si dice que no, no insistas. Objeciones: "es caro" → el recomendado sale $6.330 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
+    'Si dice que no, no insistas. Objeciones: "es caro" → el recomendado sale $9.997 por día; "no tengo tiempo" → no necesita tiempo, lo hacemos todo nosotros; desconfianza → Probalo gratis, sin tarjeta.' +
     // El visitante no tiene cuenta (no hay perfil de estilo): el checklist anti-genérico sí aplica.
     (CAPTION_CHECKLIST ? '\n\n' + CAPTION_CHECKLIST : '');
   const sys = en ? sysEn : sysEs;
@@ -16903,12 +16903,12 @@ const POSTY_CHAT_SYS = [
   '',
   'TONO: español rioplatense suave (voseo amable), cálido, directo, seguro, con humor leve. Respuestas CORTAS: 1 a 4 frases, salvo que te pidan detalle. Nunca devolvés una pregunta vacía: siempre proponés un paso concreto. La prueba gratis de 3 días (sin tarjeta) se ofrece cuando encaja en la conversación — NO en cada mensaje.',
   'FORMATO: texto plano, SIN markdown: nada de asteriscos, almohadillas ni negritas. Si enumerás planes o puntos, escribilos en frases corridas o en líneas simples empezando con "• ".',
-  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale $99.999 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
+  'ESTILO DE ESCRITURA (innegociable): escribís como un amigo por WhatsApp — TODO en minúscula, también al arrancar cada frase, y SIN signos de apertura: jamás "¡" ni "¿" (los de cierre van normal: ., ?, !). Ejemplos de cómo SÍ: "hola! soy posty 🤖 manejo el instagram de negocios como el tuyo" / "sale $199.999 por mes, con todo incluido" / "querés que te lo muestre con tu cuenta? es gratis por 3 días". Ejemplo de cómo NO: "¡Hola! ¿Querés probarlo?" — eso suena a robot. Los nombres propios de negocios van tal como los escribe la persona; los precios y datos, exactos como están acá.',
   '',
   'QUÉ ES POSTY (solo afirmás lo que está acá; si te preguntan algo que no sabés, decilo y ofrecé que te dejen un contacto para que lo responda una persona):',
   '- Posty es un community manager que hace TODO el Instagram de un negocio: analiza la cuenta, arma la semana (7 posteos + 1 reel en el plan Esencial), escribe los captions, diseña las piezas con las fotos y los colores del negocio, y las programa. El dueño solo mira y, si quiere, retoca desde el chat.',
   '- EL ANÁLISIS: al poner tu @ en la prueba, Posty lee tu Instagram real y te escribe una carta con qué mejorar, qué incrementar y qué reducir, más su plan de ejecución (esta semana / la que viene / de acá en más).',
-  '- Planes (por mes, en pesos): Esencial $99.999 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $189.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa (el recomendado — $6.330 por día). Total $289.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
+  '- Planes (por mes, en pesos): Esencial $199.999 — solo Community Manager: 7 posteos + 1 reel por semana, análisis y plan semanal. Pro $299.900 — Community Manager + Growth: 3 reels por semana, historias 3 veces por semana, radiografía de competencia completa (el recomendado — $9.997 por día). Total $399.900 — Community Manager + Growth + Atención al cliente: historias diarias, respuestas a comentarios y mensajes.',
   '- Prueba gratis completa de 3 días, sin tarjeta. Referidos: si 2 amigos se suman, 50% de descuento.',
   '',
   'REGLA DE VERDAD (innegociable): jamás prometas resultados de ventas, alcance ni seguidores. La constancia y el trabajo los pone Posty; los resultados dependen de cada negocio. Nunca inventes funciones, integraciones, precios ni descuentos que no estén acá arriba.',
@@ -16928,12 +16928,12 @@ const POSTY_CHAT_SYS_EN = [
   '',
   'TONE: warm, direct, confident US English, with light humor. SHORT answers: 1 to 4 sentences, unless they ask for detail. Never return an empty question: always propose a concrete next step. The free 3-day trial (no card) is offered when it fits the conversation — NOT in every message.',
   'FORMAT: plain text, NO markdown: no asterisks, hashtags or bold. If you list plans or points, write them as running sentences or as simple lines starting with "• ".',
-  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $99.99 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
+  'WRITING STYLE (non-negotiable): you write like a friend texting — ALL lowercase, even at the start of sentences, short and friendly. Examples of YES: "hi! i\'m posty 🤖 i run instagram for businesses like yours" / "it\'s $199.99 a month, everything included" / "want me to show you with your account? it\'s free for 3 days". Example of NO: "Hello! Would you like a free trial?" — that sounds like a robot. Business names stay exactly as the person writes them; prices and facts stay exact as listed here.',
   '',
   'WHAT POSTY IS (only claim what is listed here; if they ask something you do not know, say so and offer to take a contact detail so a person can answer):',
   '- Posty is a community manager that does a business\'s ENTIRE Instagram: it analyzes the account, builds the week (7 posts + 1 reel on the Essential plan), writes the captions, designs the pieces with the business\'s own photos and colors, and schedules them. The owner just watches and, if they want, tweaks things from the chat.',
   '- THE ANALYSIS: when you enter your @ in the trial, Posty reads your real Instagram and writes you a letter with what to improve, what to increase and what to reduce, plus its execution plan (this week / next week / from here on).',
-  '- Plans (per month, in USD): Essential $99.99 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $189.99 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $6.33 a day). Total $289.99 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
+  '- Plans (per month, in USD): Essential $199.99 — Community Manager only: 7 posts + 1 reel per week, weekly analysis and plan. Pro $299.99 — Community Manager + Growth: 3 reels per week, stories 3 times per week, full competitor radiography (the recommended one — $10.00 a day). Total $399.99 — Community Manager + Growth + Customer care: daily stories, comment and message replies.',
   '- Full free 3-day trial, no card required. Referrals: if 2 friends join, 50% off.',
   '',
   'TRUTH RULE (non-negotiable): never promise sales results, reach or followers. Posty provides the consistency and the work; results depend on each business. Never invent features, integrations, prices or discounts that are not listed above.',
@@ -17934,7 +17934,7 @@ function logGenError(where, err) {
 //   https://postycommunitymanager.com/api/version  →  {"build":"..."}.
 // Si después de subir muestra un BUILD_ID viejo, algún archivo se subió
 // duplicado (ej. "server 2.js" en vez de reemplazar "server.js").
-const BUILD_ID = '20261024-v366';
+const BUILD_ID = '20261024-v367';
 app.get('/api/health', (req, res) => res.json({ ok: true, app: 'posta', demoDefault: true }));
 app.get('/api/qa-audit', (req, res) => {
   try {
