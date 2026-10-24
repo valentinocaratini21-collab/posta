@@ -238,7 +238,7 @@ async function uploadAssetFile(file, kind) {
 // Las vistas pesadas (ajustes, admin, creador manual) viven en /chunk-*.js y se
 // cargan bajo demanda la primera vez que se navega a ellas. Son <script> clásicos:
 // comparten el scope global con este archivo, sin imports/exports que mantener.
-const CHUNK_V = '20261024-v387'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
+const CHUNK_V = '20261024-v388'; // <-- el coordinador la reemplaza por el ?v= real al armar el zip
 const __CHUNKS = {};
 function loadChunk(name) {
   if (__CHUNKS[name]) return __CHUNKS[name];
@@ -486,6 +486,23 @@ function toggleMobileMenu() {
   const m = document.getElementById('mobileMenu');
   if (m) m.classList.toggle('open');
 }
+// (v388) Al tocar un ancla interna del menú mobile, el menú se cierra como
+// parte del mismo gesto: si queda abierto durante el salto, la nav sticky
+// mide ~565px y la sección aterriza pegada a su borde inferior en vez de
+// con el aire del scroll-margin (v383). Delegado en document porque la
+// landing se re-renderiza; #mobileMenu solo existe en la landing. Las
+// rutas hash (#/...) no son anclas de sección y no se tocan.
+function closeMobileMenu() {
+  const m = document.getElementById('mobileMenu');
+  if (m) m.classList.remove('open');
+}
+document.addEventListener('click', function (e) {
+  const t = e.target;
+  const a = t && t.closest ? t.closest('#mobileMenu a[href^="#"]') : null;
+  if (!a) return;
+  const href = a.getAttribute('href') || '';
+  if (href.length > 1 && href.charAt(1) !== '/') closeMobileMenu();
+});
 async function switchPlansCountry(c) {
   PLANS_COUNTRY = (c === 'UY') ? 'UY' : 'AR';
   document.querySelectorAll('.country-toggle button').forEach(b => b.classList.toggle('on', b.dataset.country === PLANS_COUNTRY));

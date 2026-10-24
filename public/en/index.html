@@ -1270,6 +1270,22 @@ function toggleMobileMenu() {
   const m = document.getElementById('mobileMenu');
   if (m) m.classList.toggle('open');
 }
+// (v388) Tapping an in-page anchor in the mobile menu closes the menu as
+// part of the same gesture: if it stays open during the jump, the sticky
+// nav measures ~565px and the section lands stuck to its bottom edge
+// instead of with the scroll-margin air (v383). Hash routes (#/...) are
+// not section anchors and are left alone.
+function closeMobileMenu() {
+  const m = document.getElementById('mobileMenu');
+  if (m) m.classList.remove('open');
+}
+document.addEventListener('click', function (e) {
+  const t = e.target;
+  const a = t && t.closest ? t.closest('#mobileMenu a[href^="#"]') : null;
+  if (!a) return;
+  const href = a.getAttribute('href') || '';
+  if (href.length > 1 && href.charAt(1) !== '/') closeMobileMenu();
+});
 function lpCleanIg(v) {
   let s = String(v || '').trim().toLowerCase();
   s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');

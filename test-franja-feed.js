@@ -78,7 +78,7 @@ ok(!/\.lp-feed-(card|posty|grid)\{[^}]*(display\s*:\s*none|visibility\s*:\s*hidd
 ok(/\.lp-feed-chap\.on\{/.test(cssBlock), 'CSS: capítulo activo con estilo propio');
 
 /* Punteros de la tanda. */
-ok(idxHtml.includes('/app.js?v=255') && idxHtml.includes('/styles.css?v=20261024i'), 'index: bumps ?v= app.js 255 + styles.css 20261024i');
+ok(idxHtml.includes('/app.js?v=257') && idxHtml.includes('/styles.css?v=20261024i'), 'index: bumps ?v= app.js 257 + styles.css 20261024i');
 ok(enHtml.includes('/styles.css?v=20261024i'), 'EN: bump styles.css 20261024i');
 
 console.log(`test-franja-feed: ${okN} ok / ${failN} FAIL`);
